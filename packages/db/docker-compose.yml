@@ -1,0 +1,23 @@
+name: cogito-app
+
+services:
+  postgres:
+    image: postgres
+    container_name: cogito-app-postgres
+    environment:
+      POSTGRES_DB: cogito-app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - cogito-app_postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  cogito-app_postgres_data:

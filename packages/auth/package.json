@@ -1,0 +1,24 @@
+{
+  "name": "@cogito-app/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@cogito-app/db": "workspace:*",
+    "@cogito-app/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@cogito-app/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

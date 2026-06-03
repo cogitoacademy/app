@@ -1,0 +1,3 @@
+{
+  "extends": "@cogito-app/config/tsconfig.base.json"
+}
