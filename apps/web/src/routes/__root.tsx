@@ -1,5 +1,5 @@
 import type { AppRouterClient } from "@cogito-app/api/routers/index";
-import { Toaster } from "@cogito-app/ui/components/sonner";
+import { Toast } from "@cogito-app/ui/components/selia/toast";
 import { createORPCClient } from "@orpc/client";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { QueryClient } from "@tanstack/react-query";
@@ -53,11 +53,11 @@ function RootComponent() {
         disableTransitionOnChange
         storageKey="vite-ui-theme"
       >
-        <div className="grid grid-rows-[auto_1fr] h-svh">
+        <div className="root grid grid-rows-[auto_1fr] h-svh">
           <Header />
           <Outlet />
         </div>
-        <Toaster richColors />
+        <Toast />
       </ThemeProvider>
       <TanStackRouterDevtools position="bottom-left" />
       <ReactQueryDevtools position="bottom" buttonPosition="bottom-right" />

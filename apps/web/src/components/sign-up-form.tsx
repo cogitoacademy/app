@@ -1,9 +1,12 @@
-import { Button } from "@cogito-app/ui/components/button";
-import { Input } from "@cogito-app/ui/components/input";
-import { Label } from "@cogito-app/ui/components/label";
+import { Button } from "@cogito-app/ui/components/selia/button";
+import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "@cogito-app/ui/components/selia/card";
+import { Divider } from "@cogito-app/ui/components/selia/divider";
+import { Field, FieldError, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import { Input } from "@cogito-app/ui/components/selia/input";
+import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
 import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
@@ -34,10 +37,10 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
             navigate({
               to: "/dashboard",
             });
-            toast.success("Sign up successful");
+            toastManager.add({ title: "Sign up successful", type: "success" });
           },
           onError: (error) => {
-            toast.error(error.error.message || error.error.statusText);
+            toastManager.add({ title: error.error.message || error.error.statusText, type: "error" });
           },
         },
       );
@@ -56,105 +59,103 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
   }
 
   return (
-    <div className="mx-auto w-full mt-10 max-w-md p-6">
-      <h1 className="mb-6 text-center text-3xl font-bold">Create Account</h1>
-
+    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
+      <Card className="w-full lg:w-5/12 xl:w-md">
+        <CardHeader align="center">
+          <CardTitle>Create your account</CardTitle>
+          <CardDescription>Enter your details to get started</CardDescription>
+        </CardHeader>
+        <CardBody className="flex flex-col gap-5">
+          <Divider variant="center" className="my-2">Sign up with email</Divider>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           e.stopPropagation();
           form.handleSubmit();
         }}
-        className="space-y-4"
+        className="flex flex-col gap-5"
       >
-        <div>
-          <form.Field name="name">
-            {(field) => (
-              <div className="space-y-2">
-                <Label htmlFor={field.name}>Name</Label>
+        <form.Field name="name">
+          {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Name</FieldLabel>
                 <Input
                   id={field.name}
                   name={field.name}
+                  placeholder="Enter your name"
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
                 />
                 {field.state.meta.errors.map((error) => (
-                  <p key={error?.message} className="text-red-500">
+                  <FieldError key={error?.message}>
                     {error?.message}
-                  </p>
+                  </FieldError>
                 ))}
-              </div>
+              </Field>
             )}
           </form.Field>
-        </div>
 
-        <div>
-          <form.Field name="email">
-            {(field) => (
-              <div className="space-y-2">
-                <Label htmlFor={field.name}>Email</Label>
+        <form.Field name="email">
+          {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Email</FieldLabel>
                 <Input
                   id={field.name}
                   name={field.name}
                   type="email"
+                  placeholder="Enter your email"
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
                 />
                 {field.state.meta.errors.map((error) => (
-                  <p key={error?.message} className="text-red-500">
+                  <FieldError key={error?.message}>
                     {error?.message}
-                  </p>
+                  </FieldError>
                 ))}
-              </div>
+              </Field>
             )}
           </form.Field>
-        </div>
 
-        <div>
-          <form.Field name="password">
-            {(field) => (
-              <div className="space-y-2">
-                <Label htmlFor={field.name}>Password</Label>
+        <form.Field name="password">
+          {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Password</FieldLabel>
                 <Input
                   id={field.name}
                   name={field.name}
                   type="password"
+                  placeholder="Enter your password"
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
                 />
                 {field.state.meta.errors.map((error) => (
-                  <p key={error?.message} className="text-red-500">
+                  <FieldError key={error?.message}>
                     {error?.message}
-                  </p>
+                  </FieldError>
                 ))}
-              </div>
+              </Field>
             )}
           </form.Field>
-        </div>
 
         <form.Subscribe
           selector={(state) => ({ canSubmit: state.canSubmit, isSubmitting: state.isSubmitting })}
         >
           {({ canSubmit, isSubmitting }) => (
-            <Button type="submit" className="w-full" disabled={!canSubmit || isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Sign Up"}
+            <Button type="submit" block disabled={!canSubmit || isSubmitting} progress={isSubmitting}>
+              Sign Up
             </Button>
           )}
         </form.Subscribe>
       </form>
 
-      <div className="mt-4 text-center">
-        <Button
-          variant="link"
-          onClick={onSwitchToSignIn}
-          className="text-indigo-600 hover:text-indigo-800"
-        >
-          Already have an account? Sign In
-        </Button>
-      </div>
+          <Text className="text-center">
+            Already have an account? <TextLink render={<button type="button" onClick={onSwitchToSignIn} />}>Sign in</TextLink>
+          </Text>
+        </CardBody>
+      </Card>
     </div>
   );
 }

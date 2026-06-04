@@ -8,6 +8,6 @@
       "@cogito-app/ui/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "components/**/*.tsx"],
   "exclude": ["node_modules"]
 }

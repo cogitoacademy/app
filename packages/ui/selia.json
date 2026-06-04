@@ -1,0 +1,11 @@
+{
+  "$schema": "https://selia.nauv.al/schemas/config.v1.json",
+  "tsx": true,
+  "tailwind": {
+    "css": "src/styles/globals.css"
+  },
+  "aliases": {
+    "components": "@cogito-app/ui/components",
+    "utils": "@cogito-app/ui/lib/utils"
+  }
+}

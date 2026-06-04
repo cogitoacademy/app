@@ -1,14 +1,13 @@
-import { Button } from "@cogito-app/ui/components/button";
+import { Button } from "@cogito-app/ui/components/selia/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@cogito-app/ui/components/dropdown-menu";
-import { Skeleton } from "@cogito-app/ui/components/skeleton";
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from "@cogito-app/ui/components/selia/menu";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 import { authClient } from "@/lib/auth-client";
@@ -18,7 +17,7 @@ export default function UserMenu() {
   const { data: session, isPending } = authClient.useSession();
 
   if (isPending) {
-    return <Skeleton className="h-9 w-24" />;
+    return <div className="h-9.5 w-24 animate-pulse rounded bg-muted" />;
   }
 
   if (!session) {
@@ -30,17 +29,17 @@ export default function UserMenu() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" />}>
+    <Menu>
+      <MenuTrigger render={<Button variant="outline" />}>
         {session.user.name}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="bg-card">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>My Account</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem>{session.user.email}</DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuGroup>
+          <MenuGroupLabel>My Account</MenuGroupLabel>
+          <MenuSeparator />
+          <MenuItem>{session.user.email}</MenuItem>
+          <MenuItem
+            className="text-danger focus:text-danger"
             onClick={() => {
               authClient.signOut({
                 fetchOptions: {
@@ -54,9 +53,9 @@ export default function UserMenu() {
             }}
           >
             Sign Out
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </MenuItem>
+        </MenuGroup>
+      </MenuPopup>
+    </Menu>
   );
 }

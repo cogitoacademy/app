@@ -6,7 +6,7 @@
   "exports": {
     "./globals.css": "./src/styles/globals.css",
     "./lib/*": "./src/lib/*.ts",
-    "./components/*": "./src/components/*.tsx",
+    "./components/selia/*": "./components/selia/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./postcss.config": "./postcss.config.mjs"
   },
@@ -21,8 +21,6 @@
     "next-themes": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "shadcn": "^3.6.2",
-    "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.1",
     "tw-animate-css": "^1.3.4"
   },

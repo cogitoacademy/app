@@ -1,13 +1,13 @@
-import { Button } from "@cogito-app/ui/components/button";
+import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
-  CardContent,
+  CardBody,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@cogito-app/ui/components/card";
-import { Checkbox } from "@cogito-app/ui/components/checkbox";
-import { Input } from "@cogito-app/ui/components/input";
+} from "@cogito-app/ui/components/selia/card";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
+import { Input } from "@cogito-app/ui/components/selia/input";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2, Trash2 } from "lucide-react";
@@ -70,7 +70,7 @@ function TodosRoute() {
           <CardTitle>Todo List</CardTitle>
           <CardDescription>Manage your tasks efficiently</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardBody>
           <form onSubmit={handleAddTodo} className="mb-6 flex items-center space-x-2">
             <Input
               value={newTodoText}
@@ -110,7 +110,7 @@ function TodosRoute() {
                     </label>
                   </div>
                   <Button
-                    variant="ghost"
+                    variant="plain"
                     size="icon"
                     onClick={() => handleDeleteTodo(todo.id)}
                     aria-label="Delete todo"
@@ -121,7 +121,7 @@ function TodosRoute() {
               ))}
             </ul>
           )}
-        </CardContent>
+        </CardBody>
       </Card>
     </div>
   );
