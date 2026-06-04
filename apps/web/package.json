@@ -21,6 +21,7 @@
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/react-form": "^1.28.0",
     "@tanstack/react-query": "^5.90.12",
+    "@fontsource-variable/inter": "^5.2.8",
     "@tanstack/react-router": "^1.168.22",
     "better-auth": "catalog:",
     "dotenv": "catalog:",

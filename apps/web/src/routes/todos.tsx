@@ -94,7 +94,7 @@ function TodosRoute() {
               {todos.data?.map((todo) => (
                 <li
                   key={todo.id}
-                  className="flex items-center justify-between rounded-md border p-2"
+                  className="flex items-center justify-between rounded-md border border-border p-2"
                 >
                   <div className="flex items-center space-x-2">
                     <Checkbox
