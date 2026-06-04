@@ -41,6 +41,9 @@
     "db:watch": "turbo -F @cogito-app/db db:watch",
     "db:stop": "turbo -F @cogito-app/db db:stop",
     "db:down": "turbo -F @cogito-app/db db:down",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt --write",
     "check": "oxlint && oxfmt --write"
   },
   "dependencies": {

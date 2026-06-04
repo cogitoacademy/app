@@ -28,11 +28,19 @@ export function Layout({
   return (
     <>
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Close sidebar overlay"
         className={cn(
           "fixed inset-0 z-10 hidden bg-black backdrop-blur-sm transition-all max-lg:block",
           sidebarOpen ? "visible opacity-40" : "invisible opacity-0",
         )}
         onClick={toggleSidebar}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            toggleSidebar();
+          }
+        }}
       />
       <div
         className={cn(

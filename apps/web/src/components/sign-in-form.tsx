@@ -206,7 +206,15 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
 
           <Text className="text-center">
             Don&apos;t have an account?{" "}
-            <TextLink render={<button type="button" onClick={onSwitchToSignUp} />}>
+            <TextLink
+              render={
+                <button
+                  type="button"
+                  aria-label="Switch to sign up"
+                  onClick={onSwitchToSignUp}
+                />
+              }
+            >
               Sign up
             </TextLink>
           </Text>
