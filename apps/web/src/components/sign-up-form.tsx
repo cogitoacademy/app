@@ -1,5 +1,11 @@
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "@cogito-app/ui/components/selia/card";
+import {
+  Card,
+  CardBody,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@cogito-app/ui/components/selia/card";
 import { Divider } from "@cogito-app/ui/components/selia/divider";
 import { Field, FieldError, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -40,7 +46,10 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
             toastManager.add({ title: "Sign up successful", type: "success" });
           },
           onError: (error) => {
-            toastManager.add({ title: error.error.message || error.error.statusText, type: "error" });
+            toastManager.add({
+              title: error.error.message || error.error.statusText,
+              type: "error",
+            });
           },
         },
       );
@@ -66,93 +75,100 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
           <CardDescription>Enter your details to get started</CardDescription>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
-          <Divider variant="center" className="my-2">Sign up with email</Divider>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          form.handleSubmit();
-        }}
-        className="flex flex-col gap-5"
-      >
-        <form.Field name="name">
-          {(field) => (
-              <Field>
-                <FieldLabel htmlFor={field.name}>Name</FieldLabel>
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  placeholder="Enter your name"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                />
-                {field.state.meta.errors.map((error) => (
-                  <FieldError key={error?.message}>
-                    {error?.message}
-                  </FieldError>
-                ))}
-              </Field>
-            )}
-          </form.Field>
+          <Divider variant="center" className="my-2">
+            Sign up with email
+          </Divider>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              form.handleSubmit();
+            }}
+            className="flex flex-col gap-5"
+          >
+            <form.Field name="name">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    placeholder="Enter your name"
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                  {field.state.meta.errors.map((error) => (
+                    <FieldError key={error?.message}>{error?.message}</FieldError>
+                  ))}
+                </Field>
+              )}
+            </form.Field>
 
-        <form.Field name="email">
-          {(field) => (
-              <Field>
-                <FieldLabel htmlFor={field.name}>Email</FieldLabel>
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  type="email"
-                  placeholder="Enter your email"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                />
-                {field.state.meta.errors.map((error) => (
-                  <FieldError key={error?.message}>
-                    {error?.message}
-                  </FieldError>
-                ))}
-              </Field>
-            )}
-          </form.Field>
+            <form.Field name="email">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    type="email"
+                    placeholder="Enter your email"
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                  {field.state.meta.errors.map((error) => (
+                    <FieldError key={error?.message}>{error?.message}</FieldError>
+                  ))}
+                </Field>
+              )}
+            </form.Field>
 
-        <form.Field name="password">
-          {(field) => (
-              <Field>
-                <FieldLabel htmlFor={field.name}>Password</FieldLabel>
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  type="password"
-                  placeholder="Enter your password"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                />
-                {field.state.meta.errors.map((error) => (
-                  <FieldError key={error?.message}>
-                    {error?.message}
-                  </FieldError>
-                ))}
-              </Field>
-            )}
-          </form.Field>
+            <form.Field name="password">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Password</FieldLabel>
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    type="password"
+                    placeholder="Enter your password"
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                  {field.state.meta.errors.map((error) => (
+                    <FieldError key={error?.message}>{error?.message}</FieldError>
+                  ))}
+                </Field>
+              )}
+            </form.Field>
 
-        <form.Subscribe
-          selector={(state) => ({ canSubmit: state.canSubmit, isSubmitting: state.isSubmitting })}
-        >
-          {({ canSubmit, isSubmitting }) => (
-            <Button type="submit" block disabled={!canSubmit || isSubmitting} progress={isSubmitting}>
-              Sign Up
-            </Button>
-          )}
-        </form.Subscribe>
-      </form>
+            <form.Subscribe
+              selector={(state) => ({
+                canSubmit: state.canSubmit,
+                isSubmitting: state.isSubmitting,
+              })}
+            >
+              {({ canSubmit, isSubmitting }) => (
+                <Button
+                  type="submit"
+                  block
+                  disabled={!canSubmit || isSubmitting}
+                  progress={isSubmitting}
+                >
+                  Sign Up
+                </Button>
+              )}
+            </form.Subscribe>
+          </form>
 
           <Text className="text-center">
-            Already have an account? <TextLink render={<button type="button" onClick={onSwitchToSignIn} />}>Sign in</TextLink>
+            Already have an account?{" "}
+            <TextLink render={<button type="button" onClick={onSwitchToSignIn} />}>
+              Sign in
+            </TextLink>
           </Text>
         </CardBody>
       </Card>

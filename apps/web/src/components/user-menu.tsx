@@ -30,9 +30,7 @@ export default function UserMenu() {
 
   return (
     <Menu>
-      <MenuTrigger render={<Button variant="outline" />}>
-        {session.user.name}
-      </MenuTrigger>
+      <MenuTrigger render={<Button variant="outline" />}>{session.user.name}</MenuTrigger>
       <MenuPopup>
         <MenuGroup>
           <MenuGroupLabel>My Account</MenuGroupLabel>

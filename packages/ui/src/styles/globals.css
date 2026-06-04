@@ -29,8 +29,7 @@
   --card-border: oklch(0.9384 0.0018 247.84);
   --card-separator: oklch(0.9306 0.002 247.84);
   --card-footer: oklch(0.977 0.0007 247.83);
-  --card-shadow:
-    0px 5px 10px rgba(0, 0, 0, 0.03), 0px 8px 3px -4px rgba(0, 0, 0, 0.02);
+  --card-shadow: 0px 5px 10px rgba(0, 0, 0, 0.03), 0px 8px 3px -4px rgba(0, 0, 0, 0.02);
   --item: oklch(1 0 0);
   --item-border: oklch(0.9384 0.0018 247.84);
   --chip: oklch(0.9616 0.0011 247.83);
@@ -39,8 +38,7 @@
   --popover-foreground: var(--foreground);
   --popover-border: oklch(0.9384 0.0018 247.84);
   --popover-separator: oklch(0.9384 0.0018 247.84);
-  --popover-shadow:
-    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --popover-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   --popover-accent: oklch(0.9616 0.0011 247.83);
   --dialog: oklch(1 0 0);
   --dialog-foreground: var(--foreground);
@@ -186,8 +184,8 @@
 @theme inline {
   --font-sans: "Inter Variable", sans-serif;
   --font-mono:
-    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

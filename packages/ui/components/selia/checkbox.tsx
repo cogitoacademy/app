@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { Checkbox as BaseCheckbox } from '@base-ui/react/checkbox';
-import { useRender } from '@base-ui/react/use-render';
-import { CheckboxGroup as BaseCheckboxGroup } from '@base-ui/react/checkbox-group';
-import { cn } from '@cogito-app/ui/lib/utils';
+import { Checkbox as BaseCheckbox } from "@base-ui/react/checkbox";
+import { useRender } from "@base-ui/react/use-render";
+import { CheckboxGroup as BaseCheckboxGroup } from "@base-ui/react/checkbox-group";
+import { cn } from "@cogito-app/ui/lib/utils";
 
 export function CheckboxGroup({
   className,
@@ -13,39 +13,34 @@ export function CheckboxGroup({
     <BaseCheckboxGroup
       data-slot="checkbox-group"
       {...props}
-      className={cn('flex flex-col gap-2.5', className)}
+      className={cn("flex flex-col gap-2.5", className)}
     />
   );
 }
 
-export function CheckboxGroupLabel({
-  render,
-  ...props
-}: useRender.ComponentProps<'span'>) {
+export function CheckboxGroupLabel({ render, ...props }: useRender.ComponentProps<"span">) {
   return useRender({
-    defaultTagName: 'span',
+    defaultTagName: "span",
     render,
     props: {
-      'data-slot': 'checkbox-group-label',
-      className: cn('text-foreground font-medium', props.className),
+      "data-slot": "checkbox-group-label",
+      className: cn("text-foreground font-medium", props.className),
       ...props,
     },
   });
 }
 
-export function Checkbox({
-  ...props
-}: React.ComponentProps<typeof BaseCheckbox.Root>) {
+export function Checkbox({ ...props }: React.ComponentProps<typeof BaseCheckbox.Root>) {
   return (
     <BaseCheckbox.Root
       data-slot="checkbox"
       {...props}
       className={cn(
-        'size-4 shrink-0 flex items-center justify-center rounded-xs border border-input-border bg-input shadow-input cursor-pointer',
-        'focus:outline-0 focus-visible:outline-2 focus-visible:outline-offset-2 outline-primary',
-        'data-[checked]:bg-primary data-[checked]:border-primary',
-        'transition-colors duration-75 hover:border-input-accent-border',
-        'data-disabled:cursor-not-allowed data-disabled:opacity-50',
+        "size-4 shrink-0 flex items-center justify-center rounded-xs border border-input-border bg-input shadow-input cursor-pointer",
+        "focus:outline-0 focus-visible:outline-2 focus-visible:outline-offset-2 outline-primary",
+        "data-[checked]:bg-primary data-[checked]:border-primary",
+        "transition-colors duration-75 hover:border-input-accent-border",
+        "data-disabled:cursor-not-allowed data-disabled:opacity-50",
         props.className,
       )}
     >

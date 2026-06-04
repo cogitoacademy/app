@@ -1,10 +1,5 @@
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@cogito-app/ui/components/selia/menu";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@cogito-app/ui/components/selia/menu";
 import { Moon, Sun } from "lucide-react";
 
 import { useTheme } from "@/components/theme-provider";

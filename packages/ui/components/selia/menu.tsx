@@ -1,58 +1,56 @@
-'use client';
+"use client";
 
-import { Menu as BaseMenu } from '@base-ui/react/menu';
-import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '@cogito-app/ui/lib/utils';
+import { Menu as BaseMenu } from "@base-ui/react/menu";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@cogito-app/ui/lib/utils";
 
 export function Menu({ ...props }: React.ComponentProps<typeof BaseMenu.Root>) {
   return <BaseMenu.Root data-slot="menu" {...props} />;
 }
 
-export function MenuTrigger({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Trigger>) {
+export function MenuTrigger({ ...props }: React.ComponentProps<typeof BaseMenu.Trigger>) {
   return <BaseMenu.Trigger data-slot="menu-trigger" {...props} />;
 }
 
 export const menuPopupVariants = cva(
   [
-    'origin-(--transform-origin) bg-popover ring ring-popover-border rounded shadow-popover',
-    'p-1 outline-none transition-[transform,scale,opacity] space-y-0.5',
-    'data-[ending-style]:opacity-0 data-[ending-style]:scale-90',
-    'data-[starting-style]:opacity-0 data-[starting-style]:scale-90',
-    '**:data-[slot=item]:p-0 min-w-32',
+    "origin-(--transform-origin) bg-popover ring ring-popover-border rounded shadow-popover",
+    "p-1 outline-none transition-[transform,scale,opacity] space-y-0.5",
+    "data-[ending-style]:opacity-0 data-[ending-style]:scale-90",
+    "data-[starting-style]:opacity-0 data-[starting-style]:scale-90",
+    "**:data-[slot=item]:p-0 min-w-32",
   ],
   {
     variants: {
       size: {
         compact: [
-          '**:data-[slot$=item]:gap-2.5',
-          '**:data-[slot$=item]:px-2',
-          '**:data-[slot$=item]:py-1.5',
-          '**:data-[slot=menu-checkbox-item]:pl-8.5',
-          '**:data-[slot=menu-checkbox-item]:data-[checked]:pl-2',
-          '**:data-[slot$=item]:rounded-sm',
-          '**:data-[slot=menu-submenu-trigger]:gap-2.5',
-          '**:data-[slot=menu-submenu-trigger]:px-2',
-          '**:data-[slot=menu-submenu-trigger]:py-1.5',
-          '**:data-[slot=menu-submenu-trigger]:rounded-sm',
+          "**:data-[slot$=item]:gap-2.5",
+          "**:data-[slot$=item]:px-2",
+          "**:data-[slot$=item]:py-1.5",
+          "**:data-[slot=menu-checkbox-item]:pl-8.5",
+          "**:data-[slot=menu-checkbox-item]:data-[checked]:pl-2",
+          "**:data-[slot$=item]:rounded-sm",
+          "**:data-[slot=menu-submenu-trigger]:gap-2.5",
+          "**:data-[slot=menu-submenu-trigger]:px-2",
+          "**:data-[slot=menu-submenu-trigger]:py-1.5",
+          "**:data-[slot=menu-submenu-trigger]:rounded-sm",
         ],
         default: [
-          '**:data-[slot$=item]:gap-3.5',
-          '**:data-[slot$=item]:px-3',
-          '**:data-[slot$=item]:py-2.5',
-          '**:data-[slot=menu-checkbox-item]:pl-10',
-          '**:data-[slot=menu-checkbox-item]:data-[checked]:pl-2.5',
-          '**:data-[slot$=item]:rounded',
-          '**:data-[slot=menu-submenu-trigger]:gap-3.5',
-          '**:data-[slot=menu-submenu-trigger]:px-3',
-          '**:data-[slot=menu-submenu-trigger]:py-2.5',
-          '**:data-[slot=menu-submenu-trigger]:rounded',
+          "**:data-[slot$=item]:gap-3.5",
+          "**:data-[slot$=item]:px-3",
+          "**:data-[slot$=item]:py-2.5",
+          "**:data-[slot=menu-checkbox-item]:pl-10",
+          "**:data-[slot=menu-checkbox-item]:data-[checked]:pl-2.5",
+          "**:data-[slot$=item]:rounded",
+          "**:data-[slot=menu-submenu-trigger]:gap-3.5",
+          "**:data-[slot=menu-submenu-trigger]:px-3",
+          "**:data-[slot=menu-submenu-trigger]:py-2.5",
+          "**:data-[slot=menu-submenu-trigger]:rounded",
         ],
       },
     },
     defaultVariants: {
-      size: 'default',
+      size: "default",
     },
   },
 );
@@ -70,13 +68,13 @@ export function MenuPopup({
   size,
   ...props
 }: React.ComponentProps<typeof BaseMenu.Popup> & {
-  align?: BaseMenu.Positioner.Props['align'];
-  alignOffset?: BaseMenu.Positioner.Props['alignOffset'];
-  side?: BaseMenu.Positioner.Props['side'];
-  sideOffset?: BaseMenu.Positioner.Props['sideOffset'];
-  anchor?: BaseMenu.Positioner.Props['anchor'];
-  sticky?: BaseMenu.Positioner.Props['sticky'];
-  positionMethod?: BaseMenu.Positioner.Props['positionMethod'];
+  align?: BaseMenu.Positioner.Props["align"];
+  alignOffset?: BaseMenu.Positioner.Props["alignOffset"];
+  side?: BaseMenu.Positioner.Props["side"];
+  sideOffset?: BaseMenu.Positioner.Props["sideOffset"];
+  anchor?: BaseMenu.Positioner.Props["anchor"];
+  sticky?: BaseMenu.Positioner.Props["sticky"];
+  positionMethod?: BaseMenu.Positioner.Props["positionMethod"];
 } & VariantProps<typeof menuPopupVariants>) {
   return (
     <BaseMenu.Portal>
@@ -103,19 +101,17 @@ export function MenuPopup({
 }
 
 const menuItemClassName = [
-  'flex items-center text-popover-foreground',
-  'cursor-pointer select-none',
-  'data-[highlighted]:not-[[data-disabled]]:bg-popover-accent data-[selected]:not-[[data-disabled]]:bg-popover-accent',
-  'data-[popup-open]:bg-popover-accent',
-  'focus-visible:outline-none',
-  '[&_svg:not([class*=size-])]:size-4 [&_svg:not([class*=text-])]:text-popover-foreground',
-  '*:data-[slot=switch]:ml-auto',
-  'data-disabled:cursor-not-allowed data-disabled:opacity-70',
+  "flex items-center text-popover-foreground",
+  "cursor-pointer select-none",
+  "data-[highlighted]:not-[[data-disabled]]:bg-popover-accent data-[selected]:not-[[data-disabled]]:bg-popover-accent",
+  "data-[popup-open]:bg-popover-accent",
+  "focus-visible:outline-none",
+  "[&_svg:not([class*=size-])]:size-4 [&_svg:not([class*=text-])]:text-popover-foreground",
+  "*:data-[slot=switch]:ml-auto",
+  "data-disabled:cursor-not-allowed data-disabled:opacity-70",
 ];
 
-export function MenuItem({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Item>) {
+export function MenuItem({ ...props }: React.ComponentProps<typeof BaseMenu.Item>) {
   return (
     <BaseMenu.Item
       data-slot="menu-item"
@@ -125,21 +121,17 @@ export function MenuItem({
   );
 }
 
-export function MenuSeparator({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Separator>) {
+export function MenuSeparator({ ...props }: React.ComponentProps<typeof BaseMenu.Separator>) {
   return (
     <BaseMenu.Separator
       data-slot="menu-separator"
-      className={cn('h-px my-1 bg-popover-separator', props.className)}
+      className={cn("h-px my-1 bg-popover-separator", props.className)}
       {...props}
     />
   );
 }
 
-export function MenuSubmenu({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.SubmenuRoot>) {
+export function MenuSubmenu({ ...props }: React.ComponentProps<typeof BaseMenu.SubmenuRoot>) {
   return <BaseMenu.SubmenuRoot data-slot="menu-submenu" {...props} />;
 }
 
@@ -152,7 +144,7 @@ export function MenuSubmenuTrigger({
       {...props}
       className={cn(
         menuItemClassName,
-        'after:bg-chevron-right-dark dark:after:bg-chevron-right after:size-4 after:ml-auto',
+        "after:bg-chevron-right-dark dark:after:bg-chevron-right after:size-4 after:ml-auto",
         props.className,
       )}
     />
@@ -169,13 +161,13 @@ export function MenuSubmenuPopup({
   positionMethod,
   ...props
 }: React.ComponentProps<typeof BaseMenu.Popup> & {
-  align?: BaseMenu.Positioner.Props['align'];
-  alignOffset?: BaseMenu.Positioner.Props['alignOffset'];
-  side?: BaseMenu.Positioner.Props['side'];
-  sideOffset?: BaseMenu.Positioner.Props['sideOffset'];
-  anchor?: BaseMenu.Positioner.Props['anchor'];
-  sticky?: BaseMenu.Positioner.Props['sticky'];
-  positionMethod?: BaseMenu.Positioner.Props['positionMethod'];
+  align?: BaseMenu.Positioner.Props["align"];
+  alignOffset?: BaseMenu.Positioner.Props["alignOffset"];
+  side?: BaseMenu.Positioner.Props["side"];
+  sideOffset?: BaseMenu.Positioner.Props["sideOffset"];
+  anchor?: BaseMenu.Positioner.Props["anchor"];
+  sticky?: BaseMenu.Positioner.Props["sticky"];
+  positionMethod?: BaseMenu.Positioner.Props["positionMethod"];
 } & VariantProps<typeof menuPopupVariants>) {
   return (
     <MenuPopup
@@ -192,22 +184,15 @@ export function MenuSubmenuPopup({
   );
 }
 
-export function MenuGroup({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Group>) {
+export function MenuGroup({ ...props }: React.ComponentProps<typeof BaseMenu.Group>) {
   return <BaseMenu.Group data-slot="menu-group" {...props} />;
 }
 
-export function MenuGroupLabel({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.GroupLabel>) {
+export function MenuGroupLabel({ ...props }: React.ComponentProps<typeof BaseMenu.GroupLabel>) {
   return (
     <BaseMenu.GroupLabel
       data-slot="menu-group-label"
-      className={cn(
-        'px-3 py-1.5 text-dimmed font-medium text-sm',
-        props.className,
-      )}
+      className={cn("px-3 py-1.5 text-dimmed font-medium text-sm", props.className)}
       {...props}
     />
   );
@@ -244,27 +229,25 @@ export function MenuCheckboxItem({
   );
 }
 
-export function MenuRadioGroup({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.RadioGroup>) {
+export function MenuRadioGroup({ ...props }: React.ComponentProps<typeof BaseMenu.RadioGroup>) {
   return <BaseMenu.RadioGroup data-slot="menu-radio-group" {...props} />;
 }
 
 export const menuRadioItemVariants = cva(menuItemClassName, {
   variants: {
     variant: {
-      default: 'data-[checked]:pl-3',
+      default: "data-[checked]:pl-3",
       alternate: [
-        '*:data-[slot=menu-radio-item-indicator]:order-last',
-        '*:data-[slot=menu-radio-item-indicator]:ml-auto',
-        '*:data-[slot=menu-radio-item-indicator]:ring',
-        '*:data-[slot=menu-radio-item-indicator]:ring-input-border',
-        '*:data-[slot=menu-radio-item-indicator]:bg-input',
+        "*:data-[slot=menu-radio-item-indicator]:order-last",
+        "*:data-[slot=menu-radio-item-indicator]:ml-auto",
+        "*:data-[slot=menu-radio-item-indicator]:ring",
+        "*:data-[slot=menu-radio-item-indicator]:ring-input-border",
+        "*:data-[slot=menu-radio-item-indicator]:bg-input",
       ],
     },
   },
   defaultVariants: {
-    variant: 'default',
+    variant: "default",
   },
 });
 
@@ -273,8 +256,7 @@ export function MenuRadioItem({
   variant,
   children,
   ...props
-}: React.ComponentProps<typeof BaseMenu.RadioItem> &
-  VariantProps<typeof menuRadioItemVariants>) {
+}: React.ComponentProps<typeof BaseMenu.RadioItem> & VariantProps<typeof menuRadioItemVariants>) {
   return (
     <BaseMenu.RadioItem
       data-slot="menu-radio-item"

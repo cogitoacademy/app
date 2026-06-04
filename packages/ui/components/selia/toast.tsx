@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { Toast as BaseToast, type ToastObject } from '@base-ui/react/toast';
-import { buttonVariants } from './button';
-import { cn } from '@cogito-app/ui/lib/utils';
+import { Toast as BaseToast, type ToastObject } from "@base-ui/react/toast";
+import { buttonVariants } from "./button";
+import { cn } from "@cogito-app/ui/lib/utils";
 
 export const toastManager = BaseToast.createToastManager();
 export const anchoredToastManager = BaseToast.createToastManager();
@@ -32,27 +32,27 @@ function StackedToasts() {
             toast={toast}
             swipeDirection="up"
             className={cn(
-              'absolute right-0 top-0 left-0 z-[calc(1000-var(--toast-index))] mx-auto w-sm max-w-full origin-top',
-              'rounded border border-toast-border bg-toast p-4 shadow-lg select-none h-(--height)',
-              'after:absolute after:bottom-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full',
-              '[--gap:0.75rem] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))]',
-              '[--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)+(var(--toast-index)*var(--gap))+var(--toast-swipe-movement-y))]',
-              '[transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)+(var(--toast-index)*var(--peek))+(var(--shrink)*var(--height))))_scale(var(--scale))]',
-              '[transition:transform_0.5s_cubic-bezier(0.22,1,0.36,1),opacity_0.5s,height_0.15s]',
-              'data-[starting-style]:[transform:translateY(-150%)]',
-              'data-[ending-style]:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]',
-              'data-[ending-style]:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]',
-              'data-[ending-style]:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]',
-              'data-[ending-style]:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]',
-              '[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:translateY(-150%)]',
-              'data-[ending-style]:opacity-0',
-              'data-[limited]:opacity-0',
-              'data-[expanded]:h-[var(--toast-height)]',
-              'data-[expanded]:data-[ending-style]:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]',
-              'data-[expanded]:data-[ending-style]:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]',
-              'data-[expanded]:data-[ending-style]:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]',
-              'data-[expanded]:data-[ending-style]:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]',
-              'data-[expanded]:[transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--offset-y)))]',
+              "absolute right-0 top-0 left-0 z-[calc(1000-var(--toast-index))] mx-auto w-sm max-w-full origin-top",
+              "rounded border border-toast-border bg-toast p-4 shadow-lg select-none h-(--height)",
+              "after:absolute after:bottom-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full",
+              "[--gap:0.75rem] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))]",
+              "[--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)+(var(--toast-index)*var(--gap))+var(--toast-swipe-movement-y))]",
+              "[transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)+(var(--toast-index)*var(--peek))+(var(--shrink)*var(--height))))_scale(var(--scale))]",
+              "[transition:transform_0.5s_cubic-bezier(0.22,1,0.36,1),opacity_0.5s,height_0.15s]",
+              "data-[starting-style]:[transform:translateY(-150%)]",
+              "data-[ending-style]:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]",
+              "data-[ending-style]:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]",
+              "data-[ending-style]:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]",
+              "data-[ending-style]:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]",
+              "[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:translateY(-150%)]",
+              "data-[ending-style]:opacity-0",
+              "data-[limited]:opacity-0",
+              "data-[expanded]:h-[var(--toast-height)]",
+              "data-[expanded]:data-[ending-style]:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]",
+              "data-[expanded]:data-[ending-style]:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))]",
+              "data-[expanded]:data-[ending-style]:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]",
+              "data-[expanded]:data-[ending-style]:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]",
+              "data-[expanded]:[transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--offset-y)))]",
             )}
           >
             <ToastContent toast={toast} />
@@ -78,12 +78,12 @@ function AnchoredToasts() {
             <BaseToast.Root
               toast={toast}
               className={cn(
-                'group flex w-max origin-(--transform-origin) flex-col outline-none',
-                'shadow bg-toast border border-toast-border rounded',
-                'transition-[transform,scale,opacity]',
-                'data-ending-style:scale-90 data-ending-style:opacity-0',
-                'data-starting-style:scale-90 data-starting-style:opacity-0',
-                toast.data?.size === 'sm' ? 'p-2' : 'p-4',
+                "group flex w-max origin-(--transform-origin) flex-col outline-none",
+                "shadow bg-toast border border-toast-border rounded",
+                "transition-[transform,scale,opacity]",
+                "data-ending-style:scale-90 data-ending-style:opacity-0",
+                "data-starting-style:scale-90 data-starting-style:opacity-0",
+                toast.data?.size === "sm" ? "p-2" : "p-4",
               )}
             >
               <ToastContent toast={toast} />
@@ -100,32 +100,24 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
     <BaseToast.Content
       data-slot="toast-content"
       className={cn(
-        'overflow-hidden transition-opacity data-behind:pointer-events-none data-behind:opacity-0',
-        'data-expanded:opacity-100 data-expanded:pointer-events-auto',
-        'flex gap-x-2.5 gap-y-0.5 items-center',
+        "overflow-hidden transition-opacity data-behind:pointer-events-none data-behind:opacity-0",
+        "data-expanded:opacity-100 data-expanded:pointer-events-auto",
+        "flex gap-x-2.5 gap-y-0.5 items-center",
       )}
     >
-      {toast.type && (
-        <ToastIcon type={toast.type}>{icons[toast.type]}</ToastIcon>
-      )}
+      {toast.type && <ToastIcon type={toast.type}>{icons[toast.type]}</ToastIcon>}
       <div className="w-full flex justify-between flex-col md:flex-row items-start">
         <div>
-          <BaseToast.Title
-            data-slot="toast-title"
-            className="text-foreground font-medium"
-          />
-          <BaseToast.Description
-            data-slot="toast-description"
-            className="text-muted col-start-1"
-          />
+          <BaseToast.Title data-slot="toast-title" className="text-foreground font-medium" />
+          <BaseToast.Description data-slot="toast-description" className="text-muted col-start-1" />
         </div>
         <BaseToast.Action
           {...toast.actionProps}
           data-slot="toast-action"
           data-disabled={toast.actionProps?.disabled ? true : undefined}
           className={cn(
-            'text-sm md:ml-auto shrink-0 mt-2 md:mt-0 self-center',
-            buttonVariants({ variant: 'tertiary', size: 'xs' }),
+            "text-sm md:ml-auto shrink-0 mt-2 md:mt-0 self-center",
+            buttonVariants({ variant: "tertiary", size: "xs" }),
             toast.actionProps?.className,
           )}
         />
@@ -134,22 +126,16 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
   );
 }
 
-function ToastIcon({
-  type,
-  children,
-}: {
-  type?: string;
-  children: React.ReactNode;
-}) {
+function ToastIcon({ type, children }: { type?: string; children: React.ReactNode }) {
   return (
     <div
       data-slot="toast-icon"
       className={cn(
-        '*:[svg]:w-4.5 self-start',
-        type === 'success' && '*:[svg]:fill-success/20 *:[svg]:stroke-success',
-        type === 'info' && '*:[svg]:fill-info/20 *:[svg]:stroke-info',
-        type === 'warning' && '*:[svg]:fill-warning/20 *:[svg]:stroke-warning',
-        type === 'error' && '*:[svg]:fill-danger/20 *:[svg]:stroke-danger',
+        "*:[svg]:w-4.5 self-start",
+        type === "success" && "*:[svg]:fill-success/20 *:[svg]:stroke-success",
+        type === "info" && "*:[svg]:fill-info/20 *:[svg]:stroke-info",
+        type === "warning" && "*:[svg]:fill-warning/20 *:[svg]:stroke-warning",
+        type === "error" && "*:[svg]:fill-danger/20 *:[svg]:stroke-danger",
       )}
     >
       {children}
