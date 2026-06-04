@@ -1,8 +1,20 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@cogito-app/ui/components/selia/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Input } from "@cogito-app/ui/components/selia/input";
-import { InputGroup, InputGroupAddon } from "@cogito-app/ui/components/selia/input-group";
+import {
+  InputGroup,
+  InputGroupAddon,
+} from "@cogito-app/ui/components/selia/input-group";
 import { Kbd } from "@cogito-app/ui/components/selia/kbd";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@cogito-app/ui/components/selia/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@cogito-app/ui/components/selia/menu";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Sidebar,
@@ -57,7 +69,10 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar size="loose" className="border-border bg-background max-lg:border-r xl:bg-transparent">
+    <Sidebar
+      size="loose"
+      className="border-border bg-background max-lg:border-r xl:bg-transparent"
+    >
       <SidebarHeader>
         <SidebarLogo>
           <div className="size-8 rounded bg-primary" />
@@ -148,7 +163,9 @@ export function AppSidebar({
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex min-w-0 flex-col">
-                        <span className="truncate font-medium">{userName ?? "Cogito User"}</span>
+                        <span className="truncate font-medium">
+                          {userName ?? "Cogito User"}
+                        </span>
                         <span className="truncate text-sm text-muted">
                           {userEmail ?? "user@example.com"}
                         </span>

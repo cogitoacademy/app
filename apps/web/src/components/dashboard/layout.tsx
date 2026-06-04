@@ -12,11 +12,12 @@ export function Layout({
   children: React.ReactNode;
   sidebar: React.ReactNode;
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => window.innerWidth >= 1024,
+  );
 
   useEffect(() => {
     const updateSidebar = () => setSidebarOpen(window.innerWidth >= 1024);
-    updateSidebar();
     window.addEventListener("resize", updateSidebar);
     return () => window.removeEventListener("resize", updateSidebar);
   }, []);
@@ -27,20 +28,14 @@ export function Layout({
 
   return (
     <>
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         aria-label="Close sidebar overlay"
         className={cn(
           "fixed inset-0 z-10 hidden bg-black backdrop-blur-sm transition-all max-lg:block",
           sidebarOpen ? "visible opacity-40" : "invisible opacity-0",
         )}
         onClick={toggleSidebar}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            toggleSidebar();
-          }
-        }}
       />
       <div
         className={cn(
@@ -50,7 +45,9 @@ export function Layout({
       >
         {sidebar}
       </div>
-      <main className={cn("transition-all", sidebarOpen ? "xl:ml-72" : "xl:ml-0")}>
+      <main
+        className={cn("transition-all", sidebarOpen ? "xl:ml-72" : "xl:ml-0")}
+      >
         <nav
           className={cn(
             "flex h-16 items-center gap-2.5 max-lg:px-4",
@@ -58,7 +55,9 @@ export function Layout({
           )}
         >
           <Button variant="plain" size="sm-icon" onClick={toggleSidebar}>
-            <span className="sr-only">{sidebarOpen ? "Close sidebar" : "Open sidebar"}</span>
+            <span className="sr-only">
+              {sidebarOpen ? "Close sidebar" : "Open sidebar"}
+            </span>
             {sidebarOpen ? <SidebarCloseIcon /> : <SidebarOpenIcon />}
           </Button>
           <Heading size="sm">Dashboard</Heading>

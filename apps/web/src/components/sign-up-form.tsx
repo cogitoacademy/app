@@ -7,7 +7,11 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Divider } from "@cogito-app/ui/components/selia/divider";
-import { Field, FieldError, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import {
+  Field,
+  FieldError,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -19,7 +23,11 @@ import { authClient } from "@/lib/auth-client";
 
 import Loader from "./loader";
 
-export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
+export default function SignUpForm({
+  onSwitchToSignIn,
+}: {
+  onSwitchToSignIn: () => void;
+}) {
   const navigate = useNavigate({
     from: "/",
   });
@@ -99,7 +107,9 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
                   {field.state.meta.errors.map((error) => (
-                    <FieldError key={error?.message}>{error?.message}</FieldError>
+                    <FieldError key={error?.message}>
+                      {error?.message}
+                    </FieldError>
                   ))}
                 </Field>
               )}
@@ -119,7 +129,9 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
                   {field.state.meta.errors.map((error) => (
-                    <FieldError key={error?.message}>{error?.message}</FieldError>
+                    <FieldError key={error?.message}>
+                      {error?.message}
+                    </FieldError>
                   ))}
                 </Field>
               )}
@@ -139,7 +151,9 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
                   {field.state.meta.errors.map((error) => (
-                    <FieldError key={error?.message}>{error?.message}</FieldError>
+                    <FieldError key={error?.message}>
+                      {error?.message}
+                    </FieldError>
                   ))}
                 </Field>
               )}

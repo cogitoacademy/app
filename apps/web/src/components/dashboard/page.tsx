@@ -208,7 +208,9 @@ function BestSellingCard() {
                   <ItemTitle>{product.name}</ItemTitle>
                   <ItemDescription>{product.price}</ItemDescription>
                 </ItemContent>
-                <ItemMeta className="ml-auto shrink-0">{product.sales}</ItemMeta>
+                <ItemMeta className="ml-auto shrink-0">
+                  {product.sales}
+                </ItemMeta>
               </Item>
             </div>
           ))}
