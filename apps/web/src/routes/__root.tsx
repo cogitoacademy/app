@@ -1,16 +1,17 @@
-import type { AppRouterClient } from "@cogito-app/api/routers/index";
 import { Toast } from "@cogito-app/ui/components/selia/toast";
-import { createORPCClient } from "@orpc/client";
-import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { HeadContent, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Outlet,
+  createRootRouteWithContext,
+  useRouterState,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { useState } from "react";
 
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
-import { link, orpc } from "@/utils/orpc";
+import { orpc } from "@/utils/orpc";
 
 import "../index.css";
 
@@ -24,7 +25,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "cogito-app",
+        title: "Cogito Digital",
       },
       {
         name: "description",
@@ -41,8 +42,8 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
-  const [client] = useState<AppRouterClient>(() => createORPCClient(link));
-  const [orpcUtils] = useState(() => createTanstackQueryUtils(client));
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const showHeader = pathname !== "/dashboard";
 
   return (
     <>
@@ -54,7 +55,7 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <div className="root grid grid-rows-[auto_1fr] h-svh">
-          <Header />
+          {showHeader ? <Header /> : null}
           <Outlet />
         </div>
         <Toast />

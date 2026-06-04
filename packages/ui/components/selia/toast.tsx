@@ -95,7 +95,7 @@ function AnchoredToasts() {
   );
 }
 
-function ToastContent({ toast }: { toast: ToastObject<Object> }) {
+function ToastContent({ toast }: { toast: ToastObject<object> }) {
   return (
     <BaseToast.Content
       data-slot="toast-content"
