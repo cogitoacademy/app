@@ -46,7 +46,7 @@ import { authClient } from "@/lib/auth-client";
 const navigationItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/balance", label: "Balance", icon: IconCoins },
-  { to: "/achivements", label: "Achivements", icon: IconCertificate },
+  { to: "/achievements", label: "Achievements", icon: IconCertificate },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
 
@@ -58,7 +58,9 @@ export function AppSidebar({
   userEmail?: string | null;
 }) {
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
 
   function signOut() {
     authClient.signOut({
@@ -143,10 +145,12 @@ export function AppSidebar({
                   }
                 />
                 <MenuPopup className="w-(--anchor-width)" side="top">
-                  <MenuItem>
-                    <IconUser />
-                    Profile
-                  </MenuItem>
+                  <Link to="/profile">
+                    <MenuItem>
+                      <IconUser />
+                      Profile
+                    </MenuItem>
+                  </Link>
                   <MenuItem>
                     <IconSettings />
                     Settings

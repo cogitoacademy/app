@@ -14,9 +14,10 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AppTodosRouteImport } from './routes/_app.todos'
+import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
-import { Route as AppAchivementsRouteImport } from './routes/_app.achivements'
+import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -42,6 +43,11 @@ const AppTodosRoute = AppTodosRouteImport.update({
   path: '/todos',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProfileRoute = AppProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -52,27 +58,29 @@ const AppBalanceRoute = AppBalanceRouteImport.update({
   path: '/balance',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAchivementsRoute = AppAchivementsRouteImport.update({
-  id: '/achivements',
-  path: '/achivements',
+const AppAchievementsRoute = AppAchievementsRouteImport.update({
+  id: '/achievements',
+  path: '/achievements',
   getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/achivements': typeof AppAchivementsRoute
+  '/achievements': typeof AppAchievementsRoute
   '/balance': typeof AppBalanceRoute
   '/dashboard': typeof AppDashboardRoute
+  '/profile': typeof AppProfileRoute
   '/todos': typeof AppTodosRoute
   '/tutors': typeof AppTutorsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/achivements': typeof AppAchivementsRoute
+  '/achievements': typeof AppAchievementsRoute
   '/balance': typeof AppBalanceRoute
   '/dashboard': typeof AppDashboardRoute
+  '/profile': typeof AppProfileRoute
   '/todos': typeof AppTodosRoute
   '/tutors': typeof AppTutorsRoute
 }
@@ -81,9 +89,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
-  '/_app/achivements': typeof AppAchivementsRoute
+  '/_app/achievements': typeof AppAchievementsRoute
   '/_app/balance': typeof AppBalanceRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/profile': typeof AppProfileRoute
   '/_app/todos': typeof AppTodosRoute
   '/_app/tutors': typeof AppTutorsRoute
 }
@@ -92,18 +101,20 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
-    | '/achivements'
+    | '/achievements'
     | '/balance'
     | '/dashboard'
+    | '/profile'
     | '/todos'
     | '/tutors'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
-    | '/achivements'
+    | '/achievements'
     | '/balance'
     | '/dashboard'
+    | '/profile'
     | '/todos'
     | '/tutors'
   id:
@@ -111,9 +122,10 @@ export interface FileRouteTypes {
     | '/'
     | '/_app'
     | '/login'
-    | '/_app/achivements'
+    | '/_app/achievements'
     | '/_app/balance'
     | '/_app/dashboard'
+    | '/_app/profile'
     | '/_app/todos'
     | '/_app/tutors'
   fileRoutesById: FileRoutesById
@@ -161,6 +173,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTodosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/profile': {
+      id: '/_app/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -175,28 +194,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBalanceRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/achivements': {
-      id: '/_app/achivements'
-      path: '/achivements'
-      fullPath: '/achivements'
-      preLoaderRoute: typeof AppAchivementsRouteImport
+    '/_app/achievements': {
+      id: '/_app/achievements'
+      path: '/achievements'
+      fullPath: '/achievements'
+      preLoaderRoute: typeof AppAchievementsRouteImport
       parentRoute: typeof AppRoute
     }
   }
 }
 
 interface AppRouteChildren {
-  AppAchivementsRoute: typeof AppAchivementsRoute
+  AppAchievementsRoute: typeof AppAchievementsRoute
   AppBalanceRoute: typeof AppBalanceRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppProfileRoute: typeof AppProfileRoute
   AppTodosRoute: typeof AppTodosRoute
   AppTutorsRoute: typeof AppTutorsRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppAchivementsRoute: AppAchivementsRoute,
+  AppAchievementsRoute: AppAchievementsRoute,
   AppBalanceRoute: AppBalanceRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppProfileRoute: AppProfileRoute,
   AppTodosRoute: AppTodosRoute,
   AppTutorsRoute: AppTutorsRoute,
 }

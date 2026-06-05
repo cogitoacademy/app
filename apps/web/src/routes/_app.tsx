@@ -12,9 +12,10 @@ import { authClient } from "@/lib/auth-client";
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/balance": "Balance",
-  "/achivements": "Achivements",
+  "/achievements": "Achievements",
   "/tutors": "Tutors",
   "/todos": "Todos",
+  "/profile": "Profile",
 };
 
 export const Route = createFileRoute("/_app")({

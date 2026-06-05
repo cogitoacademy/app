@@ -7,6 +7,9 @@
     },
     "./*": {
       "default": "./src/*.ts"
+    },
+    "./schema": {
+      "default": "./src/schema/index.ts"
     }
   },
   "scripts": {

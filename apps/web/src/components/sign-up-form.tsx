@@ -49,7 +49,7 @@ export default function SignUpForm({
         {
           onSuccess: () => {
             navigate({
-              to: "/dashboard",
+              to: "/profile",
             });
             toastManager.add({ title: "Sign up successful", type: "success" });
           },

@@ -32,6 +32,7 @@
         "@sinclair/typebox": "^0.34.49",
         "better-auth": "catalog:",
         "dotenv": "catalog:",
+        "drizzle-orm": "catalog:",
         "elysia": "catalog:",
         "evlog": "^2.14.1",
         "zod": "catalog:",
@@ -48,6 +49,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@cogito-app/api": "workspace:*",
+        "@cogito-app/auth": "workspace:*",
         "@cogito-app/env": "workspace:*",
         "@cogito-app/ui": "workspace:*",
         "@fontsource-variable/inter": "^5.2.8",

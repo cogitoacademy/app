@@ -42,13 +42,16 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const showHeader = ![
     "/dashboard",
     "/balance",
-    "/achivements",
+    "/achievements",
     "/tutors",
     "/todos",
+    "/profile",
   ].some((path) => pathname.startsWith(path));
 
   return (

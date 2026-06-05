@@ -166,9 +166,9 @@ export function DashboardPage() {
         />
       </div>
       <div className="flex flex-wrap gap-4 lg:flex-nowrap">
-        <div className="w-full lg:w-8/12">
+        {/*<div className="w-full lg:w-8/12">
           <Chart />
-        </div>
+        </div>*/}
         <div className="w-full lg:w-4/12">
           <BestSellingCard />
         </div>

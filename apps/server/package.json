@@ -21,6 +21,7 @@
     "@sinclair/typebox": "^0.34.49",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
+    "drizzle-orm": "catalog:",
     "elysia": "catalog:",
     "evlog": "^2.14.1",
     "zod": "catalog:"
