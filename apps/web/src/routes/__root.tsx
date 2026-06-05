@@ -5,11 +5,9 @@ import {
   HeadContent,
   Outlet,
   createRootRouteWithContext,
-  useRouterState,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
-import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { orpc } from "@/utils/orpc";
 
@@ -42,18 +40,6 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-  const showHeader = ![
-    "/dashboard",
-    "/balance",
-    "/achievements",
-    "/tutors",
-    "/todos",
-    "/profile",
-  ].some((path) => pathname.startsWith(path));
-
   return (
     <>
       <HeadContent />
@@ -64,7 +50,6 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <div className="root grid grid-rows-[auto_1fr] h-svh">
-          {showHeader ? <Header /> : null}
           <Outlet />
         </div>
         <Toast />
