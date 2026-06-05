@@ -10,6 +10,9 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  build: {
+    chunkSizeWarningLimit: 800,
+  },
   plugins: [
     tailwindcss(),
     tanstackRouter({
