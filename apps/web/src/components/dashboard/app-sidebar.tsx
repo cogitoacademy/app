@@ -15,12 +15,9 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@cogito-app/ui/components/selia/menu";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Sidebar,
-  SidebarCollapsible,
-  SidebarCollapsiblePanel,
-  SidebarCollapsibleTrigger,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
@@ -31,23 +28,27 @@ import {
   SidebarList,
   SidebarLogo,
   SidebarMenu,
-  SidebarSubmenu,
 } from "@cogito-app/ui/components/selia/sidebar";
 import {
-  ChartAreaIcon,
-  ChevronsUpDownIcon,
-  HomeIcon,
-  LogOutIcon,
-  Package2Icon,
-  SearchIcon,
-  SettingsIcon,
-  ShoppingBagIcon,
-  TagsIcon,
-  UserIcon,
-} from "lucide-react";
+  IconCertificate,
+  IconCoins,
+  IconHome,
+  IconLogout,
+  IconSearch,
+  IconSelector,
+  IconSettings,
+  IconUser,
+  IconUserSquare,
+} from "@tabler/icons-react";
 
 import { authClient } from "@/lib/auth-client";
-import { ModeToggle } from "../mode-toggle";
+
+const navigationItems = [
+  { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/balance", label: "Balance", icon: IconCoins },
+  { to: "/achivements", label: "Achivements", icon: IconCertificate },
+  { to: "/tutors", label: "Tutors", icon: IconUserSquare },
+] as const;
 
 export function AppSidebar({
   userName,
@@ -57,6 +58,7 @@ export function AppSidebar({
   userEmail?: string | null;
 }) {
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   function signOut() {
     authClient.signOut({
@@ -80,7 +82,7 @@ export function AppSidebar({
         </SidebarLogo>
         <InputGroup className="mt-4">
           <InputGroupAddon>
-            <SearchIcon />
+            <IconSearch />
           </InputGroupAddon>
           <Input placeholder="Search" />
           <InputGroupAddon align="end">
@@ -93,55 +95,21 @@ export function AppSidebar({
           <SidebarGroup>
             <SidebarGroupTitle>Navigation</SidebarGroupTitle>
             <SidebarList>
-              <SidebarItem>
-                <SidebarItemButton active>
-                  <HomeIcon />
-                  Dashboard
-                </SidebarItemButton>
-              </SidebarItem>
-              <SidebarItem>
-                <SidebarItemButton>
-                  <ShoppingBagIcon />
-                  Products
-                </SidebarItemButton>
-              </SidebarItem>
-              <SidebarItem>
-                <SidebarItemButton>
-                  <TagsIcon />
-                  Categories
-                </SidebarItemButton>
-              </SidebarItem>
-              <SidebarItem>
-                <SidebarItemButton>
-                  <Package2Icon />
-                  Orders
-                </SidebarItemButton>
-              </SidebarItem>
-              <SidebarCollapsible>
-                <SidebarCollapsibleTrigger
-                  render={
-                    <SidebarItemButton>
-                      <ChartAreaIcon />
-                      Reports
+              {navigationItems.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <SidebarItem key={item.to}>
+                    <SidebarItemButton
+                      active={pathname === item.to}
+                      render={<Link to={item.to} preload="intent" />}
+                    >
+                      <Icon />
+                      {item.label}
                     </SidebarItemButton>
-                  }
-                />
-                <SidebarCollapsiblePanel>
-                  <SidebarSubmenu>
-                    <SidebarList>
-                      <SidebarItem>
-                        <SidebarItemButton>Sales</SidebarItemButton>
-                      </SidebarItem>
-                      <SidebarItem>
-                        <SidebarItemButton>Traffic</SidebarItemButton>
-                      </SidebarItem>
-                      <SidebarItem>
-                        <SidebarItemButton>Conversion</SidebarItemButton>
-                      </SidebarItem>
-                    </SidebarList>
-                  </SidebarSubmenu>
-                </SidebarCollapsiblePanel>
-              </SidebarCollapsible>
+                  </SidebarItem>
+                );
+              })}
             </SidebarList>
           </SidebarGroup>
         </SidebarMenu>
@@ -170,25 +138,22 @@ export function AppSidebar({
                           {userEmail ?? "user@example.com"}
                         </span>
                       </div>
-                      <ChevronsUpDownIcon className="ml-auto" />
+                      <IconSelector className="ml-auto" />
                     </SidebarItemButton>
                   }
                 />
                 <MenuPopup className="w-(--anchor-width)" side="top">
                   <MenuItem>
-                    <UserIcon />
+                    <IconUser />
                     Profile
                   </MenuItem>
                   <MenuItem>
-                    <SettingsIcon />
+                    <IconSettings />
                     Settings
                   </MenuItem>
                   <MenuItem onClick={signOut}>
-                    <LogOutIcon />
+                    <IconLogout />
                     Logout
-                  </MenuItem>
-                  <MenuItem>
-                    <ModeToggle />
                   </MenuItem>
                 </MenuPopup>
               </Menu>

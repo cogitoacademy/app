@@ -1,16 +1,20 @@
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { cn } from "@cogito-app/ui/lib/utils";
-import { SidebarCloseIcon, SidebarOpenIcon } from "lucide-react";
+import { IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { ModeToggle } from "../mode-toggle";
 
 export function Layout({
   children,
+  isContentPending = false,
   sidebar,
+  title = "Dashboard",
 }: {
   children: React.ReactNode;
+  isContentPending?: boolean;
   sidebar: React.ReactNode;
+  title?: string;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth >= 1024,
@@ -58,9 +62,9 @@ export function Layout({
             <span className="sr-only">
               {sidebarOpen ? "Close sidebar" : "Open sidebar"}
             </span>
-            {sidebarOpen ? <SidebarCloseIcon /> : <SidebarOpenIcon />}
+            {sidebarOpen ? <IconLayoutSidebarLeftCollapse /> : <IconLayoutSidebarLeftExpand />}
           </Button>
-          <Heading size="sm">Dashboard</Heading>
+          <Heading size="sm">{title}</Heading>
           <div className="ml-auto mr-0">
             <ModeToggle />
           </div>
@@ -71,9 +75,25 @@ export function Layout({
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >
-          {children}
+          {isContentPending ? <PagePendingState /> : children}
         </div>
       </main>
     </>
+  );
+}
+
+function PagePendingState() {
+  return (
+    <div
+      aria-live="polite"
+      aria-label="Loading page content"
+      className="rounded border border-card-border bg-card p-6 shadow-card"
+    >
+      <div className="flex animate-pulse flex-col gap-4">
+        <div className="h-5 w-40 rounded bg-accent" />
+        <div className="h-4 w-64 max-w-full rounded bg-accent" />
+        <div className="h-28 rounded bg-accent" />
+      </div>
+    </div>
   );
 }

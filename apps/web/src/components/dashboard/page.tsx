@@ -29,23 +29,16 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import {
-  ArrowRightCircleIcon,
-  ArrowRightIcon,
-  Package2Icon,
-  ShoppingBagIcon,
-  TagsIcon,
-  Users2Icon,
-} from "lucide-react";
+  IconArrowRightCircle,
+  IconArrowRight,
+  IconPackage,
+  IconShoppingBag,
+  IconTags,
+  IconUsers,
+} from "@tabler/icons-react";
 
-import { AppSidebar } from "./app-sidebar";
 import { Chart } from "./chart";
-import { Layout } from "./layout";
 import { StatCard } from "./stat-card";
-
-type DashboardPageProps = {
-  userName?: string | null;
-  userEmail?: string | null;
-};
 
 const products = [
   {
@@ -139,33 +132,33 @@ const orders = [
   },
 ] as const;
 
-export function DashboardPage({ userName, userEmail }: DashboardPageProps) {
+export function DashboardPage() {
   return (
-    <Layout sidebar={<AppSidebar userName={userName} userEmail={userEmail} />}>
+    <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          icon={<ShoppingBagIcon />}
+          icon={<IconShoppingBag />}
           title="Total Sales"
           value="$12,340"
           change="+8.2%"
           changeType="increase"
         />
         <StatCard
-          icon={<Users2Icon />}
+          icon={<IconUsers />}
           title="Customers"
           value="3,210"
           change="+4.1%"
           changeType="increase"
         />
         <StatCard
-          icon={<Package2Icon />}
+          icon={<IconPackage />}
           title="Orders"
           value="1,520"
           change="-2.3%"
           changeType="decrease"
         />
         <StatCard
-          icon={<TagsIcon />}
+          icon={<IconTags />}
           title="Revenue"
           value="$24,580"
           change="+6.9%"
@@ -181,7 +174,7 @@ export function DashboardPage({ userName, userEmail }: DashboardPageProps) {
         </div>
       </div>
       <RecentOrdersCard />
-    </Layout>
+    </>
   );
 }
 
@@ -218,7 +211,7 @@ function BestSellingCard() {
       </CardBody>
       <CardFooter>
         <Button variant="secondary" block size="lg">
-          View All <ArrowRightCircleIcon />
+          View All <IconArrowRightCircle />
         </Button>
       </CardFooter>
     </Card>
@@ -232,7 +225,7 @@ function RecentOrdersCard() {
         <CardTitle>Recent Orders</CardTitle>
         <CardHeaderAction>
           <Button variant="secondary">
-            View All <ArrowRightIcon />
+            View All <IconArrowRight />
           </Button>
         </CardHeaderAction>
       </CardHeader>

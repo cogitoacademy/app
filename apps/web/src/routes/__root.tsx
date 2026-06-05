@@ -43,7 +43,13 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 
 function RootComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const showHeader = pathname !== "/dashboard";
+  const showHeader = ![
+    "/dashboard",
+    "/balance",
+    "/achivements",
+    "/tutors",
+    "/todos",
+  ].some((path) => pathname.startsWith(path));
 
   return (
     <>
