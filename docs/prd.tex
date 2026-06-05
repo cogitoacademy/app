@@ -1,0 +1,1339 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[scaled]{helvet}
+\renewcommand\familydefault{\sfdefault}
+\usepackage{lmodern}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\graphicspath{{diagrams/}}
+
+\setlist[itemize]{topsep=2pt,itemsep=2pt,parsep=0pt}
+\setlist[enumerate]{topsep=2pt,itemsep=2pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{4pt}
+
+\titleformat{\section}{\large\bfseries}{}{0em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{}{0em}{}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue
+}
+
+\begin{document}
+
+\begin{center}
+	{\LARGE \textbf{Cogito Platform Phase 0}}\\[4pt]
+	{\Large \textbf{Product Requirements Document}}\\[8pt]
+	{\normalsize Prepared by Andreandhiki Riyanta Putra}\\
+	{\normalsize Reviewed by Argya Vityasy}\\
+	{\normalsize Date: May 29, 2026}
+\end{center}
+
+\vspace{1em}
+
+\section*{TL;DR}
+Cogito should not launch Phase 0 as a simple marketing site. The first release should prove the core operating loop of the product: student signup, Marks purchase, tutor discovery, solo or group booking, tutor fulfillment, and admin intervention when something goes wrong.
+
+This PRD is the source of truth for Phase 0 product scope, user-visible behavior, business rules, and acceptance criteria. Technical implementation choices are owned separately unless they change product behavior.
+
+The recommended Phase 0 scope is:
+\begin{itemize}
+	\item student / tutor / admin access,
+	\item Marks wallet and ledger,
+	\item payment integration,
+	\item tutor self-pricing with Cogito floor prices,
+	\item tutor listing and basic discovery,
+	\item solo booking core,
+	\item full group booking flow,
+	\item booking change policy (cancel / reschedule, late-cancel override),
+	\item notification system (in-app + critical email),
+	\item automatic online meeting link creation once all booking approvals are complete,
+	\item achievements dashboard CTA / submission flow,
+	\item tutor-side operational tools,
+	\item admin-side operational tools,
+	\item practical integration to the existing Competition Calendar and balance-gated Knowledge Bank.
+\end{itemize}
+
+\tableofcontents
+\newpage
+
+\section{Document Information}
+
+\begin{tabular}{|p{4.3cm}|p{10.2cm}|}
+\hline
+\textbf{Document Title} & Cogito Platform Phase 0 --- Product Requirements Document \\
+\hline
+	\textbf{Document Version} & 1.0 \\
+\hline
+	\textbf{Document Status} & Client Review \\
+\hline
+\textbf{Creation Date} & May 26, 2026 \\
+\hline
+\textbf{Authors} & Andreandhiki Riyanta Putra \\
+\hline
+\textbf{Reviewer} & Argya Vityasy \\
+\hline
+\textbf{Target Release} & Phase 0 \\
+\hline
+\end{tabular}
+
+\section{Version Control}
+
+\begin{tabular}{|p{3cm}|p{3cm}|p{8.2cm}|}
+	\hline
+	\textbf{Version} & \textbf{Date} & \textbf{Notes}                                                                                                                                                 \\
+	\hline
+	0.1              & May 26, 2026  & Initial PRD draft for Cogito Phase 0.                                                                                                                          \\
+	\hline
+	0.2              & May 27, 2026  & Added booking change policy, dynamic group pricing, notifications, achievements, and TDD test cases.                                                           \\
+	\hline
+	0.3              & May 27, 2026  & Hardened for build handoff: booking state model, ledger rules, group pricing deadlines, notification matrix, achievements moderation, NFRs, and TDD checklist. \\
+	\hline
+	0.4              & May 28, 2026  & Added governance, decision log, open questions, product surfaces and permissions, data model overview, edge cases, and release governance. \\
+	\hline
+	0.5              & May 29, 2026  & Resolved merge state, aligned metadata, and tightened wording for client review. \\
+	\hline
+	0.6              & May 29, 2026  & Added group booking reconfirmation sequence, confirmed participant withdrawal handling, offline room approval rules, booking price display behavior, and tier pricing matrix. \\
+	\hline
+	0.7              & May 29, 2026  & Clarified Package 2 alignment, support button / Knowledge Bank access wording, and open questions with examples. \\
+	\hline
+	0.8              & May 29, 2026  & Added parent-legible copy wording and finalized the current scope clarifications. \\
+	\hline
+	0.9              & May 30, 2026  & Aligned with In-Platform Economics: Marks economics, tutor self-pricing, Resource Bank access gate, series booking rules, critical email triggers, rich-text session notes, proposed package table, purchase UI rules, economics glossary, and expanded group series test cases. \\
+	\hline
+	1.0              & June 1, 2026  & Incorporated client feedback: finalized Marks packages, 35-Mark Knowledge Bank access threshold, public and dashboard Competition Calendar access, fixed online/offline take schedules, registered-user group invitations, offline room flow simplification, and Google Meet dependency question. \\
+	\hline
+	1.1              & June 3, 2026  & Clarified tutor self-pricing economics: Cogito tables define baseline floors, tutors may price above floor, and Cogito earns 1 extra Mark for every 5 accumulated Marks above baseline. \\
+	\hline
+	1.2              & June 3, 2026  & Added invite-only tutor onboarding, account-claim flow, tutor profile statuses, and acceptance coverage for existing-user email matching. \\
+	\hline
+	1.3              & June 3, 2026  & Resolved OQ-04 (support SLA: 30 min business hours, 4 hours outside) and OQ-05 (Google Workspace Business Standard). Added OQ-06 (IDR refund policy for unused Marks), OQ-07 (tutor no-show and lateness policy), and OQ-08 (held Marks release timing on booking expiry). \\
+	\hline
+	1.4              & June 3, 2026  & Resolved client open questions: purchased Marks are non-convertible to rupiah, Google Meet attendee automation is desired but requires API feasibility confirmation, lateness tolerance is 15 minutes for tutors and students, emergency override cases are defined, and booking response / reconfirmation windows are 12 hours. \\
+	\hline
+\end{tabular}
+
+\section{Document Governance}
+
+This PRD governs what the product must do and what users must be able to do in Phase 0.
+
+\begin{itemize}
+    \item If a product rule, workflow, or acceptance criterion is not written here, it is unresolved and must not be assumed.
+    \item Any scope, policy, pricing, or user-facing behavior change must be reflected in this document before implementation.
+    \item Technical implementation details such as framework, hosting, database, auth provider, queueing, payment vendor, and email vendor are owned separately and must not be inferred from this PRD.
+    \item Client-facing changes require explicit client approval before they are considered final.
+    \item When the implementation and this PRD disagree, this PRD wins until it is updated through version control.
+\end{itemize}
+
+This PRD implements the selected Package 2 technical scope plus the approved notification and achievements additions. Strategic-doc items such as archetype routing, free diagnostic sessions, referral mechanics, premium Knowledge Bank gating, university profile builder, and other growth modules remain deferred unless separately approved. Client feedback dated June 1, 2026 supersedes earlier package, Knowledge Bank threshold, and take-rate assumptions in this PRD.
+
+\section{Commercial Notes}
+
+This document defines the agreed Phase 0 product scope and serves as the primary reference for project implementation.
+
+\begin{itemize}
+    \item Any feature, workflow, integration, screen, report, automation, role, business rule, or user-facing behavior not explicitly documented in this PRD shall be considered out of scope unless mutually agreed upon through a documented change request.
+
+    \item Acceptance criteria define the expected product behavior and outcomes, but do not prescribe a specific implementation approach, architecture, interface design, technical stack, or user interface unless explicitly stated.
+
+    \item Third-party services and integrations may introduce implementation constraints outside the developer's control. Adjustments resulting from vendor limitations, approval processes, API restrictions, account setup requirements, service availability, quota limitations, or pricing changes shall be discussed and mutually agreed upon before implementation.
+
+    \item Acceptance of the delivered product shall be based on fulfillment of the documented requirements and acceptance criteria within this PRD.
+\end{itemize}
+
+\section{Decision Log}
+
+\small
+\begin{longtable}{|L{1.6cm}|L{2.1cm}|L{8.6cm}|L{2.1cm}|}
+\hline
+\textbf{ID} & \textbf{Date} & \textbf{Decision} & \textbf{Status} \\
+\hline
+\endfirsthead
+\hline
+\textbf{ID} & \textbf{Date} & \textbf{Decision} & \textbf{Status} \\
+\hline
+\endhead
+
+DL-01 & May 28, 2026 & Phase 0 is an operating platform, not a marketing site. & Final \\
+\hline
+DL-02 & May 28, 2026 & Parent account and dedicated parent dashboard are deferred from Phase 0. & Final \\
+\hline
+DL-03 & May 28, 2026 & Competition Calendar and Knowledge Bank remain external systems and are not rebuilt in Phase 0. & Final \\
+\hline
+DL-04 & May 28, 2026 & The Marks ledger is immutable and every balance change creates a new ledger entry. & Final \\
+\hline
+DL-05 & May 28, 2026 & In-app notifications are the source of record; email is reserved for critical events. & Final \\
+\hline
+DL-06 & May 28, 2026 & H-2 cancellation rules apply to student self-service changes and late-cancel handling. & Final \\
+\hline
+DL-07 & May 28, 2026 & Group bookings reprice against the final confirmed headcount and require reconfirmation when the price changes. & Final \\
+\hline
+DL-08 & May 28, 2026 & Admin emergency overrides are allowed only with an auditable trail. & Final \\
+\hline
+DL-09 & May 28, 2026 & Technical stack and vendor choices are intentionally excluded from this PRD. & Final \\
+\hline
+DL-10 & May 29, 2026 & Promotional or free Marks are not included in Phase 0. & Final \\
+\hline
+DL-11 & May 29, 2026 & Admin tooling includes tutor compensation visibility for payroll support. & Final \\
+\hline
+DL-12 & May 29, 2026 & Refunds are limited to actual payment errors and admin-approved corrections; normal pre-H-2 cancellations release held Marks, late cancellations and no-shows do not auto-refund, and manual corrections create compensating ledger entries. & Final \\
+\hline
+DL-13 & May 29, 2026 & Confirmed group participant withdrawal before H-2 triggers repricing and reconfirmation for remaining participants; after H-2 it follows late-cancel / no-show handling unless admin override is recorded. & Final \\
+\hline
+DL-14 & May 29, 2026 & Phase 0 follows Package 2 from the technical proposal plus approved notifications and achievements additions; archetypes, free diagnostic sessions, referral mechanics, and premium Knowledge Bank gating remain deferred unless separately approved. & Final \\
+\hline
+DL-15 & May 30, 2026 & Tutor tier-based pricing is removed from Phase 0; standard session prices are tutor-set per group size and must meet Cogito floor prices. Any tier display, if retained later, is only a credibility signal and does not affect pricing. & Final \\
+\hline
+DL-16 & June 1, 2026 & Knowledge Bank access requires student login and at least 35 total Marks in the wallet. This is an eligibility threshold, not a 35-Mark fee. & Final \\
+\hline
+DL-17 & May 30, 2026 & Series bookings may contain up to 4 explicitly selected sessions, require tutor acceptance or decline as a full package, and hold Marks for all sessions upfront. & Final \\
+\hline
+DL-18 & May 30, 2026 & Phase 0 uses rich-text session notes only; structured post-session assessment is deferred. & Final \\
+\hline
+DL-19 & June 1, 2026 & Group class invitees must be registered Cogito users in Phase 0 and accept invitations in-platform. Inviting non-registered users by email or phone is deferred. & Final \\
+\hline
+DL-20 & June 1, 2026 & Offline booking remains in Phase 0, simplified to student room preference, tutor acceptance, then admin room confirmation / relocation / cancellation. & Final \\
+\hline
+DL-21 & June 1, 2026 & All Phase 0 class sessions are 90 minutes and Marks do not expire. & Final \\
+\hline
+DL-22 & June 3, 2026 & The online/offline pricing tables are baseline floor schedules. Tutors may set prices above the baseline. For every 5 Marks of accumulated price increase above the baseline total, Cogito receives 1 additional Mark; the remaining increase is added to tutor share. & Final \\
+\hline
+DL-23 & June 3, 2026 & Tutor access is invite-only. Public signup cannot self-select tutor access. Admin invites tutors by email; accepting the invite either creates a new account or attaches tutor access to an existing user with the same verified email. Tutor profiles remain unpublished until onboarding is complete and admin approval is recorded. & Final \\
+\hline
+DL-24 & June 3, 2026 & Purchased Marks cannot be converted back to rupiah. Marks stay in the wallet unless spent on bookings or corrected by admin for actual payment / platform errors. & Final \\
+\hline
+DL-25 & June 3, 2026 & Booking confirmation, participant confirmation, reconfirmation, tutor response, and room approval windows are 12 hours unless the session starts sooner. Expired or failed scheduling holds must be released back to available Marks within 12 hours after failure. & Final \\
+\hline
+DL-26 & June 3, 2026 & Lateness tolerance is 15 minutes for both tutors and students. Tutor absence beyond 15 minutes cancels the meeting and returns held Marks to affected students. Students can report tutor lateness / no-show from the booking detail page. & Final \\
+\hline
+\end{longtable}
+\normalsize
+
+\section{Open Questions}
+
+\begin{itemize}
+    \item \textbf{OQ-01: Resolved.} Client confirmed Explorer Pack at 200 Marks, Rp 1,570,000 (~Rp 7,800 / Mark base + payment gateway processing fee). Earlier draft value of Rp 3,320,000 is superseded.
+    \item \textbf{OQ-02: Resolved.} All Phase 0 class sessions are 90 minutes.
+    \item \textbf{OQ-03: Resolved.} Marks do not expire in Phase 0.
+    \item \textbf{OQ-04: Resolved.} Emergency override cases are defined in the Emergency Override Rules section. Default support response time for booking exceptions and emergency overrides is 30 minutes during business hours (Monday--Saturday, 09:00--21:00 WIB) and 4 hours outside business hours. The admin dashboard must display a queue sorted by urgency (time-to-session, booking state, Marks at stake). Auto-acknowledge must be sent immediately on request. If no admin action is taken within the SLA window, the request must escalate via WhatsApp to Cogito Academy's support number: +62 881-0119-90195. This SLA is measured and reported in the admin dashboard.
+    \item \textbf{OQ-05: Resolved with implementation dependency.} Cogito already has a Google account for Google Meet usage. The desired product behavior is automatic Google Calendar / Google Meet event creation using a Cogito-controlled Google account, with tutor and confirmed student emails added as event attendees. This is considered feasible in concept, but final implementation must validate Google Calendar API capability, authorization method, quota / cost implications, and any account setup requirements before launch. If setup requires client action, the developer and client should hold a setup meeting to connect the Google account securely and confirm the API configuration. The fallback state ``meeting link pending'' remains required for graceful degradation.
+    \item \textbf{OQ-06: Resolved.} Purchased Marks cannot be converted back to rupiah. Unused Marks remain in the student's wallet because Marks do not expire. Cash refunds are limited to actual payment errors or admin-approved corrections where cash was captured incorrectly.
+    \item \textbf{OQ-07: Resolved.} Lateness is tolerated up to 15 minutes for both tutors and students. If the tutor does not arrive within 15 minutes after scheduled start, the meeting is considered cancelled and affected students' held Marks are returned. Students must have a booking-detail report button for tutor lateness / no-show. Student lateness beyond 15 minutes may be marked late / no-show under the normal late-cancel / no-show policy unless admin override applies.
+    \item \textbf{OQ-08: Resolved.} Booking response windows are 12 hours per step unless the session starts sooner. This applies to tutor response, participant confirmation, repricing / reconfirmation, and offline room approval. When scheduling fails or a booking expires, held Marks must be released back to available balance within 12 hours after the failure / expiry event.
+\end{itemize}
+
+\section{Product Understanding}
+
+Cogito is intended to function as a practical operating platform for competition coaching, not just a public-facing website. The product needs to support commercial transactions, booking operations, tutor fulfillment, and administrative oversight in one coherent flow.
+
+The main risk in Phase 0 is overbuilding. If the first release expands into growth tooling, advanced analytics, rich assessments, and long-term ecosystem features too early, the product becomes harder to ship, harder to stabilize, and harder to validate commercially.
+
+\section{Product Goal}
+
+The goal of Phase 0 is to deliver one complete, reliable loop:
+\begin{enumerate}
+	\item user signs up,
+	\item user purchases Marks,
+	\item user browses tutors and offerings,
+	\item user books a solo or group session,
+	\item tutor accepts or declines,
+	\item session is completed,
+	\item Marks / hold / release / refund logic are handled correctly,
+	\item admin can monitor and intervene when necessary.
+\end{enumerate}
+
+\section{Scope}
+
+\subsection{Included in Phase 0}
+\begin{itemize}
+	\item student, tutor, and admin authentication,
+	\item basic student profile,
+	\item optional parent contact information in the student profile,
+	\item Marks balance display,
+	\item package purchase flow,
+	\item payment integration,
+	\item transaction history / ledger,
+	\item hold / release / refund logic,
+	\item invite-only tutor onboarding and admin approval,
+	\item tutor self-pricing and floor validation,
+	\item tutor list, summary profile, credentials summary, expertise, price, and availability visibility,
+	\item solo booking lifecycle,
+	\item full group booking lifecycle,
+	\item booking change policy (cancel / reschedule, late-cancel override),
+	\item notification system (in-app + critical email),
+	\item achievements dashboard CTA / submission flow,
+	\item tutor availability and incoming booking tools,
+	\item admin monitoring, override, and reconciliation tools,
+	\item practical links to existing Competition Calendar and Knowledge Bank,
+	\item support button to Cogito Academy WhatsApp (+62 881-0119-90195).
+\end{itemize}
+
+\subsection{Non-Goals / Deferred from Phase 0}
+\begin{itemize}
+	\item dedicated parent account and parent dashboard,
+	\item archetype-based personalization,
+	\item full 7-point assessment engine,
+	\item rich progress reporting and advanced analytics,
+	\item referral system and watchlists,
+	\item free diagnostic sessions,
+	\item rebuilding Knowledge Bank content inside the new app,
+	\item inviting non-registered users into group classes,
+	\item AI-based long-term ecosystem modules,
+	\item subscription billing or recurring membership plans,
+	\item automated tutor payout accounting inside Phase 0 unless separately approved,
+	\item rebuilding Competition Calendar or Knowledge Bank content inside the new app,
+	\item mobile app delivery for Phase 0.
+\end{itemize}
+
+\section{Primary Users and Roles}
+
+\subsection{Student}
+The student is the main booking and payment user. The student purchases Marks, discovers tutors, books sessions, and tracks booking history and balance.
+
+\subsection{Tutor}
+The tutor is an invite-only supply-side user. A public user cannot self-select the tutor role during signup. A tutor receives incoming bookings, manages availability, accepts or declines sessions, sets session prices at or above Cogito floors, and marks sessions complete after the tutor profile is approved and published.
+
+\subsection{Admin}
+The admin monitors bookings, wallet activity, tutor pricing compliance, and exceptions. The admin also performs corrections when needed.
+
+\subsection{Parent Contact}
+A parent may be stored as contact information on the student profile, but Phase 0 does not require a dedicated parent account.
+Wallet, booking, and refund copy should remain parent-legible even without a dedicated parent dashboard.
+
+\section{Product Surfaces and Permissions}
+
+\subsection{Screen Inventory}
+
+\begin{tabular}{|p{3.1cm}|p{11.1cm}|}
+\hline
+\textbf{Surface} & \textbf{Required screens / behavior} \\
+\hline
+Public & Existing public landing page remains in place; approved achievements may be surfaced there. Competition Calendar remains publicly accessible as a public website page. \\
+\hline
+Student & Login / signup, dashboard, wallet and Marks purchase, tutor discovery, tutor profile, solo and group booking flow, booking detail / history, report tutor lateness / no-show action, notifications, achievements submission, Competition Calendar dashboard entry, Knowledge Bank button, and WhatsApp support button. Public signup creates student / default access only and cannot create tutor access. \\
+\hline
+Tutor & Invite acceptance, account claim, onboarding, dashboard, availability management, incoming bookings, booking detail, reschedule proposal, session completion, and session notes. \\
+\hline
+Admin & Login, dashboard, user lookup, tutor invitation, tutor onboarding review, booking monitor, booking detail and state history, wallet / ledger view, override / reconciliation, tutor price floor review, achievement moderation, and audit review. \\
+\hline
+\end{tabular}
+
+\subsection{Permissions Matrix}
+
+\small
+\begin{tabular}{|L{4.7cm}|L{2.2cm}|L{2.2cm}|L{2.2cm}|L{3.0cm}|}
+\hline
+\textbf{Action} & \textbf{Student} & \textbf{Tutor} & \textbf{Admin} & \textbf{Notes} \\
+\hline
+View own dashboard / profile / wallet & Yes & Yes & Yes & Admin access is for oversight and support. \\
+\hline
+Edit own profile & Yes & Yes & Yes & Admin edits are via admin tools. \\
+\hline
+Purchase Marks & Yes & No & No & Only student accounts top up the wallet. \\
+\hline
+Create solo or group booking & Yes & No & No & Student initiates booking. \\
+\hline
+Cancel / reschedule own booking before H-2 & Yes & No & No & Late self-service changes are blocked. \\
+\hline
+Accept / decline assigned booking & No & Yes & No & Tutor owns the booking decision. \\
+\hline
+Propose reschedule & No & Yes & No & Student approval is required before the change lands. \\
+\hline
+Manage availability & No & Yes & No & Tutor controls own availability. \\
+\hline
+Complete session and add notes & No & Yes & No & Completion is tutor-driven. \\
+\hline
+View all bookings and ledger entries & No & No & Yes & Admin uses this for monitoring and support. \\
+\hline
+Set own tutor prices & No & Yes & Yes & Tutors set prices for group sizes 1--6 at or above Cogito floors; admin can review or correct exceptions. \\
+\hline
+Invite tutor by email & No & No & Yes & Admin sends tutor invites; public users cannot request or self-assign tutor access. \\
+\hline
+Accept tutor invite & No & Yes & No & Invite acceptance requires email ownership and either creates a new user account or attaches tutor access to an existing matching account. \\
+\hline
+Publish tutor profile & No & No & Yes & Tutor profile remains hidden from student discovery until onboarding is complete and admin approval is recorded. \\
+\hline
+Apply emergency override & No & No & Yes & Requires audit trail. \\
+\hline
+Moderate achievements & No & No & Yes & Approve, reject, archive, or restore as needed. \\
+\hline
+\end{tabular}
+\normalsize
+
+\section{Core Product Flow}
+
+\begin{enumerate}
+	\item Student signs up or logs in.
+	\item Student purchases Marks through the payment flow.
+	\item Student browses tutor profiles, pricing, and availability.
+	\item Student books either a solo session or a group session.
+	\item Tutor receives the request and accepts or declines it.
+	\item If accepted, the session proceeds to completion.
+	\item Marks are held, released, or deducted according to the booking outcome.
+	\item Admin reviews the operational state and intervenes only when exceptions occur.
+\end{enumerate}
+
+\section{Functional Requirements}
+
+\small
+\begin{longtable}{|L{1.5cm}|L{4.1cm}|L{9.0cm}|}
+	\hline
+	\textbf{Req ID} & \textbf{User Story}                                                                                                    & \textbf{Requirement / Acceptance Criteria}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       \\
+	\hline
+	\endfirsthead
+	\hline
+	\textbf{Req ID} & \textbf{User Story}                                                                                                    & \textbf{Requirement / Acceptance Criteria}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       \\
+	\hline
+	\endhead
+
+	FR-01           & As a student, tutor, or admin, I want role-specific access so I only see the tools relevant to me.                     & \textbf{Requirement:} The system shall support student, tutor, and admin authentication. \newline \textbf{Acceptance:} Each role lands on its own permitted workspace after login, and unauthorized access to other role surfaces is blocked.                                                                                                                                                                                                                                                                                                                                                                    \\
+	\hline
+	FR-02           & As a student, I want my profile and parent contact data stored safely so the platform can support real-world usage.    & \textbf{Requirement:} The system shall store a basic student profile and optional parent contact information. \newline \textbf{Acceptance:} Student profile fields can be created and edited, and parent contact fields may remain blank without breaking the account.                                                                                                                                                                                                                                                                                                                                           \\
+	\hline
+	FR-03           & As a student, I want to see my Marks balance and transaction history so I can trust the wallet.                        & \textbf{Requirement:} The system shall display total Marks balance, held Marks, available Marks, and maintain an immutable ledger. \newline \textbf{Acceptance:} Every purchase, deduction, hold, release, and refund creates a ledger entry with timestamp, reference, amount, and resulting balances. Available balance is total balance minus held Marks.                                                                                                                                                                                                                                                                                                                                               \\
+	\hline
+	FR-04           & As a student, I want to buy Marks through a payment provider so I can fund bookings.                                   & \textbf{Requirement:} The system shall support Marks purchase through an external payment integration and approved package pricing. \newline \textbf{Acceptance:} Successful payment increases balance and records a receipt; failed or pending payments do not credit Marks. The package cards show Starter Pack (50 Marks / Rp 430,000), Learner Pack (120 Marks / Rp 990,000), Explorer Pack (200 Marks / Rp 1,570,000), and Pioneer Pack (300 Marks / Rp 2,180,000).                                                                                                                                                                                                                                                                                                                                                                 \\
+	\hline
+	FR-05           & As an admin, I want tutor prices to respect Cogito floors.                                         & \textbf{Requirement:} The system shall validate tutor-set prices against Cogito floor prices for each group size. \newline \textbf{Acceptance:} Admin can review tutor prices, prices below the floor cannot be published, no tier-based pricing logic exists in Phase 0, and prices above floor use the approved extra-take rule: Cogito receives 1 extra Mark for every accumulated 5 Marks above the baseline total.                                                                                                                                                                                                                                                                                                                                 \\
+	\hline
+	FR-06           & As a student, I want enough tutor information to make a booking decision.                                              & \textbf{Requirement:} The system shall provide a tutor list with summary profile, credentials summary, expertise, tutor-set prices in Marks, and availability. \newline \textbf{Acceptance:} The listing is usable without requiring a separate content system for these core booking details. Tutor cards and profiles must show the tutor's prices for supported group sizes, and every confirmed booking stores a price snapshot so future tutor price changes do not affect existing bookings.                                                                                                                                                                                        \\
+	\hline
+	FR-07           & As a student, I want to book a solo session so I can get help directly from a tutor.                                   & \textbf{Requirement:} The system shall support tutor selection, slot selection, booking confirmation, and lifecycle tracking for solo bookings. \newline \textbf{Acceptance:} Solo bookings move through the expected states (created, accepted / declined, completed, cancelled) and remain visible in booking history.                                                                                                                                                                                                                                                                                         \\
+	\hline
+	FR-08           & As a student, I want to book a group session so multiple participants can join the same slot.                          & \textbf{Requirement:} The system shall support proposer flow, invitee flow, target group size, invitation window, repricing, and final confirmation. \newline \textbf{Acceptance:} Group bookings only finalize when the required confirmation rules are satisfied, and the proposer can see the repricing outcome and next action. One-off group sessions may allow pre-H-2 withdrawal with repricing; group series follow the no opt-out policy in the series rules.                                                                                                                                                                                                                                                                              \\
+	\hline
+	FR-09           & As a tutor, I want lightweight operational tools so I can fulfill bookings efficiently.                                & \textbf{Requirement:} The system shall provide tutor-side tools for availability, incoming bookings, accept / decline, reschedule proposals, completion, and rich-text session notes. \newline \textbf{Acceptance:} Tutors can execute each action from their workspace and the changes persist on the booking record, including tutor-initiated schedule changes. Session notes support sanitized rich text such as paragraphs, headings, bullet lists, numbered lists, links, and emphasis; structured assessment fields are deferred from Phase 0.                                                                                                                                                                                                                                                         \\
+	\hline
+	FR-10           & As an admin, I want monitoring and override tools so exceptions do not block operations.                               & \textbf{Requirement:} The system shall provide admin visibility into bookings, wallet states, emergency overrides, and reconciliation actions. \newline \textbf{Acceptance:} Admin can inspect booking and ledger records, apply corrections or emergency overrides only for defined emergency cases, retain an auditable change trail, and see exception reports sorted by urgency. Every emergency override must record reason, actor, affected Marks, and user-visible outcome.                                                                                                                                                                                                                                                                                        \\
+	\hline
+	FR-11           & As a user, I want access to Competition Calendar without rebuilding it in the new app.                                 & \textbf{Requirement:} The system shall expose Competition Calendar on the public Cogito Academy website and inside the student dashboard while keeping the current content source of truth. \newline \textbf{Acceptance:} Public visitors can open the current calendar at \texttt{cogitoacademy.id/en/calendar}; signed-in students can also open the same calendar from the dashboard without any Marks condition; the existing website / CMS remains authoritative.                                                                                                                                                                                                                                                                                                                                         \\
+	\hline
+FR-12           & As a student, I want clear Knowledge Bank access rules so I know when content is available.                                           & \textbf{Requirement:} The system shall link to the existing Knowledge Bank and gate student access by login plus wallet threshold. \newline \textbf{Acceptance:} Knowledge Bank access is available only after signing into the student dashboard and only if the student's wallet has at least 35 Marks. The UI must state clearly that 35 Marks is a minimum wallet-balance requirement, not a 35-Mark access fee, and opening the Knowledge Bank must not deduct Marks.                                                                                                                                                                                                                                                                                                                                                                 \\
+	\hline
+	FR-13           & As support staff, I want the system to preserve history so disputes can be reviewed later.                             & \textbf{Requirement:} The system shall preserve booking and wallet history for support and dispute handling. \newline \textbf{Acceptance:} Historical booking and ledger records remain queryable and linked to the relevant student, tutor, and payment references.                                                                                                                                                                                                                                                                                                                                             \\
+	\hline
+	FR-14           & As a student, I want a clear cancel / reschedule policy so I know when a booking can still change without penalty.     & \textbf{Requirement:} The system shall allow student-initiated cancel or reschedule before the H-2 cutoff for eligible one-off bookings, block self-service changes after H-2, and treat late cancel / no-show as a penalty case unless an admin-only emergency override is applied. \newline \textbf{Acceptance:} Before H-2, eligible one-off sessions can be cancelled or rescheduled without penalty; after H-2, self-service changes are blocked, a late-cancel / no-show path deducts Marks, and any emergency override is recorded with an audit trail. Lateness tolerance is 15 minutes for both students and tutors. If the tutor does not arrive within 15 minutes after scheduled start, the meeting is considered cancelled and affected students' held Marks are returned. Series-specific cancellation rules override this generic rule where stated.                                                                                                      \\
+	\hline
+	FR-15           & As a tutor, I want to propose a new slot instead of moving the booking silently so the student can approve the change. & \textbf{Requirement:} The system shall support tutor-initiated reschedule proposals as a separate approval flow. \newline \textbf{Acceptance:} The student must approve the proposed new slot before the booking is updated, no student penalty is applied for a tutor-initiated reschedule, and the change is visible in booking history and notifications.                                                                                                                                                                                                                                                     \\
+	\hline
+	FR-16           & As a student, I want group bookings to adapt fairly when not everyone confirms.                                        & \textbf{Requirement:} The system shall support a group-booking deadline, repricing to the confirmed headcount, and a reconfirmation loop for all remaining participants. \newline \textbf{Acceptance:} Each confirmation or reconfirmation step has a 12-hour response window unless the session starts sooner. If a 5-person booking reaches the deadline with 3 approvals, the system recalculates the Marks price for 3 participants, asks all remaining participants to reconfirm the final price, and only finalizes the booking once the final confirmed headcount accepts the repriced total; if the confirmed headcount changes during reconfirmation, the system recalculates the price again before activation. Expired or failed scheduling holds are released within 12 hours after failure / expiry. \\
+	\hline
+	FR-17           & As a user, I want important changes to reach me in-app and by email when needed.                                       & \textbf{Requirement:} The system shall write every notification to the in-app notification page and send email only for critical booking, payment, refund, and schedule-change events. \newline \textbf{Acceptance:} All events remain visible in-app, schedule changes always send email, and non-critical updates stay in-app only so email volume remains controlled.                                                                                                                                                                                                                                         \\
+	\hline
+	FR-18           & As a student, I want to submit achievements from my dashboard so I can showcase them publicly.                         & \textbf{Requirement:} The system shall provide an Achievements dashboard page with a submission CTA, review status, and moderation flow. \newline \textbf{Acceptance:} The dashboard shows a CTA such as \textit{Submit your achievements to show them off on Cogito Academy}, students can submit achievement items, admins can approve or reject them, and approved entries may be surfaced on Cogito's existing public landing page.                                                                                                                                                                                        \\
+	\hline
+	FR-19           & As a tutor, I want to set my own prices so I can price my time appropriately.                         & \textbf{Requirement:} The system shall let each tutor set six standard session prices: one for each group size from 1 to 6 students. \newline \textbf{Acceptance:} Each price is stored in Marks, must be at or above the Cogito floor for that group size, has no ceiling, and changes do not retroactively affect confirmed bookings. When the tutor-set price is above the floor, the extra Marks are split using the accumulated extra-take rule: Cogito receives 1 extra Mark for every full 5 Marks above the baseline total, and the remainder is added to tutor share.                                                                                                                                                                                        \\
+	\hline
+	FR-20           & As a student, I want to book a short series of sessions in one flow.                         & \textbf{Requirement:} The system shall support series bookings of up to 4 explicitly selected sessions with the same tutor, session type, and group composition. \newline \textbf{Acceptance:} The booking form lists all selected dates and times, holds Marks for all sessions upfront, and sends the full series to the tutor for accept / decline as one package. Partial tutor acceptance is not allowed.                                                                                                                                                                                        \\
+	\hline
+	FR-21           & As a student, I want online sessions to include a meeting link after all parties confirm.                         & \textbf{Requirement:} The system shall create a 90-minute online meeting link after participant confirmation and tutor acceptance are complete. \newline \textbf{Acceptance:} Online bookings do not expose a meeting link while still awaiting invitee, tutor, or repricing confirmation. Target behavior is creating a Google Calendar / Google Meet event using Cogito-controlled Google account infrastructure, automatically inviting the tutor email and confirmed student emails from the booking, storing the provider event id and meeting URL on the booking, and including the link in critical notifications. Final implementation must validate Google Calendar API capability, authorization setup, and cost / quota implications. If automatic Google Meet event creation is not ready at launch or fails at runtime, the fallback is an admin-visible ``meeting link pending'' state with manual-link entry. Admin may paste any valid meeting URL as fallback.                                                                                                                                                                                        \\
+	\hline
+	FR-22           & As an admin, I want offline booking room approval to be simple enough to operate in v1.                         & \textbf{Requirement:} The system shall support room selection / preference during offline booking and an admin room approval step after tutor acceptance. \newline \textbf{Acceptance:} The student sees available rooms as selectable and unavailable rooms as disabled where room availability data exists. After tutor acceptance, admin can confirm the selected room, relocate the booking to another room, or cancel only if no room is available. Tutor and students are notified of relocation or cancellation.                                                                                                                                                                                        \\
+	\hline
+	FR-23           & As an admin, I want tutor access to be invite-only so Cogito controls tutor quality and prevents unauthorized tutor signup.                         & \textbf{Requirement:} The system shall support admin-created tutor invitations by email. Public signup must not expose a tutor role option. Admin shall be able to invite a new tutor by email, resend or revoke pending invites, and view invite status. \newline \textbf{Acceptance:} A tutor invite can be created only by admin. If the invited email does not belong to an existing user, accepting the invite creates the user account and a linked tutor onboarding record. If the invited email already belongs to an existing user, accepting the invite attaches tutor access to that existing user after login / email ownership verification. Admin does not manually create or know tutor passwords. Expired or revoked invites cannot create or attach tutor access, and every invite creation, acceptance, revocation, and role attachment is auditable.                                                                                                                                                                                        \\
+	\hline
+	FR-24           & As a tutor, I want a clear onboarding path before I become visible to students.                         & \textbf{Requirement:} The system shall keep tutor profiles unpublished until onboarding is complete and admin approval is recorded. \newline \textbf{Acceptance:} After invite acceptance, the tutor enters onboarding and must provide required profile data: display name, short bio, credentials summary, expertise / competition tracks, availability, supported modality, and prices for class sizes 1--6 at or above Cogito floors. Optional proof files or links may be captured for admin review. The tutor can save incomplete onboarding as draft but cannot receive bookings or appear in student discovery until admin publishes the profile. Admin can approve, request changes, unpublish, or suspend a tutor profile with an audit reason.                                                                                                                                                                                        \\
+	\hline
+\end{longtable}
+\normalsize
+
+\section{Data Model Overview}
+
+The data model is product-facing and names the records the implementation must preserve.
+
+\begin{itemize}
+    \item \textbf{User}: identity, role, status, and auth reference.
+    \item \textbf{StudentProfile}: student details plus optional parent contact information.
+    \item \textbf{TutorInvite}: admin-created invitation containing invited email, invite status, token reference, expiry, invited by, accepted by, revoked by, and audit timestamps.
+    \item \textbf{TutorProfile}: tutor bio, expertise, display prices, availability summary, onboarding status, publication status, and admin review metadata.
+    \item \textbf{Wallet}: total balance, held balance, available balance, and owner reference.
+    \item \textbf{LedgerEntry}: immutable Marks movement record.
+	\item \textbf{Booking}: booking type, current state, state history, timing, and pricing references.
+	\item \textbf{BookingParticipant}: per-participant confirmation, reconfirmation, and attendance state.
+	\item \textbf{Room}: offline classroom, capacity, location, and active / inactive status.
+	\item \textbf{MeetingEvent}: online meeting provider, external event id, meeting URL, attendee emails, creation status, and external calendar event status.
+	\item \textbf{AvailabilitySlot}: tutor availability window.
+    \item \textbf{PaymentRecord}: external payment attempt, provider reference, and receipt reference.
+    \item \textbf{RefundRecord}: compensating refund action linked to payment or booking state.
+    \item \textbf{Notification}: durable in-app notification and delivery metadata.
+    \item \textbf{Achievement}: submission payload, proof reference, and moderation status.
+    \item \textbf{AuditLog}: immutable record of admin and operational changes.
+\end{itemize}
+
+\section{Tutor Invitation and Onboarding Flow}
+
+Tutor access is not self-service. Phase 0 uses an admin-invited tutor flow so Cogito controls tutor quality, prevents unauthorized tutor accounts, and keeps tutor credentials reviewable before students can book.
+
+\textbf{Core policy}
+\begin{itemize}
+    \item Public signup creates student / default access only. The signup screen must not include an ``I am a tutor'' option.
+    \item Admin does not manually create tutor passwords and must not need to know or reset a tutor's password during onboarding.
+    \item Tutor access starts from an admin-created invite sent to a specific email address.
+    \item A tutor profile remains hidden from student discovery until onboarding is complete and admin explicitly publishes it.
+    \item A tutor cannot receive booking requests until the tutor profile is published.
+\end{itemize}
+
+\textbf{Invite lifecycle states}
+\begin{itemize}
+    \item \texttt{invited}: admin created the invite and the invite is waiting for acceptance.
+    \item \texttt{accepted}: invite was accepted by a user who proved ownership of the invited email.
+    \item \texttt{expired}: invite passed its expiry time before acceptance.
+    \item \texttt{revoked}: admin revoked the invite before acceptance.
+\end{itemize}
+
+\textbf{Tutor profile lifecycle states}
+\begin{itemize}
+    \item \texttt{draft}: tutor access exists but required onboarding fields are incomplete.
+    \item \texttt{pending\_review}: tutor submitted onboarding data and waits for admin review.
+    \item \texttt{changes\_requested}: admin requested corrections before approval.
+    \item \texttt{approved\_unpublished}: admin approved the tutor but profile is not yet visible to students.
+    \item \texttt{published}: tutor is visible in discovery and can receive booking requests.
+    \item \texttt{suspended}: tutor is hidden and cannot receive new booking requests.
+\end{itemize}
+
+\textbf{New tutor account flow}
+\begin{enumerate}
+    \item Admin opens the tutor invitation tool and enters at minimum tutor email and display name. Optional internal notes may be recorded for later review.
+    \item The system creates a \texttt{TutorInvite} with status \texttt{invited}, expiry timestamp, inviter admin id, and single-use invite token reference.
+    \item The system sends an invite email containing the claim link. The link must not expose raw sensitive user data.
+    \item The invited tutor opens the link. If no user exists for that email, the tutor creates an account by setting credentials or using an approved login provider.
+    \item After email ownership is verified, the system creates a \texttt{User} and linked \texttt{TutorProfile} in \texttt{draft} status, marks the invite \texttt{accepted}, and records an audit entry.
+    \item Tutor completes onboarding fields and submits for review.
+    \item Admin reviews the submission and either requests changes, approves without publishing, or publishes the tutor.
+\end{enumerate}
+
+\textbf{Existing user email-match flow}
+\begin{enumerate}
+    \item Admin invites an email that already belongs to an existing user account.
+    \item The invite is still sent to that email address; the existing user must open the invite and authenticate as that user.
+    \item After email ownership and login are confirmed, the system attaches tutor access to the existing user rather than creating a duplicate account.
+    \item The system creates or reactivates the linked \texttt{TutorProfile} in \texttt{draft} status and records the invite acceptance and role attachment in the audit log.
+    \item If the logged-in account email does not match the invited email, the invite must not be accepted for that account.
+\end{enumerate}
+
+\textbf{Required tutor onboarding fields}
+\begin{itemize}
+    \item display name,
+    \item short bio,
+    \item credentials summary,
+    \item expertise / competition tracks,
+    \item availability,
+    \item supported modality: online, offline, or both,
+    \item standard session prices for class sizes 1--6, validated against Cogito floors,
+    \item optional credential proof links or files for admin review.
+\end{itemize}
+
+\textbf{Admin review rules}
+\begin{itemize}
+    \item Admin can view invite status, resend pending invites, revoke pending invites, and inspect accepted invite audit history.
+    \item Admin can request tutor profile changes with a reason visible to the tutor.
+    \item Admin can approve but keep a tutor unpublished if Cogito wants the tutor ready internally but not yet visible.
+    \item Admin can publish, unpublish, or suspend a tutor profile with an audit reason.
+    \item Only \texttt{published} tutor profiles appear in student discovery, tutor cards, and booking flows.
+\end{itemize}
+
+\section{Booking State Model}
+
+The booking record shall have one canonical current state and a persistent state history.
+
+\textbf{Canonical states}
+\begin{itemize}
+	\item \texttt{draft}: booking draft exists locally and may still be edited.
+	\item \texttt{awaiting\_marks\_hold}: the booking is on hold and the Marks hold is pending or being validated.
+	\item \texttt{awaiting\_tutor\_review}: the booking request is waiting for tutor accept / decline.
+	\item \texttt{awaiting\_participant\_confirmation}: group invitees are still confirming attendance before the deadline.
+	\item \texttt{reschedule\_proposed}: tutor proposed a new slot and the student must approve.
+	\item \texttt{awaiting\_reconfirmation}: pricing or schedule changed and the remaining participants must reconfirm.
+	\item \texttt{awaiting\_admin\_room\_approval}: offline booking was accepted by the tutor and is waiting for admin to assign or approve a room.
+	\item \texttt{confirmed}: tutor accepted and the booking is valid.
+	\item \texttt{scheduled}: booking has a locked time and is ready to run.
+	\item \texttt{completed}: session finished successfully.
+	\item \texttt{declined}: tutor rejected the booking.
+	\item \texttt{cancelled}: booking was cancelled before H-2 or was voided by admin before start.
+	\item \texttt{late\_cancelled}: booking was cancelled after H-2 and the late-cancel rule applied.
+	\item \texttt{no\_show}: session start passed and attendance did not happen.
+	\item \texttt{expired}: a deadline passed before the required confirmation was collected.
+\end{itemize}
+
+\textbf{Allowed transitions}
+\begin{itemize}
+	\item \texttt{draft} -> \texttt{awaiting\_marks\_hold} -> \texttt{awaiting\_tutor\_review}.
+	\item \texttt{awaiting\_tutor\_review} -> \texttt{declined} or \texttt{confirmed}.
+	\item \texttt{awaiting\_tutor\_review} -> \texttt{reschedule\_proposed} if the tutor wants to move the session instead of accepting it.
+	\item \texttt{confirmed} -> \texttt{awaiting\_admin\_room\_approval} for offline bookings that require room assignment before scheduling.
+	\item \texttt{awaiting\_admin\_room\_approval} -> \texttt{scheduled} when admin assigns or approves the room.
+	\item \texttt{awaiting\_admin\_room\_approval} -> \texttt{reschedule\_proposed} if admin cannot secure the requested room or needs to propose a new slot / location.
+	\item \texttt{awaiting\_admin\_room\_approval} -> \texttt{cancelled} if no room or acceptable alternative is available before the operational cutoff.
+	\item \texttt{awaiting\_participant\_confirmation} -> \texttt{awaiting\_reconfirmation} when the deadline is reached and the confirmed headcount is below the target but still valid.
+	\item \texttt{reschedule\_proposed} -> \texttt{awaiting\_reconfirmation} after the student accepts the new slot.
+	\item \texttt{awaiting\_reconfirmation} -> \texttt{confirmed} when all required participants accept the final price or new slot.
+	\item \texttt{confirmed} or \texttt{scheduled} -> \texttt{cancelled} before H-2.
+	\item \texttt{confirmed} or \texttt{scheduled} -> \texttt{late\_cancelled} after H-2.
+	\item \texttt{confirmed} or \texttt{scheduled} -> \texttt{no\_show} if attendance is missing at session start.
+	\item any awaiting state -> \texttt{expired} if the deadline passes without the required response.
+	\item \texttt{completed}, \texttt{declined}, \texttt{cancelled}, \texttt{late\_cancelled}, \texttt{no\_show}, and \texttt{expired} are terminal unless an admin audit correction is recorded.
+\end{itemize}
+
+\textbf{Required persisted fields}
+\begin{itemize}
+	\item booking id, booking type, tutor id, proposer id, participant ids.
+	\item current state, previous state, state reason, state history.
+	\item target group size, confirmed headcount, deadline at, scheduled start time, timezone.
+	\item original Marks amount, repriced Marks amount, hold amount, refunded amount.
+	\item room id / room status for offline bookings and meeting event id / meeting URL for online bookings.
+	\item cancellation reason, reschedule metadata, override metadata, notification flags.
+\end{itemize}
+
+\section{Marks Ledger Rules}
+
+Marks are Cogito's internal platform currency. Marks are not transferable between accounts and have no value outside the platform. The Marks ledger is immutable. Every balance change must create a new ledger row; no row may be edited in place.
+
+\textbf{Purchase package UI}
+\begin{itemize}
+    \item Students buy Marks from a wallet top-up screen that displays approved package cards.
+    \item Each package card must show Marks amount, IDR price, effective Rp / Mark rate, and any best-value label approved by Cogito.
+    \item The purchase screen must not allow a custom Marks amount in Phase 0 unless package design is changed and approved.
+    \item If a student starts a booking without enough available Marks, the booking flow may send the student to top up, then return them to the booking flow after successful payment.
+    \item All four package values are approved for Phase 0 seed data: Starter 50 Marks / Rp 430,000, Learner 120 Marks / Rp 990,000, Explorer 200 Marks / Rp 1,570,000, Pioneer 300 Marks / Rp 2,180,000.
+\end{itemize}
+
+\textbf{Approved package table}
+
+The following package table is the approved Phase 0 wallet top-up structure. All four package prices are client-confirmed; the small gap between per-Mark rate and displayed IDR price is the payment gateway processing fee.
+
+\begin{tabular}{|p{3.0cm}|p{3.0cm}|p{3.4cm}|p{3.4cm}|}
+\hline
+\textbf{Package} & \textbf{Marks} & \textbf{IDR Price} & \textbf{Effective Rate} \\
+\hline
+Starter Pack & 50 Marks & Rp 430,000 & ~Rp 8,500 / Mark \\
+\hline
+Learner Pack & 120 Marks & Rp 990,000 & ~Rp 8,200 / Mark \\
+\hline
+Explorer Pack & 200 Marks & Rp 1,570,000 & ~Rp 7,800 / Mark \\
+\hline
+Pioneer Pack & 300 Marks & Rp 2,180,000 & ~Rp 7,250 / Mark \\
+\hline
+\end{tabular}
+
+The Explorer Pack price is Rp 1,570,000 (200 Marks at ~Rp 7,800 / Mark base + payment gateway processing fee), confirmed by the client. An earlier draft value of Rp 3,320,000 is superseded and is not used in Phase 0 seed data.
+
+\textbf{Approved economics constants}
+\begin{itemize}
+    \item Student purchase rates vary by package size: smaller packages cost more per Mark and larger packages cost less per Mark.
+    \item Approved student purchase rate range follows the approved package table: approximately Rp 8,500 / Mark (Starter Pack) to Rp 7,250 / Mark (Pioneer Pack). Per-Mark rates are the pre-fee base; displayed IDR prices include the payment gateway processing fee so the amount the student pays is the value shown in the table.
+    \item Reference student purchase rate for illustrations: Rp 7,250 / Mark (Pioneer Pack), with the working-average rate of approximately Rp 7,800 / Mark available for Phase 0 illustrations.
+    \item Tutor payout rate: Rp 7,000 / Mark.
+    \item Reference exchange margin: Rp 250 / Mark at the Rp 7,250 reference average. This margin is separate from the session take.
+\end{itemize}
+
+\textbf{Ledger rules}
+\begin{itemize}
+	\item The wallet keeps \textbf{total balance} and \textbf{held balance}; available balance is total minus held.
+	\item Students purchase Marks in approved packages: Starter 50 Marks / Rp 430,000, Learner 120 Marks / Rp 990,000, Explorer 200 Marks / Rp 1,570,000, Pioneer 300 Marks / Rp 2,180,000.
+	\item Purchased Marks cannot be converted back to rupiah and do not expire. Unused purchased Marks remain in the student's wallet.
+	\item Tutor payout uses the fixed approved payout rate of Rp 7,000 / Mark.
+	\item The reference student purchase rate for illustrations is Rp 7,250 / Mark (Pioneer Pack); the working-average rate of approximately Rp 7,800 / Mark is available for Phase 0 illustrations. Displayed IDR prices include the payment gateway processing fee.
+	\item Knowledge Bank access checks wallet balance continuously and requires at least 35 Marks.
+	\item Successful Marks purchase creates a credit entry.
+	\item Booking hold creates a hold entry.
+	\item Booking completion converts the held amount into a deduction entry.
+	\item Student cancel before H-2 creates a release entry.
+	\item Late cancel or no-show creates a deduction entry unless an admin override creates a compensating refund or release entry.
+	\item Payment refund, emergency refund, or manual correction always creates a new compensating entry; the original entry remains intact. Cash refund entries are limited to actual payment errors or admin-approved corrections where cash was captured incorrectly.
+	\item Expired or failed scheduling holds must be released back to available Marks within 12 hours after the failure or expiry event.
+	\item All ledger writes are idempotent by external event id or internal operation id.
+\end{itemize}
+
+\textbf{Required persisted fields}
+\begin{itemize}
+	\item entry id, booking id, event key, entry type, actor type, amount, before balance, after balance, reason, created at.
+	\item source reference for payment provider, refund provider, or admin override.
+\end{itemize}
+
+\textbf{Knowledge Bank access rule}
+\begin{itemize}
+    \item Student must be signed in and inside the student dashboard.
+    \item Minimum wallet balance required: 35 Marks.
+    \item Opening the Knowledge Bank does not deduct Marks.
+    \item User-facing copy must say: ``Knowledge Bank access requires at least 35 Marks in your wallet. You are not paying 35 Marks to open it.''
+    \item A student below 35 Marks loses Knowledge Bank access until they top up or admin correction restores balance.
+\end{itemize}
+
+
+\section{Refund Policy}
+
+Refund handling in Phase 0 is limited to actual payment errors and admin-approved corrections. Purchased Marks are not redeemable or convertible back to rupiah after a successful valid purchase.
+
+\begin{itemize}
+	\item A booking cancelled before H-2 does not create a cash refund; it only releases any held Marks back to the student's available balance.
+	\item A late cancel or no-show does not receive an automatic refund. The late-cancel policy applies unless an admin override is recorded.
+	\item A failed or pending payment does not credit Marks, so there is nothing to refund.
+	\item Unused purchased Marks remain in the wallet indefinitely and cannot be cashed out to rupiah.
+	\item If cash was captured incorrectly, or an admin needs to correct a wallet or booking mistake, the system records a compensating ledger entry and, when applicable, a payment-provider refund reference.
+	\item Payment-error cash refunds are corrections, not Marks cash-out. Admin must reconcile captured amount, Marks credited, Marks already spent, booking deductions, and remaining wallet balance before issuing any payment-provider refund.
+	\item If a duplicate or incorrect payment produced Marks that were already spent on completed services, admin must not issue a full cash refund blindly. Admin must either refund only the unused excess, correct the wallet with compensating entries, or escalate to finance / product owner review.
+	\item Every refund-related action must be idempotent and auditable.
+\end{itemize}
+
+
+\section{Emergency Override Rules}
+
+Emergency overrides exist to correct exceptional booking or wallet outcomes without changing the standard policy for normal cancellations, lateness, or no-shows.
+
+\textbf{Allowed emergency override cases}
+\begin{itemize}
+    \item Tutor does not arrive within 15 minutes after scheduled start.
+    \item Tutor cancels too late for the student to reasonably rebook.
+    \item Verified illness, accident, family emergency, or force majeure affects a confirmed participant.
+    \item Platform failure prevents a confirmed user from joining, receiving the meeting link, confirming, or paying correctly.
+    \item Payment provider or wallet ledger error causes an incorrect charge, hold, deduction, release, or balance display.
+    \item Offline room or operational failure prevents a confirmed class from taking place.
+    \item Admin made a documented operational mistake that affected booking state, wallet state, room assignment, or meeting access.
+\end{itemize}
+
+\textbf{Override handling rules}
+\begin{itemize}
+    \item Every override must capture actor, reason, affected booking, affected wallet entries, before / after state, and user-visible outcome.
+    \item Overrides may release held Marks, add compensating Marks, reverse an incorrect deduction, cancel a booking, or move a booking state.
+    \item Overrides must not silently delete ledger entries; corrections use compensating entries.
+    \item Admin can choose whether an exceptional case returns Marks, keeps the penalty, or requires manual follow-up.
+    \item Students can report tutor lateness / no-show from the booking detail page. The report creates an admin queue item linked to the booking and does not directly alter Marks until policy automation or admin action applies.
+\end{itemize}
+
+\textbf{Admin override UI / UX requirements}
+\begin{itemize}
+    \item Admin dashboard must include an ``Exceptions / Overrides'' queue sorted by urgency, with filters for tutor no-show, student emergency, payment / wallet issue, platform error, offline room issue, and admin correction.
+    \item Each queue item must show booking id, session time, current booking state, affected users, held / deducted Marks, reported reason, report source, time since report, and SLA status.
+    \item Booking detail must include an admin-only ``Apply override'' action. The action opens a confirmation form; it must not be a one-click destructive action.
+    \item Override form must require override category, reason, affected participant(s), Marks action, user-visible note, and internal admin note.
+    \item Marks action options should include: no Marks change, release held Marks, add compensating Marks, reverse incorrect deduction, partial return, and manual finance follow-up.
+    \item For payment / wallet overrides, the UI must show payment record, ledger entries, Marks credited, Marks spent, remaining balance, and any prior refund references before admin can submit.
+    \item Admin must preview before / after booking state and before / after wallet balances before submitting the override.
+    \item Submitted override writes audit log and sends affected users a clear in-app notification; email is sent only when the override changes booking status, wallet balance, payment/refund state, or schedule.
+    \item Override history must remain visible on booking detail and wallet / ledger detail for future dispute review.
+\end{itemize}
+
+\textbf{Override examples}
+\begin{itemize}
+    \item Tutor no-show: student reports no tutor after 15 minutes; admin verifies; booking is cancelled as tutor no-show; affected held Marks are released; tutor reliability is flagged for admin review.
+    \item Medical emergency: student requests late-cancel waiver after H-2 with evidence; admin approves; late-cancel penalty is waived fully or partially; audit records reason and Marks outcome.
+    \item Platform error: meeting link or notification failed; admin verifies logs; booking is rescheduled or affected Marks are returned without penalty.
+    \item Offline room failure: admin cannot provide room for confirmed offline class; booking is cancelled or relocated; held Marks are released if class cannot proceed.
+    \item Payment mismatch: payment succeeded but Marks did not credit; admin verifies payment gateway record and creates a compensating Marks credit.
+    \item Duplicate charge with spent Marks: admin verifies whether extra Marks were credited and spent; admin refunds only valid unused excess or escalates instead of issuing a blind full cash refund.
+\end{itemize}
+
+\section{Lateness and No-Show Policy}
+
+Lateness tolerance is 15 minutes for both tutors and students.
+
+\begin{itemize}
+    \item If the tutor arrives within 15 minutes after scheduled start, the session may proceed and is not automatically cancelled.
+    \item If the tutor does not arrive within 15 minutes after scheduled start, the session is considered tutor no-show / tutor late-cancelled. Affected students' held Marks are released back to available balance.
+    \item Students must have a ``Report tutor lateness / no-show'' action on the booking detail page after the scheduled start time.
+    \item If a student arrives more than 15 minutes late or does not attend, the standard late-cancel / no-show policy applies unless admin override is recorded.
+    \item In group sessions, once the booking is confirmed, each participant's Marks commitment is individual and locked. If tutor is present and the class proceeds, one student's lateness or no-show does not cancel the class, does not trigger repricing, and does not change the price for other participants.
+    \item A late / absent group participant forfeits only their own committed Marks for that session unless admin override is recorded. Other confirmed participants continue normally.
+    \item Tutor no-show affects all confirmed participants because the class cannot proceed without tutor delivery.
+    \item Tutor lateness and no-show events should be tracked and flagged for admin review / tutor reliability monitoring.
+    \item Phase 0 does not automatically suspend tutors based on lateness or no-show count. Admin may manually unpublish or suspend a tutor if repeated reliability issues warrant action.
+\end{itemize}
+
+\section{Group Booking Pricing and Deadline Rules}
+
+Group booking pricing is based on the final confirmed headcount and the tutor's published price for that group size. Phase 0 shall not introduce hidden discount tiers or tier-based pricing.
+
+Tutor cards and tutor profiles show booking prices in Marks before the student starts booking. Class for 1 sessions show the per-student price for size 1. Class for 2 through class for 6 sessions show the starting group price or pricing basis for that size, and the final payable amount is recalculated against confirmed headcount during confirmation or reconfirmation.
+
+\textbf{Standard 90-minute floor pricing}
+
+Each tutor must publish one price for each group size from 1 to 6 students. Published prices are per student, stored in Marks, and must be at or above the Cogito floor price below. There is no ceiling. Tutor price changes apply only to future bookings; confirmed bookings keep their stored price snapshot.
+
+\textit{Online classes at floor price}
+
+\begin{tabular}{|p{2.5cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|}
+\hline
+\textbf{Students} & \textbf{Floor / Student} & \textbf{Total Pooled} & \textbf{Tutor Share} & \textbf{Cogito Take} \\
+\hline
+1 & 42 Marks & 42 Marks & 30 Marks & 12 Marks \\
+\hline
+2 & 35 Marks & 70 Marks & 54 Marks & 16 Marks \\
+\hline
+3 & 28 Marks & 84 Marks & 64 Marks & 20 Marks \\
+\hline
+4 & 24 Marks & 96 Marks & 74 Marks & 22 Marks \\
+\hline
+5 & 21 Marks & 105 Marks & 81 Marks & 24 Marks \\
+\hline
+6 & 19 Marks & 114 Marks & 88 Marks & 26 Marks \\
+\hline
+\end{tabular}
+
+\textit{Offline classes at Cogito campus at floor price}
+
+\begin{tabular}{|p{2.5cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|}
+\hline
+\textbf{Students} & \textbf{Floor / Student} & \textbf{Total Pooled} & \textbf{Tutor Share} & \textbf{Cogito Take} \\
+\hline
+1 & 50 Marks & 50 Marks & 35 Marks & 15 Marks \\
+\hline
+2 & 45 Marks & 90 Marks & 70 Marks & 20 Marks \\
+\hline
+3 & 40 Marks & 120 Marks & 95 Marks & 25 Marks \\
+\hline
+4 & 35 Marks & 140 Marks & 115 Marks & 25 Marks \\
+\hline
+5 & 30 Marks & 150 Marks & 120 Marks & 30 Marks \\
+\hline
+6 & 27 Marks & 162 Marks & 127 Marks & 35 Marks \\
+\hline
+\end{tabular}
+
+The tables above define Cogito's baseline / minimum price schedule, not a maximum price schedule. Tutors may set prices above the floor for any supported group size. At the baseline price, tutor share and Cogito take follow the corresponding table row. When the tutor-set price is above the baseline, the system calculates the increase at the total pooled level and applies the extra-take rule below.
+
+\textbf{Extra-take rule for above-baseline tutor prices}
+\begin{itemize}
+    \item Baseline total = baseline floor per student $\times$ final confirmed headcount.
+    \item Tutor total = tutor-set per-student price $\times$ final confirmed headcount.
+    \item Extra total = tutor total $-$ baseline total.
+    \item If extra total is less than 0, the price is invalid and cannot be published.
+    \item Cogito extra take = $\lfloor$ extra total $/ 5 \rfloor$ Marks.
+    \item Tutor extra share = extra total $-$ Cogito extra take.
+    \item Final Cogito take = baseline Cogito take + Cogito extra take.
+    \item Final tutor share = baseline tutor share + tutor extra share.
+    \item Tutor payout converts final tutor share Marks to IDR at Rp 7,000 / Mark.
+\end{itemize}
+
+This means Cogito receives 1 additional Mark for every full 5 Marks of accumulated price increase above the baseline total. Any remainder below the next 5-Mark threshold goes to the tutor. For example, if extra total is 4 Marks, Cogito extra take is 0 and all 4 Marks go to the tutor. If extra total is 5 Marks, Cogito extra take is 1 and 4 Marks go to the tutor. If extra total is 12 Marks, Cogito extra take is 2 and 10 Marks go to the tutor.
+
+\textbf{Pricing examples}
+
+\begin{itemize}
+    \item Online class for 1 at floor: student pays 42 Marks, tutor share is 30 Marks, Cogito take is 12 Marks.
+    \item Online class for 1 above floor: tutor sets 50 Marks. Extra total = 50 $-$ 42 = 8 Marks. Cogito extra take = $\lfloor 8 / 5 \rfloor$ = 1 Mark. Tutor extra share = 7 Marks. Final tutor share = 37 Marks. Final Cogito take = 13 Marks.
+    \item Online class for 3 at floor: each student pays 28 Marks, total pooled is 84 Marks, tutor share is 64 Marks, Cogito take is 20 Marks.
+    \item Online class for 3 above floor: tutor sets 32 Marks per student. Tutor total = 96 Marks. Extra total = 96 $-$ 84 = 12 Marks. Cogito extra take = $\lfloor 12 / 5 \rfloor$ = 2 Marks. Tutor extra share = 10 Marks. Final tutor share = 74 Marks. Final Cogito take = 22 Marks.
+\end{itemize}
+
+Class-size labels should be literal, e.g. ``class for 1'', ``class for 2'', through ``class for 6''; Phase 0 must not use solo / duo / trio naming in student-facing class-size labels.
+
+\textbf{Rules}
+\begin{itemize}
+    \item Each group booking stores target group size, minimum confirmed headcount, deadline at, provisional total, and final total.
+    \item Default response window for each booking step is 12 hours unless the session starts sooner or admin records a shorter operational cutoff.
+    \item The 12-hour window applies to tutor response, participant confirmation, repricing / reconfirmation, and offline room approval.
+    \item Before the deadline, invitees can accept or decline, but the provisional total stays based on the target group size.
+    \item At the deadline, the system computes confirmed headcount.
+    \item Final total = per-participant rate $\times$ confirmed headcount.
+    \item If confirmed headcount is below 2, the booking expires and all held Marks are released back to available balance within 12 hours after expiry.
+    \item {\sloppy If confirmed headcount is 2 or more but below target, the system enters awaiting\_reconfirmation and sends the final price to all remaining participants.\par}
+    \item Every remaining participant, including the proposer if they are part of the group, must reconfirm the repriced total.
+    \item If any confirmation changes the headcount again, the system recalculates and reissues the reconfirmation request.
+    \item If reconfirmation deadline passes without all required approvals, the booking expires and the held amount is released within 12 hours after expiry.
+    \item Tutor-initiated time changes also force awaiting\_reconfirmation if the confirmed participants are affected.
+    \item If a confirmed group participant withdraws before H-2, the system releases that participant's held Marks, recalculates the final total for the remaining confirmed headcount, and moves the booking to awaiting\_reconfirmation.
+    \item Remaining participants must accept the updated price before the reconfirmation deadline. If all remaining participants accept and the headcount remains valid, the booking continues; otherwise, the booking expires and held Marks are released within 12 hours after expiry.
+    \item If a confirmed group participant withdraws after H-2, the withdrawal is treated as a late cancel or no-show and does not trigger automatic repricing or refund unless an admin override is recorded.
+    \item Online group bookings may proceed to scheduled after tutor acceptance and required participant confirmation.
+    \item Offline group bookings must enter awaiting\_admin\_room\_approval after tutor acceptance and may not become scheduled until admin confirms or relocates the room.
+    \item If admin cannot secure a room for an offline booking within the 12-hour room approval window, admin may relocate to another room or cancel the booking with held Marks released according to the cancellation state.
+\end{itemize}
+
+\textbf{Group booking sequence}
+\begin{enumerate}
+    \item The proposer creates a group booking by selecting tutor, session type, target group size, slot, modality, and room preference if modality is offline.
+    \item The system validates available Marks and places a provisional hold where required.
+    \item Invitees are selected from registered Cogito users and receive the booking invitation in-platform and by email. Non-registered invitees are not supported in Phase 0.
+    \item When the invitation deadline is reached, the system computes confirmed headcount.
+    \item If confirmed headcount is below the minimum, the booking expires and all held Marks are released within 12 hours after expiry.
+    \item If confirmed headcount is valid but below the target group size, the system recalculates the final total and moves the booking to awaiting\_reconfirmation.
+    \item Each remaining participant must explicitly accept the updated price. The booking does not continue silently after a price increase.
+    \item If all remaining participants accept the updated price before the reconfirmation deadline, the booking proceeds to tutor review.
+    \item If any participant rejects or does not respond before the reconfirmation deadline, the system recalculates again if the remaining headcount is still valid; otherwise, the booking expires and held Marks are released within 12 hours after expiry.
+    \item After tutor acceptance, online bookings may proceed directly to scheduled, while offline bookings enter awaiting\_admin\_room\_approval.
+    \item For offline bookings, admin confirms the selected room, relocates to another room, or cancels only if no room is available. Relocation notifies tutor and students but does not require a fresh price confirmation unless time or modality changes.
+\end{enumerate}
+
+\section{Series Booking Rules}
+
+Series bookings allow a student or group to book up to 4 sessions in one flow with the same tutor, session type, and group composition.
+
+\textbf{Series rules}
+\begin{itemize}
+    \item The booking form lists each session date and time explicitly; Phase 0 does not use abstract recurrence patterns.
+    \item Maximum sessions per series: 4.
+    \item Tutors accept or decline the full series as one package. Partial acceptance is not allowed.
+    \item If the tutor declines the series, all held Marks are released immediately, the proposer is notified, and the proposer may re-book with adjusted dates.
+    \item Marks for all sessions in the series are held upfront at booking confirmation. For group series, each participant's Marks are held individually.
+    \item After tutor acceptance, tutor-initiated reschedule proposals follow the standard approval flow per affected session.
+\end{itemize}
+
+\textbf{Series cancellation rules}
+\begin{itemize}
+    \item Solo series: a student may cancel an individual future session before that session's H-2 cutoff, and the held Marks for that session are released.
+    \item Solo series: after H-2 or no-show, the Marks for that session are forfeited unless admin override is recorded.
+    \item Full series cancellation before H-2 of the first session releases all held Marks for that series, unless group series no opt-out rules already apply after confirmation.
+    \item Group series: once confirmed, participants cannot withdraw from the series as a whole and cannot self-service opt out of individual sessions.
+    \item Group series: missed sessions follow late-cancel / no-show handling and do not affect other participants or other sessions in the series.
+    \item Admin override is available for exceptional documented cases, with or without Marks return at admin discretion. Every override must be recorded in the audit log.
+\end{itemize}
+
+\textbf{Required group series disclaimer}
+
+The following or equivalent text must appear before a group series is finalized and on the invitee acceptance screen:
+
+\begin{quote}
+This is a full-series commitment. Once confirmed, you cannot opt out of this series. Individual sessions missed after the H-2 cutoff are non-refundable. By proceeding, you confirm you are available for all listed dates and times.
+\end{quote}
+
+\textbf{Group series invitee information}
+\begin{itemize}
+    \item full list of all session dates and times,
+    \item per-student price per session,
+    \item total Marks held upfront across all sessions,
+    \item no opt-out disclaimer,
+    \item clear accept / decline action.
+\end{itemize}
+
+\section{Notification Matrix}
+
+\small
+\begin{longtable}{|L{3.5cm}|L{2.0cm}|L{2.0cm}|L{6.8cm}|}
+\hline
+\textbf{Event} & \textbf{In-app} & \textbf{Email} & \textbf{Notes} \\
+\hline
+\endfirsthead
+\hline
+\textbf{Event} & \textbf{In-app} & \textbf{Email} & \textbf{Notes} \\
+\hline
+\endhead
+Booking request created & Yes & Yes, tutor only & Action required by tutor. \\
+\hline
+Account created & Yes & Yes, new student & Signup confirmation, onboarding entry point, login link, and brief platform introduction. \\
+\hline
+Group session or series invitation received & Yes & Yes, registered invitees & Email must include full schedule, per-student price, total Marks hold, and direct CTA to view and accept in-platform. Phase 0 invitations are only sent to registered Cogito users. \\
+\hline
+Student or group has confirmed a booking & Yes & Yes, assigned tutor & Tutor preparation notice. Include student or group name, session type, date, and time. For series, list all session dates and times. \\
+\hline
+Booking accepted / declined & Yes & Yes, student only & Critical booking outcome. \\
+\hline
+Online meeting link created & Yes & Yes, tutor and confirmed students & Sent only after all required participant, tutor, and admin conditions are complete. \\
+\hline
+Offline room confirmed / relocated / cancelled & Yes & Yes, tutor and confirmed students & Room changes are critical operational notices. \\
+\hline
+Student cancel before H-2 & Yes & Yes, affected participants & Schedule-affecting change. \\
+\hline
+Late cancel / no-show / emergency override & Yes & Yes, affected participants & Penalty or correction event. \\
+\hline
+Tutor reschedule proposed / approved & Yes & Yes, affected participants & Requires student approval. \\
+\hline
+Group repricing / reconfirmation request & Yes & Yes, all current participants & Cost changes must be explicit. \\
+\hline
+Payment / refund / emergency refund & Yes & Yes, payer & Wallet event. \\
+\hline
+Achievement submitted / reviewed & Yes & No & Keep review traffic in-app. \\
+\hline
+Reminder / non-critical update & Yes & No & Never consumes email quota. \\
+\hline
+\end{longtable}
+\normalsize
+
+Email dispatch is best-effort, rate-limited, and deduplicated by event key. In-app notifications are the source of record for all events. Student emails are intentionally limited to authentication / registration, group invitation CTAs, group size-change reconfirmation CTAs, critical booking outcomes, payment / refund events, online meeting links, and offline room changes. Non-critical reminders and informational updates remain in-app only.
+
+\section{Online Meeting Link Rules}
+
+Online classes require a meeting link for a 90-minute call after all booking conditions are complete.
+
+\textbf{Rules}
+\begin{itemize}
+    \item The platform creates the meeting link only after all required participants have accepted, repricing / reconfirmation is complete, and the tutor has accepted.
+    \item Preferred provider is Google Meet using Cogito-controlled Google account infrastructure, subject to implementation validation of Google Calendar API capability and setup requirements.
+    \item Desired automatic attendee behavior: the platform creates a Google Calendar event / Google Meet conference and adds the tutor email plus confirmed student account emails as event attendees.
+    \item The meeting event must invite only the tutor and confirmed student account emails attached to the Cogito accounts in the booking.
+    \item Before launch, implementation must validate Google API authorization method, account access, quota / cost implications, and whether automatic attendee restriction behaves as expected for external student emails.
+    \item If Google API setup requires client action, developer and client should hold a setup meeting to connect the Cogito Google account securely and confirm the API configuration.
+    \item The booking stores provider, external event id, meeting URL, attendee emails, creation status, and error status if creation fails.
+    \item If automatic meeting creation fails, the booking remains valid but shows ``meeting link pending'' to admin and affected users. Admin may add a manual meeting link as any valid URL, including Google Meet, Zoom, or another approved provider.
+    \item Cogito admin will not admit unlisted emails to the meeting. Users must join using the same email address associated with their Cogito account unless admin manually corrects the attendee list.
+\end{itemize}
+
+\section{Offline Room Booking Rules}
+
+Offline booking stays in Phase 0 but should be simplified so admin handles only room confirmation exceptions after student and tutor intent are clear.
+
+\textbf{Student-side rules}
+\begin{itemize}
+    \item Offline booking form includes a classroom selector or room preference section.
+    \item Where room availability data exists, unavailable rooms are visible but not selectable.
+    \item The booking summary shows that room assignment is pending admin confirmation until admin acts.
+\end{itemize}
+
+\textbf{Tutor-side rules}
+\begin{itemize}
+    \item Tutor receives the offline booking after student / group confirmation is complete.
+    \item Tutor accepts, declines, or proposes reschedule using the same booking response flow as online sessions.
+    \item Tutor does not manage room assignment.
+\end{itemize}
+
+\textbf{Admin-side rules}
+\begin{itemize}
+    \item Admin receives the offline room task only after the tutor accepts.
+    \item Admin actions are: confirm selected room, relocate to another available room, or cancel class if no room is available.
+    \item Relocation notifies tutor and confirmed students. It does not reopen participant confirmation unless the time, price, modality, or tutor changes.
+    \item Cancellation releases held Marks according to normal cancellation state and records an audit reason.
+\end{itemize}
+
+\section{Achievement Submission Fields and Moderation States}
+
+The achievements page shall let a student submit proof of achievement and surface approved items on Cogito's existing public landing page.
+
+\textbf{Submission fields}
+\begin{itemize}
+	\item title,
+	\item category (competition, award, certificate, leadership, publication, other),
+	\item short summary,
+	\item issuer or institution,
+	\item date earned,
+	\item proof URL or file,
+	\item optional public note or context,
+	\item visibility flag.
+\end{itemize}
+
+\textbf{Moderation states}
+\begin{itemize}
+	\item draft,
+	\item pending\_review,
+	\item approved,
+	\item rejected,
+	\item archived.
+\end{itemize}
+
+\textbf{Rules}
+\begin{itemize}
+	\item Only approved achievements may appear on Cogito's existing public landing page.
+	\item Rejected achievements remain visible to the submitting student with the rejection reason.
+	\item Admin review state changes must be audited.
+	\item The dashboard CTA text may be shown as ``Submit your achievements to show them off on Cogito Academy''.
+\end{itemize}
+
+\section{Session Notes}
+
+Phase 0 supports rich-text session notes for tutor-written post-session documentation. Structured scoring, rubric fields, and assessment recommendations are deferred.
+
+\textbf{Session note rules}
+\begin{itemize}
+    \item Session notes may include paragraphs, headings, bullet lists, numbered lists, links, bold text, and italic text.
+    \item Rich-text content must be sanitized before rendering.
+    \item The implementation may store editor JSON or sanitized HTML, but the rendered output must remain stable in booking history.
+    \item File upload, image embed, scoring fields, rubric fields, and recommendation fields are out of Phase 0 unless separately approved.
+\end{itemize}
+
+\section{Non-Functional Requirements}
+
+\begin{itemize}
+	\item Authorization is enforced server-side for every student, tutor, and admin action.
+	\item Every booking, wallet, notification dispatch, and admin override writes an audit log entry with actor, timestamp, before state, after state, and reason.
+	\item Booking, wallet, and notification updates that belong together must be written atomically where possible.
+	\item Payment callbacks, refund callbacks, and notification jobs are idempotent by event id.
+	\item All booking deadlines and schedule calculations are stored in UTC and rendered in the user's local timezone.
+	\item In-app notifications are durable records; email is asynchronous and must not block booking writes.
+	\item Historical booking and Marks ledger records are retained for dispute and support review.
+\end{itemize}
+
+\section{Operational Edge Cases}
+
+\begin{itemize}
+    \item Payment succeeds but the browser closes before redirect; the webhook still credits once and only once.
+    \item Payment or refund webhook arrives more than once; idempotency prevents duplicate wallet changes.
+    \item Tutor declines after Marks are held; the hold is released and the booking state is updated once.
+    \item Student tries to self-service cancel or reschedule after H-2; the action is blocked and the booking remains auditable.
+    \item Group booking drops below the minimum confirmed headcount; the booking expires and held Marks are released.
+    \item Group booking reprices more than once during reconfirmation; each new price requires a fresh confirmation cycle.
+    \item Confirmed group participant withdraws before H-2; the withdrawing participant's hold is released, remaining participants must reconfirm the updated price, and the booking expires if reconfirmation fails.
+    \item Confirmed group participant withdraws after H-2; late-cancel / no-show handling applies unless admin records an override.
+    \item Offline group booking is accepted by tutor but no room is available; admin must propose a new slot / location or cancel the booking with held Marks released.
+    \item Tutor invite is opened by a different logged-in user whose email does not match the invited email; the invite cannot be accepted by that user.
+    \item Tutor invite expires or is revoked before acceptance; the link cannot create a tutor profile or attach tutor access.
+    \item Existing user receives tutor invite; accepting the invite attaches tutor access to the existing account and must not create a duplicate account.
+    \item Tutor onboarding is incomplete or pending review; the tutor profile remains hidden and cannot receive booking requests.
+    \item Email delivery fails; in-app notification still persists and the booking or wallet write must not fail.
+    \item Admin override on a terminal booking state requires a reason and audit entry before any compensating ledger change.
+\end{itemize}
+
+\section{TDD Implementation Checklist}
+
+The implementation order shall be test-first by domain.
+
+\begin{enumerate}
+	\item Write unit tests for booking state transitions before changing booking logic.
+	\item Write unit tests for Marks hold, release, refund, and deduction before wallet logic.
+	\item Write integration tests for student cancel / reschedule and admin emergency override before UI wiring.
+	\item Write integration tests for tutor reschedule approval and group repricing / reconfirmation before booking flow changes.
+	\item Write tutor invitation, account-claim, email-match, and tutor publication tests before tutor onboarding UI wiring.
+	\item Write notification routing tests before email or in-app dispatch code.
+	\item Write achievement submission and moderation tests before dashboard or landing-page surfaces.
+	\item Write RBAC, audit log, idempotency, and timezone tests before external integrations go live.
+\end{enumerate}
+
+No feature is complete until the corresponding tests exist and pass.
+
+\section{Acceptance and Regression Test Cases}
+
+\small
+\begin{longtable}{|L{1.2cm}|L{3.3cm}|L{3.9cm}|L{6.0cm}|}
+	\hline
+	\textbf{TC ID} & \textbf{Test Case}                                                   & \textbf{Pre-condition}                                                 & \textbf{Steps / Expected Outcome}                                                                                                                                                                                                                                                                               \\
+	\hline
+	\endfirsthead
+	\hline
+	\textbf{TC ID} & \textbf{Test Case}                                                   & \textbf{Pre-condition}                                                 & \textbf{Steps / Expected Outcome}                                                                                                                                                                                                                                                                               \\
+	\hline
+	\endhead
+
+	TC-01          & Verify role-specific login and access control.                       & Student, tutor, and admin accounts exist.                              & 1. Log in as each role. 2. Attempt to open another role's page. \newline The correct dashboard is shown for each role, and unauthorized access is denied.                                                                                                                                                       \\
+	\hline
+	TC-02          & Verify student profile and optional parent contact data.             & Student is logged in.                                                  & 1. Edit the student profile. 2. Add or remove parent contact information. \newline The profile saves correctly, and the parent contact field may remain blank without error.                                                                                                                                    \\
+	\hline
+	TC-03          & Verify Marks purchase updates the wallet ledger.                     & Student has a known starting balance.                                  & 1. Complete a successful payment. 2. Inspect the wallet history. \newline Balance increases exactly once and a matching ledger entry is created.                                                                                                                                                                \\
+	\hline
+	TC-04          & Verify failed or pending payment does not credit Marks.              & A payment attempt is started.                                          & 1. Simulate failed or pending payment status. 2. Check the wallet balance. \newline No credit is added and no completed purchase entry appears.                                                                                                                                                                 \\
+	\hline
+	TC-05          & Verify tutor prices respect Cogito floors.                      & Tutor and admin can edit tutor pricing.                                    & 1. Try to publish a price below the floor. 2. Publish valid prices for group sizes 1--6. 3. Open the tutor card and profile. \newline Below-floor prices are rejected, valid prices are displayed, and no tier-based pricing is used.                                                                                                                                                                       \\
+	\hline
+	TC-06          & Verify above-floor tutor pricing split.         & Tutor prices are configured above floor for at least one individual class and one group class.                                        & 1. Set online class for 1 to 50 Marks. 2. Complete the class and inspect the payout split. 3. Set online class for 3 to 32 Marks per student, confirm 3 students, complete the class, and inspect the payout split. \newline For class for 1, final split is tutor 37 Marks and Cogito 13 Marks. For class for 3, final split is tutor 74 Marks and Cogito 22 Marks. In both cases Cogito extra take equals one Mark per full 5 Marks accumulated above baseline.                                                                                                                                                                    \\
+	\hline
+	TC-07          & Verify tutor listing shows the required booking information.         & Multiple tutors are configured.                                        & 1. Open the tutor list. 2. Review each tutor card. \newline Each card shows summary profile, expertise, tutor-set Marks prices, and availability.                                                                                                                                                                    \\
+	\hline
+	TC-08          & Verify admin-invited new tutor account claim.                                       & Admin is logged in and invited email has no existing account.              & 1. Admin sends tutor invite. 2. Tutor opens invite link and creates an account. 3. Tutor verifies email ownership and starts onboarding. \newline A user account and draft tutor profile are created, the invite becomes accepted, no admin-created password exists, and the tutor is not visible in discovery before publication.                                                                                                              \\
+	\hline
+	TC-09          & Verify tutor invite attaches to existing user by email.                             & A user already exists with the invited email.                     & 1. Admin sends tutor invite to the existing user's email. 2. Existing user opens invite and authenticates. 3. Inspect user and tutor profile records. \newline Tutor access attaches to the existing user, no duplicate user is created, invite acceptance is audited, and email mismatch cannot accept the invite.                                                                     \\
+	\hline
+	TC-10          & Verify tutor onboarding review and publication gate.                                 & Tutor has accepted invite and opened onboarding.                                               & 1. Leave required onboarding fields incomplete. 2. Attempt to submit or publish. 3. Complete required fields and submit for review. 4. Admin requests changes, approves, then publishes. \newline Incomplete onboarding cannot be published, pending review is visible to admin, requested changes return the tutor to correction flow, and only published tutors appear in discovery or receive booking requests.                                                                                                                                           \\
+	\hline
+	TC-11          & Verify solo booking lifecycle.                                       & Student has enough Marks and tutor has an available slot.              & 1. Create a solo booking. 2. Let the tutor accept the booking. 3. Complete the session. \newline The booking moves through the correct status lifecycle and the wallet reflects the final outcome.                                                                                                              \\
+	\hline
+	TC-12          & Verify group booking finalization rules.                             & Group booking template and invitees are available.                     & 1. Create a group booking. 2. Invite participants. 3. Reach the target group size. 4. Finalize the session. \newline The booking only finalizes when the required confirmation rules are satisfied, and repricing or final rate is correct.                                                                     \\
+	\hline
+	TC-13          & Verify tutor-side operational tools.                                 & Tutor account is active.                                               & 1. Set availability. 2. Open an incoming booking. 3. Accept or decline it. 4. Add a rich-text session note with heading, bullets, link, and emphasis. \newline All actions persist, session note formatting renders safely in booking history, and no structured assessment fields are required.                                                                                                                                           \\
+	\hline
+	TC-14          & Verify student can cancel before H-2 without penalty.                & Student has a future booking that is more than H-2 away.               & 1. Open the booking. 2. Cancel it before the cutoff. \newline The booking is cancelled, no late penalty is applied, and the Marks state is released or refunded according to the booking hold rules.                                                                                                            \\
+	\hline
+	TC-15          & Verify student can reschedule before H-2 without penalty.            & Student has a future booking that is more than H-2 away.               & 1. Open the booking. 2. Move it to another available slot before the cutoff. \newline The booking updates to the new slot, no student penalty is applied, and the wallet remains consistent.                                                                                                                    \\
+	\hline
+	TC-16          & Verify late cancel after H-2 is locked and can be overridden.        & Student has a booking inside the H-2 window.                           & 1. Attempt self-service cancel. 2. Confirm the booking is locked and Marks are deducted. 3. Let an admin apply an emergency override. \newline Self-service cancel is blocked, the late-cancel / no-show rule applies by default, and the admin override is audited and can restore Marks.                      \\
+	\hline
+	TC-17          & Verify tutor-initiated reschedule requires student approval.         & Tutor and student both have access to the booking.                     & 1. Tutor proposes a new slot. 2. Student reviews the change. 3. Student approves it. \newline The booking only moves after student approval, no student penalty is applied, and the change is visible in history and notifications.                                                                             \\
+	\hline
+	TC-18          & Verify partial group approval triggers repricing and reconfirmation. & Group booking has target size 5 and deadline expires with 3 approvals. & 1. Wait for the deadline. 2. Inspect the repriced session total. 3. Ask remaining participants to reconfirm. \newline The system recalculates Marks for 3 participants, sends the new price to all remaining participants, and only finalizes after the final confirmed participants accept the repriced total. \\
+	\hline
+	TC-19          & Verify confirmed group withdrawal before H-2 triggers repricing.     & Group booking is fully confirmed and more than H-2 away.               & 1. Let one confirmed participant withdraw. 2. Inspect released Marks for the withdrawing participant. 3. Ask remaining participants to reconfirm the updated price. \newline The booking only continues if all remaining participants accept the updated price before the reconfirmation deadline; otherwise it expires and held Marks are released. \\
+	\hline
+	TC-20          & Verify offline group booking requires admin room approval.           & Offline group booking has accepted participants and tutor acceptance.   & 1. Complete participant confirmation and tutor acceptance. 2. Inspect booking state before room assignment. 3. Let admin assign a room. \newline The booking remains awaiting admin room approval until admin assigns or approves a room; after approval, it becomes scheduled. If no room is available, admin can propose a new slot / location or cancel with held Marks released. \\
+	\hline
+	TC-21          & Verify notification routing keeps in-app complete and email limited. & Notification preferences are enabled.                                  & 1. Trigger a schedule change. 2. Trigger a non-critical reminder. 3. Inspect in-app notifications and email inbox. \newline All events appear in-app, schedule changes send email, and non-critical reminders do not consume email.                                                                             \\
+	\hline
+	TC-22          & Verify achievements submission CTA and moderation flow.              & Student account can open the dashboard.                                & 1. Open the Achievements page. 2. Click the submission CTA. 3. Submit an achievement. 4. Approve or reject it as admin. \newline The CTA is visible, submissions are stored for review, and only approved achievements become eligible for public display.                                                      \\
+	\hline
+	TC-23          & Verify series booking upfront hold and tutor package decision.              & Student has enough Marks and tutor has four available slots.                                & 1. Create a 4-session series with explicit dates. 2. Confirm booking. 3. Let tutor accept or decline the series. \newline Marks for all sessions are held upfront, all dates are visible, tutor decision applies to the full series, and decline releases all held Marks.                                                      \\
+	\hline
+	TC-24          & Verify group series no opt-out policy.              & Group series is confirmed and more than H-2 away.                                & 1. Open the participant cancellation action. 2. Attempt to opt out of one session or the full series. 3. Review admin override path. \newline Self-service opt-out is blocked, required disclaimer is visible, and only admin override can return Marks for exceptional documented cases.                                                      \\
+	\hline
+	TC-25          & Verify group series invitee acceptance.              & Group series invitation exists for an invitee with enough Marks.                                & 1. Open the invite. 2. Review all listed dates and times, per-session price, total Marks hold, and no opt-out disclaimer. 3. Accept the invite. \newline Invitee can only accept after the required information is visible, and their Marks are held for the full series.                                                      \\
+	\hline
+	TC-26          & Verify group series invitee decline.              & Group series invitation exists for an invitee.                                & 1. Open the invite. 2. Decline it. 3. Inspect booking state and wallet state. \newline The invitee is not added to the confirmed participant set, no Marks remain held for that invitee, and the booking does not finalize unless remaining confirmation rules are satisfied.                                                      \\
+	\hline
+	TC-27          & Verify group series tutor decline releases all holds.              & Group series has confirmed participants and upfront holds.                                & 1. Let tutor decline the full series. 2. Inspect each participant wallet. 3. Inspect proposer notification. \newline All held Marks are released for every participant, the proposer is notified, and the proposer can re-book with adjusted dates.                                                      \\
+	\hline
+	TC-28          & Verify group series participant lacks Marks.              & Invitee has less available Marks than the total series hold.                                & 1. Open the group series invite. 2. Attempt to accept. 3. Follow top-up path if shown. \newline Acceptance is blocked until enough available Marks exist for the full upfront hold, and no partial hold is created.                                                      \\
+	\hline
+	TC-29          & Verify group series maximum length.              & Student is creating a series booking.                                & 1. Select four sessions. 2. Try to add a fifth session. \newline Four sessions are allowed, the fifth session is blocked, and copy explains the Phase 0 maximum.                                                      \\
+	\hline
+	TC-30          & Verify group series no-show affects only one session.              & Group series is confirmed with multiple scheduled sessions.                                & 1. Mark one participant as no-show for one session after H-2. 2. Inspect remaining sessions and other participants. \newline Marks for the missed session are forfeited for that participant, other sessions remain scheduled, and other participants are unaffected.                                                      \\
+	\hline
+	TC-31          & Verify group series admin cancels one session.              & Group series is confirmed and admin has an exceptional cancellation reason.                                & 1. Admin cancels one session in the series. 2. Choose whether Marks return applies. 3. Inspect other sessions. \newline The admin action is audited, selected Marks handling is applied only to the affected session, and other sessions remain intact.                                                      \\
+	\hline
+	TC-32          & Verify group series does not deduct Knowledge Bank access fee.              & Student has at least 35 Marks and can access Knowledge Bank before accepting a group series invite.                                & 1. Accept a group series that places a full upfront hold. 2. Open the Knowledge Bank. 3. Inspect wallet ledger. \newline Knowledge Bank access follows the 35-Mark wallet-balance rule, opening the Knowledge Bank creates no deduction entry, and group-series hold / release entries remain separate from content access.                                                      \\
+	\hline
+	TC-33          & Verify group series one-session tutor reschedule.              & Group series is confirmed and tutor wants to move one session.                                & 1. Tutor proposes a new time for one session. 2. Participants review and approve or reject. 3. Inspect unaffected sessions. \newline Affected participants must approve the changed session, no student penalty applies, and other sessions remain unchanged.                                                      \\
+	\hline
+	TC-34          & Verify group series idempotent accept and hold.              & Group series invitee acceptance can be submitted more than once due to retry or duplicate request.                                & 1. Submit the same accept action twice. 2. Inspect participant state and wallet ledger. \newline The invitee is confirmed once, the Marks hold is created once, and duplicate attempts do not create duplicate ledger entries.                                                      \\
+	\hline
+	TC-35          & Verify purchased Marks cannot be converted to rupiah.              & Student has unused purchased Marks.                                & 1. Open wallet and purchase history. 2. Look for cash-out or convert-to-rupiah action. 3. Trigger normal booking cancellation before H-2. \newline No cash-out action exists, unused Marks remain in wallet, and cancellation releases held Marks back to available Marks rather than creating an IDR refund.                                                      \\
+	\hline
+	TC-36          & Verify Google Meet attendee automation or fallback.              & Online booking is fully confirmed with tutor and student emails, and Google API setup has been validated or fallback mode is active.                                & 1. Finalize an online booking. 2. Inspect the created Google Calendar / Google Meet event or fallback state. 3. Inspect booking notification. \newline If Google API setup is enabled, the event includes the tutor email and all confirmed student emails as attendees, stores provider event id and meeting URL, and sends the meeting link only after final confirmation. If setup is not enabled or event creation fails, booking shows ``meeting link pending'' and admin can add a manual link.                                                      \\
+	\hline
+	TC-37          & Verify 15-minute lateness policy and tutor no-show report.              & Confirmed online booking has reached scheduled start time.                                & 1. Tutor does not arrive for 15 minutes. 2. Student clicks report tutor lateness / no-show. 3. Inspect booking, wallet, and admin queue. 4. Admin verifies and applies override. \newline A report is created, Marks do not change from report alone, admin sees an auditable exception item linked to the booking, and affected students' held Marks are returned only after admin verification / override.                                                      \\
+	\hline
+	TC-38          & Verify 12-hour response windows and hold release after scheduling failure.              & Group booking or offline booking is waiting for a required response.                                & 1. Let the relevant 12-hour response window expire. 2. Inspect booking state and wallet. 3. Inspect countdown / status copy. \newline The booking expires or moves to the correct failed scheduling state, held Marks are released within 12 hours after failure / expiry, and users can see the response window status.                                                      \\
+	\hline
+	TC-39          & Verify payment-error refund reconciliation prevents blind cash refund.              & A duplicate or incorrect payment created extra Marks, and some Marks may have been spent.                                & 1. Open admin payment / wallet override flow. 2. Review payment record, ledger entries, Marks credited, Marks spent, and remaining wallet balance. 3. Attempt cash refund. \newline Admin must reconcile usage before refunding, cannot issue blind full cash refund when credited Marks were already spent, and any correction creates audit and ledger/payment references.                                                      \\
+	\hline
+\end{longtable}
+\normalsize
+
+\section{Release Governance}
+
+\subsection{Release Acceptance Criteria}
+
+The project may move from build to release only when all of the following are true:
+
+\begin{itemize}
+    \item FR-01 through FR-24 are implemented and verified in staging.
+    \item All open questions are either answered or explicitly deferred with an owner and target date.
+    \item Marks package sizes and real-money prices are approved.
+    \item The staging demo covers signup, wallet purchase, solo booking, group booking, tutor workflow, admin override, notifications, and achievements.
+    \item No release-blocking bugs remain open.
+    \item Client sign-off is recorded for all user-facing copy and price-related flows.
+\end{itemize}
+
+\subsection{Definition of Done}
+
+A feature is done only when all of the following are true:
+
+\begin{itemize}
+    \item The requirement is implemented in the app and backend where applicable.
+    \item Server-side authorization exists.
+    \item Audit, ledger, and notification behavior exists where applicable.
+    \item Regression or domain tests exist and pass.
+    \item User-facing copy has been reviewed when the feature exposes visible text.
+    \item The PRD, changelog, and test cases remain aligned.
+\end{itemize}
+
+\subsection{Operational Ownership}
+
+\begin{tabular}{|p{5.0cm}|p{9.2cm}|}
+\hline
+\textbf{Area} & \textbf{Owner} \\
+\hline
+Product scope and change control & Product owner and client approver. \\
+\hline
+Technical implementation choices & Technical lead. \\
+\hline
+Booking disputes and emergency overrides & Admin operator. \\
+\hline
+Payment and refund reconciliation & Admin operator with finance support if needed. \\
+\hline
+Achievement moderation & Admin operator. \\
+\hline
+PRD maintenance and versioning & Product owner. \\
+\hline
+Staging sign-off & Client representative plus product owner. \\
+\hline
+\end{tabular}
+
+\subsection{Launch Checklist}
+
+\begin{itemize}
+    \item Package pricing is approved.
+    \item Open questions are resolved or explicitly deferred.
+    \item Permissions matrix is validated against the actual build.
+    \item Staging demo is completed end to end.
+    \item Regression suite is green.
+    \item Support and admin runbook is ready.
+    \item Client sign-off is recorded.
+    \item Release notes are published.
+\end{itemize}
+
+\section{Development Handoff Notes}
+
+The PRD is ready for development handoff. The build should proceed with the following implementation priorities and validation notes:
+
+\begin{itemize}
+    \item Treat Google Meet automation as an early technical spike. Target behavior is automatic Google Calendar / Google Meet event creation with tutor and confirmed student emails as attendees. Manual meeting-link entry remains the guaranteed v1 fallback if API setup blocks launch.
+    \item Arrange a client / developer setup call if Google API authorization requires access to Cogito Academy's Google account.
+    \item Implement the booking, Marks ledger, and override domains test-first. The highest-risk rules are 12-hour response windows, above-floor tutor pricing split, no Marks-to-rupiah conversion, admin-verified tutor no-show return, and payment-error reconciliation.
+    \item Build admin override UX as a guarded workflow with required reason, category, affected users, Marks action, before / after preview, and audit history. Do not implement one-click override actions.
+    \item Use Cogito Academy WhatsApp support number +62 881-0119-90195 for support button and SLA escalation configuration.
+    \item Phase 0 flags tutor reliability issues for admin review only. Do not auto-suspend tutors based on no-show / lateness counts.
+\end{itemize}
+
+\section{Assumptions and Constraints}
+
+\begin{itemize}
+	\item Phase 0 is focused on the operating core, not the full long-term platform vision.
+	\item A separate parent account is intentionally deferred.
+	\item Existing Competition Calendar and Knowledge Bank assets remain active and are reused rather than rebuilt.
+	\item Payment vendor approval and integration timelines may affect the release schedule.
+	\item Group booking rules, including deadline repricing and reconfirmation, are finalized before implementation.
+	\item All Phase 0 sessions are 90 minutes.
+	\item Marks do not expire in Phase 0.
+	\item H-2 means two hours before the scheduled booking start time.
+	\item Payment gateway implementation depends on successful account setup, approval, and operational readiness from the selected payment provider.
+  \item Google Calendar and Google Meet automation depend on Google Workspace configuration, API availability, authorization setup, quota limits, and third-party service behavior.
+  \item Email delivery behavior may vary depending on provider policies, spam filtering, recipient mailbox configuration, and external email infrastructure.
+  \item External service outages, API changes, vendor-side limitations, or third-party policy changes are outside the scope of the platform itself.
+\end{itemize}
+
+\section{Appendix}
+
+\subsection{Glossary}
+\begin{itemize}
+	\item \textbf{Marks}: Cogito's internal booking currency. Marks are not transferable between accounts and have no value outside the platform.
+	\item \textbf{Ledger}: the immutable transaction history for Marks movement.
+	\item \textbf{Available Balance}: total Marks balance minus held Marks.
+	\item \textbf{Floor Price}: minimum per-student price a tutor may set for a group size.
+	\item \textbf{Baseline Total}: floor price per student multiplied by final confirmed headcount.
+	\item \textbf{Extra Total}: tutor-set total price minus baseline total.
+	\item \textbf{Cogito Take}: baseline number of Marks Cogito deducts from total class revenue at session completion, plus 1 extra Mark for every full 5 Marks accumulated above the baseline total.
+	\item \textbf{Tutor Net}: baseline tutor share plus remaining above-baseline Marks after Cogito extra take, converted to IDR at the tutor payout rate.
+	\item \textbf{Exchange Margin}: spread between student purchase rate and tutor payout rate on Marks flowing through the platform.
+	\item \textbf{Hold / Release / Refund}: wallet states tied to booking outcomes.
+	\item \textbf{Series Booking}: up to 4 explicitly selected sessions booked as one package with the same tutor, session type, and group composition.
+	\item \textbf{Tutor Invite}: admin-created invitation that allows a specific email address to claim or attach tutor access.
+	\item \textbf{Tutor Onboarding}: required tutor setup flow completed after invite acceptance and before admin publication.
+	\item \textbf{Published Tutor}: approved tutor profile that is visible in student discovery and eligible to receive booking requests.
+	\item \textbf{Repricing}: recalculation of group session pricing when group size or confirmation state changes.
+	\item \textbf{Reconfirmation}: the follow-up approval step after repricing that each remaining participant must complete.
+	\item \textbf{Booking state machine}: the canonical booking lifecycle and permitted transitions.
+	\item \textbf{Audit log}: immutable record of who changed what, when, and why.
+	\item \textbf{Idempotency}: repeated external events produce the same outcome once.
+	\item \textbf{Deadline at}: stored cutoff time after which confirmation or reconfirmation expires.
+	\item \textbf{H-2}: two hours before the scheduled booking start time.
+	\item \textbf{Late cancel / no-show}: a late change after H-2 that is blocked by default and may trigger Marks deduction.
+	\item \textbf{Critical notification}: a booking, payment, refund, or schedule-change event that also sends email.
+	\item \textbf{Achievements}: student-submitted items that may be moderated before public display.
+	\item \textbf{External content source of truth}: the existing website / CMS that continues to own Competition Calendar and Knowledge Bank content.
+\end{itemize}
+
+\subsection{Booking Flow Diagrams}
+
+The diagrams below are rendered as images for the PDF. The Mermaid source is kept under \texttt{diagrams/} for engineering modification; this PRD does not include the source in the body so the visual is the single source of truth for the client.
+
+\textbf{Student booking and operational approval flow}
+
+\begin{center}
+\includegraphics[width=\linewidth,height=0.92\textheight,keepaspectratio]{booking-flow.png}
+\end{center}
+
+\textbf{Booking state machine}
+
+\begin{center}
+\includegraphics[width=\linewidth,height=0.92\textheight,keepaspectratio]{booking-state-machine.png}
+\end{center}
+
+\subsection{Deferred Features}
+\begin{itemize}
+	\item archetype-based personalization,
+	\item dedicated parent dashboard,
+	\item full assessment and rich progress reporting,
+	\item advanced analytics,
+	\item referrals and watchlists,
+	\item premium content gating,
+	\item AI and broader ecosystem modules.
+\end{itemize}
+
+\end{document}
