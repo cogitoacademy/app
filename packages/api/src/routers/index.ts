@@ -3,6 +3,7 @@ import type { RouterClient } from "@orpc/server";
 import { adminRouter } from "./admin-router";
 import { authRouter } from "./auth-router";
 import { protectedProcedure, publicProcedure } from "../index";
+import { achievementRouter } from "./achievement-router";
 import { todoRouter } from "./todo";
 
 export const appRouter = {
@@ -18,6 +19,7 @@ export const appRouter = {
   auth: authRouter,
   admin: adminRouter,
   todo: todoRouter,
+  achievement: achievementRouter,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;
