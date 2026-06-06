@@ -43,7 +43,9 @@ export function DialogPopup({
           'bg-dialog text-dialog-foreground backdrop-blur-sm',
           'ring ring-dialog-border rounded-xl shadow',
           'scale-[calc(1-0.1*var(--nested-dialogs))]',
-          'outline-none transition-all w-md max-w-[calc(100%-2rem)]',
+          'outline-none transition-all w-full max-w-md',
+          'max-w-[calc(100%-2rem)]',
+          'max-h-[90dvh] overflow-hidden flex flex-col',
           'data-[nested-dialog-open]:after:absolute',
           'data-[nested-dialog-open]:after:inset-0',
           'data-[nested-dialog-open]:after:rounded-xl',
@@ -101,7 +103,7 @@ export function DialogBody({
     <div
       data-slot="dialog-body"
       {...props}
-      className={cn('px-6 py-4.5 space-y-1.5', className)}
+      className={cn('px-6 py-4.5 space-y-1.5 overflow-y-auto', className)}
     >
       {children}
     </div>

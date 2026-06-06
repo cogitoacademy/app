@@ -11,6 +11,7 @@ const router = createRouter({
   defaultPreload: "intent",
   scrollRestoration: true,
   defaultPendingComponent: () => <Loader />,
+  defaultPendingMs: 1_000,
   context: { orpc, queryClient },
   Wrap: function WrapComponent({ children }: { children: React.ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;

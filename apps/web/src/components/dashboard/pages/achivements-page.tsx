@@ -49,7 +49,7 @@ export function AchivementsPage() {
 
   return (
     <Stack direction="column" spacing="lg">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Heading size="md">Achievements</Heading>
           <Text className="text-muted">

@@ -7,12 +7,10 @@ import { ModeToggle } from "../mode-toggle";
 
 export function Layout({
   children,
-  isContentPending = false,
   sidebar,
   title = "Dashboard",
 }: {
   children: React.ReactNode;
-  isContentPending?: boolean;
   sidebar: React.ReactNode;
   title?: string;
 }) {
@@ -75,25 +73,9 @@ export function Layout({
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >
-          {isContentPending ? <PagePendingState /> : children}
+          {children}
         </div>
       </main>
     </>
-  );
-}
-
-function PagePendingState() {
-  return (
-    <div
-      aria-live="polite"
-      aria-label="Loading page content"
-      className="rounded border border-card-border bg-card p-6 shadow-card"
-    >
-      <div className="flex animate-pulse flex-col gap-4">
-        <div className="h-5 w-40 rounded bg-accent" />
-        <div className="h-4 w-64 max-w-full rounded bg-accent" />
-        <div className="h-28 rounded bg-accent" />
-      </div>
-    </div>
   );
 }

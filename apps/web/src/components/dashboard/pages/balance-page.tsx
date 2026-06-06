@@ -232,7 +232,7 @@ export function BalancePage() {
           </CardDescription>
         </CardHeader>
         <CardBody>
-          <div className="flex items-center gap-3 rounded-lg border border-border p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 rounded-lg border border-border p-4">
             {kbAccessible ? (
               <IconBook className="size-6 text-success" />
             ) : (
@@ -254,7 +254,7 @@ export function BalancePage() {
               </Text>
             </div>
             <Button
-              className="ml-auto shrink-0"
+              className="w-full sm:w-auto sm:ml-auto sm:shrink-0"
               variant={kbAccessible ? "primary" : "secondary"}
               disabled={!kbAccessible}
             >
@@ -312,7 +312,7 @@ export function BalancePage() {
         </CardBody>
       </Card>
 
-      <Card>
+      {/*<Card>
         <CardHeader>
           <CardTitle>Transaction History</CardTitle>
           <CardHeaderAction>
@@ -329,8 +329,8 @@ export function BalancePage() {
                   <TableHead>Date</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Before</TableHead>
-                  <TableHead>After</TableHead>
+                  <TableHead className="hidden sm:table-cell">Before</TableHead>
+                  <TableHead className="hidden sm:table-cell">After</TableHead>
                   <TableHead>Reason</TableHead>
                 </TableRow>
               </TableHeader>
@@ -357,11 +357,11 @@ export function BalancePage() {
                           {entry.amount}
                         </Text>
                       </TableCell>
-                      <TableCell>{entry.before}</TableCell>
-                      <TableCell>{entry.after}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{entry.before}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{entry.after}</TableCell>
                       <TableCell>
                         <Text
-                          className="text-muted max-w-56 truncate text-xs"
+                          className="text-muted max-w-32 sm:max-w-56 truncate text-xs"
                           title={entry.reason}
                         >
                           {entry.reason}
@@ -374,7 +374,7 @@ export function BalancePage() {
             </Table>
           </TableContainer>
         </CardBody>
-      </Card>
+      </Card>*/}
     </Stack>
   );
 }

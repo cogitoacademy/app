@@ -173,7 +173,9 @@ export function DashboardPage() {
           <BestSellingCard />
         </div>
       </div>
-      <RecentOrdersCard />
+      {/*<div className="w-full">
+        <RecentOrdersCard />
+      </div>*/}
     </>
   );
 }

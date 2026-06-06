@@ -26,8 +26,8 @@ export function StatCard({
         <Heading size="sm" className="font-medium text-dimmed">
           {title}
         </Heading>
-        <Text className="mt-2 text-4xl font-semibold">{value}</Text>
-        <div className="mt-2 flex items-center gap-2">
+        <Text className="mt-2 text-3xl font-semibold break-words">{value}</Text>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge variant={changeType === "increase" ? "success" : "danger"} className="mt-2">
             {change}
           </Badge>

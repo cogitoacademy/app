@@ -19,6 +19,7 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import {
   Select,
   SelectItem,
@@ -227,24 +228,24 @@ export function AchievementForm({
               <form.Field name="category">
                 {(field) => (
                   <Field>
-                    <FieldLabel htmlFor={field.name}>Category</FieldLabel>
-                    <Input
-                      id={field.name}
-                      name={field.name}
+                    <FieldLabel>Category</FieldLabel>
+                    <Select
                       value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="e.g. MUN, WSC, Debate"
-                      list="category-suggestions"
-                    />
-                    <datalist id="category-suggestions">
-                      {CATEGORY_SUGGESTIONS.map((cat) => (
-                        <option key={cat} value={cat} />
-                      ))}
-                    </datalist>
-                    {field.state.meta.errors.map((error) => (
-                      <FieldError key={String(error)}>{String(error)}</FieldError>
-                    ))}
+                      onValueChange={(v) => field.handleChange(v as string)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectPopup>
+                        <SelectList>
+                          {CATEGORY_SUGGESTIONS.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectList>
+                      </SelectPopup>
+                    </Select>
                   </Field>
                 )}
               </form.Field>
@@ -293,14 +294,11 @@ export function AchievementForm({
               <form.Field name="eventDate">
                 {(field) => (
                   <Field>
-                    <FieldLabel htmlFor={field.name}>Event Date</FieldLabel>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      type="date"
+                    <FieldLabel>Event Date</FieldLabel>
+                    <DatePicker
                       value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={(value) => field.handleChange(value)}
+                      placeholder="Pick a date"
                     />
                   </Field>
                 )}

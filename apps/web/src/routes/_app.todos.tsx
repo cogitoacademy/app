@@ -83,7 +83,7 @@ function TodosRoute() {
             </Button>
           </form>
 
-          {todos.isLoading ? (
+          {!todos.data && todos.isFetching ? (
             <div className="flex justify-center py-4">
               <IconLoader className="h-6 w-6 animate-spin" />
             </div>

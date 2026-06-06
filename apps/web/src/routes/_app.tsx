@@ -34,16 +34,10 @@ export const Route = createFileRoute("/_app")({
 
 function RouteComponent() {
   const { session } = Route.useRouteContext();
-  const { isLoading, pathname } = useRouterState({
-    select: (state) => ({
-      isLoading: state.isLoading,
-      pathname: state.location.pathname,
-    }),
-  });
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
     <Layout
-      isContentPending={isLoading}
       title={routeTitles[pathname] ?? "Dashboard"}
       sidebar={
         <AppSidebar
