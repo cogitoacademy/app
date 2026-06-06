@@ -74,7 +74,7 @@ export function AppSidebar({
 
   return (
     <Sidebar
-      size="loose"
+      size="default"
       className="border-border bg-background max-lg:border-r xl:bg-transparent"
     >
       <SidebarHeader>
