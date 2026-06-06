@@ -21,6 +21,7 @@ import { orpc } from "@/utils/orpc";
 export function AchivementsPage() {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const achievements = useQuery(orpc.achievement.list.queryOptions());
 
@@ -55,16 +56,17 @@ export function AchivementsPage() {
             Your competition achievements, showcased on cogitoacademy.id
           </Text>
         </div>
-        <AchievementForm
-          mode="create"
-          trigger={
-            <Button>
-              <IconPlus className="size-4" />
-              Add Achievement
-            </Button>
-          }
-        />
+        <Button onClick={() => setCreateOpen(true)}>
+          <IconPlus className="size-4" />
+          Add Achievement
+        </Button>
       </div>
+
+      <AchievementForm
+        mode="create"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+      />
 
       {items.length > 0 && (
         <AchievementStats total={items.length} approved={approved} pending={pending} />
@@ -83,7 +85,7 @@ export function AchivementsPage() {
       )}
 
       {items.length === 0 ? (
-        <AchievementEmptyState onAdd={() => {}} />
+        <AchievementEmptyState />
       ) : filtered.length === 0 ? (
         <Text className="py-8 text-center text-muted">
           No achievements match the selected filters.

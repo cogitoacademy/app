@@ -73,7 +73,8 @@ type AchievementFormProps = {
   mode: "create" | "edit";
   defaultValues?: Partial<AchievementFormValues>;
   editId?: string;
-  trigger: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 };
 
@@ -93,10 +94,10 @@ export function AchievementForm({
   mode,
   defaultValues,
   editId,
-  trigger,
+  open,
+  onOpenChange,
   onSuccess,
 }: AchievementFormProps) {
-  const [open, setOpen] = useState(false);
   const [subjectInput, setSubjectInput] = useState("");
   const queryClient = useQueryClient();
 
@@ -109,7 +110,7 @@ export function AchievementForm({
           description: "It\u2019ll appear on cogitoacademy.id once approved.",
           type: "success",
         });
-        setOpen(false);
+        onOpenChange(false);
         onSuccess?.();
       },
     }),
@@ -124,7 +125,7 @@ export function AchievementForm({
           description: "Resubmitted for review.",
           type: "success",
         });
-        setOpen(false);
+        onOpenChange(false);
         onSuccess?.();
       },
     }),
@@ -182,10 +183,9 @@ export function AchievementForm({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>{trigger}</DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup>
-        <DialogHeader>
+        <DialogHeader className="flex-col items-start gap-1.5">
           <DialogTitle>
             {mode === "create" ? "Add Achievement" : "Edit Achievement"}
           </DialogTitle>
