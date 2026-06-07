@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogPopup,
   DialogTitle,
-  DialogTrigger,
 } from "@cogito-app/ui/components/selia/dialog";
 import {
   Field,

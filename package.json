@@ -44,7 +44,9 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "oxfmt --write",
-    "check": "oxlint && oxfmt --write"
+    "check": "oxlint && oxfmt --write",
+    "test": "bun test",
+    "test:api": "bun test --env-file apps/server/.env packages/api/src/tests"
   },
   "dependencies": {
     "@cogito-app/env": "workspace:*",

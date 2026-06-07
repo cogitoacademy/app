@@ -39,28 +39,50 @@ import {
   IconSettings,
   IconUser,
   IconUserSquare,
+  IconUsersGroup,
 } from "@tabler/icons-react";
 
 import { authClient } from "@/lib/auth-client";
 
-const navigationItems = [
+const studentNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/balance", label: "Balance", icon: IconCoins },
   { to: "/achievements", label: "Achievements", icon: IconCertificate },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
 
+const tutorNavItems = [
+  { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/onboarding", label: "My Profile", icon: IconUser },
+  { to: "/tutors", label: "Tutors", icon: IconUserSquare },
+] as const;
+
+const adminNavItems = [
+  { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
+  { to: "/tutors", label: "Tutors", icon: IconUserSquare },
+] as const;
+
 export function AppSidebar({
   userName,
   userEmail,
+  role,
 }: {
   userName?: string | null;
   userEmail?: string | null;
+  role?: string;
 }) {
   const navigate = useNavigate();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+
+  const navigationItems =
+    role === "admin"
+      ? adminNavItems
+      : role === "tutor"
+        ? tutorNavItems
+        : studentNavItems;
 
   function signOut() {
     authClient.signOut({
@@ -104,7 +126,13 @@ export function AppSidebar({
                   <SidebarItem key={item.to}>
                     <SidebarItemButton
                       active={pathname === item.to}
-                      render={<Link to={item.to} preload="intent" />}
+                      render={
+                        <Link
+                          to={item.to}
+                          preload="intent"
+                          aria-label={item.label}
+                        />
+                      }
                     >
                       <Icon />
                       {item.label}

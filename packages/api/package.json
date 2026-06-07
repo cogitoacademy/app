@@ -9,7 +9,9 @@
       "default": "./src/*.ts"
     }
   },
-  "scripts": {},
+  "scripts": {
+    "test": "bun test --env-file ../../apps/server/.env"
+  },
   "dependencies": {
     "@cogito-app/auth": "workspace:*",
     "@cogito-app/db": "workspace:*",
