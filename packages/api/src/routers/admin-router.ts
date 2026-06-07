@@ -11,6 +11,13 @@ const db = createDb();
 
 export const adminRouter = {
   listUsers: adminProcedure
+    .route({
+      method: "POST",
+      path: "/admin/users/list",
+      tags: ["Admin"],
+      summary: "List users",
+      description: "Returns a paginated list of users",
+    })
     .input(
       z.object({
         limit: z.number().min(1).max(100).default(50),
@@ -39,6 +46,13 @@ export const adminRouter = {
     }),
 
   setRole: adminProcedure
+    .route({
+      method: "POST",
+      path: "/admin/users/set-role",
+      tags: ["Admin"],
+      summary: "Set user role",
+      description: "Updates a user's role",
+    })
     .input(
       z.object({
         userId: z.string(),

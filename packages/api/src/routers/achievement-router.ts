@@ -18,7 +18,15 @@ const achievementSchema = z.object({
 });
 
 export const achievementRouter = {
-  list: protectedProcedure.handler(async ({ context }) => {
+  list: protectedProcedure
+    .route({
+      method: "POST",
+      path: "/achievements/list",
+      tags: ["Achievements"],
+      summary: "List achievements",
+      description: "Returns the authenticated user's achievements",
+    })
+    .handler(async ({ context }) => {
     const userId = context.session.user.id;
     return await db
       .select()
@@ -28,6 +36,13 @@ export const achievementRouter = {
   }),
 
   create: protectedProcedure
+    .route({
+      method: "POST",
+      path: "/achievements/create",
+      tags: ["Achievements"],
+      summary: "Create achievement",
+      description: "Submits a new achievement for review",
+    })
     .input(achievementSchema)
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
@@ -49,6 +64,13 @@ export const achievementRouter = {
     }),
 
   update: protectedProcedure
+    .route({
+      method: "POST",
+      path: "/achievements/update",
+      tags: ["Achievements"],
+      summary: "Update achievement",
+      description: "Updates a pending achievement",
+    })
     .input(
       z.object({
         id: z.string(),
@@ -77,6 +99,13 @@ export const achievementRouter = {
     }),
 
   delete: protectedProcedure
+    .route({
+      method: "POST",
+      path: "/achievements/delete",
+      tags: ["Achievements"],
+      summary: "Delete achievement",
+      description: "Deletes a pending achievement",
+    })
     .input(z.object({ id: z.string() }))
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
@@ -98,6 +127,13 @@ export const achievementRouter = {
     }),
 
   adminList: adminProcedure
+    .route({
+      method: "POST",
+      path: "/admin/achievements/list",
+      tags: ["Admin", "Achievements"],
+      summary: "List all achievements",
+      description: "Returns all achievements for admin review",
+    })
     .input(z.object({ status: z.string().optional() }).optional())
     .handler(async ({ input }) => {
       const conditions = input?.status
@@ -111,6 +147,13 @@ export const achievementRouter = {
     }),
 
   adminReview: adminProcedure
+    .route({
+      method: "POST",
+      path: "/admin/achievements/review",
+      tags: ["Admin", "Achievements"],
+      summary: "Review achievement",
+      description: "Approves or rejects an achievement",
+    })
     .input(
       z.object({
         achievementId: z.string(),
