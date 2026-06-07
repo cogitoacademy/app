@@ -16,6 +16,8 @@ const routeTitles: Record<string, string> = {
   "/tutors": "Tutors",
   "/todos": "Todos",
   "/profile": "Profile",
+  "/onboarding": "Tutor Onboarding",
+  "/admin-tutors": "Manage Tutors",
 };
 
 export const Route = createFileRoute("/_app")({
@@ -43,6 +45,7 @@ function RouteComponent() {
         <AppSidebar
           userEmail={session.data?.user.email}
           userName={session.data?.user.name}
+          role={(session.data?.user as any)?.role}
         />
       }
     >

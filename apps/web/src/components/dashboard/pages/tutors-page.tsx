@@ -1,11 +1,7 @@
-import { DefaultPage } from "./default-page";
+"use client";
+
+import { TutorsPageContent } from "@/components/tutor/tutors-page-content";
 
 export function TutorsPage() {
-  return (
-    <DefaultPage
-      title="Tutors"
-      description="Manage tutors and learning support."
-      emptyState="Tutor records will appear here once tutors are assigned."
-    />
-  );
+  return <TutorsPageContent />;
 }

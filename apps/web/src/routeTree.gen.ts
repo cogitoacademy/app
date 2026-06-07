@@ -10,18 +10,26 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AppTodosRouteImport } from './routes/_app.todos'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
+import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
+import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -48,6 +56,11 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOnboardingRoute = AppOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -58,6 +71,11 @@ const AppBalanceRoute = AppBalanceRouteImport.update({
   path: '/balance',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminTutorsRoute = AppAdminTutorsRouteImport.update({
+  id: '/admin-tutors',
+  path: '/admin-tutors',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAchievementsRoute = AppAchievementsRouteImport.update({
   id: '/achievements',
   path: '/achievements',
@@ -66,20 +84,26 @@ const AppAchievementsRoute = AppAchievementsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin-tutors': typeof AppAdminTutorsRoute
   '/balance': typeof AppBalanceRoute
   '/dashboard': typeof AppDashboardRoute
+  '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
   '/todos': typeof AppTodosRoute
   '/tutors': typeof AppTutorsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin-tutors': typeof AppAdminTutorsRoute
   '/balance': typeof AppBalanceRoute
   '/dashboard': typeof AppDashboardRoute
+  '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
   '/todos': typeof AppTodosRoute
   '/tutors': typeof AppTutorsRoute
@@ -88,10 +112,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/_app/achievements': typeof AppAchievementsRoute
+  '/_app/admin-tutors': typeof AppAdminTutorsRoute
   '/_app/balance': typeof AppBalanceRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/todos': typeof AppTodosRoute
   '/_app/tutors': typeof AppTutorsRoute
@@ -100,20 +127,26 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/invite'
     | '/login'
     | '/achievements'
+    | '/admin-tutors'
     | '/balance'
     | '/dashboard'
+    | '/onboarding'
     | '/profile'
     | '/todos'
     | '/tutors'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/invite'
     | '/login'
     | '/achievements'
+    | '/admin-tutors'
     | '/balance'
     | '/dashboard'
+    | '/onboarding'
     | '/profile'
     | '/todos'
     | '/tutors'
@@ -121,10 +154,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
+    | '/invite'
     | '/login'
     | '/_app/achievements'
+    | '/_app/admin-tutors'
     | '/_app/balance'
     | '/_app/dashboard'
+    | '/_app/onboarding'
     | '/_app/profile'
     | '/_app/todos'
     | '/_app/tutors'
@@ -133,6 +169,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
 }
 
@@ -143,6 +180,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -180,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/onboarding': {
+      id: '/_app/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -194,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBalanceRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin-tutors': {
+      id: '/_app/admin-tutors'
+      path: '/admin-tutors'
+      fullPath: '/admin-tutors'
+      preLoaderRoute: typeof AppAdminTutorsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/achievements': {
       id: '/_app/achievements'
       path: '/achievements'
@@ -206,8 +264,10 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
+  AppAdminTutorsRoute: typeof AppAdminTutorsRoute
   AppBalanceRoute: typeof AppBalanceRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
   AppTodosRoute: typeof AppTodosRoute
   AppTutorsRoute: typeof AppTutorsRoute
@@ -215,8 +275,10 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
+  AppAdminTutorsRoute: AppAdminTutorsRoute,
   AppBalanceRoute: AppBalanceRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
   AppTodosRoute: AppTodosRoute,
   AppTutorsRoute: AppTutorsRoute,
@@ -227,6 +289,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
