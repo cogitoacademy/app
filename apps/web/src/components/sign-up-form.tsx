@@ -25,8 +25,10 @@ import Loader from "./loader";
 
 export default function SignUpForm({
   onSwitchToSignIn,
+  redirectPath,
 }: {
   onSwitchToSignIn: () => void;
+  redirectPath?: string;
 }) {
   const navigate = useNavigate({
     from: "/",
@@ -48,8 +50,17 @@ export default function SignUpForm({
         },
         {
           onSuccess: () => {
-            navigate({
-              to: "/profile",
+            authClient.getSession({ query: { disableCookieCache: true } }).then((session) => {
+              const role = (session.data?.user as { role?: string } | undefined)?.role;
+              if (redirectPath) {
+                navigate({ to: redirectPath });
+              } else if (role === "tutor") {
+                navigate({ to: "/onboarding" });
+              } else if (role === "admin") {
+                navigate({ to: "/admin-tutors" });
+              } else {
+                navigate({ to: "/dashboard" });
+              }
             });
             toastManager.add({ title: "Sign up successful", type: "success" });
           },

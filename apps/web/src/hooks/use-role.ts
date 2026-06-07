@@ -12,6 +12,7 @@ export function useRole() {
     role: user?.role ?? "student",
     user,
     profile: data?.profile,
+    tutorProfile: data?.tutorProfile ?? null,
     isLoading,
   };
 }
