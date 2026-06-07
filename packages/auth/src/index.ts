@@ -28,6 +28,22 @@ export function createAuth() {
       schema: schema,
     }),
     trustedOrigins: [env.CORS_ORIGIN],
+    user: {
+      additionalFields: {
+        role: {
+          type: "string",
+          required: false,
+          defaultValue: "student",
+          input: false,
+        },
+      },
+    },
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 60,
+      },
+    },
     emailAndPassword: {
       enabled: true,
     },
@@ -35,8 +51,8 @@ export function createAuth() {
     baseURL: env.BETTER_AUTH_URL,
     advanced: {
       defaultCookieAttributes: {
-        sameSite: "none",
-        secure: true,
+        sameSite: env.NODE_ENV === "production" ? "none" : "lax",
+        secure: env.NODE_ENV === "production",
         httpOnly: true,
       },
     },
