@@ -3,15 +3,19 @@ import { appRouter } from "@cogito-app/api/routers/index";
 import { auth } from "@cogito-app/auth";
 import { env } from "@cogito-app/env/server";
 import { cors } from "@elysiajs/cors";
+import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Elysia } from "elysia";
 import { initLogger } from "evlog";
-import { createAuthMiddleware, type BetterAuthInstance } from "evlog/better-auth";
+import {
+  createAuthMiddleware,
+  type BetterAuthInstance,
+} from "evlog/better-auth";
 import { evlog } from "evlog/elysia";
+import { enrichOpenAPISpec, openApiTags, scalarHtml } from "./openapi";
 
 const rpcHandler = new RPCHandler(appRouter, {
   interceptors: [
@@ -20,12 +24,26 @@ const rpcHandler = new RPCHandler(appRouter, {
     }),
   ],
 });
+
+const openAPIGenerator = new OpenAPIGenerator({
+  schemaConverters: [new ZodToJsonSchemaConverter()],
+});
+
+async function generateOpenAPISpec(request: Request) {
+  const url = new URL(request.url);
+  const spec = await openAPIGenerator.generate(appRouter, {
+    info: {
+      title: "Cogito API",
+      version: "1.0.0",
+    },
+    servers: [{ url: `${url.protocol}//${url.host}/api-reference` }],
+    tags: openApiTags,
+  });
+
+  return enrichOpenAPISpec(spec);
+}
+
 const apiHandler = new OpenAPIHandler(appRouter, {
-  plugins: [
-    new OpenAPIReferencePlugin({
-      schemaConverters: [new ZodToJsonSchemaConverter()],
-    }),
-  ],
   interceptors: [
     onError((error) => {
       console.error(error);
@@ -76,6 +94,14 @@ new Elysia()
       parse: "none",
     },
   )
+  .get("/openapi.json", async ({ request }) => {
+    return Response.json(await generateOpenAPISpec(request));
+  })
+  .get("/api-reference", () => {
+    return new Response(scalarHtml(), {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  })
   .all(
     "/api-reference*",
     async (context) => {

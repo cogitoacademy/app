@@ -7,7 +7,9 @@
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
-    "start": "bun run dist/index.mjs"
+    "start": "bun run dist/index.mjs",
+    "seed": "bun run src/seed.ts",
+    "seed-invite": "bun run src/seed-invite.ts"
   },
   "dependencies": {
     "@cogito-app/api": "workspace:*",
