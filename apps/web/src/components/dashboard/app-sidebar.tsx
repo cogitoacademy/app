@@ -41,6 +41,7 @@ import {
   IconUserSquare,
   IconUsersGroup,
 } from "@tabler/icons-react";
+import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 
 import { authClient } from "@/lib/auth-client";
 
@@ -101,7 +102,13 @@ export function AppSidebar({
     >
       <SidebarHeader>
         <SidebarLogo>
-          <div className="size-8 rounded bg-primary" />
+          <IconBox variant="tertiary">
+            <img
+              src="/c of cogito.png"
+              alt="logo"
+              className="relative z-1 size-6 invert"
+            />
+          </IconBox>
           <span className="font-semibold">Cogito</span>
         </SidebarLogo>
         <InputGroup className="mt-4">
