@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
@@ -48,9 +49,12 @@ type TutorDrawerProps = {
 };
 
 export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
-  if (!tutor) return null;
+  const lastTutorRef = useRef(tutor);
+  if (tutor) lastTutorRef.current = tutor;
+  const t = lastTutorRef.current;
+  if (!t) return null;
 
-  const prices = tutor.prices ?? {};
+  const prices = t.prices ?? {};
   const priceEntries = Object.entries(prices).toSorted(
     ([a], [b]) => Number(a) - Number(b),
   );
@@ -60,7 +64,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
       <DrawerPopup direction="right" className="w-full max-w-lg">
         <DrawerHeader className="flex justify-between">
           <DrawerTitle>
-            {tutor.displayName ?? tutor.user?.name ?? "Tutor"}
+            {t.displayName ?? t.user?.name ?? "Tutor"}
           </DrawerTitle>
           <DrawerClose
             render={<Button variant="plain" size="sm" aria-label="Close" />}
@@ -69,26 +73,26 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           </DrawerClose>
         </DrawerHeader>
         <DrawerBody>
-          {tutor.modality && (
+          {t.modality && (
             <div className="mb-3">
-              <Badge variant={MODALITY_VARIANTS[tutor.modality] ?? "secondary"}>
-                {MODALITY_LABELS[tutor.modality] ?? tutor.modality}
+              <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
+                {MODALITY_LABELS[t.modality] ?? t.modality}
               </Badge>
             </div>
           )}
-          {tutor.shortBio && (
+          {t.shortBio && (
             <div className="mb-4">
-              <Text>{tutor.shortBio}</Text>
+              <Text>{t.shortBio}</Text>
             </div>
           )}
 
-          {tutor.expertise && tutor.expertise.length > 0 && (
+          {t.expertise && t.expertise.length > 0 && (
             <div className="mb-4">
               <Heading size="sm" className="mb-2">
                 Expertise
               </Heading>
               <div className="flex flex-wrap gap-1.5">
-                {tutor.expertise.map((e) => (
+                {t.expertise.map((e) => (
                   <Badge key={e} variant="secondary" size="sm">
                     {e}
                   </Badge>
@@ -131,34 +135,34 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
             </div>
           )}
 
-          {tutor.availabilitySummary && (
+          {t.availabilitySummary && (
             <div className="mb-4">
               <Heading size="sm" className="mb-2">
                 Availability
               </Heading>
-              <Text className="text-muted">{tutor.availabilitySummary}</Text>
+              <Text className="text-muted">{t.availabilitySummary}</Text>
             </div>
           )}
 
-          {tutor.credentialsSummary && (
+          {t.credentialsSummary && (
             <>
               <Separator className="my-4" />
               <div className="mb-4">
                 <Heading size="sm" className="mb-2">
                   Credentials
                 </Heading>
-                <Text className="text-muted">{tutor.credentialsSummary}</Text>
+                <Text className="text-muted">{t.credentialsSummary}</Text>
               </div>
             </>
           )}
 
-          {tutor.proofUrls && tutor.proofUrls.length > 0 && (
+          {t.proofUrls && t.proofUrls.length > 0 && (
             <div className="mb-4">
               <Heading size="sm" className="mb-2">
                 Proof Links
               </Heading>
               <ul className="space-y-1">
-                {tutor.proofUrls.map((url) => (
+                {t.proofUrls.map((url) => (
                   <li key={url}>
                     <a
                       href={url}
@@ -175,7 +179,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           )}
 
           <DrawerDescription className="sr-only">
-            Details for {tutor.displayName ?? "tutor"} profile
+            Details for {t.displayName ?? "tutor"} profile
           </DrawerDescription>
         </DrawerBody>
         <DrawerFooter>
