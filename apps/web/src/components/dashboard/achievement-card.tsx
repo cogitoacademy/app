@@ -52,7 +52,8 @@ export function AchievementCard({
   onEdit,
   onDelete,
 }: AchievementCardProps) {
-  const statusConfig = STATUS_CONFIG[achievement.status] ?? STATUS_CONFIG.pending;
+  const statusConfig =
+    STATUS_CONFIG[achievement.status] ?? STATUS_CONFIG.pending;
   const isPending = achievement.status === "pending";
 
   return (
@@ -94,11 +95,19 @@ export function AchievementCard({
       <CardFooter className="gap-2">
         {isPending && (
           <>
-            <Button variant="plain" size="sm" onClick={() => onEdit(achievement.id)}>
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={() => onEdit(achievement.id)}
+            >
               <IconEdit className="size-4" />
               Edit
             </Button>
-            <Button variant="plain" size="sm" onClick={() => onDelete(achievement.id)}>
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={() => onDelete(achievement.id)}
+            >
               <IconTrash className="size-4" />
               Delete
             </Button>

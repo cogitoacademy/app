@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { Dialog as BaseDialog } from '@base-ui/react/dialog';
-import { buttonVariants } from './button';
-import { cn } from '@cogito-app/ui/lib/utils';
+import { Dialog as BaseDialog } from "@base-ui/react/dialog";
+import { buttonVariants } from "./button";
+import { cn } from "@cogito-app/ui/lib/utils";
 
 export function Dialog({
   ...props
@@ -30,29 +30,29 @@ export function DialogPopup({
     <BaseDialog.Portal>
       <BaseDialog.Backdrop
         className={cn(
-          'fixed inset-0 min-h-dvh bg-black/60 transition-[color,opacity] backdrop-blur-sm',
-          'data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
+          "fixed inset-0 min-h-dvh bg-black/60 transition-[color,opacity] backdrop-blur-sm",
+          "data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
         )}
       />
       <BaseDialog.Popup
         data-slot="dialog-popup"
         {...props}
         className={cn(
-          'fixed left-1/2 -translate-x-1/2 -translate-y-1/2',
-          'top-[calc(50%+1.25rem*var(--nested-dialogs))]',
-          'bg-dialog text-dialog-foreground backdrop-blur-sm',
-          'ring ring-dialog-border rounded-xl shadow',
-          'scale-[calc(1-0.1*var(--nested-dialogs))]',
-          'outline-none transition-all w-full max-w-md',
-          'max-w-[calc(100%-2rem)]',
-          'max-h-[90dvh] overflow-hidden flex flex-col',
-          'data-[nested-dialog-open]:after:absolute',
-          'data-[nested-dialog-open]:after:inset-0',
-          'data-[nested-dialog-open]:after:rounded-xl',
-          'data-[nested-dialog-open]:after:bg-black/20',
-          'data-[nested-dialog-open]:after:z-10',
-          'data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
-          'data-[starting-style]:scale-90 data-[ending-style]:scale-90',
+          "fixed left-1/2 -translate-x-1/2 -translate-y-1/2",
+          "top-[calc(50%+1.25rem*var(--nested-dialogs))]",
+          "bg-dialog text-dialog-foreground backdrop-blur-sm",
+          "ring ring-dialog-border rounded-xl shadow",
+          "scale-[calc(1-0.1*var(--nested-dialogs))]",
+          "outline-none transition-all w-full max-w-md",
+          "max-w-[calc(100%-2rem)]",
+          "max-h-[90dvh] overflow-hidden flex flex-col",
+          "data-[nested-dialog-open]:after:absolute",
+          "data-[nested-dialog-open]:after:inset-0",
+          "data-[nested-dialog-open]:after:rounded-xl",
+          "data-[nested-dialog-open]:after:bg-black/20",
+          "data-[nested-dialog-open]:after:z-10",
+          "data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
+          "data-[starting-style]:scale-90 data-[ending-style]:scale-90",
           className,
         )}
       >
@@ -66,12 +66,12 @@ export function DialogHeader({
   className,
   children,
   ...props
-}: React.ComponentProps<'header'>) {
+}: React.ComponentProps<"header">) {
   return (
     <header
       data-slot="dialog-header"
       {...props}
-      className={cn('px-6 pt-4.5 flex items-center gap-3.5', className)}
+      className={cn("px-6 pt-4.5 flex items-center gap-3.5", className)}
     >
       {children}
     </header>
@@ -87,7 +87,7 @@ export function DialogTitle({
     <BaseDialog.Title
       data-slot="dialog-title"
       {...props}
-      className={cn('text-xl font-semibold', className)}
+      className={cn("text-xl font-semibold", className)}
     >
       {children}
     </BaseDialog.Title>
@@ -98,12 +98,12 @@ export function DialogBody({
   className,
   children,
   ...props
-}: React.ComponentProps<'div'>) {
+}: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-body"
       {...props}
-      className={cn('px-6 py-4.5 space-y-1.5 overflow-y-auto', className)}
+      className={cn("px-6 py-4.5 space-y-1.5 overflow-y-auto", className)}
     >
       {children}
     </div>
@@ -119,7 +119,7 @@ export function DialogDescription({
     <BaseDialog.Description
       data-slot="dialog-description"
       {...props}
-      className={cn('text-muted leading-relaxed', className)}
+      className={cn("text-muted leading-relaxed", className)}
     >
       {children}
     </BaseDialog.Description>
@@ -130,14 +130,14 @@ export function DialogFooter({
   className,
   children,
   ...props
-}: React.ComponentProps<'footer'>) {
+}: React.ComponentProps<"footer">) {
   return (
     <footer
       data-slot="dialog-footer"
       {...props}
       className={cn(
-        'flex items-center justify-end gap-1.5',
-        'px-6 py-3.5 bg-dialog-footer border-t border-dialog-border rounded-b-xl',
+        "flex items-center justify-end gap-1.5",
+        "px-6 py-3.5 bg-dialog-footer border-t border-dialog-border rounded-b-xl",
         className,
       )}
     >
@@ -157,7 +157,7 @@ export function DialogClose({
       data-slot="dialog-close"
       render={render}
       {...props}
-      className={cn(!render && buttonVariants({ variant: 'plain' }), className)}
+      className={cn(!render && buttonVariants({ variant: "plain" }), className)}
     >
       {children}
     </BaseDialog.Close>

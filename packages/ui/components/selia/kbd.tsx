@@ -11,7 +11,8 @@ export const kbdVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-kbd text-kbd-foreground shadow inset-shadow-2xs inset-shadow-white/15",
+        default:
+          "bg-kbd text-kbd-foreground shadow inset-shadow-2xs inset-shadow-white/15",
         outline: "ring ring-kbd-border text-kbd-foreground",
         plain: "ring-0",
       },
@@ -27,11 +28,21 @@ export function Kbd({
   className,
   ...props
 }: React.ComponentProps<"kbd"> & VariantProps<typeof kbdVariants>) {
-  return <kbd data-slot="kbd" {...props} className={cn(kbdVariants({ variant, className }))} />;
+  return (
+    <kbd
+      data-slot="kbd"
+      {...props}
+      className={cn(kbdVariants({ variant, className }))}
+    />
+  );
 }
 
 export function KbdGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="kbd-group" {...props} className={cn("flex items-center gap-1.5", className)} />
+    <div
+      data-slot="kbd-group"
+      {...props}
+      className={cn("flex items-center gap-1.5", className)}
+    />
   );
 }

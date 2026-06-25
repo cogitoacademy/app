@@ -1,12 +1,12 @@
 import { relations } from "drizzle-orm";
 import { pgTable, text, timestamp, index } from "drizzle-orm/pg-core";
 
-import { user } from "./auth";
+import { uuidPrimaryKey, user } from "./auth";
 
 export const studentProfile = pgTable(
   "student_profile",
   {
-    id: text("id").primaryKey(),
+    id: uuidPrimaryKey,
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" })

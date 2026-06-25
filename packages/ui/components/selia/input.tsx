@@ -30,8 +30,13 @@ export function Input({
   className,
   variant,
   ...props
-}: React.ComponentProps<typeof BaseInput> & VariantProps<typeof inputVariants>) {
+}: React.ComponentProps<typeof BaseInput> &
+  VariantProps<typeof inputVariants>) {
   return (
-    <BaseInput data-slot="input" className={cn(inputVariants({ variant, className }))} {...props} />
+    <BaseInput
+      data-slot="input"
+      className={cn(inputVariants({ variant, className }))}
+      {...props}
+    />
   );
 }

@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  Field,
-  FieldLabel,
-} from "@cogito-app/ui/components/selia/field";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
 

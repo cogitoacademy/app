@@ -15,14 +15,17 @@ export const iconBoxVariants = cva(
     variants: {
       variant: {
         primary: "after:bg-primary/80 after:to-primary text-primary-foreground",
-        secondary: "after:bg-secondary/80 after:to-secondary text-secondary-foreground",
-        tertiary: "after:bg-tertiary/80 after:to-tertiary text-tertiary-foreground",
+        secondary:
+          "after:bg-secondary/80 after:to-secondary text-secondary-foreground",
+        tertiary:
+          "after:bg-tertiary/80 after:to-tertiary text-tertiary-foreground",
         danger: "after:bg-danger/80 after:to-danger text-danger-foreground",
         info: "after:bg-info/80 after:to-info text-info-foreground",
         success: "after:bg-success/80 after:to-success text-success-foreground",
         warning: "after:bg-warning/80 after:to-warning text-warning-foreground",
         "primary-subtle": "bg-primary/10 text-primary before:hidden",
-        "secondary-subtle": "bg-secondary/10 text-secondary-foreground before:hidden",
+        "secondary-subtle":
+          "bg-secondary/10 text-secondary-foreground before:hidden",
         "tertiary-subtle": "bg-tertiary/10 text-tertiary before:hidden",
         "danger-subtle": "bg-danger/10 text-danger before:hidden",
         "info-subtle": "bg-info/10 text-info before:hidden",

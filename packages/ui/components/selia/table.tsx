@@ -23,7 +23,13 @@ export function TableContainer({ ...props }: React.ComponentProps<"div">) {
 }
 
 export function TableHeader({ ...props }: React.ComponentProps<"thead">) {
-  return <thead data-slot="table-header" {...props} className={cn(props.className)} />;
+  return (
+    <thead
+      data-slot="table-header"
+      {...props}
+      className={cn(props.className)}
+    />
+  );
 }
 
 export function TableHead({ ...props }: React.ComponentProps<"th">) {
@@ -40,7 +46,9 @@ export function TableHead({ ...props }: React.ComponentProps<"th">) {
 }
 
 export function TableBody({ ...props }: React.ComponentProps<"tbody">) {
-  return <tbody data-slot="table-body" {...props} className={cn(props.className)} />;
+  return (
+    <tbody data-slot="table-body" {...props} className={cn(props.className)} />
+  );
 }
 
 export function TableRow({ ...props }: React.ComponentProps<"tr">) {

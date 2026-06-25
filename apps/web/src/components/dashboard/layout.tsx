@@ -1,7 +1,10 @@
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { cn } from "@cogito-app/ui/lib/utils";
-import { IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
+import {
+  IconLayoutSidebarLeftCollapse,
+  IconLayoutSidebarLeftExpand,
+} from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { ModeToggle } from "../mode-toggle";
 
@@ -60,7 +63,11 @@ export function Layout({
             <span className="sr-only">
               {sidebarOpen ? "Close sidebar" : "Open sidebar"}
             </span>
-            {sidebarOpen ? <IconLayoutSidebarLeftCollapse /> : <IconLayoutSidebarLeftExpand />}
+            {sidebarOpen ? (
+              <IconLayoutSidebarLeftCollapse />
+            ) : (
+              <IconLayoutSidebarLeftExpand />
+            )}
           </Button>
           <Heading size="sm">{title}</Heading>
           <div className="ml-auto mr-0">

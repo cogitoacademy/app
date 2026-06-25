@@ -50,18 +50,22 @@ export default function SignUpForm({
         },
         {
           onSuccess: () => {
-            authClient.getSession({ query: { disableCookieCache: true } }).then((session) => {
-              const role = (session.data?.user as { role?: string } | undefined)?.role;
-              if (redirectPath) {
-                navigate({ to: redirectPath });
-              } else if (role === "tutor") {
-                navigate({ to: "/onboarding" });
-              } else if (role === "admin") {
-                navigate({ to: "/admin-tutors" });
-              } else {
-                navigate({ to: "/dashboard" });
-              }
-            });
+            authClient
+              .getSession({ query: { disableCookieCache: true } })
+              .then((session) => {
+                const role = (
+                  session.data?.user as { role?: string } | undefined
+                )?.role;
+                if (redirectPath) {
+                  navigate({ to: redirectPath });
+                } else if (role === "tutor") {
+                  navigate({ to: "/onboarding" });
+                } else if (role === "admin") {
+                  navigate({ to: "/admin-tutors" });
+                } else {
+                  navigate({ to: "/dashboard" });
+                }
+              });
             toastManager.add({ title: "Sign up successful", type: "success" });
           },
           onError: (error) => {

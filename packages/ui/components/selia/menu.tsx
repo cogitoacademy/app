@@ -8,7 +8,9 @@ export function Menu({ ...props }: React.ComponentProps<typeof BaseMenu.Root>) {
   return <BaseMenu.Root data-slot="menu" {...props} />;
 }
 
-export function MenuTrigger({ ...props }: React.ComponentProps<typeof BaseMenu.Trigger>) {
+export function MenuTrigger({
+  ...props
+}: React.ComponentProps<typeof BaseMenu.Trigger>) {
   return <BaseMenu.Trigger data-slot="menu-trigger" {...props} />;
 }
 
@@ -111,7 +113,9 @@ const menuItemClassName = [
   "data-disabled:cursor-not-allowed data-disabled:opacity-70",
 ];
 
-export function MenuItem({ ...props }: React.ComponentProps<typeof BaseMenu.Item>) {
+export function MenuItem({
+  ...props
+}: React.ComponentProps<typeof BaseMenu.Item>) {
   return (
     <BaseMenu.Item
       data-slot="menu-item"
@@ -121,7 +125,9 @@ export function MenuItem({ ...props }: React.ComponentProps<typeof BaseMenu.Item
   );
 }
 
-export function MenuSeparator({ ...props }: React.ComponentProps<typeof BaseMenu.Separator>) {
+export function MenuSeparator({
+  ...props
+}: React.ComponentProps<typeof BaseMenu.Separator>) {
   return (
     <BaseMenu.Separator
       data-slot="menu-separator"
@@ -131,7 +137,9 @@ export function MenuSeparator({ ...props }: React.ComponentProps<typeof BaseMenu
   );
 }
 
-export function MenuSubmenu({ ...props }: React.ComponentProps<typeof BaseMenu.SubmenuRoot>) {
+export function MenuSubmenu({
+  ...props
+}: React.ComponentProps<typeof BaseMenu.SubmenuRoot>) {
   return <BaseMenu.SubmenuRoot data-slot="menu-submenu" {...props} />;
 }
 
@@ -184,15 +192,22 @@ export function MenuSubmenuPopup({
   );
 }
 
-export function MenuGroup({ ...props }: React.ComponentProps<typeof BaseMenu.Group>) {
+export function MenuGroup({
+  ...props
+}: React.ComponentProps<typeof BaseMenu.Group>) {
   return <BaseMenu.Group data-slot="menu-group" {...props} />;
 }
 
-export function MenuGroupLabel({ ...props }: React.ComponentProps<typeof BaseMenu.GroupLabel>) {
+export function MenuGroupLabel({
+  ...props
+}: React.ComponentProps<typeof BaseMenu.GroupLabel>) {
   return (
     <BaseMenu.GroupLabel
       data-slot="menu-group-label"
-      className={cn("px-3 py-1.5 text-dimmed font-medium text-sm", props.className)}
+      className={cn(
+        "px-3 py-1.5 text-dimmed font-medium text-sm",
+        props.className,
+      )}
       {...props}
     />
   );
@@ -229,7 +244,9 @@ export function MenuCheckboxItem({
   );
 }
 
-export function MenuRadioGroup({ ...props }: React.ComponentProps<typeof BaseMenu.RadioGroup>) {
+export function MenuRadioGroup({
+  ...props
+}: React.ComponentProps<typeof BaseMenu.RadioGroup>) {
   return <BaseMenu.RadioGroup data-slot="menu-radio-group" {...props} />;
 }
 
@@ -256,7 +273,8 @@ export function MenuRadioItem({
   variant,
   children,
   ...props
-}: React.ComponentProps<typeof BaseMenu.RadioItem> & VariantProps<typeof menuRadioItemVariants>) {
+}: React.ComponentProps<typeof BaseMenu.RadioItem> &
+  VariantProps<typeof menuRadioItemVariants>) {
   return (
     <BaseMenu.RadioItem
       data-slot="menu-radio-item"

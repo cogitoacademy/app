@@ -3,7 +3,11 @@
 import { useRender } from "@base-ui/react/use-render";
 import { cn } from "@cogito-app/ui/lib/utils";
 
-export function Text({ className, render, ...props }: useRender.ComponentProps<"p">) {
+export function Text({
+  className,
+  render,
+  ...props
+}: useRender.ComponentProps<"p">) {
   return useRender({
     defaultTagName: "p",
     render,
@@ -20,7 +24,11 @@ export function Text({ className, render, ...props }: useRender.ComponentProps<"
   });
 }
 
-export function TextLink({ className, render, ...props }: useRender.ComponentProps<"a">) {
+export function TextLink({
+  className,
+  render,
+  ...props
+}: useRender.ComponentProps<"a">) {
   return useRender({
     defaultTagName: "a",
     render,
@@ -32,7 +40,10 @@ export function TextLink({ className, render, ...props }: useRender.ComponentPro
   });
 }
 
-export function Strong({ className, ...props }: React.ComponentProps<"strong">) {
+export function Strong({
+  className,
+  ...props
+}: React.ComponentProps<"strong">) {
   return (
     <strong
       data-slot="text-strong"

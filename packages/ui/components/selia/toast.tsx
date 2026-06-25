@@ -105,11 +105,19 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
         "flex gap-x-2.5 gap-y-0.5 items-center",
       )}
     >
-      {toast.type && <ToastIcon type={toast.type}>{icons[toast.type]}</ToastIcon>}
+      {toast.type && (
+        <ToastIcon type={toast.type}>{icons[toast.type]}</ToastIcon>
+      )}
       <div className="w-full flex justify-between flex-col md:flex-row items-start">
         <div>
-          <BaseToast.Title data-slot="toast-title" className="text-foreground font-medium" />
-          <BaseToast.Description data-slot="toast-description" className="text-muted col-start-1" />
+          <BaseToast.Title
+            data-slot="toast-title"
+            className="text-foreground font-medium"
+          />
+          <BaseToast.Description
+            data-slot="toast-description"
+            className="text-muted col-start-1"
+          />
         </div>
         <BaseToast.Action
           {...toast.actionProps}
@@ -126,7 +134,13 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
   );
 }
 
-function ToastIcon({ type, children }: { type?: string; children: React.ReactNode }) {
+function ToastIcon({
+  type,
+  children,
+}: {
+  type?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div
       data-slot="toast-icon"

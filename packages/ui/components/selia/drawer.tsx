@@ -131,11 +131,11 @@ export function DrawerPopup({
                   "bg-[rgb(0_0_0/calc(0.6*(1-var(--drawer-swipe-progress,0))))]",
                   "[backdrop-filter:blur(calc(4px*(1-var(--drawer-swipe-progress,0))))]",
                 ],
-             "transition-[background-color,backdrop-filter] duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
-             "data-[swiping]:duration-0",
-             "data-[starting-style]:bg-transparent data-[starting-style]:[backdrop-filter:blur(0px)]",
-             "data-[ending-style]:bg-transparent data-[ending-style]:[backdrop-filter:blur(0px)]",
-             "data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)]",
+            "transition-[background-color,backdrop-filter] duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+            "data-[swiping]:duration-0",
+            "data-[starting-style]:bg-transparent data-[starting-style]:[backdrop-filter:blur(0px)]",
+            "data-[ending-style]:bg-transparent data-[ending-style]:[backdrop-filter:blur(0px)]",
+            "data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)]",
           )}
         />
       )}
@@ -175,8 +175,8 @@ export function DrawerHandle({
       className={cn(
         "mx-auto mt-4 mb-0 h-1 w-12 rounded-full bg-muted/40 cursor-default",
         "transition-opacity duration-200ms",
-            "group-data-[nested-drawer-open]/popup:opacity-0",
-            "group-data-[nested-drawer-swiping]/popup:opacity-100",
+        "group-data-[nested-drawer-open]/popup:opacity-0",
+        "group-data-[nested-drawer-swiping]/popup:opacity-100",
         className,
       )}
     />

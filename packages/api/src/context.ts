@@ -1,6 +1,8 @@
 import { auth } from "@cogito-app/auth";
 import type { Context as ElysiaContext } from "elysia";
 
+import { services } from "./services";
+
 export type CreateContextOptions = {
   context: ElysiaContext;
 };
@@ -10,8 +12,8 @@ export async function createContext({ context }: CreateContextOptions) {
     headers: context.request.headers,
   });
   return {
-    auth: null,
     session,
+    services,
   };
 }
 

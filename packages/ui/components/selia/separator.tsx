@@ -20,7 +20,8 @@ export function Separator({
   className,
   orientation,
   ...props
-}: React.ComponentProps<typeof BaseSeparator> & VariantProps<typeof separatorVariants>) {
+}: React.ComponentProps<typeof BaseSeparator> &
+  VariantProps<typeof separatorVariants>) {
   return (
     <BaseSeparator
       data-slot="separator"

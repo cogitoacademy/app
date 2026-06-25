@@ -37,7 +37,8 @@ export function AchivementsPage() {
   const items = achievements.data ?? [];
   const filtered = items.filter((a) => {
     if (categoryFilter !== "All" && a.category !== categoryFilter) return false;
-    if (statusFilter !== "All" && a.status !== statusFilter.toLowerCase()) return false;
+    if (statusFilter !== "All" && a.status !== statusFilter.toLowerCase())
+      return false;
     return true;
   });
 
@@ -45,7 +46,8 @@ export function AchivementsPage() {
   const pending = items.filter((a) => a.status === "pending").length;
 
   const showPendingBanner = pending > 0 && approved < items.length;
-  const showAllApprovedBanner = approved > 0 && approved === items.length && items.length > 0;
+  const showAllApprovedBanner =
+    approved > 0 && approved === items.length && items.length > 0;
 
   return (
     <Stack direction="column" spacing="lg">
@@ -69,7 +71,11 @@ export function AchivementsPage() {
       />
 
       {items.length > 0 && (
-        <AchievementStats total={items.length} approved={approved} pending={pending} />
+        <AchievementStats
+          total={items.length}
+          approved={approved}
+          pending={pending}
+        />
       )}
 
       {showPendingBanner && <AchievementBanner type="pending" />}
@@ -95,7 +101,10 @@ export function AchivementsPage() {
           {filtered.map((a) => (
             <AchievementCard
               key={a.id}
-              achievement={{ ...a, status: a.status as "pending" | "approved" | "rejected" }}
+              achievement={{
+                ...a,
+                status: a.status as "pending" | "approved" | "rejected",
+              }}
               onDelete={(id) => deleteMutation.mutate({ id })}
               onEdit={() => {}}
             />

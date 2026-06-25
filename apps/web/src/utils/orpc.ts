@@ -1,4 +1,4 @@
-import type { AppRouterClient } from "@cogito-app/api/routers/index";
+import type { AppRouterClient } from "@cogito-app/api/routers";
 import { env } from "@cogito-app/env/web";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";

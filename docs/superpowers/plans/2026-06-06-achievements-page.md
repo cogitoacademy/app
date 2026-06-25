@@ -13,6 +13,7 @@
 ## Task 1: Create Achievement DB Schema
 
 **Files:**
+
 - Create: `packages/db/src/schema/achievement.ts`
 - Modify: `packages/db/src/schema/index.ts`
 
@@ -20,7 +21,14 @@
 
 ```ts
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, date, jsonb, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  date,
+  jsonb,
+  index,
+} from "drizzle-orm/pg-core";
 import { uuidPrimaryKey } from "./auth";
 
 import { user } from "./auth";
@@ -89,6 +97,7 @@ git commit -m "feat: add achievement database schema"
 ## Task 2: Create Achievement API Router
 
 **Files:**
+
 - Create: `packages/api/src/routers/achievement-router.ts`
 - Modify: `packages/api/src/routers/index.ts`
 
@@ -128,31 +137,38 @@ export const achievementRouter = {
     .input(achievementSchema)
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
-      return await db.insert(achievement).values({
-        userId,
-        eventName: input.eventName,
-        category: input.category,
-        award: input.award,
-        level: input.level,
-        eventDate: input.eventDate || null,
-        location: input.location || null,
-        description: input.description || null,
-        subjects: input.subjects || [],
-        imageUrl: input.imageUrl || null,
-      }).returning();
+      return await db
+        .insert(achievement)
+        .values({
+          userId,
+          eventName: input.eventName,
+          category: input.category,
+          award: input.award,
+          level: input.level,
+          eventDate: input.eventDate || null,
+          location: input.location || null,
+          description: input.description || null,
+          subjects: input.subjects || [],
+          imageUrl: input.imageUrl || null,
+        })
+        .returning();
     }),
 
   update: protectedProcedure
-    .input(z.object({
-      id: z.string(),
-      data: achievementSchema.partial(),
-    }))
+    .input(
+      z.object({
+        id: z.string(),
+        data: achievementSchema.partial(),
+      }),
+    )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
       const existing = await db
         .select()
         .from(achievement)
-        .where(and(eq(achievement.id, input.id), eq(achievement.userId, userId)))
+        .where(
+          and(eq(achievement.id, input.id), eq(achievement.userId, userId)),
+        )
         .limit(1);
       if (!existing[0] || existing[0].status !== "pending") {
         throw new Error("Can only edit pending achievements");
@@ -160,7 +176,9 @@ export const achievementRouter = {
       return await db
         .update(achievement)
         .set(input.data)
-        .where(and(eq(achievement.id, input.id), eq(achievement.userId, userId)))
+        .where(
+          and(eq(achievement.id, input.id), eq(achievement.userId, userId)),
+        )
         .returning();
     }),
 
@@ -171,14 +189,18 @@ export const achievementRouter = {
       const existing = await db
         .select()
         .from(achievement)
-        .where(and(eq(achievement.id, input.id), eq(achievement.userId, userId)))
+        .where(
+          and(eq(achievement.id, input.id), eq(achievement.userId, userId)),
+        )
         .limit(1);
       if (!existing[0] || existing[0].status !== "pending") {
         throw new Error("Can only delete pending achievements");
       }
       return await db
         .delete(achievement)
-        .where(and(eq(achievement.id, input.id), eq(achievement.userId, userId)));
+        .where(
+          and(eq(achievement.id, input.id), eq(achievement.userId, userId)),
+        );
     }),
 
   adminList: adminProcedure
@@ -195,11 +217,13 @@ export const achievementRouter = {
     }),
 
   adminReview: adminProcedure
-    .input(z.object({
-      achievementId: z.string(),
-      status: z.enum(["approved", "rejected"]),
-      adminNote: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        achievementId: z.string(),
+        status: z.enum(["approved", "rejected"]),
+        adminNote: z.string().optional(),
+      }),
+    )
     .handler(async ({ input }) => {
       return await db
         .update(achievement)
@@ -245,6 +269,7 @@ git commit -m "feat: add achievement API router"
 ## Task 3: Create Achievement Stats Component
 
 **Files:**
+
 - Create: `apps/web/src/components/dashboard/achievement-stats.tsx`
 
 - [ ] **Step 1: Create `apps/web/src/components/dashboard/achievement-stats.tsx`**
@@ -262,7 +287,11 @@ type AchievementStatsProps = {
   pending: number;
 };
 
-export function AchievementStats({ total, approved, pending }: AchievementStatsProps) {
+export function AchievementStats({
+  total,
+  approved,
+  pending,
+}: AchievementStatsProps) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       <StatCard
@@ -309,6 +338,7 @@ git commit -m "feat: add AchievementStats component"
 ## Task 4: Create Achievement Card Component
 
 **Files:**
+
 - Create: `apps/web/src/components/dashboard/achievement-card.tsx`
 
 - [ ] **Step 1: Create `apps/web/src/components/dashboard/achievement-card.tsx`**
@@ -377,7 +407,8 @@ export function AchievementCard({
   onEdit,
   onDelete,
 }: AchievementCardProps) {
-  const statusConfig = STATUS_CONFIG[achievement.status] ?? STATUS_CONFIG.pending;
+  const statusConfig =
+    STATUS_CONFIG[achievement.status] ?? STATUS_CONFIG.pending;
   const isPending = achievement.status === "pending";
 
   return (
@@ -419,11 +450,19 @@ export function AchievementCard({
       <CardFooter className="gap-2">
         {isPending && (
           <>
-            <Button variant="plain" size="sm" onClick={() => onEdit(achievement.id)}>
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={() => onEdit(achievement.id)}
+            >
               <IconEdit className="size-4" />
               Edit
             </Button>
-            <Button variant="plain" size="sm" onClick={() => onDelete(achievement.id)}>
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={() => onDelete(achievement.id)}
+            >
               <IconTrash className="size-4" />
               Delete
             </Button>
@@ -458,6 +497,7 @@ git commit -m "feat: add AchievementCard component"
 ## Task 5: Create Achievement Empty State Component
 
 **Files:**
+
 - Create: `apps/web/src/components/dashboard/achievement-empty-state.tsx`
 
 - [ ] **Step 1: Create `apps/web/src/components/dashboard/achievement-empty-state.tsx`**
@@ -509,6 +549,7 @@ git commit -m "feat: add AchievementEmptyState component"
 ## Task 6: Create Achievement Banner Component
 
 **Files:**
+
 - Create: `apps/web/src/components/dashboard/achievement-banner.tsx`
 
 - [ ] **Step 1: Create `apps/web/src/components/dashboard/achievement-banner.tsx`**
@@ -601,6 +642,7 @@ git commit -m "feat: add AchievementBanner component"
 ## Task 7: Create Achievement Filters Component
 
 **Files:**
+
 - Create: `apps/web/src/components/dashboard/achievement-filters.tsx`
 
 - [ ] **Step 1: Create `apps/web/src/components/dashboard/achievement-filters.tsx`**
@@ -608,7 +650,14 @@ git commit -m "feat: add AchievementBanner component"
 ```tsx
 "use client";
 
-import { Select, SelectItem, SelectList, SelectPopup, SelectTrigger, SelectValue } from "@cogito-app/ui/components/selia/select";
+import {
+  Select,
+  SelectItem,
+  SelectList,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@cogito-app/ui/components/selia/select";
 
 const CATEGORIES = [
   "All",
@@ -685,6 +734,7 @@ git commit -m "feat: add AchievementFilters component"
 ## Task 8: Create Achievement Form (Modal Content)
 
 **Files:**
+
 - Create: `apps/web/src/components/dashboard/achievement-form.tsx`
 
 - [ ] **Step 1: Create `apps/web/src/components/dashboard/achievement-form.tsx`**
@@ -795,7 +845,9 @@ export function AchievementForm({
   const createMutation = useMutation(
     orpc.achievement.create.mutationOptions({
       onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: orpc.achievement.list.key() });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.achievement.list.key(),
+        });
         toastManager.add({
           title: "Achievement submitted!",
           description: "It\u2019ll appear on cogitoacademy.id once approved.",
@@ -810,7 +862,9 @@ export function AchievementForm({
   const updateMutation = useMutation(
     orpc.achievement.update.mutationOptions({
       onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: orpc.achievement.list.key() });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.achievement.list.key(),
+        });
         toastManager.add({
           title: "Achievement updated!",
           description: "Resubmitted for review.",
@@ -861,7 +915,10 @@ export function AchievementForm({
   const addSubject = () => {
     const trimmed = subjectInput.trim();
     if (trimmed && !form.getFieldValue("subjects").includes(trimmed)) {
-      form.setFieldValue("subjects", [...form.getFieldValue("subjects"), trimmed]);
+      form.setFieldValue("subjects", [
+        ...form.getFieldValue("subjects"),
+        trimmed,
+      ]);
       setSubjectInput("");
     }
   };
@@ -889,209 +946,217 @@ export function AchievementForm({
         </DialogHeader>
 
         <DialogBody>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            form.handleSubmit();
-          }}
-        >
-          <Stack direction="column" spacing="lg">
-            <form.Field name="eventName">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>Event / Competition Name</FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder="e.g. JoinMUN 2025"
-                  />
-                  {field.state.meta.errors.map((error) => (
-                    <FieldError key={String(error)}>{String(error)}</FieldError>
-                  ))}
-                </Field>
-              )}
-            </form.Field>
-
-            <form.Field name="category">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>Category</FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder="e.g. MUN, WSC, Debate"
-                    list="category-suggestions"
-                  />
-                  <datalist id="category-suggestions">
-                    {CATEGORY_SUGGESTIONS.map((cat) => (
-                      <option key={cat} value={cat} />
-                    ))}
-                  </datalist>
-                  {field.state.meta.errors.map((error) => (
-                    <FieldError key={String(error)}>{String(error)}</FieldError>
-                  ))}
-                </Field>
-              )}
-            </form.Field>
-
-            <form.Field name="award">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>Award / Result</FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder="e.g. Best Delegate, Juara 1"
-                  />
-                </Field>
-              )}
-            </form.Field>
-
-            <form.Field name="level">
-              {(field) => (
-                <Field>
-                  <FieldLabel>Level</FieldLabel>
-                  <Select
-                    value={field.state.value}
-                    onValueChange={(value) => field.handleChange(value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select level" />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      <SelectList>
-                        {LEVELS.map((level) => (
-                          <SelectItem key={level} value={level}>
-                            {level}
-                          </SelectItem>
-                        ))}
-                      </SelectList>
-                    </SelectPopup>
-                  </Select>
-                </Field>
-              )}
-            </form.Field>
-
-            <form.Field name="eventDate">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>Event Date</FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    type="date"
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                  />
-                </Field>
-              )}
-            </form.Field>
-
-            <form.Field name="location">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>Location</FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder="e.g. Jakarta, Online"
-                  />
-                </Field>
-              )}
-            </form.Field>
-
-            <form.Field name="description">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>Description</FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder="Brief description of your achievement"
-                  />
-                </Field>
-              )}
-            </form.Field>
-
-            <form.Field name="subjects">
-              {(field) => (
-                <Field>
-                  <FieldLabel>Skills / Subjects</FieldLabel>
-                  <div className="flex gap-2">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              form.handleSubmit();
+            }}
+          >
+            <Stack direction="column" spacing="lg">
+              <form.Field name="eventName">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>
+                      Event / Competition Name
+                    </FieldLabel>
                     <Input
-                      value={subjectInput}
-                      onChange={(e) => setSubjectInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addSubject();
-                        }
-                      }}
-                      placeholder="Type and press Enter"
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="e.g. JoinMUN 2025"
                     />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={addSubject}
-                      disabled={!subjectInput.trim()}
-                    >
-                      <IconPlus className="size-4" />
-                    </Button>
-                  </div>
-                  {field.state.value.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {field.state.value.map((subject) => (
-                        <Badge key={subject} variant="secondary">
-                          {subject}
-                          <button
-                            type="button"
-                            onClick={() => removeSubject(subject)}
-                            className="ml-1 hover:text-danger"
-                          >
-                            <IconX className="size-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </Field>
-              )}
-            </form.Field>
+                    {field.state.meta.errors.map((error) => (
+                      <FieldError key={String(error)}>
+                        {String(error)}
+                      </FieldError>
+                    ))}
+                  </Field>
+                )}
+              </form.Field>
 
-            <form.Field name="imageUrl">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={field.name}>Certificate / Photo URL</FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder="https://..."
-                  />
-                </Field>
-              )}
-            </form.Field>
-          </Stack>
-        </form>
+              <form.Field name="category">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Category</FieldLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="e.g. MUN, WSC, Debate"
+                      list="category-suggestions"
+                    />
+                    <datalist id="category-suggestions">
+                      {CATEGORY_SUGGESTIONS.map((cat) => (
+                        <option key={cat} value={cat} />
+                      ))}
+                    </datalist>
+                    {field.state.meta.errors.map((error) => (
+                      <FieldError key={String(error)}>
+                        {String(error)}
+                      </FieldError>
+                    ))}
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="award">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Award / Result</FieldLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="e.g. Best Delegate, Juara 1"
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="level">
+                {(field) => (
+                  <Field>
+                    <FieldLabel>Level</FieldLabel>
+                    <Select
+                      value={field.state.value}
+                      onValueChange={(value) => field.handleChange(value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select level" />
+                      </SelectTrigger>
+                      <SelectPopup>
+                        <SelectList>
+                          {LEVELS.map((level) => (
+                            <SelectItem key={level} value={level}>
+                              {level}
+                            </SelectItem>
+                          ))}
+                        </SelectList>
+                      </SelectPopup>
+                    </Select>
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="eventDate">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Event Date</FieldLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      type="date"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="location">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Location</FieldLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="e.g. Jakarta, Online"
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="description">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Description</FieldLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="Brief description of your achievement"
+                    />
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="subjects">
+                {(field) => (
+                  <Field>
+                    <FieldLabel>Skills / Subjects</FieldLabel>
+                    <div className="flex gap-2">
+                      <Input
+                        value={subjectInput}
+                        onChange={(e) => setSubjectInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addSubject();
+                          }
+                        }}
+                        placeholder="Type and press Enter"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={addSubject}
+                        disabled={!subjectInput.trim()}
+                      >
+                        <IconPlus className="size-4" />
+                      </Button>
+                    </div>
+                    {field.state.value.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {field.state.value.map((subject) => (
+                          <Badge key={subject} variant="secondary">
+                            {subject}
+                            <button
+                              type="button"
+                              onClick={() => removeSubject(subject)}
+                              className="ml-1 hover:text-danger"
+                            >
+                              <IconX className="size-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="imageUrl">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>
+                      Certificate / Photo URL
+                    </FieldLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="https://..."
+                    />
+                  </Field>
+                )}
+              </form.Field>
+            </Stack>
+          </form>
         </DialogBody>
 
         <DialogFooter>
@@ -1142,6 +1207,7 @@ git commit -m "feat: add AchievementForm dialog component"
 ## Task 9: Create Achievements Page (Main Page)
 
 **Files:**
+
 - Modify: `apps/web/src/components/dashboard/pages/achivements-page.tsx`
 
 - [ ] **Step 1: Rewrite `apps/web/src/components/dashboard/pages/achivements-page.tsx`**
@@ -1185,7 +1251,8 @@ export function AchivementsPage() {
   const items = achievements.data ?? [];
   const filtered = items.filter((a) => {
     if (categoryFilter !== "All" && a.category !== categoryFilter) return false;
-    if (statusFilter !== "All" && a.status !== statusFilter.toLowerCase()) return false;
+    if (statusFilter !== "All" && a.status !== statusFilter.toLowerCase())
+      return false;
     return true;
   });
 
@@ -1193,7 +1260,8 @@ export function AchivementsPage() {
   const pending = items.filter((a) => a.status === "pending").length;
 
   const showPendingBanner = pending > 0 && approved < items.length;
-  const showAllApprovedBanner = approved > 0 && approved === items.length && items.length > 0;
+  const showAllApprovedBanner =
+    approved > 0 && approved === items.length && items.length > 0;
 
   const editAchievement = items.find((a) => a.id === editId);
 
@@ -1262,7 +1330,12 @@ export function AchivementsPage() {
                   subjects: a.subjects ?? [],
                   imageUrl: a.imageUrl ?? "",
                 }}
-                trigger={<Button variant="plain" size="sm"><IconPlus className="size-4" />Edit</Button>}
+                trigger={
+                  <Button variant="plain" size="sm">
+                    <IconPlus className="size-4" />
+                    Edit
+                  </Button>
+                }
                 onSuccess={() => setEditId(null)}
               />
             ) : (
@@ -1314,21 +1387,21 @@ Expected: No errors
 
 **Spec coverage check:**
 
-| Spec requirement | Task |
-|---|---|
-| DB schema (achievements table) | Task 1 |
-| API router (list, create, update, delete, adminList, adminReview) | Task 2 |
-| Stats cards (total, approved, pending) | Task 3 |
-| Achievement card with status badges | Task 4 |
-| Empty state CTA | Task 5 |
-| Pending/all-approved banners | Task 6 |
-| Category + status filters | Task 7 |
-| Form with all fields (Selia Dialog) | Task 8 |
-| Main page composition | Task 9 |
-| Route wiring | Task 10 |
-| Toast on submit | Task 8 (form) |
-| "Edit & Resubmit" for rejected | Task 8 (edit mode) + Task 9 (editId state) |
-| Delete for pending | Task 9 (delete mutation) |
+| Spec requirement                                                  | Task                                       |
+| ----------------------------------------------------------------- | ------------------------------------------ |
+| DB schema (achievements table)                                    | Task 1                                     |
+| API router (list, create, update, delete, adminList, adminReview) | Task 2                                     |
+| Stats cards (total, approved, pending)                            | Task 3                                     |
+| Achievement card with status badges                               | Task 4                                     |
+| Empty state CTA                                                   | Task 5                                     |
+| Pending/all-approved banners                                      | Task 6                                     |
+| Category + status filters                                         | Task 7                                     |
+| Form with all fields (Selia Dialog)                               | Task 8                                     |
+| Main page composition                                             | Task 9                                     |
+| Route wiring                                                      | Task 10                                    |
+| Toast on submit                                                   | Task 8 (form)                              |
+| "Edit & Resubmit" for rejected                                    | Task 8 (edit mode) + Task 9 (editId state) |
+| Delete for pending                                                | Task 9 (delete mutation)                   |
 
 **Placeholder scan:** No TBDs, TODOs, or vague steps. All code provided inline.
 

@@ -14,7 +14,6 @@ import { Route as InviteRouteImport } from './routes/invite'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
-import { Route as AppTodosRouteImport } from './routes/_app.todos'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
@@ -44,11 +43,6 @@ const IndexRoute = IndexRouteImport.update({
 const AppTutorsRoute = AppTutorsRouteImport.update({
   id: '/tutors',
   path: '/tutors',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppTodosRoute = AppTodosRouteImport.update({
-  id: '/todos',
-  path: '/todos',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProfileRoute = AppProfileRouteImport.update({
@@ -92,7 +86,6 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
-  '/todos': typeof AppTodosRoute
   '/tutors': typeof AppTutorsRoute
 }
 export interface FileRoutesByTo {
@@ -105,7 +98,6 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
-  '/todos': typeof AppTodosRoute
   '/tutors': typeof AppTutorsRoute
 }
 export interface FileRoutesById {
@@ -120,7 +112,6 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/profile': typeof AppProfileRoute
-  '/_app/todos': typeof AppTodosRoute
   '/_app/tutors': typeof AppTutorsRoute
 }
 export interface FileRouteTypes {
@@ -135,7 +126,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/onboarding'
     | '/profile'
-    | '/todos'
     | '/tutors'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -148,7 +138,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/onboarding'
     | '/profile'
-    | '/todos'
     | '/tutors'
   id:
     | '__root__'
@@ -162,7 +151,6 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/onboarding'
     | '/_app/profile'
-    | '/_app/todos'
     | '/_app/tutors'
   fileRoutesById: FileRoutesById
 }
@@ -208,13 +196,6 @@ declare module '@tanstack/react-router' {
       path: '/tutors'
       fullPath: '/tutors'
       preLoaderRoute: typeof AppTutorsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/todos': {
-      id: '/_app/todos'
-      path: '/todos'
-      fullPath: '/todos'
-      preLoaderRoute: typeof AppTodosRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/profile': {
@@ -269,7 +250,6 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
-  AppTodosRoute: typeof AppTodosRoute
   AppTutorsRoute: typeof AppTutorsRoute
 }
 
@@ -280,7 +260,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
-  AppTodosRoute: AppTodosRoute,
   AppTutorsRoute: AppTutorsRoute,
 }
 

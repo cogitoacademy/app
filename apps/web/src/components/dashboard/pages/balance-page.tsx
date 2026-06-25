@@ -22,7 +22,7 @@ import {
   IconWallet,
 } from "@tabler/icons-react";
 import { cn } from "@cogito-app/ui/lib/utils";
-import { IconDoorExit  } from "@tabler/icons-react";
+import { IconDoorExit } from "@tabler/icons-react";
 
 import { StatCard } from "../stat-card";
 

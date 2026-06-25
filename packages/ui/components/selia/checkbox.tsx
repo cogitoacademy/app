@@ -18,7 +18,10 @@ export function CheckboxGroup({
   );
 }
 
-export function CheckboxGroupLabel({ render, ...props }: useRender.ComponentProps<"span">) {
+export function CheckboxGroupLabel({
+  render,
+  ...props
+}: useRender.ComponentProps<"span">) {
   return useRender({
     defaultTagName: "span",
     render,
@@ -30,7 +33,9 @@ export function CheckboxGroupLabel({ render, ...props }: useRender.ComponentProp
   });
 }
 
-export function Checkbox({ ...props }: React.ComponentProps<typeof BaseCheckbox.Root>) {
+export function Checkbox({
+  ...props
+}: React.ComponentProps<typeof BaseCheckbox.Root>) {
   return (
     <BaseCheckbox.Root
       data-slot="checkbox"

@@ -13,7 +13,11 @@ type DefaultPageProps = {
   emptyState: string;
 };
 
-export function DefaultPage({ title, description, emptyState }: DefaultPageProps) {
+export function DefaultPage({
+  title,
+  description,
+  emptyState,
+}: DefaultPageProps) {
   return (
     <Card>
       <CardHeader>

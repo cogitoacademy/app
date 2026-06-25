@@ -25,7 +25,8 @@ export function Avatar({
   size,
   className,
   ...props
-}: React.ComponentProps<typeof BaseAvatar.Root> & VariantProps<typeof avatarVariants>) {
+}: React.ComponentProps<typeof BaseAvatar.Root> &
+  VariantProps<typeof avatarVariants>) {
   return (
     <BaseAvatar.Root
       data-slot="avatar"
@@ -55,7 +56,10 @@ export function AvatarFallback({
   return (
     <BaseAvatar.Fallback
       data-slot="avatar-fallback"
-      className={cn("flex items-center justify-center size-full rounded-full", className)}
+      className={cn(
+        "flex items-center justify-center size-full rounded-full",
+        className,
+      )}
       {...props}
     />
   );

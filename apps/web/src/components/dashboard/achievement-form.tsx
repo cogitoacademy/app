@@ -104,7 +104,9 @@ export function AchievementForm({
   const createMutation = useMutation(
     orpc.achievement.create.mutationOptions({
       onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: orpc.achievement.list.key() });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.achievement.list.key(),
+        });
         toastManager.add({
           title: "Achievement submitted!",
           description: "It\u2019ll appear on cogitoacademy.id once approved.",
@@ -119,7 +121,9 @@ export function AchievementForm({
   const updateMutation = useMutation(
     orpc.achievement.update.mutationOptions({
       onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: orpc.achievement.list.key() });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.achievement.list.key(),
+        });
         toastManager.add({
           title: "Achievement updated!",
           description: "Resubmitted for review.",
@@ -170,7 +174,10 @@ export function AchievementForm({
   const addSubject = () => {
     const trimmed = subjectInput.trim();
     if (trimmed && !form.getFieldValue("subjects").includes(trimmed)) {
-      form.setFieldValue("subjects", [...form.getFieldValue("subjects"), trimmed]);
+      form.setFieldValue("subjects", [
+        ...form.getFieldValue("subjects"),
+        trimmed,
+      ]);
       setSubjectInput("");
     }
   };
@@ -208,7 +215,9 @@ export function AchievementForm({
               <form.Field name="eventName">
                 {(field) => (
                   <Field>
-                    <FieldLabel htmlFor={field.name}>Event / Competition Name</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>
+                      Event / Competition Name
+                    </FieldLabel>
                     <Input
                       id={field.name}
                       name={field.name}
@@ -218,7 +227,9 @@ export function AchievementForm({
                       placeholder="e.g. JoinMUN 2025"
                     />
                     {field.state.meta.errors.map((error) => (
-                      <FieldError key={String(error)}>{String(error)}</FieldError>
+                      <FieldError key={String(error)}>
+                        {String(error)}
+                      </FieldError>
                     ))}
                   </Field>
                 )}
@@ -383,7 +394,9 @@ export function AchievementForm({
               <form.Field name="imageUrl">
                 {(field) => (
                   <Field>
-                    <FieldLabel htmlFor={field.name}>Certificate / Photo URL</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>
+                      Certificate / Photo URL
+                    </FieldLabel>
                     <Input
                       id={field.name}
                       name={field.name}

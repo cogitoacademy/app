@@ -2,8 +2,7 @@ import { createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
-import { createDb } from "@cogito-app/db";
-import { wallet } from "@cogito-app/db/schema";
+import { db } from "@cogito-app/db";
 import { env } from "@cogito-app/env/server";
 
 import * as schema from "@cogito-app/db/schema";
@@ -20,8 +19,6 @@ export type CogitoUser = {
 };
 
 export function createAuth() {
-  const db = createDb();
-
   return betterAuth({
     database: drizzleAdapter(db, {
       provider: "pg",
@@ -58,19 +55,9 @@ export function createAuth() {
     },
     plugins: [],
     hooks: {
-      after: createAuthMiddleware(async (ctx) => {
-        if (ctx.path.startsWith("/sign-up")) {
-          const newSession = ctx.context.newSession;
-          if (newSession?.user?.id) {
-            await db.insert(wallet).values({
-              id: crypto.randomUUID(),
-              userId: newSession.user.id,
-              totalBalance: 0,
-              heldBalance: 0,
-              availableBalance: 0,
-            });
-          }
-        }
+      after: createAuthMiddleware(async () => {
+        // Wallet creation is now handled lazily by WalletService.getOrCreate()
+        // when the user first calls auth.me. This decouples auth from wallet.
       }),
     },
   });

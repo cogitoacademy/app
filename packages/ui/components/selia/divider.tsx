@@ -26,7 +26,11 @@ export function Divider({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof dividerVariants>) {
   return (
-    <div data-slot="divider" className={cn(dividerVariants({ variant, className }))} {...props}>
+    <div
+      data-slot="divider"
+      className={cn(dividerVariants({ variant, className }))}
+      {...props}
+    >
       <span className="text-sm text-dimmed text-nowrap">{children}</span>
     </div>
   );

@@ -35,7 +35,8 @@ export const itemVariants = cva(
         warning: "bg-warning/10 rounded-(--item-rounded)",
         "warning-outline": "border-warning/20 border rounded-(--item-rounded)",
         tertiary: "bg-tertiary/10 rounded-(--item-rounded)",
-        "tertiary-outline": "border-tertiary/20 border rounded-(--item-rounded)",
+        "tertiary-outline":
+          "border-tertiary/20 border rounded-(--item-rounded)",
       },
       size: {
         sm: "p-3.5 [--item-rounded:var(--radius)] gap-2.5",
@@ -73,7 +74,10 @@ export function Item({
   });
 }
 
-export function ItemContent({ className, ...props }: React.ComponentProps<"div">) {
+export function ItemContent({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="item-content"
@@ -83,7 +87,10 @@ export function ItemContent({ className, ...props }: React.ComponentProps<"div">
   );
 }
 
-export function ItemTitle({ className, ...props }: React.ComponentProps<"div">) {
+export function ItemTitle({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="item-title"
@@ -93,7 +100,10 @@ export function ItemTitle({ className, ...props }: React.ComponentProps<"div">) 
   );
 }
 
-export function ItemDescription({ className, ...props }: React.ComponentProps<"p">) {
+export function ItemDescription({
+  className,
+  ...props
+}: React.ComponentProps<"p">) {
   return (
     <p
       data-slot="item-description"
@@ -113,7 +123,10 @@ export function ItemMeta({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-export function ItemMedia({ className, ...props }: React.ComponentProps<"div">) {
+export function ItemMedia({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="item-media"
@@ -126,7 +139,10 @@ export function ItemMedia({ className, ...props }: React.ComponentProps<"div">) 
   );
 }
 
-export function ItemAction({ className, ...props }: React.ComponentProps<"div">) {
+export function ItemAction({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="item-action"

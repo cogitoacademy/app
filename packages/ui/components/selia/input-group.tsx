@@ -94,7 +94,8 @@ export function InputGroupAddon({
   align,
   render,
   ...props
-}: useRender.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
+}: useRender.ComponentProps<"div"> &
+  VariantProps<typeof inputGroupAddonVariants>) {
   return useRender({
     defaultTagName: "div",
     render,
@@ -107,7 +108,11 @@ export function InputGroupAddon({
   });
 }
 
-export function InputGroupText({ className, children, ...props }: React.ComponentProps<"span">) {
+export function InputGroupText({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="input-group-text"

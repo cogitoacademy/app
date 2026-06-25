@@ -57,7 +57,10 @@ export function CardHeader({
   );
 }
 
-export function CardHeaderAction({ className, ...props }: React.ComponentProps<"div">) {
+export function CardHeaderAction({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-header-action"
@@ -80,8 +83,17 @@ export function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
   );
 }
 
-export function CardDescription({ className, ...props }: React.ComponentProps<"p">) {
-  return <p data-slot="card-description" className={cn("text-muted", className)} {...props} />;
+export function CardDescription({
+  className,
+  ...props
+}: React.ComponentProps<"p">) {
+  return (
+    <p
+      data-slot="card-description"
+      className={cn("text-muted", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
@@ -101,7 +113,10 @@ export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-export function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+export function CardFooter({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-footer"

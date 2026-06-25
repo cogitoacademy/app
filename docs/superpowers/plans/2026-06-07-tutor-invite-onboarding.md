@@ -16,28 +16,28 @@
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `packages/db/src/schema/tutor-invite.ts` | `tutorInvite` table + relations |
-| `packages/db/src/schema/tutor-profile.ts` | `tutorProfile` table + relations |
-| `packages/db/src/schema/audit-log.ts` | `auditLog` table + relations |
-| `packages/api/src/routers/tutor-router.ts` | Tutor-facing endpoints (profile CRUD, onboarding) |
-| `packages/api/src/routers/admin-tutor-router.ts` | Admin endpoints (invite, review, publish) |
-| `apps/web/src/routes/_app.onboarding.tsx` | Tutor onboarding route |
-| `apps/web/src/components/tutor/onboarding-form.tsx` | Multi-step onboarding form |
-| `apps/web/src/components/tutor/tutor-pricing-fields.tsx` | Pricing grid for class sizes 1-6 |
-| `apps/web/src/components/admin/tutor-invite-form.tsx` | Admin invite creation form |
-| `apps/web/src/components/admin/tutor-review-card.tsx` | Admin review of tutor submissions |
-| `apps/web/src/routes/invite.tsx` | Public invite claim page |
+| File                                                     | Purpose                                           |
+| -------------------------------------------------------- | ------------------------------------------------- |
+| `packages/db/src/schema/tutor-invite.ts`                 | `tutorInvite` table + relations                   |
+| `packages/db/src/schema/tutor-profile.ts`                | `tutorProfile` table + relations                  |
+| `packages/db/src/schema/audit-log.ts`                    | `auditLog` table + relations                      |
+| `packages/api/src/routers/tutor-router.ts`               | Tutor-facing endpoints (profile CRUD, onboarding) |
+| `packages/api/src/routers/admin-tutor-router.ts`         | Admin endpoints (invite, review, publish)         |
+| `apps/web/src/routes/_app.onboarding.tsx`                | Tutor onboarding route                            |
+| `apps/web/src/components/tutor/onboarding-form.tsx`      | Multi-step onboarding form                        |
+| `apps/web/src/components/tutor/tutor-pricing-fields.tsx` | Pricing grid for class sizes 1-6                  |
+| `apps/web/src/components/admin/tutor-invite-form.tsx`    | Admin invite creation form                        |
+| `apps/web/src/components/admin/tutor-review-card.tsx`    | Admin review of tutor submissions                 |
+| `apps/web/src/routes/invite.tsx`                         | Public invite claim page                          |
 
 ### Modified Files
 
-| File | Change |
-|------|--------|
-| `packages/db/src/schema/index.ts` | Re-export new schema files |
-| `packages/api/src/routers/index.ts` | Register new routers |
-| `apps/web/src/routes/_app.tsx` | Add route title for `/onboarding` |
-| `apps/web/src/components/dashboard/app-sidebar.tsx` | Conditional nav items by role |
+| File                                                | Change                            |
+| --------------------------------------------------- | --------------------------------- |
+| `packages/db/src/schema/index.ts`                   | Re-export new schema files        |
+| `packages/api/src/routers/index.ts`                 | Register new routers              |
+| `apps/web/src/routes/_app.tsx`                      | Add route title for `/onboarding` |
+| `apps/web/src/components/dashboard/app-sidebar.tsx` | Conditional nav items by role     |
 
 ---
 
@@ -45,58 +45,58 @@
 
 ### `tutorInvite`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | text PK (uuid) | |
-| email | text NOT NULL UNIQUE | Target email |
-| displayName | text NOT NULL | Admin-provided name hint |
-| token | text NOT NULL UNIQUE | Single-use claim token |
-| status | text NOT NULL default "invited" | invited / accepted / expired / revoked |
-| invitedBy | text NOT NULL FK → user.id | Admin who created |
-| acceptedBy | text FK → user.id | User who claimed (null until accepted) |
-| internalNotes | text | Admin notes |
-| expiresAt | timestamp NOT NULL | Invite expiry |
-| acceptedAt | timestamp | When accepted |
-| createdAt | timestamp default now | |
-| updatedAt | timestamp default now | |
+| Column        | Type                            | Notes                                  |
+| ------------- | ------------------------------- | -------------------------------------- |
+| id            | text PK (uuid)                  |                                        |
+| email         | text NOT NULL UNIQUE            | Target email                           |
+| displayName   | text NOT NULL                   | Admin-provided name hint               |
+| token         | text NOT NULL UNIQUE            | Single-use claim token                 |
+| status        | text NOT NULL default "invited" | invited / accepted / expired / revoked |
+| invitedBy     | text NOT NULL FK → user.id      | Admin who created                      |
+| acceptedBy    | text FK → user.id               | User who claimed (null until accepted) |
+| internalNotes | text                            | Admin notes                            |
+| expiresAt     | timestamp NOT NULL              | Invite expiry                          |
+| acceptedAt    | timestamp                       | When accepted                          |
+| createdAt     | timestamp default now           |                                        |
+| updatedAt     | timestamp default now           |                                        |
 
 Indexes: email, token, status, invitedBy
 
 ### `tutorProfile`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | text PK (uuid) | |
-| userId | text NOT NULL UNIQUE FK → user.id | One profile per user |
-| inviteId | text NOT NULL FK → tutorInvite.id | Linked invite |
-| displayName | text | Required for publish |
-| shortBio | text | Required for publish |
-| credentialsSummary | text | Required for publish |
-| expertise | jsonb (string[]) | Competition tracks, required for publish |
-| modality | text | "online" / "offline" / "both", required for publish |
-| prices | jsonb | { 1: number, 2: number, ..., 6: number } in Marks |
-| availabilitySummary | text | Text description of availability |
-| proofUrls | jsonb (string[]) | Optional credential proof links |
-| onboardingStatus | text NOT NULL default "draft" | draft / pending_review / changes_requested / approved_unpublished / published / suspended |
-| adminReviewNote | text | Reason for changes_requested or suspension |
-| publishedAt | timestamp | When admin published |
-| createdAt | timestamp default now | |
-| updatedAt | timestamp default now | |
+| Column              | Type                              | Notes                                                                                     |
+| ------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- |
+| id                  | text PK (uuid)                    |                                                                                           |
+| userId              | text NOT NULL UNIQUE FK → user.id | One profile per user                                                                      |
+| inviteId            | text NOT NULL FK → tutorInvite.id | Linked invite                                                                             |
+| displayName         | text                              | Required for publish                                                                      |
+| shortBio            | text                              | Required for publish                                                                      |
+| credentialsSummary  | text                              | Required for publish                                                                      |
+| expertise           | jsonb (string[])                  | Competition tracks, required for publish                                                  |
+| modality            | text                              | "online" / "offline" / "both", required for publish                                       |
+| prices              | jsonb                             | { 1: number, 2: number, ..., 6: number } in Marks                                         |
+| availabilitySummary | text                              | Text description of availability                                                          |
+| proofUrls           | jsonb (string[])                  | Optional credential proof links                                                           |
+| onboardingStatus    | text NOT NULL default "draft"     | draft / pending_review / changes_requested / approved_unpublished / published / suspended |
+| adminReviewNote     | text                              | Reason for changes_requested or suspension                                                |
+| publishedAt         | timestamp                         | When admin published                                                                      |
+| createdAt           | timestamp default now             |                                                                                           |
+| updatedAt           | timestamp default now             |                                                                                           |
 
 Indexes: userId, onboardingStatus, inviteId
 
 ### `auditLog`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | text PK (uuid) | |
-| actorId | text FK → user.id | Who performed the action |
-| actorType | text NOT NULL | "admin" / "system" / "tutor" |
-| action | text NOT NULL | e.g. "tutor_invite_created", "tutor_profile_published" |
-| targetId | text | ID of affected entity |
-| targetType | text NOT NULL | "tutor_invite" / "tutor_profile" / "booking" / "wallet" |
-| details | jsonb | Arbitrary details |
-| createdAt | timestamp default now | |
+| Column     | Type                  | Notes                                                   |
+| ---------- | --------------------- | ------------------------------------------------------- |
+| id         | text PK (uuid)        |                                                         |
+| actorId    | text FK → user.id     | Who performed the action                                |
+| actorType  | text NOT NULL         | "admin" / "system" / "tutor"                            |
+| action     | text NOT NULL         | e.g. "tutor_invite_created", "tutor_profile_published"  |
+| targetId   | text                  | ID of affected entity                                   |
+| targetType | text NOT NULL         | "tutor_invite" / "tutor_profile" / "booking" / "wallet" |
+| details    | jsonb                 | Arbitrary details                                       |
+| createdAt  | timestamp default now |                                                         |
 
 Indexes: actorId, targetType, targetId, createdAt
 
@@ -105,6 +105,7 @@ Indexes: actorId, targetType, targetId, createdAt
 ### Task 1: Tutor Invite & Tutor Profile DB Schema
 
 **Files:**
+
 - Create: `packages/db/src/schema/tutor-invite.ts`
 - Create: `packages/db/src/schema/tutor-profile.ts`
 - Create: `packages/db/src/schema/audit-log.ts`
@@ -129,8 +130,9 @@ export const tutorInvite = pgTable(
     invitedBy: text("invited_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    acceptedBy: text("accepted_by")
-      .references(() => user.id, { onDelete: "set null" }),
+    acceptedBy: text("accepted_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
     internalNotes: text("internal_notes"),
     expiresAt: timestamp("expires_at").notNull(),
     acceptedAt: timestamp("accepted_at"),
@@ -188,9 +190,7 @@ export const tutorProfile = pgTable(
     prices: jsonb("prices").$type<Record<string, number>>(),
     availabilitySummary: text("availability_summary"),
     proofUrls: jsonb("proof_urls").$type<string[]>().default([]),
-    onboardingStatus: text("onboarding_status")
-      .notNull()
-      .default("draft"),
+    onboardingStatus: text("onboarding_status").notNull().default("draft"),
     adminReviewNote: text("admin_review_note"),
     publishedAt: timestamp("published_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -249,7 +249,10 @@ export const auditLog = pgTable(
   },
   (table) => [
     index("audit_log_actorId_idx").on(table.actorId),
-    index("audit_log_targetType_targetId_idx").on(table.targetType, table.targetId),
+    index("audit_log_targetType_targetId_idx").on(
+      table.targetType,
+      table.targetId,
+    ),
     index("audit_log_action_idx").on(table.action),
     index("audit_log_createdAt_idx").on(table.createdAt),
   ],
@@ -295,6 +298,7 @@ git commit -m "feat: add tutorInvite, tutorProfile, auditLog schemas"
 ### Task 2: Admin Tutor Invite API
 
 **Files:**
+
 - Create: `packages/api/src/routers/admin-tutor-router.ts`
 - Modify: `packages/api/src/routers/index.ts`
 
@@ -305,7 +309,12 @@ import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 import { eq, and, gt, desc } from "drizzle-orm";
 import { createDb } from "@cogito-app/db";
-import { user, tutorInvite, tutorProfile, auditLog } from "@cogito-app/db/schema";
+import {
+  user,
+  tutorInvite,
+  tutorProfile,
+  auditLog,
+} from "@cogito-app/db/schema";
 import type { CogitoUser } from "@cogito-app/auth";
 import { adminProcedure } from "../index";
 
@@ -371,11 +380,15 @@ export const adminTutorRouter = {
 
   listInvites: adminProcedure
     .input(
-      z.object({
-        status: z.enum(["invited", "accepted", "expired", "revoked"]).optional(),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-      }).optional(),
+      z
+        .object({
+          status: z
+            .enum(["invited", "accepted", "expired", "revoked"])
+            .optional(),
+          limit: z.number().min(1).max(100).default(50),
+          offset: z.number().min(0).default(0),
+        })
+        .optional(),
     )
     .handler(async ({ input }) => {
       const status = input?.status;
@@ -472,18 +485,22 @@ export const adminTutorRouter = {
 
   listTutorProfiles: adminProcedure
     .input(
-      z.object({
-        status: z.enum([
-          "draft",
-          "pending_review",
-          "changes_requested",
-          "approved_unpublished",
-          "published",
-          "suspended",
-        ]).optional(),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-      }).optional(),
+      z
+        .object({
+          status: z
+            .enum([
+              "draft",
+              "pending_review",
+              "changes_requested",
+              "approved_unpublished",
+              "published",
+              "suspended",
+            ])
+            .optional(),
+          limit: z.number().min(1).max(100).default(50),
+          offset: z.number().min(0).default(0),
+        })
+        .optional(),
     )
     .handler(async ({ input }) => {
       const status = input?.status;
@@ -525,7 +542,9 @@ export const adminTutorRouter = {
       });
 
       if (!profile) {
-        throw new ORPCError("NOT_FOUND", { message: "Tutor profile not found" });
+        throw new ORPCError("NOT_FOUND", {
+          message: "Tutor profile not found",
+        });
       }
 
       const statusMap: Record<string, string> = {
@@ -567,7 +586,11 @@ export const adminTutorRouter = {
         action: `tutor_profile_${input.action}`,
         targetId: input.tutorProfileId,
         targetType: "tutor_profile",
-        details: { adminNote: input.adminNote, previousStatus: profile.onboardingStatus, newStatus },
+        details: {
+          adminNote: input.adminNote,
+          previousStatus: profile.onboardingStatus,
+          newStatus,
+        },
       });
 
       return updated;
@@ -637,7 +660,8 @@ export const inviteRouter = {
 
       if (invite.email.toLowerCase() !== userEmail.toLowerCase()) {
         throw new ORPCError("FORBIDDEN", {
-          message: "This invite is for a different email address. Please log in with the invited email.",
+          message:
+            "This invite is for a different email address. Please log in with the invited email.",
         });
       }
 
@@ -674,9 +698,7 @@ export const inviteRouter = {
         })
         .returning();
 
-      await db.update(user)
-        .set({ role: "tutor" })
-        .where(eq(user.id, userId));
+      await db.update(user).set({ role: "tutor" }).where(eq(user.id, userId));
 
       await db.insert(auditLog).values({
         id: crypto.randomUUID(),
@@ -697,8 +719,14 @@ export const inviteRouter = {
 ```
 
 Note: This file needs `auditLog` import — add to the import line:
+
 ```ts
-import { tutorInvite, tutorProfile, user, auditLog } from "@cogito-app/db/schema";
+import {
+  tutorInvite,
+  tutorProfile,
+  user,
+  auditLog,
+} from "@cogito-app/db/schema";
 ```
 
 - [ ] **Step 3: Create tutor-facing profile/onboarding router**
@@ -717,23 +745,37 @@ import { protectedProcedure } from "../index";
 const db = createDb();
 
 const ONLINE_FLOOR_PRICES: Record<string, number> = {
-  "1": 42, "2": 35, "3": 28, "4": 24, "5": 21, "6": 19,
+  "1": 42,
+  "2": 35,
+  "3": 28,
+  "4": 24,
+  "5": 21,
+  "6": 19,
 };
 
 const OFFLINE_FLOOR_PRICES: Record<string, number> = {
-  "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 27,
+  "1": 50,
+  "2": 45,
+  "3": 40,
+  "4": 35,
+  "5": 30,
+  "6": 27,
 };
 
-function validatePrices(prices: Record<string, number>, modality: string): string | null {
+function validatePrices(
+  prices: Record<string, number>,
+  modality: string,
+): string | null {
   if (!prices || Object.keys(prices).length === 0) {
     return "Prices are required";
   }
 
-  const floorPrices = modality === "online"
-    ? ONLINE_FLOOR_PRICES
-    : modality === "offline"
-      ? OFFLINE_FLOOR_PRICES
-      : null;
+  const floorPrices =
+    modality === "online"
+      ? ONLINE_FLOOR_PRICES
+      : modality === "offline"
+        ? OFFLINE_FLOOR_PRICES
+        : null;
 
   for (const [size, price] of Object.entries(prices)) {
     const groupSize = Number(size);
@@ -779,7 +821,9 @@ export const tutorRouter = {
       });
 
       if (!profile) {
-        throw new ORPCError("NOT_FOUND", { message: "Tutor profile not found" });
+        throw new ORPCError("NOT_FOUND", {
+          message: "Tutor profile not found",
+        });
       }
 
       return profile;
@@ -806,12 +850,15 @@ export const tutorRouter = {
       });
 
       if (!profile) {
-        throw new ORPCError("NOT_FOUND", { message: "Tutor profile not found" });
+        throw new ORPCError("NOT_FOUND", {
+          message: "Tutor profile not found",
+        });
       }
 
       if (profile.onboardingStatus === "published") {
         throw new ORPCError("FORBIDDEN", {
-          message: "Published profiles cannot be edited directly. Contact admin.",
+          message:
+            "Published profiles cannot be edited directly. Contact admin.",
         });
       }
 
@@ -850,10 +897,15 @@ export const tutorRouter = {
       });
 
       if (!profile) {
-        throw new ORPCError("NOT_FOUND", { message: "Tutor profile not found" });
+        throw new ORPCError("NOT_FOUND", {
+          message: "Tutor profile not found",
+        });
       }
 
-      if (profile.onboardingStatus !== "draft" && profile.onboardingStatus !== "changes_requested") {
+      if (
+        profile.onboardingStatus !== "draft" &&
+        profile.onboardingStatus !== "changes_requested"
+      ) {
         throw new ORPCError("BAD_REQUEST", {
           message: `Cannot submit from status: ${profile.onboardingStatus}`,
         });
@@ -880,7 +932,10 @@ export const tutorRouter = {
 
       if (profile.prices) {
         const modality = profile.modality ?? "online";
-        const error = validatePrices(profile.prices as Record<string, number>, modality);
+        const error = validatePrices(
+          profile.prices as Record<string, number>,
+          modality,
+        );
         if (error) {
           throw new ORPCError("BAD_REQUEST", { message: error });
         }
@@ -966,6 +1021,7 @@ git commit -m "feat: add tutor invite, claim, and onboarding API endpoints"
 ### Task 3: Auth Hook — Prevent Tutor Role during Public Signup
 
 **Files:**
+
 - Modify: `packages/auth/src/index.ts`
 
 The PRD states (DL-23, FR-23): "Public signup creates student / default access only and cannot create tutor access." Current signup creates a `user` with role defaulting to `student` and a `wallet`. This is already correct — the `user` table has `role` default `"student"`. But we should verify the signup form does NOT expose a role selector. The current `sign-up-form.tsx` only has name/email/password, which is correct.
@@ -993,6 +1049,7 @@ If no changes: skip this task. Move on.
 ### Task 4: Invite Claim Page (Public Route)
 
 **Files:**
+
 - Create: `apps/web/src/routes/invite.tsx`
 - Create: `apps/web/src/components/tutor/invite-claim-page.tsx`
 
@@ -1113,8 +1170,8 @@ export function InviteClaimPage({ token }: { token: string }) {
         </CardHeader>
         <CardBody className="flex flex-col gap-4">
           <Text>
-            By claiming this invitation, you'll gain tutor access and can set
-            up your tutor profile. You must be logged in with the email address{" "}
+            By claiming this invitation, you'll gain tutor access and can set up
+            your tutor profile. You must be logged in with the email address{" "}
             <strong>{inviteInfo?.email}</strong> to claim this invite.
           </Text>
           <Button
@@ -1163,6 +1220,7 @@ git commit -m "feat: add public invite claim page with verify and claim flow"
 ### Task 5: Tutor Onboarding Page & Form
 
 **Files:**
+
 - Create: `apps/web/src/routes/_app.onboarding.tsx`
 - Create: `apps/web/src/components/tutor/onboarding-form.tsx`
 - Create: `apps/web/src/components/tutor/tutor-pricing-fields.tsx`
@@ -1175,7 +1233,11 @@ Create `apps/web/src/components/tutor/tutor-pricing-fields.tsx`:
 ```tsx
 "use client";
 
-import { Field, FieldError, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import {
+  Field,
+  FieldError,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
@@ -1656,15 +1718,20 @@ export const Route = createFileRoute("/_app/onboarding")({
 });
 
 function RouteComponent() {
-  const { data: profile, isLoading, error } = useQuery(
-    orpc.tutor.getMyProfile.queryOptions(),
-  );
+  const {
+    data: profile,
+    isLoading,
+    error,
+  } = useQuery(orpc.tutor.getMyProfile.queryOptions());
 
   if (isLoading) return <Loader />;
   if (error || !profile) {
     return (
       <div className="p-8 text-center">
-        <p>No tutor profile found. You may need to claim a tutor invitation first.</p>
+        <p>
+          No tutor profile found. You may need to claim a tutor invitation
+          first.
+        </p>
       </div>
     );
   }
@@ -1708,6 +1775,7 @@ git commit -m "feat: add tutor onboarding page with multi-step form and floor pr
 ### Task 6: Conditional Sidebar Navigation by Role
 
 **Files:**
+
 - Modify: `apps/web/src/components/dashboard/app-sidebar.tsx`
 
 Currently the sidebar shows the same nav items regardless of role. Per PRD, tutors need their own nav (onboarding, availability, incoming bookings), admins need their own nav (invite tutors, review tutors, monitor bookings).
@@ -1744,7 +1812,12 @@ const adminNavItems = [
   { to: "/balance", label: "Wallet Monitor", icon: IconCoins },
 ];
 
-const navItems = role === "admin" ? adminNavItems : role === "tutor" ? tutorNavItems : studentNavItems;
+const navItems =
+  role === "admin"
+    ? adminNavItems
+    : role === "tutor"
+      ? tutorNavItems
+      : studentNavItems;
 ```
 
 - [ ] **Step 2: Commit**
@@ -1759,6 +1832,7 @@ git commit -m "feat: role-based sidebar navigation for student, tutor, admin"
 ### Task 7: Admin Invite & Review UI
 
 **Files:**
+
 - Create: `apps/web/src/routes/_app.admin-tutors.tsx`
 - Create: `apps/web/src/components/admin/tutor-invite-form.tsx`
 - Create: `apps/web/src/components/admin/tutor-review-card.tsx`
@@ -1904,7 +1978,19 @@ interface TutorReviewCardProps {
   onAction?: () => void;
 }
 
-const STATUS_BADGE: Record<string, { label: string; variant: "primary" | "secondary" | "danger" | "warning" | "success" | "info" }> = {
+const STATUS_BADGE: Record<
+  string,
+  {
+    label: string;
+    variant:
+      | "primary"
+      | "secondary"
+      | "danger"
+      | "warning"
+      | "success"
+      | "info";
+  }
+> = {
   draft: { label: "Draft", variant: "secondary" },
   pending_review: { label: "Pending Review", variant: "warning" },
   changes_requested: { label: "Changes Requested", variant: "danger" },
@@ -1913,14 +1999,33 @@ const STATUS_BADGE: Record<string, { label: string; variant: "primary" | "second
   suspended: { label: "Suspended", variant: "danger" },
 };
 
-const FLOOR_ONLINE: Record<string, number> = { "1": 42, "2": 35, "3": 28, "4": 24, "5": 21, "6": 19 };
-const FLOOR_OFFLINE: Record<string, number> = { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 27 };
+const FLOOR_ONLINE: Record<string, number> = {
+  "1": 42,
+  "2": 35,
+  "3": 28,
+  "4": 24,
+  "5": 21,
+  "6": 19,
+};
+const FLOOR_OFFLINE: Record<string, number> = {
+  "1": 50,
+  "2": 45,
+  "3": 40,
+  "4": 35,
+  "5": 30,
+  "6": 27,
+};
 
 export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
   const reviewMutation = orpc.adminTutor.reviewTutorProfile.useMutation();
 
   async function handleAction(
-    action: "request_changes" | "approve_unpublished" | "publish" | "unpublish" | "suspend",
+    action:
+      | "request_changes"
+      | "approve_unpublished"
+      | "publish"
+      | "unpublish"
+      | "suspend",
     adminNote?: string,
   ) {
     try {
@@ -1940,7 +2045,8 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
     variant: "secondary" as const,
   };
 
-  const floorPrices = profile.modality === "offline" ? FLOOR_OFFLINE : FLOOR_ONLINE;
+  const floorPrices =
+    profile.modality === "offline" ? FLOOR_OFFLINE : FLOOR_ONLINE;
 
   return (
     <Card>
@@ -1956,12 +2062,16 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
       <CardBody className="flex flex-col gap-3">
         {profile.shortBio && <Text>{profile.shortBio}</Text>}
         {profile.credentialsSummary && (
-          <Text className="text-sm">Credentials: {profile.credentialsSummary}</Text>
+          <Text className="text-sm">
+            Credentials: {profile.credentialsSummary}
+          </Text>
         )}
         {profile.expertise && profile.expertise.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {profile.expertise.map((e) => (
-              <Badge key={e} variant="secondary">{e}</Badge>
+              <Badge key={e} variant="secondary">
+                {e}
+              </Badge>
             ))}
           </div>
         )}
@@ -1974,14 +2084,17 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
             <div className="grid grid-cols-3 gap-1 mt-1">
               {Object.entries(profile.prices).map(([size, price]) => (
                 <Text key={size} className="text-xs">
-                  Class for {size}: {price} Marks (floor: {floorPrices[size] ?? "?"})
+                  Class for {size}: {price} Marks (floor:{" "}
+                  {floorPrices[size] ?? "?"})
                 </Text>
               ))}
             </div>
           </div>
         )}
         {profile.availabilitySummary && (
-          <Text className="text-sm">Availability: {profile.availabilitySummary}</Text>
+          <Text className="text-sm">
+            Availability: {profile.availabilitySummary}
+          </Text>
         )}
         {profile.adminReviewNote && (
           <Text className="text-sm text-muted">
@@ -2238,6 +2351,7 @@ git commit -m "feat: add admin tutor management UI with invite form and review c
 ### Task 8: Auth.me Response — Include Tutor Profile
 
 **Files:**
+
 - Modify: `packages/api/src/routers/auth-router.ts`
 
 When a tutor user calls `auth.me`, the frontend needs to know their tutor profile status to route them correctly (e.g., draft → onboarding, published → tutor dashboard).
@@ -2321,23 +2435,23 @@ git commit -m "feat: include tutorProfile in auth.me response and useRole hook"
 
 ### Spec Coverage
 
-| PRD Requirement | Task |
-|-----------------|------|
-| FR-23: Invite-only tutor access, admin creates invite | Task 2 (adminTutor.createInvite) |
-| FR-23: Public signup cannot create tutor role | Task 3 (verified, no changes needed) |
-| FR-23: New user account claim flow | Task 2 (inviteRouter.claim) |
-| FR-23: Existing user email match claim | Task 2 (inviteRouter.claim — email mismatch check) |
-| FR-23: Expired/revoked invites cannot be claimed | Task 2 (inviteRouter.verify + claim check status + expiresAt) |
-| FR-23: Admin can resend/revoke invites | Task 2 (adminTutor.resendInvite, revokeInvite) |
-| FR-24: Tutor profile lifecycle states (draft → pending_review → published) | Task 1 (tutorProfile schema), Task 5 (onboarding form), Task 2 (adminTutor.reviewTutorProfile) |
-| FR-24: Required onboarding fields | Task 5 (OnboardingForm validation) |
-| FR-24: Admin review: request_changes, approve_unpublished, publish, suspend | Task 2 (reviewTutorProfile), Task 7 (TutorReviewCard) |
-| FR-05: Floor price validation | Task 5 (TutorPricingFields + validatePrices) |
-| DL-23: Invite lifecycle states | Task 1 (tutorInvite schema) |
-| TC-08: New tutor account claim | Task 2, 4 |
-| TC-09: Existing user email match | Task 2 (email mismatch error) |
-| TC-10: Onboarding review & publication gate | Task 2, 5, 7 |
-| Audit trail for all state changes | Task 1 (auditLog schema), Task 2 (audit inserts on every action) |
+| PRD Requirement                                                             | Task                                                                                           |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| FR-23: Invite-only tutor access, admin creates invite                       | Task 2 (adminTutor.createInvite)                                                               |
+| FR-23: Public signup cannot create tutor role                               | Task 3 (verified, no changes needed)                                                           |
+| FR-23: New user account claim flow                                          | Task 2 (inviteRouter.claim)                                                                    |
+| FR-23: Existing user email match claim                                      | Task 2 (inviteRouter.claim — email mismatch check)                                             |
+| FR-23: Expired/revoked invites cannot be claimed                            | Task 2 (inviteRouter.verify + claim check status + expiresAt)                                  |
+| FR-23: Admin can resend/revoke invites                                      | Task 2 (adminTutor.resendInvite, revokeInvite)                                                 |
+| FR-24: Tutor profile lifecycle states (draft → pending_review → published)  | Task 1 (tutorProfile schema), Task 5 (onboarding form), Task 2 (adminTutor.reviewTutorProfile) |
+| FR-24: Required onboarding fields                                           | Task 5 (OnboardingForm validation)                                                             |
+| FR-24: Admin review: request_changes, approve_unpublished, publish, suspend | Task 2 (reviewTutorProfile), Task 7 (TutorReviewCard)                                          |
+| FR-05: Floor price validation                                               | Task 5 (TutorPricingFields + validatePrices)                                                   |
+| DL-23: Invite lifecycle states                                              | Task 1 (tutorInvite schema)                                                                    |
+| TC-08: New tutor account claim                                              | Task 2, 4                                                                                      |
+| TC-09: Existing user email match                                            | Task 2 (email mismatch error)                                                                  |
+| TC-10: Onboarding review & publication gate                                 | Task 2, 5, 7                                                                                   |
+| Audit trail for all state changes                                           | Task 1 (auditLog schema), Task 2 (audit inserts on every action)                               |
 
 ### Placeholder Scan
 

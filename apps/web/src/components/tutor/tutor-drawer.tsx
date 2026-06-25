@@ -63,9 +63,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerPopup direction="right" className="w-full max-w-lg">
         <DrawerHeader className="flex justify-between">
-          <DrawerTitle>
-            {t.displayName ?? t.user?.name ?? "Tutor"}
-          </DrawerTitle>
+          <DrawerTitle>{t.displayName ?? t.user?.name ?? "Tutor"}</DrawerTitle>
           <DrawerClose
             render={<Button variant="plain" size="sm" aria-label="Close" />}
           >

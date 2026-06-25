@@ -12,7 +12,9 @@ export type SelectItem = {
   icon?: React.ReactNode;
 };
 
-export function Select({ ...props }: React.ComponentProps<typeof BaseSelect.Root>) {
+export function Select({
+  ...props
+}: React.ComponentProps<typeof BaseSelect.Root>) {
   return <BaseSelect.Root {...props} />;
 }
 
@@ -44,7 +46,8 @@ export function SelectTrigger({
   children,
   variant,
   ...props
-}: React.ComponentProps<typeof BaseSelect.Trigger> & VariantProps<typeof selectTriggerVariants>) {
+}: React.ComponentProps<typeof BaseSelect.Trigger> &
+  VariantProps<typeof selectTriggerVariants>) {
   return (
     <BaseSelect.Trigger
       data-slot="select-trigger"
@@ -78,7 +81,11 @@ export function SelectValue({
   placeholder?: string;
 }) {
   return (
-    <BaseSelect.Value data-slot="select-value" className={cn(className)} {...props}>
+    <BaseSelect.Value
+      data-slot="select-value"
+      className={cn(className)}
+      {...props}
+    >
       {(value: string | SelectItem | null) => (
         <SelectRenderValue value={value} placeholder={placeholder} />
       )}
@@ -99,7 +106,8 @@ function SelectRenderValue({
 
   if (Array.isArray(value)) {
     const firstValue = value[0];
-    const firstValueLabel = typeof firstValue === "object" ? firstValue.label : firstValue;
+    const firstValueLabel =
+      typeof firstValue === "object" ? firstValue.label : firstValue;
     const additionalValues =
       value.length > 1 ? (
         <Chip className="ml-1.5" size="sm">
@@ -181,11 +189,17 @@ export function SelectPopup({
   );
 }
 
-export function SelectList({ className, ...props }: React.ComponentProps<typeof BaseSelect.List>) {
+export function SelectList({
+  className,
+  ...props
+}: React.ComponentProps<typeof BaseSelect.List>) {
   return (
     <BaseSelect.List
       data-slot="select-list"
-      className={cn("space-y-0.5 max-h-(--available-height) overflow-y-auto relative", className)}
+      className={cn(
+        "space-y-0.5 max-h-(--available-height) overflow-y-auto relative",
+        className,
+      )}
       {...props}
     />
   );

@@ -1,14 +1,13 @@
 import type { RouterClient } from "@orpc/server";
 
-import { adminRouter } from "./admin-router";
-import { adminTutorRouter } from "./admin-tutor-router";
-import { authRouter } from "./auth-router";
-import { inviteRouter } from "./invite-router";
-import { tutorPublicRouter } from "./tutor-public-router";
-import { tutorRouter } from "./tutor-router";
-import { protectedProcedure, publicProcedure } from "../index";
-import { achievementRouter } from "./achievement-router";
-import { todoRouter } from "./todo";
+import { protectedProcedure, publicProcedure } from "./procedures";
+import { authRouter } from "./modules/auth/auth.router";
+import { adminRouter } from "./modules/admin/admin.router";
+import { adminTutorRouter } from "./modules/admin-tutor/admin-tutor.router";
+import { tutorRouter } from "./modules/tutor/tutor.router";
+import { discoveryRouter } from "./modules/tutor-discovery/discovery.router";
+import { inviteRouter } from "./modules/invite/invite.router";
+import { achievementRouter } from "./modules/achievement/achievement.router";
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -40,10 +39,10 @@ export const appRouter = {
   admin: adminRouter,
   adminTutor: adminTutorRouter,
   tutor: tutorRouter,
-  tutors: tutorPublicRouter,
+  tutors: discoveryRouter,
   invite: inviteRouter,
-  todo: todoRouter,
   achievement: achievementRouter,
 };
+
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

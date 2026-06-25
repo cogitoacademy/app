@@ -88,7 +88,9 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
     orpc.tutor.updateMyProfile.mutationOptions({
       onSuccess: () => {
         toastManager.add({ title: "Progress saved", type: "success" });
-        void queryClient.invalidateQueries({ queryKey: orpc.tutor.getMyProfile.key() });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.tutor.getMyProfile.key(),
+        });
         void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
       },
       onError: (error: unknown) => {
@@ -108,7 +110,9 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
           title: "Profile submitted for review!",
           type: "success",
         });
-        void queryClient.invalidateQueries({ queryKey: orpc.tutor.getMyProfile.key() });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.tutor.getMyProfile.key(),
+        });
         void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
       },
       onError: (error: unknown) => {
@@ -125,7 +129,8 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
     const payload: Record<string, unknown> = {};
     if (form.displayName) payload.displayName = form.displayName;
     if (form.shortBio) payload.shortBio = form.shortBio;
-    if (form.credentialsSummary) payload.credentialsSummary = form.credentialsSummary;
+    if (form.credentialsSummary)
+      payload.credentialsSummary = form.credentialsSummary;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (form.modality) payload.modality = form.modality;
     if (form.prices && Object.keys(form.prices).length > 0) {
@@ -134,7 +139,8 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
       );
       if (Object.keys(cleanPrices).length > 0) payload.prices = cleanPrices;
     }
-    if (form.availabilitySummary) payload.availabilitySummary = form.availabilitySummary;
+    if (form.availabilitySummary)
+      payload.availabilitySummary = form.availabilitySummary;
     if (form.proofUrls.length > 0) payload.proofUrls = form.proofUrls;
     return payload;
   }
@@ -143,14 +149,20 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
     const validationErrors: Record<string, string> = {};
     if (!form.displayName) validationErrors.displayName = "Required";
     if (!form.shortBio) validationErrors.shortBio = "Required";
-    if (!form.credentialsSummary) validationErrors.credentialsSummary = "Required";
+    if (!form.credentialsSummary)
+      validationErrors.credentialsSummary = "Required";
     if (!form.modality) validationErrors.modality = "Required";
-    if (form.expertise.length === 0) validationErrors.expertise = "Select at least one";
-    if (!form.prices || Object.keys(form.prices).length === 0) validationErrors.prices = "Required";
+    if (form.expertise.length === 0)
+      validationErrors.expertise = "Select at least one";
+    if (!form.prices || Object.keys(form.prices).length === 0)
+      validationErrors.prices = "Required";
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
-      toastManager.add({ title: "Please fill all required fields", type: "error" });
+      toastManager.add({
+        title: "Please fill all required fields",
+        type: "error",
+      });
       return;
     }
 
@@ -189,24 +201,29 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
     profile.onboardingStatus === "changes_requested";
 
   const statusMessages: Record<string, string> = {
-    pending_review: "Your profile is under review. You'll be notified once an admin approves it.",
-    approved_unpublished: "Your profile has been approved and is awaiting publication by admin.",
-    published: "Your tutor profile is live! Students can now discover and book sessions with you.",
-    suspended: "Your tutor profile has been suspended. Please contact admin for details.",
+    pending_review:
+      "Your profile is under review. You'll be notified once an admin approves it.",
+    approved_unpublished:
+      "Your profile has been approved and is awaiting publication by admin.",
+    published:
+      "Your tutor profile is live! Students can now discover and book sessions with you.",
+    suspended:
+      "Your tutor profile has been suspended. Please contact admin for details.",
   };
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
-      {profile.adminReviewNote && profile.onboardingStatus === "changes_requested" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Admin Feedback</CardTitle>
-          </CardHeader>
-          <CardBody>
-            <Text>{profile.adminReviewNote}</Text>
-          </CardBody>
-        </Card>
-      )}
+      {profile.adminReviewNote &&
+        profile.onboardingStatus === "changes_requested" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin Feedback</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <Text>{profile.adminReviewNote}</Text>
+            </CardBody>
+          </Card>
+        )}
 
       {statusMessages[profile.onboardingStatus] && !isDraft && (
         <Card>
@@ -250,9 +267,7 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
                   }}
                   placeholder="Brief introduction about yourself"
                 />
-                {errors.shortBio && (
-                  <FieldError>{errors.shortBio}</FieldError>
-                )}
+                {errors.shortBio && <FieldError>{errors.shortBio}</FieldError>}
               </Field>
 
               <Field>
@@ -276,7 +291,9 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
                   {form.expertise.map((item) => (
                     <Chip key={item}>
                       {item}
-                      <ChipButton onClick={() => removeExpertise(item)}>×</ChipButton>
+                      <ChipButton onClick={() => removeExpertise(item)}>
+                        ×
+                      </ChipButton>
                     </Chip>
                   ))}
                 </div>
@@ -320,9 +337,10 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
                 <Select
                   value={form.modality}
                   onValueChange={(val) => {
-                    const modalityVal = typeof val === "object" && val !== null && "value" in val
-                      ? (val as { value: string }).value
-                      : val;
+                    const modalityVal =
+                      typeof val === "object" && val !== null && "value" in val
+                        ? (val as { value: string }).value
+                        : val;
                     setForm({ ...form, modality: modalityVal as Modality });
                     clearError("modality");
                   }}
@@ -336,13 +354,13 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
                       <SelectItem value="offline">
                         Offline (at Cogito campus)
                       </SelectItem>
-                      <SelectItem value="both">Both online and offline</SelectItem>
+                      <SelectItem value="both">
+                        Both online and offline
+                      </SelectItem>
                     </SelectList>
                   </SelectPopup>
                 </Select>
-                {errors.modality && (
-                  <FieldError>{errors.modality}</FieldError>
-                )}
+                {errors.modality && <FieldError>{errors.modality}</FieldError>}
               </Field>
 
               {form.modality && (

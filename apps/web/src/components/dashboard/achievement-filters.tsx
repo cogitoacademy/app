@@ -1,6 +1,13 @@
 "use client";
 
-import { Select, SelectItem, SelectList, SelectPopup, SelectTrigger, SelectValue } from "@cogito-app/ui/components/selia/select";
+import {
+  Select,
+  SelectItem,
+  SelectList,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@cogito-app/ui/components/selia/select";
 
 const CATEGORIES = [
   "All",
@@ -32,7 +39,10 @@ export function AchievementFilters({
 }: AchievementFiltersProps) {
   return (
     <div className="flex flex-wrap gap-3">
-      <Select value={category} onValueChange={(v) => onCategoryChange(v as string)}>
+      <Select
+        value={category}
+        onValueChange={(v) => onCategoryChange(v as string)}
+      >
         <SelectTrigger className="w-full sm:w-40">
           <SelectValue placeholder="Category" />
         </SelectTrigger>

@@ -8,14 +8,13 @@ export const openApiTags = [
   { name: "Auth", description: "Authentication & user profiles" },
   { name: "Invites", description: "Tutor invite verification & claiming" },
   { name: "System", description: "Health checks & system info" },
-  { name: "Todos", description: "Public todo items" },
   { name: "Tutor", description: "Tutor profile management" },
   { name: "Tutors", description: "Public tutor browsing" },
 ];
 
-export function enrichOpenAPISpec<T extends { tags?: unknown; paths?: unknown }>(
-  spec: T,
-) {
+export function enrichOpenAPISpec<
+  T extends { tags?: unknown; paths?: unknown },
+>(spec: T) {
   const enriched = structuredClone(spec) as T & {
     tags: typeof openApiTags;
     paths?: Record<string, unknown>;

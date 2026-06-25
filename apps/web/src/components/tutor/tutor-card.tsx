@@ -41,9 +41,14 @@ export function TutorCard({ tutor, onClick }: TutorCardProps) {
       onClick={onClick}
     >
       <CardHeader>
-        <CardTitle>{tutor.displayName ?? tutor.user?.name ?? "Tutor"}</CardTitle>
+        <CardTitle>
+          {tutor.displayName ?? tutor.user?.name ?? "Tutor"}
+        </CardTitle>
         {tutor.modality && (
-          <Badge variant={MODALITY_VARIANTS[tutor.modality] ?? "secondary"} size="sm">
+          <Badge
+            variant={MODALITY_VARIANTS[tutor.modality] ?? "secondary"}
+            size="sm"
+          >
             {MODALITY_LABELS[tutor.modality] ?? tutor.modality}
           </Badge>
         )}
@@ -55,7 +60,9 @@ export function TutorCard({ tutor, onClick }: TutorCardProps) {
         {tutor.expertise && tutor.expertise.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {tutor.expertise.slice(0, 4).map((e) => (
-              <Badge key={e} variant="secondary" size="sm">{e}</Badge>
+              <Badge key={e} variant="secondary" size="sm">
+                {e}
+              </Badge>
             ))}
             {tutor.expertise.length > 4 && (
               <Badge variant="tertiary" size="sm">

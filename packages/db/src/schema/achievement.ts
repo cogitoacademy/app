@@ -1,5 +1,14 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, date, jsonb, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  date,
+  jsonb,
+  index,
+  check,
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { uuidPrimaryKey } from "./auth";
 
 import { user } from "./auth";
@@ -29,6 +38,10 @@ export const achievement = pgTable(
       .notNull(),
   },
   (table) => [
+    check(
+      "achievement_status_check",
+      sql`${table.status} IN ('draft', 'pending', 'pending_review', 'approved', 'rejected', 'archived')`,
+    ),
     index("achievement_userId_idx").on(table.userId),
     index("achievement_status_idx").on(table.status),
   ],

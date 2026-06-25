@@ -1,12 +1,19 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
-import { user, tutorInvite, tutorProfile, auditLog } from "@cogito-app/db/schema";
+import {
+  user,
+  tutorInvite,
+  tutorProfile,
+  auditLog,
+} from "@cogito-app/db/schema";
 
 const SERVER_URL = process.env.VITE_SERVER_URL || "http://localhost:3001";
 
 async function rpc(method: string, input: unknown, cookie: string) {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (cookie) headers.Cookie = cookie;
   const init: RequestInit = { method: "POST", headers };
   if (input !== undefined) {
@@ -15,7 +22,11 @@ async function rpc(method: string, input: unknown, cookie: string) {
   const res = await fetch(`${SERVER_URL}/rpc/${method}`, init);
   const text = await res.text();
   let data: any;
-  try { data = JSON.parse(text); } catch { data = text; }
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = text;
+  }
   if (data && typeof data === "object" && "json" in data) {
     return { status: res.status, data: data.json };
   }
@@ -50,10 +61,20 @@ async function setUserRole(userId: string, role: string) {
 }
 
 async function cleanUser(email: string) {
-  const [found] = await db.select().from(user).where(eq(user.email, email)).limit(1);
+  const [found] = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
   if (found) {
-    await db.delete(tutorProfile).where(eq(tutorProfile.userId, found.id)).catch(() => {});
-    await db.delete(auditLog).where(eq(auditLog.actorId, found.id)).catch(() => {});
+    await db
+      .delete(tutorProfile)
+      .where(eq(tutorProfile.userId, found.id))
+      .catch(() => {});
+    await db
+      .delete(auditLog)
+      .where(eq(auditLog.actorId, found.id))
+      .catch(() => {});
     await db.delete(user).where(eq(user.id, found.id));
   }
 }
@@ -100,10 +121,14 @@ describe("Tutor Invite & Onboarding", () => {
     let inviteToken: string;
 
     test("admin creates a tutor invite", async () => {
-      const res = await rpc("adminTutor/createInvite", {
-        email: tutorEmail,
-        displayName: "Prof Awesome",
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/createInvite",
+        {
+          email: tutorEmail,
+          displayName: "Prof Awesome",
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(res.data.email).toBe(tutorEmail);
@@ -121,15 +146,27 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("matching-email user can claim invite", async () => {
-      const res = await rpc("invite/claim", { token: inviteToken }, tutorCookie);
+      const res = await rpc(
+        "invite/claim",
+        { token: inviteToken },
+        tutorCookie,
+      );
       expect(res.status).toBe(200);
       expect(res.data.invite.status).toBe("accepted");
       expect(res.data.profile.onboardingStatus).toBe("draft");
 
-      const [u] = await db.select().from(user).where(eq(user.id, tutorId)).limit(1);
+      const [u] = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, tutorId))
+        .limit(1);
       expect(u!.role).toBe("tutor");
 
-      const [p] = await db.select().from(tutorProfile).where(eq(tutorProfile.userId, tutorId)).limit(1);
+      const [p] = await db
+        .select()
+        .from(tutorProfile)
+        .where(eq(tutorProfile.userId, tutorId))
+        .limit(1);
       expect(p).toBeDefined();
       expect(p!.displayName).toBe("Prof Awesome");
     });
@@ -140,10 +177,14 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("admin can invite same email again after previous invite is accepted", async () => {
-      const res = await rpc("adminTutor/createInvite", {
-        email: tutorEmail,
-        displayName: "Prof Awesome Again",
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/createInvite",
+        {
+          email: tutorEmail,
+          displayName: "Prof Awesome Again",
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(res.data.email).toBe(tutorEmail);
@@ -156,10 +197,14 @@ describe("Tutor Invite & Onboarding", () => {
 
   describe("TC-09: Email mismatch rejection", () => {
     test("wrong-email user cannot claim invite", async () => {
-      const createRes = await rpc("adminTutor/createInvite", {
-        email: `nomatch.${Date.now()}@cogito.test`,
-        displayName: "No Match",
-      }, adminCookie);
+      const createRes = await rpc(
+        "adminTutor/createInvite",
+        {
+          email: `nomatch.${Date.now()}@cogito.test`,
+          displayName: "No Match",
+        },
+        adminCookie,
+      );
 
       const token = createRes.data.token;
 
@@ -185,32 +230,44 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("tutor can update profile with all required fields", async () => {
-      const res = await rpc("tutor/updateMyProfile", {
-        displayName: "Prof Awesome",
-        shortBio: "Passionate math educator",
-        credentialsSummary: "PhD Mathematics, 10 years teaching",
-        expertise: ["Mathematics", "Physics"],
-        modality: "online",
-        prices: { "1": 50, "2": 40, "3": 32, "4": 28, "5": 25, "6": 22 },
-        availabilitySummary: "Weekdays 3-6 PM",
-      }, tutorCookie);
+      const res = await rpc(
+        "tutor/updateMyProfile",
+        {
+          displayName: "Prof Awesome",
+          shortBio: "Passionate math educator",
+          credentialsSummary: "PhD Mathematics, 10 years teaching",
+          expertise: ["Mathematics", "Physics"],
+          modality: "online",
+          prices: { "1": 50, "2": 40, "3": 32, "4": 28, "5": 25, "6": 22 },
+          availabilitySummary: "Weekdays 3-6 PM",
+        },
+        tutorCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(res.data.displayName).toBe("Prof Awesome");
     });
 
     test("prices below floor are rejected", async () => {
-      const res = await rpc("tutor/updateMyProfile", {
-        modality: "online",
-        prices: { "1": 10 },
-      }, tutorCookie);
+      const res = await rpc(
+        "tutor/updateMyProfile",
+        {
+          modality: "online",
+          prices: { "1": 10 },
+        },
+        tutorCookie,
+      );
       expect(res.status).toBe(400);
     });
 
     test("invalid proof URLs are rejected", async () => {
-      const res = await rpc("tutor/updateMyProfile", {
-        proofUrls: ["not-a-url"],
-      }, tutorCookie);
+      const res = await rpc(
+        "tutor/updateMyProfile",
+        {
+          proofUrls: ["not-a-url"],
+        },
+        tutorCookie,
+      );
       expect(res.status).toBe(400);
     });
 
@@ -221,24 +278,35 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("admin requests changes", async () => {
-      const [profile] = await db.select().from(tutorProfile)
-        .where(eq(tutorProfile.userId, tutorId)).limit(1);
+      const [profile] = await db
+        .select()
+        .from(tutorProfile)
+        .where(eq(tutorProfile.userId, tutorId))
+        .limit(1);
       expect(profile).toBeDefined();
 
-      const res = await rpc("adminTutor/reviewTutorProfile", {
-        tutorProfileId: profile!.id,
-        action: "request_changes",
-        adminNote: "Add more detail",
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/reviewTutorProfile",
+        {
+          tutorProfileId: profile!.id,
+          action: "request_changes",
+          adminNote: "Add more detail",
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(res.data.onboardingStatus).toBe("changes_requested");
     });
 
     test("tutor can re-submit after changes requested", async () => {
-      await rpc("tutor/updateMyProfile", {
-        credentialsSummary: "PhD Math, 10yr exp, Olympiad coach",
-      }, tutorCookie);
+      await rpc(
+        "tutor/updateMyProfile",
+        {
+          credentialsSummary: "PhD Math, 10yr exp, Olympiad coach",
+        },
+        tutorCookie,
+      );
 
       const res = await rpc("tutor/submitForReview", undefined, tutorCookie);
       expect(res.status).toBe(200);
@@ -246,13 +314,20 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("admin can publish tutor profile", async () => {
-      const [profile] = await db.select().from(tutorProfile)
-        .where(eq(tutorProfile.userId, tutorId)).limit(1);
+      const [profile] = await db
+        .select()
+        .from(tutorProfile)
+        .where(eq(tutorProfile.userId, tutorId))
+        .limit(1);
 
-      const res = await rpc("adminTutor/reviewTutorProfile", {
-        tutorProfileId: profile!.id,
-        action: "publish",
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/reviewTutorProfile",
+        {
+          tutorProfileId: profile!.id,
+          action: "publish",
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(res.data.onboardingStatus).toBe("published");
@@ -260,21 +335,32 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("published profile cannot be edited by tutor", async () => {
-      const res = await rpc("tutor/updateMyProfile", {
-        displayName: "Should Not Work",
-      }, tutorCookie);
+      const res = await rpc(
+        "tutor/updateMyProfile",
+        {
+          displayName: "Should Not Work",
+        },
+        tutorCookie,
+      );
       expect(res.status).toBe(403);
     });
 
     test("admin can suspend published tutor", async () => {
-      const [profile] = await db.select().from(tutorProfile)
-        .where(eq(tutorProfile.userId, tutorId)).limit(1);
+      const [profile] = await db
+        .select()
+        .from(tutorProfile)
+        .where(eq(tutorProfile.userId, tutorId))
+        .limit(1);
 
-      const res = await rpc("adminTutor/reviewTutorProfile", {
-        tutorProfileId: profile!.id,
-        action: "suspend",
-        adminNote: "Policy violation",
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/reviewTutorProfile",
+        {
+          tutorProfileId: profile!.id,
+          action: "suspend",
+          adminNote: "Policy violation",
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(res.data.onboardingStatus).toBe("suspended");
@@ -282,9 +368,13 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("admin can list tutor profiles by status", async () => {
-      const res = await rpc("adminTutor/listTutorProfiles", {
-        status: "suspended",
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/listTutorProfiles",
+        {
+          status: "suspended",
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.data)).toBe(true);
@@ -306,46 +396,73 @@ describe("Tutor Invite & Onboarding", () => {
 
   describe("Invite lifecycle", () => {
     test("admin can revoke a pending invite", async () => {
-      const createRes = await rpc("adminTutor/createInvite", {
-        email: `revoke.${Date.now()}@cogito.test`,
-        displayName: "Revoke Me",
-      }, adminCookie);
+      const createRes = await rpc(
+        "adminTutor/createInvite",
+        {
+          email: `revoke.${Date.now()}@cogito.test`,
+          displayName: "Revoke Me",
+        },
+        adminCookie,
+      );
 
-      const res = await rpc("adminTutor/revokeInvite", {
-        inviteId: createRes.data.id,
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/revokeInvite",
+        {
+          inviteId: createRes.data.id,
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(res.data.status).toBe("revoked");
 
-      const verifyRes = await rpc("invite/verify", { token: createRes.data.token }, "");
+      const verifyRes = await rpc(
+        "invite/verify",
+        { token: createRes.data.token },
+        "",
+      );
       expect(verifyRes.status).toBe(404);
     });
 
     test("admin can resend a pending invite", async () => {
-      const createRes = await rpc("adminTutor/createInvite", {
-        email: `resend.${Date.now()}@cogito.test`,
-        displayName: "Resend Me",
-      }, adminCookie);
+      const createRes = await rpc(
+        "adminTutor/createInvite",
+        {
+          email: `resend.${Date.now()}@cogito.test`,
+          displayName: "Resend Me",
+        },
+        adminCookie,
+      );
 
       const oldToken = createRes.data.token;
 
-      const res = await rpc("adminTutor/resendInvite", {
-        inviteId: createRes.data.id,
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/resendInvite",
+        {
+          inviteId: createRes.data.id,
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(200);
       expect(res.data.token).not.toBe(oldToken);
     });
 
     test("cannot revoke an accepted invite", async () => {
-      const [invite] = await db.select().from(tutorInvite)
-        .where(eq(tutorInvite.email, tutorEmail)).limit(1);
+      const [invite] = await db
+        .select()
+        .from(tutorInvite)
+        .where(eq(tutorInvite.email, tutorEmail))
+        .limit(1);
       expect(invite).toBeDefined();
 
-      const res = await rpc("adminTutor/revokeInvite", {
-        inviteId: invite!.id,
-      }, adminCookie);
+      const res = await rpc(
+        "adminTutor/revokeInvite",
+        {
+          inviteId: invite!.id,
+        },
+        adminCookie,
+      );
 
       expect(res.status).toBe(400);
     });

@@ -50,18 +50,27 @@ export function InviteClaimPage({ token }: { token: string }) {
           title: "Please sign up or sign in to claim this invitation.",
           type: "info",
         });
-        navigate({ to: "/login", search: { redirect: `/invite?token=${token}` } });
+        navigate({
+          to: "/login",
+          search: { redirect: `/invite?token=${token}` },
+        });
         return;
       }
 
       const userEmail = session.data.user.email;
-      if (inviteInfo && userEmail.toLowerCase() !== inviteInfo.email.toLowerCase()) {
+      if (
+        inviteInfo &&
+        userEmail.toLowerCase() !== inviteInfo.email.toLowerCase()
+      ) {
         toastManager.add({
           title: `This invite is for ${inviteInfo.email}. Please log in with that email.`,
           type: "error",
         });
         await authClient.signOut();
-        navigate({ to: "/login", search: { redirect: `/invite?token=${token}` } });
+        navigate({
+          to: "/login",
+          search: { redirect: `/invite?token=${token}` },
+        });
         return;
       }
 
@@ -77,19 +86,29 @@ export function InviteClaimPage({ token }: { token: string }) {
         error && typeof error === "object" && "message" in error
           ? String((error as { message?: string }).message)
           : "Failed to claim invite";
-      if (message.includes("UNAUTHORIZED") || message.includes("Unauthorized") || message.includes("401")) {
+      if (
+        message.includes("UNAUTHORIZED") ||
+        message.includes("Unauthorized") ||
+        message.includes("401")
+      ) {
         toastManager.add({
           title: "Please sign up or sign in to claim this invitation.",
           type: "info",
         });
-        navigate({ to: "/login", search: { redirect: `/invite?token=${token}` } });
+        navigate({
+          to: "/login",
+          search: { redirect: `/invite?token=${token}` },
+        });
       } else if (message.includes("different email")) {
         toastManager.add({
           title: `This invite is for ${inviteInfo?.email}. Please sign in with that email.`,
           type: "error",
         });
         await authClient.signOut();
-        navigate({ to: "/login", search: { redirect: `/invite?token=${token}` } });
+        navigate({
+          to: "/login",
+          search: { redirect: `/invite?token=${token}` },
+        });
       } else {
         toastManager.add({ title: message, type: "error" });
       }
@@ -135,8 +154,8 @@ export function InviteClaimPage({ token }: { token: string }) {
         </CardHeader>
         <CardBody className="flex flex-col gap-4">
           <Text>
-            By claiming this invitation, you'll gain tutor access and can set
-            up your tutor profile. You must be logged in with the email address{" "}
+            By claiming this invitation, you'll gain tutor access and can set up
+            your tutor profile. You must be logged in with the email address{" "}
             <strong>{inviteInfo?.email}</strong> to claim this invite.
           </Text>
           <Button

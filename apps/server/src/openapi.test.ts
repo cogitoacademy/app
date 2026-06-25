@@ -8,17 +8,17 @@ describe("enrichOpenAPISpec", () => {
       openapi: "3.1.1",
       info: { title: "Cogito API", version: "1.0.0" },
       paths: {
-        "/todos/list": {
-          post: {
-            operationId: "todo.getAll",
-            tags: ["Todos"],
-            responses: { 200: { description: "OK" } },
-          },
-        },
         "/auth/me": {
           post: {
             operationId: "auth.me",
             tags: ["Auth"],
+            responses: { 200: { description: "OK" } },
+          },
+        },
+        "/achievements/list": {
+          post: {
+            operationId: "achievement.list",
+            tags: ["Achievements"],
             responses: { 200: { description: "OK" } },
           },
         },
@@ -31,6 +31,9 @@ describe("enrichOpenAPISpec", () => {
       name: "Auth",
       description: "Authentication & user profiles",
     });
-    expect(Object.keys(enriched.paths)).toEqual(["/auth/me", "/todos/list"]);
+    expect(Object.keys(enriched.paths)).toEqual([
+      "/achievements/list",
+      "/auth/me",
+    ]);
   });
 });

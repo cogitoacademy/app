@@ -10,7 +10,11 @@ type AchievementStatsProps = {
   pending: number;
 };
 
-export function AchievementStats({ total, approved, pending }: AchievementStatsProps) {
+export function AchievementStats({
+  total,
+  approved,
+  pending,
+}: AchievementStatsProps) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       <StatCard

@@ -16,15 +16,20 @@ export const Route = createFileRoute("/_app/onboarding")({
 });
 
 function RouteComponent() {
-  const { data: profile, isLoading, error } = useQuery(
-    orpc.tutor.getMyProfile.queryOptions(),
-  );
+  const {
+    data: profile,
+    isLoading,
+    error,
+  } = useQuery(orpc.tutor.getMyProfile.queryOptions());
 
   if (isLoading) return <Loader />;
   if (error || !profile) {
     return (
       <div className="p-8 text-center">
-        <p className="text-muted">No tutor profile found. You may need to claim a tutor invitation first.</p>
+        <p className="text-muted">
+          No tutor profile found. You may need to claim a tutor invitation
+          first.
+        </p>
       </div>
     );
   }

@@ -7,7 +7,11 @@ import { user } from "@cogito-app/db/schema";
 async function seed() {
   const adminEmail = "admin@cogitoacademy.id";
 
-  const existing = await db.select().from(user).where(eq(user.email, adminEmail)).limit(1);
+  const existing = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, adminEmail))
+    .limit(1);
   if (existing[0]) {
     console.log("Admin user already exists:", existing[0].id);
     return;
