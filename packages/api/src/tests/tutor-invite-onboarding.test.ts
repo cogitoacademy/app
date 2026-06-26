@@ -8,105 +8,53 @@ import {
   auditLog,
 } from "@cogito-app/db/schema";
 
-const SERVER_URL = process.env.VITE_SERVER_URL || "http://localhost:3001";
-
-async function rpc(method: string, input: unknown, cookie: string) {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (cookie) headers.Cookie = cookie;
-  const init: RequestInit = { method: "POST", headers };
-  if (input !== undefined) {
-    init.body = JSON.stringify({ json: input });
-  }
-  const res = await fetch(`${SERVER_URL}/rpc/${method}`, init);
-  const text = await res.text();
-  let data: any;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
-  }
-  if (data && typeof data === "object" && "json" in data) {
-    return { status: res.status, data: data.json };
-  }
-  return { status: res.status, data };
-}
-
-async function signUp(email: string, password: string, name: string) {
-  const res = await fetch(`${SERVER_URL}/api/auth/sign-up/email`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name }),
-  });
-  return res.json() as Promise<{ user?: { id: string } }>;
-}
-
-async function signIn(email: string, password: string) {
-  const res = await fetch(`${SERVER_URL}/api/auth/sign-in/email`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-    redirect: "manual",
-  });
-  const setCookie = res.headers.getSetCookie();
-  const sessionCookie = setCookie.find((c: string) =>
-    c.includes("better-auth.session_token"),
-  );
-  return { data: await res.json(), cookie: sessionCookie?.split(";")[0] || "" };
-}
-
-async function setUserRole(userId: string, role: string) {
-  await db.update(user).set({ role }).where(eq(user.id, userId));
-}
-
-async function cleanUser(email: string) {
-  const [found] = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-  if (found) {
-    await db
-      .delete(tutorProfile)
-      .where(eq(tutorProfile.userId, found.id))
-      .catch(() => {});
-    await db
-      .delete(auditLog)
-      .where(eq(auditLog.actorId, found.id))
-      .catch(() => {});
-    await db.delete(user).where(eq(user.id, found.id));
-  }
-}
+import {
+  createTestContext,
+  createTestClient,
+  signUpAndSignIn,
+  setUserRole,
+  cleanUser,
+  type TestClient,
+} from "./helpers/test-client";
 
 describe("Tutor Invite & Onboarding", () => {
   const ts = Date.now();
   const adminEmail = `admin.${ts}@cogito.test`;
   const tutorEmail = `tutor.${ts}@cogito.test`;
   const otherEmail = `other.${ts}@cogito.test`;
-  let adminCookie: string;
-  let tutorCookie: string;
-  let otherCookie: string;
+  let adminClient: TestClient;
+  let tutorClient: TestClient;
+  let otherClient: TestClient;
   let tutorId: string;
 
   beforeAll(async () => {
-    // Create admin user, set role, THEN sign in to get session with admin role
-    const adminRes = await signUp(adminEmail, "Test1234!", "Admin Test");
-    const adminId = adminRes.user!.id;
-    await setUserRole(adminId, "admin");
-    const adminSession = await signIn(adminEmail, "Test1234!");
-    adminCookie = adminSession.cookie;
+    const adminRes = await signUpAndSignIn(
+      adminEmail,
+      "Test1234!",
+      "Admin Test",
+    );
+    const adminCtx = await createTestContext(adminRes.cookie);
+    const adminUser = adminCtx.session?.user;
+    if (!adminUser) throw new Error("Admin session not found");
+    await setUserRole(adminUser.id, "admin");
+    adminClient = createTestClient(await createTestContext(adminRes.cookie));
 
-    // Create tutor user (role stays "student" until invite claimed)
-    const tutorRes = await signUp(tutorEmail, "Test1234!", "Tutor Test");
-    tutorId = tutorRes.user!.id;
-    const tutorSession = await signIn(tutorEmail, "Test1234!");
-    tutorCookie = tutorSession.cookie;
+    const tutorRes = await signUpAndSignIn(
+      tutorEmail,
+      "Test1234!",
+      "Tutor Test",
+    );
+    const tutorCtx = await createTestContext(tutorRes.cookie);
+    if (!tutorCtx.session?.user) throw new Error("Tutor session not found");
+    tutorId = tutorCtx.session.user.id;
+    tutorClient = createTestClient(await createTestContext(tutorRes.cookie));
 
-    // Create other student user
-    await signUp(otherEmail, "Test1234!", "Other Test");
-    const otherSession = await signIn(otherEmail, "Test1234!");
-    otherCookie = otherSession.cookie;
+    const otherRes = await signUpAndSignIn(
+      otherEmail,
+      "Test1234!",
+      "Other Test",
+    );
+    otherClient = createTestClient(await createTestContext(otherRes.cookie));
   });
 
   afterAll(async () => {
@@ -115,45 +63,34 @@ describe("Tutor Invite & Onboarding", () => {
     await cleanUser(otherEmail);
   });
 
-  // --- TC-08: Admin creates invite; tutor claims it ---
-
   describe("TC-08: Invite claim flow", () => {
     let inviteToken: string;
 
     test("admin creates a tutor invite", async () => {
-      const res = await rpc(
-        "adminTutor/createInvite",
-        {
-          email: tutorEmail,
-          displayName: "Prof Awesome",
-        },
-        adminCookie,
-      );
+      const invite = await adminClient.adminTutor.createInvite({
+        email: tutorEmail,
+        displayName: "Prof Awesome",
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.data.email).toBe(tutorEmail);
-      expect(res.data.displayName).toBe("Prof Awesome");
-      expect(res.data.status).toBe("invited");
-      expect(res.data.token).toBeDefined();
-      inviteToken = res.data.token;
+      expect(invite.email).toBe(tutorEmail);
+      expect(invite.displayName).toBe("Prof Awesome");
+      expect(invite.status).toBe("invited");
+      expect(invite.token).toBeDefined();
+      inviteToken = invite.token;
     });
 
     test("invite can be verified publicly", async () => {
-      const res = await rpc("invite/verify", { token: inviteToken }, "");
-      expect(res.status).toBe(200);
-      expect(res.data.email).toBe(tutorEmail);
-      expect(res.data.displayName).toBe("Prof Awesome");
+      const publicCtx = await createTestContext();
+      const publicClient = createTestClient(publicCtx);
+      const result = await publicClient.invite.verify({ token: inviteToken });
+      expect(result.email).toBe(tutorEmail);
+      expect(result.displayName).toBe("Prof Awesome");
     });
 
     test("matching-email user can claim invite", async () => {
-      const res = await rpc(
-        "invite/claim",
-        { token: inviteToken },
-        tutorCookie,
-      );
-      expect(res.status).toBe(200);
-      expect(res.data.invite.status).toBe("accepted");
-      expect(res.data.profile.onboardingStatus).toBe("draft");
+      const result = await tutorClient.invite.claim({ token: inviteToken });
+      expect(result.invite.status).toBe("accepted");
+      expect(result.profile.onboardingStatus).toBe("draft");
 
       const [u] = await db
         .select()
@@ -172,109 +109,87 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("claimed invite cannot be verified again", async () => {
-      const res = await rpc("invite/verify", { token: inviteToken }, "");
-      expect(res.status).toBe(404);
+      const publicCtx = await createTestContext();
+      const publicClient = createTestClient(publicCtx);
+      await expect(
+        publicClient.invite.verify({ token: inviteToken }),
+      ).rejects.toThrow();
     });
 
     test("admin can invite same email again after previous invite is accepted", async () => {
-      const res = await rpc(
-        "adminTutor/createInvite",
-        {
-          email: tutorEmail,
-          displayName: "Prof Awesome Again",
-        },
-        adminCookie,
-      );
+      const invite = await adminClient.adminTutor.createInvite({
+        email: tutorEmail,
+        displayName: "Prof Awesome Again",
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.data.email).toBe(tutorEmail);
-
-      await db.delete(tutorInvite).where(eq(tutorInvite.id, res.data.id));
+      expect(invite.email).toBe(tutorEmail);
+      await db.delete(tutorInvite).where(eq(tutorInvite.id, invite.id));
     });
   });
-
-  // --- TC-09: Email mismatch rejection ---
 
   describe("TC-09: Email mismatch rejection", () => {
     test("wrong-email user cannot claim invite", async () => {
-      const createRes = await rpc(
-        "adminTutor/createInvite",
-        {
-          email: `nomatch.${Date.now()}@cogito.test`,
-          displayName: "No Match",
-        },
-        adminCookie,
-      );
+      const createRes = await adminClient.adminTutor.createInvite({
+        email: `nomatch.${Date.now()}@cogito.test`,
+        displayName: "No Match",
+      });
 
-      const token = createRes.data.token;
+      await expect(
+        otherClient.invite.claim({ token: createRes.token }),
+      ).rejects.toThrow();
 
-      const claimRes = await rpc("invite/claim", { token }, otherCookie);
-      expect(claimRes.status).toBe(403);
-
-      await db.delete(tutorInvite).where(eq(tutorInvite.id, createRes.data.id));
+      await db.delete(tutorInvite).where(eq(tutorInvite.id, createRes.id));
     });
   });
 
-  // --- FR-24: Tutor onboarding + review gate ---
-
   describe("FR-24: Onboarding & review", () => {
     test("tutor can get their profile", async () => {
-      const res = await rpc("tutor/getMyProfile", undefined, tutorCookie);
-      expect(res.status).toBe(200);
-      expect(res.data.onboardingStatus).toBe("draft");
+      const profile = await tutorClient.tutor.getMyProfile(undefined as never);
+      expect(profile.onboardingStatus).toBe("draft");
     });
 
     test("tutor cannot submit for review with missing fields", async () => {
-      const res = await rpc("tutor/submitForReview", undefined, tutorCookie);
-      expect(res.status).toBe(400);
+      await expect(
+        tutorClient.tutor.submitForReview(undefined as never),
+      ).rejects.toThrow();
     });
 
     test("tutor can update profile with all required fields", async () => {
-      const res = await rpc(
-        "tutor/updateMyProfile",
-        {
-          displayName: "Prof Awesome",
-          shortBio: "Passionate math educator",
-          credentialsSummary: "PhD Mathematics, 10 years teaching",
-          expertise: ["Mathematics", "Physics"],
-          modality: "online",
-          prices: { "1": 50, "2": 40, "3": 32, "4": 28, "5": 25, "6": 22 },
-          availabilitySummary: "Weekdays 3-6 PM",
-        },
-        tutorCookie,
-      );
+      const updated = await tutorClient.tutor.updateMyProfile({
+        displayName: "Prof Awesome",
+        shortBio: "Passionate math educator",
+        credentialsSummary: "PhD Mathematics, 10 years teaching",
+        expertise: ["Mathematics", "Physics"],
+        modality: "online",
+        prices: { "1": 50, "2": 40, "3": 32, "4": 28, "5": 25, "6": 22 },
+        availabilitySummary: "Weekdays 3-6 PM",
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.data.displayName).toBe("Prof Awesome");
+      expect(updated.displayName).toBe("Prof Awesome");
     });
 
     test("prices below floor are rejected", async () => {
-      const res = await rpc(
-        "tutor/updateMyProfile",
-        {
+      await expect(
+        tutorClient.tutor.updateMyProfile({
           modality: "online",
           prices: { "1": 10 },
-        },
-        tutorCookie,
-      );
-      expect(res.status).toBe(400);
+        }),
+      ).rejects.toThrow();
     });
 
     test("invalid proof URLs are rejected", async () => {
-      const res = await rpc(
-        "tutor/updateMyProfile",
-        {
+      await expect(
+        tutorClient.tutor.updateMyProfile({
           proofUrls: ["not-a-url"],
-        },
-        tutorCookie,
-      );
-      expect(res.status).toBe(400);
+        }),
+      ).rejects.toThrow();
     });
 
     test("tutor can submit for review", async () => {
-      const res = await rpc("tutor/submitForReview", undefined, tutorCookie);
-      expect(res.status).toBe(200);
-      expect(res.data.onboardingStatus).toBe("pending_review");
+      const result = await tutorClient.tutor.submitForReview(
+        undefined as never,
+      );
+      expect(result.onboardingStatus).toBe("pending_review");
     });
 
     test("admin requests changes", async () => {
@@ -285,32 +200,24 @@ describe("Tutor Invite & Onboarding", () => {
         .limit(1);
       expect(profile).toBeDefined();
 
-      const res = await rpc(
-        "adminTutor/reviewTutorProfile",
-        {
-          tutorProfileId: profile!.id,
-          action: "request_changes",
-          adminNote: "Add more detail",
-        },
-        adminCookie,
-      );
+      const result = await adminClient.adminTutor.reviewTutorProfile({
+        tutorProfileId: profile!.id,
+        action: "request_changes",
+        adminNote: "Add more detail",
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.data.onboardingStatus).toBe("changes_requested");
+      expect(result.onboardingStatus).toBe("changes_requested");
     });
 
     test("tutor can re-submit after changes requested", async () => {
-      await rpc(
-        "tutor/updateMyProfile",
-        {
-          credentialsSummary: "PhD Math, 10yr exp, Olympiad coach",
-        },
-        tutorCookie,
-      );
+      await tutorClient.tutor.updateMyProfile({
+        credentialsSummary: "PhD Math, 10yr exp, Olympiad coach",
+      });
 
-      const res = await rpc("tutor/submitForReview", undefined, tutorCookie);
-      expect(res.status).toBe(200);
-      expect(res.data.onboardingStatus).toBe("pending_review");
+      const result = await tutorClient.tutor.submitForReview(
+        undefined as never,
+      );
+      expect(result.onboardingStatus).toBe("pending_review");
     });
 
     test("admin can publish tutor profile", async () => {
@@ -320,29 +227,21 @@ describe("Tutor Invite & Onboarding", () => {
         .where(eq(tutorProfile.userId, tutorId))
         .limit(1);
 
-      const res = await rpc(
-        "adminTutor/reviewTutorProfile",
-        {
-          tutorProfileId: profile!.id,
-          action: "publish",
-        },
-        adminCookie,
-      );
+      const result = await adminClient.adminTutor.reviewTutorProfile({
+        tutorProfileId: profile!.id,
+        action: "publish",
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.data.onboardingStatus).toBe("published");
-      expect(res.data.publishedAt).toBeDefined();
+      expect(result.onboardingStatus).toBe("published");
+      expect(result.publishedAt).toBeDefined();
     });
 
     test("published profile cannot be edited by tutor", async () => {
-      const res = await rpc(
-        "tutor/updateMyProfile",
-        {
+      await expect(
+        tutorClient.tutor.updateMyProfile({
           displayName: "Should Not Work",
-        },
-        tutorCookie,
-      );
-      expect(res.status).toBe(403);
+        }),
+      ).rejects.toThrow();
     });
 
     test("admin can suspend published tutor", async () => {
@@ -352,36 +251,23 @@ describe("Tutor Invite & Onboarding", () => {
         .where(eq(tutorProfile.userId, tutorId))
         .limit(1);
 
-      const res = await rpc(
-        "adminTutor/reviewTutorProfile",
-        {
-          tutorProfileId: profile!.id,
-          action: "suspend",
-          adminNote: "Policy violation",
-        },
-        adminCookie,
-      );
+      const result = await adminClient.adminTutor.reviewTutorProfile({
+        tutorProfileId: profile!.id,
+        action: "suspend",
+        adminNote: "Policy violation",
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.data.onboardingStatus).toBe("suspended");
-      expect(res.data.publishedAt).toBeNull();
+      expect(result.onboardingStatus).toBe("suspended");
+      expect(result.publishedAt).toBeNull();
     });
 
     test("admin can list tutor profiles by status", async () => {
-      const res = await rpc(
-        "adminTutor/listTutorProfiles",
-        {
-          status: "suspended",
-        },
-        adminCookie,
-      );
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.data)).toBe(true);
+      const profiles = await adminClient.adminTutor.listTutorProfiles({
+        status: "suspended",
+      });
+      expect(Array.isArray(profiles)).toBe(true);
     });
   });
-
-  // --- Audit log ---
 
   test("audit log entries exist for key actions", async () => {
     const logs = await db.select().from(auditLog);
@@ -392,60 +278,39 @@ describe("Tutor Invite & Onboarding", () => {
     expect(actions).toContain("tutor_profile_submitted_for_review");
   });
 
-  // --- Invite lifecycle ---
-
   describe("Invite lifecycle", () => {
     test("admin can revoke a pending invite", async () => {
-      const createRes = await rpc(
-        "adminTutor/createInvite",
-        {
-          email: `revoke.${Date.now()}@cogito.test`,
-          displayName: "Revoke Me",
-        },
-        adminCookie,
-      );
+      const createRes = await adminClient.adminTutor.createInvite({
+        email: `revoke.${Date.now()}@cogito.test`,
+        displayName: "Revoke Me",
+      });
 
-      const res = await rpc(
-        "adminTutor/revokeInvite",
-        {
-          inviteId: createRes.data.id,
-        },
-        adminCookie,
-      );
+      const result = await adminClient.adminTutor.revokeInvite({
+        inviteId: createRes.id,
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.data.status).toBe("revoked");
+      expect(result.status).toBe("revoked");
 
-      const verifyRes = await rpc(
-        "invite/verify",
-        { token: createRes.data.token },
-        "",
-      );
-      expect(verifyRes.status).toBe(404);
+      const publicCtx = await createTestContext();
+      const publicClient = createTestClient(publicCtx);
+      await expect(
+        publicClient.invite.verify({ token: createRes.token }),
+      ).rejects.toThrow();
     });
 
     test("admin can resend a pending invite", async () => {
-      const createRes = await rpc(
-        "adminTutor/createInvite",
-        {
-          email: `resend.${Date.now()}@cogito.test`,
-          displayName: "Resend Me",
-        },
-        adminCookie,
-      );
+      const createRes = await adminClient.adminTutor.createInvite({
+        email: `resend.${Date.now()}@cogito.test`,
+        displayName: "Resend Me",
+      });
 
-      const oldToken = createRes.data.token;
+      const oldToken = createRes.token;
 
-      const res = await rpc(
-        "adminTutor/resendInvite",
-        {
-          inviteId: createRes.data.id,
-        },
-        adminCookie,
-      );
+      const result = await adminClient.adminTutor.resendInvite({
+        inviteId: createRes.id,
+      });
 
-      expect(res.status).toBe(200);
-      expect(res.data.token).not.toBe(oldToken);
+      expect(result.token).not.toBe(oldToken);
     });
 
     test("cannot revoke an accepted invite", async () => {
@@ -456,22 +321,17 @@ describe("Tutor Invite & Onboarding", () => {
         .limit(1);
       expect(invite).toBeDefined();
 
-      const res = await rpc(
-        "adminTutor/revokeInvite",
-        {
+      await expect(
+        adminClient.adminTutor.revokeInvite({
           inviteId: invite!.id,
-        },
-        adminCookie,
-      );
-
-      expect(res.status).toBe(400);
+        }),
+      ).rejects.toThrow();
     });
   });
 
-  // --- Auth gate ---
-
   test("non-admin cannot access admin endpoints", async () => {
-    const res = await rpc("adminTutor/listInvites", undefined, otherCookie);
-    expect(res.status).toBe(403);
+    await expect(
+      otherClient.adminTutor.listInvites(undefined as never),
+    ).rejects.toThrow();
   });
 });

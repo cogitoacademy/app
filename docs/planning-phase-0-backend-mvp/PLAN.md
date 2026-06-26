@@ -1,7 +1,7 @@
 # Cogito Phase 0 — Backend MVP Plan
 
-**Status:** Draft for review
-**Date:** 2026-06-19
+**Status:** Phase 0 + Phase 0.5 complete. Infrastructure set up. Ready for Phase 1.
+**Date:** 2026-06-19 (created), 2026-06-26 (last updated)
 **Source of truth:** `docs/prd.tex` (v1.4)
 **Scope:** Production-grade backend that satisfies PRD FR-01..FR-24 as an MVP — minimal, scalable, iterable.
 
@@ -936,20 +936,54 @@ From PRD §Operational Edge Cases + analysis. Each maps to a test.
 
 Each slice = schema migration + modules + tests + CONTEXT.md update. Slice is "done" when its tests pass and `bun run check` is green.
 
-### Phase 0 — Foundation fixes (no new features)
+### Phase 0 — Foundation fixes ✅ COMPLETE
 
-1. Remove `todo` table + router.
-2. Standardize single `db` singleton; delete 6 `createDb()` calls.
-3. Fix `auditLog.actorId` nullable + onDelete.
-4. Add `uuidPrimaryKey` to wallet/ledgerEntry/studentProfile.
-5. Add `CHECK` constraints to existing enum-ish columns.
-6. Add `CHECK(total=held+available)` + ledger idempotency `UNIQUE`.
-7. Switch to `drizzle-kit generate` + `db:migrate`; commit initial migration.
-8. Add `lib/` (db, tx, errors, money, time) + `shared/ports/` + `shared/events/` skeleton.
-9. Wrap `submitForReview`, `reviewTutorProfile`, `setRole` in tx + audit.
-10. Tests: existing invite test still green; add ledger-invariant test, audit-on-setRole test.
+1. ✅ Remove `todo` table + router.
+2. ✅ Standardize single `db` singleton; delete 6 `createDb()` calls.
+3. ✅ Fix `auditLog.actorId` nullable + onDelete.
+4. ✅ Add `uuidPrimaryKey` to wallet/ledgerEntry/studentProfile.
+5. ✅ Add `CHECK` constraints to existing enum-ish columns (audit actor_type, ledger entry_type + amount + actor_type, tutor invite status, tutor profile modality + onboarding_status, achievement status).
+6. ✅ Add `CHECK(total=held+available)` + ledger idempotency `UNIQUE(wallet_id, event_key, source_reference)`.
+7. ✅ Switch to `drizzle-kit generate` + `db:migrate`; commit initial migration.
+8. ✅ Add `lib/` (db, tx, errors, money, time) + `shared/ports/` (8 interfaces) + `shared/events/` (nanoevents bus + 10 domain event types).
+9. ✅ Wrap `submitForReview`, `reviewTutorProfile`, `setRole` in tx + audit.
+10. ✅ Tests: existing invite test still green; add ledger-invariant test (7 tests), audit-on-setRole test (2 tests).
 
-### Phase 1 — Wallet & Payment (FR-03, FR-04, FR-12, DL-04, DL-16, DL-24)
+### Phase 0.5 — Module Refactoring ✅ COMPLETE
+
+Restructured from "business logic in routers" to "thin routers → services → ports" with dependency injection.
+
+1. ✅ Split server entrypoint: `index.ts` (bootstrap) + `routes.ts` (mount + `/health`) + `middleware.ts` (identifyUser).
+2. ✅ Extract `procedures.ts` from `index.ts`; `index.ts` becomes composition root barrel.
+3. ✅ Create 10 domain modules: `auth`, `wallet`, `admin`, `admin-tutor`, `tutor`, `tutor-discovery`, `invite`, `achievement`, `audit`, `pricing`.
+4. ✅ Each module: thin router (validate → authorize → `context.services.{module}.{method}()`) + service (functional factory with port DI) + types (zod schemas).
+5. ✅ Composition root (`services.ts`): instantiate all services with port dependencies, export `ServiceRegistry`.
+6. ✅ Context injection: `context.services` available to all procedures.
+7. ✅ Decouple auth from wallet: removed Better Auth hook, lazy wallet creation via `WalletService.getOrCreate()` on first `auth.me`.
+8. ✅ `/health` endpoint with DB ping.
+9. ✅ SQL-level filtering in tutor discovery (ILIKE + jsonb `@>` replaces in-memory filtering).
+10. ✅ Delete old flat `routers/` directory.
+11. ✅ All 32 existing tests pass after refactoring.
+
+### Phase 0.6 — Infrastructure ✅ COMPLETE
+
+1. ✅ GitHub Actions CI: 4 parallel jobs (lint, typecheck, build, test+coverage) with PostgreSQL service container.
+2. ✅ Lefthook pre-commit hooks: pre-commit (lint + format), pre-push (typecheck).
+3. ✅ Bun test coverage: `lcov` reporter, 50% threshold, ignore patterns for non-source files.
+4. ✅ Custom lcov coverage PR comment script (`.github/scripts/coverage-comment.ts`).
+5. ✅ Dependabot config for weekly dependency updates.
+6. ✅ `oxlint --format=github` for inline PR annotations.
+7. ✅ Integration tests refactored to use `createRouterClient` (no HTTP server needed in CI).
+8. ✅ Updated `.env.example` with documented env vars.
+9. ✅ Cache Bun dependencies in CI via `actions/cache`.
+
+**Deferred (private repo limitations):**
+
+- CodeRabbit AI PR review — free for public repos only; defer until repo goes public or budget allows.
+- Codecov dashboard — free for public repos only; using custom PR comment script instead.
+- CodeQL security scanning — requires GitHub Advanced Security license for private repos; using `oxlint` + Dependabot instead.
+
+### Phase 1 — Wallet & Payment (FR-03, FR-04, FR-12, DL-04, DL-16, DL-24) — NEXT
 
 - `markPackage`, `paymentRecord`, `refundRecord` tables.
 - `WalletService`, `PaymentService` (stub), `PricingService` (floor tables).
@@ -997,10 +1031,12 @@ Each slice = schema migration + modules + tests + CONTEXT.md update. Slice is "d
 - OpenAPI tags cleanup; Scalar review.
 - Rate limiting on auth + payment webhook (Bun middleware or `@elysiajs/rate-limit`).
 - Structured logging (evlog) on every service error.
-- Health check `/health` with DB ping.
-- CI: `bun run check` + `bun test` on PR.
+- ✅ Health check `/health` with DB ping (done in Phase 0.5).
+- ✅ CI: `bun run check` + `bun test` on PR (done in Phase 0.6).
 - Production env review (secrets, CORS, secure cookies already set).
 - CONTEXT.md final rewrite.
+- Dockerfiles for server + web (for Coolify deployment).
+- CD pipeline (`cd.yml`) for staging + production deploys.
 
 ---
 
@@ -1403,33 +1439,38 @@ FLOOR_PRICES_ONLINE_1=42 ... FLOOR_PRICES_OFFLINE_6=27   (or load from config ta
 
 ## 14. Decision Log
 
-| ID   | Decision                                                                                                                    | Rationale                                                                                                                                                                                                                                      |
-| ---- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D-01 | Stack unchanged: Elysia + Postgres + Drizzle + oRPC + Better Auth                                                           | Already in place; matches PRD governance (tech owned separately).                                                                                                                                                                              |
-| D-02 | Centralized schema in `packages/db`                                                                                         | Single source for Drizzle Kit migrations + cross-module relations.                                                                                                                                                                             |
-| D-03 | Fine-grained modules (14)                                                                                                   | Easy navigation; each domain self-contained.                                                                                                                                                                                                   |
-| D-04 | Ports (interfaces) for sync cross-module calls                                                                              | Dependency inversion; booking testable without DB; no circular imports.                                                                                                                                                                        |
-| D-05 | nanoevents for post-commit async (email, meeting, provider callbacks)                                                       | NFR requires email to not block booking writes; minimal EDD.                                                                                                                                                                                   |
-| D-06 | Payment: stub interface now; real provider swap later                                                                       | Schema provider-agnostic; unblocks booking/wallet without vendor.                                                                                                                                                                              |
-| D-07 | Meeting: fallback-first (manual link); Google API post-MVP                                                                  | OQ-05 requires fallback; API setup needs client meeting.                                                                                                                                                                                       |
-| D-08 | Migrations: `drizzle-kit generate` + `migrate`; SQL committed                                                               | Production-safe schema evolution.                                                                                                                                                                                                              |
-| D-09 | Money: integer Marks + integer IDR; pure PricingService                                                                     | No float math; `floor(extra/5)` integer division.                                                                                                                                                                                              |
-| D-10 | Time: `timestamptz` UTC; WIB client render; H-2 in UTC                                                                      | NFR compliance.                                                                                                                                                                                                                                |
-| D-11 | Idempotency: DB unique keys (`providerEventId`, `(walletId,eventKey,sourceReference)`)                                      | NFR: external events idempotent by event id.                                                                                                                                                                                                   |
-| D-12 | Immutable tables: no UPDATE path (`ledgerEntry`, `auditLog`, `bookingStateHistory`, `notificationDispatch`, `refundRecord`) | DL-04 immutable ledger; audit integrity.                                                                                                                                                                                                       |
-| D-13 | Event bus: nanoevents                                                                                                       | User choice; mature, typed, tiny.                                                                                                                                                                                                              |
-| D-14 | Tests: top-level `packages/api/src/tests/` with `unit/` + `integration/`                                                    | User choice.                                                                                                                                                                                                                                   |
-| D-15 | Tests: top-level `packages/api/src/tests/` with `unit/` + `integration/`                                                    | User choice.                                                                                                                                                                                                                                   |
-| D-16 | Local dev: Docker Postgres + native Bun app                                                                                 | Fast HMR; matches current setup; minimal host deps.                                                                                                                                                                                            |
-| D-17 | CI: GitHub Actions                                                                                                          | Repo is on GitHub; service containers for Postgres work cleanly.                                                                                                                                                                               |
-| D-18 | CD: Coolify v4 on self-managed VPS; GH Actions builds → GHCR → Coolify deploy API                                           | User has self-hosting experience; PaaS-like DX without recurring per-service pricing.                                                                                                                                                          |
-| D-19 | Migrations: CI runs `drizzle-kit migrate` pre-deploy                                                                        | Standard for small teams; validates migrations apply cleanly in CI against ephemeral DB; gates deploy on success.                                                                                                                              |
-| D-20 | Postgres: Coolify managed Postgres service on same VPS                                                                      | Cheapest; automated backups via Coolify; one service per env (staging/prod).                                                                                                                                                                   |
-| D-21 | Environments: staging (tracks `main`) + production (deploys on `v*` tags)                                                   | Allows smoke-testing before prod; tag-gated prod is safer for real money flows.                                                                                                                                                                |
-| D-22 | Artifacts: Docker images for server + web, pushed to GHCR                                                                   | Portable; Coolify builds/pulls from GHCR; same image runs locally if needed.                                                                                                                                                                   |
-| D-23 | Deploy trigger: GH Actions calls Coolify deploy API (not Coolify watching the branch)                                       | User choice; keeps build + migrate + deploy in one auditable CI run.                                                                                                                                                                           |
-| D-24 | Healthcheck: `/health` with DB ping gates Coolify rollout                                                                   | Catches a bad deploy that starts but can't reach the DB.                                                                                                                                                                                       |
-| D-25 | Auth: Google primary + email/password fallback via Better Auth (in-app library, not SaaS)                                   | PRD doesn't mandate a method; Google covers most Indonesian users; email/password keeps accessibility. Existing `account` table already supports multi-provider — zero DB schema changes. Wallet hook to be made provider-agnostic in Phase 0. |
+| ID   | Decision                                                                                                                    | Rationale                                                                                                                                                                                                                                                                    |
+| ---- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D-01 | Stack unchanged: Elysia + Postgres + Drizzle + oRPC + Better Auth                                                           | Already in place; matches PRD governance (tech owned separately).                                                                                                                                                                                                            |
+| D-02 | Centralized schema in `packages/db`                                                                                         | Single source for Drizzle Kit migrations + cross-module relations.                                                                                                                                                                                                           |
+| D-03 | Fine-grained modules (14)                                                                                                   | Easy navigation; each domain self-contained.                                                                                                                                                                                                                                 |
+| D-04 | Ports (interfaces) for sync cross-module calls                                                                              | Dependency inversion; booking testable without DB; no circular imports.                                                                                                                                                                                                      |
+| D-05 | nanoevents for post-commit async (email, meeting, provider callbacks)                                                       | NFR requires email to not block booking writes; minimal EDD.                                                                                                                                                                                                                 |
+| D-06 | Payment: stub interface now; real provider swap later                                                                       | Schema provider-agnostic; unblocks booking/wallet without vendor.                                                                                                                                                                                                            |
+| D-07 | Meeting: fallback-first (manual link); Google API post-MVP                                                                  | OQ-05 requires fallback; API setup needs client meeting.                                                                                                                                                                                                                     |
+| D-08 | Migrations: `drizzle-kit generate` + `migrate`; SQL committed                                                               | Production-safe schema evolution.                                                                                                                                                                                                                                            |
+| D-09 | Money: integer Marks + integer IDR; pure PricingService                                                                     | No float math; `floor(extra/5)` integer division.                                                                                                                                                                                                                            |
+| D-10 | Time: `timestamptz` UTC; WIB client render; H-2 in UTC                                                                      | NFR compliance.                                                                                                                                                                                                                                                              |
+| D-11 | Idempotency: DB unique keys (`providerEventId`, `(walletId,eventKey,sourceReference)`)                                      | NFR: external events idempotent by event id.                                                                                                                                                                                                                                 |
+| D-12 | Immutable tables: no UPDATE path (`ledgerEntry`, `auditLog`, `bookingStateHistory`, `notificationDispatch`, `refundRecord`) | DL-04 immutable ledger; audit integrity.                                                                                                                                                                                                                                     |
+| D-13 | Event bus: nanoevents                                                                                                       | User choice; mature, typed, tiny.                                                                                                                                                                                                                                            |
+| D-14 | Tests: top-level `packages/api/src/tests/` with `unit/` + `integration/`                                                    | User choice.                                                                                                                                                                                                                                                                 |
+| D-15 | Tests: top-level `packages/api/src/tests/` with `unit/` + `integration/`                                                    | User choice.                                                                                                                                                                                                                                                                 |
+| D-16 | Local dev: Docker Postgres + native Bun app                                                                                 | Fast HMR; matches current setup; minimal host deps.                                                                                                                                                                                                                          |
+| D-17 | CI: GitHub Actions                                                                                                          | Repo is on GitHub; service containers for Postgres work cleanly.                                                                                                                                                                                                             |
+| D-18 | CD: Coolify v4 on self-managed VPS; GH Actions builds → GHCR → Coolify deploy API                                           | User has self-hosting experience; PaaS-like DX without recurring per-service pricing.                                                                                                                                                                                        |
+| D-19 | Migrations: CI runs `drizzle-kit migrate` pre-deploy                                                                        | Standard for small teams; validates migrations apply cleanly in CI against ephemeral DB; gates deploy on success.                                                                                                                                                            |
+| D-20 | Postgres: Coolify managed Postgres service on same VPS                                                                      | Cheapest; automated backups via Coolify; one service per env (staging/prod).                                                                                                                                                                                                 |
+| D-21 | Environments: staging (tracks `main`) + production (deploys on `v*` tags)                                                   | Allows smoke-testing before prod; tag-gated prod is safer for real money flows.                                                                                                                                                                                              |
+| D-22 | Artifacts: Docker images for server + web, pushed to GHCR                                                                   | Portable; Coolify builds/pulls from GHCR; same image runs locally if needed.                                                                                                                                                                                                 |
+| D-23 | Deploy trigger: GH Actions calls Coolify deploy API (not Coolify watching the branch)                                       | User choice; keeps build + migrate + deploy in one auditable CI run.                                                                                                                                                                                                         |
+| D-24 | Healthcheck: `/health` with DB ping gates Coolify rollout                                                                   | Catches a bad deploy that starts but can't reach the DB.                                                                                                                                                                                                                     |
+| D-25 | Auth: Google primary + email/password fallback via Better Auth (in-app library, not SaaS)                                   | PRD doesn't mandate a method; Google covers most Indonesian users; email/password keeps accessibility. Existing `account` table already supports multi-provider — zero DB schema changes. Wallet hook removed in Phase 0.5; lazy creation via `WalletService.getOrCreate()`. |
+| D-26 | Module architecture: 10 domain modules with functional factory services + port DI                                           | Thin routers (validate → authorize → call service) + services (business logic) + types (zod). Functional factories (`createTutorService({db, pricing, audit})`) match codebase style (no classes). DI via oRPC context (`context.services`).                                 |
+| D-27 | Auth → Wallet decoupling: lazy creation (Option C)                                                                          | Removed Better Auth `after` hook. Wallet created on first `auth.me` via `WalletService.getOrCreate(userId)`. Idempotent — no race, no wasted rows. Auth package has zero knowledge of wallet schema.                                                                         |
+| D-28 | Service style: functional factories, not classes                                                                            | Matches existing codebase (Elysia, oRPC, Better Auth, Drizzle all use factories). No `this` binding issues. Services are stateless — all state in PostgreSQL.                                                                                                                |
+| D-29 | CI: GitHub Actions with 4 parallel jobs, Bun cache, PostgreSQL service, custom coverage comment                             | Private repo: Codecov/CodeRabbit/CodeQL all require paid plans. Using `oxlint --format=github` + custom lcov PR comment script + Dependabot — all free for private repos.                                                                                                    |
+| D-30 | Pre-commit: Lefthook (Go binary, fast, parallel)                                                                            | Pre-commit: oxlint + oxfmt on staged files (~1s). Pre-push: typecheck only (tests in CI, not locally).                                                                                                                                                                       |
 
 ---
 
@@ -1439,3 +1480,4 @@ FLOOR_PRICES_ONLINE_1=42 ... FLOOR_PRICES_OFFLINE_6=27   (or load from config ta
 - v0.2 (2026-06-19): Finalized Sections 11 (Docker Postgres + native Bun) and 12 (GitHub Actions CI-only, CD deferred). Decisions D-16..D-19 added.
 - v0.3 (2026-06-19): Locked CD: Coolify v4 on self-managed VPS, GH Actions builds Docker images → GHCR → Coolify deploy API, Coolify managed Postgres, staging + prod, CI runs migrations first. Added `apps/server/Dockerfile` + `apps/web/Dockerfile` specs, full `cd.yml`, Coolify setup steps, deploy safety, secrets list. Decisions D-18..D-24 revised/added.
 - v0.4 (2026-06-19): Locked auth: Google primary + email/password fallback. Added §2 auth architecture subsection (Better Auth is a library not a SaaS; `account` table already supports OAuth; zero DB schema changes). Added Google env vars to §13. Decision D-25 added.
+- v0.5 (2026-06-26): Phase 0 + Phase 0.5 + Phase 0.6 complete. Added Phase 0.5 (module refactoring: 10 domain modules, functional factory services, port DI, auth→wallet decoupling, server split, `/health` endpoint) and Phase 0.6 (infrastructure: GitHub Actions CI, Lefthook, coverage, Dependabot). Decisions D-26..D-30 added. Table count corrected (26 total, 15 new). Booking transition matrix derived. Series child state machine: independent. Refund status: CHECK-constrained column. Floor prices: runtime-editable config table (deferred to Phase 1). Status updated to "Phase 0 + Phase 0.5 complete. Infrastructure set up. Ready for Phase 1."

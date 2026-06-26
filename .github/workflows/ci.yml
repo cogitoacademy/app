@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx oxlint --format=github
+      - run: bunx oxfmt --check
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-bun-types-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-types-
+      - run: bun run check-types
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            .turbo
+            apps/web/dist
+            apps/server/dist
+          key: ${{ runner.os }}-bun-build-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-build-
+      - run: bun run build
+
+  test:
+    name: Test + Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint, typecheck]
+    permissions:
+      contents: read
+      pull-requests: write
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: cogito-test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/cogito-test
+      BETTER_AUTH_SECRET: ci-secret-at-least-32-characters-long-xxxx
+      BETTER_AUTH_URL: http://localhost:3001
+      CORS_ORIGIN: http://localhost:3000
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-bun-test-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-test-
+      - run: bun run db:migrate
+      - run: bun test --coverage
+      - name: Post coverage comment
+        if: github.event_name == 'pull_request'
+        run: bun .github/scripts/coverage-comment.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LCOV_FILE: ./coverage/lcov.info
+          PR_NUMBER: ${{ github.event.pull_request.number }}

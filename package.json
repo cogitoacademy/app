@@ -46,7 +46,9 @@
     "format": "oxfmt --write",
     "check": "oxlint && oxfmt --write",
     "test": "bun test",
-    "test:api": "bun test --env-file apps/server/.env packages/api/src/tests"
+    "test:api": "bun test --env-file apps/server/.env packages/api/src/tests",
+    "test:coverage": "bun test --coverage --env-file apps/server/.env packages/api/src/tests",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@cogito-app/env": "workspace:*",
@@ -58,6 +60,7 @@
   "devDependencies": {
     "@cogito-app/config": "workspace:*",
     "@types/bun": "catalog:",
+    "lefthook": "^2.1.9",
     "oxfmt": "^0.46.0",
     "oxlint": "^1.61.0",
     "turbo": "^2.8.12",
