@@ -56,7 +56,8 @@ export const tutorRouter = {
       path: "/tutor/availability/list",
       tags: ["Tutor"],
       summary: "List availability",
-      description: "Returns the authenticated tutor's active availability slots",
+      description:
+        "Returns the authenticated tutor's active availability slots",
     })
     .input(z.void())
     .handler(async ({ context }) => {

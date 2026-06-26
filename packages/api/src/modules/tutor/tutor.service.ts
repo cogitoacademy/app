@@ -141,12 +141,18 @@ export function createTutorService(deps: {
       .select()
       .from(availabilitySlot)
       .where(
-        and(eq(availabilitySlot.tutorId, userId), eq(availabilitySlot.isActive, true)),
+        and(
+          eq(availabilitySlot.tutorId, userId),
+          eq(availabilitySlot.isActive, true),
+        ),
       )
       .orderBy(availabilitySlot.startDate);
   }
 
-  async function upsertAvailability(userId: string, input: UpsertAvailabilityInput) {
+  async function upsertAvailability(
+    userId: string,
+    input: UpsertAvailabilityInput,
+  ) {
     const start = new Date(input.startDate);
     const end = new Date(input.endDate);
     if (end <= start) throw badRequest("endDate must be after startDate");
@@ -183,7 +189,10 @@ export function createTutorService(deps: {
           isActive: input.isActive ?? true,
         })
         .where(
-          and(eq(availabilitySlot.id, input.id), eq(availabilitySlot.tutorId, userId)),
+          and(
+            eq(availabilitySlot.id, input.id),
+            eq(availabilitySlot.tutorId, userId),
+          ),
         )
         .returning();
       if (!updated) throw notFound("Availability slot not found");
@@ -208,11 +217,20 @@ export function createTutorService(deps: {
   async function deleteAvailability(userId: string, id: string) {
     const [deleted] = await db
       .delete(availabilitySlot)
-      .where(and(eq(availabilitySlot.id, id), eq(availabilitySlot.tutorId, userId)))
+      .where(
+        and(eq(availabilitySlot.id, id), eq(availabilitySlot.tutorId, userId)),
+      )
       .returning();
     if (!deleted) throw notFound("Availability slot not found");
     return { id: deleted.id };
   }
 
-  return { getMyProfile, updateMyProfile, submitForReview, listAvailability, upsertAvailability, deleteAvailability };
+  return {
+    getMyProfile,
+    updateMyProfile,
+    submitForReview,
+    listAvailability,
+    upsertAvailability,
+    deleteAvailability,
+  };
 }

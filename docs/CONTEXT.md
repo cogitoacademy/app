@@ -33,7 +33,7 @@ cogito-app/
 | `@cogito-app/env/web`    | Web env validation       | `VITE_SERVER_URL`                                                                                                                                                                  |
 | `@cogito-app/ui`         | Selia UI components      | 22 components from `@cogito-app/ui/components/selia/*`                                                                                                                             |
 
-## DB Schema (10 tables)
+## DB Schema (11 tables)
 
 ### `user` (auth.ts)
 
@@ -75,6 +75,13 @@ cogito-app/
 ### `refundRecord` (payment-record.ts)
 
 - id (uuid PK), paymentId FK→paymentRecord, walletId FK→wallet, providerReference, providerEventId unique, amountIdr, marks, reason, actorId FK→user nullable, createdAt. Schema-only until Phase 5.
+
+### `availabilitySlot` (availability-slot.ts)
+
+- id (uuid PK), tutorId FK→user, startDate timestamptz, endDate timestamptz, modality (`online` | `offline` | `both`), isRecurring bool default false, recurrenceRule text nullable, isActive bool default true, createdAt, updatedAt.
+- Index: `(tutorId, startDate)` for discovery queries.
+- Overlap guard rejects intersecting active windows for same tutor.
+- `recurrenceRule` stored but not expanded (Phase 2 backend only).
 
 ## API Routers (oRPC)
 
@@ -118,6 +125,14 @@ cogito-app/
 - `getMyProfile` → GET /tutor/profile — own tutor profile
 - `updateMyProfile` → PATCH /tutor/profile — update profile (not if published)
 - `submitForReview` → POST /tutor/profile/submit — submit draft for admin review
+- `listAvailability` → POST /tutor/availability — list own active slots
+- `upsertAvailability` → POST /tutor/availability/upsert — create or update a slot (overlap guard)
+- `deleteAvailability` → POST /tutor/availability/delete — soft-delete a slot
+
+### `tutorsRouter` (protected)
+
+- `listPublished` → POST /tutors/list — paginated published tutors with filters (search, expertise, modality) and `upcomingSlots`
+- `getProfile` → POST /tutors/profile — full published tutor profile + future active slots
 
 ### `inviteRouter`
 
@@ -191,7 +206,7 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 | Phase 0.5   | Module refactor (services + ports + DI)                                                                  | Complete               |
 | Phase 0.6   | CI/Lefthook/coverage                                                                                     | Complete               |
 | **Phase 1** | **Wallet & Payment (mark packages, payment records, wallet router, payment router, idempotent webhook)** | **Complete (backend)** |
-| Phase 2     | Tutor availability + discovery refactor                                                                  | Next                   |
+| **Phase 2** | **Tutor availability + discovery refactor**                                                              | **Complete (backend)** |
 | Phase 3     | Booking core (solo)                                                                                      | Pending                |
 | Phase 4     | Booking group + series                                                                                   | Pending                |
 | Phase 5     | Admin override + support                                                                                 | Pending                |
@@ -200,7 +215,6 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 ### Still Missing
 
 - Frontend real wallet data + purchase flow
-- Tutor availability + discovery SQL filters
 - Booking state machine + all booking tables
 - Notification table + email queue
 - Admin override/refund flows

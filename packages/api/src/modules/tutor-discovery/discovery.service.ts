@@ -65,24 +65,25 @@ export function createDiscoveryService(deps: { db: DbType }) {
       with: { user: true },
     });
 
-    const results = [];
-    for (const p of profiles) {
-      const slots = await upcomingSlots(p.userId);
-      results.push({
-        id: p.id,
-        displayName: p.displayName,
-        shortBio: p.shortBio,
-        credentialsSummary: p.credentialsSummary,
-        expertise: p.expertise ?? [],
-        modality: p.modality,
-        prices: p.prices,
-        availabilitySummary: p.availabilitySummary,
-        proofUrls: p.proofUrls,
-        publishedAt: p.publishedAt,
-        user: p.user ? { name: p.user.name, image: p.user.image } : null,
-        upcomingSlots: slots,
-      });
-    }
+    const results = await Promise.all(
+      profiles.map(async (p) => {
+        const slots = await upcomingSlots(p.userId);
+        return {
+          id: p.id,
+          displayName: p.displayName,
+          shortBio: p.shortBio,
+          credentialsSummary: p.credentialsSummary,
+          expertise: p.expertise ?? [],
+          modality: p.modality,
+          prices: p.prices,
+          availabilitySummary: p.availabilitySummary,
+          proofUrls: p.proofUrls,
+          publishedAt: p.publishedAt,
+          user: p.user ? { name: p.user.name, image: p.user.image } : null,
+          upcomingSlots: slots,
+        };
+      }),
+    );
     return results;
   }
 

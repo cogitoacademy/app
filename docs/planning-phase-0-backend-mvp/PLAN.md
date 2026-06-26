@@ -1,6 +1,6 @@
 # Cogito Phase 0 — Backend MVP Plan
 
-**Status:** Phase 0 + Phase 0.5 complete. Infrastructure set up. Ready for Phase 1.
+**Status:** Phase 0, 0.5, 0.6, 1, and 2 complete. Phase 3 next.
 **Date:** 2026-06-19 (created), 2026-06-26 (last updated)
 **Source of truth:** `docs/prd.tex` (v1.4)
 **Scope:** Production-grade backend that satisfies PRD FR-01..FR-24 as an MVP — minimal, scalable, iterable.
@@ -992,13 +992,13 @@ Restructured from "business logic in routers" to "thin routers → services → 
 - ✅ `auth.me` returns wallet (already in place).
 - ✅ Tests: TC-03, TC-04, TC-35, TC-32.
 
-### Phase 2 — Tutor Discovery & Availability (FR-06, FR-19, FR-23, FR-24) — NEXT
+### Phase 2 — Tutor Discovery & Availability (FR-06, FR-19, FR-23, FR-24) ✅ COMPLETE
 
-- `availabilitySlot` table.
-- Refactor `tutor-public-router` → `tutorDiscoveryRouter` with SQL filtering + projections.
-- `tutorRouter` availability CRUD.
-- Floor-price validation fixed (both modality stricter floor).
-- Tests: TC-05, TC-07, TC-10.
+- ✅ `availabilitySlot` table with overlap guard and recurrence rule column.
+- ✅ `tutorDiscoveryRouter` (`tutors`): SQL filtering + projections + upcoming slots.
+- ✅ `tutorRouter` availability CRUD.
+- ✅ Floor-price validation fixed (both modality stricter floor).
+- ✅ Tests: TC-05, TC-07, TC-10.
 
 ### Phase 3 — Booking Core: Solo (FR-07, FR-14, FR-15, FR-21 fallback, FR-22)
 
@@ -1481,4 +1481,6 @@ FLOOR_PRICES_ONLINE_1=42 ... FLOOR_PRICES_OFFLINE_6=27   (or load from config ta
 - v0.2 (2026-06-19): Finalized Sections 11 (Docker Postgres + native Bun) and 12 (GitHub Actions CI-only, CD deferred). Decisions D-16..D-19 added.
 - v0.3 (2026-06-19): Locked CD: Coolify v4 on self-managed VPS, GH Actions builds Docker images → GHCR → Coolify deploy API, Coolify managed Postgres, staging + prod, CI runs migrations first. Added `apps/server/Dockerfile` + `apps/web/Dockerfile` specs, full `cd.yml`, Coolify setup steps, deploy safety, secrets list. Decisions D-18..D-24 revised/added.
 - v0.4 (2026-06-19): Locked auth: Google primary + email/password fallback. Added §2 auth architecture subsection (Better Auth is a library not a SaaS; `account` table already supports OAuth; zero DB schema changes). Added Google env vars to §13. Decision D-25 added.
-- v0.5 (2026-06-26): Phase 0 + Phase 0.5 + Phase 0.6 complete. Added Phase 0.5 (module refactoring: 10 domain modules, functional factory services, port DI, auth→wallet decoupling, server split, `/health` endpoint) and Phase 0.6 (infrastructure: GitHub Actions CI, Lefthook, coverage, Dependabot). Decisions D-26..D-30 added. Table count corrected (26 total, 15 new). Booking transition matrix derived. Series child state machine: independent. Refund status: CHECK-constrained column. Floor prices: runtime-editable config table (deferred to Phase 1). Status updated to "Phase 0 + Phase 0.5 complete. Infrastructure set up. Ready for Phase 1."
+- v0.5 (2026-06-26): Phase 0 + Phase 0.5 + Phase 0.6 complete. Added Phase 0.5 (module refactoring: 10 domain modules, functional factory services, port DI, auth→wallet decoupling, server split, `/health` endpoint) and Phase 0.6 (infrastructure: GitHub Actions CI, Lefthook, coverage, Dependabot).
+- v0.6 (2026-06-26): Phase 1 complete — wallet, mark packages, payment records, stub payment provider, idempotent webhook, wallet router extensions.
+- v0.7 (2026-06-26): Phase 2 complete — `availabilitySlot` schema, overlap guard, discovery SQL filters, `getProfile` with slots, tutor availability CRUD routes, integration tests. Decisions D-26..D-30 added. Table count corrected (26 total, 15 new). Booking transition matrix derived. Series child state machine: independent. Refund status: CHECK-constrained column. Floor prices: runtime-editable config table (deferred to Phase 1). Status updated to "Phase 0 + Phase 0.5 complete. Infrastructure set up. Ready for Phase 1."
