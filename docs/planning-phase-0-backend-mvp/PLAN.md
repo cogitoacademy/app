@@ -983,15 +983,16 @@ Restructured from "business logic in routers" to "thin routers → services → 
 - Codecov dashboard — free for public repos only; using custom PR comment script instead.
 - CodeQL security scanning — requires GitHub Advanced Security license for private repos; using `oxlint` + Dependabot instead.
 
-### Phase 1 — Wallet & Payment (FR-03, FR-04, FR-12, DL-04, DL-16, DL-24) — NEXT
+### Phase 1 — Wallet & Payment (FR-03, FR-04, FR-12, DL-04, DL-16, DL-24) ✅ COMPLETE
 
-- `markPackage`, `paymentRecord`, `refundRecord` tables.
-- `WalletService`, `PaymentService` (stub), `PricingService` (floor tables).
-- `walletRouter`, `paymentRouter` + webhook route.
-- `auth.me` returns wallet.
-- Tests: TC-03, TC-04, TC-35, TC-32 (idempotency, no-credit-on-fail, no-cashout, KB gate).
+- ✅ `markPackage`, `paymentRecord`, `refundRecord` tables.
+- ✅ `WalletService` extensions (listLedger, knowledgeBankEligible).
+- ✅ `PaymentService` (stub provider) + idempotent webhook.
+- ✅ `walletRouter`, `paymentRouter` + webhook route.
+- ✅ `auth.me` returns wallet (already in place).
+- ✅ Tests: TC-03, TC-04, TC-35, TC-32.
 
-### Phase 2 — Tutor Discovery & Availability (FR-06, FR-19, FR-23, FR-24)
+### Phase 2 — Tutor Discovery & Availability (FR-06, FR-19, FR-23, FR-24) — NEXT
 
 - `availabilitySlot` table.
 - Refactor `tutor-public-router` → `tutorDiscoveryRouter` with SQL filtering + projections.

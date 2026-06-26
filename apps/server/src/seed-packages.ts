@@ -9,12 +9,13 @@ const PACKAGES = [
 ];
 
 export async function seedPackages() {
-  for (const pkg of PACKAGES) {
-    await db
-      .insert(markPackage)
-      .values(pkg)
-      .onConflictDoNothing({ target: markPackage.code });
-  }
+  await Promise.all(
+    PACKAGES.map((pkg) =>
+      db.insert(markPackage).values(pkg).onConflictDoNothing({
+        target: markPackage.code,
+      }),
+    ),
+  );
   console.log("Seeded mark packages");
 }
 

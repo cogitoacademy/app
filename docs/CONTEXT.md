@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-06-07
+Last updated: 2026-06-26
 
 ## Architecture
 
@@ -24,16 +24,16 @@ cogito-app/
 
 ## Packages
 
-| Package                  | Purpose                  | Key Exports                                                                        |
-| ------------------------ | ------------------------ | ---------------------------------------------------------------------------------- |
-| `@cogito-app/db`         | Drizzle ORM + PostgreSQL | `createDb()`, `db`, all schema tables                                              |
-| `@cogito-app/auth`       | Better Auth setup        | `auth`, `createAuth()`, `CogitoUser` type                                          |
-| `@cogito-app/api`        | oRPC routers             | `appRouter`, `AppRouter`, `AppRouterClient`, procedures                            |
-| `@cogito-app/env/server` | Server env validation    | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, `NODE_ENV` |
-| `@cogito-app/env/web`    | Web env validation       | `VITE_SERVER_URL`                                                                  |
-| `@cogito-app/ui`         | Selia UI components      | 22 components from `@cogito-app/ui/components/selia/*`                             |
+| Package                  | Purpose                  | Key Exports                                                                                                                                                                        |
+| ------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cogito-app/db`         | Drizzle ORM + PostgreSQL | `createDb()`, `db`, all schema tables                                                                                                                                              |
+| `@cogito-app/auth`       | Better Auth setup        | `auth`, `createAuth()`, `CogitoUser` type                                                                                                                                          |
+| `@cogito-app/api`        | oRPC routers             | `appRouter`, `AppRouter`, `AppRouterClient`, procedures                                                                                                                            |
+| `@cogito-app/env/server` | Server env validation    | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, `NODE_ENV`, `PAYMENT_PROVIDER`, `PAYMENT_WEBHOOK_SECRET`, `COMPETITION_CALENDAR_URL`, `KNOWLEDGE_BANK_URL` |
+| `@cogito-app/env/web`    | Web env validation       | `VITE_SERVER_URL`                                                                                                                                                                  |
+| `@cogito-app/ui`         | Selia UI components      | 22 components from `@cogito-app/ui/components/selia/*`                                                                                                                             |
 
-## DB Schema (5 tables)
+## DB Schema (10 tables)
 
 ### `user` (auth.ts)
 
@@ -64,9 +64,17 @@ cogito-app/
 - id (uuid), userId (FK → user), eventName, category, award, level, eventDate (date), location, description, subjects (jsonb string[]), imageUrl, status (default "pending"), adminNote, timestamps
 - Indexes: userId, status
 
-### `todo` (todo.ts)
+### `markPackage` (mark-package.ts)
 
-- id (serial), text, completed (boolean default false)
+- id (uuid PK), code unique (starter/learner/explorer/pioneer), name, marks, priceIdr, isActive, timestamps
+
+### `paymentRecord` (payment-record.ts)
+
+- id (uuid PK), userId FK→user, walletId FK→wallet, packageId FK→markPackage nullable, provider (stub/midtrans/xendit), providerReference, providerEventId unique, amountIdr, marks, status (pending/succeeded/failed/refunded), receiptUrl, failureReason, timestamps
+
+### `refundRecord` (payment-record.ts)
+
+- id (uuid PK), paymentId FK→paymentRecord, walletId FK→wallet, providerReference, providerEventId unique, amountIdr, marks, reason, actorId FK→user nullable, createdAt. Schema-only until Phase 5.
 
 ## API Routers (oRPC)
 
@@ -78,8 +86,8 @@ cogito-app/
 
 ### `authRouter` (protected)
 
-- `me` → GET /auth/me — `{ user, profile, tutorProfile }`
-- `getProfile` → GET /auth/profile — studentProfile or NOT_FOUND
+- `me` → POST /auth/me — `{ user, profile, tutorProfile, wallet }`
+- `getProfile` → POST /auth/profile — studentProfile or NOT_FOUND
 - `updateProfile` → POST /auth/profile — upsert studentProfile (phone, school, grade, parent fields)
 
 ### `adminRouter` (admin)
@@ -116,19 +124,34 @@ cogito-app/
 - `verify` (public) → POST /invites/verify — validate invite token
 - `claim` (protected) → POST /invites/claim — claim invite, create tutor profile
 
-### `todoRouter` (public, no auth)
+### `walletRouter` (protected)
 
-- `getAll` → GET /todos
-- `create` → POST /todos
-- `toggle` → PATCH /todos/{id}/toggle
-- `delete` → DELETE /todos/{id}
+- `get` → POST /wallet/get — `{ totalBalance, heldBalance, availableBalance }`
+- `listLedger` → POST /wallet/ledger — paginated ledger entries
+- `listPackages` → POST /wallet/packages — active mark packages
+- `knowledgeBankEligible` → POST /wallet/knowledge-bank — `{ eligible, balance, threshold }`
+- `competitionCalendarLink` → POST /wallet/competition-calendar — `{ url }`
+
+### `paymentRouter` (protected)
+
+- `createPurchase` → POST /payment/purchase — `{ packageCode }` → `{ paymentId, providerReference, checkoutUrl }`
+- `getPurchase` → POST /payment/get — `{ paymentId }` → payment record
+
+### Webhooks
+
+- `POST /webhooks/payments/:provider` — signature-verified payment webhook (idempotent via `providerEventId`)
+- `GET /webhooks/payments/stub/checkout?ref=...` — dev shortcut that auto-confirms a stub payment
+
+### `todoRouter` (public, no auth) — removed
+
+- todo table and router removed before MVP.
 
 ## OpenAPI Reference
 
 Interactive API docs available at `http://localhost:3001/api-reference` (Scalar UI).
 OpenAPI spec generated by `@orpc/openapi` with `ZodToJsonSchemaConverter`.
 Each route has `.route()` metadata: method, path, summary, description, tags.
-Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tutor Profiles`, `Todos`.
+Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tutor Profiles`, `Wallet`, `Payments`, `Webhooks`.
 
 ## Auth Config
 
@@ -160,45 +183,28 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 - `apps/web/src/components/dashboard/pages/balance-page.tsx` — Mock balance + package cards + Knowledge Bank section
 - `apps/web/src/components/dashboard/pages/achivements-page.tsx` — Full achievement CRUD UI
 
-## NOT Yet Built (PRD Gaps)
+## Build Status
 
-### Missing DB Tables
+| Phase       | Scope                                                                                                    | Status                 |
+| ----------- | -------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Phase 0     | Schema integrity, single db pool, migrations                                                             | Complete               |
+| Phase 0.5   | Module refactor (services + ports + DI)                                                                  | Complete               |
+| Phase 0.6   | CI/Lefthook/coverage                                                                                     | Complete               |
+| **Phase 1** | **Wallet & Payment (mark packages, payment records, wallet router, payment router, idempotent webhook)** | **Complete (backend)** |
+| Phase 2     | Tutor availability + discovery refactor                                                                  | Next                   |
+| Phase 3     | Booking core (solo)                                                                                      | Pending                |
+| Phase 4     | Booking group + series                                                                                   | Pending                |
+| Phase 5     | Admin override + support                                                                                 | Pending                |
+| Phase 6     | Polish + Docker/CD                                                                                       | Pending                |
 
-- `tutorInvite` — admin-created invite (email, status, token, timestamps)
-- `tutorProfile` — bio, expertise, prices, availability, onboarding status, publication status
-- `booking` — full booking state machine
-- `bookingParticipant` — per-participant confirmation state
-- `room` — offline classroom management
-- `meetingEvent` — Google Meet integration
-- `availabilitySlot` — tutor availability
-- `paymentRecord` — payment provider records
-- `refundRecord` — refund tracking
-- `notification` — in-app + email notification records
-- `auditLog` — immutable audit trail
+### Still Missing
 
-### Missing API Routers
-
-- Wallet router (purchase, balance, ledger)
-- Payment router (provider integration)
-- Tutor invite/onboarding router
-- Tutor profile/discovery router
-- Booking router (solo, group, series + full state machine)
-- Notification router
-- Admin monitoring/override router
-- Meeting link creation
-
-### Missing Frontend
-
-- Real wallet data (currently mock)
-- Wallet purchase flow
-- Tutor discovery UI
-- Booking flow UI (solo, group, series)
-- Tutor workspace (availability, incoming bookings, session notes)
-- Admin dashboard (monitoring, overrides, tutor review)
-- Notification UI
-- Knowledge Bank access gate
-- Competition Calendar link
-- Support button
+- Frontend real wallet data + purchase flow
+- Tutor availability + discovery SQL filters
+- Booking state machine + all booking tables
+- Notification table + email queue
+- Admin override/refund flows
+- Production Dockerfiles + CD pipeline
 
 ## PRD Reference
 
@@ -214,9 +220,10 @@ bun run dev                # Dev all (web + server + db watch)
 bun run dev:web            # Dev web only
 bun run dev:server         # Dev server only
 bun run db:start           # Start PostgreSQL Docker
-bun run db:push            # Push schema to dev DB
+bun run db:migrate         # Apply migrations
 bun run db:studio          # Drizzle Studio
 bun run db:generate        # Generate migrations
+bun run seed-packages      # Seed mark packages
 bun run lint               # Oxlint
 bun run format             # Oxfmt
 bun run check              # Lint + format
