@@ -8,6 +8,8 @@ import { tutorRouter } from "./modules/tutor/tutor.router";
 import { discoveryRouter } from "./modules/tutor-discovery/discovery.router";
 import { inviteRouter } from "./modules/invite/invite.router";
 import { achievementRouter } from "./modules/achievement/achievement.router";
+import { walletRouter } from "./modules/wallet/wallet.router";
+import { paymentRouter } from "./modules/payment/payment.router";
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -42,6 +44,8 @@ export const appRouter = {
   tutors: discoveryRouter,
   invite: inviteRouter,
   achievement: achievementRouter,
+  wallet: walletRouter,
+  payment: paymentRouter,
 };
 
 export type AppRouter = typeof appRouter;
