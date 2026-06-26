@@ -124,7 +124,7 @@ async function main() {
     .map((r) => {
       const shortPath = r.file
         .replace(process.cwd() + "/", "")
-        .replace("/Users/runner/work/", "");
+        .replace(/^\/home\/runner\/work\/[^/]+\/[^/]+\//, "");
       return `| ${shortPath} | ${pct(r.linesHit, r.linesFound)} | ${pct(r.functionsHit, r.functionsFound)} |`;
     });
 

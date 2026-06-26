@@ -36,7 +36,6 @@ jobs:
         with:
           path: |
             ~/.bun/install/cache
-            node_modules
             .turbo
           key: ${{ runner.os }}-bun-types-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-types-
@@ -54,7 +53,6 @@ jobs:
         with:
           path: |
             ~/.bun/install/cache
-            node_modules
             .turbo
             apps/web/dist
             apps/server/dist
@@ -98,7 +96,6 @@ jobs:
         with:
           path: |
             ~/.bun/install/cache
-            node_modules
             .turbo
           key: ${{ runner.os }}-bun-test-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-test-
