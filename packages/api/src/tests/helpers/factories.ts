@@ -65,10 +65,6 @@ export async function getWalletByUserId(userId: string) {
   return w ?? null;
 }
 
-export async function getAuditLogsForTarget(targetId: string) {
-  return db.select().from(auditLog).where(eq(auditLog.targetId, targetId));
-}
-
 export async function cleanTestUser(email: string) {
   const [found] = await db
     .select()

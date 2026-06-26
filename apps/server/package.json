@@ -20,7 +20,6 @@
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
-    "@sinclair/typebox": "^0.34.49",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
