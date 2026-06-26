@@ -11,6 +11,16 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
+    PAYMENT_PROVIDER: z.enum(["stub", "midtrans", "xendit"]).default("stub"),
+    PAYMENT_WEBHOOK_SECRET: z.string().min(32),
+    COMPETITION_CALENDAR_URL: z
+      .string()
+      .url()
+      .default("https://cogitoacademy.id/en/calendar"),
+    KNOWLEDGE_BANK_URL: z
+      .string()
+      .url()
+      .default("https://cogitoacademy.id/knowledge-bank"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

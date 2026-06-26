@@ -11,7 +11,11 @@ async function signBody(body: string, secret: string): Promise<string> {
     false,
     ["sign"],
   );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(body),
+  );
   return Buffer.from(sig).toString("hex");
 }
 

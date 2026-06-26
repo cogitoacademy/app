@@ -1,4 +1,10 @@
-import { pgTable, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  integer,
+  boolean,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 import { uuidPrimaryKey } from "./auth";
 

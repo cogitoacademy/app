@@ -1,6 +1,11 @@
-import type { PaymentProvider, WebhookPayload } from "../../shared/ports/payment.port";
+import type {
+  PaymentProvider,
+  WebhookPayload,
+} from "../../shared/ports/payment.port";
 
-export function createStubPaymentProvider(webhookSecret: string): PaymentProvider {
+export function createStubPaymentProvider(
+  webhookSecret: string,
+): PaymentProvider {
   async function createIntent(params: {
     paymentId: string;
     amountIdr: number;
@@ -11,7 +16,10 @@ export function createStubPaymentProvider(webhookSecret: string): PaymentProvide
     };
   }
 
-  async function verifyWebhook(rawBody: string, signature: string): Promise<WebhookPayload> {
+  async function verifyWebhook(
+    rawBody: string,
+    signature: string,
+  ): Promise<WebhookPayload> {
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(webhookSecret),
