@@ -8,6 +8,13 @@
       "when": 1782292868043,
       "tag": "0000_misty_boomer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782461974428,
+      "tag": "0001_bored_husk",
+      "breakpoints": true
     }
   ]
 }

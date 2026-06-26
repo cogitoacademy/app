@@ -5,3 +5,5 @@ export * from "./achievement";
 export * from "./tutor-invite";
 export * from "./tutor-profile";
 export * from "./audit-log";
+export * from "./mark-package";
+export * from "./payment-record";
