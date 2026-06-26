@@ -62,6 +62,13 @@ export interface WalletSnapshot {
   availableBalance: number;
 }
 
+export interface LedgerQueryOptions {
+  cursor?: string;
+  limit?: number;
+  bookingId?: string;
+  eventKey?: string;
+}
+
 export interface WalletPort {
   hold(db: DbOrTx, params: HoldParams): Promise<WalletSnapshot>;
   release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
@@ -71,4 +78,13 @@ export interface WalletPort {
   getById(db: DbOrTx, walletId: string): Promise<WalletSnapshot | null>;
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
   getOrCreate(userId: string): Promise<WalletSnapshot>;
+  listLedger(
+    walletId: string,
+    opts?: LedgerQueryOptions,
+  ): Promise<{ items: unknown[]; nextCursor: string | null }>;
+  knowledgeBankEligible(userId: string): Promise<{
+    eligible: boolean;
+    balance: number;
+    threshold: number;
+  }>;
 }

@@ -276,6 +276,37 @@ export function createWalletService(db: DbType): WalletPort {
     return updated!;
   }
 
+  async function listLedger(
+    walletId: string,
+    opts: {
+      cursor?: string;
+      limit?: number;
+      bookingId?: string;
+      eventKey?: string;
+    } = {},
+  ) {
+    const limit = Math.min(opts.limit ?? 20, 100);
+    const rows = await db
+      .select()
+      .from(ledgerEntry)
+      .where(eq(ledgerEntry.walletId, walletId))
+      .limit(limit + 1);
+
+    const items = rows.slice(0, limit);
+    const nextCursor =
+      rows.length > limit ? rows[limit - 1]!.createdAt.toISOString() : null;
+    return { items, nextCursor };
+  }
+
+  async function knowledgeBankEligible(userId: string) {
+    const w = await getOrCreate(userId);
+    return {
+      eligible: w.totalBalance >= 35,
+      balance: w.totalBalance,
+      threshold: 35,
+    };
+  }
+
   return {
     hold,
     release,
@@ -285,5 +316,7 @@ export function createWalletService(db: DbType): WalletPort {
     getById,
     getByUserId,
     getOrCreate,
+    listLedger,
+    knowledgeBankEligible,
   };
 }
