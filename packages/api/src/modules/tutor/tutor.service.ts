@@ -1,9 +1,9 @@
-import { eq } from "drizzle-orm";
-import { tutorProfile } from "@cogito-app/db/schema";
+import { eq, and, gte, lte, ne } from "drizzle-orm";
+import { tutorProfile, availabilitySlot } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { AuditPort } from "../../shared/ports/audit.port";
 import type { PricingPort } from "../../shared/ports/pricing.port";
-import { notFound, forbidden, badRequest } from "../../lib/errors";
+import { notFound, forbidden, badRequest, conflict } from "../../lib/errors";
 
 export interface UpdateMyProfileInput {
   displayName?: string;
@@ -14,6 +14,16 @@ export interface UpdateMyProfileInput {
   prices?: Record<string, number>;
   availabilitySummary?: string;
   proofUrls?: string[];
+}
+
+export interface UpsertAvailabilityInput {
+  id?: string;
+  startDate: string;
+  endDate: string;
+  modality: "online" | "offline" | "both";
+  isRecurring?: boolean;
+  recurrenceRule?: string;
+  isActive?: boolean;
 }
 
 export type TutorService = ReturnType<typeof createTutorService>;
@@ -126,5 +136,83 @@ export function createTutorService(deps: {
     });
   }
 
-  return { getMyProfile, updateMyProfile, submitForReview };
+  async function listAvailability(userId: string) {
+    return db
+      .select()
+      .from(availabilitySlot)
+      .where(
+        and(eq(availabilitySlot.tutorId, userId), eq(availabilitySlot.isActive, true)),
+      )
+      .orderBy(availabilitySlot.startDate);
+  }
+
+  async function upsertAvailability(userId: string, input: UpsertAvailabilityInput) {
+    const start = new Date(input.startDate);
+    const end = new Date(input.endDate);
+    if (end <= start) throw badRequest("endDate must be after startDate");
+
+    const overlapConditions = [
+      eq(availabilitySlot.tutorId, userId),
+      eq(availabilitySlot.isActive, true),
+      lte(availabilitySlot.startDate, end),
+      gte(availabilitySlot.endDate, start),
+    ];
+    if (input.id) {
+      overlapConditions.push(ne(availabilitySlot.id, input.id));
+    }
+
+    const existing = await db
+      .select()
+      .from(availabilitySlot)
+      .where(and(...overlapConditions))
+      .limit(1);
+
+    if (existing.length > 0) {
+      throw conflict("Availability window overlaps with an existing slot");
+    }
+
+    if (input.id) {
+      const [updated] = await db
+        .update(availabilitySlot)
+        .set({
+          startDate: start,
+          endDate: end,
+          modality: input.modality,
+          isRecurring: input.isRecurring ?? false,
+          recurrenceRule: input.recurrenceRule ?? null,
+          isActive: input.isActive ?? true,
+        })
+        .where(
+          and(eq(availabilitySlot.id, input.id), eq(availabilitySlot.tutorId, userId)),
+        )
+        .returning();
+      if (!updated) throw notFound("Availability slot not found");
+      return updated;
+    }
+
+    const [created] = await db
+      .insert(availabilitySlot)
+      .values({
+        tutorId: userId,
+        startDate: start,
+        endDate: end,
+        modality: input.modality,
+        isRecurring: input.isRecurring ?? false,
+        recurrenceRule: input.recurrenceRule ?? null,
+        isActive: input.isActive ?? true,
+      })
+      .returning();
+    return created!;
+  }
+
+  async function deleteAvailability(userId: string, id: string) {
+    const [deleted] = await db
+      .delete(availabilitySlot)
+      .where(and(eq(availabilitySlot.id, id), eq(availabilitySlot.tutorId, userId)))
+      .returning();
+    if (!deleted) throw notFound("Availability slot not found");
+    return { id: deleted.id };
+  }
+
+  return { getMyProfile, updateMyProfile, submitForReview, listAvailability, upsertAvailability, deleteAvailability };
 }
