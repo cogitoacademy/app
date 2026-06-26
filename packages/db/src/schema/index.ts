@@ -7,3 +7,4 @@ export * from "./tutor-profile";
 export * from "./audit-log";
 export * from "./mark-package";
 export * from "./payment-record";
+export * from "./availability-slot";
