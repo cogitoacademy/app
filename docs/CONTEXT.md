@@ -33,7 +33,7 @@ cogito-app/
 | `@cogito-app/env/web`    | Web env validation       | `VITE_SERVER_URL`                                                                                                                                                                  |
 | `@cogito-app/ui`         | Selia UI components      | 22 components from `@cogito-app/ui/components/selia/*`                                                                                                                             |
 
-## DB Schema (11 tables)
+## DB Schema (24 tables)
 
 ### `user` (auth.ts)
 
@@ -82,6 +82,44 @@ cogito-app/
 - Index: `(tutorId, startDate)` for discovery queries.
 - Overlap guard rejects intersecting active windows for same tutor.
 - `recurrenceRule` stored but not expanded (Phase 2 backend only).
+
+### `booking` (booking.ts)
+
+- id (uuid PK), type (`solo` | `group` | `series`), modality (`online` | `offline`), tutorId FK→user, proposerId FK→user, targetGroupSize (1-6), minConfirmedHeadcount, confirmedHeadcount, currentState (15 states), previousState, stateReason, deadlineAt, scheduledStartAt, scheduledEndAt, timezone, roomId, priceSnapshot jsonb, originalMarks, repricedMarks, holdAmount, refundedAmount, cancellationReason, rescheduleMeta, overrideMeta, notificationFlags, seriesParentId, timestamps.
+- Indexes: tutorId+state, proposerId+state, state+deadline, seriesParentId, scheduledStartAt.
+
+### `bookingParticipant` (booking.ts)
+
+- id (uuid PK), bookingId FK→booking cascade, userId FK→user cascade, role (`proposer` | `invitee`), confirmationState, heldAmount, heldLedgerId, confirmedAt, declinedAt, reconfirmedAt, withdrawnAt, withdrawnReason, attendanceState, timestamps.
+- Unique per booking+user. Index: userId+confirmationState.
+
+### `bookingStateHistory` (booking.ts)
+
+- id (uuid PK), bookingId FK→booking cascade, fromState, toState, reason, actorId FK→user set null, actorType, metadata jsonb, createdAt. Immutable.
+
+### `bookingRescheduleProposal` (booking.ts)
+
+- id (uuid PK), bookingId FK→booking cascade, proposedBy FK→user, proposedStartAt, proposedEndAt, status (`pending` | `accepted` | `rejected` | `expired`), createdAt, decidedAt.
+
+### `room` (booking.ts)
+
+- id (uuid PK), name, location, capacity, isActive, timestamps. Index isActive.
+
+### `roomBooking` (booking.ts)
+
+- id (uuid PK), roomId FK→room cascade, bookingId FK→booking cascade, startAt, endAt, status (`requested` | `confirmed` | `relocated` | `cancelled`), timestamps. Indexes: roomId, bookingId, startAt.
+
+### `meetingEvent` (booking.ts)
+
+- id (uuid PK), bookingId FK→booking cascade, provider (`google_meet` | `manual` | `pending`), externalEventId, meetingUrl, attendeeEmails jsonb, status (`pending` | `created` | `failed` | `manual` | `cancelled`), errorReason, createdBy FK→user set null, timestamps.
+
+### `notification` (notification.ts)
+
+- id (uuid PK), userId FK→user cascade, bookingId FK→booking cascade nullable, category (`booking` | `payment` | `refund` | `schedule` | `achievement` | `system` | `override`), title, body, severity (`info` | `action` | `critical`), isRead, readAt, eventKey (dedupe), metadata jsonb, createdAt. Index: userId+isRead+createdAt, eventKey.
+
+### `notificationDispatch` (notification.ts)
+
+- id (uuid PK), notificationId FK→notification cascade, channel (`email`), recipientEmail, providerMessageId, status (`queued` | `sent` | `failed` | `suppressed`), attempts, lastError, createdAt, sentAt.
 
 ## API Routers (oRPC)
 
@@ -152,6 +190,26 @@ cogito-app/
 - `createPurchase` → POST /payment/purchase — `{ packageCode }` → `{ paymentId, providerReference, checkoutUrl }`
 - `getPurchase` → POST /payment/get — `{ paymentId }` → payment record
 
+### `bookingRouter` (protected)
+
+- `createSolo` → POST /booking/solo/create — hold Marks, create booking + participant + history + notification
+- `get` → POST /booking/get — full booking with participants, history, meeting, roomBookings
+- `listMine` → POST /booking/list-mine — paginated bookings where user is proposer
+- `cancel` → POST /booking/cancel — release held Marks, transition to cancelled/late_cancelled
+- `proposeReschedule` → POST /booking/reschedule/propose — student proposes new slot
+
+### `tutorActionsRouter` (protected, tutor)
+
+- `acceptBooking` → POST /tutor/booking/accept — tutor accepts; online → scheduled + meeting created
+- `declineBooking` → POST /tutor/booking/decline — tutor declines, release held Marks
+- `completeSession` → POST /tutor/booking/complete — deduct held Marks, transition to completed
+
+### `roomRouter` (protected / admin)
+
+- `list` → POST /rooms/list — active rooms (any authed user)
+- `create` → POST /admin/rooms/create — admin creates room
+- `assign` → POST /admin/rooms/assign — admin assigns room to offline booking
+
 ### Webhooks
 
 - `POST /webhooks/payments/:provider` — signature-verified payment webhook (idempotent via `providerEventId`)
@@ -200,22 +258,22 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 
 ## Build Status
 
-| Phase       | Scope                                                                                                    | Status                 |
-| ----------- | -------------------------------------------------------------------------------------------------------- | ---------------------- |
-| Phase 0     | Schema integrity, single db pool, migrations                                                             | Complete               |
-| Phase 0.5   | Module refactor (services + ports + DI)                                                                  | Complete               |
-| Phase 0.6   | CI/Lefthook/coverage                                                                                     | Complete               |
-| **Phase 1** | **Wallet & Payment (mark packages, payment records, wallet router, payment router, idempotent webhook)** | **Complete (backend)** |
-| **Phase 2** | **Tutor availability + discovery refactor**                                                              | **Complete (backend)** |
-| Phase 3     | Booking core (solo)                                                                                      | Pending                |
-| Phase 4     | Booking group + series                                                                                   | Pending                |
-| Phase 5     | Admin override + support                                                                                 | Pending                |
-| Phase 6     | Polish + Docker/CD                                                                                       | Pending                |
+| Phase       | Scope                                                                                                                               | Status                 |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Phase 0     | Schema integrity, single db pool, migrations                                                                                        | Complete               |
+| Phase 0.5   | Module refactor (services + ports + DI)                                                                                             | Complete               |
+| Phase 0.6   | CI/Lefthook/coverage                                                                                                                | Complete               |
+| **Phase 1** | **Wallet & Payment (mark packages, payment records, wallet router, payment router, idempotent webhook)**                            | **Complete (backend)** |
+| **Phase 2** | **Tutor availability + discovery refactor**                                                                                         | **Complete (backend)** |
+| **Phase 3** | **Booking core (solo): booking tables, state machine, createSolo, accept/decline, complete, notifications, meeting fallback, room** | **Complete (backend)** |
+| Phase 4     | Booking group + series                                                                                                              | Pending                |
+| Phase 5     | Admin override + support                                                                                                            | Pending                |
+| Phase 6     | Polish + Docker/CD                                                                                                                  | Pending                |
 
 ### Still Missing
 
 - Frontend real wallet data + purchase flow
-- Booking state machine + all booking tables
+- Booking group + series + expiry sweeper
 - Notification table + email queue
 - Admin override/refund flows
 - Production Dockerfiles + CD pipeline

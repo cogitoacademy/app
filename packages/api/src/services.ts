@@ -11,11 +11,17 @@ import { createInviteService } from "./modules/invite/invite.service";
 import { createAchievementService } from "./modules/achievement/achievement.service";
 import { createPaymentService } from "./modules/payment/payment.service";
 import { createStubPaymentProvider } from "./modules/payment/stub-payment.provider";
+import { createNotificationService } from "./modules/notification/notification.service";
+import { createBookingService } from "./modules/booking/booking.service";
+import { createFallbackMeetingProvider } from "./modules/meeting/fallback.provider";
+import { createRoomService } from "./modules/room/room.service";
 import { env } from "@cogito-app/env/server";
 
 import type { AuditPort } from "./shared/ports/audit.port";
 import type { PricingPort } from "./shared/ports/pricing.port";
 import type { WalletPort } from "./shared/ports/wallet.port";
+import type { InAppNotificationPort } from "./shared/ports/notification.port";
+import type { MeetingPort } from "./shared/ports/meeting.port";
 import type { AuthService } from "./modules/auth/auth.service";
 import type { AdminService } from "./modules/admin/admin.service";
 import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
@@ -24,11 +30,15 @@ import type { DiscoveryService } from "./modules/tutor-discovery/discovery.servi
 import type { InviteService } from "./modules/invite/invite.service";
 import type { AchievementService } from "./modules/achievement/achievement.service";
 import type { PaymentService } from "./modules/payment/payment.service";
+import type { BookingService } from "./modules/booking/booking.service";
+import type { RoomService } from "./modules/room/room.service";
 
 export interface ServiceRegistry {
   audit: AuditPort;
   pricing: PricingPort;
   wallet: WalletPort;
+  notification: InAppNotificationPort;
+  meeting: MeetingPort;
   auth: AuthService;
   admin: AdminService;
   adminTutor: AdminTutorService;
@@ -37,12 +47,16 @@ export interface ServiceRegistry {
   invite: InviteService;
   achievement: AchievementService;
   payment: PaymentService;
+  booking: BookingService;
+  room: RoomService;
 }
 
 function createServices(): ServiceRegistry {
   const audit = createAuditService();
   const pricing = createPricingService();
   const wallet = createWalletService(db);
+  const notification = createNotificationService(db);
+  const meeting = createFallbackMeetingProvider(db);
   const auth = createAuthService({ db, wallet });
   const admin = createAdminService({ db, audit });
   const adminTutor = createAdminTutorService({ db, audit });
@@ -56,11 +70,22 @@ function createServices(): ServiceRegistry {
     wallet,
     provider: paymentProvider,
   });
+  const booking = createBookingService({
+    db,
+    wallet,
+    pricing,
+    audit,
+    notification,
+    meeting,
+  });
+  const room = createRoomService(db);
 
   return {
     audit,
     pricing,
     wallet,
+    notification,
+    meeting,
     auth,
     admin,
     adminTutor,
@@ -69,6 +94,8 @@ function createServices(): ServiceRegistry {
     invite,
     achievement,
     payment,
+    booking,
+    room,
   };
 }
 

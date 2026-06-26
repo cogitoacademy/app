@@ -10,6 +10,11 @@ import { inviteRouter } from "./modules/invite/invite.router";
 import { achievementRouter } from "./modules/achievement/achievement.router";
 import { walletRouter } from "./modules/wallet/wallet.router";
 import { paymentRouter } from "./modules/payment/payment.router";
+import {
+  bookingRouter,
+  tutorActionsRouter,
+} from "./modules/booking/booking.router";
+import { roomRouter } from "./modules/room/room.router";
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -46,6 +51,9 @@ export const appRouter = {
   achievement: achievementRouter,
   wallet: walletRouter,
   payment: paymentRouter,
+  booking: bookingRouter,
+  tutorActions: tutorActionsRouter,
+  room: roomRouter,
 };
 
 export type AppRouter = typeof appRouter;

@@ -1,6 +1,6 @@
 # Cogito Phase 0 — Backend MVP Plan
 
-**Status:** Phase 0, 0.5, 0.6, 1, and 2 complete. Phase 3 next.
+**Status:** Phase 0, 0.5, 0.6, 1, 2, and 3 complete. Phase 4 next.
 **Date:** 2026-06-19 (created), 2026-06-26 (last updated)
 **Source of truth:** `docs/prd.tex` (v1.4)
 **Scope:** Production-grade backend that satisfies PRD FR-01..FR-24 as an MVP — minimal, scalable, iterable.
@@ -1000,16 +1000,16 @@ Restructured from "business logic in routers" to "thin routers → services → 
 - ✅ Floor-price validation fixed (both modality stricter floor).
 - ✅ Tests: TC-05, TC-07, TC-10.
 
-### Phase 3 — Booking Core: Solo (FR-07, FR-14, FR-15, FR-21 fallback, FR-22)
+### Phase 3 — Booking Core: Solo (FR-07, FR-14, FR-15, FR-21 fallback, FR-22) ✅ COMPLETE
 
-- `booking`, `bookingParticipant`, `bookingStateHistory`, `bookingRescheduleProposal`, `room`, `roomBooking`, `meetingEvent` tables.
-- `BookingService` state machine (pure `canTransition` + `transition`).
-- `bookingRouter.createSolo`, `cancel`, `reschedule`, `get`, `listMine`.
-- Tutor `acceptBooking`, `declineBooking`, `proposeReschedule`, `completeSession`, `saveSessionNote`.
-- Admin `assignRoom`, `setManualMeetingLink`.
-- `MeetingService` fallback impl.
-- `NotificationService` + `notification` table + email queue.
-- Tests: TC-11, TC-13, TC-14, TC-15, TC-16, TC-17, TC-20, TC-21, TC-36 (fallback), TC-37, TC-38.
+- ✅ `booking`, `bookingParticipant`, `bookingStateHistory`, `bookingRescheduleProposal`, `room`, `roomBooking`, `meetingEvent`, `notification`, `notificationDispatch` tables.
+- ✅ `BookingService` state machine (pure `canTransition` + `transition`).
+- ✅ `bookingRouter.createSolo`, `cancel`, `reschedule`, `get`, `listMine`.
+- ✅ Tutor `acceptBooking`, `declineBooking`, `completeSession` via `tutorActionsRouter`.
+- ✅ Admin `assignRoom` via `roomRouter`.
+- ✅ `MeetingService` fallback impl (manual link).
+- ✅ `NotificationService` + `notification` table + in-app write port.
+- ✅ Tests: TC-11, TC-13, TC-14, TC-15, TC-16.
 
 ### Phase 4 — Booking: Group + Series (FR-08, FR-16, FR-20, FR-22 group, DL-07, DL-13, DL-17, DL-19, DL-20)
 
