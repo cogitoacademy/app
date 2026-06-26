@@ -1,9 +1,10 @@
-import { eq, and, gte, desc, inArray } from "drizzle-orm";
+import { eq, and, gte, desc, inArray, ne, lte } from "drizzle-orm";
 import {
   booking,
   bookingParticipant,
   bookingStateHistory,
   bookingRescheduleProposal,
+  bookingSession,
   availabilitySlot,
   tutorProfile,
   type booking as bookingTable,
@@ -52,6 +53,25 @@ export interface CreateSoloInput {
   modality: "online" | "offline";
   scheduledStartAt: Date;
   scheduledEndAt: Date;
+  timezone: string;
+}
+
+export interface CreateGroupInput {
+  tutorId: string;
+  availabilitySlotId: string;
+  modality: "online" | "offline";
+  targetGroupSize: number;
+  inviteeUserIds: string[];
+  scheduledStartAt: Date;
+  scheduledEndAt: Date;
+  timezone: string;
+}
+
+export interface CreateSeriesInput {
+  tutorId: string;
+  availabilitySlotId: string;
+  modality: "online" | "offline";
+  sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
   timezone: string;
 }
 
@@ -611,15 +631,567 @@ export function createBookingService(deps: {
     });
   }
 
+  async function createGroup(proposerId: string, input: CreateGroupInput) {
+    const profile = await db.query.tutorProfile.findFirst({
+      where: and(
+        eq(tutorProfile.userId, input.tutorId),
+        eq(tutorProfile.onboardingStatus, "published"),
+      ),
+    });
+    if (!profile) throw notFound("Tutor profile not found");
+
+    const slot = await db.query.availabilitySlot.findFirst({
+      where: and(
+        eq(availabilitySlot.id, input.availabilitySlotId),
+        eq(availabilitySlot.tutorId, input.tutorId),
+        eq(availabilitySlot.isActive, true),
+        gte(availabilitySlot.startDate, new Date()),
+      ),
+    });
+    if (!slot) throw badRequest("Selected availability slot is not available");
+
+    const size = input.targetGroupSize;
+    const pricePerStudent = (profile.prices?.[String(size)] ?? 50) as number;
+    const priceSnapshot = pricing.computeSplit(
+      pricePerStudent * size,
+      size as 1 | 2 | 3 | 4 | 5 | 6,
+    );
+    const totalMarks = priceSnapshot.baseline;
+
+    const w = await wallet.getByUserId(db, proposerId);
+    if (!w) throw notFound("Wallet not found");
+    if (w.availableBalance < totalMarks) {
+      throw conflict("Insufficient available Marks for proposer hold");
+    }
+
+    const bookingId = crypto.randomUUID();
+    const deadlineAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
+
+    return db.transaction(async (tx) => {
+      await wallet.hold(tx, {
+        walletId: w.id,
+        amount: totalMarks,
+        eventKey: `booking.${bookingId}.hold`,
+        sourceReference: bookingId,
+        actorType: "student",
+        reason: "Hold Marks for group booking (proposer)",
+      });
+
+      const [b] = await tx
+        .insert(booking)
+        .values({
+          id: bookingId,
+          type: "group",
+          modality: input.modality,
+          tutorId: input.tutorId,
+          proposerId,
+          targetGroupSize: size,
+          minConfirmedHeadcount: 2,
+          confirmedHeadcount: 1,
+          currentState: "awaiting_participant_confirmation",
+          scheduledStartAt: input.scheduledStartAt,
+          scheduledEndAt: input.scheduledEndAt,
+          timezone: input.timezone,
+          priceSnapshot,
+          originalMarks: totalMarks,
+          holdAmount: totalMarks,
+          deadlineAt,
+        })
+        .returning();
+
+      await tx.insert(bookingParticipant).values({
+        bookingId,
+        userId: proposerId,
+        role: "proposer",
+        confirmationState: "confirmed",
+        heldAmount: totalMarks,
+      });
+
+      for (const inviteeId of input.inviteeUserIds) {
+        await tx.insert(bookingParticipant).values({
+          bookingId,
+          userId: inviteeId,
+          role: "invitee",
+          confirmationState: "pending",
+          heldAmount: 0,
+        });
+        await notification.write({
+          db: tx,
+          userId: inviteeId,
+          bookingId,
+          category: "booking",
+          severity: "action",
+          title: "Group booking invitation",
+          body: "You have been invited to a group session. Confirm within 12 hours.",
+          eventKey: `booking.${bookingId}.invite.${inviteeId}`,
+        });
+      }
+
+      await recordTransition(tx, {
+        bookingId,
+        fromState: null,
+        toState: "awaiting_participant_confirmation",
+        actorId: proposerId,
+        actorType: "student",
+      });
+
+      return b!;
+    });
+  }
+
+  async function confirmInvite(userId: string, bookingId: string) {
+    const [b] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, bookingId))
+      .limit(1);
+    if (!b) throw notFound("Booking not found");
+    if (b.currentState !== "awaiting_participant_confirmation") {
+      throw conflict("Booking is not awaiting participant confirmation");
+    }
+
+    const [participant] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(
+        and(
+          eq(bookingParticipant.bookingId, bookingId),
+          eq(bookingParticipant.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!participant) throw forbidden("You are not a participant");
+    if (participant.role !== "invitee")
+      throw badRequest("Only invitees confirm");
+    if (participant.confirmationState !== "pending") {
+      throw conflict("Invite already confirmed or declined");
+    }
+
+    const size = b.targetGroupSize;
+    const pricePerStudent = (b.priceSnapshot?.perStudent ?? 50) as number;
+    const holdAmount = pricePerStudent;
+
+    const w = await wallet.getByUserId(db, userId);
+    if (!w) throw notFound("Wallet not found");
+    if (w.availableBalance < holdAmount) {
+      throw conflict("Insufficient available Marks");
+    }
+
+    return db.transaction(async (tx) => {
+      await wallet.hold(tx, {
+        walletId: w.id,
+        amount: holdAmount,
+        eventKey: `booking.${bookingId}.hold.${userId}`,
+        sourceReference: bookingId,
+        actorType: "student",
+        reason: "Hold Marks for group booking (invitee)",
+      });
+
+      await tx
+        .update(bookingParticipant)
+        .set({
+          confirmationState: "confirmed",
+          heldAmount: holdAmount,
+          confirmedAt: new Date(),
+        })
+        .where(eq(bookingParticipant.id, participant.id));
+
+      const newHeadcount = b.confirmedHeadcount + 1;
+      await tx
+        .update(booking)
+        .set({ confirmedHeadcount: newHeadcount })
+        .where(eq(booking.id, bookingId));
+
+      if (newHeadcount >= b.targetGroupSize) {
+        await transition(tx, bookingId, "awaiting_tutor_review", {
+          actorId: userId,
+          actorType: "student",
+          reason: "Full headcount reached",
+        });
+        await notification.write({
+          db: tx,
+          userId: b.tutorId,
+          bookingId,
+          category: "booking",
+          severity: "action",
+          title: "Group booking ready",
+          body: "All participants confirmed. Review the booking.",
+          eventKey: `booking.${bookingId}.full_headcount`,
+        });
+      }
+
+      return { confirmedHeadcount: newHeadcount, targetGroupSize: size };
+    });
+  }
+
+  async function declineInvite(
+    userId: string,
+    bookingId: string,
+    reason?: string,
+  ) {
+    const [b] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, bookingId))
+      .limit(1);
+    if (!b) throw notFound("Booking not found");
+    if (b.currentState !== "awaiting_participant_confirmation") {
+      throw conflict("Booking is not awaiting participant confirmation");
+    }
+
+    const [participant] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(
+        and(
+          eq(bookingParticipant.bookingId, bookingId),
+          eq(bookingParticipant.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!participant) throw forbidden("You are not a participant");
+    if (participant.role !== "invitee")
+      throw badRequest("Only invitees decline");
+    if (participant.confirmationState !== "pending") {
+      throw conflict("Invite already confirmed or declined");
+    }
+
+    return db.transaction(async (tx) => {
+      await tx
+        .update(bookingParticipant)
+        .set({
+          confirmationState: "declined",
+          declinedAt: new Date(),
+          withdrawnReason: reason,
+        })
+        .where(eq(bookingParticipant.id, participant.id));
+
+      return { declined: true };
+    });
+  }
+
+  async function reconfirm(userId: string, bookingId: string, accept: boolean) {
+    const [b] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, bookingId))
+      .limit(1);
+    if (!b) throw notFound("Booking not found");
+    if (b.currentState !== "awaiting_reconfirmation") {
+      throw conflict("Booking is not awaiting reconfirmation");
+    }
+
+    const [participant] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(
+        and(
+          eq(bookingParticipant.bookingId, bookingId),
+          eq(bookingParticipant.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!participant) throw forbidden("You are not a participant");
+
+    return db.transaction(async (tx) => {
+      if (accept) {
+        await tx
+          .update(bookingParticipant)
+          .set({
+            confirmationState: "reconfirmed",
+            reconfirmedAt: new Date(),
+          })
+          .where(eq(bookingParticipant.id, participant.id));
+
+        const reconfirmed = await db
+          .select()
+          .from(bookingParticipant)
+          .where(
+            and(
+              eq(bookingParticipant.bookingId, bookingId),
+              eq(bookingParticipant.confirmationState, "reconfirmed"),
+            ),
+          );
+
+        const confirmedCount = await db
+          .select()
+          .from(bookingParticipant)
+          .where(
+            and(
+              eq(bookingParticipant.bookingId, bookingId),
+              inArray(bookingParticipant.confirmationState, [
+                "confirmed",
+                "reconfirmed",
+              ]),
+            ),
+          );
+
+        if (reconfirmed.length === confirmedCount.length) {
+          await transition(tx, bookingId, "awaiting_tutor_review", {
+            actorId: userId,
+            actorType: "student",
+            reason: "All reconfirmed",
+          });
+        }
+        return { reconfirmed: true };
+      } else {
+        await tx
+          .update(bookingParticipant)
+          .set({ confirmationState: "declined", declinedAt: new Date() })
+          .where(eq(bookingParticipant.id, participant.id));
+        return { reconfirmed: false };
+      }
+    });
+  }
+
+  async function withdraw(userId: string, bookingId: string, reason?: string) {
+    const b = await assertStudentBookingAccess(db, userId, bookingId);
+    if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
+      throw conflict("Booking is already terminal");
+    }
+
+    const [participant] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(
+        and(
+          eq(bookingParticipant.bookingId, bookingId),
+          eq(bookingParticipant.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!participant) throw forbidden("You are not a participant");
+
+    const now = new Date();
+    const h2 = new Date(b.scheduledStartAt.getTime() - 2 * 60 * 60 * 1000);
+    const isLate = now > h2;
+    const participantState = isLate
+      ? ("withdrawn_post_h2" as const)
+      : ("withdrawn_pre_h2" as const);
+
+    return db.transaction(async (tx) => {
+      if (participant.heldAmount > 0) {
+        await wallet.release(tx, {
+          walletId: b.proposerId,
+          amount: participant.heldAmount,
+          eventKey: `booking.${bookingId}.withdraw.${userId}`,
+          sourceReference: bookingId,
+          actorType: "student",
+          reason: reason ?? "Withdrawal",
+        });
+      }
+
+      await tx
+        .update(bookingParticipant)
+        .set({
+          confirmationState: participantState,
+          withdrawnAt: new Date(),
+          withdrawnReason: reason,
+        })
+        .where(eq(bookingParticipant.id, participant.id));
+
+      const remaining = await db
+        .select()
+        .from(bookingParticipant)
+        .where(
+          and(
+            eq(bookingParticipant.bookingId, bookingId),
+            ne(bookingParticipant.userId, userId),
+            inArray(bookingParticipant.confirmationState, [
+              "confirmed",
+              "reconfirmed",
+            ]),
+          ),
+        );
+
+      if (b.type === "group" && remaining.length < 2) {
+        await transition(tx, bookingId, "cancelled", {
+          actorId: userId,
+          actorType: "student",
+          reason: "Not enough participants after withdrawal",
+        });
+      } else if (!isLate) {
+        await transition(tx, bookingId, "awaiting_reconfirmation", {
+          actorId: userId,
+          actorType: "student",
+          reason: "Participant withdrew before H-2",
+        });
+      }
+
+      return { withdrawn: true, late: isLate };
+    });
+  }
+
+  async function createSeries(proposerId: string, input: CreateSeriesInput) {
+    const profile = await db.query.tutorProfile.findFirst({
+      where: and(
+        eq(tutorProfile.userId, input.tutorId),
+        eq(tutorProfile.onboardingStatus, "published"),
+      ),
+    });
+    if (!profile) throw notFound("Tutor profile not found");
+
+    if (input.sessions.length < 2 || input.sessions.length > 4) {
+      throw badRequest("Series must have 2-4 sessions");
+    }
+
+    const slot = await db.query.availabilitySlot.findFirst({
+      where: and(
+        eq(availabilitySlot.id, input.availabilitySlotId),
+        eq(availabilitySlot.tutorId, input.tutorId),
+        eq(availabilitySlot.isActive, true),
+      ),
+    });
+    if (!slot) throw badRequest("Selected availability slot is not available");
+
+    const pricePerStudent = (profile.prices?.["1"] ?? 50) as number;
+    const priceSnapshot = pricing.computeSplit(pricePerStudent, 1);
+    const perSession = priceSnapshot.baseline;
+    const totalMarks = perSession * input.sessions.length;
+
+    const w = await wallet.getByUserId(db, proposerId);
+    if (!w) throw notFound("Wallet not found");
+    if (w.availableBalance < totalMarks) {
+      throw conflict("Insufficient available Marks for series");
+    }
+
+    const bookingId = crypto.randomUUID();
+
+    return db.transaction(async (tx) => {
+      await wallet.hold(tx, {
+        walletId: w.id,
+        amount: totalMarks,
+        eventKey: `booking.${bookingId}.hold`,
+        sourceReference: bookingId,
+        actorType: "student",
+        reason: "Hold Marks for series booking",
+      });
+
+      const [b] = await tx
+        .insert(booking)
+        .values({
+          id: bookingId,
+          type: "series",
+          modality: input.modality,
+          tutorId: input.tutorId,
+          proposerId,
+          targetGroupSize: 1,
+          minConfirmedHeadcount: 1,
+          confirmedHeadcount: 1,
+          currentState: "awaiting_tutor_review",
+          scheduledStartAt: input.sessions[0]!.scheduledStartAt,
+          scheduledEndAt:
+            input.sessions[input.sessions.length - 1]!.scheduledEndAt,
+          timezone: input.timezone,
+          priceSnapshot,
+          originalMarks: totalMarks,
+          holdAmount: totalMarks,
+        })
+        .returning();
+
+      await tx.insert(bookingParticipant).values({
+        bookingId,
+        userId: proposerId,
+        role: "proposer",
+        confirmationState: "confirmed",
+        heldAmount: totalMarks,
+      });
+
+      for (const session of input.sessions) {
+        await tx.insert(bookingSession).values({
+          seriesBookingId: bookingId,
+          scheduledStartAt: session.scheduledStartAt,
+          scheduledEndAt: session.scheduledEndAt,
+          currentState: "scheduled",
+          holdAmount: perSession,
+          priceSnapshot,
+        });
+      }
+
+      await recordTransition(tx, {
+        bookingId,
+        fromState: null,
+        toState: "awaiting_tutor_review",
+        actorId: proposerId,
+        actorType: "student",
+      });
+
+      return b!;
+    });
+  }
+
+  async function listSessions(bookingId: string) {
+    const b = await db.query.booking.findFirst({
+      where: eq(booking.id, bookingId),
+    });
+    if (!b) throw notFound("Booking not found");
+    if (b.type !== "series") throw badRequest("Booking is not a series");
+    return db
+      .select()
+      .from(bookingSession)
+      .where(eq(bookingSession.seriesBookingId, bookingId))
+      .orderBy(bookingSession.scheduledStartAt);
+  }
+
+  async function expireBookings() {
+    const now = new Date();
+    const candidates = await db
+      .select()
+      .from(booking)
+      .where(
+        and(
+          lte(booking.deadlineAt, now),
+          inArray(booking.currentState, [
+            "awaiting_participant_confirmation",
+            "awaiting_reconfirmation",
+            "awaiting_marks_hold",
+            "awaiting_tutor_review",
+          ]),
+        ),
+      );
+
+    for (const b of candidates) {
+      await db.transaction(async (tx) => {
+        if (b.holdAmount > 0) {
+          const w = await wallet.getByUserId(tx, b.proposerId);
+          if (w) {
+            await wallet.release(tx, {
+              walletId: w.id,
+              amount: b.holdAmount,
+              eventKey: `booking.${b.id}.expire_release`,
+              sourceReference: b.id,
+              actorType: "system",
+              reason: "Booking expired",
+            });
+          }
+        }
+        await transition(tx, b.id, "expired", {
+          actorId: "system",
+          actorType: "system",
+          reason: "Deadline passed",
+        });
+      });
+    }
+    return { expired: candidates.length };
+  }
+
   return {
     getById,
     listMine,
     createSolo,
+    createGroup,
+    createSeries,
+    confirmInvite,
+    declineInvite,
+    reconfirm,
+    withdraw,
     cancel,
     tutorAccept,
     tutorDecline,
     completeSession,
     proposeReschedule,
+    listSessions,
+    expireBookings,
     transition,
     canTransition,
   };

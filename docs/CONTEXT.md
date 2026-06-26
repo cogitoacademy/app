@@ -33,7 +33,7 @@ cogito-app/
 | `@cogito-app/env/web`    | Web env validation       | `VITE_SERVER_URL`                                                                                                                                                                  |
 | `@cogito-app/ui`         | Selia UI components      | 22 components from `@cogito-app/ui/components/selia/*`                                                                                                                             |
 
-## DB Schema (24 tables)
+## DB Schema (25 tables)
 
 ### `user` (auth.ts)
 
@@ -121,6 +121,11 @@ cogito-app/
 
 - id (uuid PK), notificationId FK→notification cascade, channel (`email`), recipientEmail, providerMessageId, status (`queued` | `sent` | `failed` | `suppressed`), attempts, lastError, createdAt, sentAt.
 
+### `bookingSession` (booking.ts)
+
+- id (uuid PK), seriesBookingId FK→booking cascade, scheduledStartAt, scheduledEndAt, currentState (`scheduled` | `completed` | `cancelled` | `no_show` | `late_cancelled`), holdAmount, priceSnapshot jsonb, timestamps.
+- Index: seriesBookingId, scheduledStartAt.
+
 ## API Routers (oRPC)
 
 ### Procedures
@@ -193,8 +198,15 @@ cogito-app/
 ### `bookingRouter` (protected)
 
 - `createSolo` → POST /booking/solo/create — hold Marks, create booking + participant + history + notification
+- `createGroup` → POST /booking/group/create — hold proposer Marks, create invitee participants, send invitations
+- `createSeries` → POST /booking/series/create — hold all session Marks upfront, create bookingSession children
+- `confirmInvite` → POST /booking/invite/confirm — invitee confirms, holds Marks, auto-transitions when full
+- `declineInvite` → POST /booking/invite/decline — invitee declines
+- `reconfirm` → POST /booking/reconfirm — accept/reject new price after repricing
+- `withdraw` → POST /booking/withdraw — participant withdraws (pre-H2 release, post-H2 late-cancel)
 - `get` → POST /booking/get — full booking with participants, history, meeting, roomBookings
 - `listMine` → POST /booking/list-mine — paginated bookings where user is proposer
+- `listSessions` → POST /booking/sessions/list — child sessions for series booking
 - `cancel` → POST /booking/cancel — release held Marks, transition to cancelled/late_cancelled
 - `proposeReschedule` → POST /booking/reschedule/propose — student proposes new slot
 
@@ -266,14 +278,14 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 | **Phase 1** | **Wallet & Payment (mark packages, payment records, wallet router, payment router, idempotent webhook)**                            | **Complete (backend)** |
 | **Phase 2** | **Tutor availability + discovery refactor**                                                                                         | **Complete (backend)** |
 | **Phase 3** | **Booking core (solo): booking tables, state machine, createSolo, accept/decline, complete, notifications, meeting fallback, room** | **Complete (backend)** |
-| Phase 4     | Booking group + series                                                                                                              | Pending                |
-| Phase 5     | Admin override + support                                                                                                            | Pending                |
+| **Phase 4** | **Booking group + series: createGroup, confirmInvite, reconfirm, withdraw, createSeries, bookingSession, expiry sweeper** | **Complete (backend)** |
+| Phase 5     | Admin override + support                                                                                 | Pending                |
 | Phase 6     | Polish + Docker/CD                                                                                                                  | Pending                |
 
 ### Still Missing
 
 - Frontend real wallet data + purchase flow
-- Booking group + series + expiry sweeper
+- Admin override/refund flows
 - Notification table + email queue
 - Admin override/refund flows
 - Production Dockerfiles + CD pipeline

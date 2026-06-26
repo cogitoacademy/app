@@ -230,6 +230,43 @@ export const bookingRescheduleProposal = pgTable(
   ],
 );
 
+export const bookingSession = pgTable(
+  "booking_session",
+  {
+    id: uuidPrimaryKey,
+    seriesBookingId: text("series_booking_id")
+      .notNull()
+      .references(() => booking.id, { onDelete: "cascade" }),
+    scheduledStartAt: timestamp("scheduled_start_at", {
+      withTimezone: true,
+    }).notNull(),
+    scheduledEndAt: timestamp("scheduled_end_at", {
+      withTimezone: true,
+    }).notNull(),
+    currentState: text("current_state").notNull().default("scheduled"),
+    holdAmount: integer("hold_amount").notNull().default(0),
+    priceSnapshot: jsonb("price_snapshot").$type<{
+      perStudent: number;
+      baseline: number;
+      tutorShare: number;
+      cogitoTake: number;
+    }>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "booking_session_state_check",
+      sql`${table.currentState} IN ('scheduled','completed','cancelled','no_show','late_cancelled')`,
+    ),
+    index("booking_session_seriesBookingId_idx").on(table.seriesBookingId),
+    index("booking_session_scheduledStartAt_idx").on(table.scheduledStartAt),
+  ],
+);
+
 export const room = pgTable(
   "room",
   {
@@ -337,6 +374,7 @@ export const bookingRelations = relations(booking, ({ one, many }) => ({
   seriesChildren: many(booking, {
     relationName: "seriesParent",
   }),
+  sessions: many(bookingSession),
 }));
 
 export const bookingParticipantRelations = relations(
@@ -404,5 +442,12 @@ export const meetingEventRelations = relations(meetingEvent, ({ one }) => ({
   createdBy: one(user, {
     fields: [meetingEvent.createdBy],
     references: [user.id],
+  }),
+}));
+
+export const bookingSessionRelations = relations(bookingSession, ({ one }) => ({
+  seriesBooking: one(booking, {
+    fields: [bookingSession.seriesBookingId],
+    references: [booking.id],
   }),
 }));

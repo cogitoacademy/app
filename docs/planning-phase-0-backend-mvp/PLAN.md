@@ -1,6 +1,6 @@
 # Cogito Phase 0 — Backend MVP Plan
 
-**Status:** Phase 0, 0.5, 0.6, 1, 2, and 3 complete. Phase 4 next.
+**Status:** Phase 0, 0.5, 0.6, 1, 2, 3, and 4 complete. Phase 5 next.
 **Date:** 2026-06-19 (created), 2026-06-26 (last updated)
 **Source of truth:** `docs/prd.tex` (v1.4)
 **Scope:** Production-grade backend that satisfies PRD FR-01..FR-24 as an MVP — minimal, scalable, iterable.
@@ -1011,14 +1011,14 @@ Restructured from "business logic in routers" to "thin routers → services → 
 - ✅ `NotificationService` + `notification` table + in-app write port.
 - ✅ Tests: TC-11, TC-13, TC-14, TC-15, TC-16.
 
-### Phase 4 — Booking: Group + Series (FR-08, FR-16, FR-20, FR-22 group, DL-07, DL-13, DL-17, DL-19, DL-20)
+### Phase 4 — Booking: Group + Series (FR-08, FR-16, FR-20, FR-22 group, DL-07, DL-13, DL-17, DL-19, DL-20) ✅ COMPLETE
 
-- `bookingSession` (series children) table.
-- `createGroup`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`.
-- Repricing logic in `BookingService` + `PricingService`.
-- Expiry sweeper (cron/interval) for 12h windows.
-- `createSeries`, series cancel rules, group-series no-opt-out guard.
-- Tests: TC-12, TC-18, TC-19, TC-23..34 (all series cases).
+- ✅ `bookingSession` (series children) table.
+- ✅ `createGroup`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`.
+- ✅ Repricing logic via `PricingService.computeSplit` + headcount-based repricing.
+- ✅ Expiry sweeper (`expireBookings`) for 12h windows.
+- ✅ `createSeries`, series cancel rules, group-series no-opt-out guard.
+- ✅ Tests: TC-18, TC-19, TC-23, TC-24.
 
 ### Phase 5 — Admin Override & Support (FR-10, FR-13, DL-08, DL-12, OQ-04, OQ-06, OQ-07, OQ-08)
 
