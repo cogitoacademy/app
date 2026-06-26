@@ -1,21 +1,18 @@
-export interface PaymentIntent {
-  paymentId: string;
+export interface WebhookPayload {
   providerReference: string;
-  providerCheckoutUrl?: string;
-}
-
-export interface PaymentConfirmation {
-  paymentId: string;
+  providerEventId: string;
   status: "succeeded" | "failed";
-  marks: number;
-  receiptUrl?: string;
-  failureReason?: string;
+  receiptUrl?: string | null;
+  failureReason?: string | null;
 }
 
-export interface PaymentPort {
-  createIntent(userId: string, packageCode: string): Promise<PaymentIntent>;
-  confirmFromWebhook(
-    providerEventId: string,
-    body: unknown,
-  ): Promise<PaymentConfirmation>;
+export interface PaymentProvider {
+  createIntent(params: {
+    paymentId: string;
+    amountIdr: number;
+    providerReference: string;
+  }): Promise<{ checkoutUrl: string }>;
+  verifyWebhook(rawBody: string, signature: string): Promise<WebhookPayload>;
 }
+
+export type PaymentPort = PaymentProvider;
