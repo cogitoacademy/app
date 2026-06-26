@@ -9,6 +9,8 @@ import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Elysia } from "elysia";
+
+import { paymentsWebhook } from "./webhooks/payments";
 import { evlog } from "evlog/elysia";
 
 import { identifyUser } from "./middleware";
@@ -117,5 +119,6 @@ export function createServer() {
         );
       }
     })
-    .get("/", () => "OK");
+    .get("/", () => "OK")
+    .use(paymentsWebhook);
 }
