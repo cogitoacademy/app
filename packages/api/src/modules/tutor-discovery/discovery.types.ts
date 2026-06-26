@@ -9,3 +9,7 @@ export const listPublishedInput = z
     offset: z.number().min(0).default(0),
   })
   .optional();
+
+export const getProfileInput = z.object({
+  tutorId: z.string(),
+});

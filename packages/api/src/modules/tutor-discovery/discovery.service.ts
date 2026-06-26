@@ -1,6 +1,7 @@
-import { eq, desc, and, sql, type SQL } from "drizzle-orm";
-import { tutorProfile } from "@cogito-app/db/schema";
+import { eq, desc, and, gte, sql, type SQL } from "drizzle-orm";
+import { tutorProfile, availabilitySlot } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
+import { notFound } from "../../lib/errors";
 
 export interface ListPublishedInput {
   search?: string;
@@ -14,6 +15,22 @@ export type DiscoveryService = ReturnType<typeof createDiscoveryService>;
 
 export function createDiscoveryService(deps: { db: DbType }) {
   const { db } = deps;
+
+  async function upcomingSlots(tutorUserId: string, limit = 3) {
+    const now = new Date();
+    return db
+      .select()
+      .from(availabilitySlot)
+      .where(
+        and(
+          eq(availabilitySlot.tutorId, tutorUserId),
+          eq(availabilitySlot.isActive, true),
+          gte(availabilitySlot.startDate, now),
+        ),
+      )
+      .orderBy(availabilitySlot.startDate)
+      .limit(limit);
+  }
 
   async function listPublished(input: ListPublishedInput = {}) {
     const limit = input.limit ?? 20;
@@ -48,19 +65,25 @@ export function createDiscoveryService(deps: { db: DbType }) {
       with: { user: true },
     });
 
-    return profiles.map((p) => ({
-      id: p.id,
-      displayName: p.displayName,
-      shortBio: p.shortBio,
-      credentialsSummary: p.credentialsSummary,
-      expertise: p.expertise ?? [],
-      modality: p.modality,
-      prices: p.prices,
-      availabilitySummary: p.availabilitySummary,
-      proofUrls: p.proofUrls,
-      publishedAt: p.publishedAt,
-      user: p.user ? { name: p.user.name, image: p.user.image } : null,
-    }));
+    const results = [];
+    for (const p of profiles) {
+      const slots = await upcomingSlots(p.userId);
+      results.push({
+        id: p.id,
+        displayName: p.displayName,
+        shortBio: p.shortBio,
+        credentialsSummary: p.credentialsSummary,
+        expertise: p.expertise ?? [],
+        modality: p.modality,
+        prices: p.prices,
+        availabilitySummary: p.availabilitySummary,
+        proofUrls: p.proofUrls,
+        publishedAt: p.publishedAt,
+        user: p.user ? { name: p.user.name, image: p.user.image } : null,
+        upcomingSlots: slots,
+      });
+    }
+    return results;
   }
 
   async function getProfile(tutorId: string) {
@@ -71,7 +94,22 @@ export function createDiscoveryService(deps: { db: DbType }) {
       ),
       with: { user: true },
     });
-    return profile;
+    if (!profile) throw notFound("Tutor profile not found");
+
+    const now = new Date();
+    const slots = await db
+      .select()
+      .from(availabilitySlot)
+      .where(
+        and(
+          eq(availabilitySlot.tutorId, profile.userId),
+          eq(availabilitySlot.isActive, true),
+          gte(availabilitySlot.startDate, now),
+        ),
+      )
+      .orderBy(availabilitySlot.startDate);
+
+    return { ...profile, slots };
   }
 
   return { listPublished, getProfile };

@@ -1,5 +1,5 @@
 import { protectedProcedure } from "../../procedures";
-import { listPublishedInput } from "./discovery.types";
+import { listPublishedInput, getProfileInput } from "./discovery.types";
 
 export const discoveryRouter = {
   listPublished: protectedProcedure
@@ -14,5 +14,18 @@ export const discoveryRouter = {
     .input(listPublishedInput)
     .handler(async ({ context, input }) => {
       return context.services.discovery.listPublished(input ?? {});
+    }),
+
+  getProfile: protectedProcedure
+    .route({
+      method: "POST",
+      path: "/tutors/profile/get",
+      tags: ["Tutors"],
+      summary: "Get published tutor profile",
+      description: "Returns a published tutor profile with availability slots",
+    })
+    .input(getProfileInput)
+    .handler(async ({ context, input }) => {
+      return context.services.discovery.getProfile(input.tutorId);
     }),
 };
