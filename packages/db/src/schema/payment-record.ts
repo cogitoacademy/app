@@ -32,7 +32,7 @@ export const paymentRecord = pgTable(
     providerEventId: text("provider_event_id"),
     amountIdr: integer("amount_idr").notNull(),
     marks: integer("marks").notNull(),
-    status: text("status").notNull().default("pending"),
+    status: text("status").notNull().default("PENDING"),
     receiptUrl: text("receipt_url"),
     failureReason: text("failure_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -48,7 +48,7 @@ export const paymentRecord = pgTable(
     ),
     check(
       "payment_status_check",
-      sql`${table.status} IN ('pending','succeeded','failed','refunded')`,
+      sql`${table.status} IN ('PENDING','PAID','SETTLED','FAILED','EXPIRED','REFUNDED')`,
     ),
     uniqueIndex("payment_provider_event_id_idx").on(table.providerEventId),
     index("payment_userId_idx").on(table.userId),
