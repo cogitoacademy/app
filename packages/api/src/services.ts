@@ -66,15 +66,27 @@ function createServices(): ServiceRegistry {
   const invite = createInviteService({ db, audit });
   const achievement = createAchievementService({ db, audit });
   const providerName = env.PAYMENT_PROVIDER;
-  const paymentProvider =
-    providerName === "xendit"
-      ? createXenditPaymentProvider({
-          secretKey: env.XENDIT_SECRET_KEY!,
-          webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
-          successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL!,
-          failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL!,
-        })
-      : createStubPaymentProvider(env.PAYMENT_WEBHOOK_SECRET);
+  let paymentProvider;
+  if (providerName === "xendit") {
+    if (
+      !env.XENDIT_SECRET_KEY ||
+      !env.XENDIT_WEBHOOK_TOKEN ||
+      !env.XENDIT_SUCCESS_REDIRECT_URL ||
+      !env.XENDIT_FAILURE_REDIRECT_URL
+    ) {
+      throw new Error(
+        "XENDIT_SECRET_KEY, XENDIT_WEBHOOK_TOKEN, XENDIT_SUCCESS_REDIRECT_URL, XENDIT_FAILURE_REDIRECT_URL required when PAYMENT_PROVIDER=xendit",
+      );
+    }
+    paymentProvider = createXenditPaymentProvider({
+      secretKey: env.XENDIT_SECRET_KEY,
+      webhookToken: env.XENDIT_WEBHOOK_TOKEN,
+      successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL,
+      failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL,
+    });
+  } else {
+    paymentProvider = createStubPaymentProvider(env.PAYMENT_WEBHOOK_SECRET);
+  }
   const payment = createPaymentService({
     db,
     wallet,

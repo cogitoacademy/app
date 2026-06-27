@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import type {
   PaymentProvider,
   PaymentStatus,
@@ -32,37 +33,41 @@ export function createXenditPaymentProvider(opts: {
     amountIdr: number;
     providerReference: string;
   }): Promise<{ checkoutUrl: string }> {
-    const res = await fetch(
-      `${XENDIT_API_BASE}/payment_requests`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: authHeader,
-        },
-        body: JSON.stringify({
-          reference_id: params.providerReference,
-          currency: "IDR",
-          amount: params.amountIdr,
-          payment_method: {
-            type: "EWALLET",
-            ewallet: {
-              channel_code: "ID_OVO",
-            },
-          },
-          success_redirect_url: opts.successRedirectUrl,
-          failure_redirect_url: opts.failureRedirectUrl,
-          metadata: {
-            paymentId: params.paymentId,
-          },
-        }),
+    const res = await fetch(`${XENDIT_API_BASE}/payment_requests`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: authHeader,
       },
-    );
+      body: JSON.stringify({
+        reference_id: params.providerReference,
+        currency: "IDR",
+        amount: params.amountIdr,
+        payment_method: {
+          type: "EWALLET",
+          ewallet: {
+            channel_code: "ID_OVO",
+          },
+        },
+        success_redirect_url: opts.successRedirectUrl,
+        failure_redirect_url: opts.failureRedirectUrl,
+        metadata: {
+          paymentId: params.paymentId,
+        },
+      }),
+    });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({} as Record<string, unknown>));
+      const text = await res.text().catch(() => "");
+      let errCode: string | undefined;
+      try {
+        const errJson = JSON.parse(text);
+        errCode = errJson.error_code;
+      } catch {
+        errCode = undefined;
+      }
       throw new Error(
-        `Xendit API error: ${res.status} ${(err as { error_code?: string }).error_code ?? res.statusText}`,
+        `Xendit API error: ${res.status} ${errCode ?? res.statusText}`,
       );
     }
 
@@ -87,11 +92,16 @@ export function createXenditPaymentProvider(opts: {
     rawBody: string,
     token: string,
   ): Promise<WebhookPayload> {
-    if (token !== opts.webhookToken) {
+    const tokenBuf = Buffer.from(token);
+    const expectedBuf = Buffer.from(opts.webhookToken);
+    if (
+      tokenBuf.length !== expectedBuf.length ||
+      !timingSafeEqual(tokenBuf, expectedBuf)
+    ) {
       throw new Error("Invalid webhook token");
     }
 
-    const body = JSON.parse(rawBody) as {
+    let body: {
       event_id?: string;
       id?: string;
       data?: {
@@ -102,6 +112,11 @@ export function createXenditPaymentProvider(opts: {
         receipt_url?: string;
       };
     };
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      throw new Error("Invalid webhook payload: malformed JSON");
+    }
 
     const data = (body.data ?? body) as {
       id?: string;
