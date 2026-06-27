@@ -255,7 +255,9 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 | `/_app/dashboard`    | DashboardPage (mock data)                     | Yes  |
 | `/_app/balance`      | BalancePage (mock wallet)                     | Yes  |
 | `/_app/achievements` | AchivementsPage (live API)                    | Yes  |
-| `/_app/tutors`       | TutorsPage (placeholder)                      | Yes  |
+| `/_app/tutors`       | TutorsPage (live discovery)                   | Yes  |
+| `/_app/bookings`     | BookingsPage (my bookings, live API)          | Yes  |
+| `/_app/tutor-bookings` | TutorBookingsPage (accept/decline/complete)   | Yes  |
 | `/_app/profile`      | ProfilePage (live API)                        | Yes  |
 | `/_app/todos`        | TodoPage (no sidebar link)                    | Yes  |
 
@@ -265,7 +267,11 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 - `apps/web/src/lib/auth-client.ts` — Better Auth React client
 - `apps/web/src/utils/orpc.ts` — oRPC client + TanStack Query setup
 - `apps/web/src/components/dashboard/app-sidebar.tsx` — Sidebar with nav items
-- `apps/web/src/components/dashboard/pages/balance-page.tsx` — Mock balance + package cards + Knowledge Bank section
+- `apps/web/src/components/dashboard/pages/balance-page.tsx` — Real wallet + live package cards + purchase flow
+- `apps/web/src/components/tutor/tutors-page-content.tsx` — Live tutor discovery
+- `apps/web/src/components/tutor/tutor-drawer.tsx` — Tutor profile + book solo session
+- `apps/web/src/components/dashboard/pages/bookings-page.tsx` — My bookings list with cancel
+- `apps/web/src/components/dashboard/pages/tutor-bookings-page.tsx` — Tutor incoming bookings accept/decline/complete
 - `apps/web/src/components/dashboard/pages/achivements-page.tsx` — Full achievement CRUD UI
 
 ## Build Status
@@ -278,8 +284,8 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 | **Phase 1** | **Wallet & Payment (mark packages, payment records, wallet router, payment router, idempotent webhook)**                            | **Complete (backend)** |
 | **Phase 2** | **Tutor availability + discovery refactor**                                                                                         | **Complete (backend)** |
 | **Phase 3** | **Booking core (solo): booking tables, state machine, createSolo, accept/decline, complete, notifications, meeting fallback, room** | **Complete (backend)** |
-| **Phase 4** | **Booking group + series: createGroup, confirmInvite, reconfirm, withdraw, createSeries, bookingSession, expiry sweeper** | **Complete (backend)** |
-| Phase 5     | Admin override + support                                                                                 | Pending                |
+| **Phase 4** | **Booking group + series: createGroup, confirmInvite, reconfirm, withdraw, createSeries, bookingSession, expiry sweeper**           | **Complete (backend)** |
+| Phase 5     | Admin override + support                                                                                                            | Pending                |
 | Phase 6     | Polish + Docker/CD                                                                                                                  | Pending                |
 
 ### Still Missing

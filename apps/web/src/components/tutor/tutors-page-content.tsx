@@ -47,6 +47,12 @@ type PublishedTutor = {
   proofUrls: string[] | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
+  upcomingSlots: {
+    id: string;
+    startDate: Date;
+    endDate: Date;
+    modality: string;
+  }[];
 };
 
 export function TutorsPageContent() {

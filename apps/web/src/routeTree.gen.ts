@@ -14,9 +14,11 @@ import { Route as InviteRouteImport } from "./routes/invite";
 import { Route as AppRouteImport } from "./routes/_app";
 import { Route as IndexRouteImport } from "./routes/index";
 import { Route as AppTutorsRouteImport } from "./routes/_app.tutors";
+import { Route as AppTutorBookingsRouteImport } from "./routes/_app.tutor-bookings";
 import { Route as AppProfileRouteImport } from "./routes/_app.profile";
 import { Route as AppOnboardingRouteImport } from "./routes/_app.onboarding";
 import { Route as AppDashboardRouteImport } from "./routes/_app.dashboard";
+import { Route as AppBookingsRouteImport } from "./routes/_app.bookings";
 import { Route as AppBalanceRouteImport } from "./routes/_app.balance";
 import { Route as AppAdminTutorsRouteImport } from "./routes/_app.admin-tutors";
 import { Route as AppAchievementsRouteImport } from "./routes/_app.achievements";
@@ -45,6 +47,11 @@ const AppTutorsRoute = AppTutorsRouteImport.update({
   path: "/tutors",
   getParentRoute: () => AppRoute,
 } as any);
+const AppTutorBookingsRoute = AppTutorBookingsRouteImport.update({
+  id: "/tutor-bookings",
+  path: "/tutor-bookings",
+  getParentRoute: () => AppRoute,
+} as any);
 const AppProfileRoute = AppProfileRouteImport.update({
   id: "/profile",
   path: "/profile",
@@ -58,6 +65,11 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: "/dashboard",
   path: "/dashboard",
+  getParentRoute: () => AppRoute,
+} as any);
+const AppBookingsRoute = AppBookingsRouteImport.update({
+  id: "/bookings",
+  path: "/bookings",
   getParentRoute: () => AppRoute,
 } as any);
 const AppBalanceRoute = AppBalanceRouteImport.update({
@@ -83,9 +95,11 @@ export interface FileRoutesByFullPath {
   "/achievements": typeof AppAchievementsRoute;
   "/admin-tutors": typeof AppAdminTutorsRoute;
   "/balance": typeof AppBalanceRoute;
+  "/bookings": typeof AppBookingsRoute;
   "/dashboard": typeof AppDashboardRoute;
   "/onboarding": typeof AppOnboardingRoute;
   "/profile": typeof AppProfileRoute;
+  "/tutor-bookings": typeof AppTutorBookingsRoute;
   "/tutors": typeof AppTutorsRoute;
 }
 export interface FileRoutesByTo {
@@ -95,9 +109,11 @@ export interface FileRoutesByTo {
   "/achievements": typeof AppAchievementsRoute;
   "/admin-tutors": typeof AppAdminTutorsRoute;
   "/balance": typeof AppBalanceRoute;
+  "/bookings": typeof AppBookingsRoute;
   "/dashboard": typeof AppDashboardRoute;
   "/onboarding": typeof AppOnboardingRoute;
   "/profile": typeof AppProfileRoute;
+  "/tutor-bookings": typeof AppTutorBookingsRoute;
   "/tutors": typeof AppTutorsRoute;
 }
 export interface FileRoutesById {
@@ -109,9 +125,11 @@ export interface FileRoutesById {
   "/_app/achievements": typeof AppAchievementsRoute;
   "/_app/admin-tutors": typeof AppAdminTutorsRoute;
   "/_app/balance": typeof AppBalanceRoute;
+  "/_app/bookings": typeof AppBookingsRoute;
   "/_app/dashboard": typeof AppDashboardRoute;
   "/_app/onboarding": typeof AppOnboardingRoute;
   "/_app/profile": typeof AppProfileRoute;
+  "/_app/tutor-bookings": typeof AppTutorBookingsRoute;
   "/_app/tutors": typeof AppTutorsRoute;
 }
 export interface FileRouteTypes {
@@ -123,9 +141,11 @@ export interface FileRouteTypes {
     | "/achievements"
     | "/admin-tutors"
     | "/balance"
+    | "/bookings"
     | "/dashboard"
     | "/onboarding"
     | "/profile"
+    | "/tutor-bookings"
     | "/tutors";
   fileRoutesByTo: FileRoutesByTo;
   to:
@@ -135,9 +155,11 @@ export interface FileRouteTypes {
     | "/achievements"
     | "/admin-tutors"
     | "/balance"
+    | "/bookings"
     | "/dashboard"
     | "/onboarding"
     | "/profile"
+    | "/tutor-bookings"
     | "/tutors";
   id:
     | "__root__"
@@ -148,9 +170,11 @@ export interface FileRouteTypes {
     | "/_app/achievements"
     | "/_app/admin-tutors"
     | "/_app/balance"
+    | "/_app/bookings"
     | "/_app/dashboard"
     | "/_app/onboarding"
     | "/_app/profile"
+    | "/_app/tutor-bookings"
     | "/_app/tutors";
   fileRoutesById: FileRoutesById;
 }
@@ -198,6 +222,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppTutorsRouteImport;
       parentRoute: typeof AppRoute;
     };
+    "/_app/tutor-bookings": {
+      id: "/_app/tutor-bookings";
+      path: "/tutor-bookings";
+      fullPath: "/tutor-bookings";
+      preLoaderRoute: typeof AppTutorBookingsRouteImport;
+      parentRoute: typeof AppRoute;
+    };
     "/_app/profile": {
       id: "/_app/profile";
       path: "/profile";
@@ -217,6 +248,13 @@ declare module "@tanstack/react-router" {
       path: "/dashboard";
       fullPath: "/dashboard";
       preLoaderRoute: typeof AppDashboardRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/_app/bookings": {
+      id: "/_app/bookings";
+      path: "/bookings";
+      fullPath: "/bookings";
+      preLoaderRoute: typeof AppBookingsRouteImport;
       parentRoute: typeof AppRoute;
     };
     "/_app/balance": {
@@ -247,9 +285,11 @@ interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute;
   AppAdminTutorsRoute: typeof AppAdminTutorsRoute;
   AppBalanceRoute: typeof AppBalanceRoute;
+  AppBookingsRoute: typeof AppBookingsRoute;
   AppDashboardRoute: typeof AppDashboardRoute;
   AppOnboardingRoute: typeof AppOnboardingRoute;
   AppProfileRoute: typeof AppProfileRoute;
+  AppTutorBookingsRoute: typeof AppTutorBookingsRoute;
   AppTutorsRoute: typeof AppTutorsRoute;
 }
 
@@ -257,9 +297,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
   AppAdminTutorsRoute: AppAdminTutorsRoute,
   AppBalanceRoute: AppBalanceRoute,
+  AppBookingsRoute: AppBookingsRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
+  AppTutorBookingsRoute: AppTutorBookingsRoute,
   AppTutorsRoute: AppTutorsRoute,
 };
 

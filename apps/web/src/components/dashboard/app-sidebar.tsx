@@ -30,6 +30,7 @@ import {
   SidebarMenu,
 } from "@cogito-app/ui/components/selia/sidebar";
 import {
+  IconCalendarEvent,
   IconCertificate,
   IconCoins,
   IconHome,
@@ -48,6 +49,7 @@ import { authClient } from "@/lib/auth-client";
 const studentNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/balance", label: "Balance", icon: IconCoins },
+  { to: "/bookings", label: "My Bookings", icon: IconCalendarEvent },
   { to: "/achievements", label: "Achievements", icon: IconCertificate },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
@@ -55,6 +57,7 @@ const studentNavItems = [
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/onboarding", label: "My Profile", icon: IconUser },
+  { to: "/tutor-bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
 
