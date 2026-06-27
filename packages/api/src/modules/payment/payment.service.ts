@@ -2,7 +2,10 @@ import { eq } from "drizzle-orm";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { WalletPort } from "../../shared/ports/wallet.port";
-import type { PaymentProvider, PaymentStatus } from "../../shared/ports/payment.port";
+import type {
+  PaymentProvider,
+  PaymentStatus,
+} from "../../shared/ports/payment.port";
 import { notFound } from "../../lib/errors";
 
 export interface CreateIntentResult {
