@@ -43,6 +43,13 @@
       "when": 1782493834393,
       "tag": "0005_small_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782533849687,
+      "tag": "0006_rich_groot",
+      "breakpoints": true
     }
   ]
 }
