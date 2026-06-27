@@ -29,7 +29,7 @@ cogito-app/
 | `@cogito-app/db`         | Drizzle ORM + PostgreSQL | `createDb()`, `db`, all schema tables                                                                                                                                              |
 | `@cogito-app/auth`       | Better Auth setup        | `auth`, `createAuth()`, `CogitoUser` type                                                                                                                                          |
 | `@cogito-app/api`        | oRPC routers             | `appRouter`, `AppRouter`, `AppRouterClient`, procedures                                                                                                                            |
-| `@cogito-app/env/server` | Server env validation    | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, `NODE_ENV`, `PAYMENT_PROVIDER`, `PAYMENT_WEBHOOK_SECRET`, `COMPETITION_CALENDAR_URL`, `KNOWLEDGE_BANK_URL` |
+| `@cogito-app/env/server` | Server env validation    | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, `NODE_ENV`, `PAYMENT_PROVIDER`, `PAYMENT_WEBHOOK_SECRET`, `XENDIT_SECRET_KEY`, `XENDIT_WEBHOOK_TOKEN`, `XENDIT_SUCCESS_REDIRECT_URL`, `XENDIT_FAILURE_REDIRECT_URL`, `COMPETITION_CALENDAR_URL`, `KNOWLEDGE_BANK_URL` |
 | `@cogito-app/env/web`    | Web env validation       | `VITE_SERVER_URL`                                                                                                                                                                  |
 | `@cogito-app/ui`         | Selia UI components      | 22 components from `@cogito-app/ui/components/selia/*`                                                                                                                             |
 
@@ -70,7 +70,7 @@ cogito-app/
 
 ### `paymentRecord` (payment-record.ts)
 
-- id (uuid PK), userId FK→user, walletId FK→wallet, packageId FK→markPackage nullable, provider (stub/midtrans/xendit), providerReference, providerEventId unique, amountIdr, marks, status (pending/succeeded/failed/refunded), receiptUrl, failureReason, timestamps
+- id (uuid PK), userId FK→user, walletId FK→wallet, packageId FK→markPackage nullable, provider (stub/midtrans/xendit), providerReference, providerEventId unique, amountIdr, marks, status (PENDING/PAID/SETTLED/FAILED/EXPIRED/REFUNDED), receiptUrl, failureReason, timestamps
 
 ### `refundRecord` (payment-record.ts)
 
@@ -247,19 +247,19 @@ Tags: `System`, `Auth`, `Admin`, `Achievements`, `Tutor`, `Tutor Invites`, `Tuto
 
 ## Frontend Routes
 
-| Route                | Component                                     | Auth |
-| -------------------- | --------------------------------------------- | ---- |
-| `/`                  | Redirect (authed → /dashboard, else → /login) | —    |
-| `/login`             | SignIn/SignUp form toggle                     | No   |
-| `/_app`              | Layout + AppSidebar                           | Yes  |
-| `/_app/dashboard`    | DashboardPage (mock data)                     | Yes  |
-| `/_app/balance`      | BalancePage (mock wallet)                     | Yes  |
-| `/_app/achievements` | AchivementsPage (live API)                    | Yes  |
-| `/_app/tutors`       | TutorsPage (live discovery)                   | Yes  |
-| `/_app/bookings`     | BookingsPage (my bookings, live API)          | Yes  |
+| Route                  | Component                                     | Auth |
+| ---------------------- | --------------------------------------------- | ---- |
+| `/`                    | Redirect (authed → /dashboard, else → /login) | —    |
+| `/login`               | SignIn/SignUp form toggle                     | No   |
+| `/_app`                | Layout + AppSidebar                           | Yes  |
+| `/_app/dashboard`      | DashboardPage (mock data)                     | Yes  |
+| `/_app/balance`        | BalancePage (mock wallet)                     | Yes  |
+| `/_app/achievements`   | AchivementsPage (live API)                    | Yes  |
+| `/_app/tutors`         | TutorsPage (live discovery)                   | Yes  |
+| `/_app/bookings`       | BookingsPage (my bookings, live API)          | Yes  |
 | `/_app/tutor-bookings` | TutorBookingsPage (accept/decline/complete)   | Yes  |
-| `/_app/profile`      | ProfilePage (live API)                        | Yes  |
-| `/_app/todos`        | TodoPage (no sidebar link)                    | Yes  |
+| `/_app/profile`        | ProfilePage (live API)                        | Yes  |
+| `/_app/todos`          | TodoPage (no sidebar link)                    | Yes  |
 
 ## Frontend Key Files
 
