@@ -35,21 +35,21 @@ describe("StubPaymentProvider", () => {
     const body = JSON.stringify({
       providerReference: "stub-pay_123",
       providerEventId: "evt_1",
-      status: "succeeded",
+      status: "PAID",
     });
     const signature = await signBody(body, SECRET);
 
     const payload = await provider.verifyWebhook(body, signature);
     expect(payload.providerReference).toBe("stub-pay_123");
     expect(payload.providerEventId).toBe("evt_1");
-    expect(payload.status).toBe("succeeded");
+    expect(payload.status).toBe("PAID");
   });
 
   test("verifyWebhook rejects invalid signature", async () => {
     const body = JSON.stringify({
       providerReference: "x",
       providerEventId: "y",
-      status: "succeeded",
+      status: "PAID",
     });
     await expect(provider.verifyWebhook(body, "deadbeef")).rejects.toThrow(
       "Invalid webhook signature",

@@ -11,6 +11,7 @@ import { createInviteService } from "./modules/invite/invite.service";
 import { createAchievementService } from "./modules/achievement/achievement.service";
 import { createPaymentService } from "./modules/payment/payment.service";
 import { createStubPaymentProvider } from "./modules/payment/stub-payment.provider";
+import { createXenditPaymentProvider } from "./modules/payment/xendit-payment.provider";
 import { createNotificationService } from "./modules/notification/notification.service";
 import { createBookingService } from "./modules/booking/booking.service";
 import { createFallbackMeetingProvider } from "./modules/meeting/fallback.provider";
@@ -64,11 +65,21 @@ function createServices(): ServiceRegistry {
   const discovery = createDiscoveryService({ db });
   const invite = createInviteService({ db, audit });
   const achievement = createAchievementService({ db, audit });
-  const paymentProvider = createStubPaymentProvider(env.PAYMENT_WEBHOOK_SECRET);
+  const providerName = env.PAYMENT_PROVIDER;
+  const paymentProvider =
+    providerName === "xendit"
+      ? createXenditPaymentProvider({
+          secretKey: env.XENDIT_SECRET_KEY!,
+          webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
+          successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL!,
+          failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL!,
+        })
+      : createStubPaymentProvider(env.PAYMENT_WEBHOOK_SECRET);
   const payment = createPaymentService({
     db,
     wallet,
     provider: paymentProvider,
+    providerName,
   });
   const booking = createBookingService({
     db,

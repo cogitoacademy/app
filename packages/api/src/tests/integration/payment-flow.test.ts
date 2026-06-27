@@ -57,7 +57,7 @@ describe("PaymentService", () => {
       provider: "stub",
       providerReference: intent.providerReference,
       providerEventId: "evt_tc03",
-      status: "succeeded",
+      status: "PAID",
     });
 
     const w = await services.wallet.getByUserId(db, user.id);
@@ -87,13 +87,13 @@ describe("PaymentService", () => {
       provider: "stub",
       providerReference: intent.providerReference,
       providerEventId: "evt_dup",
-      status: "succeeded",
+      status: "PAID",
     });
     await services.payment.confirmFromWebhook({
       provider: "stub",
       providerReference: intent.providerReference,
       providerEventId: "evt_dup",
-      status: "succeeded",
+      status: "PAID",
     });
 
     const w = await services.wallet.getByUserId(db, user.id);
@@ -119,7 +119,7 @@ describe("PaymentService", () => {
       provider: "stub",
       providerReference: intent.providerReference,
       providerEventId: "evt_fail",
-      status: "failed",
+      status: "FAILED",
       failureReason: "declined",
     });
 
@@ -131,7 +131,7 @@ describe("PaymentService", () => {
       .from(paymentRecord)
       .where(eq(paymentRecord.id, intent.paymentId))
       .limit(1);
-    expect(record[0]!.status).toBe("failed");
+    expect(record[0]!.status).toBe("FAILED");
     expect(record[0]!.failureReason).toBe("declined");
   });
 

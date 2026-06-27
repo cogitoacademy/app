@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { WalletPort } from "../../shared/ports/wallet.port";
-import type { PaymentProvider } from "../../shared/ports/payment.port";
+import type { PaymentProvider, PaymentStatus } from "../../shared/ports/payment.port";
 import { notFound } from "../../lib/errors";
 
 export interface CreateIntentResult {
@@ -15,7 +15,7 @@ export interface ConfirmInput {
   provider: string;
   providerReference: string;
   providerEventId: string;
-  status: "succeeded" | "failed";
+  status: PaymentStatus;
   receiptUrl?: string | null;
   failureReason?: string | null;
 }
@@ -26,8 +26,9 @@ export function createPaymentService(deps: {
   db: DbType;
   wallet: WalletPort;
   provider: PaymentProvider;
+  providerName: string;
 }) {
-  const { db, wallet, provider } = deps;
+  const { db, wallet, provider, providerName } = deps;
 
   async function createIntent(
     userId: string,
@@ -42,18 +43,18 @@ export function createPaymentService(deps: {
     if (!pkg || !pkg.isActive) throw notFound("Package not found");
 
     const paymentId = crypto.randomUUID();
-    const providerReference = `stub-${paymentId}`;
+    const providerReference = `${providerName}-${paymentId}`;
 
     await db.insert(paymentRecord).values({
       id: paymentId,
       userId,
       walletId,
       packageId: pkg.id,
-      provider: "stub",
+      provider: providerName,
       providerReference,
       amountIdr: pkg.priceIdr,
       marks: pkg.marks,
-      status: "pending",
+      status: "PENDING",
     });
 
     const intent = await provider.createIntent({
@@ -75,8 +76,10 @@ export function createPaymentService(deps: {
         .limit(1);
 
       if (!record) throw notFound("Payment not found");
-      if (record.status === "succeeded") return { status: "succeeded" };
-      if (record.status === "failed") return { status: "failed" };
+      if (record.status === "PAID") return { status: "PAID" };
+      if (record.status === "FAILED") return { status: "FAILED" };
+      if (record.status === "SETTLED") return { status: "SETTLED" };
+      if (record.status === "EXPIRED") return { status: "EXPIRED" };
 
       if (input.providerEventId) {
         const [existing] = await tx
@@ -89,29 +92,32 @@ export function createPaymentService(deps: {
         }
       }
 
-      if (input.status === "succeeded") {
+      if (input.status === "PAID" || input.status === "SETTLED") {
+        const shouldCredit = record.status === "PENDING";
         await tx
           .update(paymentRecord)
           .set({
-            status: "succeeded",
+            status: input.status,
             providerEventId: input.providerEventId,
             receiptUrl: input.receiptUrl ?? null,
           })
           .where(eq(paymentRecord.id, record.id));
 
-        await wallet.credit(tx, {
-          walletId: record.walletId,
-          actorType: "student",
-          amount: record.marks,
-          eventKey: `purchase.${record.id}`,
-          sourceReference: record.id,
-          reason: `Purchase: ${record.marks} Marks`,
-        });
+        if (shouldCredit) {
+          await wallet.credit(tx, {
+            walletId: record.walletId,
+            actorType: "student",
+            amount: record.marks,
+            eventKey: `purchase.${record.id}`,
+            sourceReference: record.id,
+            reason: `Purchase: ${record.marks} Marks`,
+          });
+        }
       } else {
         await tx
           .update(paymentRecord)
           .set({
-            status: "failed",
+            status: input.status,
             providerEventId: input.providerEventId,
             failureReason: input.failureReason ?? null,
           })

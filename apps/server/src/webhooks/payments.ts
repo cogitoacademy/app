@@ -41,7 +41,7 @@ export function paymentsWebhook(app: Elysia) {
       provider: "stub",
       providerReference: ref,
       providerEventId: eventId,
-      status: "succeeded",
+      status: "PAID",
     });
 
     set.status = 200;
