@@ -1,7 +1,15 @@
+export type PaymentStatus =
+  | "PENDING"
+  | "PAID"
+  | "SETTLED"
+  | "FAILED"
+  | "EXPIRED"
+  | "REFUNDED";
+
 export interface WebhookPayload {
   providerReference: string;
   providerEventId: string;
-  status: "succeeded" | "failed";
+  status: PaymentStatus;
   receiptUrl?: string | null;
   failureReason?: string | null;
 }
