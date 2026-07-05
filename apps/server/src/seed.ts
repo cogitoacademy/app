@@ -7,10 +7,18 @@ import {
   tutorInvite,
   tutorProfile,
   availabilitySlot,
+  markPackage,
 } from "@cogito-app/db/schema";
 
 const SEED_SUFFIX = "seed";
 const SEED_DISPLAY_TAG = "[seed]";
+
+const PACKAGES = [
+  { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 430000 },
+  { code: "learner", name: "Learner Pack", marks: 120, priceIdr: 990000 },
+  { code: "explorer", name: "Explorer Pack", marks: 200, priceIdr: 1570000 },
+  { code: "pioneer", name: "Pioneer Pack", marks: 300, priceIdr: 2180000 },
+];
 
 async function ensureUser(email: string, password: string, name: string) {
   const existing = await db
@@ -30,7 +38,56 @@ async function ensureUser(email: string, password: string, name: string) {
   return result.user;
 }
 
+async function seedPackages() {
+  await Promise.all(
+    PACKAGES.map((pkg) =>
+      db.insert(markPackage).values(pkg).onConflictDoNothing({
+        target: markPackage.code,
+      }),
+    ),
+  );
+  console.log("Seeded mark packages");
+}
+
+async function seedDemoStudent(email: string, password: string, name: string) {
+  const student = await ensureUser(email, password, name);
+  await db.update(user).set({ role: "student" }).where(eq(user.id, student.id));
+
+  const { services } = await import("@cogito-app/api/services");
+  const wallet = await services.wallet.getOrCreate(student.id);
+
+  const existingCredit = await db.query.ledgerEntry.findFirst({
+    where: (ledger, { eq, and }) =>
+      and(
+        eq(ledger.walletId, wallet.id),
+        eq(ledger.eventKey, "seed.demo_student_credit"),
+      ),
+  });
+
+  if (!existingCredit && wallet.totalBalance < 200) {
+    await services.wallet.credit(db, {
+      walletId: wallet.id,
+      amount: 200,
+      eventKey: "seed.demo_student_credit",
+      sourceReference: "seed",
+      actorType: "system",
+      reason: "Demo student starting balance",
+    });
+  }
+
+  const finalWallet = await services.wallet.getByUserId(db, student.id);
+  console.log(
+    "Demo student ready:",
+    student.id,
+    "balance:",
+    finalWallet?.totalBalance ?? 0,
+  );
+  return student;
+}
+
 async function seed() {
+  await seedPackages();
+
   const adminEmail = "admin@cogitoacademy.id";
 
   const admin = await ensureUser(adminEmail, "admin123", "Admin User");
@@ -100,6 +157,12 @@ async function seed() {
   } else {
     console.log("Seed tutor profile already exists:", existingProfile[0].id);
   }
+
+  await seedDemoStudent(
+    `student.${SEED_SUFFIX}@cogitoacademy.id`,
+    "student123",
+    `${SEED_DISPLAY_TAG} Student`,
+  );
 }
 
 seed().catch((err) => {
