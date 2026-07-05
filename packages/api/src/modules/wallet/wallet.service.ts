@@ -69,6 +69,7 @@ export function createWalletService(db: DbType): WalletPort {
       eventKey: string;
       sourceReference?: string;
       reason?: string;
+      bookingId?: string;
       beforeBalance: number;
       afterBalance: number;
       balanceAfterTotal: number;
@@ -77,6 +78,7 @@ export function createWalletService(db: DbType): WalletPort {
   ): Promise<void> {
     await conn.insert(ledgerEntry).values({
       walletId: params.walletId,
+      bookingId: params.bookingId ?? null,
       entryType: params.entryType,
       actorType: params.actorType,
       amount: params.amount,
@@ -117,6 +119,7 @@ export function createWalletService(db: DbType): WalletPort {
       eventKey: params.eventKey,
       sourceReference: params.sourceReference,
       reason: params.reason,
+      bookingId: params.bookingId,
       beforeBalance: w.totalBalance,
       afterBalance: w.totalBalance,
       balanceAfterTotal: newHeld + newAvailable,
@@ -150,6 +153,7 @@ export function createWalletService(db: DbType): WalletPort {
       eventKey: params.eventKey,
       sourceReference: params.sourceReference,
       reason: params.reason,
+      bookingId: params.bookingId,
       beforeBalance: w.totalBalance,
       afterBalance: w.totalBalance,
       balanceAfterTotal: newHeld + newAvailable,
@@ -188,6 +192,7 @@ export function createWalletService(db: DbType): WalletPort {
       eventKey: params.eventKey,
       sourceReference: params.sourceReference,
       reason: params.reason,
+      bookingId: params.bookingId,
       beforeBalance: w.totalBalance,
       afterBalance: newTotal,
       balanceAfterTotal: newTotal,
@@ -221,6 +226,7 @@ export function createWalletService(db: DbType): WalletPort {
       eventKey: params.eventKey,
       sourceReference: params.sourceReference,
       reason: params.reason,
+      bookingId: params.bookingId,
       beforeBalance: w.totalBalance,
       afterBalance: newTotal,
       balanceAfterTotal: newTotal,
@@ -267,6 +273,7 @@ export function createWalletService(db: DbType): WalletPort {
       eventKey: params.eventKey,
       sourceReference: params.sourceReference,
       reason: params.reason,
+      bookingId: params.bookingId,
       beforeBalance: w.totalBalance,
       afterBalance: newTotal,
       balanceAfterTotal: newTotal,

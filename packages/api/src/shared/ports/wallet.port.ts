@@ -16,6 +16,7 @@ export interface HoldParams {
   sourceReference?: string;
   actorType: ActorType;
   reason?: string;
+  bookingId?: string;
 }
 
 export interface ReleaseParams {
@@ -25,6 +26,7 @@ export interface ReleaseParams {
   sourceReference?: string;
   actorType: ActorType;
   reason?: string;
+  bookingId?: string;
 }
 
 export interface DeductParams {
@@ -34,6 +36,7 @@ export interface DeductParams {
   sourceReference?: string;
   actorType: ActorType;
   reason?: string;
+  bookingId?: string;
 }
 
 export interface CreditParams {
@@ -43,6 +46,7 @@ export interface CreditParams {
   sourceReference?: string;
   actorType: ActorType;
   reason?: string;
+  bookingId?: string;
 }
 
 export interface CompensateParams {
@@ -53,6 +57,7 @@ export interface CompensateParams {
   actorType: ActorType;
   reason?: string;
   type: "compensate_credit" | "compensate_deduct";
+  bookingId?: string;
 }
 
 export interface WalletSnapshot {

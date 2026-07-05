@@ -17,35 +17,14 @@ import type { PricingPort } from "../../shared/ports/pricing.port";
 import type { AuditPort } from "../../shared/ports/audit.port";
 import type { InAppNotificationPort } from "../../shared/ports/notification.port";
 import type { MeetingPort } from "../../shared/ports/meeting.port";
+import {
+  BOOKING_STATES,
+  TERMINAL_STATES,
+  type BookingState,
+} from "./booking-state.types";
 
-export const BOOKING_STATES = [
-  "draft",
-  "awaiting_marks_hold",
-  "awaiting_tutor_review",
-  "awaiting_participant_confirmation",
-  "awaiting_reconfirmation",
-  "awaiting_admin_room_approval",
-  "confirmed",
-  "scheduled",
-  "completed",
-  "declined",
-  "cancelled",
-  "late_cancelled",
-  "no_show",
-  "expired",
-  "reschedule_proposed",
-] as const;
-
-export type BookingState = (typeof BOOKING_STATES)[number];
-
-export const TERMINAL_STATES: BookingState[] = [
-  "declined",
-  "cancelled",
-  "late_cancelled",
-  "no_show",
-  "expired",
-  "completed",
-];
+export { BOOKING_STATES, TERMINAL_STATES };
+export type { BookingState };
 
 export interface CreateSoloInput {
   tutorId: string;
@@ -94,7 +73,14 @@ const TRANSITIONS: Record<
   draft: { to: ["awaiting_marks_hold"] },
   awaiting_marks_hold: { to: ["awaiting_tutor_review", "expired"] },
   awaiting_tutor_review: {
-    to: ["declined", "confirmed", "reschedule_proposed", "expired"],
+    to: [
+      "declined",
+      "confirmed",
+      "reschedule_proposed",
+      "expired",
+      "cancelled",
+      "late_cancelled",
+    ],
   },
   awaiting_participant_confirmation: {
     to: ["awaiting_reconfirmation", "awaiting_tutor_review", "expired"],
@@ -317,6 +303,7 @@ export function createBookingService(deps: {
         amount: totalMarks,
         eventKey: `booking.${bookingId}.hold`,
         sourceReference: bookingId,
+        bookingId,
         actorType: "student",
         reason: "Hold Marks for solo booking",
       });
@@ -403,11 +390,14 @@ export function createBookingService(deps: {
 
     return db.transaction(async (tx) => {
       if (b.holdAmount > 0) {
+        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+        if (!proposerWallet) throw notFound("Wallet not found");
         await wallet.release(tx, {
-          walletId: b.proposerId,
+          walletId: proposerWallet.id,
           amount: b.holdAmount,
           eventKey: `booking.${bookingId}.cancel_release`,
           sourceReference: bookingId,
+        bookingId,
           actorType: "student",
           reason: `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
         });
@@ -457,18 +447,26 @@ export function createBookingService(deps: {
       : "confirmed";
 
     return db.transaction(async (tx) => {
-      const updated = await transition(tx, bookingId, toState, {
+      await transition(tx, bookingId, toState, {
         actorId: tutorId,
         actorType: "tutor",
       });
 
+      let updated;
       if (!isOffline) {
         await meeting.createEvent(bookingId);
-        await transition(tx, bookingId, "scheduled", {
+        updated = await transition(tx, bookingId, "scheduled", {
           actorId: tutorId,
           actorType: "tutor",
           reason: "Meeting created automatically",
         });
+      } else {
+        const [row] = await tx
+          .select()
+          .from(booking)
+          .where(eq(booking.id, bookingId))
+          .limit(1);
+        updated = row;
       }
 
       await notification.write({
@@ -506,11 +504,14 @@ export function createBookingService(deps: {
 
     return db.transaction(async (tx) => {
       if (b.holdAmount > 0) {
+        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+        if (!proposerWallet) throw notFound("Wallet not found");
         await wallet.release(tx, {
-          walletId: b.proposerId,
+          walletId: proposerWallet.id,
           amount: b.holdAmount,
           eventKey: `booking.${bookingId}.decline_release`,
           sourceReference: bookingId,
+        bookingId,
           actorType: "tutor",
           reason: reason ?? "Tutor declined",
         });
@@ -554,11 +555,14 @@ export function createBookingService(deps: {
     }
 
     return db.transaction(async (tx) => {
+      const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+      if (!proposerWallet) throw notFound("Wallet not found");
       await wallet.deduct(tx, {
-        walletId: b.proposerId,
+        walletId: proposerWallet.id,
         amount: b.holdAmount,
         eventKey: `booking.${bookingId}.deduct`,
         sourceReference: bookingId,
+        bookingId,
         actorType: "tutor",
         reason: "Session completed",
       });
@@ -673,6 +677,7 @@ export function createBookingService(deps: {
         amount: totalMarks,
         eventKey: `booking.${bookingId}.hold`,
         sourceReference: bookingId,
+        bookingId,
         actorType: "student",
         reason: "Hold Marks for group booking (proposer)",
       });
@@ -783,6 +788,7 @@ export function createBookingService(deps: {
         amount: holdAmount,
         eventKey: `booking.${bookingId}.hold.${userId}`,
         sourceReference: bookingId,
+        bookingId,
         actorType: "student",
         reason: "Hold Marks for group booking (invitee)",
       });
@@ -971,11 +977,14 @@ export function createBookingService(deps: {
 
     return db.transaction(async (tx) => {
       if (participant.heldAmount > 0) {
+        const participantWallet = await wallet.getByUserId(tx, userId);
+        if (!participantWallet) throw notFound("Wallet not found");
         await wallet.release(tx, {
-          walletId: b.proposerId,
+          walletId: participantWallet.id,
           amount: participant.heldAmount,
           eventKey: `booking.${bookingId}.withdraw.${userId}`,
           sourceReference: bookingId,
+        bookingId,
           actorType: "student",
           reason: reason ?? "Withdrawal",
         });
@@ -1063,6 +1072,7 @@ export function createBookingService(deps: {
         amount: totalMarks,
         eventKey: `booking.${bookingId}.hold`,
         sourceReference: bookingId,
+        bookingId,
         actorType: "student",
         reason: "Hold Marks for series booking",
       });
