@@ -8,8 +8,8 @@ export function paymentsWebhook(app: Elysia) {
       const provider = params.provider as string;
       const signature =
         provider === "xendit"
-          ? request.headers.get("x-callback-token") ?? ""
-          : request.headers.get("x-webhook-signature") ?? "";
+          ? (request.headers.get("x-callback-token") ?? "")
+          : (request.headers.get("x-webhook-signature") ?? "");
       const rawBody = typeof body === "string" ? body : JSON.stringify(body);
 
       try {

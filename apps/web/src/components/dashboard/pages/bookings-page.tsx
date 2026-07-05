@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardBody,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
@@ -26,10 +27,7 @@ const STATE_LABELS: Record<string, string> = {
   awaiting_participant_confirmation: "Awaiting participants",
 };
 
-const STATE_VARIANTS: Record<
-  string,
-  "warning" | "info" | "success" | "danger"
-> = {
+const STATE_VARIANTS: Record<string, string> = {
   awaiting_tutor_review: "warning",
   scheduled: "info",
   completed: "success",
@@ -73,7 +71,11 @@ export function BookingsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {bookings.map((b) => (
-            <Card key={b.id}>
+            <Card
+              key={b.id}
+              className="transition-shadow hover:shadow-card"
+              data-slot="booking-card"
+            >
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>
@@ -83,9 +85,7 @@ export function BookingsPage() {
                         ? "Group session"
                         : "Series"}
                   </CardTitle>
-                  <Badge
-                    variant={STATE_VARIANTS[b.currentState] ?? "secondary"}
-                  >
+                  <Badge variant={STATE_VARIANTS[b.currentState] as never}>
                     {STATE_LABELS[b.currentState] ?? b.currentState}
                   </Badge>
                 </div>
@@ -99,12 +99,18 @@ export function BookingsPage() {
                   {" — "}
                   {b.modality}
                 </Text>
+              </CardBody>
+              <CardFooter className="flex items-center justify-between">
+                <Text className="text-sm text-dimmed">
+                  {b.currentState === "awaiting_tutor_review"
+                    ? "Waiting for tutor confirmation"
+                    : b.currentState}
+                </Text>
                 {b.currentState !== "completed" &&
                   b.currentState !== "cancelled" &&
                   b.currentState !== "declined" &&
                   b.currentState !== "expired" && (
                     <Button
-                      className="mt-3"
                       variant="secondary"
                       size="sm"
                       onClick={() => cancel.mutate({ bookingId: b.id })}
@@ -114,7 +120,7 @@ export function BookingsPage() {
                       Cancel
                     </Button>
                   )}
-              </CardBody>
+              </CardFooter>
             </Card>
           ))}
         </div>

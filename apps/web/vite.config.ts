@@ -8,7 +8,8 @@ const faviconPlugin = () => ({
   transformIndexHtml: {
     order: "pre" as const,
     handler(html: string, ctx: { server?: { config?: { mode?: string } } }) {
-      const mode = ctx.server?.config?.mode ?? process.env.NODE_ENV ?? "production";
+      const mode =
+        ctx.server?.config?.mode ?? process.env.NODE_ENV ?? "production";
       const href = mode === "development" ? "/favicon-dev.svg" : "/favicon.svg";
       return html.replace("%FAVICON_HREF%", href);
     },

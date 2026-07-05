@@ -115,8 +115,7 @@ export default function SignInForm({
                   {
                     onError: (error) => {
                       toastManager.add({
-                        title:
-                          error.error.message || error.error.statusText,
+                        title: error.error.message || error.error.statusText,
                         type: "error",
                       });
                     },

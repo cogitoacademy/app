@@ -11,7 +11,9 @@ export const paymentRouter = {
     })
     .input(createPurchaseInput)
     .handler(async ({ context, input }) => {
-      const w = await context.services.wallet.getOrCreate(context.session!.user.id);
+      const w = await context.services.wallet.getOrCreate(
+        context.session!.user.id,
+      );
       return context.services.payment.createIntent(
         context.session!.user.id,
         w.id,

@@ -173,6 +173,21 @@ export function BalancePage() {
           </CardDescription>
         </CardHeader>
         <CardBody>
+          <div className="rounded-lg border border-border bg-card p-4 mb-4">
+            <Heading size="sm" className="mb-1">
+              Test mode active
+            </Heading>
+            <Text className="text-dimmed text-sm">
+              Payments currently use the stub provider (
+              <code className="rounded bg-item px-1 text-xs">PAYMENT_PROVIDER=stub</code>
+              ). Clicking <strong>Buy</strong> adds Marks immediately without real
+              money. To switch to Xendit, set{" "}
+              <code className="rounded bg-item px-1 text-xs">PAYMENT_PROVIDER=xendit</code>{" "}
+              and provide{" "}
+              <code className="rounded bg-item px-1 text-xs">XENDIT_SECRET_KEY</code>{" "}
+              plus webhook credentials.
+            </Text>
+          </div>
           {packagesLoading ? (
             <Text className="text-muted">Loading packages...</Text>
           ) : (

@@ -14,7 +14,9 @@ export const walletRouter = {
       summary: "Get wallet",
     })
     .handler(async ({ context }) => {
-      const w = await context.services.wallet.getOrCreate(context.session!.user.id);
+      const w = await context.services.wallet.getOrCreate(
+        context.session!.user.id,
+      );
       return {
         id: w.id,
         totalBalance: w.totalBalance,
@@ -32,7 +34,9 @@ export const walletRouter = {
     })
     .input(listLedgerInput)
     .handler(async ({ context, input }) => {
-      const w = await context.services.wallet.getOrCreate(context.session!.user.id);
+      const w = await context.services.wallet.getOrCreate(
+        context.session!.user.id,
+      );
       return context.services.wallet.listLedger(w.id, input);
     }),
 
@@ -58,7 +62,9 @@ export const walletRouter = {
       summary: "Knowledge Bank eligibility",
     })
     .handler(async ({ context }) => {
-      return context.services.wallet.knowledgeBankEligible(context.session!.user.id);
+      return context.services.wallet.knowledgeBankEligible(
+        context.session!.user.id,
+      );
     }),
 
   competitionCalendarLink: protectedProcedure
