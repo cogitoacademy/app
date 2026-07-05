@@ -22,10 +22,12 @@ import {
 } from "../helpers/test-client";
 
 async function creditWallet(userId: string, amount: number) {
+  const { services } = await import("@cogito-app/api/services");
+  const w = await services.wallet.getOrCreate(userId);
   await db
     .update(wallet)
     .set({ totalBalance: amount, availableBalance: amount })
-    .where(eq(wallet.userId, userId));
+    .where(eq(wallet.id, w.id));
 }
 
 async function createPublishedTutor(email: string, ts: number) {

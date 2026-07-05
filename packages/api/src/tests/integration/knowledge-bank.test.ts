@@ -37,7 +37,9 @@ describe("Knowledge Bank gate", () => {
       .select()
       .from(ledgerEntry)
       .where(eq(ledgerEntry.walletId, w.id));
-    expect(entries.filter((e) => e.eventKey.includes("knowledge_bank")).length).toBe(0);
+    expect(
+      entries.filter((e) => e.eventKey.includes("knowledge_bank")).length,
+    ).toBe(0);
   });
 
   test("ineligible when <35", async () => {

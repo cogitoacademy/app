@@ -16,6 +16,19 @@ import {
   type TestClient,
 } from "../helpers/test-client";
 
+async function signInAndGetCookie(email: string, password: string) {
+  const { auth } = await import("@cogito-app/auth");
+  const res = await auth.api.signInEmail({
+    body: { email, password },
+    headers: new Headers(),
+    asResponse: true,
+  });
+  const setCookie = res.headers.getSetCookie();
+  return setCookie
+    .find((c: string) => c.includes("better-auth.session_token"))
+    ?.split(";")[0];
+}
+
 describe("Tutor discovery", () => {
   const ts = Date.now();
   const studentEmail = `student.disc.${ts}@cogito.test`;
@@ -115,14 +128,22 @@ describe("Tutor discovery", () => {
   });
 
   test("getProfile returns NOT_FOUND for draft profile", async () => {
+    const draftEmail = `draft.${ts}@cogito.test`;
+    await signUpAndSignIn(draftEmail, "Test1234!", "Draft Tutor");
+    const draftCtx = await createTestContext(
+      (await signInAndGetCookie(draftEmail, "Test1234!")) ?? "",
+    );
+    const draftUserId = draftCtx.session?.user?.id;
+    if (!draftUserId) throw new Error("Draft user session missing");
+
     const [draftInvite] = await db
       .insert(tutorInvite)
       .values({
-        email: `draft.${ts}@cogito.test`,
+        email: draftEmail,
         displayName: "Draft",
         token: `draft-token-${ts}`,
         status: "accepted",
-        invitedBy: tutorId,
+        invitedBy: draftUserId,
         expiresAt: new Date(Date.now() + 86400000),
       })
       .returning();
@@ -130,18 +151,23 @@ describe("Tutor discovery", () => {
     const [draftProfile] = await db
       .insert(tutorProfile)
       .values({
-        userId: tutorId,
+        userId: draftUserId,
         inviteId: draftInvite!.id,
         displayName: "Draft Tutor",
         onboardingStatus: "draft",
       })
       .returning();
 
-    await expect(
-      studentClient.tutors.getProfile({ tutorId: draftProfile!.id }),
-    ).rejects.toThrow();
+    let threw = false;
+    try {
+      await studentClient.tutors.getProfile({ tutorId: draftProfile!.id });
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
 
     await db.delete(tutorProfile).where(eq(tutorProfile.id, draftProfile!.id));
     await db.delete(tutorInvite).where(eq(tutorInvite.id, draftInvite!.id));
+    await cleanUser(draftEmail);
   });
 });
