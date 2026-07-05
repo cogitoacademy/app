@@ -5,9 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 
 export function BalanceBadge() {
-  const { data: wallet, isLoading } = useQuery(
-    orpc.wallet.get.queryOptions(),
-  );
+  const { data: wallet, isLoading } = useQuery(orpc.wallet.get.queryOptions());
 
   const balance = wallet?.totalBalance ?? 0;
   const isEmpty = balance === 0;
@@ -24,11 +22,7 @@ export function BalanceBadge() {
         <span className="text-muted">0</span>
       ) : (
         <>
-          <img
-            src="/cogito-mark.png"
-            className="h-[0.9em] w-auto"
-            alt=""
-          />
+          <img src="/cogito-mark.png" className="h-[0.9em] w-auto" alt="" />
           <span>{balance}</span>
         </>
       )}

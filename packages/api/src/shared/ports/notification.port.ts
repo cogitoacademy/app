@@ -55,7 +55,10 @@ export interface NotificationIdInput {
 
 export interface InAppNotificationPort {
   write(params: NotificationWriteParams): Promise<void>;
-  list(userId: string, opts?: NotificationListInput): Promise<NotificationListResult>;
+  list(
+    userId: string,
+    opts?: NotificationListInput,
+  ): Promise<NotificationListResult>;
   getUnreadCount(userId: string): Promise<number>;
   markAsRead(userId: string, id: string): Promise<void>;
   markAllAsRead(userId: string): Promise<void>;

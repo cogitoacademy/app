@@ -59,10 +59,7 @@ export function createNotificationService(db: DbType): InAppNotificationPort {
       .select({ value: count() })
       .from(notification)
       .where(
-        and(
-          eq(notification.userId, userId),
-          eq(notification.isRead, false),
-        ),
+        and(eq(notification.userId, userId), eq(notification.isRead, false)),
       );
     return Number(row?.value ?? 0);
   }
@@ -79,10 +76,7 @@ export function createNotificationService(db: DbType): InAppNotificationPort {
       .update(notification)
       .set({ isRead: true, readAt: new Date() })
       .where(
-        and(
-          eq(notification.userId, userId),
-          eq(notification.isRead, false),
-        ),
+        and(eq(notification.userId, userId), eq(notification.isRead, false)),
       );
   }
 

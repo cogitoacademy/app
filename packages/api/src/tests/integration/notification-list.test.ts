@@ -48,7 +48,10 @@ describe("Notification list & read flow", () => {
   });
 
   afterAll(async () => {
-    await db.delete(notification).where(eq(notification.userId, studentId)).catch(() => {});
+    await db
+      .delete(notification)
+      .where(eq(notification.userId, studentId))
+      .catch(() => {});
     await cleanUser(studentEmail);
   });
 
@@ -83,8 +86,13 @@ describe("Notification list & read flow", () => {
 
     const result = await studentClient.notification.list({});
 
-    expect(result.items.every((n: { userId: string }) => n.userId === studentId)).toBe(true);
-    await db.delete(user).where(eq(user.id, otherId)).catch(() => {});
+    expect(
+      result.items.every((n: { userId: string }) => n.userId === studentId),
+    ).toBe(true);
+    await db
+      .delete(user)
+      .where(eq(user.id, otherId))
+      .catch(() => {});
   });
 
   test("list supports unreadOnly filter", async () => {
@@ -100,8 +108,12 @@ describe("Notification list & read flow", () => {
 
     const result = await studentClient.notification.list({ unreadOnly: true });
 
-    expect(result.items.some((n: { id: string }) => n.id === unread.id)).toBe(true);
-    expect(result.items.every((n: { isRead: boolean }) => n.isRead === false)).toBe(true);
+    expect(result.items.some((n: { id: string }) => n.id === unread.id)).toBe(
+      true,
+    );
+    expect(
+      result.items.every((n: { isRead: boolean }) => n.isRead === false),
+    ).toBe(true);
   });
 
   test("getUnreadCount returns count of unread", async () => {
@@ -137,7 +149,9 @@ describe("Notification list & read flow", () => {
     });
     const otherNotif = await insertNotification(otherId, { isRead: false });
 
-    await studentClient.notification.markAsRead({ id: otherNotif.id }).catch(() => {});
+    await studentClient.notification
+      .markAsRead({ id: otherNotif.id })
+      .catch(() => {});
 
     const [stillUnread] = await db
       .select()
@@ -145,7 +159,10 @@ describe("Notification list & read flow", () => {
       .where(eq(notification.id, otherNotif.id))
       .limit(1);
     expect(stillUnread!.isRead).toBe(false);
-    await db.delete(user).where(eq(user.id, otherId)).catch(() => {});
+    await db
+      .delete(user)
+      .where(eq(user.id, otherId))
+      .catch(() => {});
   });
 
   test("markAllAsRead marks all own unread notifications", async () => {

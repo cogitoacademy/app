@@ -397,7 +397,7 @@ export function createBookingService(deps: {
           amount: b.holdAmount,
           eventKey: `booking.${bookingId}.cancel_release`,
           sourceReference: bookingId,
-        bookingId,
+          bookingId,
           actorType: "student",
           reason: `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
         });
@@ -511,7 +511,7 @@ export function createBookingService(deps: {
           amount: b.holdAmount,
           eventKey: `booking.${bookingId}.decline_release`,
           sourceReference: bookingId,
-        bookingId,
+          bookingId,
           actorType: "tutor",
           reason: reason ?? "Tutor declined",
         });
@@ -984,7 +984,7 @@ export function createBookingService(deps: {
           amount: participant.heldAmount,
           eventKey: `booking.${bookingId}.withdraw.${userId}`,
           sourceReference: bookingId,
-        bookingId,
+          bookingId,
           actorType: "student",
           reason: reason ?? "Withdrawal",
         });

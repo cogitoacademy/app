@@ -4,10 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
-import {
-  Card,
-  CardBody,
-} from "@cogito-app/ui/components/selia/card";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -260,7 +257,10 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                       </thead>
                       <tbody>
                         {priceEntries.map(([size, price]) => (
-                          <tr key={size} className="border-t border-item-border">
+                          <tr
+                            key={size}
+                            className="border-t border-item-border"
+                          >
                             <td className="px-3 py-2">
                               {size} student{Number(size) > 1 ? "s" : ""}
                             </td>

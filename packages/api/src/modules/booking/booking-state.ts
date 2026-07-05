@@ -8,7 +8,11 @@ import { preconditionFailed } from "../../lib/errors";
 
 const TRANSITIONS: BookingTransition[] = [
   { from: "draft", event: "submit", to: "awaiting_marks_hold" },
-  { from: "awaiting_marks_hold", event: "hold_ok", to: "awaiting_tutor_review" },
+  {
+    from: "awaiting_marks_hold",
+    event: "hold_ok",
+    to: "awaiting_tutor_review",
+  },
   { from: "awaiting_marks_hold", event: "deadline_missed", to: "expired" },
   { from: "awaiting_tutor_review", event: "tutor_decline", to: "declined" },
   { from: "awaiting_tutor_review", event: "tutor_accept", to: "confirmed" },
@@ -19,7 +23,11 @@ const TRANSITIONS: BookingTransition[] = [
   },
   { from: "awaiting_tutor_review", event: "deadline_missed", to: "expired" },
   { from: "awaiting_tutor_review", event: "cancel_pre_h2", to: "cancelled" },
-  { from: "awaiting_tutor_review", event: "cancel_post_h2", to: "late_cancelled" },
+  {
+    from: "awaiting_tutor_review",
+    event: "cancel_post_h2",
+    to: "late_cancelled",
+  },
   {
     from: "reschedule_proposed",
     event: "student_accept_reschedule",
@@ -73,7 +81,10 @@ const TRANSITIONS: BookingTransition[] = [
 
 const TERMINAL_SET = new Set<BookingState>(TERMINAL_STATES);
 
-function lookup(from: BookingState, event: BookingEvent): BookingState | undefined {
+function lookup(
+  from: BookingState,
+  event: BookingEvent,
+): BookingState | undefined {
   return TRANSITIONS.find((t) => t.from === from && t.event === event)?.to;
 }
 
@@ -96,9 +107,7 @@ export function transition(
   }
   const to = lookup(from, event);
   if (!to) {
-    throw preconditionFailed(
-      `Illegal booking transition: ${from} + ${event}`,
-    );
+    throw preconditionFailed(`Illegal booking transition: ${from} + ${event}`);
   }
   return to;
 }

@@ -121,9 +121,7 @@ describe("Tutor Invite & Onboarding", () => {
     test("claimed invite cannot be verified again", async () => {
       const publicCtx = await createTestContext();
       const publicClient = createTestClient(publicCtx);
-      await expectRejects(
-        publicClient.invite.verify({ token: inviteToken }),
-      );
+      await expectRejects(publicClient.invite.verify({ token: inviteToken }));
     });
 
     test("admin can invite same email again after previous invite is accepted", async () => {
@@ -144,9 +142,7 @@ describe("Tutor Invite & Onboarding", () => {
         displayName: "No Match",
       });
 
-      await expectRejects(
-        otherClient.invite.claim({ token: createRes.token }),
-      );
+      await expectRejects(otherClient.invite.claim({ token: createRes.token }));
 
       await db.delete(tutorInvite).where(eq(tutorInvite.id, createRes.id));
     });
@@ -340,8 +336,6 @@ describe("Tutor Invite & Onboarding", () => {
   });
 
   test("non-admin cannot access admin endpoints", async () => {
-    await expectRejects(
-      otherClient.adminTutor.listInvites(undefined as never),
-    );
+    await expectRejects(otherClient.adminTutor.listInvites(undefined as never));
   });
 });

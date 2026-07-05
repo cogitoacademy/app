@@ -1,8 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import {
-  canTransition,
-  transition,
-} from "../../modules/booking/booking-state";
+import { canTransition, transition } from "../../modules/booking/booking-state";
 import type {
   BookingState,
   BookingEvent,
