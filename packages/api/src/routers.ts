@@ -15,6 +15,7 @@ import {
   tutorActionsRouter,
 } from "./modules/booking/booking.router";
 import { roomRouter } from "./modules/room/room.router";
+import { notificationRouter } from "./modules/notification/notification.router";
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -54,6 +55,7 @@ export const appRouter = {
   booking: bookingRouter,
   tutorActions: tutorActionsRouter,
   room: roomRouter,
+  notification: notificationRouter,
 };
 
 export type AppRouter = typeof appRouter;

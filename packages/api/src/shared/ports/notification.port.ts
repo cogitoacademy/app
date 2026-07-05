@@ -23,6 +23,40 @@ export interface NotificationWriteParams {
   metadata?: Record<string, unknown>;
 }
 
+export interface NotificationListItem {
+  id: string;
+  userId: string;
+  bookingId: string | null;
+  category: string;
+  title: string;
+  body: string;
+  severity: string;
+  isRead: boolean;
+  readAt: Date | null;
+  eventKey: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
+export interface NotificationListInput {
+  unreadOnly?: boolean;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface NotificationListResult {
+  items: NotificationListItem[];
+  nextCursor: string | null;
+}
+
+export interface NotificationIdInput {
+  id: string;
+}
+
 export interface InAppNotificationPort {
   write(params: NotificationWriteParams): Promise<void>;
+  list(userId: string, opts?: NotificationListInput): Promise<NotificationListResult>;
+  getUnreadCount(userId: string): Promise<number>;
+  markAsRead(userId: string, id: string): Promise<void>;
+  markAllAsRead(userId: string): Promise<void>;
 }

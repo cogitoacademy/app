@@ -7,6 +7,9 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { ModeToggle } from "../mode-toggle";
+import { NotificationBell } from "../notification-bell";
+import { BalanceBadge } from "../balance-badge";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
 
 export function Layout({
   children,
@@ -70,7 +73,10 @@ export function Layout({
             )}
           </Button>
           <Heading size="sm">{title}</Heading>
-          <div className="ml-auto mr-0">
+          <div className="ml-auto mr-0 flex items-center gap-2">
+            <BalanceBadge />
+            <Separator orientation="vertical" />
+            <NotificationBell />
             <ModeToggle />
           </div>
         </nav>
