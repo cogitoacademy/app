@@ -15,8 +15,10 @@ import {
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
@@ -34,6 +36,7 @@ export default function SignUpForm({
     from: "/",
   });
   const { isPending } = authClient.useSession();
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm({
     defaultValues: {
@@ -156,15 +159,35 @@ export default function SignUpForm({
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Password</FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    type="password"
-                    placeholder="Enter your password"
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                  />
+                  <div className="relative">
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="plain"
+                      size="sm-icon"
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-dimmed hover:text-foreground"
+                    >
+                      {showPassword ? (
+                        <IconEyeOff size={18} />
+                      ) : (
+                        <IconEye size={18} />
+                      )}
+                    </Button>
+                  </div>
                   {field.state.meta.errors.map((error) => (
                     <FieldError key={error?.message}>
                       {error?.message}

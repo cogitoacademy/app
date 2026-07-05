@@ -25,6 +25,8 @@ export const env = createEnv({
     XENDIT_WEBHOOK_TOKEN: z.string().min(1).optional(),
     XENDIT_SUCCESS_REDIRECT_URL: z.string().url().optional(),
     XENDIT_FAILURE_REDIRECT_URL: z.string().url().optional(),
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

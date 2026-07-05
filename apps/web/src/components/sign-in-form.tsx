@@ -15,7 +15,7 @@ import {
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconEye, IconEyeOff } from "@tabler/icons-react";
+import { IconBrandGoogle, IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -96,16 +96,36 @@ export default function SignInForm({
         <CardHeader align="center">
           <CardTitle>Sign in to your account</CardTitle>
           <CardDescription>
-            Login with your Google or GitHub account
+            Login with your Email or Google account
           </CardDescription>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
           <div className="flex flex-col gap-2.5">
-            <Button type="button" variant="secondary" block size="lg">
+            <Button
+              type="button"
+              variant="secondary"
+              block
+              size="lg"
+              onClick={() => {
+                authClient.signIn.social(
+                  {
+                    provider: "google",
+                    callbackURL: `${window.location.origin}/auth/callback`,
+                  },
+                  {
+                    onError: (error) => {
+                      toastManager.add({
+                        title:
+                          error.error.message || error.error.statusText,
+                        type: "error",
+                      });
+                    },
+                  },
+                );
+              }}
+            >
+              <IconBrandGoogle size={18} />
               Login with Google
-            </Button>
-            <Button type="button" variant="secondary" block size="lg">
-              Login with GitHub
             </Button>
           </div>
           <Divider variant="center" className="my-2">
