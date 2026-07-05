@@ -24,6 +24,7 @@ const MODALITY_VARIANTS: Record<string, "info" | "success" | "warning"> = {
 type TutorCardProps = {
   tutor: {
     id: string;
+    userId: string;
     displayName: string | null;
     shortBio: string | null;
     expertise: string[] | null;
@@ -37,7 +38,7 @@ type TutorCardProps = {
 export function TutorCard({ tutor, onClick }: TutorCardProps) {
   return (
     <Card
-      className="cursor-pointer transition-shadow hover:shadow-card"
+      className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
       onClick={onClick}
     >
       <CardHeader>

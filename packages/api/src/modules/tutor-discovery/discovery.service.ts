@@ -70,6 +70,7 @@ export function createDiscoveryService(deps: { db: DbType }) {
         const slots = await upcomingSlots(p.userId);
         return {
           id: p.id,
+          userId: p.userId,
           displayName: p.displayName,
           shortBio: p.shortBio,
           credentialsSummary: p.credentialsSummary,

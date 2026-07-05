@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { IconSearch } from "@tabler/icons-react";
+import {
+  Card,
+  CardBody,
+  CardHeader,
+} from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
@@ -37,6 +42,7 @@ const EXPERTISE_OPTIONS = [
 
 type PublishedTutor = {
   id: string;
+  userId: string;
   displayName: string | null;
   shortBio: string | null;
   credentialsSummary: string | null;
@@ -134,7 +140,11 @@ export function TutorsPageContent() {
       </div>
 
       {isLoading ? (
-        <Text className="py-8 text-center text-muted">Loading tutors...</Text>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <TutorCardSkeleton key={i} />
+          ))}
+        </div>
       ) : tutors.length === 0 ? (
         <Text className="py-8 text-center text-muted">
           No tutors found matching your criteria.
@@ -159,5 +169,25 @@ export function TutorsPageContent() {
         }}
       />
     </Stack>
+  );
+}
+
+function TutorCardSkeleton() {
+  return (
+    <Card className="animate-pulse">
+      <CardHeader>
+        <div className="h-5 w-32 rounded bg-muted" />
+        <div className="h-5 w-16 rounded bg-muted" />
+      </CardHeader>
+      <CardBody className="flex flex-col gap-3">
+        <div className="h-4 w-full rounded bg-muted" />
+        <div className="h-4 w-2/3 rounded bg-muted" />
+        <div className="flex flex-wrap gap-1.5">
+          <div className="h-5 w-16 rounded bg-muted" />
+          <div className="h-5 w-20 rounded bg-muted" />
+          <div className="h-5 w-14 rounded bg-muted" />
+        </div>
+      </CardBody>
+    </Card>
   );
 }
