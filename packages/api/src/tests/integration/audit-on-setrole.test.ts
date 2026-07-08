@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import { auditLog } from "@cogito-app/db/schema";
@@ -8,11 +8,15 @@ import {
   createTestClient,
   signUpAndSignIn,
   setUserRole,
-  cleanUser,
+  resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
 
 describe("Admin setRole audit + last-admin guard", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now();
   const adminEmail = `audit-admin.${ts}@cogito.test`;
   const studentEmail = `audit-student.${ts}@cogito.test`;
@@ -40,11 +44,6 @@ describe("Admin setRole audit + last-admin guard", () => {
     const studentCtx = await createTestContext(studentRes.cookie);
     if (!studentCtx.session?.user) throw new Error("Student session not found");
     studentId = studentCtx.session.user.id;
-  });
-
-  afterAll(async () => {
-    await cleanUser(adminEmail);
-    await cleanUser(studentEmail);
   });
 
   test("setRole writes an audit log entry", async () => {

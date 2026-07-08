@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
@@ -6,8 +6,6 @@ import {
   tutorInvite,
   tutorProfile,
   availabilitySlot,
-  booking,
-  bookingParticipant,
   ledgerEntry,
   notification,
 } from "@cogito-app/db/schema";
@@ -17,7 +15,7 @@ import {
   createTestClient,
   signUpAndSignIn,
   setUserRole,
-  cleanUser,
+  resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
 
@@ -99,6 +97,10 @@ async function signInAndGetCookie(email: string, password: string) {
 }
 
 describe("Booking solo flow", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now();
   const studentEmail = `student.book.${ts}@cogito.test`;
   const tutorEmail = `tutor.book.${ts}@cogito.test`;
@@ -128,21 +130,6 @@ describe("Booking solo flow", () => {
 
     const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
     tutorClient = createTestClient(await createTestContext(tutorCookie));
-  });
-
-  afterAll(async () => {
-    if (bookingId) {
-      await db
-        .delete(bookingParticipant)
-        .where(eq(bookingParticipant.bookingId, bookingId))
-        .catch(() => {});
-      await db
-        .delete(booking)
-        .where(eq(booking.id, bookingId))
-        .catch(() => {});
-    }
-    await cleanUser(studentEmail);
-    await cleanUser(tutorEmail);
   });
 
   test("TC-11: student creates solo booking → awaiting_tutor_review", async () => {
@@ -213,6 +200,10 @@ describe("Booking solo flow", () => {
 });
 
 describe("Booking decline flow", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now() + 1000;
   const studentEmail = `student.decl.${ts}@cogito.test`;
   const tutorEmail = `tutor.decl.${ts}@cogito.test`;
@@ -244,21 +235,6 @@ describe("Booking decline flow", () => {
     tutorClient = createTestClient(await createTestContext(tutorCookie));
   });
 
-  afterAll(async () => {
-    if (bookingId) {
-      await db
-        .delete(bookingParticipant)
-        .where(eq(bookingParticipant.bookingId, bookingId))
-        .catch(() => {});
-      await db
-        .delete(booking)
-        .where(eq(booking.id, bookingId))
-        .catch(() => {});
-    }
-    await cleanUser(studentEmail);
-    await cleanUser(tutorEmail);
-  });
-
   test("TC-14: tutor declines → declined + Marks released", async () => {
     const start = new Date(Date.now() + 24 * 3600_000).toISOString();
     const end = new Date(Date.now() + 25 * 3600_000).toISOString();
@@ -285,6 +261,10 @@ describe("Booking decline flow", () => {
 });
 
 describe("Booking cancel flow", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now() + 2000;
   const studentEmail = `student.cancel.${ts}@cogito.test`;
   const tutorEmail = `tutor.cancel.${ts}@cogito.test`;
@@ -310,21 +290,6 @@ describe("Booking cancel flow", () => {
     const tutorData = await createPublishedTutor(tutorEmail, ts);
     tutorId = tutorData.tutorId;
     slotId = tutorData.slotId;
-  });
-
-  afterAll(async () => {
-    if (bookingId) {
-      await db
-        .delete(bookingParticipant)
-        .where(eq(bookingParticipant.bookingId, bookingId))
-        .catch(() => {});
-      await db
-        .delete(booking)
-        .where(eq(booking.id, bookingId))
-        .catch(() => {});
-    }
-    await cleanUser(studentEmail);
-    await cleanUser(tutorEmail);
   });
 
   test("TC-15: student cancels before H-2 → cancelled + Marks released", async () => {

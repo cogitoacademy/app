@@ -1,49 +1,19 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
-import { ledgerEntry, markPackage, paymentRecord } from "@cogito-app/db/schema";
+import { ledgerEntry, paymentRecord } from "@cogito-app/db/schema";
 
 import { services } from "../../services";
 import { createTestUser } from "../helpers/factories";
+import { resetDatabase } from "../helpers/test-client";
 import { createXenditPaymentProvider } from "../../modules/payment/xendit-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
-import { createWalletService } from "../../modules/wallet/wallet.service";
-import { db as dbInstance } from "@cogito-app/db";
-
-async function seedPackages() {
-  await db
-    .insert(markPackage)
-    .values([
-      { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 430000 },
-      { code: "learner", name: "Learner Pack", marks: 120, priceIdr: 990000 },
-      {
-        code: "explorer",
-        name: "Explorer Pack",
-        marks: 200,
-        priceIdr: 1570000,
-      },
-      { code: "pioneer", name: "Pioneer Pack", marks: 300, priceIdr: 2180000 },
-    ])
-    .onConflictDoNothing({ target: markPackage.code });
-}
-
-async function truncate(...tables: string[]) {
-  await Promise.all(
-    tables.map((t) => db.execute(`TRUNCATE TABLE "${t}" CASCADE`)),
-  );
-}
+import { createWalletRepo } from "../../modules/wallet/wallet.repo";
+import { createWalletHandler } from "../../modules/wallet/wallet.handler";
 
 describe("PaymentService", () => {
-  beforeEach(async () => {
-    await truncate(
-      "payment_record",
-      "ledger_entry",
-      "wallet",
-      "mark_package",
-      "refund_record",
-      "user",
-    );
-    await seedPackages();
+  beforeAll(async () => {
+    await resetDatabase();
   });
 
   test("TC-03: createPurchase then webhook confirm credits wallet", async () => {
@@ -153,9 +123,9 @@ describe("PaymentService", () => {
     failureRedirectUrl: "http://localhost:3000/balance?status=failed",
   });
 
-  const xenditWallet = createWalletService(dbInstance);
+  const xenditWallet = createWalletHandler(createWalletRepo(db), db);
   const xenditPayment = createPaymentService({
-    db: dbInstance,
+    db,
     wallet: xenditWallet,
     provider: xenditProvider,
     providerName: "xendit",
@@ -164,17 +134,11 @@ describe("PaymentService", () => {
   describe("PaymentService (Xendit provider)", () => {
     let originalFetch: typeof globalThis.fetch;
 
-    beforeEach(async () => {
-      await truncate(
-        "payment_record",
-        "ledger_entry",
-        "wallet",
-        "mark_package",
-        "refund_record",
-        "user",
-      );
-      await seedPackages();
+    beforeAll(async () => {
+      await resetDatabase();
+    });
 
+    beforeEach(() => {
       originalFetch = globalThis.fetch;
       globalThis.fetch = mock(() =>
         Promise.resolve(
@@ -208,7 +172,7 @@ describe("PaymentService", () => {
       );
       expect(intent.providerReference).toContain("xendit-");
 
-      const [record] = await dbInstance
+      const [record] = await db
         .select()
         .from(paymentRecord)
         .where(eq(paymentRecord.id, intent.paymentId))
@@ -234,10 +198,10 @@ describe("PaymentService", () => {
         status: "PAID",
       });
 
-      const w = await xenditWallet.getByUserId(dbInstance, user.id);
+      const w = await xenditWallet.getByUserId(db, user.id);
       expect(w!.totalBalance).toBe(50);
 
-      const [record] = await dbInstance
+      const [record] = await db
         .select()
         .from(paymentRecord)
         .where(eq(paymentRecord.id, intent.paymentId))
@@ -268,10 +232,10 @@ describe("PaymentService", () => {
         status: "SETTLED",
       });
 
-      const w = await xenditWallet.getByUserId(dbInstance, user.id);
+      const w = await xenditWallet.getByUserId(db, user.id);
       expect(w!.totalBalance).toBe(120);
 
-      const [record] = await dbInstance
+      const [record] = await db
         .select()
         .from(paymentRecord)
         .where(eq(paymentRecord.id, intent.paymentId))
@@ -296,10 +260,10 @@ describe("PaymentService", () => {
         status: "EXPIRED",
       });
 
-      const w = await xenditWallet.getByUserId(dbInstance, user.id);
+      const w = await xenditWallet.getByUserId(db, user.id);
       expect(w!.totalBalance).toBe(0);
 
-      const [record] = await dbInstance
+      const [record] = await db
         .select()
         .from(paymentRecord)
         .where(eq(paymentRecord.id, intent.paymentId))
@@ -325,7 +289,7 @@ describe("PaymentService", () => {
         failureReason: "DECLINED",
       });
 
-      const [record] = await dbInstance
+      const [record] = await db
         .select()
         .from(paymentRecord)
         .where(eq(paymentRecord.id, intent.paymentId))
@@ -357,10 +321,10 @@ describe("PaymentService", () => {
         status: "PAID",
       });
 
-      const w = await xenditWallet.getByUserId(dbInstance, user.id);
+      const w = await xenditWallet.getByUserId(db, user.id);
       expect(w!.totalBalance).toBe(50);
 
-      const entries = await dbInstance
+      const entries = await db
         .select()
         .from(ledgerEntry)
         .where(eq(ledgerEntry.walletId, walletRow.id));

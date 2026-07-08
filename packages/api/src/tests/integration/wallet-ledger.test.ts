@@ -1,17 +1,21 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import { wallet, ledgerEntry } from "@cogito-app/db/schema";
 
+import { resetDatabase } from "../helpers/test-client";
 import {
   createTestUser,
   createTestWallet,
   insertLedgerEntry,
   getWalletByUserId,
-  cleanTestUser,
 } from "../helpers/factories";
 
 describe("Wallet ledger invariants", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const email = `ledger.${Date.now()}@cogito.test`;
   let userId: string;
   let walletId: string;
@@ -21,10 +25,6 @@ describe("Wallet ledger invariants", () => {
     userId = u.id;
     const w = await createTestWallet(userId, 100);
     walletId = w.id;
-  });
-
-  afterAll(async () => {
-    await cleanTestUser(email);
   });
 
   test("wallet CHECK(total=held+available) holds for initial state", async () => {

@@ -1,5 +1,5 @@
 import type { DbType } from "../../lib/db";
-import { notFound } from "../../lib/errors";
+import { notFound, badRequest } from "../../lib/errors";
 import type { AuditPort } from "../../shared/ports/audit.port";
 import type { PricingPort } from "../../shared/ports/pricing.port";
 import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
@@ -65,10 +65,26 @@ export function createTutorHandler(deps: {
       isActive?: boolean;
     },
   ) {
+    const start = new Date(input.startDate);
+    const end = new Date(input.endDate);
+
+    if (end <= start) {
+      throw badRequest("endDate must be after startDate");
+    }
+
+    const existing = await tutorRepo.listAvailability(db, userId);
+    const overlapping = existing.find((slot) => {
+      if (input.id && slot.id === input.id) return false;
+      return start < slot.endDate && end > slot.startDate;
+    });
+    if (overlapping) {
+      throw badRequest("Availability window overlaps with an existing slot");
+    }
+
     return tutorRepo.upsertAvailability(db, userId, {
       ...input,
-      startDate: new Date(input.startDate),
-      endDate: new Date(input.endDate),
+      startDate: start,
+      endDate: end,
     });
   }
 

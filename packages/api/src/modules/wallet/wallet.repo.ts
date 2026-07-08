@@ -107,6 +107,7 @@ export function createWalletRepo(db: DbType) {
       afterBalance: number;
       balanceAfterTotal: number;
       balanceAfterHeld: number;
+      bookingId?: string;
     },
   ): Promise<void> {
     await conn.insert(ledgerEntry).values({
@@ -121,6 +122,7 @@ export function createWalletRepo(db: DbType) {
       afterBalance: params.afterBalance,
       balanceAfterWalletTotal: params.balanceAfterTotal,
       balanceAfterWalletHeld: params.balanceAfterHeld,
+      bookingId: params.bookingId ?? null,
     });
   }
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import { notification, user } from "@cogito-app/db/schema";
@@ -7,7 +7,7 @@ import {
   createTestContext,
   createTestClient,
   signUpAndSignIn,
-  cleanUser,
+  resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
 
@@ -31,6 +31,10 @@ async function insertNotification(
 }
 
 describe("Notification list & read flow", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now();
   const studentEmail = `student.notif.${ts}@cogito.test`;
   let studentClient: TestClient;
@@ -45,14 +49,6 @@ describe("Notification list & read flow", () => {
     studentClient = createTestClient(await createTestContext(res.cookie));
     const ctx = await createTestContext(res.cookie);
     studentId = ctx.session?.user?.id ?? "";
-  });
-
-  afterAll(async () => {
-    await db
-      .delete(notification)
-      .where(eq(notification.userId, studentId))
-      .catch(() => {});
-    await cleanUser(studentEmail);
   });
 
   test("list returns notifications for current user", async () => {

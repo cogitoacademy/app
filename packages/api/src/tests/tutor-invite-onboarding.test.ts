@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
@@ -13,7 +13,7 @@ import {
   createTestClient,
   signUpAndSignIn,
   setUserRole,
-  cleanUser,
+  resetDatabase,
   type TestClient,
 } from "./helpers/test-client";
 
@@ -28,6 +28,10 @@ async function expectRejects(promise: Promise<unknown>): Promise<void> {
 }
 
 describe("Tutor Invite & Onboarding", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now();
   const adminEmail = `admin.${ts}@cogito.test`;
   const tutorEmail = `tutor.${ts}@cogito.test`;
@@ -65,12 +69,6 @@ describe("Tutor Invite & Onboarding", () => {
       "Other Test",
     );
     otherClient = createTestClient(await createTestContext(otherRes.cookie));
-  });
-
-  afterAll(async () => {
-    await cleanUser(adminEmail);
-    await cleanUser(tutorEmail);
-    await cleanUser(otherEmail);
   });
 
   describe("TC-08: Invite claim flow", () => {

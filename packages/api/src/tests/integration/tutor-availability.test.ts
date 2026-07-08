@@ -1,15 +1,19 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll } from "bun:test";
 
 import {
   createTestContext,
   createTestClient,
   signUpAndSignIn,
   setUserRole,
-  cleanUser,
+  resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
 
 describe("Tutor availability", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now();
   const tutorEmail = `tutor.avail.${ts}@cogito.test`;
   let tutorClient: TestClient;
@@ -20,10 +24,6 @@ describe("Tutor availability", () => {
     if (!ctx.session?.user) throw new Error("Tutor session not found");
     await setUserRole(ctx.session.user.id, "tutor");
     tutorClient = createTestClient(ctx);
-  });
-
-  afterAll(async () => {
-    await cleanUser(tutorEmail);
   });
 
   function slotStart(minutesFromNow = 60) {

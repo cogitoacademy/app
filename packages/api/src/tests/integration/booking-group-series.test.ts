@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
@@ -6,8 +6,6 @@ import {
   tutorInvite,
   tutorProfile,
   availabilitySlot,
-  booking,
-  bookingParticipant,
 } from "@cogito-app/db/schema";
 
 import {
@@ -15,7 +13,7 @@ import {
   createTestClient,
   signUpAndSignIn,
   setUserRole,
-  cleanUser,
+  resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
 
@@ -96,6 +94,10 @@ async function createPublishedTutor(email: string, ts: number) {
 }
 
 describe("Booking group flow", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now();
   const tutorEmail = `tutor.grp.${ts}@cogito.test`;
   const proposerEmail = `proposer.grp.${ts}@cogito.test`;
@@ -153,23 +155,6 @@ describe("Booking group flow", () => {
     }
   });
 
-  afterAll(async () => {
-    if (bookingId) {
-      await db
-        .delete(bookingParticipant)
-        .where(eq(bookingParticipant.bookingId, bookingId))
-        .catch(() => {});
-      await db
-        .delete(booking)
-        .where(eq(booking.id, bookingId))
-        .catch(() => {});
-    }
-    await cleanUser(proposerEmail);
-    await cleanUser(invitee1Email);
-    await cleanUser(invitee2Email);
-    await cleanUser(tutorEmail);
-  });
-
   test("TC-18: create group booking → awaiting_participant_confirmation", async () => {
     const start = new Date(Date.now() + 48 * 3600_000).toISOString();
     const end = new Date(Date.now() + 49 * 3600_000).toISOString();
@@ -220,6 +205,10 @@ describe("Booking group flow", () => {
 });
 
 describe("Booking series flow", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
   const ts = Date.now() + 5000;
   const tutorEmail = `tutor.srs.${ts}@cogito.test`;
   const studentEmail = `student.srs.${ts}@cogito.test`;
@@ -245,21 +234,6 @@ describe("Booking series flow", () => {
     if (studentCtx.session?.user) {
       await creditWallet(studentCtx.session.user.id, 500);
     }
-  });
-
-  afterAll(async () => {
-    if (bookingId) {
-      await db
-        .delete(bookingParticipant)
-        .where(eq(bookingParticipant.bookingId, bookingId))
-        .catch(() => {});
-      await db
-        .delete(booking)
-        .where(eq(booking.id, bookingId))
-        .catch(() => {});
-    }
-    await cleanUser(studentEmail);
-    await cleanUser(tutorEmail);
   });
 
   test("TC-23: create series with 3 sessions → awaiting_tutor_review", async () => {

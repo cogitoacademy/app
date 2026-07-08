@@ -64,6 +64,7 @@ export function createWalletHandler(repo: WalletRepo, db: DbType): WalletPort {
       afterBalance: w.totalBalance,
       balanceAfterTotal: newHeld + newAvailable,
       balanceAfterHeld: newHeld,
+      bookingId: params.bookingId,
     });
 
     return updated;
@@ -97,6 +98,7 @@ export function createWalletHandler(repo: WalletRepo, db: DbType): WalletPort {
       afterBalance: w.totalBalance,
       balanceAfterTotal: newHeld + newAvailable,
       balanceAfterHeld: newHeld,
+      bookingId: params.bookingId,
     });
 
     return updated;
@@ -131,6 +133,7 @@ export function createWalletHandler(repo: WalletRepo, db: DbType): WalletPort {
       afterBalance: newTotal,
       balanceAfterTotal: newTotal,
       balanceAfterHeld: newHeld,
+      bookingId: params.bookingId,
     });
 
     return updated;
@@ -164,6 +167,7 @@ export function createWalletHandler(repo: WalletRepo, db: DbType): WalletPort {
       afterBalance: newTotal,
       balanceAfterTotal: newTotal,
       balanceAfterHeld: w.heldBalance,
+      bookingId: params.bookingId,
     });
 
     return updated;
@@ -206,6 +210,7 @@ export function createWalletHandler(repo: WalletRepo, db: DbType): WalletPort {
       afterBalance: newTotal,
       balanceAfterTotal: newTotal,
       balanceAfterHeld: newHeld,
+      bookingId: params.bookingId,
     });
 
     return updated;

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
-import { wallet, ledgerEntry, user, auditLog } from "@cogito-app/db/schema";
+import { wallet, ledgerEntry, user } from "@cogito-app/db/schema";
 
 export async function createTestUser(email: string, role = "student") {
   const [u] = await db
@@ -63,34 +63,4 @@ export async function getWalletByUserId(userId: string) {
     .where(eq(wallet.userId, userId))
     .limit(1);
   return w ?? null;
-}
-
-export async function cleanTestUser(email: string) {
-  const [found] = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-  if (found) {
-    await db
-      .delete(auditLog)
-      .where(eq(auditLog.actorId, found.id))
-      .catch(() => {});
-    const [w] = await db
-      .select()
-      .from(wallet)
-      .where(eq(wallet.userId, found.id))
-      .limit(1);
-    if (w) {
-      await db
-        .delete(ledgerEntry)
-        .where(eq(ledgerEntry.walletId, w.id))
-        .catch(() => {});
-      await db
-        .delete(wallet)
-        .where(eq(wallet.userId, found.id))
-        .catch(() => {});
-    }
-    await db.delete(user).where(eq(user.id, found.id));
-  }
 }

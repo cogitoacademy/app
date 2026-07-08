@@ -1,29 +1,24 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import { ledgerEntry } from "@cogito-app/db/schema";
 
+import { resetDatabase } from "../helpers/test-client";
 import { services } from "../../services";
 import { createTestUser } from "../helpers/factories";
 
-async function truncate(...tables: string[]) {
-  await Promise.all(
-    tables.map((t) => db.execute(`TRUNCATE TABLE "${t}" CASCADE`)),
-  );
-}
-
 describe("Knowledge Bank gate", () => {
-  beforeEach(async () => {
-    await truncate("ledger_entry", "wallet", "user");
+  beforeAll(async () => {
+    await resetDatabase();
   });
 
-  test("TC-32: eligible when >=35 total, no ledger entry on check", async () => {
+  test("TC-32: eligible when >=500 total, no ledger entry on check", async () => {
     const user = await createTestUser("kb1@cogito.test");
     const w = await services.wallet.getOrCreate(user.id);
     await services.wallet.credit(db, {
       walletId: w.id,
       actorType: "system",
-      amount: 40,
+      amount: 510,
       eventKey: "seed.kb",
       sourceReference: "seed",
       reason: "seed",
@@ -31,7 +26,7 @@ describe("Knowledge Bank gate", () => {
 
     const result = await services.wallet.knowledgeBankEligible(user.id);
     expect(result.eligible).toBe(true);
-    expect(result.threshold).toBe(35);
+    expect(result.threshold).toBe(500);
 
     const entries = await db
       .select()
