@@ -8,249 +8,249 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as LoginRouteImport } from "./routes/login";
-import { Route as InviteRouteImport } from "./routes/invite";
-import { Route as AppRouteImport } from "./routes/_app";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as AppTutorsRouteImport } from "./routes/_app.tutors";
-import { Route as AppProfileRouteImport } from "./routes/_app.profile";
-import { Route as AppOnboardingRouteImport } from "./routes/_app.onboarding";
-import { Route as AppDashboardRouteImport } from "./routes/_app.dashboard";
-import { Route as AppBalanceRouteImport } from "./routes/_app.balance";
-import { Route as AppAdminTutorsRouteImport } from "./routes/_app.admin-tutors";
-import { Route as AppAchievementsRouteImport } from "./routes/_app.achievements";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as InviteRouteImport } from './routes/invite'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
+import { Route as AppProfileRouteImport } from './routes/_app.profile'
+import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
+import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppBalanceRouteImport } from './routes/_app.balance'
+import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
+import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 
 const LoginRoute = LoginRouteImport.update({
-  id: "/login",
-  path: "/login",
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const InviteRoute = InviteRouteImport.update({
-  id: "/invite",
-  path: "/invite",
+  id: '/invite',
+  path: '/invite',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AppRoute = AppRouteImport.update({
-  id: "/_app",
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AppTutorsRoute = AppTutorsRouteImport.update({
-  id: "/tutors",
-  path: "/tutors",
+  id: '/tutors',
+  path: '/tutors',
   getParentRoute: () => AppRoute,
-} as any);
+} as any)
 const AppProfileRoute = AppProfileRouteImport.update({
-  id: "/profile",
-  path: "/profile",
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => AppRoute,
-} as any);
+} as any)
 const AppOnboardingRoute = AppOnboardingRouteImport.update({
-  id: "/onboarding",
-  path: "/onboarding",
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => AppRoute,
-} as any);
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
-  id: "/dashboard",
-  path: "/dashboard",
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AppRoute,
-} as any);
+} as any)
 const AppBalanceRoute = AppBalanceRouteImport.update({
-  id: "/balance",
-  path: "/balance",
+  id: '/balance',
+  path: '/balance',
   getParentRoute: () => AppRoute,
-} as any);
+} as any)
 const AppAdminTutorsRoute = AppAdminTutorsRouteImport.update({
-  id: "/admin-tutors",
-  path: "/admin-tutors",
+  id: '/admin-tutors',
+  path: '/admin-tutors',
   getParentRoute: () => AppRoute,
-} as any);
+} as any)
 const AppAchievementsRoute = AppAchievementsRouteImport.update({
-  id: "/achievements",
-  path: "/achievements",
+  id: '/achievements',
+  path: '/achievements',
   getParentRoute: () => AppRoute,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/invite": typeof InviteRoute;
-  "/login": typeof LoginRoute;
-  "/achievements": typeof AppAchievementsRoute;
-  "/admin-tutors": typeof AppAdminTutorsRoute;
-  "/balance": typeof AppBalanceRoute;
-  "/dashboard": typeof AppDashboardRoute;
-  "/onboarding": typeof AppOnboardingRoute;
-  "/profile": typeof AppProfileRoute;
-  "/tutors": typeof AppTutorsRoute;
+  '/': typeof IndexRoute
+  '/invite': typeof InviteRoute
+  '/login': typeof LoginRoute
+  '/achievements': typeof AppAchievementsRoute
+  '/admin-tutors': typeof AppAdminTutorsRoute
+  '/balance': typeof AppBalanceRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/onboarding': typeof AppOnboardingRoute
+  '/profile': typeof AppProfileRoute
+  '/tutors': typeof AppTutorsRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/invite": typeof InviteRoute;
-  "/login": typeof LoginRoute;
-  "/achievements": typeof AppAchievementsRoute;
-  "/admin-tutors": typeof AppAdminTutorsRoute;
-  "/balance": typeof AppBalanceRoute;
-  "/dashboard": typeof AppDashboardRoute;
-  "/onboarding": typeof AppOnboardingRoute;
-  "/profile": typeof AppProfileRoute;
-  "/tutors": typeof AppTutorsRoute;
+  '/': typeof IndexRoute
+  '/invite': typeof InviteRoute
+  '/login': typeof LoginRoute
+  '/achievements': typeof AppAchievementsRoute
+  '/admin-tutors': typeof AppAdminTutorsRoute
+  '/balance': typeof AppBalanceRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/onboarding': typeof AppOnboardingRoute
+  '/profile': typeof AppProfileRoute
+  '/tutors': typeof AppTutorsRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/_app": typeof AppRouteWithChildren;
-  "/invite": typeof InviteRoute;
-  "/login": typeof LoginRoute;
-  "/_app/achievements": typeof AppAchievementsRoute;
-  "/_app/admin-tutors": typeof AppAdminTutorsRoute;
-  "/_app/balance": typeof AppBalanceRoute;
-  "/_app/dashboard": typeof AppDashboardRoute;
-  "/_app/onboarding": typeof AppOnboardingRoute;
-  "/_app/profile": typeof AppProfileRoute;
-  "/_app/tutors": typeof AppTutorsRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/invite': typeof InviteRoute
+  '/login': typeof LoginRoute
+  '/_app/achievements': typeof AppAchievementsRoute
+  '/_app/admin-tutors': typeof AppAdminTutorsRoute
+  '/_app/balance': typeof AppBalanceRoute
+  '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/onboarding': typeof AppOnboardingRoute
+  '/_app/profile': typeof AppProfileRoute
+  '/_app/tutors': typeof AppTutorsRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
+  fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | "/"
-    | "/invite"
-    | "/login"
-    | "/achievements"
-    | "/admin-tutors"
-    | "/balance"
-    | "/dashboard"
-    | "/onboarding"
-    | "/profile"
-    | "/tutors";
-  fileRoutesByTo: FileRoutesByTo;
+    | '/'
+    | '/invite'
+    | '/login'
+    | '/achievements'
+    | '/admin-tutors'
+    | '/balance'
+    | '/dashboard'
+    | '/onboarding'
+    | '/profile'
+    | '/tutors'
+  fileRoutesByTo: FileRoutesByTo
   to:
-    | "/"
-    | "/invite"
-    | "/login"
-    | "/achievements"
-    | "/admin-tutors"
-    | "/balance"
-    | "/dashboard"
-    | "/onboarding"
-    | "/profile"
-    | "/tutors";
+    | '/'
+    | '/invite'
+    | '/login'
+    | '/achievements'
+    | '/admin-tutors'
+    | '/balance'
+    | '/dashboard'
+    | '/onboarding'
+    | '/profile'
+    | '/tutors'
   id:
-    | "__root__"
-    | "/"
-    | "/_app"
-    | "/invite"
-    | "/login"
-    | "/_app/achievements"
-    | "/_app/admin-tutors"
-    | "/_app/balance"
-    | "/_app/dashboard"
-    | "/_app/onboarding"
-    | "/_app/profile"
-    | "/_app/tutors";
-  fileRoutesById: FileRoutesById;
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/invite'
+    | '/login'
+    | '/_app/achievements'
+    | '/_app/admin-tutors'
+    | '/_app/balance'
+    | '/_app/dashboard'
+    | '/_app/onboarding'
+    | '/_app/profile'
+    | '/_app/tutors'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  AppRoute: typeof AppRouteWithChildren;
-  InviteRoute: typeof InviteRoute;
-  LoginRoute: typeof LoginRoute;
+  IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  InviteRoute: typeof InviteRoute
+  LoginRoute: typeof LoginRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/login": {
-      id: "/login";
-      path: "/login";
-      fullPath: "/login";
-      preLoaderRoute: typeof LoginRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/invite": {
-      id: "/invite";
-      path: "/invite";
-      fullPath: "/invite";
-      preLoaderRoute: typeof InviteRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/_app": {
-      id: "/_app";
-      path: "";
-      fullPath: "/";
-      preLoaderRoute: typeof AppRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/_app/tutors": {
-      id: "/_app/tutors";
-      path: "/tutors";
-      fullPath: "/tutors";
-      preLoaderRoute: typeof AppTutorsRouteImport;
-      parentRoute: typeof AppRoute;
-    };
-    "/_app/profile": {
-      id: "/_app/profile";
-      path: "/profile";
-      fullPath: "/profile";
-      preLoaderRoute: typeof AppProfileRouteImport;
-      parentRoute: typeof AppRoute;
-    };
-    "/_app/onboarding": {
-      id: "/_app/onboarding";
-      path: "/onboarding";
-      fullPath: "/onboarding";
-      preLoaderRoute: typeof AppOnboardingRouteImport;
-      parentRoute: typeof AppRoute;
-    };
-    "/_app/dashboard": {
-      id: "/_app/dashboard";
-      path: "/dashboard";
-      fullPath: "/dashboard";
-      preLoaderRoute: typeof AppDashboardRouteImport;
-      parentRoute: typeof AppRoute;
-    };
-    "/_app/balance": {
-      id: "/_app/balance";
-      path: "/balance";
-      fullPath: "/balance";
-      preLoaderRoute: typeof AppBalanceRouteImport;
-      parentRoute: typeof AppRoute;
-    };
-    "/_app/admin-tutors": {
-      id: "/_app/admin-tutors";
-      path: "/admin-tutors";
-      fullPath: "/admin-tutors";
-      preLoaderRoute: typeof AppAdminTutorsRouteImport;
-      parentRoute: typeof AppRoute;
-    };
-    "/_app/achievements": {
-      id: "/_app/achievements";
-      path: "/achievements";
-      fullPath: "/achievements";
-      preLoaderRoute: typeof AppAchievementsRouteImport;
-      parentRoute: typeof AppRoute;
-    };
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/tutors': {
+      id: '/_app/tutors'
+      path: '/tutors'
+      fullPath: '/tutors'
+      preLoaderRoute: typeof AppTutorsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/profile': {
+      id: '/_app/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/onboarding': {
+      id: '/_app/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/balance': {
+      id: '/_app/balance'
+      path: '/balance'
+      fullPath: '/balance'
+      preLoaderRoute: typeof AppBalanceRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-tutors': {
+      id: '/_app/admin-tutors'
+      path: '/admin-tutors'
+      fullPath: '/admin-tutors'
+      preLoaderRoute: typeof AppAdminTutorsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/achievements': {
+      id: '/_app/achievements'
+      path: '/achievements'
+      fullPath: '/achievements'
+      preLoaderRoute: typeof AppAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
-  AppAchievementsRoute: typeof AppAchievementsRoute;
-  AppAdminTutorsRoute: typeof AppAdminTutorsRoute;
-  AppBalanceRoute: typeof AppBalanceRoute;
-  AppDashboardRoute: typeof AppDashboardRoute;
-  AppOnboardingRoute: typeof AppOnboardingRoute;
-  AppProfileRoute: typeof AppProfileRoute;
-  AppTutorsRoute: typeof AppTutorsRoute;
+  AppAchievementsRoute: typeof AppAchievementsRoute
+  AppAdminTutorsRoute: typeof AppAdminTutorsRoute
+  AppBalanceRoute: typeof AppBalanceRoute
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppOnboardingRoute: typeof AppOnboardingRoute
+  AppProfileRoute: typeof AppProfileRoute
+  AppTutorsRoute: typeof AppTutorsRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -261,16 +261,16 @@ const AppRouteChildren: AppRouteChildren = {
   AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
   AppTutorsRoute: AppTutorsRoute,
-};
+}
 
-const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()

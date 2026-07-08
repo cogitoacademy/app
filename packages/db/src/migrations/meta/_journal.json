@@ -12,43 +12,8 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1782461974428,
-      "tag": "0001_bored_husk",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1782463514283,
-      "tag": "0002_reflective_captain_britain",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1782492827818,
-      "tag": "0003_shallow_gargoyle",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1782492871948,
-      "tag": "0004_short_colossus",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1782493834393,
-      "tag": "0005_small_gunslinger",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1782533849687,
-      "tag": "0006_rich_groot",
+      "when": 1783486025724,
+      "tag": "0001_tidy_purple_man",
       "breakpoints": true
     }
   ]

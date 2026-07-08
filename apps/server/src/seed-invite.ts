@@ -2,6 +2,8 @@ import { db } from "@cogito-app/db";
 import { tutorInvite, user } from "@cogito-app/db/schema";
 import { eq } from "drizzle-orm";
 
+const INVITE_EXPIRY_DAYS = 7;
+
 const email = process.argv[2];
 const displayName = process.argv[3] || email;
 
@@ -42,7 +44,7 @@ async function main() {
 
   const token = crypto.randomUUID();
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
 
   const result = await db
     .insert(tutorInvite)

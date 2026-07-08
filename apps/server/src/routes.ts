@@ -1,6 +1,7 @@
 import { createContext } from "@cogito-app/api/context";
 import { appRouter } from "@cogito-app/api/routers";
 import { auth } from "@cogito-app/auth";
+import { db } from "@cogito-app/db";
 import { env } from "@cogito-app/env/server";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -8,6 +9,7 @@ import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
+import { sql } from "drizzle-orm";
 import { Elysia } from "elysia";
 
 import { paymentsWebhook } from "./webhooks/payments";
@@ -104,8 +106,6 @@ export function createServer() {
     )
     .get("/health", async () => {
       try {
-        const { db } = await import("@cogito-app/db");
-        const { sql } = await import("drizzle-orm");
         await db.execute(sql`SELECT 1`);
         return Response.json({
           status: "ok",

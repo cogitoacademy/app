@@ -1,6 +1,7 @@
 import type { DbType } from "../../lib/db";
 import { notFound, badRequest, conflict } from "../../lib/errors";
 import type { AuditPort } from "../../shared/ports/audit.port";
+import { INVITE_EXPIRY_DAYS } from "../../shared/constants";
 import type {
   AdminTutorRepo,
   InviteStatus,
@@ -13,8 +14,6 @@ import {
   buildReviewUpdates,
   type ReviewAction,
 } from "./admin-tutor.service";
-
-const INVITE_EXPIRY_DAYS = 7;
 
 export interface CreateInviteInput {
   email: string;
