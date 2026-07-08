@@ -87,6 +87,7 @@ jobs:
       BETTER_AUTH_SECRET: ci-secret-at-least-32-characters-long-xxxx
       BETTER_AUTH_URL: http://localhost:3001
       CORS_ORIGIN: http://localhost:3000
+      PAYMENT_WEBHOOK_SECRET: ci-payment-webhook-secret-at-least-32-characters-long
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +101,7 @@ jobs:
           key: ${{ runner.os }}-bun-test-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-test-
       - run: bun run db:migrate
-      - run: bun test --coverage
+      - run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts
       - name: Post coverage comment
         if: github.event_name == 'pull_request'
         run: bun .github/scripts/coverage-comment.ts

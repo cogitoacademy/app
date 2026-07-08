@@ -1,9 +1,12 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import dotenv from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
-dotenv.config({
-  path: "../../apps/server/.env",
-});
+const envPath = resolve("../../apps/server/.env");
+if (existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+}
 
 export default defineConfig({
   schema: "./src/schema",
