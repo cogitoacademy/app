@@ -1,4 +1,12 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import { ledgerEntry, paymentRecord } from "@cogito-app/db/schema";
