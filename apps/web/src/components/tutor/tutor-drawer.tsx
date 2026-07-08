@@ -91,139 +91,136 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
         <DrawerBody>
           <>
             {t.modality && (
-                <div className="mb-3">
-                  <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
-                    {MODALITY_LABELS[t.modality] ?? t.modality}
-                  </Badge>
-                </div>
-              )}
-              {t.shortBio && (
-                <div className="mb-4">
-                  <Text>{t.shortBio}</Text>
-                </div>
-              )}
+              <div className="mb-3">
+                <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
+                  {MODALITY_LABELS[t.modality] ?? t.modality}
+                </Badge>
+              </div>
+            )}
+            {t.shortBio && (
+              <div className="mb-4">
+                <Text>{t.shortBio}</Text>
+              </div>
+            )}
 
-              {t.expertise && t.expertise.length > 0 && (
-                <div className="mb-4">
-                  <Heading size="sm" className="mb-2">
-                    Expertise
-                  </Heading>
-                  <div className="flex flex-wrap gap-1.5">
-                    {t.expertise.map((e) => (
-                      <Badge key={e} variant="secondary" size="sm">
-                        {e}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {priceEntries.length > 0 && (
-                <div className="mb-4">
-                  <Heading size="sm" className="mb-2">
-                    Pricing
-                  </Heading>
-                  <div className="rounded-lg border border-item-border overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-item">
-                          <th className="px-3 py-2 text-left text-muted">
-                            Group Size
-                          </th>
-                          <th className="px-3 py-2 text-right text-muted">
-                            Price (Marks)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {priceEntries.map(([size, price]) => (
-                          <tr
-                            key={size}
-                            className="border-t border-item-border"
-                          >
-                            <td className="px-3 py-2">
-                              {size} student{Number(size) > 1 ? "s" : ""}
-                            </td>
-                            <td className="px-3 py-2 text-right font-medium">
-                              {price}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {t.availabilitySummary && (
-                <div className="mb-4">
-                  <Heading size="sm" className="mb-2">
-                    Availability
-                  </Heading>
-                  <Text className="text-muted">{t.availabilitySummary}</Text>
-                </div>
-              )}
-
-              {t.credentialsSummary && (
-                <>
-                  <Separator className="my-4" />
-                  <div className="mb-4">
-                    <Heading size="sm" className="mb-2">
-                      Credentials
-                    </Heading>
-                    <Text className="text-muted">{t.credentialsSummary}</Text>
-                  </div>
-                </>
-              )}
-
-              {t.proofUrls && t.proofUrls.length > 0 && (
-                <div className="mb-4">
-                  <Heading size="sm" className="mb-2">
-                    Proof Links
-                  </Heading>
-                  <ul className="space-y-1">
-                    {t.proofUrls.map((url) => (
-                      <li key={url}>
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary underline text-sm break-all"
-                        >
-                          {url}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <Separator className="my-4" />
+            {t.expertise && t.expertise.length > 0 && (
               <div className="mb-4">
                 <Heading size="sm" className="mb-2">
-                  Book a session
+                  Expertise
                 </Heading>
-                <Text className="text-muted">
-                  Select a modality and proceed to book.
-                </Text>
-                <Select
-                  value={selectedModality}
-                  onValueChange={(v) => setSelectedModality(v as string)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose modality" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      {modalityOptions.map((m) => (
-                        <SelectItem key={m} value={m}>
-                          {MODALITY_LABELS[m] ?? m}
-                        </SelectItem>
-                      ))}
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
+                <div className="flex flex-wrap gap-1.5">
+                  {t.expertise.map((e) => (
+                    <Badge key={e} variant="secondary" size="sm">
+                      {e}
+                    </Badge>
+                  ))}
+                </div>
               </div>
+            )}
+
+            {priceEntries.length > 0 && (
+              <div className="mb-4">
+                <Heading size="sm" className="mb-2">
+                  Pricing
+                </Heading>
+                <div className="rounded-lg border border-item-border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-item">
+                        <th className="px-3 py-2 text-left text-muted">
+                          Group Size
+                        </th>
+                        <th className="px-3 py-2 text-right text-muted">
+                          Price (Marks)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {priceEntries.map(([size, price]) => (
+                        <tr key={size} className="border-t border-item-border">
+                          <td className="px-3 py-2">
+                            {size} student{Number(size) > 1 ? "s" : ""}
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium">
+                            {price}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {t.availabilitySummary && (
+              <div className="mb-4">
+                <Heading size="sm" className="mb-2">
+                  Availability
+                </Heading>
+                <Text className="text-muted">{t.availabilitySummary}</Text>
+              </div>
+            )}
+
+            {t.credentialsSummary && (
+              <>
+                <Separator className="my-4" />
+                <div className="mb-4">
+                  <Heading size="sm" className="mb-2">
+                    Credentials
+                  </Heading>
+                  <Text className="text-muted">{t.credentialsSummary}</Text>
+                </div>
+              </>
+            )}
+
+            {t.proofUrls && t.proofUrls.length > 0 && (
+              <div className="mb-4">
+                <Heading size="sm" className="mb-2">
+                  Proof Links
+                </Heading>
+                <ul className="space-y-1">
+                  {t.proofUrls.map((url) => (
+                    <li key={url}>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline text-sm break-all"
+                      >
+                        {url}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <Separator className="my-4" />
+            <div className="mb-4">
+              <Heading size="sm" className="mb-2">
+                Book a session
+              </Heading>
+              <Text className="text-muted">
+                Select a modality and proceed to book.
+              </Text>
+              <Select
+                value={selectedModality}
+                onValueChange={(v) => setSelectedModality(v as string)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose modality" />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectList>
+                    {modalityOptions.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {MODALITY_LABELS[m] ?? m}
+                      </SelectItem>
+                    ))}
+                  </SelectList>
+                </SelectPopup>
+              </Select>
+            </div>
           </>
 
           <DrawerDescription className="sr-only">

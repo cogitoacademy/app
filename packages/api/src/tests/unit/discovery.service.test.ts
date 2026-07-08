@@ -36,6 +36,7 @@ describe("Discovery Service", () => {
       const profile = makeProfile();
       const result = buildProjection(profile);
       expect(result.id).toBe("tp1");
+      expect(result.userId).toBe("u1");
       expect(result.displayName).toBe("Dr. Smith");
       expect(result.shortBio).toBe("Experienced tutor");
       expect(result.credentialsSummary).toBe("PhD Math");

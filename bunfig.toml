@@ -12,6 +12,7 @@ coveragePathIgnorePatterns = [
   "packages/ui/",
   "packages/config/",
   "packages/env/",
+  "packages/e2e/",
   "**/*.test.ts",
   "**/routeTree.gen.ts",
   "apps/web/src/main.tsx",

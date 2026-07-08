@@ -47,11 +47,11 @@ typecheck:       ## Type-check all packages
 
 # ── Tests ────────────────────────────────────────────────────────────────────────
 
-test:            ## Run all unit + integration tests
-		bun test
+test:            ## Run unit tests only
+		bun test packages/api/src/tests/unit/ apps/server/src/openapi.test.ts
 
-test-api:        ## Run API tests with env
-		bun run test:api
+test-api:        ## Run all API tests (unit + integration) with env
+		bun test --env-file apps/server/.env packages/api/src/tests/ apps/server/src/openapi.test.ts
 
 test-e2e:        ## Run E2E tests (Playwright)
 		bun run test:e2e
@@ -59,11 +59,11 @@ test-e2e:        ## Run E2E tests (Playwright)
 test-e2e-ui:     ## Run E2E tests with Playwright UI
 		bun run test:e2e:ui
 
-test-coverage:   ## Run API tests with coverage
-		bun run test:coverage
+test-coverage:   ## Run unit tests with coverage
+		bun test --coverage packages/api/src/tests/unit/ apps/server/src/openapi.test.ts
 
-test-coverage-html: ## Run tests with HTML coverage report
-		bun test --coverage --env-file apps/server/.env packages/api/src/tests && \
+test-coverage-html: ## Run unit tests with HTML coverage report
+		bun test --coverage --env-file apps/server/.env packages/api/src/tests/unit/ apps/server/src/openapi.test.ts && \
 		bunx coverage-istanbul report --include=coverage/coverage-final.json --reporter=html --dir=coverage/html
 
 # ── Database ──────────────────────────────────────────────────────────────────────
