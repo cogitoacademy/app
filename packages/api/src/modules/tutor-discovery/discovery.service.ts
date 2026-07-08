@@ -10,6 +10,7 @@ export interface ProfileWithUser extends TutorProfileRow {
 export function buildProjection(profile: ProfileWithUser) {
   return {
     id: profile.id,
+    userId: profile.userId,
     displayName: profile.displayName,
     shortBio: profile.shortBio,
     credentialsSummary: profile.credentialsSummary,

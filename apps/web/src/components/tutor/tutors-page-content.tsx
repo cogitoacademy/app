@@ -42,6 +42,7 @@ const EXPERTISE_OPTIONS = [
 
 type PublishedTutor = {
   id: string;
+  userId: string;
   displayName: string | null;
   shortBio: string | null;
   credentialsSummary: string | null;

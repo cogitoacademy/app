@@ -24,10 +24,9 @@ const MODALITY_VARIANTS: Record<string, "info" | "success" | "warning"> = {
 type TutorCardProps = {
   tutor: {
     id: string;
-    userId: string;
     displayName: string | null;
     shortBio: string | null;
-    expertise: string[] | null;
+    expertise: string[];
     modality: string | null;
     publishedAt: Date | null;
     user: { name: string | null; image: string | null } | null;
