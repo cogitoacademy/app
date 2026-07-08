@@ -1,0 +1,68 @@
+import { eq } from "drizzle-orm";
+import { studentProfile, tutorProfile } from "@cogito-app/db/schema";
+import type { DbOrTx } from "../../lib/tx";
+
+export interface ProfileInput {
+  phoneNumber?: string;
+  schoolName?: string;
+  gradeLevel?: string;
+  parentName?: string;
+  parentPhone?: string;
+  parentEmail?: string;
+}
+
+export type StudentProfileRow = typeof studentProfile.$inferSelect;
+export type TutorProfileRow = typeof tutorProfile.$inferSelect;
+
+export function createAuthRepo() {
+  async function getStudentProfile(
+    conn: DbOrTx,
+    userId: string,
+  ): Promise<StudentProfileRow | null> {
+    return (
+      (await conn.query.studentProfile.findFirst({
+        where: eq(studentProfile.userId, userId),
+      })) ?? null
+    );
+  }
+
+  async function getTutorProfile(
+    conn: DbOrTx,
+    userId: string,
+  ): Promise<TutorProfileRow | null> {
+    return (
+      (await conn.query.tutorProfile.findFirst({
+        where: eq(tutorProfile.userId, userId),
+      })) ?? null
+    );
+  }
+
+  async function upsertProfile(
+    conn: DbOrTx,
+    userId: string,
+    input: ProfileInput,
+  ): Promise<StudentProfileRow> {
+    const [updated] = await conn
+      .update(studentProfile)
+      .set(input)
+      .where(eq(studentProfile.userId, userId))
+      .returning();
+    return updated!;
+  }
+
+  async function createProfile(
+    conn: DbOrTx,
+    userId: string,
+    input: ProfileInput,
+  ): Promise<StudentProfileRow> {
+    const [created] = await conn
+      .insert(studentProfile)
+      .values({ userId, ...input })
+      .returning();
+    return created!;
+  }
+
+  return { getStudentProfile, getTutorProfile, upsertProfile, createProfile };
+}
+
+export type AuthRepo = ReturnType<typeof createAuthRepo>;

@@ -1,114 +1,92 @@
 import { db } from "./lib/db";
-import { createAuditService } from "./modules/audit/audit.service";
+import { createAuditRepo } from "./modules/audit/audit.repo";
+import { createAuditHandler } from "./modules/audit/audit.handler";
 import { createPricingService } from "./modules/pricing/pricing.service";
-import { createWalletService } from "./modules/wallet/wallet.service";
-import { createAuthService } from "./modules/auth/auth.service";
-import { createAdminService } from "./modules/admin/admin.service";
-import { createAdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
-import { createTutorService } from "./modules/tutor/tutor.service";
-import { createDiscoveryService } from "./modules/tutor-discovery/discovery.service";
-import { createInviteService } from "./modules/invite/invite.service";
-import { createAchievementService } from "./modules/achievement/achievement.service";
-import { createPaymentService } from "./modules/payment/payment.service";
-import { createStubPaymentProvider } from "./modules/payment/stub-payment.provider";
-import { createXenditPaymentProvider } from "./modules/payment/xendit-payment.provider";
-import { createNotificationService } from "./modules/notification/notification.service";
-import { createBookingService } from "./modules/booking/booking.service";
-import { createFallbackMeetingProvider } from "./modules/meeting/fallback.provider";
-import { createRoomService } from "./modules/room/room.service";
-import { env } from "@cogito-app/env/server";
+import { createWalletRepo } from "./modules/wallet/wallet.repo";
+import { createWalletHandler } from "./modules/wallet/wallet.handler";
+import { createAuthRepo } from "./modules/auth/auth.repo";
+import { createAuthHandler } from "./modules/auth/auth.handler";
+import { createAdminRepo } from "./modules/admin/admin.repo";
+import { createAdminHandler } from "./modules/admin/admin.handler";
+import { createAdminTutorRepo } from "./modules/admin-tutor/admin-tutor.repo";
+import { createAdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
+import { createTutorRepo } from "./modules/tutor/tutor.repo";
+import { createTutorHandler } from "./modules/tutor/tutor.handler";
+import { createDiscoveryRepo } from "./modules/tutor-discovery/discovery.repo";
+import { createDiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
+import { createInviteRepo } from "./modules/invite/invite.repo";
+import { createInviteHandler } from "./modules/invite/invite.handler";
+import { createAchievementRepo } from "./modules/achievement/achievement.repo";
+import { createAchievementHandler } from "./modules/achievement/achievement.handler";
 
 import type { AuditPort } from "./shared/ports/audit.port";
 import type { PricingPort } from "./shared/ports/pricing.port";
 import type { WalletPort } from "./shared/ports/wallet.port";
-import type { InAppNotificationPort } from "./shared/ports/notification.port";
-import type { MeetingPort } from "./shared/ports/meeting.port";
-import type { AuthService } from "./modules/auth/auth.service";
-import type { AdminService } from "./modules/admin/admin.service";
-import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
-import type { TutorService } from "./modules/tutor/tutor.service";
-import type { DiscoveryService } from "./modules/tutor-discovery/discovery.service";
-import type { InviteService } from "./modules/invite/invite.service";
-import type { AchievementService } from "./modules/achievement/achievement.service";
-import type { PaymentService } from "./modules/payment/payment.service";
-import type { BookingService } from "./modules/booking/booking.service";
-import type { RoomService } from "./modules/room/room.service";
+import type { AuthHandler } from "./modules/auth/auth.handler";
+import type { AdminHandler } from "./modules/admin/admin.handler";
+import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
+import type { TutorHandler } from "./modules/tutor/tutor.handler";
+import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
+import type { InviteHandler } from "./modules/invite/invite.handler";
+import type { AchievementHandler } from "./modules/achievement/achievement.handler";
 
 export interface ServiceRegistry {
   audit: AuditPort;
   pricing: PricingPort;
   wallet: WalletPort;
-  notification: InAppNotificationPort;
-  meeting: MeetingPort;
-  auth: AuthService;
-  admin: AdminService;
-  adminTutor: AdminTutorService;
-  tutor: TutorService;
-  discovery: DiscoveryService;
-  invite: InviteService;
-  achievement: AchievementService;
-  payment: PaymentService;
-  booking: BookingService;
-  room: RoomService;
+  auth: AuthHandler;
+  admin: AdminHandler;
+  adminTutor: AdminTutorHandler;
+  tutor: TutorHandler;
+  discovery: DiscoveryHandler;
+  invite: InviteHandler;
+  achievement: AchievementHandler;
 }
 
 function createServices(): ServiceRegistry {
-  const audit = createAuditService();
+  const auditRepo = createAuditRepo();
+  const audit = createAuditHandler(auditRepo);
   const pricing = createPricingService();
-  const wallet = createWalletService(db);
-  const notification = createNotificationService(db);
-  const meeting = createFallbackMeetingProvider(db);
-  const auth = createAuthService({ db, wallet });
-  const admin = createAdminService({ db, audit });
-  const adminTutor = createAdminTutorService({ db, audit });
-  const tutor = createTutorService({ db, pricing, audit });
-  const discovery = createDiscoveryService({ db });
-  const invite = createInviteService({ db, audit });
-  const achievement = createAchievementService({ db, audit });
-  const providerName = env.PAYMENT_PROVIDER;
-  let paymentProvider;
-  if (providerName === "xendit") {
-    if (
-      !env.XENDIT_SECRET_KEY ||
-      !env.XENDIT_WEBHOOK_TOKEN ||
-      !env.XENDIT_SUCCESS_REDIRECT_URL ||
-      !env.XENDIT_FAILURE_REDIRECT_URL
-    ) {
-      throw new Error(
-        "XENDIT_SECRET_KEY, XENDIT_WEBHOOK_TOKEN, XENDIT_SUCCESS_REDIRECT_URL, XENDIT_FAILURE_REDIRECT_URL required when PAYMENT_PROVIDER=xendit",
-      );
-    }
-    paymentProvider = createXenditPaymentProvider({
-      secretKey: env.XENDIT_SECRET_KEY,
-      webhookToken: env.XENDIT_WEBHOOK_TOKEN,
-      successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL,
-      failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL,
-    });
-  } else {
-    paymentProvider = createStubPaymentProvider(env.PAYMENT_WEBHOOK_SECRET);
-  }
-  const payment = createPaymentService({
+  const wallet = createWalletHandler(createWalletRepo(db));
+
+  const authRepo = createAuthRepo();
+  const auth = createAuthHandler({ authRepo, walletPort: wallet });
+
+  const adminRepo = createAdminRepo();
+  const admin = createAdminHandler({ adminRepo, auditPort: audit });
+
+  const adminTutorRepo = createAdminTutorRepo();
+  const adminTutor = createAdminTutorHandler({
+    adminTutorRepo,
+    auditPort: audit,
     db,
-    wallet,
-    provider: paymentProvider,
-    providerName,
   });
-  const booking = createBookingService({
+
+  const tutorRepo = createTutorRepo();
+  const tutor = createTutorHandler({
+    tutorRepo,
+    pricingPort: pricing,
+    auditPort: audit,
     db,
-    wallet,
-    pricing,
-    audit,
-    notification,
-    meeting,
   });
-  const room = createRoomService(db);
+
+  const discoveryRepo = createDiscoveryRepo();
+  const discovery = createDiscoveryHandler({ discoveryRepo, db });
+
+  const inviteRepo = createInviteRepo();
+  const invite = createInviteHandler({ inviteRepo, auditPort: audit, db });
+
+  const achievementRepo = createAchievementRepo();
+  const achievement = createAchievementHandler({
+    achievementRepo,
+    auditPort: audit,
+    db,
+  });
 
   return {
     audit,
     pricing,
     wallet,
-    notification,
-    meeting,
     auth,
     admin,
     adminTutor,
@@ -116,9 +94,6 @@ function createServices(): ServiceRegistry {
     discovery,
     invite,
     achievement,
-    payment,
-    booking,
-    room,
   };
 }
 

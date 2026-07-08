@@ -1,85 +1,36 @@
-import { eq } from "drizzle-orm";
-import { studentProfile, tutorProfile } from "@cogito-app/db/schema";
-import type { DbType } from "../../lib/db";
-import type { WalletPort } from "../../shared/ports/wallet.port";
-import { notFound } from "../../lib/errors";
+import type { z } from "zod";
+import { ORPCError } from "@orpc/server";
+import { updateProfileInput } from "./auth.types";
 
-export interface MeResult {
-  profile: typeof studentProfile.$inferSelect | null;
-  tutorProfile: typeof tutorProfile.$inferSelect | null;
-  wallet: {
-    id: string;
-    totalBalance: number;
-    heldBalance: number;
-    availableBalance: number;
-  };
-}
+export type UpdateProfileInput = z.infer<typeof updateProfileInput>;
 
-export interface UpdateProfileInput {
-  phoneNumber?: string;
-  schoolName?: string;
-  gradeLevel?: string;
-  parentName?: string;
-  parentPhone?: string;
-  parentEmail?: string;
-}
+type AuthError = ORPCError<"BAD_REQUEST", undefined>;
 
-export type AuthService = ReturnType<typeof createAuthService>;
+export type ValidationResult = { ok: true } | { ok: false; error: AuthError };
 
-export function createAuthService(deps: { db: DbType; wallet: WalletPort }) {
-  const { db, wallet } = deps;
+export function validateUpdateInput(
+  input: UpdateProfileInput,
+): ValidationResult {
+  const stringFields = [
+    "phoneNumber",
+    "schoolName",
+    "gradeLevel",
+    "parentName",
+    "parentPhone",
+    "parentEmail",
+  ] as const;
 
-  async function me(userId: string): Promise<MeResult> {
-    const [profile, tutor, walletSnapshot] = await Promise.all([
-      db.query.studentProfile.findFirst({
-        where: eq(studentProfile.userId, userId),
-      }),
-      db.query.tutorProfile.findFirst({
-        where: eq(tutorProfile.userId, userId),
-      }),
-      wallet.getOrCreate(userId),
-    ]);
-
-    return {
-      profile: profile ?? null,
-      tutorProfile: tutor ?? null,
-      wallet: {
-        id: walletSnapshot.id,
-        totalBalance: walletSnapshot.totalBalance,
-        heldBalance: walletSnapshot.heldBalance,
-        availableBalance: walletSnapshot.availableBalance,
-      },
-    };
-  }
-
-  async function getProfile(userId: string) {
-    const profile = await db.query.studentProfile.findFirst({
-      where: eq(studentProfile.userId, userId),
-    });
-    if (!profile) throw notFound("Profile not found");
-    return profile;
-  }
-
-  async function updateProfile(userId: string, input: UpdateProfileInput) {
-    const existing = await db.query.studentProfile.findFirst({
-      where: eq(studentProfile.userId, userId),
-    });
-
-    if (existing) {
-      const [updated] = await db
-        .update(studentProfile)
-        .set(input)
-        .where(eq(studentProfile.userId, userId))
-        .returning();
-      return updated;
+  for (const field of stringFields) {
+    const value = input[field];
+    if (value !== undefined && value.trim() === "") {
+      return {
+        ok: false,
+        error: new ORPCError("BAD_REQUEST", {
+          message: `${field} cannot be blank`,
+        }),
+      };
     }
-
-    const [created] = await db
-      .insert(studentProfile)
-      .values({ userId, ...input })
-      .returning();
-    return created;
   }
 
-  return { me, getProfile, updateProfile };
+  return { ok: true };
 }
