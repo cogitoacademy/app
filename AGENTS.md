@@ -185,10 +185,6 @@ Uses Sidebar with collapsible groups, InputGroup+Kbd for search, Menu+Avatar for
 
 Uses Card + Field + Input + Button pattern with Divider for OAuth options.
 
-### Todo CRUD
-
-Uses Card + Input + Button + Checkbox pattern with simple state management.
-
 ## Rules for Agents
 
 1. Always import from `@cogito-app/ui/components/selia/*` — never from shadcn or elsewhere
