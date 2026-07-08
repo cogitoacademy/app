@@ -42,23 +42,16 @@ const EXPERTISE_OPTIONS = [
 
 type PublishedTutor = {
   id: string;
-  userId: string;
   displayName: string | null;
   shortBio: string | null;
   credentialsSummary: string | null;
-  expertise: string[] | null;
+  expertise: string[];
   modality: string | null;
   prices: Record<string, number> | null;
   availabilitySummary: string | null;
   proofUrls: string[] | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
-  upcomingSlots: {
-    id: string;
-    startDate: Date;
-    endDate: Date;
-    modality: string;
-  }[];
 };
 
 export function TutorsPageContent() {
