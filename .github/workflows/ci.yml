@@ -100,6 +100,13 @@ jobs:
             .turbo
           key: ${{ runner.os }}-bun-test-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-test-
+      - name: Create env file for drizzle
+        run: |
+          echo "DATABASE_URL=${{ env.DATABASE_URL }}" > apps/server/.env
+          echo "BETTER_AUTH_SECRET=${{ env.BETTER_AUTH_SECRET }}" >> apps/server/.env
+          echo "BETTER_AUTH_URL=${{ env.BETTER_AUTH_URL }}" >> apps/server/.env
+          echo "CORS_ORIGIN=${{ env.CORS_ORIGIN }}" >> apps/server/.env
+          echo "PAYMENT_WEBHOOK_SECRET=${{ env.PAYMENT_WEBHOOK_SECRET }}" >> apps/server/.env
       - run: bun run db:migrate
       - run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts
       - name: Post coverage comment
