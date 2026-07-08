@@ -108,7 +108,9 @@ jobs:
           echo "CORS_ORIGIN=${{ env.CORS_ORIGIN }}" >> apps/server/.env
           echo "PAYMENT_WEBHOOK_SECRET=${{ env.PAYMENT_WEBHOOK_SECRET }}" >> apps/server/.env
       - run: bun run db:migrate
+      - run: bun test packages/api/src/tests/ apps/server/src/openapi.test.ts
       - run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts
+        continue-on-error: true
       - name: Post coverage comment
         if: github.event_name == 'pull_request'
         run: bun .github/scripts/coverage-comment.ts
