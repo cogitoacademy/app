@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1782292868043,
-      "tag": "0000_misty_boomer",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1783486025724,
-      "tag": "0001_tidy_purple_man",
+      "when": 1783495225466,
+      "tag": "0000_silly_thunderbolts",
       "breakpoints": true
     }
   ]
