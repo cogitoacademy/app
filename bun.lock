@@ -98,6 +98,7 @@
       },
       "devDependencies": {
         "@cogito-app/config": "workspace:*",
+        "elysia": "catalog:",
         "typescript": "catalog:",
       },
     },

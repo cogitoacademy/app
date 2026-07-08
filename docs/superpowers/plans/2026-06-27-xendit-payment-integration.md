@@ -12,27 +12,28 @@
 
 ## File Structure
 
-| File | Responsibility | Action |
-| ---- | --------------- | ------ |
-| `packages/api/src/shared/ports/payment.port.ts` | `PaymentStatus` type + `WebhookPayload` shape | Modify |
-| `packages/api/src/modules/payment/xendit-payment.provider.ts` | Xendit HTTP calls + webhook token verification | Create |
-| `packages/api/src/modules/payment/stub-payment.provider.ts` | Stub provider, uppercase statuses | Modify |
-| `packages/api/src/modules/payment/payment.service.ts` | Orchestrates provider + wallet credit, uppercase statuses | Modify |
-| `packages/api/src/services.ts` | Provider selection switch | Modify |
-| `packages/env/src/server.ts` | Xendit env vars | Modify |
-| `apps/server/src/webhooks/payments.ts` | Header selection per provider | Modify |
-| `apps/server/.env` | Xendit vars (commented) | Modify |
-| `packages/db/src/schema/payment-record.ts` | Uppercase status check + default | Modify |
-| `packages/db/src/migrations/0006_xendit_statuses.sql` | Status constraint + data migration | Create |
-| `packages/api/src/tests/unit/xendit-payment.provider.test.ts` | Unit tests for Xendit provider | Create |
-| `packages/api/src/tests/unit/stub-provider.test.ts` | Update status assertions | Modify |
-| `packages/api/src/tests/integration/payment-flow.test.ts` | Update stub tests + add Xendit describe block | Modify |
+| File                                                          | Responsibility                                            | Action |
+| ------------------------------------------------------------- | --------------------------------------------------------- | ------ |
+| `packages/api/src/shared/ports/payment.port.ts`               | `PaymentStatus` type + `WebhookPayload` shape             | Modify |
+| `packages/api/src/modules/payment/xendit-payment.provider.ts` | Xendit HTTP calls + webhook token verification            | Create |
+| `packages/api/src/modules/payment/stub-payment.provider.ts`   | Stub provider, uppercase statuses                         | Modify |
+| `packages/api/src/modules/payment/payment.service.ts`         | Orchestrates provider + wallet credit, uppercase statuses | Modify |
+| `packages/api/src/services.ts`                                | Provider selection switch                                 | Modify |
+| `packages/env/src/server.ts`                                  | Xendit env vars                                           | Modify |
+| `apps/server/src/webhooks/payments.ts`                        | Header selection per provider                             | Modify |
+| `apps/server/.env`                                            | Xendit vars (commented)                                   | Modify |
+| `packages/db/src/schema/payment-record.ts`                    | Uppercase status check + default                          | Modify |
+| `packages/db/src/migrations/0006_xendit_statuses.sql`         | Status constraint + data migration                        | Create |
+| `packages/api/src/tests/unit/xendit-payment.provider.test.ts` | Unit tests for Xendit provider                            | Create |
+| `packages/api/src/tests/unit/stub-provider.test.ts`           | Update status assertions                                  | Modify |
+| `packages/api/src/tests/integration/payment-flow.test.ts`     | Update stub tests + add Xendit describe block             | Modify |
 
 ---
 
 ## Task 1: Add `PaymentStatus` type to port
 
 **Files:**
+
 - Modify: `packages/api/src/shared/ports/payment.port.ts`
 
 - [ ] **Step 1: Replace file contents with `PaymentStatus` type and updated `WebhookPayload`**
@@ -83,6 +84,7 @@ git commit -m "feat(payment): add PaymentStatus type, update WebhookPayload"
 ## Task 2: Update schema status constraint + default
 
 **Files:**
+
 - Modify: `packages/db/src/schema/payment-record.ts:35,49-52`
 
 - [ ] **Step 1: Update `status` default and check constraint**
@@ -121,6 +123,7 @@ git commit -m "feat(db): align payment status with Xendit native lifecycle"
 ## Task 3: Generate migration for status constraint
 
 **Files:**
+
 - Create: `packages/db/src/migrations/0006_xendit_statuses.sql` (via drizzle-kit)
 
 - [ ] **Step 1: Generate migration**
@@ -165,6 +168,7 @@ git commit -m "feat(db): migration 0006 — status constraint + data migration"
 ## Task 4: Update stub provider to uppercase statuses
 
 **Files:**
+
 - Modify: `packages/api/src/modules/payment/stub-payment.provider.ts`
 
 - [ ] **Step 1: Write failing test — update `stub-provider.test.ts`**
@@ -172,29 +176,29 @@ git commit -m "feat(db): migration 0006 — status constraint + data migration"
 In `packages/api/src/tests/unit/stub-provider.test.ts`, replace the `verifyWebhook accepts valid HMAC signature` test body (lines 34-46):
 
 ```ts
-  test("verifyWebhook accepts valid HMAC signature", async () => {
-    const body = JSON.stringify({
-      providerReference: "stub-pay_123",
-      providerEventId: "evt_1",
-      status: "PAID",
-    });
-    const signature = await signBody(body, SECRET);
-
-    const payload = await provider.verifyWebhook(body, signature);
-    expect(payload.providerReference).toBe("stub-pay_123");
-    expect(payload.providerEventId).toBe("evt_1");
-    expect(payload.status).toBe("PAID");
+test("verifyWebhook accepts valid HMAC signature", async () => {
+  const body = JSON.stringify({
+    providerReference: "stub-pay_123",
+    providerEventId: "evt_1",
+    status: "PAID",
   });
+  const signature = await signBody(body, SECRET);
+
+  const payload = await provider.verifyWebhook(body, signature);
+  expect(payload.providerReference).toBe("stub-pay_123");
+  expect(payload.providerEventId).toBe("evt_1");
+  expect(payload.status).toBe("PAID");
+});
 ```
 
 Also update the `verifyWebhook rejects invalid signature` test body (lines 49-53):
 
 ```ts
-    const body = JSON.stringify({
-      providerReference: "x",
-      providerEventId: "y",
-      status: "PAID",
-    });
+const body = JSON.stringify({
+  providerReference: "x",
+  providerEventId: "y",
+  status: "PAID",
+});
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -223,6 +227,7 @@ git commit -m "test(payment): update stub provider tests for uppercase statuses"
 ## Task 5: Update payment service for uppercase statuses + provider name
 
 **Files:**
+
 - Modify: `packages/api/src/modules/payment/payment.service.ts`
 
 - [ ] **Step 1: Write failing test — update `payment-flow.test.ts` stub tests**
@@ -275,20 +280,20 @@ export function createPaymentService(deps: {
 Replace lines 44-57:
 
 ```ts
-    const paymentId = crypto.randomUUID();
-    const providerReference = `${providerName}-${paymentId}`;
+const paymentId = crypto.randomUUID();
+const providerReference = `${providerName}-${paymentId}`;
 
-    await db.insert(paymentRecord).values({
-      id: paymentId,
-      userId,
-      walletId,
-      packageId: pkg.id,
-      provider: providerName,
-      providerReference,
-      amountIdr: pkg.priceIdr,
-      marks: pkg.marks,
-      status: "PENDING",
-    });
+await db.insert(paymentRecord).values({
+  id: paymentId,
+  userId,
+  walletId,
+  packageId: pkg.id,
+  provider: providerName,
+  providerReference,
+  amountIdr: pkg.priceIdr,
+  marks: pkg.marks,
+  status: "PENDING",
+});
 ```
 
 - [ ] **Step 6: Update `confirmFromWebhook` status checks (lines 78-79, 92, 96, 110-111, 113)**
@@ -296,46 +301,46 @@ Replace lines 44-57:
 Replace lines 78-79:
 
 ```ts
-      if (record.status === "PAID") return { status: "PAID" };
-      if (record.status === "FAILED") return { status: "FAILED" };
-      if (record.status === "SETTLED") return { status: "SETTLED" };
-      if (record.status === "EXPIRED") return { status: "EXPIRED" };
+if (record.status === "PAID") return { status: "PAID" };
+if (record.status === "FAILED") return { status: "FAILED" };
+if (record.status === "SETTLED") return { status: "SETTLED" };
+if (record.status === "EXPIRED") return { status: "EXPIRED" };
 ```
 
 Replace lines 92-109 (the `if (input.status === "succeeded")` block):
 
 ```ts
-      if (input.status === "PAID" || input.status === "SETTLED") {
-        const shouldCredit = record.status === "PENDING";
-        await tx
-          .update(paymentRecord)
-          .set({
-            status: input.status,
-            providerEventId: input.providerEventId,
-            receiptUrl: input.receiptUrl ?? null,
-          })
-          .where(eq(paymentRecord.id, record.id));
+if (input.status === "PAID" || input.status === "SETTLED") {
+  const shouldCredit = record.status === "PENDING";
+  await tx
+    .update(paymentRecord)
+    .set({
+      status: input.status,
+      providerEventId: input.providerEventId,
+      receiptUrl: input.receiptUrl ?? null,
+    })
+    .where(eq(paymentRecord.id, record.id));
 
-        if (shouldCredit) {
-          await wallet.credit(tx, {
-            walletId: record.walletId,
-            actorType: "student",
-            amount: record.marks,
-            eventKey: `purchase.${record.id}`,
-            sourceReference: record.id,
-            reason: `Purchase: ${record.marks} Marks`,
-          });
-        }
-      } else {
-        await tx
-          .update(paymentRecord)
-          .set({
-            status: input.status,
-            providerEventId: input.providerEventId,
-            failureReason: input.failureReason ?? null,
-          })
-          .where(eq(paymentRecord.id, record.id));
-      }
+  if (shouldCredit) {
+    await wallet.credit(tx, {
+      walletId: record.walletId,
+      actorType: "student",
+      amount: record.marks,
+      eventKey: `purchase.${record.id}`,
+      sourceReference: record.id,
+      reason: `Purchase: ${record.marks} Marks`,
+    });
+  }
+} else {
+  await tx
+    .update(paymentRecord)
+    .set({
+      status: input.status,
+      providerEventId: input.providerEventId,
+      failureReason: input.failureReason ?? null,
+    })
+    .where(eq(paymentRecord.id, record.id));
+}
 ```
 
 - [ ] **Step 7: Update `services.ts` to pass `providerName`**
@@ -343,22 +348,22 @@ Replace lines 92-109 (the `if (input.status === "succeeded")` block):
 In `packages/api/src/services.ts`, change line 67-72:
 
 ```ts
-  const providerName = env.PAYMENT_PROVIDER;
-  const paymentProvider =
-    providerName === "xendit"
-      ? createXenditPaymentProvider({
-          secretKey: env.XENDIT_SECRET_KEY!,
-          webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
-          successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL!,
-          failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL!,
-        })
-      : createStubPaymentProvider(env.PAYMENT_WEBHOOK_SECRET);
-  const payment = createPaymentService({
-    db,
-    wallet,
-    provider: paymentProvider,
-    providerName,
-  });
+const providerName = env.PAYMENT_PROVIDER;
+const paymentProvider =
+  providerName === "xendit"
+    ? createXenditPaymentProvider({
+        secretKey: env.XENDIT_SECRET_KEY!,
+        webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
+        successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL!,
+        failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL!,
+      })
+    : createStubPaymentProvider(env.PAYMENT_WEBHOOK_SECRET);
+const payment = createPaymentService({
+  db,
+  wallet,
+  provider: paymentProvider,
+  providerName,
+});
 ```
 
 Add import at top (after line 13):
@@ -389,6 +394,7 @@ git commit -m "feat(payment): uppercase statuses + providerName in service"
 ## Task 6: Create Xendit payment provider
 
 **Files:**
+
 - Create: `packages/api/src/modules/payment/xendit-payment.provider.ts`
 
 - [ ] **Step 1: Write failing test — `xendit-payment.provider.test.ts`**
@@ -581,32 +587,29 @@ export function createXenditPaymentProvider(opts: {
     amountIdr: number;
     providerReference: string;
   }): Promise<{ checkoutUrl: string }> {
-    const res = await fetch(
-      `${XENDIT_API_BASE}/payment_requests`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: authHeader,
-        },
-        body: JSON.stringify({
-          reference_id: params.providerReference,
-          currency: "IDR",
-          amount: params.amountIdr,
-          payment_method: {
-            type: "EWALLET",
-            ewallet: {
-              channel_code: "ID_OVO",
-            },
-          },
-          success_redirect_url: opts.successRedirectUrl,
-          failure_redirect_url: opts.failureRedirectUrl,
-          metadata: {
-            paymentId: params.paymentId,
-          },
-        }),
+    const res = await fetch(`${XENDIT_API_BASE}/payment_requests`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: authHeader,
       },
-    );
+      body: JSON.stringify({
+        reference_id: params.providerReference,
+        currency: "IDR",
+        amount: params.amountIdr,
+        payment_method: {
+          type: "EWALLET",
+          ewallet: {
+            channel_code: "ID_OVO",
+          },
+        },
+        success_redirect_url: opts.successRedirectUrl,
+        failure_redirect_url: opts.failureRedirectUrl,
+        metadata: {
+          paymentId: params.paymentId,
+        },
+      }),
+    });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -684,6 +687,7 @@ git commit -m "feat(payment): add Xendit payment provider"
 ## Task 7: Add Xendit env vars
 
 **Files:**
+
 - Modify: `packages/env/src/server.ts`
 - Modify: `apps/server/.env`
 
@@ -728,6 +732,7 @@ git commit -m "feat(env): add Xendit env vars"
 ## Task 8: Update webhook route for per-provider header
 
 **Files:**
+
 - Modify: `apps/server/src/webhooks/payments.ts`
 
 - [ ] **Step 1: Update header selection in webhook POST handler**
@@ -761,6 +766,7 @@ git commit -m "feat(webhooks): per-provider header selection"
 ## Task 9: Add Xendit integration tests
 
 **Files:**
+
 - Modify: `packages/api/src/tests/integration/payment-flow.test.ts`
 
 - [ ] **Step 1: Add Xendit provider integration test block**
@@ -1016,6 +1022,7 @@ git commit -m "chore: typecheck + lint fixes for Xendit integration"
 ## Task 11: Update CONTEXT.md
 
 **Files:**
+
 - Modify: `docs/CONTEXT.md`
 
 - [ ] **Step 1: Update payment record status description**

@@ -1,9 +1,11 @@
 # Environment-Colored Favicon Design
 
 ## Goal
+
 Make it easy to distinguish development vs production Cogito app tabs/windows at a glance by changing the favicon color based on the build environment.
 
 ## Approach
+
 Build-time favicon swap via a small Vite plugin. No runtime JavaScript, no extra request logic in the browser.
 
 ## Favicon Assets

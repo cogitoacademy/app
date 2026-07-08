@@ -13,6 +13,7 @@ Replace the stub payment provider with Xendit for production mark package purcha
 ## 2. Scope Boundaries
 
 **In scope:**
+
 - Xendit payment provider implementation (`createXenditPaymentProvider`)
 - Payment record status enum migration to Xendit native statuses
 - Webhook handler updates for Xendit callback token verification
@@ -23,6 +24,7 @@ Replace the stub payment provider with Xendit for production mark package purcha
 - Stub provider + existing tests updated to new status values
 
 **Out of scope:**
+
 - Refund flow (Phase 5 admin, `refundRecord` stays schema-only)
 - Booking payment flow (uses wallet ledger, no provider)
 - Frontend changes (checkout URL already handled by frontend)
@@ -36,14 +38,14 @@ Replace lowercase generic statuses with Xendit native uppercase statuses.
 
 ### Payment Record Status
 
-| Status     | Wallet action         | Trigger                                   |
-| ---------- | --------------------- | ----------------------------------------- |
-| `PENDING`  | none                  | `createIntent` called, payment request created |
-| `PAID`     | credit marks          | Xendit webhook `payment.paid`             |
-| `SETTLED`  | no-op (already paid)  | Xendit webhook `payment.settled` — funds settled, no double credit |
-| `FAILED`   | mark failed           | Xendit webhook `payment.failed`           |
-| `EXPIRED`  | mark failed           | Xendit webhook `payment.expired` — timeout |
-| `REFUNDED` | future Phase 5        | Admin refund flow (not implemented yet)   |
+| Status     | Wallet action        | Trigger                                                            |
+| ---------- | -------------------- | ------------------------------------------------------------------ |
+| `PENDING`  | none                 | `createIntent` called, payment request created                     |
+| `PAID`     | credit marks         | Xendit webhook `payment.paid`                                      |
+| `SETTLED`  | no-op (already paid) | Xendit webhook `payment.settled` — funds settled, no double credit |
+| `FAILED`   | mark failed          | Xendit webhook `payment.failed`                                    |
+| `EXPIRED`  | mark failed          | Xendit webhook `payment.expired` — timeout                         |
+| `REFUNDED` | future Phase 5       | Admin refund flow (not implemented yet)                            |
 
 **Credit trigger: `PAID` only.** Digital goods (Marks) don't need to wait for settlement. `SETTLED` after `PAID` is a status update, wallet already credited.
 
@@ -117,7 +119,7 @@ export function createXenditPaymentProvider(opts: {
   webhookToken: string;
   successRedirectUrl: string;
   failureRedirectUrl: string;
-}): PaymentProvider
+}): PaymentProvider;
 ```
 
 ### `createIntent`
@@ -125,6 +127,7 @@ export function createXenditPaymentProvider(opts: {
 Calls `POST https://api.xendit.co/v3/payment_requests` with Basic auth (`secretKey:` base64 encoded).
 
 Request body:
+
 ```json
 {
   "reference_id": "xendit-{paymentId}",
@@ -147,10 +150,12 @@ Request body:
 ```
 
 Response parsing:
+
 - `response.data.actions[0].url` — checkout URL (e-wallet deep link / QR)
 - Fallback: `response.data.payment_method.url` if actions empty
 
 Error handling:
+
 - Non-2xx response → throw with Xendit error code + message
 - Network failure → throw (Elysia returns 500 to client)
 
@@ -159,7 +164,10 @@ Error handling:
 Xendit v3 webhook verification uses **plain token comparison** via `X-Callback-Token` header, not HMAC.
 
 ```ts
-async function verifyWebhook(rawBody: string, token: string): Promise<WebhookPayload> {
+async function verifyWebhook(
+  rawBody: string,
+  token: string,
+): Promise<WebhookPayload> {
   if (token !== webhookToken) {
     throw new Error("Invalid webhook token");
   }
@@ -179,11 +187,11 @@ async function verifyWebhook(rawBody: string, token: string): Promise<WebhookPay
 
 function mapXenditStatus(status: string): PaymentStatus {
   const map: Record<string, PaymentStatus> = {
-    "PENDING": "PENDING",
-    "PAID": "PAID",
-    "SETTLED": "SETTLED",
-    "FAILED": "FAILED",
-    "EXPIRED": "EXPIRED",
+    PENDING: "PENDING",
+    PAID: "PAID",
+    SETTLED: "SETTLED",
+    FAILED: "FAILED",
+    EXPIRED: "EXPIRED",
   };
   const mapped = map[status];
   if (!mapped) throw new Error(`Unknown Xendit status: ${status}`);
@@ -204,8 +212,8 @@ app.post(
     const provider = params.provider as string;
     const signature =
       provider === "xendit"
-        ? request.headers.get("x-callback-token") ?? ""
-        : request.headers.get("x-webhook-signature") ?? "";
+        ? (request.headers.get("x-callback-token") ?? "")
+        : (request.headers.get("x-webhook-signature") ?? "");
     const rawBody = typeof body === "string" ? body : JSON.stringify(body);
 
     try {
@@ -238,12 +246,14 @@ The stub checkout shortcut route (`GET /webhooks/payments/stub/checkout`) stays 
 ### `confirmFromWebhook`
 
 Update status checks to uppercase:
+
 - `record.status === 'PAID'` → return early (idempotent)
 - `record.status === 'FAILED'` → return early (idempotent)
 - `record.status === 'SETTLED'` → return early (idempotent)
 - `record.status === 'EXPIRED'` → return early (idempotent)
 
 Credit logic:
+
 - `input.status === 'PAID'` → credit wallet, set status `PAID`
 - `input.status === 'SETTLED'` → if record is `PAID`, update to `SETTLED` (no credit). If record is `PENDING`, credit + set `SETTLED` (edge case: missed PAID webhook).
 - `input.status === 'FAILED'` → set status `FAILED`, record `failureReason`
@@ -349,6 +359,7 @@ New describe block "Xendit provider" with `services` overridden to use Xendit pr
 ### Stub Provider Backward Compat
 
 Update existing stub tests:
+
 - `status: "succeeded"` → `status: "PAID"`
 - `status: "failed"` → `status: "FAILED"`
 - Assertions: `record.status === "PAID"` (was `"succeeded"`)
@@ -367,32 +378,32 @@ Update existing stub tests:
 
 ## 12. Files Changed
 
-| File | Change |
-| ---- | ------ |
-| `packages/api/src/shared/ports/payment.port.ts` | Add `PaymentStatus` type, update `WebhookPayload.status` |
-| `packages/api/src/modules/payment/xendit-payment.provider.ts` | **New** — Xendit provider |
-| `packages/api/src/modules/payment/stub-payment.provider.ts` | Update status values to uppercase |
-| `packages/api/src/modules/payment/payment.service.ts` | Update status checks, credit logic, provider prefix |
-| `packages/api/src/modules/payment/payment.types.ts` | No change (status is string in output schema) |
-| `packages/api/src/services.ts` | Provider selection switch |
-| `packages/env/src/server.ts` | Add Xendit env vars |
-| `apps/server/.env` | Add Xendit vars (commented) |
-| `apps/server/src/webhooks/payments.ts` | Header selection per provider |
-| `packages/db/src/schema/payment-record.ts` | No schema change (constraint in migration) |
-| `packages/db/migrations/0006_xendit_statuses/` | **New** migration — status constraint + data migration |
-| `packages/api/src/tests/unit/xendit-payment.provider.test.ts` | **New** — unit tests |
-| `packages/api/src/tests/integration/payment-flow.test.ts` | Update stub tests + add Xendit describe block |
+| File                                                          | Change                                                   |
+| ------------------------------------------------------------- | -------------------------------------------------------- |
+| `packages/api/src/shared/ports/payment.port.ts`               | Add `PaymentStatus` type, update `WebhookPayload.status` |
+| `packages/api/src/modules/payment/xendit-payment.provider.ts` | **New** — Xendit provider                                |
+| `packages/api/src/modules/payment/stub-payment.provider.ts`   | Update status values to uppercase                        |
+| `packages/api/src/modules/payment/payment.service.ts`         | Update status checks, credit logic, provider prefix      |
+| `packages/api/src/modules/payment/payment.types.ts`           | No change (status is string in output schema)            |
+| `packages/api/src/services.ts`                                | Provider selection switch                                |
+| `packages/env/src/server.ts`                                  | Add Xendit env vars                                      |
+| `apps/server/.env`                                            | Add Xendit vars (commented)                              |
+| `apps/server/src/webhooks/payments.ts`                        | Header selection per provider                            |
+| `packages/db/src/schema/payment-record.ts`                    | No schema change (constraint in migration)               |
+| `packages/db/migrations/0006_xendit_statuses/`                | **New** migration — status constraint + data migration   |
+| `packages/api/src/tests/unit/xendit-payment.provider.test.ts` | **New** — unit tests                                     |
+| `packages/api/src/tests/integration/payment-flow.test.ts`     | Update stub tests + add Xendit describe block            |
 
 ## 13. Risks & Mitigations
 
-| Risk | Mitigation |
-| ---- | ---------- |
-| Missed `PAID` webhook, only `SETTLED` arrives | Credit on `SETTLED` if record still `PENDING` (edge case) |
-| Xendit webhook token leaked | Token in env var only, never logged |
-| Production key used in tests | Tests use mocked fetch, never real API |
-| Status migration breaks existing data | Migration handles lowercase → uppercase mapping |
-| Stub provider tests break | Update test assertions in same PR |
-| Business verification blocks live testing | Xendit development mode (`xnd_development_`) works without verification |
+| Risk                                          | Mitigation                                                              |
+| --------------------------------------------- | ----------------------------------------------------------------------- |
+| Missed `PAID` webhook, only `SETTLED` arrives | Credit on `SETTLED` if record still `PENDING` (edge case)               |
+| Xendit webhook token leaked                   | Token in env var only, never logged                                     |
+| Production key used in tests                  | Tests use mocked fetch, never real API                                  |
+| Status migration breaks existing data         | Migration handles lowercase → uppercase mapping                         |
+| Stub provider tests break                     | Update test assertions in same PR                                       |
+| Business verification blocks live testing     | Xendit development mode (`xnd_development_`) works without verification |
 
 ## 14. Rollout Plan
 

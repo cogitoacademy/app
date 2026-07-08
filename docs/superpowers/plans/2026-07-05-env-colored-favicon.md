@@ -13,6 +13,7 @@
 ### Task 1: Create the production favicon SVG
 
 **Files:**
+
 - Create: `apps/web/public/favicon.svg`
 
 - [ ] **Step 1: Write an SVG that reproduces the existing Cogito "C" mark**
@@ -31,6 +32,7 @@ Save this SVG to `apps/web/public/favicon.svg`:
 ```
 
 Color choices:
+
 - Outer "C" fill: `#F97316` (Tailwind orange-500, matches current logo).
 - Bite background: `white` so it blends with browser tab backgrounds.
 - Inner circle: `#111827` (gray-900, near-black).
@@ -49,6 +51,7 @@ git commit -m "assets: add production orange favicon svg"
 ### Task 2: Create the development favicon SVG
 
 **Files:**
+
 - Create: `apps/web/public/favicon-dev.svg`
 
 - [ ] **Step 1: Copy the production SVG and change the outer color to green**
@@ -65,6 +68,7 @@ Save this SVG to `apps/web/public/favicon-dev.svg`:
 ```
 
 Color choices:
+
 - Outer "C" fill: `#22C55E` (Tailwind green-500).
 - Bite and inner circle unchanged.
 
@@ -82,6 +86,7 @@ git commit -m "assets: add development green favicon svg"
 ### Task 3: Add the favicon link placeholder to index.html
 
 **Files:**
+
 - Modify: `apps/web/index.html:5-6`
 
 - [ ] **Step 1: Add the placeholder link inside `<head>`**
@@ -89,16 +94,16 @@ git commit -m "assets: add development green favicon svg"
 Replace:
 
 ```html
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cogito Digital</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cogito Digital</title>
 ```
 
 with:
 
 ```html
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="%FAVICON_HREF%" />
-    <title>Cogito Digital</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="%FAVICON_HREF%" />
+<title>Cogito Digital</title>
 ```
 
 - [ ] **Step 2: Verify no syntax errors**
@@ -115,6 +120,7 @@ git commit -m "html: add favicon href placeholder"
 ### Task 4: Add the Vite plugin that swaps the favicon per mode
 
 **Files:**
+
 - Modify: `apps/web/vite.config.ts`
 
 - [ ] **Step 1: Add a small inline plugin before the existing plugins array**
@@ -132,7 +138,8 @@ const faviconPlugin = () => ({
   transformIndexHtml: {
     order: "pre" as const,
     handler(html: string, ctx: { server?: { config?: { mode?: string } } }) {
-      const mode = ctx.server?.config?.mode ?? process.env.NODE_ENV ?? "production";
+      const mode =
+        ctx.server?.config?.mode ?? process.env.NODE_ENV ?? "production";
       const href = mode === "development" ? "/favicon-dev.svg" : "/favicon.svg";
       return html.replace("%FAVICON_HREF%", href);
     },
@@ -181,6 +188,7 @@ git commit -m "build: add vite plugin for env-specific favicon"
 ### Task 5: Verify the dev build shows the green favicon
 
 **Files:**
+
 - No file changes.
 
 - [ ] **Step 1: Start the web dev server**
@@ -196,7 +204,7 @@ bun run dev:web
 Open `http://localhost:3000`. In DevTools → Elements → `<head>`, confirm:
 
 ```html
-<link rel="icon" type="image/svg+xml" href="/favicon-dev.svg">
+<link rel="icon" type="image/svg+xml" href="/favicon-dev.svg" />
 ```
 
 The browser tab should display the green Cogito icon.
@@ -208,6 +216,7 @@ Use `Ctrl+C` to stop the server.
 ### Task 6: Verify the production build shows the orange favicon
 
 **Files:**
+
 - No file changes.
 
 - [ ] **Step 1: Build the web app for production**
@@ -223,7 +232,7 @@ bun run build --filter=web
 Open `apps/web/dist/index.html` and confirm the favicon link is:
 
 ```html
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 ```
 
 - [ ] **Step 3: Verify the SVG is copied to dist**
@@ -264,14 +273,14 @@ If no additional changes were made, no commit is required. If the build generate
 
 ## Spec Coverage Check
 
-| Spec requirement | Task |
-| ---------------- | ---- |
+| Spec requirement                       | Task   |
+| -------------------------------------- | ------ |
 | Create production SVG favicon (orange) | Task 1 |
 | Create development SVG favicon (green) | Task 2 |
-| `index.html` placeholder link | Task 3 |
-| Vite plugin swaps href by build mode | Task 4 |
-| Dev build shows green icon | Task 5 |
-| Prod build shows orange icon | Task 6 |
+| `index.html` placeholder link          | Task 3 |
+| Vite plugin swaps href by build mode   | Task 4 |
+| Dev build shows green icon             | Task 5 |
+| Prod build shows orange icon           | Task 6 |
 
 ## Placeholder Scan
 
