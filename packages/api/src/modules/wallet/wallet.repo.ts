@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { wallet, ledgerEntry } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -124,6 +124,28 @@ export function createWalletRepo(db: DbType) {
     });
   }
 
+  async function listLedger(
+    conn: DbOrTx,
+    walletId: string,
+    opts?: {
+      cursor?: string;
+      limit?: number;
+      bookingId?: string;
+      eventKey?: string;
+    },
+  ) {
+    const limit = Math.min(opts?.limit ?? 20, 100);
+    const rows = await conn
+      .select()
+      .from(ledgerEntry)
+      .where(eq(ledgerEntry.walletId, walletId))
+      .orderBy(desc(ledgerEntry.createdAt))
+      .limit(limit + 1);
+    const items = rows.slice(0, limit);
+    const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+    return { items, nextCursor };
+  }
+
   return {
     getById,
     getByUserId,
@@ -131,5 +153,6 @@ export function createWalletRepo(db: DbType) {
     insert,
     updateBalances,
     insertLedger,
+    listLedger,
   };
 }

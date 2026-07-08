@@ -7,7 +7,7 @@ import type {
 
 const XENDIT_API_BASE = "https://api.xendit.co/v3";
 
-function mapXenditStatus(status: string): PaymentStatus {
+export function mapXenditStatus(status: string): PaymentStatus {
   const map: Record<string, PaymentStatus> = {
     PENDING: "PENDING",
     PAID: "PAID",
@@ -92,8 +92,8 @@ export function createXenditPaymentProvider(opts: {
     rawBody: string,
     token: string,
   ): Promise<WebhookPayload> {
-    const tokenBuf = Buffer.from(token);
-    const expectedBuf = Buffer.from(opts.webhookToken);
+    const tokenBuf = new TextEncoder().encode(token);
+    const expectedBuf = new TextEncoder().encode(opts.webhookToken);
     if (
       tokenBuf.length !== expectedBuf.length ||
       !timingSafeEqual(tokenBuf, expectedBuf)

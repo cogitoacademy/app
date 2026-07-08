@@ -18,6 +18,14 @@ import { createInviteRepo } from "./modules/invite/invite.repo";
 import { createInviteHandler } from "./modules/invite/invite.handler";
 import { createAchievementRepo } from "./modules/achievement/achievement.repo";
 import { createAchievementHandler } from "./modules/achievement/achievement.handler";
+import { createBookingService } from "./modules/booking/booking.service";
+import { createNotificationService } from "./modules/notification/notification.service";
+import { createPaymentService } from "./modules/payment/payment.service";
+import { createRoomService } from "./modules/room/room.service";
+import { createFallbackMeetingProvider } from "./modules/meeting/fallback.provider";
+import { createStubPaymentProvider } from "./modules/payment/stub-payment.provider";
+import { createXenditPaymentProvider } from "./modules/payment/xendit-payment.provider";
+import { env } from "@cogito-app/env/server";
 
 import type { AuditPort } from "./shared/ports/audit.port";
 import type { PricingPort } from "./shared/ports/pricing.port";
@@ -29,6 +37,10 @@ import type { TutorHandler } from "./modules/tutor/tutor.handler";
 import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
 import type { InviteHandler } from "./modules/invite/invite.handler";
 import type { AchievementHandler } from "./modules/achievement/achievement.handler";
+import type { BookingService } from "./modules/booking/booking.service";
+import type { NotificationService } from "./modules/notification/notification.service";
+import type { PaymentService } from "./modules/payment/payment.service";
+import type { RoomService } from "./modules/room/room.service";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -41,13 +53,17 @@ export interface ServiceRegistry {
   discovery: DiscoveryHandler;
   invite: InviteHandler;
   achievement: AchievementHandler;
+  booking: BookingService;
+  notification: NotificationService;
+  payment: PaymentService;
+  room: RoomService;
 }
 
 function createServices(): ServiceRegistry {
   const auditRepo = createAuditRepo();
   const audit = createAuditHandler(auditRepo);
   const pricing = createPricingService();
-  const wallet = createWalletHandler(createWalletRepo(db));
+  const wallet = createWalletHandler(createWalletRepo(db), db);
 
   const authRepo = createAuthRepo();
   const auth = createAuthHandler({ authRepo, walletPort: wallet });
@@ -83,6 +99,39 @@ function createServices(): ServiceRegistry {
     db,
   });
 
+  const meeting = createFallbackMeetingProvider(db);
+
+  const notification = createNotificationService(db);
+
+  const useXendit = !!(env.XENDIT_SECRET_KEY && env.XENDIT_WEBHOOK_TOKEN);
+  const paymentProvider = useXendit
+    ? createXenditPaymentProvider({
+        secretKey: env.XENDIT_SECRET_KEY!,
+        webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
+        successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL ?? "",
+        failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL ?? "",
+      })
+    : createStubPaymentProvider(env.PAYMENT_WEBHOOK_SECRET);
+  const providerName = useXendit ? "xendit" : "stub";
+
+  const payment = createPaymentService({
+    db,
+    wallet,
+    provider: paymentProvider,
+    providerName,
+  });
+
+  const room = createRoomService(db);
+
+  const booking = createBookingService({
+    db,
+    wallet,
+    pricing,
+    audit,
+    notification,
+    meeting,
+  });
+
   return {
     audit,
     pricing,
@@ -94,6 +143,10 @@ function createServices(): ServiceRegistry {
     discovery,
     invite,
     achievement,
+    booking,
+    notification,
+    payment,
+    room,
   };
 }
 

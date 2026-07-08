@@ -49,7 +49,41 @@ export function createTutorHandler(deps: {
     });
   }
 
-  return { getMyProfile, updateMyProfile, submitForReview };
+  async function listAvailability(userId: string) {
+    return tutorRepo.listAvailability(db, userId);
+  }
+
+  async function upsertAvailability(
+    userId: string,
+    input: {
+      id?: string;
+      startDate: string | Date;
+      endDate: string | Date;
+      modality: "online" | "offline" | "both";
+      isRecurring?: boolean;
+      recurrenceRule?: string;
+      isActive?: boolean;
+    },
+  ) {
+    return tutorRepo.upsertAvailability(db, userId, {
+      ...input,
+      startDate: new Date(input.startDate),
+      endDate: new Date(input.endDate),
+    });
+  }
+
+  async function deleteAvailability(_userId: string, slotId: string) {
+    await tutorRepo.deleteAvailability(db, slotId);
+  }
+
+  return {
+    getMyProfile,
+    updateMyProfile,
+    submitForReview,
+    listAvailability,
+    upsertAvailability,
+    deleteAvailability,
+  };
 }
 
 export type TutorHandler = ReturnType<typeof createTutorHandler>;

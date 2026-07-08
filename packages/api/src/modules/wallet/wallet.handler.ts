@@ -1,4 +1,5 @@
 import { notFound, badRequest } from "../../lib/errors";
+import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type {
   WalletPort,
@@ -13,7 +14,7 @@ import type { WalletRepo } from "./wallet.repo";
 
 export type WalletHandler = ReturnType<typeof createWalletHandler>;
 
-export function createWalletHandler(repo: WalletRepo): WalletPort {
+export function createWalletHandler(repo: WalletRepo, db: DbType): WalletPort {
   async function getById(
     conn: DbOrTx,
     walletId: string,
@@ -210,6 +211,31 @@ export function createWalletHandler(repo: WalletRepo): WalletPort {
     return updated;
   }
 
+  async function listLedger(
+    walletId: string,
+    opts?: {
+      cursor?: string;
+      limit?: number;
+      bookingId?: string;
+      eventKey?: string;
+    },
+  ) {
+    return repo.listLedger(db, walletId, opts);
+  }
+
+  async function knowledgeBankEligible(userId: string) {
+    const w = await repo.getByUserId(db, userId);
+    const threshold = 500;
+    if (!w) {
+      return { eligible: false, balance: 0, threshold };
+    }
+    return {
+      eligible: w.availableBalance >= threshold,
+      balance: w.availableBalance,
+      threshold,
+    };
+  }
+
   return {
     hold,
     release,
@@ -219,5 +245,7 @@ export function createWalletHandler(repo: WalletRepo): WalletPort {
     getById,
     getByUserId,
     getOrCreate,
+    listLedger,
+    knowledgeBankEligible,
   };
 }
