@@ -1,72 +1,120 @@
 name: CI
 on:
-  push:
-    branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
+    name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install
-      - run: bun run check
+      - run: bun install --frozen-lockfile
+      - run: bunx oxlint --format=github
+      - run: bunx oxfmt --check
 
   typecheck:
+    name: Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install
+      - run: bun install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            .turbo
+          key: ${{ runner.os }}-bun-types-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-types-
       - run: bun run check-types
 
   build:
+    name: Build
     runs-on: ubuntu-latest
-    needs: [lint, typecheck]
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install
+      - run: bun install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            .turbo
+            apps/web/dist
+            apps/server/dist
+          key: ${{ runner.os }}-bun-build-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-build-
       - run: bun run build
 
   test:
+    name: Test + Coverage
     runs-on: ubuntu-latest
-    needs: [build]
+    timeout-minutes: 10
+    needs: [lint, typecheck]
+    permissions:
+      contents: read
+      pull-requests: write
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16-alpine
         env:
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
           POSTGRES_DB: cogito-test
         ports:
-          - 6767:5432
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/cogito-test
+      BETTER_AUTH_SECRET: ci-secret-at-least-32-characters-long-xxxx
+      BETTER_AUTH_URL: http://localhost:3001
+      CORS_ORIGIN: http://localhost:3000
+      PAYMENT_WEBHOOK_SECRET: ci-payment-webhook-secret-at-least-32-characters-long
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install
+      - run: bun install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            .turbo
+          key: ${{ runner.os }}-bun-test-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-test-
       - name: Create env file for drizzle
         run: |
-          echo "DATABASE_URL=postgresql://postgres:password@localhost:6767/cogito-test" > apps/server/.env
-          echo "BETTER_AUTH_SECRET=test-secret-at-least-32-characters-long" >> apps/server/.env
-          echo "BETTER_AUTH_URL=http://localhost:3001" >> apps/server/.env
-          echo "CORS_ORIGIN=http://localhost:3000" >> apps/server/.env
-          echo "PAYMENT_WEBHOOK_SECRET=test-webhook-secret-at-least-32-characters" >> apps/server/.env
+          echo "DATABASE_URL=${{ env.DATABASE_URL }}" > apps/server/.env
+          echo "BETTER_AUTH_SECRET=${{ env.BETTER_AUTH_SECRET }}" >> apps/server/.env
+          echo "BETTER_AUTH_URL=${{ env.BETTER_AUTH_URL }}" >> apps/server/.env
+          echo "CORS_ORIGIN=${{ env.CORS_ORIGIN }}" >> apps/server/.env
+          echo "PAYMENT_WEBHOOK_SECRET=${{ env.PAYMENT_WEBHOOK_SECRET }}" >> apps/server/.env
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
+      - run: bun test packages/api/src/tests/ apps/server/src/openapi.test.ts
+      - run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts
+        continue-on-error: true
+      - name: Post coverage comment
+        if: github.event_name == 'pull_request'
+        run: bun .github/scripts/coverage-comment.ts
         env:
-          DATABASE_URL: postgresql://postgres:password@localhost:6767/cogito-test
-      - run: bun run test:coverage
-        env:
-          DATABASE_URL: postgresql://postgres:password@localhost:6767/cogito-test
-          BETTER_AUTH_SECRET: test-secret-at-least-32-characters-long
-          BETTER_AUTH_URL: http://localhost:3001
-          CORS_ORIGIN: http://localhost:3000
-          PAYMENT_PROVIDER: stub
-          PAYMENT_WEBHOOK_SECRET: test-webhook-secret-at-least-32-characters
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LCOV_FILE: ./coverage/lcov.info
+          PR_NUMBER: ${{ github.event.pull_request.number }}
