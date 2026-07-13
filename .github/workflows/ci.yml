@@ -51,6 +51,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install
+      - name: Create env file for drizzle
+        run: |
+          echo "DATABASE_URL=postgresql://postgres:password@localhost:6767/cogito-test" > apps/server/.env
+          echo "BETTER_AUTH_SECRET=test-secret-at-least-32-characters-long" >> apps/server/.env
+          echo "BETTER_AUTH_URL=http://localhost:3001" >> apps/server/.env
+          echo "CORS_ORIGIN=http://localhost:3000" >> apps/server/.env
+          echo "PAYMENT_WEBHOOK_SECRET=test-webhook-secret-at-least-32-characters" >> apps/server/.env
+          echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:6767/cogito-test
