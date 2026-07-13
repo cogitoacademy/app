@@ -83,5 +83,20 @@ describe("AdminTutor Service", () => {
       );
       expect(updates.adminReviewNote).toBe("looks good");
     });
+
+    test("buildReviewUpdates throws for invalid action", () => {
+      expect(() =>
+        buildReviewUpdates("invalid_action" as ReviewAction),
+      ).toThrow("Invalid action");
+    });
+
+    test("validateReviewAction returns error for invalid action string", () => {
+      const result = validateReviewAction(
+        "invalid_action" as ReviewAction,
+        makeProfile(),
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    });
   });
 });

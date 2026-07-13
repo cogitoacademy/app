@@ -84,6 +84,37 @@ describe("Tutor Service", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
     });
+
+    test("returns ok when input has no prices (skip pricing validation)", () => {
+      const result = validateUpdateInput(
+        makeProfile({ onboardingStatus: "draft" }),
+        { displayName: "New Name" },
+        failPricingPort,
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    test("returns ok when input provides modality override with prices", () => {
+      const result = validateUpdateInput(
+        makeProfile({ onboardingStatus: "draft", modality: "online" }),
+        { prices: { "1": 50 }, modality: "both" },
+        {
+          ...mockPricingPort,
+          validatePrices: () => null,
+        },
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    test("returns error when modality override prices fail validation", () => {
+      const result = validateUpdateInput(
+        makeProfile({ onboardingStatus: "draft", modality: "online" }),
+        { prices: { "1": 0 }, modality: "both" },
+        failPricingPort,
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    });
   });
 
   describe("validateSubmitForReview", () => {

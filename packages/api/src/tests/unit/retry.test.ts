@@ -1,5 +1,5 @@
-import { describe, test, expect, mock } from "bun:test";
-import { retryWithBackoff } from "../../lib/retry";
+import { describe, test, expect, mock, afterEach } from "bun:test";
+import { retryWithBackoff, fetchWithTimeout } from "../../lib/retry";
 
 describe("retryWithBackoff", () => {
   test("returns result on first successful attempt", async () => {
@@ -92,5 +92,112 @@ describe("retryWithBackoff", () => {
       }),
     ).rejects.toThrow("out of range");
     expect(fn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("fetchWithTimeout", () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  });
+
+  test("returns response on successful fetch", async () => {
+    const response = new Response("ok", { status: 200 });
+    globalThis.fetch = mock(() => Promise.resolve(response));
+
+    const result = await fetchWithTimeout("https://example.com");
+    expect(result).toBe(response);
+  });
+
+  test("passes url and init with signal to fetch", async () => {
+    const response = new Response("ok", { status: 200 });
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    globalThis.fetch = mock(
+      (url: string | URL | Request, init?: RequestInit) => {
+        calls.push({ url: String(url), init: init ?? {} });
+        return Promise.resolve(response);
+      },
+    ) as never;
+
+    await fetchWithTimeout("https://example.com/api", { method: "POST" });
+    expect(calls[0].url).toBe("https://example.com/api");
+    expect(calls[0].init.method).toBe("POST");
+    expect(calls[0].init.signal).toBeDefined();
+  });
+
+  test("uses default timeout of 15000ms", async () => {
+    const response = new Response("ok", { status: 200 });
+    let timeoutMs = 0;
+    globalThis.fetch = mock(() => Promise.resolve(response));
+    globalThis.setTimeout = ((fn: () => void, ms: number) => {
+      timeoutMs = ms;
+      return 1;
+    }) as never;
+    globalThis.clearTimeout = () => {};
+
+    await fetchWithTimeout("https://example.com");
+    expect(timeoutMs).toBe(15000);
+  });
+
+  test("uses custom timeout when provided", async () => {
+    const response = new Response("ok", { status: 200 });
+    let timeoutMs = 0;
+    globalThis.fetch = mock(() => Promise.resolve(response));
+    globalThis.setTimeout = ((fn: () => void, ms: number) => {
+      timeoutMs = ms;
+      return 1;
+    }) as never;
+    globalThis.clearTimeout = () => {};
+
+    await fetchWithTimeout("https://example.com", {}, 5000);
+    expect(timeoutMs).toBe(5000);
+  });
+
+  test("clears timeout after successful fetch", async () => {
+    const response = new Response("ok", { status: 200 });
+    let clearedId: number | undefined;
+    globalThis.fetch = mock(() => Promise.resolve(response));
+    globalThis.setTimeout = (() => 42) as never;
+    globalThis.clearTimeout = (id: number | undefined) => {
+      clearedId = id;
+    };
+
+    await fetchWithTimeout("https://example.com");
+    expect(clearedId).toBe(42);
+  });
+
+  test("clears timeout even when fetch throws", async () => {
+    let clearedId: number | undefined;
+    globalThis.fetch = mock(() => Promise.reject(new Error("network error")));
+    globalThis.setTimeout = (() => 99) as never;
+    globalThis.clearTimeout = (id: number | undefined) => {
+      clearedId = id;
+    };
+
+    await expect(fetchWithTimeout("https://example.com")).rejects.toThrow(
+      "network error",
+    );
+    expect(clearedId).toBe(99);
+  });
+
+  test("passes AbortSignal to fetch via AbortController", async () => {
+    let capturedInit: RequestInit | undefined;
+    const response = new Response("ok", { status: 200 });
+    globalThis.fetch = mock(
+      (_url: string | URL | Request, init?: RequestInit) => {
+        capturedInit = init;
+        return Promise.resolve(response);
+      },
+    ) as never;
+
+    await fetchWithTimeout("https://example.com/api", { method: "GET" });
+    expect(capturedInit).toBeDefined();
+    expect(capturedInit!.signal).toBeInstanceOf(AbortSignal);
+    expect(capturedInit!.method).toBe("GET");
   });
 });
