@@ -30,7 +30,7 @@
   "devDependencies": {
     "@cogito-app/config": "workspace:*",
     "@types/bun": "catalog:",
-    "tsdown": "^0.21.9",
+    "tsdown": "^0.22.7",
     "typescript": "catalog:"
   }
 }
