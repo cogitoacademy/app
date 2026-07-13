@@ -20,7 +20,9 @@ process.on("unhandledRejection", (reason) => {
 async function waitForDb(maxAttempts = 10, delayMs = 2000): Promise<void> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       const { db } = await import("@cogito-app/db");
+      // eslint-disable-next-line no-await-in-loop
       await db.execute(sql`SELECT 1`);
       log({
         level: "info",
@@ -36,6 +38,7 @@ async function waitForDb(maxAttempts = 10, delayMs = 2000): Promise<void> {
         error: { message: String(error) },
       });
       if (attempt === maxAttempts) throw error;
+      // eslint-disable-next-line no-await-in-loop
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }

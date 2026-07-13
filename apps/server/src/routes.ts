@@ -224,8 +224,8 @@ export function createServer() {
     })
     .get("/metrics", ({ request }) => {
       if (!env.METRICS_TOKEN) return new Response("Not Found", { status: 404 });
-      const auth = request.headers.get("authorization");
-      if (auth !== `Bearer ${env.METRICS_TOKEN}`) {
+      const authHeader = request.headers.get("authorization");
+      if (authHeader !== `Bearer ${env.METRICS_TOKEN}`) {
         return new Response("Unauthorized", { status: 401 });
       }
       return Response.json(getMetrics());

@@ -27,6 +27,7 @@ export async function retryWithBackoff<T>(
 
   for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       return await fn();
     } catch (error) {
       lastError = error;
@@ -38,6 +39,7 @@ export async function retryWithBackoff<T>(
           Math.random() * opts.jitterMs,
         opts.maxDelayMs,
       );
+      // eslint-disable-next-line no-await-in-loop
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }

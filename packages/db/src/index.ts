@@ -1,10 +1,10 @@
 import { env } from "@cogito-app/env/server";
 import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { Pool, type PoolConfig } from "pg";
 
 import * as schema from "./schema";
 
-const poolConfig: pg.PoolConfig = {
+const poolConfig: PoolConfig = {
   max: 20,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
@@ -22,7 +22,7 @@ if (env.NODE_ENV === "production" && !env.DB_SSL_REJECT_UNAUTHORIZED) {
   );
 }
 
-const pool = new pg.Pool(poolConfig);
+const pool = new Pool(poolConfig);
 
 pool.on("error", (err) => {
   console.error("Unexpected database pool error:", err);

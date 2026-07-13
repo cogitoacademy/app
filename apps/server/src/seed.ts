@@ -64,10 +64,10 @@ async function seedDemoStudent(email: string, password: string, name: string) {
   const wallet = await services.wallet.getOrCreate(student.id);
 
   const existingCredit = await db.query.ledgerEntry.findFirst({
-    where: (ledger, { eq, and }) =>
+    where: (ledger, { eq: eqOp, and }) =>
       and(
-        eq(ledger.walletId, wallet.id),
-        eq(ledger.eventKey, "seed.demo_student_credit"),
+        eqOp(ledger.walletId, wallet.id),
+        eqOp(ledger.eventKey, "seed.demo_student_credit"),
       ),
   });
 
@@ -160,6 +160,7 @@ async function seed() {
     for (let i = 1; i <= 5; i++) {
       const start = new Date(base.getTime() + i * 24 * 60 * 60 * 1000);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
+      // eslint-disable-next-line no-await-in-loop
       await db.insert(availabilitySlot).values({
         tutorId: tutorUser.id,
         startDate: start,

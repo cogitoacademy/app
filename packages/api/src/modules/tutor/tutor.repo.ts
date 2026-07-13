@@ -23,72 +23,60 @@ export interface UpsertAvailabilityInput {
   isActive?: boolean;
 }
 
-export function createTutorRepo() {
-  async function getByUserId(conn: DbOrTx, userId: string) {
-    return conn.query.tutorProfile.findFirst({
-      where: eq(tutorProfile.userId, userId),
-    });
-  }
+export async function getByUserId(conn: DbOrTx, userId: string) {
+  return conn.query.tutorProfile.findFirst({
+    where: eq(tutorProfile.userId, userId),
+  });
+}
 
-  async function updateProfile(
-    conn: DbOrTx,
-    userId: string,
-    input: UpdateProfileInput,
-  ) {
+export async function updateProfile(
+  conn: DbOrTx,
+  userId: string,
+  input: UpdateProfileInput,
+) {
+  const [updated] = await conn
+    .update(tutorProfile)
+    .set(input)
+    .where(eq(tutorProfile.userId, userId))
+    .returning();
+  return updated;
+}
+
+export async function updateStatus(
+  conn: DbOrTx,
+  userId: string,
+  status: string,
+) {
+  const [updated] = await conn
+    .update(tutorProfile)
+    .set({ onboardingStatus: status })
+    .where(eq(tutorProfile.userId, userId))
+    .returning();
+  return updated;
+}
+
+export async function listAvailability(conn: DbOrTx, userId: string) {
+  return conn
+    .select()
+    .from(availabilitySlot)
+    .where(
+      and(
+        eq(availabilitySlot.tutorId, userId),
+        eq(availabilitySlot.isActive, true),
+        gte(availabilitySlot.startDate, new Date()),
+      ),
+    );
+}
+
+export async function upsertAvailability(
+  conn: DbOrTx,
+  userId: string,
+  input: UpsertAvailabilityInput,
+) {
+  if (input.id) {
     const [updated] = await conn
-      .update(tutorProfile)
-      .set(input)
-      .where(eq(tutorProfile.userId, userId))
-      .returning();
-    return updated;
-  }
-
-  async function updateStatus(conn: DbOrTx, userId: string, status: string) {
-    const [updated] = await conn
-      .update(tutorProfile)
-      .set({ onboardingStatus: status })
-      .where(eq(tutorProfile.userId, userId))
-      .returning();
-    return updated;
-  }
-
-  async function listAvailability(conn: DbOrTx, userId: string) {
-    return conn
-      .select()
-      .from(availabilitySlot)
-      .where(
-        and(
-          eq(availabilitySlot.tutorId, userId),
-          eq(availabilitySlot.isActive, true),
-          gte(availabilitySlot.startDate, new Date()),
-        ),
-      );
-  }
-
-  async function upsertAvailability(
-    conn: DbOrTx,
-    userId: string,
-    input: UpsertAvailabilityInput,
-  ) {
-    if (input.id) {
-      const [updated] = await conn
-        .update(availabilitySlot)
-        .set({
-          startDate: input.startDate,
-          endDate: input.endDate,
-          modality: input.modality,
-          isRecurring: input.isRecurring ?? false,
-          recurrenceRule: input.recurrenceRule ?? null,
-          isActive: input.isActive ?? true,
-        })
-        .where(eq(availabilitySlot.id, input.id))
-        .returning();
-      return updated;
-    }
-    const [created] = await conn
-      .insert(availabilitySlot)
-      .values({
-        tutorId: userId,
+      .update(availabilitySlot)
+      .set({
         startDate: input.startDate,
         endDate: input.endDate,
         modality: input.modality,
@@ -96,17 +84,33 @@ export function createTutorRepo() {
         recurrenceRule: input.recurrenceRule ?? null,
         isActive: input.isActive ?? true,
       })
+      .where(eq(availabilitySlot.id, input.id))
       .returning();
-    return created;
+    return updated;
   }
+  const [created] = await conn
+    .insert(availabilitySlot)
+    .values({
+      tutorId: userId,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      modality: input.modality,
+      isRecurring: input.isRecurring ?? false,
+      recurrenceRule: input.recurrenceRule ?? null,
+      isActive: input.isActive ?? true,
+    })
+    .returning();
+  return created;
+}
 
-  async function deleteAvailability(conn: DbOrTx, slotId: string) {
-    await conn
-      .update(availabilitySlot)
-      .set({ isActive: false })
-      .where(eq(availabilitySlot.id, slotId));
-  }
+export async function deleteAvailability(conn: DbOrTx, slotId: string) {
+  await conn
+    .update(availabilitySlot)
+    .set({ isActive: false })
+    .where(eq(availabilitySlot.id, slotId));
+}
 
+export function createTutorRepo() {
   return {
     getByUserId,
     updateProfile,

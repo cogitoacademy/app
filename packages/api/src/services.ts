@@ -195,7 +195,7 @@ function createServices(): ServiceRegistry {
     meeting,
   });
 
-  const adminBookingRepo = createAdminBookingRepo(db);
+  const adminBookingRepo = createAdminBookingRepo();
   const adminBookingService = createAdminBookingService({
     db,
     repo: adminBookingRepo,

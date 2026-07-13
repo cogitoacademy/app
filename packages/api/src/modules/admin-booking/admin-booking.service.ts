@@ -117,6 +117,7 @@ export function createAdminBookingService(deps: {
         );
 
         for (const participant of affectedParts) {
+          // eslint-disable-next-line no-await-in-loop
           const participantWallet = await wallet.getByUserId(
             tx,
             participant.userId,
@@ -127,6 +128,7 @@ export function createAdminBookingService(deps: {
             input.marksAction === "release_holds" &&
             participant.heldAmount > 0
           ) {
+            // eslint-disable-next-line no-await-in-loop
             await wallet.release(tx, {
               walletId: participantWallet.id,
               amount: participant.heldAmount,
@@ -136,6 +138,7 @@ export function createAdminBookingService(deps: {
               bookingId: input.bookingId,
             });
           } else if (input.marksAction === "compensate_credit") {
+            // eslint-disable-next-line no-await-in-loop
             await wallet.compensate(tx, {
               walletId: participantWallet.id,
               amount: participant.heldAmount || bookingRow.holdAmount,
@@ -146,6 +149,7 @@ export function createAdminBookingService(deps: {
               bookingId: input.bookingId,
             });
           } else if (input.marksAction === "compensate_deduct") {
+            // eslint-disable-next-line no-await-in-loop
             await wallet.compensate(tx, {
               walletId: participantWallet.id,
               amount: participant.heldAmount || bookingRow.holdAmount,

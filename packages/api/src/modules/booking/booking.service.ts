@@ -648,6 +648,7 @@ export function createBookingService(deps: {
       });
 
       for (const inviteeId of input.inviteeUserIds) {
+        // eslint-disable-next-line no-await-in-loop
         await repo.insertParticipant(tx, {
           bookingId,
           userId: inviteeId,
@@ -655,6 +656,7 @@ export function createBookingService(deps: {
           confirmationState: CONFIRMATION_STATE.PENDING,
           heldAmount: 0,
         });
+        // eslint-disable-next-line no-await-in-loop
         await notification.write({
           db: tx,
           userId: inviteeId,
@@ -921,6 +923,7 @@ export function createBookingService(deps: {
     if (!slot) throw badRequest("Selected availability slot is not available");
 
     for (const session of input.sessions) {
+      // eslint-disable-next-line no-await-in-loop
       const overlapping = await repo.findOverlappingBookings(
         db,
         input.tutorId,
@@ -985,6 +988,7 @@ export function createBookingService(deps: {
       });
 
       for (const session of input.sessions) {
+        // eslint-disable-next-line no-await-in-loop
         await repo.insertBookingSession(tx, {
           seriesBookingId: bookingId,
           scheduledStartAt: session.scheduledStartAt,
@@ -1025,6 +1029,7 @@ export function createBookingService(deps: {
 
     for (const b of candidates) {
       try {
+        // eslint-disable-next-line no-await-in-loop
         await db.transaction(async (tx) => {
           if (b.holdAmount > 0) {
             const w = await wallet.getByUserId(tx, b.proposerId);
