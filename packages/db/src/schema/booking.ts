@@ -74,6 +74,7 @@ export const booking = pgTable(
     repricedMarks: integer("repriced_marks"),
     holdAmount: integer("hold_amount").notNull().default(0),
     refundedAmount: integer("refunded_amount").notNull().default(0),
+    version: integer("version").default(1).notNull(),
     cancellationReason: text("cancellation_reason"),
     rescheduleMeta: jsonb("reschedule_meta"),
     overrideMeta: jsonb("override_meta"),

@@ -1,8 +1,11 @@
 import { db } from "@cogito-app/db";
 import { tutorInvite, user } from "@cogito-app/db/schema";
 import { eq } from "drizzle-orm";
-
-const INVITE_EXPIRY_DAYS = 7;
+import {
+  INVITE_EXPIRY_DAYS,
+  USER_ROLE,
+} from "@cogito-app/api/shared/constants";
+import { env } from "@cogito-app/env/server";
 
 const email = process.argv[2];
 const displayName = process.argv[3] || email;
@@ -26,7 +29,7 @@ async function main() {
   if (active) {
     console.log(`\nActive invite already exists for ${inviteEmail}`);
     console.log(`Token:    ${active.token}`);
-    console.log(`Link:     http://localhost:5173/invite?token=${active.token}`);
+    console.log(`Link:     ${env.CORS_ORIGIN}/invite?token=${active.token}`);
     console.log(`Expires:  ${active.expiresAt.toISOString()}\n`);
     return;
   }
@@ -34,7 +37,7 @@ async function main() {
   const admins = await db
     .select({ id: user.id })
     .from(user)
-    .where(eq(user.role, "admin"))
+    .where(eq(user.role, USER_ROLE.ADMIN))
     .limit(1);
   if (admins.length === 0) {
     console.error("No admin user found. Run `bun run seed` first.");
@@ -61,7 +64,7 @@ async function main() {
   const invite = result[0];
   console.log(`\nInvite created for ${inviteEmail}`);
   console.log(`Token:    ${invite!.token}`);
-  console.log(`Link:     http://localhost:5173/invite?token=${invite!.token}`);
+  console.log(`Link:     ${env.CORS_ORIGIN}/invite?token=${invite!.token}`);
   console.log(`Expires:  ${invite!.expiresAt.toISOString()}\n`);
 }
 

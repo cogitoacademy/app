@@ -2,6 +2,7 @@ import { eq, and, gte, lte, ne } from "drizzle-orm";
 import { room, roomBooking } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import { notFound, conflict } from "../../lib/errors";
+import { ROOM_BOOKING_STATUS } from "../../shared/constants";
 
 export type RoomService = ReturnType<typeof createRoomService>;
 
@@ -29,7 +30,7 @@ export function createRoomService(db: DbType) {
   ) {
     const conditions = [
       eq(roomBooking.roomId, roomId),
-      eq(roomBooking.status, "confirmed"),
+      eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
       lte(roomBooking.startAt, endAt),
       gte(roomBooking.endAt, startAt),
     ];
@@ -70,7 +71,7 @@ export function createRoomService(db: DbType) {
         bookingId,
         startAt,
         endAt,
-        status: "confirmed",
+        status: ROOM_BOOKING_STATUS.CONFIRMED,
       })
       .returning();
     return row!;

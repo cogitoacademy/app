@@ -9,6 +9,10 @@ import {
   availabilitySlot,
   markPackage,
 } from "@cogito-app/db/schema";
+import {
+  INVITE_EXPIRY_DAYS,
+  USER_ROLE,
+} from "@cogito-app/api/shared/constants";
 
 const SEED_SUFFIX = "seed";
 const SEED_DISPLAY_TAG = "[seed]";
@@ -51,7 +55,10 @@ async function seedPackages() {
 
 async function seedDemoStudent(email: string, password: string, name: string) {
   const student = await ensureUser(email, password, name);
-  await db.update(user).set({ role: "student" }).where(eq(user.id, student.id));
+  await db
+    .update(user)
+    .set({ role: USER_ROLE.STUDENT })
+    .where(eq(user.id, student.id));
 
   const { services } = await import("@cogito-app/api/services");
   const wallet = await services.wallet.getOrCreate(student.id);
@@ -91,7 +98,10 @@ async function seed() {
   const adminEmail = "admin@cogitoacademy.id";
 
   const admin = await ensureUser(adminEmail, "admin123", "Admin User");
-  await db.update(user).set({ role: "admin" }).where(eq(user.id, admin.id));
+  await db
+    .update(user)
+    .set({ role: USER_ROLE.ADMIN })
+    .where(eq(user.id, admin.id));
   console.log("Admin user ready:", admin.id);
 
   const tutorEmail = `tutor.${SEED_SUFFIX}@cogitoacademy.id`;
@@ -100,7 +110,10 @@ async function seed() {
     "tutor123",
     `${SEED_DISPLAY_TAG} Tutor`,
   );
-  await db.update(user).set({ role: "tutor" }).where(eq(user.id, tutorUser.id));
+  await db
+    .update(user)
+    .set({ role: USER_ROLE.TUTOR })
+    .where(eq(user.id, tutorUser.id));
 
   const existingProfile = await db
     .select()
@@ -117,7 +130,9 @@ async function seed() {
         token: crypto.randomUUID(),
         status: "accepted",
         invitedBy: admin.id,
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(
+          Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+        ),
         acceptedBy: tutorUser.id,
         acceptedAt: new Date(),
       })

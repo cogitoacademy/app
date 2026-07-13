@@ -1,7 +1,9 @@
 import { createContext } from "@cogito-app/api/context";
 import { appRouter } from "@cogito-app/api/routers";
+import { rateLimit } from "@cogito-app/api/lib/rate-limit";
+import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
+import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth } from "@cogito-app/auth";
-import { db } from "@cogito-app/db";
 import { env } from "@cogito-app/env/server";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -9,7 +11,6 @@ import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
-import { sql } from "drizzle-orm";
 import { Elysia } from "elysia";
 
 import { paymentsWebhook } from "./webhooks/payments";
@@ -17,11 +18,34 @@ import { evlog } from "evlog/elysia";
 
 import { identifyUser } from "./middleware";
 import { enrichOpenAPISpec, openApiTags, scalarHtml } from "./openapi";
+import { generateRequestId } from "@cogito-app/api/lib/request-id";
+import { log as appLog } from "@cogito-app/api/lib/logger";
+import { healthCheck } from "@cogito-app/api/lib/db-health";
+
+const authRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 10,
+  keyPrefix: "auth",
+});
+const paymentRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 5,
+  keyPrefix: "payment",
+});
+
+const MAX_BODY_BYTES = 1024 * 1024;
 
 const rpcHandler = new RPCHandler(appRouter, {
   interceptors: [
     onError((error) => {
-      console.error(error);
+      appLog({
+        level: "error",
+        action: "rpc_error",
+        error: {
+          message: String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+      });
     }),
   ],
 });
@@ -47,7 +71,14 @@ async function generateOpenAPISpec(request: Request) {
 const apiHandler = new OpenAPIHandler(appRouter, {
   interceptors: [
     onError((error) => {
-      console.error(error);
+      appLog({
+        level: "error",
+        action: "rpc_error",
+        error: {
+          message: String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+      });
     }),
   ],
 });
@@ -55,6 +86,39 @@ const apiHandler = new OpenAPIHandler(appRouter, {
 export function createServer() {
   return new Elysia()
     .use(evlog())
+    .derive(({ request }) => {
+      const requestId =
+        request.headers.get("x-request-id") || generateRequestId();
+      const startTime = performance.now();
+      return { requestId, startTime };
+    })
+    .onAfterHandle(({ requestId, startTime, request }) => {
+      const durationMs = performance.now() - startTime;
+      const path = new URL(request.url).pathname;
+      recordRequest(path, durationMs);
+      appLog({
+        level: "info",
+        requestId,
+        action: "request_complete",
+        durationMs,
+      });
+    })
+    .onError(({ requestId, error }) => {
+      appLog({
+        level: "error",
+        requestId,
+        action: "request_error",
+        error: {
+          message: String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+      });
+    })
+    .onRequest(({ set }) => {
+      for (const [header, value] of Object.entries(SECURITY_HEADERS)) {
+        set.headers[header] = value;
+      }
+    })
     .derive(async ({ request, log }) => {
       await identifyUser(log, request.headers, new URL(request.url).pathname);
       return {};
@@ -67,6 +131,54 @@ export function createServer() {
         credentials: true,
       }),
     )
+    .onRequest(({ request }) => {
+      if (!request.url.includes("/webhooks/")) {
+        const contentLength = request.headers.get("content-length");
+        if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+          return new Response(
+            JSON.stringify({ error: "Request body too large" }),
+            {
+              status: 413,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+      }
+    })
+    .onRequest(({ request }) => {
+      const url = new URL(request.url);
+      const path = url.pathname;
+      const ip =
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        request.headers.get("x-real-ip") ??
+        "unknown";
+
+      if (path.startsWith("/rpc/auth.")) {
+        const { allowed, retryAfterMs } = authRateLimit(ip);
+        if (!allowed) {
+          return new Response(JSON.stringify({ error: "Too many requests" }), {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+            },
+          });
+        }
+      }
+
+      if (path === "/rpc/payment.createIntent") {
+        const { allowed, retryAfterMs } = paymentRateLimit(ip);
+        if (!allowed) {
+          return new Response(JSON.stringify({ error: "Too many requests" }), {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+            },
+          });
+        }
+      }
+    })
     .all("/api/auth/*", async (context) => {
       const { request, status } = context;
       if (["POST", "GET"].includes(request.method)) {
@@ -105,19 +217,18 @@ export function createServer() {
       { parse: "none" },
     )
     .get("/health", async () => {
-      try {
-        await db.execute(sql`SELECT 1`);
-        return Response.json({
-          status: "ok",
-          database: "connected",
-          timestamp: new Date().toISOString(),
-        });
-      } catch {
-        return Response.json(
-          { status: "degraded", database: "disconnected" },
-          { status: 503 },
-        );
+      const result = await healthCheck();
+      const status =
+        result.status === "ok" ? 200 : result.status === "degraded" ? 200 : 503;
+      return Response.json(result, { status });
+    })
+    .get("/metrics", ({ request }) => {
+      if (!env.METRICS_TOKEN) return new Response("Not Found", { status: 404 });
+      const auth = request.headers.get("authorization");
+      if (auth !== `Bearer ${env.METRICS_TOKEN}`) {
+        return new Response("Unauthorized", { status: 401 });
       }
+      return Response.json(getMetrics());
     })
     .get("/", () => "OK")
     .use(paymentsWebhook);

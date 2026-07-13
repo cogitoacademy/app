@@ -6,5 +6,8 @@ export function validateLoginSearch(
   search: Record<string, string>,
 ): LoginSearch {
   const redirect = search.redirect;
-  return redirect ? { redirect } : {};
+  if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
+    return { redirect };
+  }
+  return {};
 }

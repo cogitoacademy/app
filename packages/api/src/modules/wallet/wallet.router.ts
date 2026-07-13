@@ -1,8 +1,5 @@
-import { eq } from "drizzle-orm";
 import { protectedProcedure } from "../../procedures";
 import { env } from "@cogito-app/env/server";
-import { db } from "@cogito-app/db";
-import { markPackage } from "@cogito-app/db/schema";
 import { listLedgerInput } from "./wallet.types";
 
 export const walletRouter = {
@@ -47,11 +44,8 @@ export const walletRouter = {
       tags: ["Wallet"],
       summary: "List mark packages",
     })
-    .handler(async () => {
-      return db
-        .select()
-        .from(markPackage)
-        .where(eq(markPackage.isActive, true));
+    .handler(async ({ context }) => {
+      return context.services.wallet.listActivePackages();
     }),
 
   knowledgeBankEligible: protectedProcedure

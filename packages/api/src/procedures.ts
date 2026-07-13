@@ -2,6 +2,7 @@ import { ORPCError, os } from "@orpc/server";
 
 import type { CogitoUser } from "@cogito-app/auth";
 
+import { USER_ROLE } from "./shared/constants";
 import type { Context } from "./context";
 
 export const o = os.$context<Context>();
@@ -25,7 +26,7 @@ const requireAdmin = o.middleware(async ({ context, next }) => {
     throw new ORPCError("UNAUTHORIZED");
   }
   const user = context.session.user as CogitoUser;
-  if (user.role !== "admin") {
+  if (user.role !== USER_ROLE.ADMIN) {
     throw new ORPCError("FORBIDDEN", { message: "Admin access required" });
   }
   return next({

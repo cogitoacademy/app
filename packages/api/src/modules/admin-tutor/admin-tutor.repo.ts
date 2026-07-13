@@ -1,6 +1,7 @@
 import { eq, and, desc } from "drizzle-orm";
 import { tutorInvite, tutorProfile } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
+import { INVITE_STATUS } from "../../shared/constants";
 
 export type TutorInviteRow = typeof tutorInvite.$inferSelect;
 export type TutorProfileRow = typeof tutorProfile.$inferSelect;
@@ -59,7 +60,7 @@ export function createAdminTutorRepo() {
       (await conn.query.tutorInvite.findFirst({
         where: and(
           eq(tutorInvite.email, email),
-          eq(tutorInvite.status, "invited"),
+          eq(tutorInvite.status, INVITE_STATUS.INVITED),
         ),
       })) ?? null
     );

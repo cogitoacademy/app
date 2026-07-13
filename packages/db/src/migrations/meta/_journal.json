@@ -8,6 +8,27 @@
       "when": 1783495225466,
       "tag": "0000_silly_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783580000000,
+      "tag": "0001_add_missing_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783666400000,
+      "tag": "0002_booking_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783752800000,
+      "tag": "0003_notification_eventkey_unique",
+      "breakpoints": true
     }
   ]
 }

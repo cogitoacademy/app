@@ -1,5 +1,6 @@
 import type { ORPCError } from "@orpc/server";
 import { notFound, badRequest } from "../../lib/errors";
+import { ONBOARDING_STATUS } from "../../shared/constants";
 
 export type ReviewAction =
   | "request_changes"
@@ -29,11 +30,11 @@ export type ReviewValidationResult =
   | { ok: false; error: ReviewError };
 
 const STATUS_MAP: Record<ReviewAction, string> = {
-  request_changes: "changes_requested",
-  approve_unpublished: "approved_unpublished",
-  publish: "published",
-  unpublish: "approved_unpublished",
-  suspend: "suspended",
+  request_changes: ONBOARDING_STATUS.CHANGES_REQUESTED,
+  approve_unpublished: ONBOARDING_STATUS.APPROVED_UNPUBLISHED,
+  publish: ONBOARDING_STATUS.PUBLISHED,
+  unpublish: ONBOARDING_STATUS.APPROVED_UNPUBLISHED,
+  suspend: ONBOARDING_STATUS.SUSPENDED,
 };
 
 export function validateReviewAction(

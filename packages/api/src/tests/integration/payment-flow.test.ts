@@ -17,7 +17,7 @@ import { resetDatabase } from "../helpers/test-client";
 import { createXenditPaymentProvider } from "../../modules/payment/xendit-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
 import { createWalletRepo } from "../../modules/wallet/wallet.repo";
-import { createWalletHandler } from "../../modules/wallet/wallet.handler";
+import { createWalletService } from "../../modules/wallet/wallet.service";
 
 describe("PaymentService", () => {
   beforeAll(async () => {
@@ -131,7 +131,7 @@ describe("PaymentService", () => {
     failureRedirectUrl: "http://localhost:3000/balance?status=failed",
   });
 
-  const xenditWallet = createWalletHandler(createWalletRepo(db), db);
+  const xenditWallet = createWalletService(createWalletRepo(db), db);
   const xenditPayment = createPaymentService({
     db,
     wallet: xenditWallet,

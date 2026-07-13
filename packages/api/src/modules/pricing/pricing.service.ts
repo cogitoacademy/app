@@ -4,34 +4,19 @@ import type {
   GroupSize,
   Modality,
 } from "../../shared/ports/pricing.port";
-
-const ONLINE_FLOOR_PRICES: Record<number, number> = {
-  1: 42,
-  2: 35,
-  3: 28,
-  4: 24,
-  5: 21,
-  6: 19,
-};
-
-const OFFLINE_FLOOR_PRICES: Record<number, number> = {
-  1: 50,
-  2: 45,
-  3: 40,
-  4: 35,
-  5: 30,
-  6: 27,
-};
-
-const COGITO_TAKE_RATE = 0.2;
-const TUTOR_PAYOUT_RATE_IDR = 7000;
+import {
+  ONLINE_FLOOR_PRICES,
+  OFFLINE_FLOOR_PRICES,
+  COGITO_TAKE_RATE,
+  MODALITY,
+} from "../../shared/constants";
 
 export type PricingService = ReturnType<typeof createPricingService>;
 
 export function createPricingService(): PricingPort {
   function getFloorPrices(modality: Modality): Record<number, number> {
-    if (modality === "online") return ONLINE_FLOOR_PRICES;
-    if (modality === "offline") return OFFLINE_FLOOR_PRICES;
+    if (modality === MODALITY.ONLINE) return ONLINE_FLOOR_PRICES;
+    if (modality === MODALITY.OFFLINE) return OFFLINE_FLOOR_PRICES;
     const higher: Record<number, number> = {};
     for (const size of [1, 2, 3, 4, 5, 6]) {
       higher[size] = Math.max(
@@ -87,5 +72,3 @@ export function createPricingService(): PricingPort {
 
   return { validatePrices, computeSplit };
 }
-
-export { ONLINE_FLOOR_PRICES, OFFLINE_FLOOR_PRICES, TUTOR_PAYOUT_RATE_IDR };

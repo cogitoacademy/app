@@ -79,6 +79,10 @@ export const ledgerEntry = pgTable(
   ],
 );
 
+export const ledgerCreatedAtIdx = index("ledger_createdAt_idx").on(
+  ledgerEntry.createdAt,
+);
+
 export const walletRelations = relations(wallet, ({ one, many }) => ({
   user: one(user, {
     fields: [wallet.userId],

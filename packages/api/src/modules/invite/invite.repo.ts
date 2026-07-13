@@ -1,6 +1,7 @@
 import { eq, and, gt } from "drizzle-orm";
 import { tutorInvite, tutorProfile, user } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
+import { INVITE_STATUS, ONBOARDING_STATUS } from "../../shared/constants";
 
 export interface InsertTutorProfileParams {
   userId: string;
@@ -13,7 +14,7 @@ export function createInviteRepo() {
     return conn.query.tutorInvite.findFirst({
       where: and(
         eq(tutorInvite.token, token),
-        eq(tutorInvite.status, "invited"),
+        eq(tutorInvite.status, INVITE_STATUS.INVITED),
         gt(tutorInvite.expiresAt, new Date()),
       ),
     });
@@ -60,7 +61,7 @@ export function createInviteRepo() {
         displayName: params.displayName,
         expertise: [],
         proofUrls: [],
-        onboardingStatus: "draft",
+        onboardingStatus: ONBOARDING_STATUS.DRAFT,
       })
       .returning();
     return profile;

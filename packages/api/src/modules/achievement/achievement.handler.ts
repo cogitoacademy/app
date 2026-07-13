@@ -1,6 +1,7 @@
 import type { DbType } from "../../lib/db";
 import { notFound } from "../../lib/errors";
 import type { AuditPort } from "../../shared/ports/audit.port";
+import { ACTOR_TYPE } from "../../shared/constants";
 import type {
   AchievementRepo,
   InsertAchievementParams,
@@ -21,6 +22,41 @@ export interface AdminReviewInput {
 }
 
 export function createAchievementHandler(deps: {
+  achievementService: ReturnType<typeof createAchievementService>;
+}) {
+  const { achievementService } = deps;
+
+  async function list(userId: string) {
+    return achievementService.list(userId);
+  }
+
+  async function create(
+    userId: string,
+    input: Omit<InsertAchievementParams, "userId">,
+  ) {
+    return achievementService.create(userId, input);
+  }
+
+  async function update(userId: string, input: UpdateAchievementInput) {
+    return achievementService.update(userId, input);
+  }
+
+  async function remove(userId: string, id: string) {
+    return achievementService.remove(userId, id);
+  }
+
+  async function adminList(input: AdminListInput = {}) {
+    return achievementService.adminList(input);
+  }
+
+  async function adminReview(adminId: string, input: AdminReviewInput) {
+    return achievementService.adminReview(adminId, input);
+  }
+
+  return { list, create, update, remove, adminList, adminReview };
+}
+
+export function createAchievementService(deps: {
   achievementRepo: AchievementRepo;
   auditPort: AuditPort;
   db: DbType;
@@ -75,7 +111,7 @@ export function createAchievementHandler(deps: {
       await auditPort.record({
         db: tx,
         actorId: adminId,
-        actorType: "admin",
+        actorType: ACTOR_TYPE.ADMIN,
         action: `achievement_${input.status}`,
         targetId: input.achievementId,
         targetType: "achievement",

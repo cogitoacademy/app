@@ -1,6 +1,7 @@
 import { count, desc, eq } from "drizzle-orm";
 import { user } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
+import { USER_ROLE } from "../../shared/constants";
 
 export type UserRole = "student" | "tutor" | "admin";
 export type UserRow = typeof user.$inferSelect;
@@ -40,7 +41,7 @@ export function createAdminRepo() {
     const [row] = await conn
       .select({ count: count() })
       .from(user)
-      .where(eq(user.role, "admin"));
+      .where(eq(user.role, USER_ROLE.ADMIN));
     return row?.count ?? 0;
   }
 

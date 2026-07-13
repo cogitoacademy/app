@@ -1,8 +1,9 @@
-import { eq, desc } from "drizzle-orm";
-import { wallet, ledgerEntry } from "@cogito-app/db/schema";
+import { eq, desc, sql, and, gte } from "drizzle-orm";
+import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { WalletSnapshot } from "../../shared/ports/wallet.port";
+import { badRequest } from "../../lib/errors";
 
 export type WalletRepo = ReturnType<typeof createWalletRepo>;
 
@@ -47,7 +48,18 @@ export function createWalletRepo(db: DbType) {
         heldBalance: 0,
         availableBalance: 0,
       })
+      .onConflictDoNothing()
       .returning();
+
+    if (!created) {
+      const [existingAfter] = await db
+        .select()
+        .from(wallet)
+        .where(eq(wallet.userId, userId))
+        .limit(1);
+      return existingAfter as WalletSnapshot;
+    }
+
     return created as WalletSnapshot;
   }
 
@@ -87,6 +99,106 @@ export function createWalletRepo(db: DbType) {
         totalBalance: balances.totalBalance,
         heldBalance: balances.heldBalance,
         availableBalance: balances.availableBalance,
+      })
+      .where(eq(wallet.id, walletId))
+      .returning();
+    return updated as WalletSnapshot;
+  }
+
+  async function atomicHold(
+    conn: DbOrTx,
+    walletId: string,
+    amount: number,
+  ): Promise<WalletSnapshot> {
+    const rows = await conn
+      .update(wallet)
+      .set({
+        heldBalance: sql`${wallet.heldBalance} + ${amount}`,
+        availableBalance: sql`${wallet.availableBalance} - ${amount}`,
+      })
+      .where(and(eq(wallet.id, walletId), gte(wallet.availableBalance, amount)))
+      .returning();
+    if (!rows.length) throw badRequest("Insufficient available balance");
+    return rows[0] as WalletSnapshot;
+  }
+
+  async function atomicRelease(
+    conn: DbOrTx,
+    walletId: string,
+    amount: number,
+  ): Promise<WalletSnapshot> {
+    const [updated] = await conn
+      .update(wallet)
+      .set({
+        heldBalance: sql`GREATEST(${wallet.heldBalance} - ${amount}, 0)`,
+        availableBalance: sql`${wallet.availableBalance} + ${amount}`,
+      })
+      .where(eq(wallet.id, walletId))
+      .returning();
+    return updated as WalletSnapshot;
+  }
+
+  async function atomicDeduct(
+    conn: DbOrTx,
+    walletId: string,
+    amount: number,
+  ): Promise<WalletSnapshot> {
+    const rows = await conn
+      .update(wallet)
+      .set({
+        heldBalance: sql`GREATEST(${wallet.heldBalance} - ${amount}, 0)`,
+        totalBalance: sql`${wallet.totalBalance} - ${amount}`,
+      })
+      .where(
+        and(eq(wallet.id, walletId), sql`${wallet.heldBalance} >= ${amount}`),
+      )
+      .returning();
+    if (!rows.length) throw badRequest("Insufficient held balance");
+    return rows[0] as WalletSnapshot;
+  }
+
+  async function atomicCredit(
+    conn: DbOrTx,
+    walletId: string,
+    amount: number,
+  ): Promise<WalletSnapshot> {
+    const [updated] = await conn
+      .update(wallet)
+      .set({
+        totalBalance: sql`${wallet.totalBalance} + ${amount}`,
+        availableBalance: sql`${wallet.availableBalance} + ${amount}`,
+      })
+      .where(eq(wallet.id, walletId))
+      .returning();
+    return updated as WalletSnapshot;
+  }
+
+  async function atomicCompensateCredit(
+    conn: DbOrTx,
+    walletId: string,
+    amount: number,
+  ): Promise<WalletSnapshot> {
+    const [updated] = await conn
+      .update(wallet)
+      .set({
+        totalBalance: sql`${wallet.totalBalance} + ${amount}`,
+        availableBalance: sql`${wallet.availableBalance} + ${amount}`,
+      })
+      .where(eq(wallet.id, walletId))
+      .returning();
+    return updated as WalletSnapshot;
+  }
+
+  async function atomicCompensateDeduct(
+    conn: DbOrTx,
+    walletId: string,
+    amount: number,
+  ): Promise<WalletSnapshot> {
+    const [updated] = await conn
+      .update(wallet)
+      .set({
+        totalBalance: sql`${wallet.totalBalance} - ${amount}`,
+        availableBalance: sql`${wallet.availableBalance} - ${amount}`,
       })
       .where(eq(wallet.id, walletId))
       .returning();
@@ -148,13 +260,27 @@ export function createWalletRepo(db: DbType) {
     return { items, nextCursor };
   }
 
+  async function listActivePackages(conn: DbOrTx) {
+    return conn
+      .select()
+      .from(markPackage)
+      .where(eq(markPackage.isActive, true));
+  }
+
   return {
     getById,
     getByUserId,
     getOrCreate,
     insert,
     updateBalances,
+    atomicHold,
+    atomicRelease,
+    atomicDeduct,
+    atomicCredit,
+    atomicCompensateCredit,
+    atomicCompensateDeduct,
     insertLedger,
     listLedger,
+    listActivePackages,
   };
 }

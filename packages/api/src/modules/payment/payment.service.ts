@@ -7,6 +7,7 @@ import type {
   PaymentStatus,
 } from "../../shared/ports/payment.port";
 import { notFound } from "../../lib/errors";
+import { PAYMENT_STATUS } from "../../shared/constants";
 
 export interface CreateIntentResult {
   paymentId: string;
@@ -45,8 +46,27 @@ export function createPaymentService(deps: {
       .limit(1);
     if (!pkg || !pkg.isActive) throw notFound("Package not found");
 
+    const idempotencyKey = `${providerName}-${userId}-${packageCode}`;
+    const [existing] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.providerReference, idempotencyKey))
+      .limit(1);
+    if (existing && existing.status === PAYMENT_STATUS.PENDING) {
+      const existingIntent = await provider.createIntent({
+        paymentId: existing.id,
+        amountIdr: pkg.priceIdr,
+        providerReference: existing.providerReference,
+      });
+      return {
+        paymentId: existing.id,
+        providerReference: existing.providerReference,
+        checkoutUrl: existingIntent.checkoutUrl,
+      };
+    }
+
     const paymentId = crypto.randomUUID();
-    const providerReference = `${providerName}-${paymentId}`;
+    const providerReference = idempotencyKey;
 
     await db.insert(paymentRecord).values({
       id: paymentId,
@@ -57,15 +77,23 @@ export function createPaymentService(deps: {
       providerReference,
       amountIdr: pkg.priceIdr,
       marks: pkg.marks,
-      status: "PENDING",
+      status: PAYMENT_STATUS.PENDING,
     });
 
-    const intent = await provider.createIntent({
-      paymentId,
-      amountIdr: pkg.priceIdr,
-      providerReference,
-    });
-    return { paymentId, providerReference, checkoutUrl: intent.checkoutUrl };
+    try {
+      const intent = await provider.createIntent({
+        paymentId,
+        amountIdr: pkg.priceIdr,
+        providerReference,
+      });
+      return { paymentId, providerReference, checkoutUrl: intent.checkoutUrl };
+    } catch (error) {
+      await db
+        .update(paymentRecord)
+        .set({ status: PAYMENT_STATUS.EXPIRED })
+        .where(eq(paymentRecord.id, paymentId));
+      throw error;
+    }
   }
 
   async function confirmFromWebhook(
@@ -79,10 +107,16 @@ export function createPaymentService(deps: {
         .limit(1);
 
       if (!record) throw notFound("Payment not found");
-      if (record.status === "PAID") return { status: "PAID" };
-      if (record.status === "FAILED") return { status: "FAILED" };
-      if (record.status === "SETTLED") return { status: "SETTLED" };
-      if (record.status === "EXPIRED") return { status: "EXPIRED" };
+      if (record.status === PAYMENT_STATUS.PAID)
+        return { status: PAYMENT_STATUS.PAID };
+      if (record.status === PAYMENT_STATUS.FAILED)
+        return { status: PAYMENT_STATUS.FAILED };
+      if (record.status === PAYMENT_STATUS.SETTLED)
+        return { status: PAYMENT_STATUS.SETTLED };
+      if (record.status === PAYMENT_STATUS.EXPIRED)
+        return { status: PAYMENT_STATUS.EXPIRED };
+      if (record.status === PAYMENT_STATUS.REFUNDED)
+        return { status: PAYMENT_STATUS.REFUNDED };
 
       if (input.providerEventId) {
         const [existing] = await tx
@@ -95,8 +129,11 @@ export function createPaymentService(deps: {
         }
       }
 
-      if (input.status === "PAID" || input.status === "SETTLED") {
-        const shouldCredit = record.status === "PENDING";
+      if (
+        input.status === PAYMENT_STATUS.PAID ||
+        input.status === PAYMENT_STATUS.SETTLED
+      ) {
+        const shouldCredit = record.status === PAYMENT_STATUS.PENDING;
         await tx
           .update(paymentRecord)
           .set({
