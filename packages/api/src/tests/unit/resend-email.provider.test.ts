@@ -18,7 +18,10 @@ describe("ResendEmailProvider", () => {
   });
 
   test("sends email via Resend API and returns messageId", async () => {
-    const provider = createResendEmailProvider("re_test_key", "noreply@test.com");
+    const provider = createResendEmailProvider(
+      "re_test_key",
+      "noreply@test.com",
+    );
 
     const result = await provider.send({
       to: "user@test.com",
@@ -41,7 +44,10 @@ describe("ResendEmailProvider", () => {
   });
 
   test("includes category as tag in request body", async () => {
-    const provider = createResendEmailProvider("re_test_key", "noreply@test.com");
+    const provider = createResendEmailProvider(
+      "re_test_key",
+      "noreply@test.com",
+    );
 
     await provider.send({
       to: "user@test.com",
@@ -63,7 +69,10 @@ describe("ResendEmailProvider", () => {
       json: async () => ({}),
     })) as any;
 
-    const provider = createResendEmailProvider("re_test_key", "noreply@test.com");
+    const provider = createResendEmailProvider(
+      "re_test_key",
+      "noreply@test.com",
+    );
 
     try {
       await provider.send({

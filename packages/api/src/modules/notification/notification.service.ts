@@ -72,7 +72,11 @@ export function createNotificationService(
         .limit(1);
       const recipientEmail = userRow?.email ?? "";
 
-      if (emailPort && recipientEmail && EMAIL_SUPPORTED_CATEGORIES.has(params.category)) {
+      if (
+        emailPort &&
+        recipientEmail &&
+        EMAIL_SUPPORTED_CATEGORIES.has(params.category)
+      ) {
         await params.db.insert(notificationDispatch).values({
           notificationId: inserted.id,
           channel: "email",
