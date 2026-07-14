@@ -42,6 +42,7 @@ import { createNotificationService } from "./modules/notification/notification.s
 import { createNotificationHandler } from "./modules/notification/notification.handler";
 import { createEmailService } from "./modules/email/email.service";
 import { createStubEmailProvider } from "./modules/email/stub-email.provider";
+import { createResendEmailProvider } from "./modules/email/resend-email.provider";
 import { createPaymentService } from "./modules/payment/payment.service";
 import { createRoomService } from "./modules/room/room.service";
 import { createFallbackMeetingProvider } from "./modules/meeting/fallback.provider";
@@ -157,7 +158,10 @@ function createServices(): ServiceRegistry {
         )
       : createFallbackMeetingProvider(db);
 
-  const emailProvider = createStubEmailProvider();
+  const emailProvider =
+    env.RESEND_API_KEY
+      ? createResendEmailProvider(env.RESEND_API_KEY, env.EMAIL_FROM)
+      : createStubEmailProvider();
   const email = createEmailService(emailProvider);
 
   const notificationService = createNotificationService(db, email);
