@@ -57,7 +57,7 @@ export function createRefundService(deps: {
       };
 
       await repo.insertRefundRecord(tx, {
-        paymentId: input.bookingId ?? `correction-${Date.now()}`,
+        paymentId: input.bookingId ?? null,
         walletId: input.walletId,
         amountIdr: 0,
         marks: input.amount,

@@ -1,0 +1,1 @@
+ALTER TABLE refund_record ALTER COLUMN payment_id DROP NOT NULL;

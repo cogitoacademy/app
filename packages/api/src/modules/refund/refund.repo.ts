@@ -16,7 +16,7 @@ async function findPaymentByReference(conn: DbOrTx, providerReference: string) {
 async function insertRefundRecord(
   conn: DbOrTx,
   record: {
-    paymentId: string;
+    paymentId: string | null;
     walletId: string;
     amountIdr: number;
     marks: number;
@@ -27,7 +27,7 @@ async function insertRefundRecord(
   const [inserted] = await conn
     .insert(refundRecord)
     .values({
-      paymentId: record.paymentId,
+      paymentId: record.paymentId ?? null,
       walletId: record.walletId,
       amountIdr: record.amountIdr,
       marks: record.marks,
