@@ -33,7 +33,7 @@ describe("PaymentService", () => {
       walletRow.id,
       "starter",
     );
-    expect(intent.providerReference).toContain("stub-");
+    expect(intent.providerReference).toContain("stub:");
 
     await services.payment.confirmFromWebhook({
       provider: "stub",

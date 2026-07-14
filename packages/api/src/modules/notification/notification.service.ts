@@ -81,7 +81,7 @@ export function createNotificationService(
           notificationId: inserted.id,
           channel: "email",
           recipientEmail,
-          status: "pending",
+          status: "queued",
         });
 
         await emailPort
