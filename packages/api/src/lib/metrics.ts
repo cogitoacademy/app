@@ -19,11 +19,14 @@ export function getMetrics(): Record<
   const result: Record<string, { path: string; count: number; avgMs: number }> =
     {};
   for (const [path, count] of requestCounts.entries()) {
+    const durations = requestDurations.get(path) ?? [];
     result[path] = {
       path,
       count,
       avgMs:
-        (requestDurations.get(path) ?? []).reduce((a, b) => a + b, 0) / count,
+        durations.length > 0
+          ? durations.reduce((a, b) => a + b, 0) / durations.length
+          : 0,
     };
   }
   return result;

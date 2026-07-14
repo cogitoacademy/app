@@ -29,12 +29,17 @@ describe("Metrics", () => {
     expect(metrics["/api/b"].avgMs).toBe(20);
   });
 
-  test("caps duration array at 1000 entries", () => {
+  test("caps duration array at 1000 entries and computes correct rolling avgMs", () => {
     for (let i = 0; i < 1050; i++) {
       recordRequest("/api/capped", i);
     }
     const metrics = getMetrics();
     expect(metrics["/api/capped"].count).toBe(1050);
+    expect(metrics["/api/capped"].avgMs).toBeGreaterThanOrEqual(0);
+    const durations = [];
+    for (let i = 0; i < 1050; i++) durations.push(i);
+    const expectedAvg = durations.slice(50).reduce((a, b) => a + b, 0) / 1000;
+    expect(metrics["/api/capped"].avgMs).toBeCloseTo(expectedAvg, 0);
   });
 
   test("handles zero-duration requests", () => {
