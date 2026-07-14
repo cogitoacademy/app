@@ -135,6 +135,8 @@ export function createXenditPaymentProvider(opts: {
     const tokenBuf = new TextEncoder().encode(token);
     const expectedBuf = new TextEncoder().encode(opts.webhookToken);
     if (
+      tokenBuf.length === 0 ||
+      expectedBuf.length === 0 ||
       tokenBuf.length !== expectedBuf.length ||
       !timingSafeEqual(tokenBuf, expectedBuf)
     ) {
