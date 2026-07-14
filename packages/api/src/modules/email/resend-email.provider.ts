@@ -1,7 +1,10 @@
 import type { EmailPort, EmailMessage } from "../../shared/ports/email.port";
 import { log } from "../../lib/logger";
 
-export function createResendEmailProvider(apiKey: string, fromEmail: string): EmailPort {
+export function createResendEmailProvider(
+  apiKey: string,
+  fromEmail: string,
+): EmailPort {
   async function send(message: EmailMessage) {
     try {
       const response = await fetch("https://api.resend.com/emails", {
@@ -24,7 +27,7 @@ export function createResendEmailProvider(apiKey: string, fromEmail: string): Em
         throw new Error(`Resend API error: ${response.status} ${text}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as { id: string };
       return { messageId: data.id };
     } catch (error) {
       log({

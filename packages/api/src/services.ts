@@ -158,10 +158,9 @@ function createServices(): ServiceRegistry {
         )
       : createFallbackMeetingProvider(db);
 
-  const emailProvider =
-    env.RESEND_API_KEY
-      ? createResendEmailProvider(env.RESEND_API_KEY, env.EMAIL_FROM)
-      : createStubEmailProvider();
+  const emailProvider = env.RESEND_API_KEY
+    ? createResendEmailProvider(env.RESEND_API_KEY, env.EMAIL_FROM)
+    : createStubEmailProvider();
   const email = createEmailService(emailProvider);
 
   const notificationService = createNotificationService(db, email);
@@ -199,16 +198,18 @@ function createServices(): ServiceRegistry {
     meeting,
   });
 
+  const refundRepo = createRefundRepo(db);
+
   const adminBookingRepo = createAdminBookingRepo();
   const adminBookingService = createAdminBookingService({
     db,
     repo: adminBookingRepo,
     auditPort: audit,
     wallet,
+    refundRepo,
   });
   const adminBooking = createAdminBookingHandler({ adminBookingService });
 
-  const refundRepo = createRefundRepo(db);
   const refundService = createRefundService({
     db,
     repo: refundRepo,

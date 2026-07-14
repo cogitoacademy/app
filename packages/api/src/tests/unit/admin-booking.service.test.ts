@@ -75,6 +75,14 @@ function makeWalletPort() {
   };
 }
 
+function makeRefundRepo() {
+  return {
+    insertRefundRecord: mock(async () => ({})),
+    findPaymentByReference: mock(async () => null),
+    updatePaymentStatus: mock(async () => null),
+  };
+}
+
 describe("AdminBookingService", () => {
   describe("applyOverride", () => {
     test("throws notFound when booking does not exist", async () => {
@@ -86,6 +94,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
+        refundRepo: makeRefundRepo() as any,
       });
 
       try {
@@ -113,6 +122,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
+        refundRepo: makeRefundRepo() as any,
       });
 
       try {
@@ -156,6 +166,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
+        refundRepo: makeRefundRepo() as any,
       });
 
       const result = await service.listBookings();
@@ -172,6 +183,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
+        refundRepo: makeRefundRepo() as any,
       });
 
       const result = await service.listBookings({ bookingId: "b1" });
@@ -189,6 +201,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
+        refundRepo: makeRefundRepo() as any,
       });
 
       try {
@@ -210,6 +223,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
+        refundRepo: makeRefundRepo() as any,
       });
 
       try {
@@ -237,6 +251,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
+        refundRepo: makeRefundRepo() as any,
       });
 
       try {

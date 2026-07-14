@@ -10,6 +10,7 @@ import type { DbType } from "../../lib/db";
 import type { AuditPort } from "../../shared/ports/audit.port";
 import type { WalletPort } from "../../shared/ports/wallet.port";
 import type { AdminBookingRepo } from "./admin-booking.repo";
+import type { RefundRepo } from "../refund/refund.repo";
 
 export const OVERRIDE_CATEGORIES = [
   "tutor_no_show",
@@ -46,8 +47,9 @@ export function createAdminBookingService(deps: {
   repo: AdminBookingRepo;
   auditPort: AuditPort;
   wallet: WalletPort;
+  refundRepo: RefundRepo;
 }) {
-  const { db, repo, auditPort, wallet } = deps;
+  const { db, repo, auditPort, wallet, refundRepo } = deps;
 
   async function applyOverride(
     adminId: string,
@@ -234,6 +236,15 @@ export function createAdminBookingService(deps: {
         input.paymentId,
         PAYMENT_STATUS.REFUNDED,
       );
+
+      await refundRepo.insertRefundRecord(tx, {
+        paymentId: input.paymentId,
+        walletId: participantWallet.id,
+        amountIdr: payment.amountIdr ?? 0,
+        marks: payment.marks,
+        reason: input.reason,
+        actorId: adminId,
+      });
 
       await auditPort.record({
         db: tx,

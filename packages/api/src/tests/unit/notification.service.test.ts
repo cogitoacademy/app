@@ -176,4 +176,79 @@ describe("NotificationService (unit)", () => {
     const service = createNotificationService(db);
     expect(typeof service.getUnreadCount).toBe("function");
   });
+  test("skips email dispatch for unsupported categories (achievement, system)", async () => {
+    let insertCalled = false;
+    const selectFromWhereLimit = mock(async () => []);
+    const selectFromWhere = mock(() => ({ limit: selectFromWhereLimit }));
+    const selectFrom = mock(() => ({ where: selectFromWhere }));
+    const selectFn = mock(() => ({ from: selectFrom }));
+
+    const insertFn = mock(() => {
+      insertCalled = true;
+      return {
+        values: mock(() => ({
+          returning: mock(async () => [{ id: "n_achievement" }]),
+        })),
+      };
+    });
+
+    const paramsDb = {
+      select: selectFn,
+      insert: insertFn,
+    } as any;
+
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const mainDb = {} as any;
+
+    const service = createNotificationService(mainDb, emailPort as any);
+
+    await service.write({
+      db: paramsDb,
+      userId: "user1",
+      category: "achievement",
+      title: "Achievement Unlocked",
+      body: "You earned a badge!",
+      severity: "action",
+    });
+
+    expect(insertCalled).toBe(true);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+
+  test("dispatches email for supported categories (booking)", async () => {
+    let insertCalled = false;
+    const selectFromWhereLimit = mock(async () => []);
+    const selectFromWhere = mock(() => ({ limit: selectFromWhereLimit }));
+    const selectFrom = mock(() => ({ where: selectFromWhere }));
+    const selectFn = mock(() => ({ from: selectFrom }));
+
+    const insertFn = mock(() => {
+      insertCalled = true;
+      return {
+        values: mock(() => ({
+          returning: mock(async () => [{ id: "n_booking" }]),
+        })),
+      };
+    });
+
+    const paramsDb = {
+      select: selectFn,
+      insert: insertFn,
+    } as any;
+
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const mainDb = {} as any;
+
+    const service = createNotificationService(mainDb, emailPort as any);
+
+    await service.write({
+      db: paramsDb,
+      userId: "user1",
+      category: "booking",
+      title: "Booking Confirmed",
+      body: "Your booking is confirmed",
+    });
+
+    expect(insertCalled).toBe(true);
+  });
 });

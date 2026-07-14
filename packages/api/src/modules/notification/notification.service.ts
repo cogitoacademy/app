@@ -72,40 +72,48 @@ export function createNotificationService(
         .limit(1);
       const recipientEmail = userRow?.email ?? "";
 
-      await params.db.insert(notificationDispatch).values({
-        notificationId: inserted.id,
-        channel: "email",
-        recipientEmail,
-        status: "queued",
-      });
+      if (emailPort && recipientEmail && EMAIL_SUPPORTED_CATEGORIES.has(params.category)) {
+        await params.db.insert(notificationDispatch).values({
+          notificationId: inserted.id,
+          channel: "email",
+          recipientEmail,
+          status: "pending",
+        });
 
-      if (emailPort && recipientEmail) {
-        if (EMAIL_SUPPORTED_CATEGORIES.has(params.category)) {
-          await emailPort
-            .send({
-              to: recipientEmail,
-              subject: params.title,
-              html: params.body,
-              category: params.category as EmailMessage["category"],
-            })
-            .catch((error) => {
-              log({
-                level: "error",
-                action: "notification_email_dispatch_failed",
-                error: { message: String(error) },
-                notificationId: inserted.id,
-                userId: params.userId,
-              });
+        await emailPort
+          .send({
+            to: recipientEmail,
+            subject: params.title,
+            html: params.body,
+            category: params.category as EmailMessage["category"],
+          })
+          .then(async () => {
+            await params.db
+              .update(notificationDispatch)
+              .set({ status: "sent" })
+              .where(eq(notificationDispatch.notificationId, inserted.id));
+          })
+          .catch(async (error) => {
+            await params.db
+              .update(notificationDispatch)
+              .set({ status: "failed" })
+              .where(eq(notificationDispatch.notificationId, inserted.id));
+            log({
+              level: "error",
+              action: "notification_email_dispatch_failed",
+              error: { message: String(error) },
+              notificationId: inserted.id,
+              userId: params.userId,
             });
-        } else {
-          log({
-            level: "debug",
-            action: "notification_email_skipped_category",
-            category: params.category,
-            notificationId: inserted.id,
-            userId: params.userId,
           });
-        }
+      } else if (emailPort && recipientEmail) {
+        log({
+          level: "debug",
+          action: "notification_email_skipped_category",
+          category: params.category,
+          notificationId: inserted.id,
+          userId: params.userId,
+        });
       }
     }
   }
