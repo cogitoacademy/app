@@ -18,7 +18,15 @@ import type {
   NotificationListResult,
   NotificationListItem,
 } from "../../shared/ports/notification.port";
-import type { EmailPort } from "../../shared/ports/email.port";
+import type { EmailPort, EmailMessage } from "../../shared/ports/email.port";
+
+const EMAIL_SUPPORTED_CATEGORIES: Set<string> = new Set([
+  "booking",
+  "payment",
+  "refund",
+  "schedule",
+  "override",
+]);
 
 export type NotificationService = ReturnType<typeof createNotificationService>;
 
@@ -72,27 +80,32 @@ export function createNotificationService(
       });
 
       if (emailPort && recipientEmail) {
-        await emailPort
-          .send({
-            to: recipientEmail,
-            subject: params.title,
-            html: params.body,
-            category: params.category as
-              | "booking"
-              | "payment"
-              | "refund"
-              | "schedule"
-              | "override",
-          })
-          .catch((error) => {
-            log({
-              level: "error",
-              action: "notification_email_dispatch_failed",
-              error: { message: String(error) },
-              notificationId: inserted.id,
-              userId: params.userId,
+        if (EMAIL_SUPPORTED_CATEGORIES.has(params.category)) {
+          await emailPort
+            .send({
+              to: recipientEmail,
+              subject: params.title,
+              html: params.body,
+              category: params.category as EmailMessage["category"],
+            })
+            .catch((error) => {
+              log({
+                level: "error",
+                action: "notification_email_dispatch_failed",
+                error: { message: String(error) },
+                notificationId: inserted.id,
+                userId: params.userId,
+              });
             });
+        } else {
+          log({
+            level: "debug",
+            action: "notification_email_skipped_category",
+            category: params.category,
+            notificationId: inserted.id,
+            userId: params.userId,
           });
+        }
       }
     }
   }
