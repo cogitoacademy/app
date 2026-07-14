@@ -6,7 +6,7 @@ import type {
   PaymentProvider,
   PaymentStatus,
 } from "../../shared/ports/payment.port";
-import { notFound } from "../../lib/errors";
+import { conflict, notFound } from "../../lib/errors";
 import { PAYMENT_STATUS } from "../../shared/constants";
 
 export interface CreateIntentResult {
@@ -46,23 +46,28 @@ export function createPaymentService(deps: {
       .limit(1);
     if (!pkg || !pkg.isActive) throw notFound("Package not found");
 
-    const idempotencyKey = `${providerName}-${userId}-${packageCode}`;
+    const idempotencyKey = `${providerName}:${userId}:${packageCode}`;
     const [existing] = await db
       .select()
       .from(paymentRecord)
       .where(eq(paymentRecord.providerReference, idempotencyKey))
       .limit(1);
-    if (existing && existing.status === PAYMENT_STATUS.PENDING) {
-      const existingIntent = await provider.createIntent({
-        paymentId: existing.id,
-        amountIdr: pkg.priceIdr,
-        providerReference: existing.providerReference,
-      });
-      return {
-        paymentId: existing.id,
-        providerReference: existing.providerReference,
-        checkoutUrl: existingIntent.checkoutUrl,
-      };
+    if (existing) {
+      if (existing.status === PAYMENT_STATUS.PENDING) {
+        const existingIntent = await provider.createIntent({
+          paymentId: existing.id,
+          amountIdr: pkg.priceIdr,
+          providerReference: existing.providerReference,
+        });
+        return {
+          paymentId: existing.id,
+          providerReference: existing.providerReference,
+          checkoutUrl: existingIntent.checkoutUrl,
+        };
+      }
+      throw conflict(
+        `Package already ${existing.status.toLowerCase()} for this user`,
+      );
     }
 
     const paymentId = crypto.randomUUID();
