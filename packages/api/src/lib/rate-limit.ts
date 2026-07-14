@@ -1,5 +1,7 @@
 const store = new Map<string, { count: number; resetAt: number }>();
 const MAX_ENTRIES = 10_000;
+let lastCleanup = 0;
+const CLEANUP_INTERVAL = 60_000;
 
 export function rateLimit(options: {
   windowMs: number;
@@ -10,19 +12,21 @@ export function rateLimit(options: {
     const key = `${options.keyPrefix ?? ""}:${identifier}`;
     const now = Date.now();
 
-    for (const [k, v] of store) {
-      if (now > v.resetAt) store.delete(k);
-    }
-
-    if (store.size >= MAX_ENTRIES) {
+    if (now - lastCleanup > CLEANUP_INTERVAL) {
       for (const [k, v] of store) {
         if (now > v.resetAt) store.delete(k);
       }
+      lastCleanup = now;
     }
 
     const entry = store.get(key);
 
     if (!entry || now > entry.resetAt) {
+      if (store.size >= MAX_ENTRIES) {
+        for (const [k, v] of store) {
+          if (now > v.resetAt) store.delete(k);
+        }
+      }
       store.set(key, { count: 1, resetAt: now + options.windowMs });
       return { allowed: true, retryAfterMs: 0 };
     }
