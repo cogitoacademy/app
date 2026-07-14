@@ -1,0 +1,208 @@
+import { describe, test, expect, mock } from "bun:test";
+import { createRefundService } from "../../modules/refund/refund.service";
+
+function makeDb() {
+  return {
+    transaction: mock(async (fn: any) => {
+      return fn({
+        ...makeDb(),
+      });
+    }),
+  } as any;
+}
+
+function makeRepo(overrides: Record<string, unknown> = {}) {
+  return {
+    insertRefundRecord: mock(async () => ({})),
+    findPaymentByReference: mock(async () => null),
+    updatePaymentStatus: mock(async () => null),
+    ...overrides,
+  };
+}
+
+function makeWalletPort() {
+  return {
+    getById: mock(async () => ({
+      id: "w1",
+      totalBalance: 100,
+      heldBalance: 0,
+      availableBalance: 100,
+    })),
+    compensate: mock(async () => ({
+      id: "w1",
+      totalBalance: 150,
+      heldBalance: 0,
+      availableBalance: 150,
+    })),
+    listLedger: mock(async () => ({
+      items: [],
+      nextCursor: null,
+    })),
+  };
+}
+
+function makeAuditPort() {
+  return { record: mock(async () => {}) };
+}
+
+describe("RefundService", () => {
+  describe("createCorrection", () => {
+    test("throws error when wallet not found", async () => {
+      const service = createRefundService({
+        db: makeDb(),
+        repo: makeRepo(),
+        wallet: {
+          ...makeWalletPort(),
+          getById: mock(async () => null),
+        } as any,
+        auditPort: makeAuditPort() as any,
+      });
+
+      try {
+        await service.createCorrection("admin1", {
+          walletId: "nonexistent",
+          amount: 50,
+          type: "compensate_credit",
+          reason: "Test correction",
+        });
+        expect(true).toBe(false);
+      } catch (e: any) {
+        expect(e.message).toContain("not found");
+      }
+    });
+
+    test("throws badRequest when amount is zero or negative", async () => {
+      const service = createRefundService({
+        db: makeDb(),
+        repo: makeRepo(),
+        wallet: makeWalletPort() as any,
+        auditPort: makeAuditPort() as any,
+      });
+
+      try {
+        await service.createCorrection("admin1", {
+          walletId: "w1",
+          amount: 0,
+          type: "compensate_credit",
+          reason: "Test",
+        });
+        expect(true).toBe(false);
+      } catch (e: any) {
+        expect(e.message).toContain("positive");
+      }
+    });
+
+    test("creates a credit correction successfully", async () => {
+      const repo = makeRepo();
+      const wallet = makeWalletPort();
+      const audit = makeAuditPort();
+      const service = createRefundService({
+        db: makeDb(),
+        repo,
+        wallet: wallet as any,
+        auditPort: audit as any,
+      });
+
+      const result = await service.createCorrection("admin1", {
+        walletId: "w1",
+        amount: 50,
+        type: "compensate_credit",
+        reason: "Admin credit correction",
+      });
+
+      expect(result.walletId).toBe("w1");
+      expect(result.type).toBe("compensate_credit");
+      expect(result.amount).toBe(50);
+    });
+
+    test("creates a deduct correction successfully", async () => {
+      const repo = makeRepo();
+      const wallet = makeWalletPort();
+      const audit = makeAuditPort();
+      const service = createRefundService({
+        db: makeDb(),
+        repo,
+        wallet: wallet as any,
+        auditPort: audit as any,
+      });
+
+      const result = await service.createCorrection("admin1", {
+        walletId: "w1",
+        amount: 30,
+        type: "compensate_deduct",
+        reason: "Admin deduction",
+      });
+
+      expect(result.walletId).toBe("w1");
+      expect(result.type).toBe("compensate_deduct");
+    });
+
+    test("passes null paymentId when no bookingId provided", async () => {
+      const repo = makeRepo();
+      const wallet = makeWalletPort();
+      const service = createRefundService({
+        db: makeDb(),
+        repo,
+        wallet: wallet as any,
+        auditPort: makeAuditPort() as any,
+      });
+
+      await service.createCorrection("admin1", {
+        walletId: "w1",
+        amount: 50,
+        type: "compensate_credit",
+        reason: "No booking ref",
+      });
+
+      const call = repo.insertRefundRecord.mock.calls[0];
+      expect(call[1].paymentId).toBeNull();
+    });
+
+    test("passes bookingId as paymentId when provided", async () => {
+      const repo = makeRepo();
+      const wallet = makeWalletPort();
+      const service = createRefundService({
+        db: makeDb(),
+        repo,
+        wallet: wallet as any,
+        auditPort: makeAuditPort() as any,
+      });
+
+      await service.createCorrection("admin1", {
+        walletId: "w1",
+        amount: 50,
+        type: "compensate_credit",
+        reason: "Booking correction",
+        bookingId: "b123",
+      });
+
+      const call = repo.insertRefundRecord.mock.calls[0];
+      expect(call[1].paymentId).toBe("b123");
+    });
+  });
+
+  describe("listCorrections", () => {
+    test("returns corrections filtered by compensate types", async () => {
+      const wallet = {
+        ...makeWalletPort(),
+        listLedger: mock(async () => ({
+          items: [
+            { entryType: "compensate_credit", id: "1" },
+            { entryType: "credit", id: "2" },
+            { entryType: "compensate_deduct", id: "3" },
+          ],
+          nextCursor: null,
+        })),
+      };
+      const service = createRefundService({
+        db: makeDb(),
+        repo: makeRepo(),
+        wallet: wallet as any,
+        auditPort: makeAuditPort() as any,
+      });
+
+      const result = await service.listCorrections({ walletId: "w1" });
+      expect(result.items.length).toBe(2);
+    });
+  });
+});
