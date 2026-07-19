@@ -3,7 +3,7 @@ import { describe, test, expect, mock } from "bun:test";
 mock.module("../../procedures", () => ({
   publicProcedure: {
     route: () => ({
-      handler: (fn: any) => ({ handler: fn }),
+      handler: (fn: () => any) => fn,
     }),
   },
   o: {},
@@ -11,12 +11,12 @@ mock.module("../../procedures", () => ({
   requireAdmin: { middleware: (fn: any) => fn },
   protectedProcedure: {
     use: () => ({
-      route: () => ({ handler: (fn: any) => ({ handler: fn }) }),
+      route: () => ({ handler: (fn: any) => fn }),
     }),
   },
   adminProcedure: {
     use: () => ({
-      route: () => ({ handler: (fn: any) => ({ handler: fn }) }),
+      route: () => ({ handler: (fn: any) => fn }),
     }),
   },
 }));
@@ -60,8 +60,8 @@ mock.module("../../modules/refund/refund.router", () => ({
 const { appRouter } = await import("../../routers");
 
 describe("appRouter healthCheck", () => {
-  test("handler returns 'OK'", async () => {
-    const result = await appRouter.healthCheck.handler();
+  test("handler returns 'OK'", () => {
+    const result = appRouter.healthCheck();
     expect(result).toBe("OK");
   });
 });
