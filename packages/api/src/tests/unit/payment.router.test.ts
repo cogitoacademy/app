@@ -1,22 +1,11 @@
 import { describe, test, expect, mock } from "bun:test";
 
-mock.module("../../procedures", () => {
-  const mockProc = {
-    route: () => mockProc,
-    input: () => mockProc,
-    handler: (fn: any) => fn,
-  };
-  return {
-    protectedProcedure: mockProc,
-    adminProcedure: mockProc,
-  };
-});
-
 const { paymentRouter } = await import("../../modules/payment/payment.router");
 import {
   createPurchaseInput,
   getPurchaseInput,
 } from "../../modules/payment/payment.types";
+import { paymentHandlers } from "../../modules/payment/payment.handlers";
 
 describe("paymentRouter", () => {
   test("exports expected route keys", () => {
@@ -50,6 +39,49 @@ describe("paymentRouter", () => {
     test("getPurchaseInput rejects missing paymentId", () => {
       const result = getPurchaseInput.safeParse({});
       expect(result.success).toBe(false);
+    });
+  });
+});
+
+describe("paymentHandlers", () => {
+  describe("createPurchase", () => {
+    test("calls wallet.getOrCreate then payment.createIntent", async () => {
+      const wallet = { id: "w1", totalBalance: 0 };
+      const getOrCreate = mock(async () => wallet);
+      const createIntent = mock(async () => ({
+        id: "pay1",
+        status: "pending",
+      }));
+      const context = {
+        session: { user: { id: "u1" } },
+        services: {
+          wallet: { getOrCreate },
+          payment: { createIntent },
+        },
+      };
+      const input = { packageCode: "basic" };
+
+      const result = await paymentHandlers.createPurchase({ context, input });
+
+      expect(getOrCreate).toHaveBeenCalledWith("u1");
+      expect(createIntent).toHaveBeenCalledWith("u1", "w1", "basic");
+      expect(result).toEqual({ id: "pay1", status: "pending" });
+    });
+  });
+
+  describe("getPurchase", () => {
+    test("calls payment.getPurchase with paymentId and userId", async () => {
+      const getPurchase = mock(async () => ({ id: "pay1", status: "paid" }));
+      const context = {
+        session: { user: { id: "u1" } },
+        services: { payment: { getPurchase } },
+      };
+      const input = { paymentId: "pay1" };
+
+      const result = await paymentHandlers.getPurchase({ context, input });
+
+      expect(getPurchase).toHaveBeenCalledWith("pay1", "u1");
+      expect(result).toEqual({ id: "pay1", status: "paid" });
     });
   });
 });

@@ -6,6 +6,7 @@ import {
   adminListInput,
   adminReviewInput,
 } from "./achievement.types";
+import { achievementHandlers } from "./achievement.handlers";
 
 export const achievementRouter = {
   list: protectedProcedure
@@ -16,9 +17,7 @@ export const achievementRouter = {
       summary: "List achievements",
       description: "Returns the authenticated user's achievements",
     })
-    .handler(async ({ context }) => {
-      return context.services.achievement.list(context.session.user.id);
-    }),
+    .handler(achievementHandlers.list),
 
   create: protectedProcedure
     .route({
@@ -29,12 +28,7 @@ export const achievementRouter = {
       description: "Submits a new achievement for review",
     })
     .input(achievementInput)
-    .handler(async ({ context, input }) => {
-      return context.services.achievement.create(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(achievementHandlers.create),
 
   update: protectedProcedure
     .route({
@@ -45,12 +39,7 @@ export const achievementRouter = {
       description: "Updates a pending achievement",
     })
     .input(updateAchievementInput)
-    .handler(async ({ context, input }) => {
-      return context.services.achievement.update(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(achievementHandlers.update),
 
   delete: protectedProcedure
     .route({
@@ -61,12 +50,7 @@ export const achievementRouter = {
       description: "Deletes a pending achievement",
     })
     .input(deleteAchievementInput)
-    .handler(async ({ context, input }) => {
-      return context.services.achievement.remove(
-        context.session.user.id,
-        input.id,
-      );
-    }),
+    .handler(achievementHandlers.delete),
 
   adminList: adminProcedure
     .route({
@@ -77,9 +61,7 @@ export const achievementRouter = {
       description: "Returns all achievements for admin review, paginated",
     })
     .input(adminListInput)
-    .handler(async ({ context, input }) => {
-      return context.services.achievement.adminList(input ?? {});
-    }),
+    .handler(achievementHandlers.adminList),
 
   adminReview: adminProcedure
     .route({
@@ -90,10 +72,5 @@ export const achievementRouter = {
       description: "Approves or rejects an achievement with audit trail",
     })
     .input(adminReviewInput)
-    .handler(async ({ context, input }) => {
-      return context.services.achievement.adminReview(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(achievementHandlers.adminReview),
 };

@@ -1,19 +1,8 @@
 import { describe, test, expect, mock } from "bun:test";
 
-mock.module("../../procedures", () => {
-  const mockProc = {
-    route: () => mockProc,
-    input: () => mockProc,
-    handler: (fn: any) => fn,
-  };
-  return {
-    protectedProcedure: mockProc,
-    adminProcedure: mockProc,
-  };
-});
-
 const { authRouter } = await import("../../modules/auth/auth.router");
 import { updateProfileInput } from "../../modules/auth/auth.types";
+import { authHandlers } from "../../modules/auth/auth.handlers";
 
 describe("authRouter", () => {
   test("exports expected route keys", () => {
@@ -52,6 +41,63 @@ describe("authRouter", () => {
     test("updateProfileInput accepts empty object", () => {
       const result = updateProfileInput.safeParse({});
       expect(result.success).toBe(true);
+    });
+  });
+});
+
+describe("authHandlers", () => {
+  describe("me", () => {
+    test("returns user, profile, tutorProfile, and wallet from auth.me", async () => {
+      const me = mock(async () => ({
+        profile: { id: "p1" },
+        tutorProfile: { id: "t1" },
+        wallet: { id: "w1", totalBalance: 100 },
+      }));
+      const context = {
+        session: { user: { id: "u1", email: "u1@test.com" } },
+        services: { auth: { me } },
+      };
+
+      const result = await authHandlers.me({ context });
+
+      expect(me).toHaveBeenCalledWith("u1");
+      expect(result).toEqual({
+        user: { id: "u1", email: "u1@test.com" },
+        profile: { id: "p1" },
+        tutorProfile: { id: "t1" },
+        wallet: { id: "w1", totalBalance: 100 },
+      });
+    });
+  });
+
+  describe("getProfile", () => {
+    test("calls auth.getProfile with userId", async () => {
+      const getProfile = mock(async () => ({ id: "p1", userId: "u1" }));
+      const context = {
+        session: { user: { id: "u1" } },
+        services: { auth: { getProfile } },
+      };
+
+      const result = await authHandlers.getProfile({ context });
+
+      expect(getProfile).toHaveBeenCalledWith("u1");
+      expect(result).toEqual({ id: "p1", userId: "u1" });
+    });
+  });
+
+  describe("updateProfile", () => {
+    test("calls auth.updateProfile with userId and input", async () => {
+      const updateProfile = mock(async () => ({ id: "p1", userId: "u1" }));
+      const context = {
+        session: { user: { id: "u1" } },
+        services: { auth: { updateProfile } },
+      };
+      const input = { phoneNumber: "0812" };
+
+      const result = await authHandlers.updateProfile({ context, input });
+
+      expect(updateProfile).toHaveBeenCalledWith("u1", input);
+      expect(result).toEqual({ id: "p1", userId: "u1" });
     });
   });
 });

@@ -7,6 +7,7 @@ import {
   listTutorProfilesInput,
   reviewTutorProfileInput,
 } from "./admin-tutor.types";
+import { adminTutorHandlers } from "./admin-tutor.handlers";
 
 export const adminTutorRouter = {
   createInvite: adminProcedure
@@ -18,12 +19,7 @@ export const adminTutorRouter = {
       description: "Creates a tutor invite by email",
     })
     .input(createInviteInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminTutor.createInvite(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(adminTutorHandlers.createInvite),
 
   listInvites: adminProcedure
     .route({
@@ -34,9 +30,7 @@ export const adminTutorRouter = {
       description: "Returns tutor invites, optionally filtered by status",
     })
     .input(listInvitesInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminTutor.listInvites(input ?? {});
-    }),
+    .handler(adminTutorHandlers.listInvites),
 
   resendInvite: adminProcedure
     .route({
@@ -47,12 +41,7 @@ export const adminTutorRouter = {
       description: "Regenerates an invite token and expiry",
     })
     .input(resendInviteInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminTutor.resendInvite(
-        context.session.user.id,
-        input.inviteId,
-      );
-    }),
+    .handler(adminTutorHandlers.resendInvite),
 
   revokeInvite: adminProcedure
     .route({
@@ -63,12 +52,7 @@ export const adminTutorRouter = {
       description: "Revokes a pending tutor invite",
     })
     .input(revokeInviteInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminTutor.revokeInvite(
-        context.session.user.id,
-        input.inviteId,
-      );
-    }),
+    .handler(adminTutorHandlers.revokeInvite),
 
   listTutorProfiles: adminProcedure
     .route({
@@ -80,9 +64,7 @@ export const adminTutorRouter = {
         "Returns tutor profiles, optionally filtered by onboarding status",
     })
     .input(listTutorProfilesInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminTutor.listTutorProfiles(input ?? {});
-    }),
+    .handler(adminTutorHandlers.listTutorProfiles),
 
   reviewTutorProfile: adminProcedure
     .route({
@@ -93,10 +75,5 @@ export const adminTutorRouter = {
       description: "Reviews or changes a tutor profile status",
     })
     .input(reviewTutorProfileInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminTutor.reviewTutorProfile(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(adminTutorHandlers.reviewTutorProfile),
 };

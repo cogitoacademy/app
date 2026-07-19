@@ -5,6 +5,7 @@ import {
   getBookingStateHistoryInput,
   adminRefundInput,
 } from "./admin-booking.types";
+import { adminBookingHandlers } from "./admin-booking.handlers";
 
 export const adminBookingRouter = {
   applyOverride: adminProcedure
@@ -17,12 +18,7 @@ export const adminBookingRouter = {
         "Override a booking state with an admin action, optionally adjusting held Marks",
     })
     .input(applyOverrideInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminBooking.applyOverride(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(adminBookingHandlers.applyOverride),
 
   listBookings: adminProcedure
     .route({
@@ -33,9 +29,7 @@ export const adminBookingRouter = {
       description: "Returns paginated booking list sorted by urgency",
     })
     .input(listOverridesInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminBooking.listBookings(input);
-    }),
+    .handler(adminBookingHandlers.listBookings),
 
   getBookingStateHistory: adminProcedure
     .route({
@@ -46,11 +40,7 @@ export const adminBookingRouter = {
       description: "Returns full state transition history for a booking",
     })
     .input(getBookingStateHistoryInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminBooking.getBookingStateHistory(
-        input.bookingId,
-      );
-    }),
+    .handler(adminBookingHandlers.getBookingStateHistory),
 
   adminRefund: adminProcedure
     .route({
@@ -61,10 +51,5 @@ export const adminBookingRouter = {
       description: "Creates a compensating ledger entry for a payment error",
     })
     .input(adminRefundInput)
-    .handler(async ({ context, input }) => {
-      return context.services.adminBooking.adminRefund(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(adminBookingHandlers.adminRefund),
 };

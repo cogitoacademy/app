@@ -1,5 +1,6 @@
 import { protectedProcedure } from "../../procedures";
 import { listInput, idInput } from "./notification.types";
+import { notificationHandlers } from "./notification.handlers";
 
 export const notificationRouter = {
   list: protectedProcedure
@@ -12,12 +13,7 @@ export const notificationRouter = {
         "Returns the authenticated user's notifications, newest first",
     })
     .input(listInput)
-    .handler(async ({ context, input }) => {
-      return context.services.notification.list(
-        context.session.user.id,
-        input ?? {},
-      );
-    }),
+    .handler(notificationHandlers.list),
 
   getUnreadCount: protectedProcedure
     .route({
@@ -27,12 +23,7 @@ export const notificationRouter = {
       summary: "Unread notification count",
       description: "Returns the number of unread notifications for the user",
     })
-    .handler(async ({ context }) => {
-      const c = await context.services.notification.getUnreadCount(
-        context.session.user.id,
-      );
-      return { count: c };
-    }),
+    .handler(notificationHandlers.getUnreadCount),
 
   markAsRead: protectedProcedure
     .route({
@@ -43,13 +34,7 @@ export const notificationRouter = {
       description: "Marks a single notification as read for the current user",
     })
     .input(idInput)
-    .handler(async ({ context, input }) => {
-      await context.services.notification.markAsRead(
-        context.session.user.id,
-        input.id,
-      );
-      return { ok: true };
-    }),
+    .handler(notificationHandlers.markAsRead),
 
   markAllAsRead: protectedProcedure
     .route({
@@ -60,10 +45,5 @@ export const notificationRouter = {
       description:
         "Marks all unread notifications as read for the current user",
     })
-    .handler(async ({ context }) => {
-      await context.services.notification.markAllAsRead(
-        context.session.user.id,
-      );
-      return { ok: true };
-    }),
+    .handler(notificationHandlers.markAllAsRead),
 };

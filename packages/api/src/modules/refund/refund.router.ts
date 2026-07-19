@@ -1,5 +1,6 @@
 import { adminProcedure } from "../../procedures";
 import { createCorrectionInput, listCorrectionsInput } from "./refund.types";
+import { refundHandlers } from "./refund.handlers";
 
 export const refundRouter = {
   createCorrection: adminProcedure
@@ -12,12 +13,7 @@ export const refundRouter = {
         "Admin-only: creates a compensating ledger entry for wallet corrections",
     })
     .input(createCorrectionInput)
-    .handler(async ({ context, input }) => {
-      return context.services.refund.createCorrection(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(refundHandlers.createCorrection),
 
   listCorrections: adminProcedure
     .route({
@@ -28,7 +24,5 @@ export const refundRouter = {
       description: "Returns compensating entries for a wallet",
     })
     .input(listCorrectionsInput)
-    .handler(async ({ context, input }) => {
-      return context.services.refund.listCorrections(input);
-    }),
+    .handler(refundHandlers.listCorrections),
 };

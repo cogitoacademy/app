@@ -1,5 +1,6 @@
 import { protectedProcedure } from "../../procedures";
 import { createPurchaseInput, getPurchaseInput } from "./payment.types";
+import { paymentHandlers } from "./payment.handlers";
 
 export const paymentRouter = {
   createPurchase: protectedProcedure
@@ -10,16 +11,7 @@ export const paymentRouter = {
       summary: "Create purchase intent",
     })
     .input(createPurchaseInput)
-    .handler(async ({ context, input }) => {
-      const w = await context.services.wallet.getOrCreate(
-        context.session!.user.id,
-      );
-      return context.services.payment.createIntent(
-        context.session!.user.id,
-        w.id,
-        input.packageCode,
-      );
-    }),
+    .handler(paymentHandlers.createPurchase),
 
   getPurchase: protectedProcedure
     .route({
@@ -29,10 +21,5 @@ export const paymentRouter = {
       summary: "Get purchase status",
     })
     .input(getPurchaseInput)
-    .handler(async ({ context, input }) => {
-      return context.services.payment.getPurchase(
-        input.paymentId,
-        context.session!.user.id,
-      );
-    }),
+    .handler(paymentHandlers.getPurchase),
 };

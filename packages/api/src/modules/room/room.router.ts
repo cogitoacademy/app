@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../procedures";
+import { roomHandlers } from "./room.handlers";
 
 export const roomRouter = {
   list: protectedProcedure
@@ -12,9 +13,7 @@ export const roomRouter = {
       description: "Returns all active rooms for offline scheduling",
     })
     .input(z.void())
-    .handler(async ({ context }) => {
-      return context.services.room.listActive();
-    }),
+    .handler(roomHandlers.list),
 
   create: adminProcedure
     .route({
@@ -31,9 +30,7 @@ export const roomRouter = {
         capacity: z.number().int().min(1),
       }),
     )
-    .handler(async ({ context, input }) => {
-      return context.services.room.createRoom(input);
-    }),
+    .handler(roomHandlers.create),
 
   assign: adminProcedure
     .route({
@@ -51,12 +48,5 @@ export const roomRouter = {
         endAt: z.string().datetime(),
       }),
     )
-    .handler(async ({ context, input }) => {
-      return context.services.room.assignRoom(
-        input.bookingId,
-        input.roomId,
-        new Date(input.startAt),
-        new Date(input.endAt),
-      );
-    }),
+    .handler(roomHandlers.assign),
 };

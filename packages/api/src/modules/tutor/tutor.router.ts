@@ -6,6 +6,7 @@ import {
   upsertAvailabilityInput,
   deleteAvailabilityInput,
 } from "./availability.types";
+import { tutorHandlers } from "./tutor.handlers";
 
 export const tutorRouter = {
   getMyProfile: protectedProcedure
@@ -17,9 +18,7 @@ export const tutorRouter = {
       description: "Returns the authenticated tutor's profile",
     })
     .input(z.void())
-    .handler(async ({ context }) => {
-      return context.services.tutor.getMyProfile(context.session.user.id);
-    }),
+    .handler(tutorHandlers.getMyProfile),
 
   updateMyProfile: protectedProcedure
     .route({
@@ -30,12 +29,7 @@ export const tutorRouter = {
       description: "Updates the authenticated tutor's draft profile",
     })
     .input(updateMyProfileInput)
-    .handler(async ({ context, input }) => {
-      return context.services.tutor.updateMyProfile(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(tutorHandlers.updateMyProfile),
 
   submitForReview: protectedProcedure
     .route({
@@ -46,9 +40,7 @@ export const tutorRouter = {
       description: "Submits a tutor profile for admin review",
     })
     .input(z.void())
-    .handler(async ({ context }) => {
-      return context.services.tutor.submitForReview(context.session.user.id);
-    }),
+    .handler(tutorHandlers.submitForReview),
 
   listAvailability: protectedProcedure
     .route({
@@ -60,9 +52,7 @@ export const tutorRouter = {
         "Returns the authenticated tutor's active availability slots",
     })
     .input(z.void())
-    .handler(async ({ context }) => {
-      return context.services.tutor.listAvailability(context.session.user.id);
-    }),
+    .handler(tutorHandlers.listAvailability),
 
   upsertAvailability: protectedProcedure
     .route({
@@ -73,12 +63,7 @@ export const tutorRouter = {
       description: "Creates or updates a tutor availability window",
     })
     .input(upsertAvailabilityInput)
-    .handler(async ({ context, input }) => {
-      return context.services.tutor.upsertAvailability(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(tutorHandlers.upsertAvailability),
 
   deleteAvailability: protectedProcedure
     .route({
@@ -89,10 +74,5 @@ export const tutorRouter = {
       description: "Deletes a tutor availability window",
     })
     .input(deleteAvailabilityInput)
-    .handler(async ({ context, input }) => {
-      return context.services.tutor.deleteAvailability(
-        context.session.user.id,
-        input.id,
-      );
-    }),
+    .handler(tutorHandlers.deleteAvailability),
 };

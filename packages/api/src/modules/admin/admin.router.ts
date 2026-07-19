@@ -1,5 +1,6 @@
 import { adminProcedure } from "../../procedures";
 import { listUsersInput, setRoleInput } from "./admin.types";
+import { adminHandlers } from "./admin.handlers";
 
 export const adminRouter = {
   listUsers: adminProcedure
@@ -11,9 +12,7 @@ export const adminRouter = {
       description: "Returns a paginated list of users",
     })
     .input(listUsersInput)
-    .handler(async ({ context, input }) => {
-      return context.services.admin.listUsers(input ?? {});
-    }),
+    .handler(adminHandlers.listUsers),
 
   setRole: adminProcedure
     .route({
@@ -25,7 +24,5 @@ export const adminRouter = {
         "Updates a user's role with audit trail and last-admin guard",
     })
     .input(setRoleInput)
-    .handler(async ({ context, input }) => {
-      return context.services.admin.setRole(context.session.user.id, input);
-    }),
+    .handler(adminHandlers.setRole),
 };

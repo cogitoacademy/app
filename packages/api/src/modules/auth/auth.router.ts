@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { protectedProcedure } from "../../procedures";
 import { updateProfileInput } from "./auth.types";
+import { authHandlers } from "./auth.handlers";
 
 export const authRouter = {
   me: protectedProcedure
@@ -14,15 +15,7 @@ export const authRouter = {
         "Returns the authenticated user with student profile, tutor profile, and wallet data",
     })
     .input(z.void())
-    .handler(async ({ context }) => {
-      const result = await context.services.auth.me(context.session.user.id);
-      return {
-        user: context.session.user,
-        profile: result.profile,
-        tutorProfile: result.tutorProfile,
-        wallet: result.wallet,
-      };
-    }),
+    .handler(authHandlers.me),
 
   getProfile: protectedProcedure
     .route({
@@ -33,9 +26,7 @@ export const authRouter = {
       description: "Returns the authenticated user's student profile",
     })
     .input(z.void())
-    .handler(async ({ context }) => {
-      return context.services.auth.getProfile(context.session.user.id);
-    }),
+    .handler(authHandlers.getProfile),
 
   updateProfile: protectedProcedure
     .route({
@@ -47,10 +38,5 @@ export const authRouter = {
         "Creates or updates the authenticated user's student profile",
     })
     .input(updateProfileInput)
-    .handler(async ({ context, input }) => {
-      return context.services.auth.updateProfile(
-        context.session.user.id,
-        input,
-      );
-    }),
+    .handler(authHandlers.updateProfile),
 };
