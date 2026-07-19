@@ -86,4 +86,39 @@ describe("ResendEmailProvider", () => {
       expect(e.message).toContain("422");
     }
   });
+
+  test("logs and re-throws when fetch throws a network error", async () => {
+    const networkError = new TypeError("fetch failed");
+    globalThis.fetch = mock(() => {
+      throw networkError;
+    }) as any;
+
+    const consoleErrorSpy = mock(() => {});
+    const originalConsoleError = console.error;
+    console.error = consoleErrorSpy;
+
+    const provider = createResendEmailProvider(
+      "re_test_key",
+      "noreply@test.com",
+    );
+
+    try {
+      await provider.send({
+        to: "user@test.com",
+        subject: "Test",
+        html: "<p>Test</p>",
+        category: "booking",
+      });
+      expect(true).toBe(false);
+    } catch (e: any) {
+      expect(e).toBe(networkError);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      const loggedEntry = JSON.parse(consoleErrorSpy.mock.calls[0][0]);
+      expect(loggedEntry.level).toBe("error");
+      expect(loggedEntry.action).toBe("resend_email_send_failed");
+      expect(loggedEntry.error.message).toContain("fetch failed");
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
 });

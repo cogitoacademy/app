@@ -3,6 +3,11 @@ const MAX_ENTRIES = 10_000;
 let lastCleanup = 0;
 const CLEANUP_INTERVAL = 60_000;
 
+export function resetRateLimitStore() {
+  store.clear();
+  lastCleanup = 0;
+}
+
 export function rateLimit(options: {
   windowMs: number;
   maxRequests: number;

@@ -93,6 +93,21 @@ describe("retryWithBackoff", () => {
     ).rejects.toThrow("out of range");
     expect(fn).toHaveBeenCalledTimes(2);
   });
+
+  test("throws when maxAttempts is 0", async () => {
+    const fn = mock(async () => "ok");
+    try {
+      await retryWithBackoff(fn, {
+        maxAttempts: 0,
+        baseDelayMs: 1,
+        maxDelayMs: 10,
+        jitterMs: 0,
+      });
+      expect.unreachable("should have thrown");
+    } catch {
+      expect(fn).toHaveBeenCalledTimes(0);
+    }
+  });
 });
 
 describe("fetchWithTimeout", () => {
@@ -199,5 +214,27 @@ describe("fetchWithTimeout", () => {
     expect(capturedInit).toBeDefined();
     expect(capturedInit!.signal).toBeInstanceOf(AbortSignal);
     expect(capturedInit!.method).toBe("GET");
+  });
+
+  test("aborts fetch when timeout fires", async () => {
+    globalThis.fetch = mock(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init!.signal!.addEventListener("abort", () => {
+            reject(
+              new DOMException("The operation was aborted.", "AbortError"),
+            );
+          });
+        }),
+    ) as never;
+    globalThis.setTimeout = ((fn: () => void, _ms: number) => {
+      queueMicrotask(fn);
+      return 1;
+    }) as never;
+    globalThis.clearTimeout = () => {};
+
+    await expect(
+      fetchWithTimeout("https://example.com", {}, 5000),
+    ).rejects.toThrow("The operation was aborted.");
   });
 });

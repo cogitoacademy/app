@@ -1,7 +1,10 @@
-import { describe, test, expect } from "bun:test";
-import { rateLimit } from "../../lib/rate-limit";
+import { describe, test, expect, beforeEach } from "bun:test";
+import { rateLimit, resetRateLimitStore } from "../../lib/rate-limit";
 
 describe("rateLimit", () => {
+  beforeEach(() => {
+    resetRateLimitStore();
+  });
   test("allows request within limit", () => {
     const limiter = rateLimit({ windowMs: 60000, maxRequests: 5 });
     const result = limiter("user1");
@@ -78,5 +81,37 @@ describe("rateLimit", () => {
     }
     const result = limiter("overflow_user_10002");
     expect(result.allowed).toBe(true);
+  });
+
+  test("evicts expired entries when store at MAX_ENTRIES", async () => {
+    const shortLimiter = rateLimit({ windowMs: 1, maxRequests: 1 });
+    for (let i = 0; i < 100; i++) {
+      shortLimiter(`evict_expired_${i}`);
+    }
+    await new Promise((r) => setTimeout(r, 5));
+    const longLimiter = rateLimit({ windowMs: 60000, maxRequests: 1 });
+    for (let i = 0; i < 10001; i++) {
+      longLimiter(`evict_fill_${i}`);
+    }
+    const result = longLimiter("evict_trigger");
+    expect(result.allowed).toBe(true);
+  });
+
+  test("cleans up expired entries when cleanup interval elapses", () => {
+    const originalDateNow = Date.now;
+    const currentTime = { value: 1000000 };
+    Date.now = () => currentTime.value;
+
+    try {
+      const limiter = rateLimit({ windowMs: 5000, maxRequests: 2 });
+      limiter("expired_user");
+      limiter("another_expired");
+
+      currentTime.value = 1000000 + 61000;
+      const result = limiter("new_user_after_cleanup");
+      expect(result.allowed).toBe(true);
+    } finally {
+      Date.now = originalDateNow;
+    }
   });
 });
