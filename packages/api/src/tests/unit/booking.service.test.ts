@@ -751,7 +751,11 @@ describe("BookingService", () => {
     test("accepts online booking — transitions to confirmed then scheduled and creates meeting", async () => {
       const booking = makeBooking({ modality: "online" });
       let findCallCount = 0;
-      const { service, meeting: meetingMock, notification } = createService({
+      const {
+        service,
+        meeting: meetingMock,
+        notification,
+      } = createService({
         repo: {
           findBookingById: mock(async () => {
             findCallCount++;
@@ -885,11 +889,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.tutorDecline(
-        "b1",
-        "tutor1",
-        "schedule conflict",
-      );
+      await service.tutorDecline("b1", "tutor1", "schedule conflict");
 
       expect(wallet.release).toHaveBeenCalledTimes(1);
       expect(wallet.release.mock.calls[0][1]).toMatchObject({
