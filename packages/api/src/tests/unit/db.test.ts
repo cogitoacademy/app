@@ -8,14 +8,14 @@ mock.module("@cogito-app/env/server", () => ({
   },
 }));
 
-mock.module("postgres", () => {
-  return function postgres() {
+mock.module("postgres", () => ({
+  default: function postgres() {
     return {};
-  };
-});
+  },
+}));
 
 mock.module("drizzle-orm/postgres-js", () => ({
-  drizzle: (_client: any, opts: any) => ({ schema: opts?.schema }),
+  drizzle: (_client: any, opts: any) => ({ schema: opts?.schema, select: () => {} }),
 }));
 
 describe("db", () => {
