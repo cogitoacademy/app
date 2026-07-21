@@ -16,6 +16,10 @@ function makeRefundService(): RefundService {
   };
 }
 
+function makeContext(userId = "admin1") {
+  return { session: { user: { id: userId } } } as any;
+}
+
 describe("RefundHandler", () => {
   describe("createCorrection", () => {
     test("delegates to refundService.createCorrection with correct arguments", async () => {
@@ -29,7 +33,7 @@ describe("RefundHandler", () => {
         reason: "Test correction",
       };
 
-      await handler.createCorrection("admin1", input);
+      await handler.createCorrection({ context: makeContext(), input });
 
       expect(refundService.createCorrection).toHaveBeenCalledWith(
         "admin1",
@@ -47,11 +51,14 @@ describe("RefundHandler", () => {
       refundService.createCorrection = mock(async () => expected);
       const handler = createRefundHandler({ refundService });
 
-      const result = await handler.createCorrection("admin1", {
-        walletId: "w1",
-        amount: 50,
-        type: "compensate_credit",
-        reason: "Test",
+      const result = await handler.createCorrection({
+        context: makeContext(),
+        input: {
+          walletId: "w1",
+          amount: 50,
+          type: "compensate_credit",
+          reason: "Test",
+        },
       });
 
       expect(result).toEqual(expected);
@@ -69,7 +76,7 @@ describe("RefundHandler", () => {
         bookingId: "b123",
       };
 
-      await handler.createCorrection("admin1", input);
+      await handler.createCorrection({ context: makeContext(), input });
 
       expect(refundService.createCorrection).toHaveBeenCalledWith(
         "admin1",
@@ -84,7 +91,7 @@ describe("RefundHandler", () => {
       const handler = createRefundHandler({ refundService });
 
       const input = { walletId: "w1", limit: 10, cursor: "abc" };
-      await handler.listCorrections(input);
+      await handler.listCorrections({ context: makeContext(), input });
 
       expect(refundService.listCorrections).toHaveBeenCalledWith(input);
     });
@@ -98,7 +105,10 @@ describe("RefundHandler", () => {
       refundService.listCorrections = mock(async () => expected);
       const handler = createRefundHandler({ refundService });
 
-      const result = await handler.listCorrections({ walletId: "w1" });
+      const result = await handler.listCorrections({
+        context: makeContext(),
+        input: { walletId: "w1" },
+      });
 
       expect(result).toEqual(expected);
     });
@@ -107,7 +117,10 @@ describe("RefundHandler", () => {
       const refundService = makeRefundService();
       const handler = createRefundHandler({ refundService });
 
-      await handler.listCorrections({ walletId: "w1" });
+      await handler.listCorrections({
+        context: makeContext(),
+        input: { walletId: "w1" },
+      });
 
       expect(refundService.listCorrections).toHaveBeenCalledWith({
         walletId: "w1",

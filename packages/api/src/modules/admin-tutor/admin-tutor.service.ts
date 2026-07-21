@@ -19,14 +19,10 @@ import type {
   ListInvitesInput,
   ListTutorProfilesInput,
   ReviewTutorProfileInput,
-} from "./admin-tutor.handler";
+  ReviewAction,
+} from "./admin-tutor.types";
 
-export type ReviewAction =
-  | "request_changes"
-  | "approve_unpublished"
-  | "publish"
-  | "unpublish"
-  | "suspend";
+export type { ReviewAction };
 
 export interface TutorProfileSnapshot {
   id: string;

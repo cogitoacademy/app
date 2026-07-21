@@ -1,30 +1,39 @@
+import type { Context } from "../../context";
+import type { z } from "zod";
 import type {
   AdminService,
-  SetRoleInput,
   ListUsersInput,
   ListUsersResult,
 } from "./admin.service";
-import type { UserRow } from "./admin.repo";
+import type { listUsersInput, setRoleInput } from "./admin.types";
+
+type ListUsersInputZod = z.infer<typeof listUsersInput>;
+type SetRoleInputZod = z.infer<typeof setRoleInput>;
 
 export type { ListUsersInput, ListUsersResult };
 
 export type AdminHandler = ReturnType<typeof createAdminHandler>;
 
-export function createAdminHandler(deps: { adminService: AdminService }) {
-  const { adminService } = deps;
+export function createAdminHandler(adminService: AdminService) {
+  return {
+    listUsers: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: ListUsersInputZod;
+    }) => {
+      return adminService.listUsers(input ?? {});
+    },
 
-  async function listUsers(
-    input: ListUsersInput = {},
-  ): Promise<ListUsersResult> {
-    return adminService.listUsers(input);
-  }
-
-  async function setRole(
-    adminId: string,
-    input: SetRoleInput,
-  ): Promise<UserRow> {
-    return adminService.setRole(adminId, input);
-  }
-
-  return { listUsers, setRole };
+    setRole: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: SetRoleInputZod;
+    }) => {
+      return adminService.setRole(context.session!.user.id, input);
+    },
+  };
 }

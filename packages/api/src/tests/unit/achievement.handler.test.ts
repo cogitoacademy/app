@@ -45,6 +45,10 @@ function makeAuditPort() {
   return { record: mock(async () => {}) };
 }
 
+function makeContext(userId = "u1") {
+  return { session: { user: { id: userId } } } as any;
+}
+
 describe("AchievementHandler", () => {
   describe("list", () => {
     test("delegates to achievementService.list", async () => {
@@ -60,7 +64,7 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      const result = await handler.list("u1");
+      const result = await handler.list({ context: makeContext() });
 
       expect(result).toEqual([{ id: "a1" }]);
     });
@@ -88,7 +92,7 @@ describe("AchievementHandler", () => {
         award: "1st",
         level: "regional",
       };
-      const result = await handler.create("u1", input);
+      const result = await handler.create({ context: makeContext(), input });
 
       expect(result.userId).toBe("u1");
     });
@@ -104,9 +108,9 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      const result = await handler.update("u1", {
-        id: "a1",
-        data: { eventName: "Updated" },
+      const result = await handler.update({
+        context: makeContext(),
+        input: { id: "a1", data: { eventName: "Updated" } },
       });
 
       expect(result.id).toBe("a1");
@@ -123,7 +127,10 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      await handler.remove("u1", "a1");
+      await handler.remove({
+        context: makeContext(),
+        input: { id: "a1" },
+      });
 
       expect(repo.deleteRow).toHaveBeenCalled();
     });
@@ -141,7 +148,10 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      const result = await handler.adminList({});
+      const result = await handler.adminList({
+        context: makeContext(),
+        input: {},
+      });
 
       expect(result).toEqual([{ id: "a1" }]);
     });
@@ -158,9 +168,12 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      const result = await handler.adminReview("admin1", {
-        achievementId: "a1",
-        status: "approved",
+      const result = await handler.adminReview({
+        context: makeContext("admin1"),
+        input: {
+          achievementId: "a1",
+          status: "approved",
+        },
       });
 
       expect(result.id).toBe("a1");

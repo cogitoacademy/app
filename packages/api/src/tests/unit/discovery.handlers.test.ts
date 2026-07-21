@@ -1,51 +1,74 @@
 import { describe, test, expect, mock } from "bun:test";
-import { discoveryHandlers } from "../../modules/tutor-discovery/discovery.handlers";
+import { createDiscoveryHandler } from "../../modules/tutor-discovery/discovery.handler";
+
+function makeDiscoveryRepo(overrides: Record<string, unknown> = {}) {
+  return {
+    listPublished: mock(async () => [{ id: "t1" }]),
+    getProfileById: mock(async () => ({ id: "t1", displayName: "Tutor" })),
+    ...overrides,
+  };
+}
+
+function makeDb() {
+  return {} as any;
+}
 
 describe("discoveryHandlers", () => {
   describe("listPublished", () => {
-    test("calls discovery.listPublished with input", async () => {
-      const listPublished = mock(async () => [{ id: "t1" }]);
-      const context = {
-        session: { user: { id: "u1" } },
-        services: { discovery: { listPublished } },
-      };
+    test("calls discoveryRepo.listPublished with input", async () => {
+      const discoveryRepo = makeDiscoveryRepo({
+        listPublished: mock(async () => [{ id: "t1", displayName: "Tutor" }]),
+      });
+      const db = makeDb();
+      const handler = createDiscoveryHandler({
+        discoveryRepo: discoveryRepo as any,
+        db,
+      });
+      const context = { session: { user: { id: "u1" } } } as any;
       const input = { search: "math", limit: 20, offset: 0 };
 
-      const result = await discoveryHandlers.listPublished({ context, input });
+      await handler.listPublished({ context, input });
 
-      expect(listPublished).toHaveBeenCalledWith(input);
-      expect(result).toEqual([{ id: "t1" }]);
+      expect(discoveryRepo.listPublished).toHaveBeenCalledWith(db, input);
     });
 
-    test("calls discovery.listPublished with empty object when input is undefined", async () => {
-      const listPublished = mock(async () => []);
-      const context = {
-        session: { user: { id: "u1" } },
-        services: { discovery: { listPublished } },
-      };
+    test("calls discoveryRepo.listPublished with empty object when input is undefined", async () => {
+      const discoveryRepo = makeDiscoveryRepo({
+        listPublished: mock(async () => []),
+      });
+      const db = makeDb();
+      const handler = createDiscoveryHandler({
+        discoveryRepo: discoveryRepo as any,
+        db,
+      });
+      const context = { session: { user: { id: "u1" } } } as any;
 
-      await discoveryHandlers.listPublished({
+      await handler.listPublished({
         context,
         input: undefined as any,
       });
 
-      expect(listPublished).toHaveBeenCalledWith({});
+      expect(discoveryRepo.listPublished).toHaveBeenCalledWith(db, {});
     });
   });
 
   describe("getProfile", () => {
-    test("calls discovery.getProfile with input.tutorId", async () => {
-      const getProfile = mock(async () => ({ id: "t1", displayName: "Tutor" }));
-      const context = {
-        session: { user: { id: "u1" } },
-        services: { discovery: { getProfile } },
-      };
+    test("calls discoveryRepo.getProfileById with input.tutorId", async () => {
+      const discoveryRepo = makeDiscoveryRepo({
+        getProfileById: mock(async () => ({ id: "t1", displayName: "Tutor" })),
+      });
+      const db = makeDb();
+      const handler = createDiscoveryHandler({
+        discoveryRepo: discoveryRepo as any,
+        db,
+      });
+      const context = { session: { user: { id: "u1" } } } as any;
       const input = { tutorId: "t1" };
 
-      const result = await discoveryHandlers.getProfile({ context, input });
+      const result = await handler.getProfile({ context, input });
 
-      expect(getProfile).toHaveBeenCalledWith("t1");
-      expect(result).toEqual({ id: "t1", displayName: "Tutor" });
+      expect(discoveryRepo.getProfileById).toHaveBeenCalledWith(db, "t1");
+      expect(result.id).toBe("t1");
     });
   });
 });

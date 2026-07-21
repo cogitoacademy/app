@@ -1,52 +1,53 @@
-import type { UpdateProfileInput } from "./tutor.repo";
+import type { Context } from "../../context";
 import type { TutorService } from "./tutor.service";
 
-export function createTutorHandler(deps: { tutorService: TutorService }) {
-  const { tutorService } = deps;
+export type TutorHandler = ReturnType<typeof createTutorHandler>;
 
-  async function getMyProfile(userId: string) {
-    return tutorService.getMyProfile(userId);
-  }
-
-  async function updateMyProfile(userId: string, input: UpdateProfileInput) {
-    return tutorService.updateMyProfile(userId, input);
-  }
-
-  async function submitForReview(userId: string) {
-    return tutorService.submitForReview(userId);
-  }
-
-  async function listAvailability(userId: string) {
-    return tutorService.listAvailability(userId);
-  }
-
-  async function upsertAvailability(
-    userId: string,
-    input: {
-      id?: string;
-      startDate: string | Date;
-      endDate: string | Date;
-      modality: "online" | "offline" | "both";
-      isRecurring?: boolean;
-      recurrenceRule?: string;
-      isActive?: boolean;
-    },
-  ) {
-    return tutorService.upsertAvailability(userId, input);
-  }
-
-  async function deleteAvailability(userId: string, slotId: string) {
-    return tutorService.deleteAvailability(userId, slotId);
-  }
-
+export function createTutorHandler(tutorService: TutorService) {
   return {
-    getMyProfile,
-    updateMyProfile,
-    submitForReview,
-    listAvailability,
-    upsertAvailability,
-    deleteAvailability,
+    getMyProfile: async ({ context }: { context: Context }) => {
+      return tutorService.getMyProfile(context.session!.user.id);
+    },
+
+    updateMyProfile: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return tutorService.updateMyProfile(context.session!.user.id, input);
+    },
+
+    submitForReview: async ({ context }: { context: Context }) => {
+      return tutorService.submitForReview(context.session!.user.id);
+    },
+
+    listAvailability: async ({ context }: { context: Context }) => {
+      return tutorService.listAvailability(context.session!.user.id);
+    },
+
+    upsertAvailability: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return tutorService.upsertAvailability(context.session!.user.id, input);
+    },
+
+    deleteAvailability: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return tutorService.deleteAvailability(
+        context.session!.user.id,
+        input.id,
+      );
+    },
   };
 }
-
-export type TutorHandler = ReturnType<typeof createTutorHandler>;

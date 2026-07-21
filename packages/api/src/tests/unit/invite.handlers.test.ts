@@ -1,16 +1,19 @@
 import { describe, test, expect, mock } from "bun:test";
-import { inviteHandlers } from "../../modules/invite/invite.handlers";
+import { createInviteHandler } from "../../modules/invite/invite.handler";
 
-describe("inviteHandlers", () => {
+describe("inviteHandler", () => {
+  const verify = mock(async () => ({ valid: true, tutorId: "t1" }));
+  const claim = mock(async () => ({ id: "t1" }));
+  const handler = createInviteHandler({
+    inviteService: { verify, claim } as any,
+  });
+
   describe("verify", () => {
-    test("calls invite.verify with input.token", async () => {
-      const verify = mock(async () => ({ valid: true, tutorId: "t1" }));
-      const context = {
-        services: { invite: { verify } },
-      };
+    test("calls inviteService.verify with input.token", async () => {
+      const context = { session: { user: { id: "u1" } } } as any;
       const input = { token: "tok123" };
 
-      const result = await inviteHandlers.verify({ context, input });
+      const result = await handler.verify({ context, input });
 
       expect(verify).toHaveBeenCalledWith("tok123");
       expect(result).toEqual({ valid: true, tutorId: "t1" });
@@ -18,32 +21,28 @@ describe("inviteHandlers", () => {
   });
 
   describe("claim", () => {
-    test("calls invite.claim with user.id and user.email", async () => {
-      const claim = mock(async () => ({ id: "t1" }));
+    test("calls inviteService.claim with user.id, user.email and input.token", async () => {
       const context = {
         session: { user: { id: "u1", email: "u1@test.com" } },
-        services: { invite: { claim } },
-      };
+      } as any;
       const input = { token: "tok123" };
 
-      const result = await inviteHandlers.claim({ context, input });
+      const result = await handler.claim({ context, input });
 
       expect(claim).toHaveBeenCalledWith("u1", "u1@test.com", "tok123");
       expect(result).toEqual({ id: "t1" });
     });
 
-    test("passes user email to invite.claim", async () => {
-      const claim = mock(async () => ({ id: "t2" }));
+    test("passes user email to inviteService.claim", async () => {
       const context = {
         session: { user: { id: "u2", email: "u2@example.com" } },
-        services: { invite: { claim } },
-      };
+      } as any;
       const input = { token: "abc" };
 
-      const result = await inviteHandlers.claim({ context, input });
+      const result = await handler.claim({ context, input });
 
       expect(claim).toHaveBeenCalledWith("u2", "u2@example.com", "abc");
-      expect(result).toEqual({ id: "t2" });
+      expect(result).toEqual({ id: "t1" });
     });
   });
 });

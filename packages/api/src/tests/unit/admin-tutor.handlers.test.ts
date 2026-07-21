@@ -1,17 +1,16 @@
 import { describe, test, expect, mock } from "bun:test";
-import { adminTutorHandlers } from "../../modules/admin-tutor/admin-tutor.handlers";
+import { createAdminTutorHandler } from "../../modules/admin-tutor/admin-tutor.handler";
 
 describe("adminTutorHandlers", () => {
   describe("createInvite", () => {
     test("calls adminTutor.createInvite with session user id and input", async () => {
       const createInvite = mock(async () => ({ id: "inv1" }));
-      const context = {
-        session: { user: { id: "admin1" } },
-        services: { adminTutor: { createInvite } },
-      };
+      const adminTutorService = { createInvite } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
       const input = { email: "tutor@example.com" };
 
-      const result = await adminTutorHandlers.createInvite({ context, input });
+      const result = await handler.createInvite({ context, input });
 
       expect(createInvite).toHaveBeenCalledWith("admin1", input);
       expect(result).toEqual({ id: "inv1" });
@@ -21,13 +20,12 @@ describe("adminTutorHandlers", () => {
   describe("listInvites", () => {
     test("calls adminTutor.listInvites with input", async () => {
       const listInvites = mock(async () => ({ items: [] }));
-      const context = {
-        session: { user: { id: "admin1" } },
-        services: { adminTutor: { listInvites } },
-      };
+      const adminTutorService = { listInvites } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
       const input = { status: "pending" };
 
-      const result = await adminTutorHandlers.listInvites({ context, input });
+      const result = await handler.listInvites({ context, input });
 
       expect(listInvites).toHaveBeenCalledWith(input);
       expect(result).toEqual({ items: [] });
@@ -35,12 +33,11 @@ describe("adminTutorHandlers", () => {
 
     test("calls adminTutor.listInvites with empty object when input is undefined", async () => {
       const listInvites = mock(async () => ({ items: [] }));
-      const context = {
-        session: { user: { id: "admin1" } },
-        services: { adminTutor: { listInvites } },
-      };
+      const adminTutorService = { listInvites } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
 
-      await adminTutorHandlers.listInvites({
+      await handler.listInvites({
         context,
         input: undefined as any,
       });
@@ -52,13 +49,12 @@ describe("adminTutorHandlers", () => {
   describe("resendInvite", () => {
     test("calls adminTutor.resendInvite with session user id and input.inviteId", async () => {
       const resendInvite = mock(async () => ({ ok: true }));
-      const context = {
-        session: { user: { id: "admin1" } },
-        services: { adminTutor: { resendInvite } },
-      };
+      const adminTutorService = { resendInvite } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
       const input = { inviteId: "inv1" };
 
-      const result = await adminTutorHandlers.resendInvite({ context, input });
+      const result = await handler.resendInvite({ context, input });
 
       expect(resendInvite).toHaveBeenCalledWith("admin1", "inv1");
       expect(result).toEqual({ ok: true });
@@ -68,13 +64,12 @@ describe("adminTutorHandlers", () => {
   describe("revokeInvite", () => {
     test("calls adminTutor.revokeInvite with session user id and input.inviteId", async () => {
       const revokeInvite = mock(async () => ({ ok: true }));
-      const context = {
-        session: { user: { id: "admin1" } },
-        services: { adminTutor: { revokeInvite } },
-      };
+      const adminTutorService = { revokeInvite } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
       const input = { inviteId: "inv1" };
 
-      const result = await adminTutorHandlers.revokeInvite({ context, input });
+      const result = await handler.revokeInvite({ context, input });
 
       expect(revokeInvite).toHaveBeenCalledWith("admin1", "inv1");
       expect(result).toEqual({ ok: true });
@@ -84,13 +79,12 @@ describe("adminTutorHandlers", () => {
   describe("listTutorProfiles", () => {
     test("calls adminTutor.listTutorProfiles with input", async () => {
       const listTutorProfiles = mock(async () => ({ items: [] }));
-      const context = {
-        session: { user: { id: "admin1" } },
-        services: { adminTutor: { listTutorProfiles } },
-      };
+      const adminTutorService = { listTutorProfiles } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
       const input = { status: "pending" };
 
-      const result = await adminTutorHandlers.listTutorProfiles({
+      const result = await handler.listTutorProfiles({
         context,
         input,
       });
@@ -101,12 +95,11 @@ describe("adminTutorHandlers", () => {
 
     test("calls adminTutor.listTutorProfiles with empty object when input is undefined", async () => {
       const listTutorProfiles = mock(async () => ({ items: [] }));
-      const context = {
-        session: { user: { id: "admin1" } },
-        services: { adminTutor: { listTutorProfiles } },
-      };
+      const adminTutorService = { listTutorProfiles } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
 
-      await adminTutorHandlers.listTutorProfiles({
+      await handler.listTutorProfiles({
         context,
         input: undefined as any,
       });
@@ -118,13 +111,12 @@ describe("adminTutorHandlers", () => {
   describe("reviewTutorProfile", () => {
     test("calls adminTutor.reviewTutorProfile with session user id and input", async () => {
       const reviewTutorProfile = mock(async () => ({ ok: true }));
-      const context = {
-        session: { user: { id: "admin1" } },
-        services: { adminTutor: { reviewTutorProfile } },
-      };
+      const adminTutorService = { reviewTutorProfile } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
       const input = { profileId: "p1", action: "approve" };
 
-      const result = await adminTutorHandlers.reviewTutorProfile({
+      const result = await handler.reviewTutorProfile({
         context,
         input,
       });

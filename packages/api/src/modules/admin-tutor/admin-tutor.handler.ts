@@ -1,89 +1,77 @@
-import type {
-  TutorInviteRow,
-  TutorProfileRow,
-  InviteStatus,
-  OnboardingStatus,
-} from "./admin-tutor.repo";
-import {
-  type ReviewAction,
-  type AdminTutorService,
-} from "./admin-tutor.service";
-
-export interface CreateInviteInput {
-  email: string;
-  displayName: string;
-  internalNotes?: string;
-}
-
-export interface ListInvitesInput {
-  status?: InviteStatus;
-  limit?: number;
-  offset?: number;
-}
-
-export interface ListTutorProfilesInput {
-  status?: OnboardingStatus;
-  limit?: number;
-  offset?: number;
-}
-
-export interface ReviewTutorProfileInput {
-  tutorProfileId: string;
-  action: ReviewAction;
-  adminNote?: string;
-}
+import type { Context } from "../../context";
+import type { AdminTutorService } from "./admin-tutor.service";
 
 export type AdminTutorHandler = ReturnType<typeof createAdminTutorHandler>;
 
-export function createAdminTutorHandler(deps: {
-  adminTutorService: AdminTutorService;
-}) {
-  const { adminTutorService } = deps;
-
-  async function createInvite(
-    adminId: string,
-    input: CreateInviteInput,
-  ): Promise<TutorInviteRow> {
-    return adminTutorService.createInvite(adminId, input);
-  }
-
-  async function listInvites(
-    input: ListInvitesInput = {},
-  ): Promise<TutorInviteRow[]> {
-    return adminTutorService.listInvites(input);
-  }
-
-  async function resendInvite(
-    adminId: string,
-    inviteId: string,
-  ): Promise<TutorInviteRow> {
-    return adminTutorService.resendInvite(adminId, inviteId);
-  }
-
-  async function revokeInvite(
-    adminId: string,
-    inviteId: string,
-  ): Promise<TutorInviteRow> {
-    return adminTutorService.revokeInvite(adminId, inviteId);
-  }
-
-  async function listTutorProfiles(input: ListTutorProfilesInput = {}) {
-    return adminTutorService.listTutorProfiles(input);
-  }
-
-  async function reviewTutorProfile(
-    adminId: string,
-    input: ReviewTutorProfileInput,
-  ): Promise<TutorProfileRow> {
-    return adminTutorService.reviewTutorProfile(adminId, input);
-  }
-
+export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
   return {
-    createInvite,
-    listInvites,
-    resendInvite,
-    revokeInvite,
-    listTutorProfiles,
-    reviewTutorProfile,
+    createInvite: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminTutorService.createInvite(context.session!.user.id, input);
+    },
+
+    listInvites: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminTutorService.listInvites(input ?? {});
+    },
+
+    resendInvite: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminTutorService.resendInvite(
+        context.session!.user.id,
+        input.inviteId,
+      );
+    },
+
+    revokeInvite: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminTutorService.revokeInvite(
+        context.session!.user.id,
+        input.inviteId,
+      );
+    },
+
+    listTutorProfiles: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminTutorService.listTutorProfiles(input ?? {});
+    },
+
+    reviewTutorProfile: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminTutorService.reviewTutorProfile(
+        context.session!.user.id,
+        input,
+      );
+    },
   };
 }

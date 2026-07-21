@@ -1,3 +1,4 @@
+import type { Context } from "../../context";
 import type { AdminBookingService } from "./admin-booking.service";
 import {
   OVERRIDE_CATEGORIES,
@@ -32,52 +33,56 @@ function validateMarksAction(
 
 export type AdminBookingHandler = ReturnType<typeof createAdminBookingHandler>;
 
-export function createAdminBookingHandler(deps: {
-  adminBookingService: AdminBookingService;
-}) {
-  const { adminBookingService } = deps;
-
-  async function applyOverride(
-    adminId: string,
-    input: {
-      bookingId: string;
-      category: string;
-      reason: string;
-      affectedParticipants?: string[];
-      marksAction?: string;
-      userNote?: string;
-      internalNote?: string;
+export function createAdminBookingHandler(
+  adminBookingService: AdminBookingService,
+) {
+  return {
+    applyOverride: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminBookingService.applyOverride(context.session!.user.id, {
+        bookingId: input.bookingId,
+        category: validateCategory(input.category),
+        reason: input.reason,
+        affectedParticipants: input.affectedParticipants,
+        marksAction: validateMarksAction(input.marksAction),
+        userNote: input.userNote,
+        internalNote: input.internalNote,
+      });
     },
-  ) {
-    return adminBookingService.applyOverride(adminId, {
-      bookingId: input.bookingId,
-      category: validateCategory(input.category),
-      reason: input.reason,
-      affectedParticipants: input.affectedParticipants,
-      marksAction: validateMarksAction(input.marksAction),
-      userNote: input.userNote,
-      internalNote: input.internalNote,
-    });
-  }
 
-  async function listBookings(input?: {
-    bookingId?: string;
-    limit?: number;
-    cursor?: string;
-  }) {
-    return adminBookingService.listBookings(input);
-  }
+    listBookings: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminBookingService.listBookings(input);
+    },
 
-  async function getBookingStateHistory(bookingId: string) {
-    return adminBookingService.getBookingStateHistory(bookingId);
-  }
+    getBookingStateHistory: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminBookingService.getBookingStateHistory(input.bookingId);
+    },
 
-  async function adminRefund(
-    adminId: string,
-    input: { paymentId: string; reason: string },
-  ) {
-    return adminBookingService.adminRefund(adminId, input);
-  }
-
-  return { applyOverride, listBookings, getBookingStateHistory, adminRefund };
+    adminRefund: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: any;
+    }) => {
+      return adminBookingService.adminRefund(context.session!.user.id, input);
+    },
+  };
 }

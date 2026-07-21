@@ -1,43 +1,76 @@
+import type { Context } from "../../context";
+import type { z } from "zod";
 import type {
-  InsertAchievementParams,
-  AdminListInput,
-} from "./achievement.repo";
-import type {
-  AchievementService,
-  UpdateAchievementInput,
-  AdminReviewInput,
-} from "./achievement.service";
+  achievementInput,
+  updateAchievementInput,
+  deleteAchievementInput,
+  adminListInput,
+  adminReviewInput,
+} from "./achievement.types";
+import type { AchievementService } from "./achievement.service";
+
+type AchievementInput = z.infer<typeof achievementInput>;
+type UpdateAchievementInput = z.infer<typeof updateAchievementInput>;
+type DeleteAchievementInput = z.infer<typeof deleteAchievementInput>;
+type AdminListInput = z.infer<typeof adminListInput>;
+type AdminReviewInput = z.infer<typeof adminReviewInput>;
 
 export function createAchievementHandler(deps: {
   achievementService: AchievementService;
 }) {
   const { achievementService } = deps;
 
-  async function list(userId: string) {
-    return achievementService.list(userId);
+  async function list({ context }: { context: Context }) {
+    return achievementService.list(context.session!.user.id);
   }
 
-  async function create(
-    userId: string,
-    input: Omit<InsertAchievementParams, "userId">,
-  ) {
-    return achievementService.create(userId, input);
+  async function create({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: AchievementInput;
+  }) {
+    return achievementService.create(context.session!.user.id, input);
   }
 
-  async function update(userId: string, input: UpdateAchievementInput) {
-    return achievementService.update(userId, input);
+  async function update({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: UpdateAchievementInput;
+  }) {
+    return achievementService.update(context.session!.user.id, input);
   }
 
-  async function remove(userId: string, id: string) {
-    return achievementService.remove(userId, id);
+  async function remove({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: DeleteAchievementInput;
+  }) {
+    return achievementService.remove(context.session!.user.id, input.id);
   }
 
-  async function adminList(input: AdminListInput = {}) {
-    return achievementService.adminList(input);
+  async function adminList({
+    input,
+  }: {
+    context: Context;
+    input: AdminListInput;
+  }) {
+    return achievementService.adminList(input ?? {});
   }
 
-  async function adminReview(adminId: string, input: AdminReviewInput) {
-    return achievementService.adminReview(adminId, input);
+  async function adminReview({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: AdminReviewInput;
+  }) {
+    return achievementService.adminReview(context.session!.user.id, input);
   }
 
   return { list, create, update, remove, adminList, adminReview };

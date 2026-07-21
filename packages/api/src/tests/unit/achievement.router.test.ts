@@ -1,6 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 
-const { achievementRouter } =
+const { createAchievementRouter } =
   await import("../../modules/achievement/achievement.router");
 import {
   achievementInput,
@@ -9,11 +9,22 @@ import {
   adminListInput,
   adminReviewInput,
 } from "../../modules/achievement/achievement.types";
-import { achievementHandlers } from "../../modules/achievement/achievement.handlers";
+import { createAchievementHandler } from "../../modules/achievement/achievement.handler";
 
 describe("achievementRouter", () => {
   test("exports expected route keys", () => {
-    expect(Object.keys(achievementRouter).toSorted()).toEqual([
+    const handler = createAchievementHandler({
+      achievementService: {
+        list: mock(async () => []),
+        create: mock(async () => ({})),
+        update: mock(async () => ({})),
+        remove: mock(async () => {}),
+        adminList: mock(async () => []),
+        adminReview: mock(async () => ({})),
+      } as any,
+    });
+    const router = createAchievementRouter(handler);
+    expect(Object.keys(router).toSorted()).toEqual([
       "adminList",
       "adminReview",
       "create",
@@ -101,16 +112,18 @@ describe("achievementRouter", () => {
   });
 });
 
-describe("achievementHandlers", () => {
+describe("achievementHandler", () => {
   describe("list", () => {
-    test("calls achievement.list with userId", async () => {
+    test("calls achievementService.list with userId", async () => {
       const list = mock(async () => [{ id: "a1" }]);
+      const handler = createAchievementHandler({
+        achievementService: { list } as any,
+      });
       const context = {
         session: { user: { id: "u1" } },
-        services: { achievement: { list } },
-      };
+      } as any;
 
-      const result = await achievementHandlers.list({ context });
+      const result = await handler.list({ context });
 
       expect(list).toHaveBeenCalledWith("u1");
       expect(result).toEqual([{ id: "a1" }]);
@@ -118,12 +131,14 @@ describe("achievementHandlers", () => {
   });
 
   describe("create", () => {
-    test("calls achievement.create with userId and input", async () => {
+    test("calls achievementService.create with userId and input", async () => {
       const create = mock(async () => ({ id: "a1" }));
+      const handler = createAchievementHandler({
+        achievementService: { create } as any,
+      });
       const context = {
         session: { user: { id: "u1" } },
-        services: { achievement: { create } },
-      };
+      } as any;
       const input = {
         eventName: "Olympiad",
         category: "academic",
@@ -131,7 +146,7 @@ describe("achievementHandlers", () => {
         level: "national",
       };
 
-      const result = await achievementHandlers.create({ context, input });
+      const result = await handler.create({ context, input });
 
       expect(create).toHaveBeenCalledWith("u1", input);
       expect(result).toEqual({ id: "a1" });
@@ -139,74 +154,84 @@ describe("achievementHandlers", () => {
   });
 
   describe("update", () => {
-    test("calls achievement.update with userId and input", async () => {
+    test("calls achievementService.update with userId and input", async () => {
       const update = mock(async () => ({ id: "a1" }));
+      const handler = createAchievementHandler({
+        achievementService: { update } as any,
+      });
       const context = {
         session: { user: { id: "u1" } },
-        services: { achievement: { update } },
-      };
+      } as any;
       const input = { id: "a1", data: { eventName: "Updated" } };
 
-      const result = await achievementHandlers.update({ context, input });
+      const result = await handler.update({ context, input });
 
       expect(update).toHaveBeenCalledWith("u1", input);
       expect(result).toEqual({ id: "a1" });
     });
   });
 
-  describe("delete", () => {
-    test("calls achievement.remove with userId and input.id", async () => {
+  describe("remove", () => {
+    test("calls achievementService.remove with userId and input.id", async () => {
       const remove = mock(async () => undefined);
+      const handler = createAchievementHandler({
+        achievementService: { remove } as any,
+      });
       const context = {
         session: { user: { id: "u1" } },
-        services: { achievement: { remove } },
-      };
+      } as any;
       const input = { id: "a1" };
 
-      await achievementHandlers.delete({ context, input });
+      await handler.remove({ context, input });
 
       expect(remove).toHaveBeenCalledWith("u1", "a1");
     });
   });
 
   describe("adminList", () => {
-    test("calls achievement.adminList with input", async () => {
+    test("calls achievementService.adminList with input", async () => {
       const adminList = mock(async () => [{ id: "a1" }]);
+      const handler = createAchievementHandler({
+        achievementService: { adminList } as any,
+      });
       const context = {
         session: { user: { id: "admin1" } },
-        services: { achievement: { adminList } },
-      };
+      } as any;
       const input = { status: "pending_review", limit: 10 };
 
-      const result = await achievementHandlers.adminList({ context, input });
+      const result = await handler.adminList({ context, input });
 
       expect(adminList).toHaveBeenCalledWith(input);
       expect(result).toEqual([{ id: "a1" }]);
     });
 
-    test("calls achievement.adminList with empty object when input is undefined", async () => {
+    test("calls achievementService.adminList with empty object when input is undefined", async () => {
       const adminList = mock(async () => []);
+      const handler = createAchievementHandler({
+        achievementService: { adminList } as any,
+      });
       const context = {
         session: { user: { id: "admin1" } },
-        services: { achievement: { adminList } },
-      };
+      } as any;
 
-      await achievementHandlers.adminList({ context, input: undefined as any });
+      await handler.adminList({ context, input: undefined as any });
 
       expect(adminList).toHaveBeenCalledWith({});
     });
   });
 
   describe("adminReview", () => {
-    test("calls achievement.adminReview with userId and input", async () => {
+    test("calls achievementService.adminReview with userId and input", async () => {
       const adminReview = mock(async () => ({ id: "a1", status: "approved" }));
+      const handler = createAchievementHandler({
+        achievementService: { adminReview } as any,
+      });
       const context = {
         session: { user: { id: "admin1" } },
-        services: { achievement: { adminReview } },
-      };
+      } as any;
       const input = { achievementId: "a1", status: "approved" as const };
 
-      const result = await achievementHandlers.adminReview({ context, input });
+      const result = await handler.adminReview({ context, input });
 
       expect(adminReview).toHaveBeenCalledWith("admin1", input);
       expect(result).toEqual({ id: "a1", status: "approved" });

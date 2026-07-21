@@ -4,6 +4,7 @@ import { createAuditService } from "./modules/audit/audit.service";
 import { createPricingService } from "./modules/pricing/pricing.service";
 import { createWalletRepo } from "./modules/wallet/wallet.repo";
 import { createWalletService } from "./modules/wallet/wallet.service";
+import { createWalletHandler } from "./modules/wallet/wallet.handler";
 import { createAuthRepo } from "./modules/auth/auth.repo";
 import { createAuthHandler } from "./modules/auth/auth.handler";
 import { createAuthService } from "./modules/auth/auth.service";
@@ -26,13 +27,19 @@ import { createAchievementHandler } from "./modules/achievement/achievement.hand
 import { createAchievementService } from "./modules/achievement/achievement.service";
 import { createBookingRepo } from "./modules/booking/booking.repo";
 import { createBookingService } from "./modules/booking/booking.service";
+import {
+  createBookingHandler,
+  createTutorActionsHandler,
+} from "./modules/booking/booking.handler";
 import { createNotificationService } from "./modules/notification/notification.service";
 import { createNotificationHandler } from "./modules/notification/notification.handler";
 import { createEmailService } from "./modules/email/email.service";
 import { createStubEmailProvider } from "./modules/email/stub-email.provider";
 import { createResendEmailProvider } from "./modules/email/resend-email.provider";
 import { createPaymentService } from "./modules/payment/payment.service";
+import { createPaymentHandler } from "./modules/payment/payment.handler";
 import { createRoomService } from "./modules/room/room.service";
+import { createRoomHandler } from "./modules/room/room.handler";
 import { createFallbackMeetingProvider } from "./modules/meeting/fallback.provider";
 import { createGoogleMeetingProviderWithFallback } from "./modules/meeting/google-meeting.provider";
 import { createStubPaymentProvider } from "./modules/payment/stub-payment.provider";
@@ -48,55 +55,79 @@ import { env } from "@cogito-app/env/server";
 import type { AuditPort } from "./shared/ports/audit.port";
 import type { PricingPort } from "./shared/ports/pricing.port";
 import type { WalletPort } from "./shared/ports/wallet.port";
-import type { AuthHandler } from "./modules/auth/auth.handler";
-import type { AdminHandler } from "./modules/admin/admin.handler";
-import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
-import type { TutorHandler } from "./modules/tutor/tutor.handler";
-import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
-import type { InviteHandler } from "./modules/invite/invite.handler";
-import type { AchievementHandler } from "./modules/achievement/achievement.handler";
+import type { AuthService } from "./modules/auth/auth.service";
+import type { AdminService } from "./modules/admin/admin.service";
+import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
+import type { TutorService } from "./modules/tutor/tutor.service";
+import type { InviteService } from "./modules/invite/invite.service";
+import type { AchievementService } from "./modules/achievement/achievement.service";
 import type { BookingService } from "./modules/booking/booking.service";
-import type { NotificationHandler } from "./modules/notification/notification.handler";
+import type { NotificationService } from "./modules/notification/notification.service";
 import type { PaymentService } from "./modules/payment/payment.service";
 import type { RoomService } from "./modules/room/room.service";
-import type { AdminBookingHandler } from "./modules/admin-booking/admin-booking.handler";
-import type { RefundHandler } from "./modules/refund/refund.handler";
+import type { AdminBookingService } from "./modules/admin-booking/admin-booking.service";
+import type { RefundService } from "./modules/refund/refund.service";
 import type { EmailService } from "./modules/email/email.service";
+import type { WalletHandler } from "./modules/wallet/wallet.handler";
+import type {
+  BookingHandler,
+  TutorActionsHandler,
+} from "./modules/booking/booking.handler";
+import type { PaymentHandler } from "./modules/payment/payment.handler";
+import type { RoomHandler } from "./modules/room/room.handler";
 
 export interface ServiceRegistry {
   audit: AuditPort;
   pricing: PricingPort;
   wallet: WalletPort;
-  auth: AuthHandler;
-  admin: AdminHandler;
-  adminTutor: AdminTutorHandler;
-  tutor: TutorHandler;
-  discovery: DiscoveryHandler;
-  invite: InviteHandler;
-  achievement: AchievementHandler;
+  auth: AuthService;
+  admin: AdminService;
+  adminTutor: AdminTutorService;
+  tutor: TutorService;
+  invite: InviteService;
+  achievement: AchievementService;
   booking: BookingService;
-  notification: NotificationHandler;
+  notification: NotificationService;
   email: EmailService;
   payment: PaymentService;
   room: RoomService;
-  adminBooking: AdminBookingHandler;
-  refund: RefundHandler;
+  adminBooking: AdminBookingService;
+  refund: RefundService;
 }
 
-function createServices(): ServiceRegistry {
+export interface HandlerRegistry {
+  auth: ReturnType<typeof createAuthHandler>;
+  admin: ReturnType<typeof createAdminHandler>;
+  adminTutor: ReturnType<typeof createAdminTutorHandler>;
+  tutor: ReturnType<typeof createTutorHandler>;
+  discovery: ReturnType<typeof createDiscoveryHandler>;
+  invite: ReturnType<typeof createInviteHandler>;
+  achievement: ReturnType<typeof createAchievementHandler>;
+  notification: ReturnType<typeof createNotificationHandler>;
+  adminBooking: ReturnType<typeof createAdminBookingHandler>;
+  refund: ReturnType<typeof createRefundHandler>;
+  wallet: WalletHandler;
+  booking: BookingHandler;
+  tutorActions: TutorActionsHandler;
+  payment: PaymentHandler;
+  room: RoomHandler;
+}
+
+function createServices() {
   const auditRepo = createAuditRepo();
   const audit = createAuditService(auditRepo);
   const pricing = createPricingService();
   const walletRepo = createWalletRepo(db);
   const wallet = createWalletService(walletRepo, db);
+  const walletHandler = createWalletHandler(wallet);
 
   const authRepo = createAuthRepo();
   const authService = createAuthService({ authRepo, walletPort: wallet, db });
-  const auth = createAuthHandler({ authRepo, walletPort: wallet, authService });
+  const authHandler = createAuthHandler(authService);
 
   const adminRepo = createAdminRepo();
   const adminService = createAdminService({ adminRepo, auditPort: audit, db });
-  const admin = createAdminHandler({ adminService });
+  const adminHandler = createAdminHandler(adminService);
 
   const adminTutorRepo = createAdminTutorRepo();
   const adminTutorService = createAdminTutorService({
@@ -104,7 +135,7 @@ function createServices(): ServiceRegistry {
     auditPort: audit,
     db,
   });
-  const adminTutor = createAdminTutorHandler({ adminTutorService });
+  const adminTutorHandler = createAdminTutorHandler(adminTutorService);
 
   const tutorRepo = createTutorRepo();
   const tutorService = createTutorService({
@@ -113,10 +144,10 @@ function createServices(): ServiceRegistry {
     auditPort: audit,
     db,
   });
-  const tutor = createTutorHandler({ tutorService });
+  const tutorHandler = createTutorHandler(tutorService);
 
   const discoveryRepo = createDiscoveryRepo();
-  const discovery = createDiscoveryHandler({ discoveryRepo, db });
+  const discoveryHandler = createDiscoveryHandler({ discoveryRepo, db });
 
   const inviteRepo = createInviteRepo();
   const inviteService = createInviteService({
@@ -124,7 +155,7 @@ function createServices(): ServiceRegistry {
     auditPort: audit,
     db,
   });
-  const invite = createInviteHandler({ inviteService });
+  const inviteHandler = createInviteHandler({ inviteService });
 
   const achievementRepo = createAchievementRepo();
   const achievementService = createAchievementService({
@@ -132,7 +163,7 @@ function createServices(): ServiceRegistry {
     auditPort: audit,
     db,
   });
-  const achievement = createAchievementHandler({ achievementService });
+  const achievementHandler = createAchievementHandler({ achievementService });
 
   const meeting =
     env.GOOGLE_MEET_ENABLED && env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY
@@ -152,7 +183,9 @@ function createServices(): ServiceRegistry {
   const email = createEmailService(emailProvider);
 
   const notificationService = createNotificationService(db, email);
-  const notification = createNotificationHandler(notificationService);
+  const notificationHandler = createNotificationHandler({
+    notificationService,
+  });
 
   const useXendit = !!(env.XENDIT_SECRET_KEY && env.XENDIT_WEBHOOK_TOKEN);
   const paymentProvider = useXendit
@@ -172,8 +205,10 @@ function createServices(): ServiceRegistry {
     provider: paymentProvider,
     providerName,
   });
+  const paymentHandler = createPaymentHandler(payment, wallet);
 
   const room = createRoomService(db);
+  const roomHandler = createRoomHandler(room);
 
   const bookingRepo = createBookingRepo(db);
   const booking = createBookingService({
@@ -182,9 +217,11 @@ function createServices(): ServiceRegistry {
     wallet,
     pricing,
     audit,
-    notification,
+    notification: notificationService,
     meeting,
   });
+  const bookingHandler = createBookingHandler(booking);
+  const tutorActionsHandler = createTutorActionsHandler(booking);
 
   const refundRepo = createRefundRepo(db);
 
@@ -196,7 +233,7 @@ function createServices(): ServiceRegistry {
     wallet,
     refundRepo,
   });
-  const adminBooking = createAdminBookingHandler({ adminBookingService });
+  const adminBookingHandler = createAdminBookingHandler(adminBookingService);
 
   const refundService = createRefundService({
     db,
@@ -204,27 +241,47 @@ function createServices(): ServiceRegistry {
     wallet,
     auditPort: audit,
   });
-  const refund = createRefundHandler({ refundService });
+  const refundHandler = createRefundHandler({ refundService });
 
-  return {
+  const services: ServiceRegistry = {
     audit,
     pricing,
     wallet,
-    auth,
-    admin,
-    adminTutor,
-    tutor,
-    discovery,
-    invite,
-    achievement,
+    auth: authService,
+    admin: adminService,
+    adminTutor: adminTutorService,
+    tutor: tutorService,
+    invite: inviteService,
+    achievement: achievementService,
     booking,
-    notification,
+    notification: notificationService,
     email,
     payment,
     room,
-    adminBooking,
-    refund,
+    adminBooking: adminBookingService,
+    refund: refundService,
   };
+
+  const handlers: HandlerRegistry = {
+    auth: authHandler,
+    admin: adminHandler,
+    adminTutor: adminTutorHandler,
+    tutor: tutorHandler,
+    discovery: discoveryHandler,
+    invite: inviteHandler,
+    achievement: achievementHandler,
+    notification: notificationHandler,
+    adminBooking: adminBookingHandler,
+    refund: refundHandler,
+    wallet: walletHandler,
+    booking: bookingHandler,
+    tutorActions: tutorActionsHandler,
+    payment: paymentHandler,
+    room: roomHandler,
+  };
+
+  return { services, handlers };
 }
 
-export const services = createServices();
+const { services, handlers } = createServices();
+export { services, handlers };

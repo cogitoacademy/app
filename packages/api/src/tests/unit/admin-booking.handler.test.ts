@@ -10,15 +10,16 @@ describe("AdminBookingHandler", () => {
     test("throws error for invalid category", async () => {
       const applyOverride = mock(async () => ({}));
       const adminBookingService = { applyOverride };
-      const handler = createAdminBookingHandler({
-        adminBookingService: adminBookingService as any,
-      });
+      const handler = createAdminBookingHandler(adminBookingService as any);
 
       try {
-        await handler.applyOverride("admin1", {
-          bookingId: "b1",
-          category: "invalid_category",
-          reason: "test",
+        await handler.applyOverride({
+          context: { session: { user: { id: "admin1" } } } as any,
+          input: {
+            bookingId: "b1",
+            category: "invalid_category",
+            reason: "test",
+          },
         });
         expect(true).toBe(false);
       } catch (e: any) {
@@ -33,16 +34,17 @@ describe("AdminBookingHandler", () => {
     test("throws error for invalid marksAction", async () => {
       const applyOverride = mock(async () => ({}));
       const adminBookingService = { applyOverride };
-      const handler = createAdminBookingHandler({
-        adminBookingService: adminBookingService as any,
-      });
+      const handler = createAdminBookingHandler(adminBookingService as any);
 
       try {
-        await handler.applyOverride("admin1", {
-          bookingId: "b1",
-          category: "tutor_no_show",
-          reason: "test",
-          marksAction: "invalid_action",
+        await handler.applyOverride({
+          context: { session: { user: { id: "admin1" } } } as any,
+          input: {
+            bookingId: "b1",
+            category: "tutor_no_show",
+            reason: "test",
+            marksAction: "invalid_action",
+          },
         });
         expect(true).toBe(false);
       } catch (e: any) {
@@ -59,15 +61,16 @@ describe("AdminBookingHandler", () => {
         currentState: "no_show",
       }));
       const adminBookingService = { applyOverride };
-      const handler = createAdminBookingHandler({
-        adminBookingService: adminBookingService as any,
-      });
+      const handler = createAdminBookingHandler(adminBookingService as any);
 
-      await handler.applyOverride("admin1", {
-        bookingId: "b1",
-        category: "tutor_no_show",
-        reason: "test",
-        marksAction: undefined,
+      await handler.applyOverride({
+        context: { session: { user: { id: "admin1" } } } as any,
+        input: {
+          bookingId: "b1",
+          category: "tutor_no_show",
+          reason: "test",
+          marksAction: undefined,
+        },
       });
 
       expect(applyOverride).toHaveBeenCalledWith(
@@ -84,15 +87,16 @@ describe("AdminBookingHandler", () => {
         currentState: "cancelled",
       }));
       const adminBookingService = { applyOverride };
-      const handler = createAdminBookingHandler({
-        adminBookingService: adminBookingService as any,
-      });
+      const handler = createAdminBookingHandler(adminBookingService as any);
 
-      await handler.applyOverride("admin1", {
-        bookingId: "b1",
-        category: "medical_emergency",
-        reason: "test reason",
-        marksAction: "release_holds",
+      await handler.applyOverride({
+        context: { session: { user: { id: "admin1" } } } as any,
+        input: {
+          bookingId: "b1",
+          category: "medical_emergency",
+          reason: "test reason",
+          marksAction: "release_holds",
+        },
       });
 
       expect(applyOverride).toHaveBeenCalledWith("admin1", {
@@ -109,17 +113,18 @@ describe("AdminBookingHandler", () => {
     test("validates each OVERRIDE_CATEGORY is accepted", async () => {
       const applyOverride = mock(async () => ({}));
       const adminBookingService = { applyOverride };
-      const handler = createAdminBookingHandler({
-        adminBookingService: adminBookingService as any,
-      });
+      const handler = createAdminBookingHandler(adminBookingService as any);
 
       for (const category of OVERRIDE_CATEGORIES) {
         applyOverride.mockClear();
         // eslint-disable-next-line no-await-in-loop
-        await handler.applyOverride("admin1", {
-          bookingId: "b1",
-          category,
-          reason: "test",
+        await handler.applyOverride({
+          context: { session: { user: { id: "admin1" } } } as any,
+          input: {
+            bookingId: "b1",
+            category,
+            reason: "test",
+          },
         });
         expect(applyOverride).toHaveBeenCalledTimes(1);
       }
@@ -128,18 +133,19 @@ describe("AdminBookingHandler", () => {
     test("validates each MARKS_ACTIONS is accepted", async () => {
       const applyOverride = mock(async () => ({}));
       const adminBookingService = { applyOverride };
-      const handler = createAdminBookingHandler({
-        adminBookingService: adminBookingService as any,
-      });
+      const handler = createAdminBookingHandler(adminBookingService as any);
 
       for (const marksAction of MARKS_ACTIONS) {
         applyOverride.mockClear();
         // eslint-disable-next-line no-await-in-loop
-        await handler.applyOverride("admin1", {
-          bookingId: "b1",
-          category: "tutor_no_show",
-          reason: "test",
-          marksAction,
+        await handler.applyOverride({
+          context: { session: { user: { id: "admin1" } } } as any,
+          input: {
+            bookingId: "b1",
+            category: "tutor_no_show",
+            reason: "test",
+            marksAction,
+          },
         });
         expect(applyOverride).toHaveBeenCalledTimes(1);
       }

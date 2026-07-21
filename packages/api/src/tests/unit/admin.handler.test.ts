@@ -39,7 +39,7 @@ function makeAuditPort() {
 
 describe("AdminHandler", () => {
   describe("listUsers", () => {
-    test("delegates to adminService.listUsers", async () => {
+    test("calls adminService.listUsers with input from handler", async () => {
       const repo = makeAdminRepo();
       const auditPort = makeAuditPort();
       const db = makeDb();
@@ -48,9 +48,13 @@ describe("AdminHandler", () => {
         auditPort: auditPort as any,
         db,
       });
-      const handler = createAdminHandler({ adminService: service });
+      const handler = createAdminHandler(service);
+      const context = {
+        session: { user: { id: "admin1" } },
+      } as any;
+      const input = { limit: 10, offset: 0 };
 
-      const result = await handler.listUsers({ limit: 10, offset: 0 });
+      const result = await handler.listUsers({ context, input });
 
       expect(result.users).toEqual([{ id: "u1", role: "student" }]);
       expect(result.total).toBe(1);
@@ -58,7 +62,7 @@ describe("AdminHandler", () => {
   });
 
   describe("setRole", () => {
-    test("delegates to adminService.setRole", async () => {
+    test("calls adminService.setRole with session user id and input", async () => {
       const repo = makeAdminRepo();
       const auditPort = makeAuditPort();
       const db = makeDb();
@@ -67,12 +71,13 @@ describe("AdminHandler", () => {
         auditPort: auditPort as any,
         db,
       });
-      const handler = createAdminHandler({ adminService: service });
+      const handler = createAdminHandler(service);
+      const context = {
+        session: { user: { id: "admin1" } },
+      } as any;
+      const input = { userId: "u1", role: "tutor" };
 
-      const result = await handler.setRole("admin1", {
-        userId: "u1",
-        role: "tutor",
-      });
+      const result = await handler.setRole({ context, input });
 
       expect(result.id).toBe("u1");
     });

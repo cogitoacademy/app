@@ -55,58 +55,59 @@ function makeWalletPort() {
 
 describe("AuthHandler", () => {
   describe("me", () => {
-    test("delegates to authService.me", async () => {
+    test("returns user, profile, tutorProfile, and wallet from authService", async () => {
       const authService = createAuthService({
         authRepo: makeAuthRepo() as any,
         walletPort: makeWalletPort() as any,
         db: makeDb(),
       });
-      const handler = createAuthHandler({
-        authRepo: makeAuthRepo() as any,
-        walletPort: makeWalletPort() as any,
-        authService,
-      });
+      const handler = createAuthHandler(authService);
+      const context = {
+        session: { user: { id: "u1", email: "u1@test.com" } },
+      } as any;
 
-      const result = await handler.me("u1");
+      const result = await handler.me({ context });
 
       expect(result.wallet.id).toBe("w1");
       expect(result.wallet.totalBalance).toBe(100);
+      expect(result.user.id).toBe("u1");
     });
   });
 
   describe("getProfile", () => {
-    test("delegates to authService.getProfile", async () => {
+    test("calls authService.getProfile with userId from session", async () => {
       const authService = createAuthService({
         authRepo: makeAuthRepo() as any,
         walletPort: makeWalletPort() as any,
         db: makeDb(),
       });
-      const handler = createAuthHandler({
-        authRepo: makeAuthRepo() as any,
-        walletPort: makeWalletPort() as any,
-        authService,
-      });
+      const handler = createAuthHandler(authService);
+      const context = {
+        session: { user: { id: "u1" } },
+      } as any;
 
-      const result = await handler.getProfile("u1");
+      const result = await handler.getProfile({ context });
 
       expect(result.userId).toBe("u1");
     });
   });
 
   describe("updateProfile", () => {
-    test("delegates to authService.updateProfile", async () => {
+    test("calls authService.updateProfile with userId and input", async () => {
       const authService = createAuthService({
         authRepo: makeAuthRepo() as any,
         walletPort: makeWalletPort() as any,
         db: makeDb(),
       });
-      const handler = createAuthHandler({
-        authRepo: makeAuthRepo() as any,
-        walletPort: makeWalletPort() as any,
-        authService,
-      });
+      const handler = createAuthHandler(authService);
+      const context = {
+        session: { user: { id: "u1" } },
+      } as any;
 
-      const result = await handler.updateProfile("u1", { phoneNumber: "123" });
+      const result = await handler.updateProfile({
+        context,
+        input: { phoneNumber: "123" },
+      });
 
       expect(result.userId).toBe("u1");
     });

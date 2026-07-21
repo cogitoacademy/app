@@ -1,23 +1,40 @@
 import type { RouterClient } from "@orpc/server";
 
 import { publicProcedure } from "./procedures";
-import { authRouter } from "./modules/auth/auth.router";
-import { adminRouter } from "./modules/admin/admin.router";
-import { adminTutorRouter } from "./modules/admin-tutor/admin-tutor.router";
-import { tutorRouter } from "./modules/tutor/tutor.router";
-import { discoveryRouter } from "./modules/tutor-discovery/discovery.router";
-import { inviteRouter } from "./modules/invite/invite.router";
-import { achievementRouter } from "./modules/achievement/achievement.router";
-import { walletRouter } from "./modules/wallet/wallet.router";
-import { paymentRouter } from "./modules/payment/payment.router";
+import { createAuthRouter } from "./modules/auth/auth.router";
+import { createAdminRouter } from "./modules/admin/admin.router";
+import { createAdminTutorRouter } from "./modules/admin-tutor/admin-tutor.router";
+import { createTutorRouter } from "./modules/tutor/tutor.router";
+import { createDiscoveryRouter } from "./modules/tutor-discovery/discovery.router";
+import { createInviteRouter } from "./modules/invite/invite.router";
+import { createAchievementRouter } from "./modules/achievement/achievement.router";
+import { createWalletRouter } from "./modules/wallet/wallet.router";
+import { createPaymentRouter } from "./modules/payment/payment.router";
 import {
-  bookingRouter,
-  tutorActionsRouter,
+  createBookingRouter,
+  createTutorActionsRouter,
 } from "./modules/booking/booking.router";
-import { roomRouter } from "./modules/room/room.router";
-import { notificationRouter } from "./modules/notification/notification.router";
-import { adminBookingRouter } from "./modules/admin-booking/admin-booking.router";
-import { refundRouter } from "./modules/refund/refund.router";
+import { createRoomRouter } from "./modules/room/room.router";
+import { createNotificationRouter } from "./modules/notification/notification.router";
+import { createAdminBookingRouter } from "./modules/admin-booking/admin-booking.router";
+import { createRefundRouter } from "./modules/refund/refund.router";
+import { handlers } from "./services";
+
+const authRouter = createAuthRouter(handlers.auth);
+const adminRouter = createAdminRouter(handlers.admin);
+const adminTutorRouter = createAdminTutorRouter(handlers.adminTutor);
+const tutorRouter = createTutorRouter(handlers.tutor);
+const discoveryRouter = createDiscoveryRouter(handlers.discovery);
+const inviteRouter = createInviteRouter(handlers.invite);
+const achievementRouter = createAchievementRouter(handlers.achievement);
+const walletRouter = createWalletRouter(handlers.wallet);
+const paymentRouter = createPaymentRouter(handlers.payment);
+const bookingRouter = createBookingRouter(handlers.booking);
+const tutorActionsRouter = createTutorActionsRouter(handlers.tutorActions);
+const roomRouter = createRoomRouter(handlers.room);
+const notificationRouter = createNotificationRouter(handlers.notification);
+const adminBookingRouter = createAdminBookingRouter(handlers.adminBooking);
+const refundRouter = createRefundRouter(handlers.refund);
 
 export const appRouter = {
   healthCheck: publicProcedure

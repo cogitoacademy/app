@@ -1,45 +1,49 @@
 import { describe, test, expect, mock } from "bun:test";
-import { roomHandlers } from "../../modules/room/room.handlers";
+import { createRoomHandler } from "../../modules/room/room.handler";
 
-describe("roomHandlers", () => {
+function makeRoomService() {
+  return {
+    listActive: mock(async () => [{ id: "r1" }]),
+    createRoom: mock(async () => ({ id: "r1" })),
+    assignRoom: mock(async () => ({ ok: true })),
+  };
+}
+
+describe("roomHandler", () => {
   describe("list", () => {
     test("calls room.listActive", async () => {
-      const listActive = mock(async () => [{ id: "r1" }]);
-      const context = {
-        session: { user: { id: "u1" } },
-        services: { room: { listActive } },
-      };
+      const roomService = makeRoomService();
+      const handler = createRoomHandler(roomService as any);
 
-      const result = await roomHandlers.list({ context });
+      const result = await handler.list({
+        context: { session: { user: { id: "u1" } } },
+      } as any);
 
-      expect(listActive).toHaveBeenCalledWith();
+      expect(roomService.listActive).toHaveBeenCalledWith();
       expect(result).toEqual([{ id: "r1" }]);
     });
   });
 
   describe("create", () => {
     test("calls room.createRoom with input", async () => {
-      const createRoom = mock(async () => ({ id: "r1" }));
-      const context = {
-        session: { user: { id: "u1" } },
-        services: { room: { createRoom } },
-      };
-      const input = { name: "Room A", capacity: 10 };
+      const roomService = makeRoomService();
+      const handler = createRoomHandler(roomService as any);
+      const input = { name: "Room A", location: "Floor 1", capacity: 10 };
 
-      const result = await roomHandlers.create({ context, input });
+      const result = await handler.create({
+        context: { session: { user: { id: "u1" } } } as any,
+        input: input as any,
+      });
 
-      expect(createRoom).toHaveBeenCalledWith(input);
+      expect(roomService.createRoom).toHaveBeenCalledWith(input);
       expect(result).toEqual({ id: "r1" });
     });
   });
 
   describe("assign", () => {
     test("calls room.assignRoom with bookingId, roomId, and Date-converted startAt/endAt", async () => {
-      const assignRoom = mock(async () => ({ ok: true }));
-      const context = {
-        session: { user: { id: "u1" } },
-        services: { room: { assignRoom } },
-      };
+      const roomService = makeRoomService();
+      const handler = createRoomHandler(roomService as any);
       const input = {
         bookingId: "b1",
         roomId: "r1",
@@ -47,9 +51,12 @@ describe("roomHandlers", () => {
         endAt: "2025-01-01T11:00:00Z",
       };
 
-      const result = await roomHandlers.assign({ context, input });
+      const result = await handler.assign({
+        context: { session: { user: { id: "u1" } } } as any,
+        input: input as any,
+      });
 
-      expect(assignRoom).toHaveBeenCalledWith(
+      expect(roomService.assignRoom).toHaveBeenCalledWith(
         "b1",
         "r1",
         new Date("2025-01-01T10:00:00Z"),

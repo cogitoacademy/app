@@ -1,72 +1,76 @@
 import { describe, test, expect, mock } from "bun:test";
-import { notificationHandlers } from "../../modules/notification/notification.handlers";
+import { createNotificationHandler } from "../../modules/notification/notification.handler";
 
-describe("notificationHandlers", () => {
+describe("notificationHandler", () => {
+  const list = mock(async () => [{ id: "n1" }]);
+  const getUnreadCount = mock(async () => 5);
+  const markAsRead = mock(async () => {});
+  const markAllAsRead = mock(async () => {});
+  const handler = createNotificationHandler({
+    notificationService: {
+      list,
+      getUnreadCount,
+      markAsRead,
+      markAllAsRead,
+    } as any,
+  });
+
   describe("list", () => {
-    test("calls notification.list with userId and input", async () => {
-      const list = mock(async () => [{ id: "n1" }]);
+    test("calls notificationService.list with userId and input", async () => {
       const context = {
         session: { user: { id: "u1" } },
-        services: { notification: { list } },
-      };
+      } as any;
       const input = { unreadOnly: true, limit: 10 };
 
-      const result = await notificationHandlers.list({ context, input });
+      const result = await handler.list({ context, input });
 
       expect(list).toHaveBeenCalledWith("u1", input);
       expect(result).toEqual([{ id: "n1" }]);
     });
 
-    test("calls notification.list with empty object when input is undefined", async () => {
-      const list = mock(async () => []);
+    test("calls notificationService.list with empty object when input is undefined", async () => {
       const context = {
         session: { user: { id: "u1" } },
-        services: { notification: { list } },
-      };
+      } as any;
 
-      await notificationHandlers.list({ context, input: undefined as any });
+      await handler.list({ context, input: undefined as any });
 
       expect(list).toHaveBeenCalledWith("u1", {});
     });
   });
 
   describe("getUnreadCount", () => {
-    test("calls notification.getUnreadCount and returns { count }", async () => {
-      const getUnreadCount = mock(async () => 5);
+    test("calls notificationService.getUnreadCount and returns { count }", async () => {
       const context = {
         session: { user: { id: "u1" } },
-        services: { notification: { getUnreadCount } },
-      };
+      } as any;
 
-      const result = await notificationHandlers.getUnreadCount({ context });
+      const result = await handler.getUnreadCount({ context });
 
       expect(getUnreadCount).toHaveBeenCalledWith("u1");
       expect(result).toEqual({ count: 5 });
     });
 
     test("returns { count: 0 } when no unread notifications", async () => {
-      const getUnreadCount = mock(async () => 0);
+      getUnreadCount.mockImplementationOnce(async () => 0);
       const context = {
         session: { user: { id: "u1" } },
-        services: { notification: { getUnreadCount } },
-      };
+      } as any;
 
-      const result = await notificationHandlers.getUnreadCount({ context });
+      const result = await handler.getUnreadCount({ context });
 
       expect(result).toEqual({ count: 0 });
     });
   });
 
   describe("markAsRead", () => {
-    test("calls notification.markAsRead with userId and input.id, returns { ok: true }", async () => {
-      const markAsRead = mock(async () => {});
+    test("calls notificationService.markAsRead with userId and input.id, returns { ok: true }", async () => {
       const context = {
         session: { user: { id: "u1" } },
-        services: { notification: { markAsRead } },
-      };
+      } as any;
       const input = { id: "n1" };
 
-      const result = await notificationHandlers.markAsRead({ context, input });
+      const result = await handler.markAsRead({ context, input });
 
       expect(markAsRead).toHaveBeenCalledWith("u1", "n1");
       expect(result).toEqual({ ok: true });
@@ -74,14 +78,12 @@ describe("notificationHandlers", () => {
   });
 
   describe("markAllAsRead", () => {
-    test("calls notification.markAllAsRead with userId, returns { ok: true }", async () => {
-      const markAllAsRead = mock(async () => {});
+    test("calls notificationService.markAllAsRead with userId, returns { ok: true }", async () => {
       const context = {
         session: { user: { id: "u1" } },
-        services: { notification: { markAllAsRead } },
-      };
+      } as any;
 
-      const result = await notificationHandlers.markAllAsRead({ context });
+      const result = await handler.markAllAsRead({ context });
 
       expect(markAllAsRead).toHaveBeenCalledWith("u1");
       expect(result).toEqual({ ok: true });
