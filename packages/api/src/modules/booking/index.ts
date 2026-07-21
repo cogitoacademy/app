@@ -1,0 +1,73 @@
+import type { DbType } from "../../lib/db";
+import type { MeetingEvent } from "../meeting/meeting.types";
+import type { AuditRecordParams } from "../audit/audit.service";
+import type { GroupSize, PriceSnapshot } from "../pricing/pricing.service";
+import type { NotificationWriteParams } from "../notification/notification.service";
+import type {
+  WalletSnapshot,
+  HoldParams,
+  ReleaseParams,
+  DeductParams,
+} from "../wallet/wallet.service";
+import { createBookingRepo } from "./booking.repo";
+import { createBookingService } from "./booking.service";
+import {
+  createBookingHandler,
+  createTutorActionsHandler,
+} from "./booking.handler";
+import type { BookingService } from "./booking.service";
+import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
+
+export type BookingModule = ReturnType<typeof createBookingModule>;
+
+interface BookingWalletPort {
+  hold(db: unknown, params: HoldParams): Promise<WalletSnapshot>;
+  release(db: unknown, params: ReleaseParams): Promise<WalletSnapshot>;
+  deduct(db: unknown, params: DeductParams): Promise<WalletSnapshot>;
+  getByUserId(db: unknown, userId: string): Promise<WalletSnapshot | null>;
+}
+
+interface BookingPricingPort {
+  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
+}
+
+interface BookingAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
+
+interface BookingNotificationPort {
+  write(params: NotificationWriteParams): Promise<void>;
+}
+
+interface BookingMeetingPort {
+  createEvent(
+    bookingId: string,
+    scheduledStartAt?: Date,
+    scheduledEndAt?: Date,
+  ): Promise<MeetingEvent>;
+}
+
+export function createBookingModule(deps: {
+  db: DbType;
+  wallet: BookingWalletPort;
+  pricing: BookingPricingPort;
+  audit: BookingAuditPort;
+  notification: BookingNotificationPort;
+  meeting: BookingMeetingPort;
+}) {
+  const repo = createBookingRepo(deps.db);
+  const service = createBookingService({
+    db: deps.db,
+    repo,
+    wallet: deps.wallet,
+    pricing: deps.pricing,
+    audit: deps.audit,
+    notification: deps.notification,
+    meeting: deps.meeting,
+  });
+  const handler = createBookingHandler(service);
+  const tutorActionsHandler = createTutorActionsHandler(service);
+  return { service, handler, tutorActionsHandler };
+}
+
+export type { BookingService, BookingHandler, TutorActionsHandler };
