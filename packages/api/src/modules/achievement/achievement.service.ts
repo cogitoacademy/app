@@ -2,7 +2,7 @@ import type { achievement } from "@cogito-app/db/schema";
 import type { ORPCError } from "@orpc/server";
 import type { DbType } from "../../lib/db";
 import { badRequest, notFound } from "../../lib/errors";
-import type { AuditPort } from "../../shared/ports/audit.port";
+import type { AuditRecordParams } from "../audit/audit.service";
 import { ACHIEVEMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import type {
   AchievementRepo,
@@ -12,6 +12,10 @@ import type {
 } from "./achievement.repo";
 
 type AchievementRow = typeof achievement.$inferSelect;
+
+interface AchievementAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
 
 export interface UpdateAchievementInput {
   id: string;
@@ -54,7 +58,7 @@ export function validateDelete(
 
 export function createAchievementService(deps: {
   achievementRepo: AchievementRepo;
-  auditPort: AuditPort;
+  auditPort: AchievementAuditPort;
   db: DbType;
 }) {
   const { achievementRepo, auditPort, db } = deps;

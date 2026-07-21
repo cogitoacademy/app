@@ -7,10 +7,25 @@ import {
 } from "../../shared/constants";
 import { TERMINAL_STATES } from "../booking/booking-state.types";
 import type { DbType } from "../../lib/db";
-import type { AuditPort } from "../../shared/ports/audit.port";
-import type { WalletPort } from "../../shared/ports/wallet.port";
+import type { DbOrTx } from "../../lib/tx";
+import type { AuditRecordParams } from "../audit/audit.service";
+import type {
+  WalletSnapshot,
+  ReleaseParams,
+  CompensateParams,
+} from "../wallet/wallet.service";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import type { RefundRepo } from "../refund/refund.repo";
+
+interface AdminBookingAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
+
+interface AdminBookingWalletPort {
+  getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
+  release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
+  compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
+}
 
 export const OVERRIDE_CATEGORIES = [
   "tutor_no_show",
@@ -45,8 +60,8 @@ export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
 export function createAdminBookingService(deps: {
   db: DbType;
   repo: AdminBookingRepo;
-  auditPort: AuditPort;
-  wallet: WalletPort;
+  auditPort: AdminBookingAuditPort;
+  wallet: AdminBookingWalletPort;
   refundRepo: RefundRepo;
 }) {
   const { db, repo, auditPort, wallet, refundRepo } = deps;

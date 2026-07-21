@@ -2,9 +2,13 @@ import type { tutorInvite, tutorProfile } from "@cogito-app/db/schema";
 import type { ORPCError } from "@orpc/server";
 import type { DbType } from "../../lib/db";
 import { notFound, forbidden, conflict } from "../../lib/errors";
-import type { AuditPort } from "../../shared/ports/audit.port";
+import type { AuditRecordParams } from "../audit/audit.service";
 import { INVITE_STATUS, USER_ROLE, ACTOR_TYPE } from "../../shared/constants";
 import type { InviteRepo } from "./invite.repo";
+
+interface InviteAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
 
 type InviteRow = typeof tutorInvite.$inferSelect;
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
@@ -46,7 +50,7 @@ export function validateClaim(
 
 export function createInviteService(deps: {
   inviteRepo: InviteRepo;
-  auditPort: AuditPort;
+  auditPort: InviteAuditPort;
   db: DbType;
 }) {
   const { inviteRepo, auditPort, db } = deps;

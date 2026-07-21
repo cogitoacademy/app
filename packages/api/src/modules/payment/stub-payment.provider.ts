@@ -1,7 +1,4 @@
-import type {
-  PaymentProvider,
-  WebhookPayload,
-} from "../../shared/ports/payment.port";
+import type { PaymentProvider, WebhookPayload } from "./payment.service";
 
 export async function createIntent(params: {
   paymentId: string;

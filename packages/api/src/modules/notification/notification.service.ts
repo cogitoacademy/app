@@ -5,20 +5,86 @@ import {
   user,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import {
   NOTIFICATION_SEVERITY,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
 } from "../../shared/constants";
 import { log } from "../../lib/logger";
-import type {
-  InAppNotificationPort,
-  NotificationWriteParams,
-  NotificationListInput,
-  NotificationListResult,
-  NotificationListItem,
-} from "../../shared/ports/notification.port";
-import type { EmailPort, EmailMessage } from "../../shared/ports/email.port";
+
+interface NotificationEmailPort {
+  send(message: {
+    to: string;
+    subject: string;
+    html: string;
+    category: "booking" | "payment" | "refund" | "schedule" | "override";
+  }): Promise<{ messageId: string } | { skipped: true }>;
+}
+
+export type NotificationCategory =
+  | "booking"
+  | "payment"
+  | "refund"
+  | "schedule"
+  | "achievement"
+  | "system"
+  | "override";
+
+export type NotificationSeverity = "info" | "action" | "critical";
+
+export interface NotificationWriteParams {
+  db: DbOrTx;
+  userId: string;
+  bookingId?: string;
+  category: NotificationCategory;
+  title: string;
+  body: string;
+  severity?: NotificationSeverity;
+  eventKey: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface NotificationListItem {
+  id: string;
+  userId: string;
+  bookingId: string | null;
+  category: string;
+  title: string;
+  body: string;
+  severity: string;
+  isRead: boolean;
+  readAt: Date | null;
+  eventKey: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
+export interface NotificationListInput {
+  unreadOnly?: boolean;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface NotificationListResult {
+  items: NotificationListItem[];
+  nextCursor: string | null;
+}
+
+export interface NotificationIdInput {
+  id: string;
+}
+
+export interface InAppNotificationPort {
+  write(params: NotificationWriteParams): Promise<void>;
+  list(
+    userId: string,
+    opts?: NotificationListInput,
+  ): Promise<NotificationListResult>;
+  getUnreadCount(userId: string): Promise<number>;
+  markAsRead(userId: string, id: string): Promise<void>;
+  markAllAsRead(userId: string): Promise<void>;
+}
 
 const EMAIL_SUPPORTED_CATEGORIES: Set<string> = new Set([
   "booking",
@@ -32,7 +98,7 @@ export type NotificationService = ReturnType<typeof createNotificationService>;
 
 export function createNotificationService(
   db: DbType,
-  emailPort?: EmailPort,
+  emailPort?: NotificationEmailPort,
 ): InAppNotificationPort & {
   dispatchStatus: (notificationId: string) => Promise<unknown>;
 } {
@@ -89,7 +155,12 @@ export function createNotificationService(
             to: recipientEmail,
             subject: params.title,
             html: params.body,
-            category: params.category as EmailMessage["category"],
+            category: params.category as
+              | "booking"
+              | "payment"
+              | "refund"
+              | "schedule"
+              | "override",
           })
           .then(async () => {
             await params.db

@@ -2,9 +2,13 @@ import type { z } from "zod";
 import { ORPCError } from "@orpc/server";
 import type { DbType } from "../../lib/db";
 import { notFound } from "../../lib/errors";
-import type { WalletPort } from "../../shared/ports/wallet.port";
+import type { WalletSnapshot } from "../wallet/wallet.service";
 import type { AuthRepo, StudentProfileRow, TutorProfileRow } from "./auth.repo";
 import { updateProfileInput } from "./auth.types";
+
+interface AuthWalletPort {
+  getOrCreate(userId: string): Promise<WalletSnapshot>;
+}
 
 export type UpdateProfileInput = z.infer<typeof updateProfileInput>;
 
@@ -54,7 +58,7 @@ export type AuthService = ReturnType<typeof createAuthService>;
 
 export function createAuthService(deps: {
   authRepo: AuthRepo;
-  walletPort: WalletPort;
+  walletPort: AuthWalletPort;
   db: DbType;
 }) {
   const { authRepo, walletPort, db } = deps;

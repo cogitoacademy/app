@@ -2,7 +2,11 @@ import type { Context } from "../../context";
 import type { z } from "zod";
 import type { createPurchaseInput, getPurchaseInput } from "./payment.types";
 import type { PaymentService } from "./payment.service";
-import type { WalletPort } from "../../shared/ports/wallet.port";
+import type { WalletSnapshot } from "../wallet/wallet.service";
+
+interface PaymentHandlerWalletPort {
+  getOrCreate(userId: string): Promise<WalletSnapshot>;
+}
 
 type CreatePurchaseInput = z.infer<typeof createPurchaseInput>;
 type GetPurchaseInput = z.infer<typeof getPurchaseInput>;
@@ -11,7 +15,7 @@ export type PaymentHandler = ReturnType<typeof createPaymentHandler>;
 
 export function createPaymentHandler(
   payment: PaymentService,
-  wallet: WalletPort,
+  wallet: PaymentHandlerWalletPort,
 ) {
   return {
     createPurchase: async ({

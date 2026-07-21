@@ -18,11 +18,16 @@ import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { notFound, conflict, forbidden, badRequest } from "../../lib/errors";
 import { log } from "../../lib/logger";
-import type { WalletPort } from "../../shared/ports/wallet.port";
-import type { PricingPort } from "../../shared/ports/pricing.port";
-import type { AuditPort } from "../../shared/ports/audit.port";
-import type { InAppNotificationPort } from "../../shared/ports/notification.port";
-import type { MeetingPort } from "../../shared/ports/meeting.port";
+import type {
+  WalletSnapshot,
+  HoldParams,
+  ReleaseParams,
+  DeductParams,
+} from "../wallet/wallet.service";
+import type { GroupSize, PriceSnapshot } from "../pricing/pricing.service";
+import type { AuditRecordParams } from "../audit/audit.service";
+import type { NotificationWriteParams } from "../notification/notification.service";
+import type { MeetingEvent } from "../meeting/meeting.types";
 import type { BookingRepo } from "./booking.repo";
 import {
   BOOKING_STATES,
@@ -30,6 +35,33 @@ import {
   type BookingState,
 } from "./booking-state.types";
 import { canTransition } from "./booking-transitions";
+
+interface BookingWalletPort {
+  hold(db: DbOrTx, params: HoldParams): Promise<WalletSnapshot>;
+  release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
+  deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
+  getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
+}
+
+interface BookingPricingPort {
+  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
+}
+
+interface BookingAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
+
+interface BookingNotificationPort {
+  write(params: NotificationWriteParams): Promise<void>;
+}
+
+interface BookingMeetingPort {
+  createEvent(
+    bookingId: string,
+    scheduledStartAt?: Date,
+    scheduledEndAt?: Date,
+  ): Promise<MeetingEvent>;
+}
 
 export { BOOKING_STATES, TERMINAL_STATES, canTransition };
 export type { BookingState };
@@ -77,11 +109,11 @@ export type BookingService = ReturnType<typeof createBookingService>;
 export function createBookingService(deps: {
   db: DbType;
   repo: BookingRepo;
-  wallet: WalletPort;
-  pricing: PricingPort;
-  audit: AuditPort;
-  notification: InAppNotificationPort;
-  meeting: MeetingPort;
+  wallet: BookingWalletPort;
+  pricing: BookingPricingPort;
+  audit: BookingAuditPort;
+  notification: BookingNotificationPort;
+  meeting: BookingMeetingPort;
 }) {
   const { db, repo, wallet, pricing, audit, notification, meeting } = deps;
 

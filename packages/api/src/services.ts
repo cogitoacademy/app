@@ -52,9 +52,9 @@ import { createRefundService } from "./modules/refund/refund.service";
 import { createRefundHandler } from "./modules/refund/refund.handler";
 import { env } from "@cogito-app/env/server";
 
-import type { AuditPort } from "./shared/ports/audit.port";
-import type { PricingPort } from "./shared/ports/pricing.port";
-import type { WalletPort } from "./shared/ports/wallet.port";
+import type { AuditPort } from "./modules/audit/audit.service";
+import type { PricingPort } from "./modules/pricing/pricing.service";
+import type { WalletPort } from "./modules/wallet/wallet.service";
 import type { AuthService } from "./modules/auth/auth.service";
 import type { AdminService } from "./modules/admin/admin.service";
 import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";

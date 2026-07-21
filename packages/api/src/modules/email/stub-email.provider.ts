@@ -1,4 +1,4 @@
-import type { EmailPort, EmailMessage } from "../../shared/ports/email.port";
+import type { EmailPort, EmailMessage } from "./email.service";
 import { log } from "../../lib/logger";
 
 async function stubSend(message: EmailMessage) {

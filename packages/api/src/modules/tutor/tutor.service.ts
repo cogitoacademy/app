@@ -1,7 +1,11 @@
 import type { DbType } from "../../lib/db";
 import { notFound, badRequest, forbidden } from "../../lib/errors";
-import type { AuditPort } from "../../shared/ports/audit.port";
-import type { PricingPort } from "../../shared/ports/pricing.port";
+import type { AuditRecordParams } from "../audit/audit.service";
+import type {
+  GroupSize,
+  Modality,
+  PriceSnapshot,
+} from "../pricing/pricing.service";
 import {
   ONBOARDING_STATUS,
   MODALITY,
@@ -13,6 +17,18 @@ import type { ORPCError } from "@orpc/server";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 
+interface TutorAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
+
+interface TutorPricingPort {
+  validatePrices(
+    prices: Record<string, number>,
+    modality: Modality,
+  ): string | null;
+  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
+}
+
 export type ValidationResult =
   | { ok: true }
   | { ok: false; error: ORPCError<any, any> };
@@ -20,7 +36,7 @@ export type ValidationResult =
 export function validateUpdateInput(
   profile: TutorProfileRow | undefined,
   input: UpdateProfileInput,
-  pricingPort: PricingPort,
+  pricingPort: TutorPricingPort,
 ): ValidationResult {
   if (!profile) {
     return { ok: false, error: notFound("Tutor profile not found") };
@@ -51,7 +67,7 @@ export function validateUpdateInput(
 
 export function validateSubmitForReview(
   profile: TutorProfileRow | undefined,
-  pricingPort: PricingPort,
+  pricingPort: TutorPricingPort,
 ): ValidationResult {
   if (!profile) {
     return { ok: false, error: notFound("Tutor profile not found") };
@@ -109,8 +125,8 @@ export function validateSubmitForReview(
 
 export function createTutorService(deps: {
   tutorRepo: TutorRepo;
-  pricingPort: PricingPort;
-  auditPort: AuditPort;
+  pricingPort: TutorPricingPort;
+  auditPort: TutorAuditPort;
   db: DbType;
 }) {
   const { tutorRepo, pricingPort, auditPort, db } = deps;

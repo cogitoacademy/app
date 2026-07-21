@@ -1,13 +1,41 @@
 import { eq } from "drizzle-orm";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
-import type { WalletPort } from "../../shared/ports/wallet.port";
-import type {
-  PaymentProvider,
-  PaymentStatus,
-} from "../../shared/ports/payment.port";
+import type { DbOrTx } from "../../lib/tx";
+import type { CreditParams, WalletSnapshot } from "../wallet/wallet.service";
 import { conflict, notFound } from "../../lib/errors";
 import { PAYMENT_STATUS } from "../../shared/constants";
+
+interface PaymentWalletPort {
+  credit(db: DbOrTx, params: CreditParams): Promise<WalletSnapshot>;
+}
+
+export type PaymentStatus =
+  | "PENDING"
+  | "PAID"
+  | "SETTLED"
+  | "FAILED"
+  | "EXPIRED"
+  | "REFUNDED";
+
+export interface WebhookPayload {
+  providerReference: string;
+  providerEventId: string;
+  status: PaymentStatus;
+  receiptUrl?: string | null;
+  failureReason?: string | null;
+}
+
+export interface PaymentProvider {
+  createIntent(params: {
+    paymentId: string;
+    amountIdr: number;
+    providerReference: string;
+  }): Promise<{ checkoutUrl: string }>;
+  verifyWebhook(rawBody: string, signature: string): Promise<WebhookPayload>;
+}
+
+export type PaymentPort = PaymentProvider;
 
 export interface CreateIntentResult {
   paymentId: string;
@@ -28,7 +56,7 @@ export type PaymentService = ReturnType<typeof createPaymentService>;
 
 export function createPaymentService(deps: {
   db: DbType;
-  wallet: WalletPort;
+  wallet: PaymentWalletPort;
   provider: PaymentProvider;
   providerName: string;
 }) {

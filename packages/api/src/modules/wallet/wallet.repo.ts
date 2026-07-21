@@ -2,7 +2,7 @@ import { eq, desc, sql, and, gte } from "drizzle-orm";
 import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import type { WalletSnapshot } from "../../shared/ports/wallet.port";
+import type { WalletSnapshot } from "./wallet.service";
 import { badRequest } from "../../lib/errors";
 
 export type WalletRepo = ReturnType<typeof createWalletRepo>;

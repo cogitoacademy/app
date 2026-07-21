@@ -2,8 +2,12 @@ import type { ORPCError } from "@orpc/server";
 import { notFound, conflict } from "../../lib/errors";
 import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
-import type { AuditPort } from "../../shared/ports/audit.port";
+import type { AuditRecordParams } from "../audit/audit.service";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
+
+interface AdminAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
 
 export interface ListUsersInput {
   limit?: number;
@@ -62,7 +66,7 @@ export function validateRoleChange(
 
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
-  auditPort: AuditPort;
+  auditPort: AdminAuditPort;
   db: DbType;
 }) {
   const { adminRepo, auditPort, db } = deps;

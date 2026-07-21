@@ -1,21 +1,43 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   ACTOR_TYPE,
 } from "../../shared/constants";
 import { badRequest } from "../../lib/errors";
-import type { WalletPort } from "../../shared/ports/wallet.port";
-import type { AuditPort } from "../../shared/ports/audit.port";
+import type {
+  WalletSnapshot,
+  CompensateParams,
+} from "../wallet/wallet.service";
+import type { AuditRecordParams } from "../audit/audit.service";
 import type { RefundRepo } from "./refund.repo";
+
+interface RefundWalletPort {
+  getById(db: DbOrTx, walletId: string): Promise<WalletSnapshot | null>;
+  compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
+  listLedger(
+    walletId: string,
+    opts?: {
+      cursor?: string;
+      limit?: number;
+      bookingId?: string;
+      eventKey?: string;
+    },
+  ): Promise<{ items: unknown[]; nextCursor: string | null }>;
+}
+
+interface RefundAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
 
 export type RefundService = ReturnType<typeof createRefundService>;
 
 export function createRefundService(deps: {
   db: DbType;
   repo: RefundRepo;
-  wallet: WalletPort;
-  auditPort: AuditPort;
+  wallet: RefundWalletPort;
+  auditPort: RefundAuditPort;
 }) {
   const { db, wallet, auditPort, repo } = deps;
 

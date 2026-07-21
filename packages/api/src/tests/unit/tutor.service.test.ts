@@ -3,7 +3,7 @@ import {
   validateUpdateInput,
   validateSubmitForReview,
 } from "../../modules/tutor/tutor.service";
-import type { PricingPort } from "../../shared/ports/pricing.port";
+import type { PricingPort } from "../../modules/pricing/pricing.service";
 
 function makeProfile(overrides: Record<string, unknown> = {}) {
   return {

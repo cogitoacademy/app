@@ -5,7 +5,7 @@ import type {
   PaymentProvider,
   PaymentStatus,
   WebhookPayload,
-} from "../../shared/ports/payment.port";
+} from "./payment.service";
 
 const XENDIT_API_BASE = "https://api.xendit.co/v3";
 

@@ -4,10 +4,7 @@ import {
   type meetingEvent as meetingEventTable,
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
-import type {
-  MeetingEvent,
-  MeetingPort,
-} from "../../shared/ports/meeting.port";
+import type { MeetingEvent, MeetingPort } from "./meeting.types";
 import { log } from "../../lib/logger";
 
 interface GoogleMeetingConfig {

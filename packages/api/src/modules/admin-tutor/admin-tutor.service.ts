@@ -1,7 +1,7 @@
 import type { ORPCError } from "@orpc/server";
 import { notFound, badRequest, conflict } from "../../lib/errors";
 import type { DbType } from "../../lib/db";
-import type { AuditPort } from "../../shared/ports/audit.port";
+import type { AuditRecordParams } from "../audit/audit.service";
 import {
   INVITE_EXPIRY_DAYS,
   INVITE_STATUS,
@@ -21,6 +21,10 @@ import type {
   ReviewTutorProfileInput,
   ReviewAction,
 } from "./admin-tutor.types";
+
+interface AdminTutorAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
 
 export type { ReviewAction };
 
@@ -88,7 +92,7 @@ export type AdminTutorService = ReturnType<typeof createAdminTutorService>;
 
 export function createAdminTutorService(deps: {
   adminTutorRepo: AdminTutorRepo;
-  auditPort: AuditPort;
+  auditPort: AdminTutorAuditPort;
   db: DbType;
 }) {
   const { adminTutorRepo, auditPort, db } = deps;
