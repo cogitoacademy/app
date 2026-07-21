@@ -32,36 +32,36 @@ It runs in parallel with the infrastructure branch — they touch different file
 
 ### P0 — Data Integrity
 
-| ID  | Bug | Impact | Root Cause |
-|-----|-----|--------|------------|
-| B2  | Meeting creation failure leaves booking in `"scheduled"` state | Orphaned bookings, student can't rebook | No rollback of booking status on meeting provider error |
-| B4  | Series bookings never expire — no `deadlineAt` set | Series slots held forever | `createSeries` doesn't set `deadlineAt` |
-| B3  | Refund correction stores `bookingId` as `paymentId` | Ledger entries reference wrong entity | `createCorrection` passes `bookingId` to `paymentId` param |
-| B5  | No CSRF protection on mutation endpoints | Any malicious site can invoke state-changing API | No CSRF token or SameSite enforcement |
+| ID  | Bug                                                            | Impact                                           | Root Cause                                                 |
+| --- | -------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
+| B2  | Meeting creation failure leaves booking in `"scheduled"` state | Orphaned bookings, student can't rebook          | No rollback of booking status on meeting provider error    |
+| B4  | Series bookings never expire — no `deadlineAt` set             | Series slots held forever                        | `createSeries` doesn't set `deadlineAt`                    |
+| B3  | Refund correction stores `bookingId` as `paymentId`            | Ledger entries reference wrong entity            | `createCorrection` passes `bookingId` to `paymentId` param |
+| B5  | No CSRF protection on mutation endpoints                       | Any malicious site can invoke state-changing API | No CSRF token or SameSite enforcement                      |
 
 ### P1 — Performance
 
-| ID  | Bug | Impact | Root Cause |
-|-----|-----|--------|------------|
+| ID  | Bug                                                 | Impact                                | Root Cause                                                                   |
+| --- | --------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------- |
 | B1  | Triple session validation per authenticated request | 3x DB queries on every protected call | `identifyUser` + `protectedProcedure` + `createContext` all validate session |
 
 ### P1 — Correctness
 
-| ID  | Bug | Impact | Root Cause |
-|-----|-----|--------|------------|
-| N1  | Scheduler `onReleaseHolds` calls `expireBookings` | Hold release job does the same thing as expiry job | Wrong function reference |
-| N2  | Scheduler `onSendNotificationEmail` is a no-op | Notifications silently dropped | Handler stub never implemented |
-| N7  | Refund `createCorrection` uses `Date.now()` in event key | Potential unique constraint violation | Race window with ms precision |
-| N15 | `applyOverride` doesn't update `booking.holdAmount` | Override changes price but hold stays at old amount | Missing field update |
+| ID  | Bug                                                      | Impact                                              | Root Cause                     |
+| --- | -------------------------------------------------------- | --------------------------------------------------- | ------------------------------ |
+| N1  | Scheduler `onReleaseHolds` calls `expireBookings`        | Hold release job does the same thing as expiry job  | Wrong function reference       |
+| N2  | Scheduler `onSendNotificationEmail` is a no-op           | Notifications silently dropped                      | Handler stub never implemented |
+| N7  | Refund `createCorrection` uses `Date.now()` in event key | Potential unique constraint violation               | Race window with ms precision  |
+| N15 | `applyOverride` doesn't update `booking.holdAmount`      | Override changes price but hold stays at old amount | Missing field update           |
 
 ### P2 — Functional
 
-| ID  | Bug | Impact | Root Cause |
-|-----|-----|--------|------------|
-| N4  | `expireBookings` doesn't expire series sessions | Orphaned series sessions | Scheduler only queries top-level bookings |
-| N5  | `listLedger` ignores `bookingId`/`eventKey` filters | Pagination broken for filtered views | Repo doesn't pass filter params |
-| N8  | `withdraw` doesn't release other participants' holds | Group booking withdrawal leaks held funds | Only releases withdrawing user's hold |
-| N9  | `adminBooking.listBookings` returns null cursor | Admin pagination broken | Cursor never set in response |
+| ID  | Bug                                                  | Impact                                    | Root Cause                                |
+| --- | ---------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
+| N4  | `expireBookings` doesn't expire series sessions      | Orphaned series sessions                  | Scheduler only queries top-level bookings |
+| N5  | `listLedger` ignores `bookingId`/`eventKey` filters  | Pagination broken for filtered views      | Repo doesn't pass filter params           |
+| N8  | `withdraw` doesn't release other participants' holds | Group booking withdrawal leaks held funds | Only releases withdrawing user's hold     |
+| N9  | `adminBooking.listBookings` returns null cursor      | Admin pagination broken                   | Cursor never set in response              |
 
 ---
 
@@ -195,6 +195,7 @@ It runs in parallel with the infrastructure branch — they touch different file
 ### Architecture Decision
 
 **Single Redis instance** for all use cases, with key prefix namespacing:
+
 - `cogito:session:*` — session cache
 - `cogito:idempotency:*` — idempotency records
 - `cogito:ratelimit:*` — rate limit counters
@@ -289,14 +290,14 @@ Note: `pg → postgres.js` migration was done in the consolidation branch. This 
 
 **Files:** New migration `packages/db/src/migrations/`
 
-| Index | Table | Column(s) | Purpose |
-|-------|-------|-----------|---------|
-| `idx_booking_status_deadline` | `booking` | `status, deadline_at` | Expiry sweep query |
-| `idx_booking_participant_user` | `bookingParticipant` | `user_id` | User bookings lookup |
-| `idx_booking_session_booking_id` | `bookingSession` | `booking_id` | Series session lookup |
-| `idx_ledger_entry_wallet_event` | `ledgerEntry` | `wallet_id, event_key` | Idempotency check |
-| `idx_tutor_profile_status_published` | `tutorProfile` | `onboarding_status, published_at` | Discovery query |
-| `idx_audit_log_target` | `auditLog` | `target_type, target_id` | Admin audit lookup |
+| Index                                | Table                | Column(s)                         | Purpose               |
+| ------------------------------------ | -------------------- | --------------------------------- | --------------------- |
+| `idx_booking_status_deadline`        | `booking`            | `status, deadline_at`             | Expiry sweep query    |
+| `idx_booking_participant_user`       | `bookingParticipant` | `user_id`                         | User bookings lookup  |
+| `idx_booking_session_booking_id`     | `bookingSession`     | `booking_id`                      | Series session lookup |
+| `idx_ledger_entry_wallet_event`      | `ledgerEntry`        | `wallet_id, event_key`            | Idempotency check     |
+| `idx_tutor_profile_status_published` | `tutorProfile`       | `onboarding_status, published_at` | Discovery query       |
+| `idx_audit_log_target`               | `auditLog`           | `target_type, target_id`          | Admin audit lookup    |
 
 **Acceptance:** Migration applies cleanly. `EXPLAIN ANALYZE` on key queries shows index usage.
 
@@ -607,6 +608,7 @@ After consolidation, router files contain the orchestration logic that was previ
 **Files:** `docs/MODULE-REFERENCE.md` (new)
 
 For each module:
+
 - Name and purpose
 - File structure (router, service, repo, types, index)
 - Exported service methods with signatures
@@ -621,6 +623,7 @@ For each module:
 **Files:** `docs/API-REFERENCE.md` (new)
 
 For each endpoint:
+
 - Path and method (all POST per oRPC convention)
 - Auth requirement (public/protected/admin)
 - Input schema (Zod type name)
@@ -653,6 +656,7 @@ For each endpoint:
 **Files:** All `*.service.ts`, `*.repo.ts`, `*.router.ts` files
 
 Add JSDoc comments to:
+
 - Every exported service method
 - Every exported repo method
 - Every router procedure
@@ -660,6 +664,7 @@ Add JSDoc comments to:
 - Every utility function in `lib/`
 
 Format:
+
 ```ts
 /**
  * Creates a solo booking with wallet hold and notification dispatch.
@@ -712,6 +717,7 @@ Coverage must be ≥ 80% overall, ≥ 90% for `packages/api`.
 ### 7.2 Manual smoke test
 
 Start dev server with Redis and test:
+
 - Auth: login, get profile
 - Wallet: check balance, purchase, hold/deduct
 - Booking: create solo, confirm, withdraw, cancel
@@ -723,6 +729,7 @@ Start dev server with Redis and test:
 ### 7.3 Performance baseline
 
 Run load tests against production-readiness build:
+
 - Auth flow: 100 concurrent logins
 - Booking creation: 50 concurrent bookings
 - Wallet operations: 100 concurrent holds on same wallet
@@ -734,16 +741,16 @@ Run load tests against production-readiness build:
 
 ## 9. Risk Register
 
-| # | Risk | Likelihood | Impact | Mitigation |
-|---|------|-----------|--------|------------|
-| R1 | Redis unavailable causes app crash | Medium | High | All Redis clients have in-memory fallback. App starts without Redis. |
-| R2 | 100% test coverage takes too long | Medium | Medium | Prioritize services (pure, easy), then routers, then repos. Accept 95% branch if 100% line is achieved. |
-| R3 | CSRF protection breaks frontend | Medium | High | Use `SameSite=Strict` first. Add CSRF token only if cross-site is needed. |
-| R4 | Docker build fails due to native deps | Medium | Low | Use `bun` base image. Verify all native deps available in Alpine. |
-| R5 | E2E tests are flaky in CI | High | Low | Mark E2E job as non-blocking initially. Stabilize over time. |
-| R6 | Redis key collision between features | Low | Medium | Use namespaced keys with `cogito:` prefix. Each feature has its own sub-prefix. |
-| R7 | Migration to Redis session cache breaks existing sessions | Medium | Medium | Deploy with dual-read: check Redis first, fall back to DB. Existing sessions rehydrate. |
-| R8 | 100% line coverage creates fragile tests | Low | Low | Focus on testing behavior, not implementation. Use integration tests for routers, unit tests for services. |
+| #   | Risk                                                      | Likelihood | Impact | Mitigation                                                                                                 |
+| --- | --------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| R1  | Redis unavailable causes app crash                        | Medium     | High   | All Redis clients have in-memory fallback. App starts without Redis.                                       |
+| R2  | 100% test coverage takes too long                         | Medium     | Medium | Prioritize services (pure, easy), then routers, then repos. Accept 95% branch if 100% line is achieved.    |
+| R3  | CSRF protection breaks frontend                           | Medium     | High   | Use `SameSite=Strict` first. Add CSRF token only if cross-site is needed.                                  |
+| R4  | Docker build fails due to native deps                     | Medium     | Low    | Use `bun` base image. Verify all native deps available in Alpine.                                          |
+| R5  | E2E tests are flaky in CI                                 | High       | Low    | Mark E2E job as non-blocking initially. Stabilize over time.                                               |
+| R6  | Redis key collision between features                      | Low        | Medium | Use namespaced keys with `cogito:` prefix. Each feature has its own sub-prefix.                            |
+| R7  | Migration to Redis session cache breaks existing sessions | Medium     | Medium | Deploy with dual-read: check Redis first, fall back to DB. Existing sessions rehydrate.                    |
+| R8  | 100% line coverage creates fragile tests                  | Low        | Low    | Focus on testing behavior, not implementation. Use integration tests for routers, unit tests for services. |
 
 ---
 

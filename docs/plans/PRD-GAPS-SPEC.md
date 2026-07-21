@@ -21,26 +21,26 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 ## 1. Gap Summary
 
-| # | Gap | PRD Ref | Priority | Effort | Module |
-|---|-----|---------|----------|--------|--------|
-| G1 | Report tutor lateness/no-show | FR-14, DL-26 | High | 3d | support |
-| G2 | 12-hour deadline enforcement by scheduler | DL-25 | High | 2d | scheduler |
-| G3 | 15-minute lateness auto-cancel | DL-26, OQ-07 | High | 2d | scheduler |
-| G4 | Group repricing recalculation | FR-16 | High | 2d | booking |
-| G5 | Series cancellation rules | FR-20 | Medium | 2d | booking |
-| G6 | Tutor reschedule with student approval | FR-15 | Medium | 1d | booking |
-| G7 | Rich-text session notes | FR-09, DL-18 | Low | 1d | booking |
-| G8 | Admin override queue with urgency | FR-10 | Medium | 2d | admin-booking |
-| G9 | Admin wallet/ledger view | FR-10 | Medium | 1d | admin-booking |
-| G10 | Before/after override preview | FR-10 | Medium | 1d | admin-booking |
-| G11 | Meeting link visibility gating | FR-21 | High | 1d | meeting |
-| G12 | Google Meet attendee automation | FR-21, OQ-05 | Medium | 2d | meeting |
-| G13 | Offline room availability | FR-22 | Low | 1d | room |
-| G14 | Admin room approval | FR-22 | Low | 1d | room |
-| G15 | Group series no opt-out disclaimer | FR-20 | Low | 0.5d | booking |
-| G16 | Tutor payout calculation | DL-11 | Medium | 1d | wallet |
-| G17 | Full notification matrix | FR-17 | Medium | 2d | notification |
-| G18 | Series session completion | FR-20 | Medium | 1d | booking |
+| #   | Gap                                       | PRD Ref      | Priority | Effort | Module        |
+| --- | ----------------------------------------- | ------------ | -------- | ------ | ------------- |
+| G1  | Report tutor lateness/no-show             | FR-14, DL-26 | High     | 3d     | support       |
+| G2  | 12-hour deadline enforcement by scheduler | DL-25        | High     | 2d     | scheduler     |
+| G3  | 15-minute lateness auto-cancel            | DL-26, OQ-07 | High     | 2d     | scheduler     |
+| G4  | Group repricing recalculation             | FR-16        | High     | 2d     | booking       |
+| G5  | Series cancellation rules                 | FR-20        | Medium   | 2d     | booking       |
+| G6  | Tutor reschedule with student approval    | FR-15        | Medium   | 1d     | booking       |
+| G7  | Rich-text session notes                   | FR-09, DL-18 | Low      | 1d     | booking       |
+| G8  | Admin override queue with urgency         | FR-10        | Medium   | 2d     | admin-booking |
+| G9  | Admin wallet/ledger view                  | FR-10        | Medium   | 1d     | admin-booking |
+| G10 | Before/after override preview             | FR-10        | Medium   | 1d     | admin-booking |
+| G11 | Meeting link visibility gating            | FR-21        | High     | 1d     | meeting       |
+| G12 | Google Meet attendee automation           | FR-21, OQ-05 | Medium   | 2d     | meeting       |
+| G13 | Offline room availability                 | FR-22        | Low      | 1d     | room          |
+| G14 | Admin room approval                       | FR-22        | Low      | 1d     | room          |
+| G15 | Group series no opt-out disclaimer        | FR-20        | Low      | 0.5d   | booking       |
+| G16 | Tutor payout calculation                  | DL-11        | Medium   | 1d     | wallet        |
+| G17 | Full notification matrix                  | FR-17        | Medium   | 2d     | notification  |
+| G18 | Series session completion                 | FR-20        | Medium   | 1d     | booking       |
 
 **Total estimated effort: ~24 days**
 
@@ -81,6 +81,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Ticket auto-escalates if SLA deadline passes without response
 
 **Acceptance tests:**
+
 - Student reports tutor 20 minutes late → ticket created with SLA deadline
 - Student reports no-show → ticket created, booking status updated
 - Admin lists tickets sorted by urgency (SLA deadline ascending)
@@ -103,6 +104,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 5. Add logging/metrics for number of bookings expired per run
 
 **Acceptance tests:**
+
 - Booking created with 12h deadline → after 12h, scheduler expires it
 - Held funds released when booking expires
 - Series session with past deadline → expired by scheduler
@@ -131,6 +133,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - When 15 minutes pass without joining: scheduler sets `tutorAttendance = 'absent'`
 
 **Acceptance tests:**
+
 - Booking starts, tutor doesn't join within 15 minutes → auto-cancelled, funds released
 - Tutor joins at minute 5 → attendance set to `present`, no auto-cancel
 - Student notified of auto-cancellation
@@ -159,6 +162,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Release excess held funds for existing participants
 
 **Acceptance tests:**
+
 - Group of 4 at 28 Marks/student → 1 drops out → remaining 3 at 35 Marks/student, holds adjusted
 - Group of 3 at 35 Marks/student → 1 joins → all 4 at 28 Marks/student, excess released
 - Reconfirmation notification shows updated price
@@ -183,6 +187,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Enforce at service level: `canCancelSession(session)` returns false for group series
 
 **Acceptance tests:**
+
 - Solo series: cancel session 3 hours before start → allowed, funds released
 - Solo series: cancel session 1 hour before start → rejected
 - Group series: cancel session → rejected with disclaimer
@@ -213,6 +218,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Booking remains at original time
 
 **Acceptance tests:**
+
 - Tutor proposes reschedule → proposal created, student notified
 - Student accepts → booking time updated, both notified
 - Student rejects → proposal rejected, booking unchanged
@@ -241,6 +247,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Only visible after session is completed
 
 **Acceptance tests:**
+
 - Tutor adds note after session → stored, visible to student
 - Student views notes → sees tutor's notes
 - Attempt to add note before session completed → rejected
@@ -261,6 +268,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 4. Add exception filters: filter by override category, urgency level, SLA status
 
 **Acceptance tests:**
+
 - Admin lists bookings → sorted by urgency (pending overrides first)
 - Filter by category → shows only matching bookings
 - SLA deadline passed → booking flagged as escalated
@@ -281,6 +289,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Filterable by: entry type, date range, booking ID
 
 **Acceptance tests:**
+
 - Admin views student wallet → sees balance, held, available
 - Admin views ledger entries → paginated, filterable
 - Non-admin attempts → 403
@@ -300,6 +309,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Does NOT persist any changes
 
 **Acceptance tests:**
+
 - Admin previews override → sees before/after booking state
 - Admin previews override → sees wallet balance impact
 - Preview does not modify any data
@@ -320,6 +330,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 4. If participant withdraws after link creation: don't revoke link (tutor may still want to use it)
 
 **Acceptance tests:**
+
 - Booking confirmed by student, waiting for tutor → no meeting link
 - Tutor accepts → meeting link created, visible to both
 - Group booking: 3 of 4 confirmed → no link yet
@@ -345,6 +356,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Update calendar event with new time
 
 **Acceptance tests:**
+
 - Booking confirmed → tutor and student receive Google Calendar invite
 - Booking cancelled → calendar event updated/cancelled
 - Booking rescheduled → calendar event time updated
@@ -368,6 +380,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - `POST /rpc/room.checkAvailability` — check if room is free for a time slot
 
 **Acceptance tests:**
+
 - Offline booking with available room → room auto-assigned
 - Offline booking with unavailable room → booking created without room
 - Room availability check for overlapping time → returns conflict
@@ -387,6 +400,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 3. `POST /rpc/admin.cancelRoom` — cancel room booking (booking continues without room)
 
 **Acceptance tests:**
+
 - Admin approves room → status changes to `confirmed`, student notified
 - Admin relocates room → booking updated with new room, student notified
 - Admin cancels room → room freed, booking continues
@@ -406,6 +420,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 2. Enforce at service level: `canCancelSession(session)` returns false for group series
 
 **Acceptance tests:**
+
 - Create group series → response includes disclaimer text
 - Attempt to cancel individual session → rejected with disclaimer reference
 
@@ -428,6 +443,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - Same calculation but scoped to requesting tutor
 
 **Acceptance tests:**
+
 - Admin views tutor payouts → sees correct calculation with COGITO_TAKE_RATE
 - Tutor views own payouts → sees only own data
 - Payout includes only completed sessions, not cancelled ones
@@ -444,30 +460,31 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 Implement the full notification matrix:
 
-| Event | In-App | Email |
-|-------|--------|-------|
-| Booking confirmed | ✅ | ✅ |
-| Booking cancelled by student | ✅ | ✅ |
-| Booking cancelled by tutor | ✅ | ✅ |
-| Booking reminder (H-2) | ✅ | ✅ |
-| Booking starting in 15 min | ✅ | ✅ |
-| Payment received | ✅ | ✅ |
-| Payment failed | ✅ | ✅ |
-| Refund processed | ✅ | ✅ |
-| Tutor lateness detected | ✅ | ✅ |
-| Tutor no-show detected | ✅ | ✅ |
-| Admin override applied | ✅ | ✅ |
-| Reschedule proposed | ✅ | ✅ |
-| Reschedule accepted | ✅ | ✅ |
-| Reschedule rejected | ✅ | ✅ |
-| Achievement unlocked | ✅ | ❌ |
-| Support ticket created | ✅ | ✅ |
-| Support ticket resolved | ✅ | ✅ |
-| Session notes available | ✅ | ✅ |
-| Series session cancelled | ✅ | ✅ |
-| Wallet low balance | ✅ | ✅ |
+| Event                        | In-App | Email |
+| ---------------------------- | ------ | ----- |
+| Booking confirmed            | ✅     | ✅    |
+| Booking cancelled by student | ✅     | ✅    |
+| Booking cancelled by tutor   | ✅     | ✅    |
+| Booking reminder (H-2)       | ✅     | ✅    |
+| Booking starting in 15 min   | ✅     | ✅    |
+| Payment received             | ✅     | ✅    |
+| Payment failed               | ✅     | ✅    |
+| Refund processed             | ✅     | ✅    |
+| Tutor lateness detected      | ✅     | ✅    |
+| Tutor no-show detected       | ✅     | ✅    |
+| Admin override applied       | ✅     | ✅    |
+| Reschedule proposed          | ✅     | ✅    |
+| Reschedule accepted          | ✅     | ✅    |
+| Reschedule rejected          | ✅     | ✅    |
+| Achievement unlocked         | ✅     | ❌    |
+| Support ticket created       | ✅     | ✅    |
+| Support ticket resolved      | ✅     | ✅    |
+| Session notes available      | ✅     | ✅    |
+| Series session cancelled     | ✅     | ✅    |
+| Wallet low balance           | ✅     | ✅    |
 
 **Acceptance tests:**
+
 - Each event type creates the correct notification records
 - Email dispatch happens for events marked ✅ in Email column
 - In-app notification visible in notification list
@@ -494,6 +511,7 @@ Implement the full notification matrix:
    - Release any remaining holds
 
 **Acceptance tests:**
+
 - Mark session 1 of 3 as completed → session state updated, funds deducted
 - Mark all 3 sessions → booking state transitions to `completed`
 - Attempt to complete future session → rejected
@@ -505,25 +523,25 @@ Implement the full notification matrix:
 
 These tests should be written during PRD gap implementation, not deferred:
 
-| Area | Tests Needed | Priority |
-|------|-------------|----------|
-| Booking state machine (all transitions) | Integration test covering every `canTransition` path | High |
-| Wallet concurrency (parallel holds/releases) | Concurrent operation test with 5+ parallel holds | High |
-| Group repricing recalculation | Integration test for headcount change → price update | High |
-| Series no opt-out enforcement | Unit + integration test | High |
-| Payment idempotency race condition | Concurrent webhook test (2 identical webhooks) | High |
-| 12-hour deadline enforcement | Scheduler integration test | Medium |
-| Scheduler jobs (release holds, send email) | Integration test with BullMQ | Medium |
-| Tutor reschedule approval flow | Integration test | Medium |
-| Offline room approval flow | Integration test | Medium |
-| Pricing extra-take calculation | Unit test for 1-per-5-Marks rule | Medium |
-| Notification matrix routing | Unit test for email vs in-app | Medium |
-| Admin override with hold amount update | Integration test | Medium |
-| Support ticket SLA tracking | Integration test | Medium |
-| Series session completion | Integration test | Medium |
-| Circuit breaker open/close cycles | Unit test | Low |
-| Rate limiting effectiveness | Integration test | Low |
-| Auth session caching | Integration test | Low |
+| Area                                         | Tests Needed                                         | Priority |
+| -------------------------------------------- | ---------------------------------------------------- | -------- |
+| Booking state machine (all transitions)      | Integration test covering every `canTransition` path | High     |
+| Wallet concurrency (parallel holds/releases) | Concurrent operation test with 5+ parallel holds     | High     |
+| Group repricing recalculation                | Integration test for headcount change → price update | High     |
+| Series no opt-out enforcement                | Unit + integration test                              | High     |
+| Payment idempotency race condition           | Concurrent webhook test (2 identical webhooks)       | High     |
+| 12-hour deadline enforcement                 | Scheduler integration test                           | Medium   |
+| Scheduler jobs (release holds, send email)   | Integration test with BullMQ                         | Medium   |
+| Tutor reschedule approval flow               | Integration test                                     | Medium   |
+| Offline room approval flow                   | Integration test                                     | Medium   |
+| Pricing extra-take calculation               | Unit test for 1-per-5-Marks rule                     | Medium   |
+| Notification matrix routing                  | Unit test for email vs in-app                        | Medium   |
+| Admin override with hold amount update       | Integration test                                     | Medium   |
+| Support ticket SLA tracking                  | Integration test                                     | Medium   |
+| Series session completion                    | Integration test                                     | Medium   |
+| Circuit breaker open/close cycles            | Unit test                                            | Low      |
+| Rate limiting effectiveness                  | Integration test                                     | Low      |
+| Auth session caching                         | Integration test                                     | Low      |
 
 ---
 
@@ -545,15 +563,15 @@ For each gap:
 
 ## 5. Estimated Timeline
 
-| Phase | Gaps | Days |
-|-------|-------|------|
-| Support tickets + lateness (G1, G2, G3) | G1, G2, G3 | 7 |
-| Booking improvements (G4, G5, G6, G7) | G4, G5, G6, G7 | 6 |
-| Admin improvements (G8, G9, G10) | G8, G9, G10 | 4 |
-| Meeting + Room (G11, G12, G13, G14) | G11, G12, G13, G14 | 5 |
-| Payouts + Notifications + Series (G15, G16, G17, G18) | G15, G16, G17, G18 | 4.5 |
-| Test coverage | High-priority gaps | 3-4 |
-| **Total** | | **~30 days** |
+| Phase                                                 | Gaps               | Days         |
+| ----------------------------------------------------- | ------------------ | ------------ |
+| Support tickets + lateness (G1, G2, G3)               | G1, G2, G3         | 7            |
+| Booking improvements (G4, G5, G6, G7)                 | G4, G5, G6, G7     | 6            |
+| Admin improvements (G8, G9, G10)                      | G8, G9, G10        | 4            |
+| Meeting + Room (G11, G12, G13, G14)                   | G11, G12, G13, G14 | 5            |
+| Payouts + Notifications + Series (G15, G16, G17, G18) | G15, G16, G17, G18 | 4.5          |
+| Test coverage                                         | High-priority gaps | 3-4          |
+| **Total**                                             |                    | **~30 days** |
 
 ---
 

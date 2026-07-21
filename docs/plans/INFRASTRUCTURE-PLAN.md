@@ -32,15 +32,15 @@ This branch sets up the full deployment infrastructure: Docker, CI/CD, Hetzner V
 
 ### What This Branch Does
 
-| Phase | Focus | Days |
-|-------|-------|------|
-| 1 | Docker Compose + Dockerfiles | 1 |
-| 2 | CI pipeline (feature branches) | 0.5 |
-| 3 | CD pipeline (staging + production) | 1 |
-| 4 | Hetzner provisioning (single VPS) | 1 |
-| 5 | Monitoring + observability (self-hosted, free) | 1 |
-| 6 | Code scanning + bot maximization | 0.5 |
-| **Total** | | **~5 days** |
+| Phase     | Focus                                          | Days        |
+| --------- | ---------------------------------------------- | ----------- |
+| 1         | Docker Compose + Dockerfiles                   | 1           |
+| 2         | CI pipeline (feature branches)                 | 0.5         |
+| 3         | CD pipeline (staging + production)             | 1           |
+| 4         | Hetzner provisioning (single VPS)              | 1           |
+| 5         | Monitoring + observability (self-hosted, free) | 1           |
+| 6         | Code scanning + bot maximization               | 0.5         |
+| **Total** |                                                | **~5 days** |
 
 ### Principles
 
@@ -542,6 +542,7 @@ jobs:
 **File:** `.github/workflows/cd-prod.yml`
 
 Same as staging but:
+
 - Trigger: `push` to `main`
 - Tag: `ghcr.io/.../server:latest` and `ghcr.io/.../server:v${{ github.sha }}`
 - Deploys to production
@@ -738,13 +739,34 @@ Replace `console.log` / `console.error` with structured JSON logs:
 // lib/logger.ts
 export const log = {
   info: (msg: string, data?: Record<string, unknown>) => {
-    console.log(JSON.stringify({ level: "info", msg, timestamp: new Date().toISOString(), ...data }));
+    console.log(
+      JSON.stringify({
+        level: "info",
+        msg,
+        timestamp: new Date().toISOString(),
+        ...data,
+      }),
+    );
   },
   error: (msg: string, data?: Record<string, unknown>) => {
-    console.error(JSON.stringify({ level: "error", msg, timestamp: new Date().toISOString(), ...data }));
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg,
+        timestamp: new Date().toISOString(),
+        ...data,
+      }),
+    );
   },
   warn: (msg: string, data?: Record<string, unknown>) => {
-    console.warn(JSON.stringify({ level: "warn", msg, timestamp: new Date().toISOString(), ...data }));
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        msg,
+        timestamp: new Date().toISOString(),
+        ...data,
+      }),
+    );
   },
 };
 ```
@@ -781,7 +803,11 @@ Enhance `/health` to check PostgreSQL and Redis:
 app.get("/health", async () => {
   const dbHealthy = await db.execute(sql`SELECT 1`);
   const redisHealthy = await redis.ping(); // after Redis is added
-  return { status: "ok", db: dbHealthy ? "ok" : "error", redis: redisHealthy ? "ok" : "error" };
+  return {
+    status: "ok",
+    db: dbHealthy ? "ok" : "error",
+    redis: redisHealthy ? "ok" : "error",
+  };
 });
 ```
 
@@ -875,7 +901,7 @@ on:
   pull_request:
     branches: [main, staging]
   schedule:
-    - cron: "0 0 * * 1"  # Weekly Monday
+    - cron: "0 0 * * 1" # Weekly Monday
 
 jobs:
   analyze:
@@ -897,6 +923,7 @@ Already enabled in GitHub (repository settings → Code security → Secret scan
 **File:** `.github/codeql-custom-queries/secrets.yml` (or configure in GitHub UI)
 
 Custom patterns to detect:
+
 - `XENDIT_SECRET_KEY`
 - `GOOGLE_PRIVATE_KEY`
 - `RESEND_API_KEY`
@@ -990,6 +1017,7 @@ coverageThreshold = 80
 ### 6.7 Pre-commit hooks (already configured)
 
 Lefthook is already set up. Verify it covers:
+
 - `oxlint` on commit
 - `oxfmt --check` on commit
 - `bun run check-types` on push
@@ -1062,16 +1090,16 @@ Secrets that shouldn't be in `.env` files (API keys, etc.) are set via GitHub Ac
 
 ## 10. Risk Register
 
-| # | Risk | Likelihood | Impact | Mitigation |
-|---|------|-----------|--------|------------|
-| R1 | VPS runs out of resources (RAM/CPU) | Medium | High | Monitor with Uptime Kuma + Docker stats. Start with 8GB RAM. Upgrade Hetzner plan if needed. |
-| R2 | Docker image build fails in CI | Medium | Low | Cache Docker layers. Use buildkit. Test locally first. |
-| R3 | Database migration fails on deploy | Low | High | CD runs migration before `docker compose up`. If migration fails, deploy stops. Manual rollback required. |
-| R4 | Staging and production on same VPS = blast radius | Medium | High | Use separate Docker networks and databases. Staging data is isolated. If VPS goes down, both go down — accept risk for now. |
-| R5 | Caddy certificate provisioning fails | Low | Medium | Caddy auto-provisions Let's Encrypt certs. If it fails, check DNS and port 80/443 availability. |
-| R6 | Uptime Kuma uses too much memory | Low | Low | Uptime Kuma uses ~50MB. Monitor with Docker stats. |
-| R7 | Dependabot PRs break CI | Medium | Low | CI runs on all Dependabot PRs. Only merge passing PRs. |
-| R8 | Hetzner VPS IP changes | Very Low | Medium | Use Hetzner floating IP if needed. DNS TTL set low (300s). |
+| #   | Risk                                              | Likelihood | Impact | Mitigation                                                                                                                  |
+| --- | ------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------------------- |
+| R1  | VPS runs out of resources (RAM/CPU)               | Medium     | High   | Monitor with Uptime Kuma + Docker stats. Start with 8GB RAM. Upgrade Hetzner plan if needed.                                |
+| R2  | Docker image build fails in CI                    | Medium     | Low    | Cache Docker layers. Use buildkit. Test locally first.                                                                      |
+| R3  | Database migration fails on deploy                | Low        | High   | CD runs migration before `docker compose up`. If migration fails, deploy stops. Manual rollback required.                   |
+| R4  | Staging and production on same VPS = blast radius | Medium     | High   | Use separate Docker networks and databases. Staging data is isolated. If VPS goes down, both go down — accept risk for now. |
+| R5  | Caddy certificate provisioning fails              | Low        | Medium | Caddy auto-provisions Let's Encrypt certs. If it fails, check DNS and port 80/443 availability.                             |
+| R6  | Uptime Kuma uses too much memory                  | Low        | Low    | Uptime Kuma uses ~50MB. Monitor with Docker stats.                                                                          |
+| R7  | Dependabot PRs break CI                           | Medium     | Low    | CI runs on all Dependabot PRs. Only merge passing PRs.                                                                      |
+| R8  | Hetzner VPS IP changes                            | Very Low   | Medium | Use Hetzner floating IP if needed. DNS TTL set low (300s).                                                                  |
 
 ---
 

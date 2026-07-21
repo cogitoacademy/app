@@ -41,14 +41,15 @@ cogito-app/
 
 **Router → Handler → Service → Repository**
 
-| Layer      | Responsibility                                      | DB?            | File                          |
-| ---------- | --------------------------------------------------- | -------------- | ----------------------------- |
-| Router     | oRPC route definition, zod validation, auth middleware | No             | `{module}.router.ts`         |
-| Handler    | DI factory + `{ context, input }` transport adapters | No             | `{module}.handler.ts`        |
-| Service    | Pure business logic + consumer port interfaces     | No             | `{module}.service.ts`        |
-| Repository | Data access (SQL queries only)                      | Yes            | `{module}.repo.ts`           |
+| Layer      | Responsibility                                         | DB? | File                  |
+| ---------- | ------------------------------------------------------ | --- | --------------------- |
+| Router     | oRPC route definition, zod validation, auth middleware | No  | `{module}.router.ts`  |
+| Handler    | DI factory + `{ context, input }` transport adapters   | No  | `{module}.handler.ts` |
+| Service    | Pure business logic + consumer port interfaces         | No  | `{module}.service.ts` |
+| Repository | Data access (SQL queries only)                         | Yes | `{module}.repo.ts`    |
 
 Each module also has:
+
 - `{module}.types.ts` — Zod input/output schemas
 - `index.ts` — `createModule()` factory function
 
@@ -106,12 +107,12 @@ POST /rpc/booking.create
 
 ```ts
 export interface ServiceRegistry {
-  auth: AuthHandler;           // Handler type for modules with HTTP endpoints
+  auth: AuthHandler; // Handler type for modules with HTTP endpoints
   admin: AdminHandler;
-  wallet: WalletHandler;       // Handler type (was WalletPort before)
-  booking: BookingHandler;     // Handler type (was BookingService before)
-  pricing: PricingService;    // Service type (no HTTP endpoints)
-  audit: AuditService;        // Service type (no HTTP endpoints)
+  wallet: WalletHandler; // Handler type (was WalletPort before)
+  booking: BookingHandler; // Handler type (was BookingService before)
+  pricing: PricingService; // Service type (no HTTP endpoints)
+  audit: AuditService; // Service type (no HTTP endpoints)
   // ...
 }
 ```
@@ -169,48 +170,61 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Auth Module (protected)
+
 - `me`, `getProfile`, `updateProfile`
 
 ### Admin Module (admin)
+
 - `listUsers`, `setRole`
 
 ### AdminTutor Module (admin)
+
 - `createInvite`, `listInvites`, `resendInvite`, `revokeInvite`
 - `listTutorProfiles`, `reviewTutorProfile`
 
 ### Tutor Module (protected)
+
 - `getMyProfile`, `updateMyProfile`, `submitForReview`
 
 ### TutorDiscovery Module (protected)
+
 - `listPublished`, `getProfile`
 
 ### Invite Module (public + protected)
+
 - `verify` (public), `claim` (protected)
 
 ### Achievement Module (protected + admin)
+
 - `list`, `create`, `update`, `delete`
 - `adminList`, `adminReview`
 
 ### Wallet Module (protected + admin)
+
 - `hold`, `release`, `deduct`, `credit`, `compensate`
 - `getOrCreate`, `listLedger`, `knowledgeBankEligible`, `listPackages`
 
 ### Pricing Module (internal)
+
 - `calculateSoloPrice`, `calculateGroupPrice`, `calculateSeriesPrice`, `validateFloorPrice`
 
 ### Booking Module (protected + admin)
+
 - `create`, `confirm`, `withdraw`, `cancel`
 - `createGroup`, `confirmInvite`, `reconfirm`, `withdrawGroup`
 - `createSeries`, `completeSession`
 
 ### Payment Module (public webhook + protected)
+
 - `createCheckout`, `listPackages` (protected)
 - `handleWebhook` (public)
 
 ### Notification Module (protected)
+
 - `list`, `markRead`, `markAllRead`
 
 ### Scheduler Module (internal)
+
 - `onExpireBookings`, `onReleaseHolds`, `onSendNotificationEmail`
 
 ## Auth Config
@@ -231,33 +245,33 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ## Active Plans
 
-| Plan | Branch | Status |
-|------|--------|--------|
-| `docs/plans/CONSOLIDATION-PLAN.md` | `improvement/consolidation` | Next to execute |
-| `docs/plans/PRODUCTION-READINESS-PLAN.md` | `improvement/production-readiness` | Parallel with infrastructure, after consolidation |
-| `docs/plans/INFRASTRUCTURE-PLAN.md` | `improvement/infrastructure` | Parallel with production readiness, after consolidation |
-| `docs/plans/PRD-GAPS-SPEC.md` | `feature/prd-gaps` (future) | Reference spec, after both merge to main |
-| `docs/plans/EXECUTION-PLAN-v2.md` | — | Superseded |
-| `docs/plans/REFACTORING-PLAN.md` | — | Historical reference |
+| Plan                                      | Branch                             | Status                                                  |
+| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------- |
+| `docs/plans/CONSOLIDATION-PLAN.md`        | `improvement/consolidation`        | Next to execute                                         |
+| `docs/plans/PRODUCTION-READINESS-PLAN.md` | `improvement/production-readiness` | Parallel with infrastructure, after consolidation       |
+| `docs/plans/INFRASTRUCTURE-PLAN.md`       | `improvement/infrastructure`       | Parallel with production readiness, after consolidation |
+| `docs/plans/PRD-GAPS-SPEC.md`             | `feature/prd-gaps` (future)        | Reference spec, after both merge to main                |
+| `docs/plans/EXECUTION-PLAN-v2.md`         | —                                  | Superseded                                              |
+| `docs/plans/REFACTORING-PLAN.md`          | —                                  | Historical reference                                    |
 
 ## Known Bugs
 
-| ID  | Bug | Priority |
-|-----|-----|----------|
-| B1  | Triple session validation per request | P1 |
-| B2  | Meeting creation failure leaves booking in scheduled | P0 |
-| B3  | Refund correction stores bookingId as paymentId | P0 |
-| B4  | Series bookings never expire (no deadlineAt) | P0 |
-| B5  | No CSRF protection on mutations | P0 |
-| N1  | Scheduler onReleaseHolds calls expireBookings | P1 |
-| N2  | Scheduler onSendNotificationEmail is a no-op | P1 |
-| N3  | Scheduler not shut down gracefully | P1 |
-| N4  | expireBookings doesn't expire series sessions | P2 |
-| N5  | listLedger ignores bookingId/eventKey filters | P2 |
-| N7  | Refund createCorrection uses Date.now() in event key | P1 |
-| N8  | withdraw doesn't release other participants' holds | P2 |
-| N9  | adminBooking.listBookings returns null cursor | P2 |
-| N15 | applyOverride doesn't update booking.holdAmount | P1 |
+| ID  | Bug                                                  | Priority |
+| --- | ---------------------------------------------------- | -------- |
+| B1  | Triple session validation per request                | P1       |
+| B2  | Meeting creation failure leaves booking in scheduled | P0       |
+| B3  | Refund correction stores bookingId as paymentId      | P0       |
+| B4  | Series bookings never expire (no deadlineAt)         | P0       |
+| B5  | No CSRF protection on mutations                      | P0       |
+| N1  | Scheduler onReleaseHolds calls expireBookings        | P1       |
+| N2  | Scheduler onSendNotificationEmail is a no-op         | P1       |
+| N3  | Scheduler not shut down gracefully                   | P1       |
+| N4  | expireBookings doesn't expire series sessions        | P2       |
+| N5  | listLedger ignores bookingId/eventKey filters        | P2       |
+| N7  | Refund createCorrection uses Date.now() in event key | P1       |
+| N8  | withdraw doesn't release other participants' holds   | P2       |
+| N9  | adminBooking.listBookings returns null cursor        | P2       |
+| N15 | applyOverride doesn't update booking.holdAmount      | P1       |
 
 ## Common Commands
 
