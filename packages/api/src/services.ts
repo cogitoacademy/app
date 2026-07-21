@@ -5,37 +5,25 @@ import { createPricingService } from "./modules/pricing/pricing.service";
 import { createWalletRepo } from "./modules/wallet/wallet.repo";
 import { createWalletService } from "./modules/wallet/wallet.service";
 import { createAuthRepo } from "./modules/auth/auth.repo";
-import {
-  createAuthHandler,
-  createAuthService,
-} from "./modules/auth/auth.handler";
+import { createAuthHandler } from "./modules/auth/auth.handler";
+import { createAuthService } from "./modules/auth/auth.service";
 import { createAdminRepo } from "./modules/admin/admin.repo";
-import {
-  createAdminHandler,
-  createAdminService,
-} from "./modules/admin/admin.handler";
+import { createAdminHandler } from "./modules/admin/admin.handler";
+import { createAdminService } from "./modules/admin/admin.service";
 import { createAdminTutorRepo } from "./modules/admin-tutor/admin-tutor.repo";
-import {
-  createAdminTutorHandler,
-  createAdminTutorService,
-} from "./modules/admin-tutor/admin-tutor.handler";
+import { createAdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
+import { createAdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
 import { createTutorRepo } from "./modules/tutor/tutor.repo";
-import {
-  createTutorHandler,
-  createTutorService,
-} from "./modules/tutor/tutor.handler";
+import { createTutorHandler } from "./modules/tutor/tutor.handler";
+import { createTutorService } from "./modules/tutor/tutor.service";
 import { createDiscoveryRepo } from "./modules/tutor-discovery/discovery.repo";
 import { createDiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
 import { createInviteRepo } from "./modules/invite/invite.repo";
-import {
-  createInviteHandler,
-  createInviteService,
-} from "./modules/invite/invite.handler";
+import { createInviteHandler } from "./modules/invite/invite.handler";
+import { createInviteService } from "./modules/invite/invite.service";
 import { createAchievementRepo } from "./modules/achievement/achievement.repo";
-import {
-  createAchievementHandler,
-  createAchievementService,
-} from "./modules/achievement/achievement.handler";
+import { createAchievementHandler } from "./modules/achievement/achievement.handler";
+import { createAchievementService } from "./modules/achievement/achievement.service";
 import { createBookingRepo } from "./modules/booking/booking.repo";
 import { createBookingService } from "./modules/booking/booking.service";
 import { createNotificationService } from "./modules/notification/notification.service";

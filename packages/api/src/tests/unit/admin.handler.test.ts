@@ -1,9 +1,9 @@
 import { describe, test, expect, mock } from "bun:test";
+import { createAdminHandler } from "../../modules/admin/admin.handler";
 import {
-  createAdminHandler,
   createAdminService,
-} from "../../modules/admin/admin.handler";
-import { validateRoleChange } from "../../modules/admin/admin.service";
+  validateRoleChange,
+} from "../../modules/admin/admin.service";
 import { USER_ROLE } from "../../shared/constants";
 
 function makeDb() {

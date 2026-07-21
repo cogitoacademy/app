@@ -1,8 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
-import {
-  createAchievementHandler,
-  createAchievementService,
-} from "../../modules/achievement/achievement.handler";
+import { createAchievementHandler } from "../../modules/achievement/achievement.handler";
+import { createAchievementService } from "../../modules/achievement/achievement.service";
 import {
   validateUpdate,
   validateDelete,

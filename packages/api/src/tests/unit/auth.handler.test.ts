@@ -1,9 +1,9 @@
 import { describe, test, expect, mock } from "bun:test";
+import { createAuthHandler } from "../../modules/auth/auth.handler";
 import {
-  createAuthHandler,
   createAuthService,
-} from "../../modules/auth/auth.handler";
-import { validateUpdateInput } from "../../modules/auth/auth.service";
+  validateUpdateInput,
+} from "../../modules/auth/auth.service";
 
 function makeDb() {
   return {

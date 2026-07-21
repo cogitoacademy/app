@@ -1,5 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
-import { createAdminTutorService } from "../../modules/admin-tutor/admin-tutor.handler";
+import { createAdminTutorService } from "../../modules/admin-tutor/admin-tutor.service";
 import { ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 
 function makeAdminTutorRepo(overrides: Record<string, unknown> = {}) {

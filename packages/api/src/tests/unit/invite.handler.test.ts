@@ -50,7 +50,7 @@ describe("InviteHandler", () => {
   describe("claim", () => {
     test("throws notFound when updateInviteStatus returns empty array (race condition)", async () => {
       const { createInviteService } =
-        await import("../../modules/invite/invite.handler");
+        await import("../../modules/invite/invite.service");
       const validInvite = makeValidInvite();
       const inviteRepo = makeInviteRepo({
         findInviteByToken: mock(async () => validInvite),
@@ -73,7 +73,7 @@ describe("InviteHandler", () => {
 
     test("throws notFound when invite is null", async () => {
       const { createInviteService } =
-        await import("../../modules/invite/invite.handler");
+        await import("../../modules/invite/invite.service");
       const inviteRepo = makeInviteRepo({
         findInviteByToken: mock(async () => undefined),
       });
@@ -94,7 +94,7 @@ describe("InviteHandler", () => {
 
     test("throws forbidden when email does not match", async () => {
       const { createInviteService } =
-        await import("../../modules/invite/invite.handler");
+        await import("../../modules/invite/invite.service");
       const invite = makeValidInvite();
       const inviteRepo = makeInviteRepo({
         findInviteByToken: mock(async () => invite),
@@ -116,7 +116,7 @@ describe("InviteHandler", () => {
 
     test("throws conflict when user already has a tutor profile", async () => {
       const { createInviteService } =
-        await import("../../modules/invite/invite.handler");
+        await import("../../modules/invite/invite.service");
       const invite = makeValidInvite();
       const existingProfile = { id: "tp1", userId: "user1" };
       const inviteRepo = makeInviteRepo({
@@ -140,7 +140,7 @@ describe("InviteHandler", () => {
 
     test("successfully claims invite", async () => {
       const { createInviteService } =
-        await import("../../modules/invite/invite.handler");
+        await import("../../modules/invite/invite.service");
       const invite = makeValidInvite();
       const acceptedInvite = {
         ...invite,
