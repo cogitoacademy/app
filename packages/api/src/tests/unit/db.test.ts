@@ -15,7 +15,10 @@ mock.module("postgres", () => ({
 }));
 
 mock.module("drizzle-orm/postgres-js", () => ({
-  drizzle: (_client: any, opts: any) => ({ schema: opts?.schema, select: () => {} }),
+  drizzle: (_client: any, opts: any) => ({
+    schema: opts?.schema,
+    select: () => {},
+  }),
 }));
 
 describe("db", () => {
