@@ -1,5 +1,3 @@
-import { env } from "@cogito-app/env/server";
-
 import type { Context } from "../../context";
 import type { z } from "zod";
 import type { listLedgerInput } from "./wallet.types";
@@ -9,7 +7,15 @@ type ListLedgerInput = z.infer<typeof listLedgerInput>;
 
 export type WalletHandler = ReturnType<typeof createWalletHandler>;
 
-export function createWalletHandler(wallet: WalletService) {
+interface WalletHandlerDeps {
+  wallet: WalletService;
+  competitionCalendarUrl: string;
+}
+
+export function createWalletHandler({
+  wallet,
+  competitionCalendarUrl,
+}: WalletHandlerDeps) {
   return {
     get: async ({ context }: { context: Context }) => {
       const w = await wallet.getOrCreate(context.session!.user.id);
@@ -40,9 +46,9 @@ export function createWalletHandler(wallet: WalletService) {
       return wallet.knowledgeBankEligible(context.session!.user.id);
     },
 
-    // TODO(Phase 6): Move to a config module — this is not a wallet concern
+    // TODO: Move to a dedicated config module — this is not a wallet concern
     competitionCalendarLink: async () => {
-      return { url: env.COMPETITION_CALENDAR_URL };
+      return { url: competitionCalendarUrl };
     },
   };
 }

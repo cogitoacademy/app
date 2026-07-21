@@ -1,11 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
 
-mock.module("@cogito-app/env/server", () => ({
-  env: {
-    COMPETITION_CALENDAR_URL: "https://example.com/calendar",
-  },
-}));
-
 import { createWalletHandler } from "../../modules/wallet/wallet.handler";
 
 const walletService = {
@@ -20,7 +14,10 @@ const walletService = {
   knowledgeBankEligible: mock(async () => ({ eligible: true })),
 };
 
-const walletHandler = createWalletHandler(walletService as any);
+const walletHandler = createWalletHandler({
+  wallet: walletService as any,
+  competitionCalendarUrl: "https://example.com/calendar",
+});
 
 describe("walletHandler", () => {
   describe("get", () => {
@@ -43,15 +40,15 @@ describe("walletHandler", () => {
 
   describe("listLedger", () => {
     test("calls wallet.getOrCreate then wallet.listLedger with wallet id and input", async () => {
-      const input = { limit: 10 };
-
-      const result = await walletHandler.listLedger(
-        { context: { session: { user: { id: "u1" } } } } as any,
-        input,
-      );
+      const result = await walletHandler.listLedger({
+        context: { session: { user: { id: "u1" } } } as any,
+        input: { limit: 10 },
+      });
 
       expect(walletService.getOrCreate).toHaveBeenCalledWith("u1");
-      expect(walletService.listLedger).toHaveBeenCalledWith("w1", input);
+      expect(walletService.listLedger).toHaveBeenCalledWith("w1", {
+        limit: 10,
+      });
       expect(result).toEqual({ items: [] });
     });
   });

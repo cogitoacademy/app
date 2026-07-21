@@ -1,7 +1,7 @@
 import type { z } from "zod";
-import { ORPCError } from "@orpc/server";
 import type { DbType } from "../../lib/db";
-import { notFound } from "../../lib/errors";
+import { ORPCError } from "@orpc/server";
+import { badRequest, notFound } from "../../lib/errors";
 import type { WalletSnapshot } from "../wallet/wallet.service";
 import type { AuthRepo, StudentProfileRow, TutorProfileRow } from "./auth.repo";
 import { updateProfileInput } from "./auth.types";
@@ -33,9 +33,7 @@ export function validateUpdateInput(
     if (value !== undefined && value.trim() === "") {
       return {
         ok: false,
-        error: new ORPCError("BAD_REQUEST", {
-          message: `${field} cannot be blank`,
-        }),
+        error: badRequest(`${field} cannot be blank`),
       };
     }
   }
