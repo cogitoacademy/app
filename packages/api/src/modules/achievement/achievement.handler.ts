@@ -1,5 +1,7 @@
 import type { Context } from "../../context";
-import type { z } from "zod";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
+import { internalServerError } from "../../lib/errors";
 import type {
   achievementInput,
   updateAchievementInput,
@@ -21,7 +23,12 @@ export function createAchievementHandler(deps: {
   const { achievementService } = deps;
 
   async function list({ context }: { context: Context }) {
-    return achievementService.list(context.session!.user.id);
+    try {
+      return achievementService.list(context.session!.user.id);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to list achievements", err);
+    }
   }
 
   async function create({
@@ -31,7 +38,12 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: AchievementInput;
   }) {
-    return achievementService.create(context.session!.user.id, input);
+    try {
+      return achievementService.create(context.session!.user.id, input);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to create achievement", err);
+    }
   }
 
   async function update({
@@ -41,7 +53,12 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: UpdateAchievementInput;
   }) {
-    return achievementService.update(context.session!.user.id, input);
+    try {
+      return achievementService.update(context.session!.user.id, input);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to update achievement", err);
+    }
   }
 
   async function remove({
@@ -51,7 +68,12 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: DeleteAchievementInput;
   }) {
-    return achievementService.remove(context.session!.user.id, input.id);
+    try {
+      return achievementService.remove(context.session!.user.id, input.id);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to delete achievement", err);
+    }
   }
 
   async function adminList({
@@ -60,7 +82,12 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: AdminListInput;
   }) {
-    return achievementService.adminList(input ?? {});
+    try {
+      return achievementService.adminList(input ?? {});
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to list achievements (admin)", err);
+    }
   }
 
   async function adminReview({
@@ -70,7 +97,12 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: AdminReviewInput;
   }) {
-    return achievementService.adminReview(context.session!.user.id, input);
+    try {
+      return achievementService.adminReview(context.session!.user.id, input);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to review achievement", err);
+    }
   }
 
   return { list, create, update, remove, adminList, adminReview };

@@ -8,7 +8,7 @@ import type { WalletSnapshot } from "../wallet/wallet.service";
 
 export type AuthModule = ReturnType<typeof createAuthModule>;
 
-interface AuthWalletPort {
+export interface AuthWalletPort {
   getOrCreate(userId: string): Promise<WalletSnapshot>;
 }
 

@@ -1,24 +1,13 @@
 import type { z } from "zod";
 import type { DbType } from "../../lib/db";
-import { ORPCError } from "@orpc/server";
 import { badRequest, notFound } from "../../lib/errors";
-import type { WalletSnapshot } from "../wallet/wallet.service";
 import type { AuthRepo, StudentProfileRow, TutorProfileRow } from "./auth.repo";
 import { updateProfileInput } from "./auth.types";
-
-interface AuthWalletPort {
-  getOrCreate(userId: string): Promise<WalletSnapshot>;
-}
+import type { AuthWalletPort } from "./index";
 
 export type UpdateProfileInput = z.infer<typeof updateProfileInput>;
 
-type AuthError = ORPCError<"BAD_REQUEST", undefined>;
-
-export type ValidationResult = { ok: true } | { ok: false; error: AuthError };
-
-export function validateUpdateInput(
-  input: UpdateProfileInput,
-): ValidationResult {
+export function validateUpdateInput(input: UpdateProfileInput): void {
   const stringFields = [
     "phoneNumber",
     "schoolName",
@@ -31,14 +20,9 @@ export function validateUpdateInput(
   for (const field of stringFields) {
     const value = input[field];
     if (value !== undefined && value.trim() === "") {
-      return {
-        ok: false,
-        error: badRequest(`${field} cannot be blank`),
-      };
+      throw badRequest(`${field} cannot be blank`);
     }
   }
-
-  return { ok: true };
 }
 
 export interface MeResult {
@@ -90,8 +74,7 @@ export function createAuthService(deps: {
     userId: string,
     input: UpdateProfileInput,
   ): Promise<StudentProfileRow> {
-    const result = validateUpdateInput(input);
-    if (!result.ok) throw result.error;
+    validateUpdateInput(input);
 
     const existing = await authRepo.getStudentProfile(db, userId);
     if (existing) return authRepo.upsertProfile(db, userId, input);

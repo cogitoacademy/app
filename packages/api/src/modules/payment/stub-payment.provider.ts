@@ -1,4 +1,5 @@
 import type { PaymentProvider, WebhookPayload } from "./payment.service";
+import { unauthorized } from "../../lib/errors";
 
 export async function createIntent(params: {
   paymentId: string;
@@ -30,7 +31,7 @@ export function createStubPaymentProvider(
       Buffer.from(signature, "hex"),
       new TextEncoder().encode(rawBody),
     );
-    if (!valid) throw new Error("Invalid webhook signature");
+    if (!valid) throw unauthorized("Invalid webhook signature");
 
     return JSON.parse(rawBody) as WebhookPayload;
   }

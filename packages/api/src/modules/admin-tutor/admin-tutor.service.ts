@@ -1,7 +1,5 @@
-import type { ORPCError } from "@orpc/server";
 import { notFound, badRequest, conflict } from "../../lib/errors";
 import type { DbType } from "../../lib/db";
-import type { AuditRecordParams } from "../audit/audit.service";
 import {
   INVITE_EXPIRY_DAYS,
   INVITE_STATUS,
@@ -21,10 +19,7 @@ import type {
   ReviewTutorProfileInput,
   ReviewAction,
 } from "./admin-tutor.types";
-
-interface AdminTutorAuditPort {
-  record(params: AuditRecordParams): Promise<void>;
-}
+import type { AdminTutorAuditPort } from "./index";
 
 export type { ReviewAction };
 
@@ -40,14 +35,6 @@ export interface ReviewUpdates {
   publishedAt?: Date | null;
 }
 
-type ReviewError =
-  | ORPCError<"NOT_FOUND", undefined>
-  | ORPCError<"BAD_REQUEST", undefined>;
-
-export type ReviewValidationResult =
-  | { ok: true; profile: TutorProfileSnapshot }
-  | { ok: false; error: ReviewError };
-
 const STATUS_MAP: Record<ReviewAction, string> = {
   request_changes: ONBOARDING_STATUS.CHANGES_REQUESTED,
   approve_unpublished: ONBOARDING_STATUS.APPROVED_UNPUBLISHED,
@@ -59,14 +46,14 @@ const STATUS_MAP: Record<ReviewAction, string> = {
 export function validateReviewAction(
   action: ReviewAction,
   profile: TutorProfileSnapshot | null,
-): ReviewValidationResult {
+): { profile: TutorProfileSnapshot } {
   if (!profile) {
-    return { ok: false, error: notFound("Tutor profile not found") };
+    throw notFound("Tutor profile not found");
   }
   if (!STATUS_MAP[action]) {
-    return { ok: false, error: badRequest("Invalid action") };
+    throw badRequest("Invalid action");
   }
-  return { ok: true, profile };
+  return { profile };
 }
 
 export function buildReviewUpdates(
@@ -233,9 +220,7 @@ export function createAdminTutorService(deps: {
         input.tutorProfileId,
       );
 
-      const validation = validateReviewAction(input.action, profile);
-      if (!validation.ok) throw validation.error;
-      const existing = validation.profile;
+      const { profile: existing } = validateReviewAction(input.action, profile);
 
       const { updates, newStatus } = buildReviewUpdates(
         input.action,

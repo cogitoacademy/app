@@ -7,25 +7,9 @@ import {
 } from "../../shared/constants";
 import { TERMINAL_STATES } from "../booking/booking-state.types";
 import type { DbType } from "../../lib/db";
-import type { DbOrTx } from "../../lib/tx";
-import type { AuditRecordParams } from "../audit/audit.service";
-import type {
-  WalletSnapshot,
-  ReleaseParams,
-  CompensateParams,
-} from "../wallet/wallet.service";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import type { RefundRepo } from "../refund/refund.repo";
-
-interface AdminBookingAuditPort {
-  record(params: AuditRecordParams): Promise<void>;
-}
-
-interface AdminBookingWalletPort {
-  getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
-  release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
-  compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
-}
+import type { AdminBookingAuditPort, AdminBookingWalletPort } from "./index";
 
 export const OVERRIDE_CATEGORIES = [
   "tutor_no_show",

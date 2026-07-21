@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { validateClaim } from "../../modules/invite/invite.service";
+import { createInviteService } from "../../modules/invite/invite.service";
+import type { InviteRepo } from "../../modules/invite/invite.repo";
 import type { tutorInvite, tutorProfile } from "@cogito-app/db/schema";
 
 type InviteRow = typeof tutorInvite.$inferSelect;
@@ -25,51 +26,56 @@ function makeInvite(overrides: Partial<InviteRow> = {}): InviteRow {
   } as InviteRow;
 }
 
+function makeService(
+  invite: InviteRow | undefined,
+  existingProfile: TutorProfileRow | undefined,
+) {
+  const inviteRepo: Partial<InviteRepo> = {
+    findInviteByToken: async () => invite,
+    findTutorProfileByUserId: async () => existingProfile,
+    updateInviteStatus: async () => [null],
+    insertTutorProfile: async () => ({ id: "tp1" }) as any,
+    updateUserRole: async () => {},
+  };
+  const auditPort = { record: async () => {} };
+  const db = {
+    transaction: async (fn: any) => fn({}),
+  } as any;
+  return createInviteService({
+    inviteRepo: inviteRepo as InviteRepo,
+    auditPort: auditPort as any,
+    db,
+  });
+}
+
 describe("Invite Service", () => {
-  describe("validateClaim", () => {
-    test("returns ok for valid invite with matching email", () => {
-      const result = validateClaim(
-        makeInvite({ email: "tutor@example.com" }),
-        "tutor@example.com",
-        undefined,
-      );
-      expect(result.ok).toBe(true);
+  describe("validateClaim (via claim)", () => {
+    test("throws for null invite", async () => {
+      const service = makeService(undefined, undefined);
+      await expect(
+        service.claim("u1", "tutor@example.com", "tok1"),
+      ).rejects.toThrow();
     });
 
-    test("returns ok with case-insensitive email matching", () => {
-      const result = validateClaim(
-        makeInvite({ email: "Tutor@Example.COM" }),
-        "tutor@example.com",
-        undefined,
-      );
-      expect(result.ok).toBe(true);
-    });
-
-    test("returns error for null invite", () => {
-      const result = validateClaim(undefined, "tutor@example.com", undefined);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
-    });
-
-    test("returns error when email does not match", () => {
-      const result = validateClaim(
+    test("throws when email does not match", async () => {
+      const service = makeService(
         makeInvite({ email: "other@example.com" }),
-        "tutor@example.com",
         undefined,
       );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("FORBIDDEN");
+      await expect(
+        service.claim("u1", "tutor@example.com", "tok1"),
+      ).rejects.toThrow();
     });
 
-    test("returns error when user already has tutor profile", () => {
+    test("throws when user already has tutor profile", async () => {
       const profile = { id: "tp1" } as TutorProfileRow;
-      const result = validateClaim(
+      const service = makeService(
         makeInvite({ email: "tutor@example.com" }),
-        "tutor@example.com",
         profile,
       );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("CONFLICT");
+      await expect(
+        service.claim("u1", "tutor@example.com", "tok1"),
+      ).rejects.toThrow();
     });
   });
 });

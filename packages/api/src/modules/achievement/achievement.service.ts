@@ -1,8 +1,6 @@
 import type { achievement } from "@cogito-app/db/schema";
-import type { ORPCError } from "@orpc/server";
 import type { DbType } from "../../lib/db";
 import { badRequest, notFound } from "../../lib/errors";
-import type { AuditRecordParams } from "../audit/audit.service";
 import { ACHIEVEMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import type {
   AchievementRepo,
@@ -10,12 +8,9 @@ import type {
   UpdateAchievementData,
   AdminListInput,
 } from "./achievement.repo";
+import type { AchievementAuditPort } from "./index";
 
 type AchievementRow = typeof achievement.$inferSelect;
-
-interface AchievementAuditPort {
-  record(params: AuditRecordParams): Promise<void>;
-}
 
 export interface UpdateAchievementInput {
   id: string;
@@ -28,32 +23,16 @@ export interface AdminReviewInput {
   adminNote?: string;
 }
 
-export type ValidationResult =
-  | { ok: true }
-  | { ok: false; error: ORPCError<any, any> };
-
-export function validateUpdate(
-  existing: AchievementRow | undefined,
-): ValidationResult {
+export function validateUpdate(existing: AchievementRow | undefined): void {
   if (!existing || existing.status !== ACHIEVEMENT_STATUS.PENDING) {
-    return {
-      ok: false,
-      error: badRequest("Can only edit pending achievements"),
-    };
+    throw badRequest("Can only edit pending achievements");
   }
-  return { ok: true };
 }
 
-export function validateDelete(
-  existing: AchievementRow | undefined,
-): ValidationResult {
+export function validateDelete(existing: AchievementRow | undefined): void {
   if (!existing || existing.status !== ACHIEVEMENT_STATUS.PENDING) {
-    return {
-      ok: false,
-      error: badRequest("Can only delete pending achievements"),
-    };
+    throw badRequest("Can only delete pending achievements");
   }
-  return { ok: true };
 }
 
 export function createAchievementService(deps: {
@@ -80,15 +59,13 @@ export function createAchievementService(deps: {
       input.id,
       userId,
     );
-    const result = validateUpdate(existing);
-    if (!result.ok) throw result.error;
+    validateUpdate(existing);
     return achievementRepo.update(db, input.id, userId, input.data);
   }
 
   async function remove(userId: string, id: string) {
     const existing = await achievementRepo.findByIdForUser(db, id, userId);
-    const result = validateDelete(existing);
-    if (!result.ok) throw result.error;
+    validateDelete(existing);
     return achievementRepo.deleteRow(db, id, userId);
   }
 

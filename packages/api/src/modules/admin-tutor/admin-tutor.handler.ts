@@ -1,5 +1,23 @@
 import type { Context } from "../../context";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
+import { internalServerError } from "../../lib/errors";
 import type { AdminTutorService } from "./admin-tutor.service";
+import {
+  createInviteInput,
+  listInvitesInput,
+  resendInviteInput,
+  revokeInviteInput,
+  listTutorProfilesInput,
+  reviewTutorProfileInput,
+} from "./admin-tutor.types";
+
+type CreateInviteInput = z.infer<typeof createInviteInput>;
+type ListInvitesInput = z.infer<typeof listInvitesInput>;
+type ResendInviteInput = z.infer<typeof resendInviteInput>;
+type RevokeInviteInput = z.infer<typeof revokeInviteInput>;
+type ListTutorProfilesInput = z.infer<typeof listTutorProfilesInput>;
+type ReviewTutorProfileInput = z.infer<typeof reviewTutorProfileInput>;
 
 export type AdminTutorHandler = ReturnType<typeof createAdminTutorHandler>;
 
@@ -10,9 +28,14 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       input,
     }: {
       context: Context;
-      input: any;
+      input: CreateInviteInput;
     }) => {
-      return adminTutorService.createInvite(context.session!.user.id, input);
+      try {
+        return adminTutorService.createInvite(context.session!.user.id, input);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to create invite", err);
+      }
     },
 
     listInvites: async ({
@@ -20,9 +43,14 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       input,
     }: {
       context: Context;
-      input: any;
+      input: ListInvitesInput;
     }) => {
-      return adminTutorService.listInvites(input ?? {});
+      try {
+        return adminTutorService.listInvites(input ?? {});
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to list invites", err);
+      }
     },
 
     resendInvite: async ({
@@ -30,12 +58,17 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       input,
     }: {
       context: Context;
-      input: any;
+      input: ResendInviteInput;
     }) => {
-      return adminTutorService.resendInvite(
-        context.session!.user.id,
-        input.inviteId,
-      );
+      try {
+        return adminTutorService.resendInvite(
+          context.session!.user.id,
+          input.inviteId,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to resend invite", err);
+      }
     },
 
     revokeInvite: async ({
@@ -43,12 +76,17 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       input,
     }: {
       context: Context;
-      input: any;
+      input: RevokeInviteInput;
     }) => {
-      return adminTutorService.revokeInvite(
-        context.session!.user.id,
-        input.inviteId,
-      );
+      try {
+        return adminTutorService.revokeInvite(
+          context.session!.user.id,
+          input.inviteId,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to revoke invite", err);
+      }
     },
 
     listTutorProfiles: async ({
@@ -56,9 +94,14 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       input,
     }: {
       context: Context;
-      input: any;
+      input: ListTutorProfilesInput;
     }) => {
-      return adminTutorService.listTutorProfiles(input ?? {});
+      try {
+        return adminTutorService.listTutorProfiles(input ?? {});
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to list tutor profiles", err);
+      }
     },
 
     reviewTutorProfile: async ({
@@ -66,12 +109,17 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       input,
     }: {
       context: Context;
-      input: any;
+      input: ReviewTutorProfileInput;
     }) => {
-      return adminTutorService.reviewTutorProfile(
-        context.session!.user.id,
-        input,
-      );
+      try {
+        return adminTutorService.reviewTutorProfile(
+          context.session!.user.id,
+          input,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to review tutor profile", err);
+      }
     },
   };
 }

@@ -251,44 +251,36 @@ describe("AdminService", () => {
 });
 
 describe("validateRoleChange", () => {
-  test("returns error for null target", () => {
-    const result = validateRoleChange(null, "tutor", 2);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+  test("throws for null target", () => {
+    expect(() => validateRoleChange(null, "tutor", 2)).toThrow();
   });
 
-  test("returns ok for student to tutor change", () => {
+  test("returns previousRole for student to tutor change", () => {
     const result = validateRoleChange(
       { id: "u1", role: "student" },
       "tutor",
       2,
     );
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.previousRole).toBe("student");
+    expect(result.previousRole).toBe("student");
   });
 
-  test("returns error for demoting last admin", () => {
-    const result = validateRoleChange(
-      { id: "u1", role: "admin" },
-      "student",
-      1,
-    );
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("CONFLICT");
+  test("throws for demoting last admin", () => {
+    expect(() =>
+      validateRoleChange({ id: "u1", role: "admin" }, "student", 1),
+    ).toThrow();
   });
 
-  test("returns ok for demoting admin with multiple admins", () => {
+  test("returns previousRole for demoting admin with multiple admins", () => {
     const result = validateRoleChange(
       { id: "u1", role: "admin" },
       "student",
       3,
     );
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.previousRole).toBe("admin");
+    expect(result.previousRole).toBe("admin");
   });
 
-  test("returns ok for admin to admin (no change)", () => {
+  test("returns previousRole for admin to admin (no change)", () => {
     const result = validateRoleChange({ id: "u1", role: "admin" }, "admin", 1);
-    expect(result.ok).toBe(true);
+    expect(result.previousRole).toBe("admin");
   });
 });

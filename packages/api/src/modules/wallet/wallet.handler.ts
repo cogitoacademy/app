@@ -1,5 +1,7 @@
 import type { Context } from "../../context";
-import type { z } from "zod";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
+import { internalServerError } from "../../lib/errors";
 import type { listLedgerInput } from "./wallet.types";
 import type { WalletService } from "./wallet.service";
 
@@ -18,13 +20,18 @@ export function createWalletHandler({
 }: WalletHandlerDeps) {
   return {
     get: async ({ context }: { context: Context }) => {
-      const w = await wallet.getOrCreate(context.session!.user.id);
-      return {
-        id: w.id,
-        totalBalance: w.totalBalance,
-        heldBalance: w.heldBalance,
-        availableBalance: w.availableBalance,
-      };
+      try {
+        const w = await wallet.getOrCreate(context.session!.user.id);
+        return {
+          id: w.id,
+          totalBalance: w.totalBalance,
+          heldBalance: w.heldBalance,
+          availableBalance: w.availableBalance,
+        };
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to fetch wallet", err);
+      }
     },
 
     listLedger: async ({
@@ -34,21 +41,46 @@ export function createWalletHandler({
       context: Context;
       input: ListLedgerInput;
     }) => {
-      const w = await wallet.getOrCreate(context.session!.user.id);
-      return wallet.listLedger(w.id, input);
+      try {
+        const w = await wallet.getOrCreate(context.session!.user.id);
+        return wallet.listLedger(w.id, input);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to list ledger entries", err);
+      }
     },
 
     listPackages: async ({ context: _context }: { context: Context }) => {
-      return wallet.listActivePackages();
+      try {
+        return wallet.listActivePackages();
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to list packages", err);
+      }
     },
 
     knowledgeBankEligible: async ({ context }: { context: Context }) => {
-      return wallet.knowledgeBankEligible(context.session!.user.id);
+      try {
+        return wallet.knowledgeBankEligible(context.session!.user.id);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError(
+          "Failed to check knowledge bank eligibility",
+          err,
+        );
+      }
     },
 
-    // TODO: Move to a dedicated config module — this is not a wallet concern
     competitionCalendarLink: async () => {
-      return { url: competitionCalendarUrl };
+      try {
+        return { url: competitionCalendarUrl };
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError(
+          "Failed to fetch competition calendar link",
+          err,
+        );
+      }
     },
   };
 }

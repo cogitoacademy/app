@@ -1,6 +1,8 @@
 import type { Context } from "../../context";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
+import { internalServerError } from "../../lib/errors";
 import type { RefundService } from "./refund.service";
-import type { z } from "zod";
 import type {
   createCorrectionInput,
   listCorrectionsInput,
@@ -21,7 +23,12 @@ export function createRefundHandler(deps: { refundService: RefundService }) {
     context: Context;
     input: CreateCorrectionInput;
   }) {
-    return refundService.createCorrection(context.session!.user.id, input);
+    try {
+      return refundService.createCorrection(context.session!.user.id, input);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to create correction", err);
+    }
   }
 
   async function listCorrections({
@@ -30,7 +37,12 @@ export function createRefundHandler(deps: { refundService: RefundService }) {
     context: Context;
     input: ListCorrectionsInput;
   }) {
-    return refundService.listCorrections(input);
+    try {
+      return refundService.listCorrections(input);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to list corrections", err);
+    }
   }
 
   return { createCorrection, listCorrections };

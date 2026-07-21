@@ -1,11 +1,5 @@
 import type { DbType } from "../../lib/db";
 import { notFound, badRequest, forbidden } from "../../lib/errors";
-import type { AuditRecordParams } from "../audit/audit.service";
-import type {
-  GroupSize,
-  Modality,
-  PriceSnapshot,
-} from "../pricing/pricing.service";
 import {
   ONBOARDING_STATUS,
   MODALITY,
@@ -13,42 +7,23 @@ import {
 } from "../../shared/constants";
 import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
-import type { ORPCError } from "@orpc/server";
+import type { TutorAuditPort, TutorPricingPort } from "./index";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
-
-interface TutorAuditPort {
-  record(params: AuditRecordParams): Promise<void>;
-}
-
-interface TutorPricingPort {
-  validatePrices(
-    prices: Record<string, number>,
-    modality: Modality,
-  ): string | null;
-  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
-}
-
-export type ValidationResult =
-  | { ok: true }
-  | { ok: false; error: ORPCError<any, any> };
 
 export function validateUpdateInput(
   profile: TutorProfileRow | undefined,
   input: UpdateProfileInput,
   pricingPort: TutorPricingPort,
-): ValidationResult {
+): void {
   if (!profile) {
-    return { ok: false, error: notFound("Tutor profile not found") };
+    throw notFound("Tutor profile not found");
   }
 
   if (profile.onboardingStatus === ONBOARDING_STATUS.PUBLISHED) {
-    return {
-      ok: false,
-      error: forbidden(
-        "Published profiles cannot be edited directly. Contact admin.",
-      ),
-    };
+    throw forbidden(
+      "Published profiles cannot be edited directly. Contact admin.",
+    );
   }
 
   if (input.prices) {
@@ -58,31 +33,24 @@ export function validateUpdateInput(
       | "both";
     const error = pricingPort.validatePrices(input.prices, modality);
     if (error) {
-      return { ok: false, error: badRequest(error) };
+      throw badRequest(error);
     }
   }
-
-  return { ok: true };
 }
 
 export function validateSubmitForReview(
   profile: TutorProfileRow | undefined,
   pricingPort: TutorPricingPort,
-): ValidationResult {
+): void {
   if (!profile) {
-    return { ok: false, error: notFound("Tutor profile not found") };
+    throw notFound("Tutor profile not found");
   }
 
   if (
     profile.onboardingStatus !== ONBOARDING_STATUS.DRAFT &&
     profile.onboardingStatus !== ONBOARDING_STATUS.CHANGES_REQUESTED
   ) {
-    return {
-      ok: false,
-      error: badRequest(
-        `Cannot submit from status: ${profile.onboardingStatus}`,
-      ),
-    };
+    throw badRequest(`Cannot submit from status: ${profile.onboardingStatus}`);
   }
 
   const requiredFields = [
@@ -93,17 +61,11 @@ export function validateSubmitForReview(
     profile.prices,
   ];
   if (requiredFields.some((f) => !f)) {
-    return {
-      ok: false,
-      error: badRequest("All required fields must be filled before submission"),
-    };
+    throw badRequest("All required fields must be filled before submission");
   }
 
   if (!profile.expertise || profile.expertise.length === 0) {
-    return {
-      ok: false,
-      error: badRequest("At least one expertise track is required"),
-    };
+    throw badRequest("At least one expertise track is required");
   }
 
   if (profile.prices) {
@@ -116,11 +78,9 @@ export function validateSubmitForReview(
       modality,
     );
     if (error) {
-      return { ok: false, error: badRequest(error) };
+      throw badRequest(error);
     }
   }
-
-  return { ok: true };
 }
 
 export function createTutorService(deps: {
@@ -139,15 +99,13 @@ export function createTutorService(deps: {
 
   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
     const profile = await tutorRepo.getByUserId(db, userId);
-    const result = validateUpdateInput(profile, input, pricingPort);
-    if (!result.ok) throw result.error;
+    validateUpdateInput(profile, input, pricingPort);
     return tutorRepo.updateProfile(db, userId, input);
   }
 
   async function submitForReview(userId: string) {
     const profile = await tutorRepo.getByUserId(db, userId);
-    const result = validateSubmitForReview(profile, pricingPort);
-    if (!result.ok) throw result.error;
+    validateSubmitForReview(profile, pricingPort);
 
     return db.transaction(async (tx) => {
       const row = await tutorRepo.updateStatus(

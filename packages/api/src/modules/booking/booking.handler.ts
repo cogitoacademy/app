@@ -1,5 +1,7 @@
 import type { Context } from "../../context";
-import type { z } from "zod";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
+import { internalServerError } from "../../lib/errors";
 import type {
   createSoloInput,
   createGroupInput,
@@ -43,14 +45,19 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: CreateSoloInput;
     }) => {
-      return booking.createSolo(context.session!.user.id, {
-        tutorId: input.tutorId,
-        availabilitySlotId: input.availabilitySlotId,
-        modality: input.modality,
-        scheduledStartAt: new Date(input.scheduledStartAt),
-        scheduledEndAt: new Date(input.scheduledEndAt),
-        timezone: input.timezone,
-      });
+      try {
+        return booking.createSolo(context.session!.user.id, {
+          tutorId: input.tutorId,
+          availabilitySlotId: input.availabilitySlotId,
+          modality: input.modality,
+          scheduledStartAt: new Date(input.scheduledStartAt),
+          scheduledEndAt: new Date(input.scheduledEndAt),
+          timezone: input.timezone,
+        });
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to create solo booking", err);
+      }
     },
 
     get: async ({
@@ -60,7 +67,12 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: GetBookingInput;
     }) => {
-      return booking.getById(input.bookingId);
+      try {
+        return booking.getById(input.bookingId);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to fetch booking", err);
+      }
     },
 
     listMine: async ({
@@ -70,7 +82,12 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ListMineInput;
     }) => {
-      return booking.listMine(context.session!.user.id, input);
+      try {
+        return booking.listMine(context.session!.user.id, input);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to list bookings", err);
+      }
     },
 
     cancel: async ({
@@ -80,11 +97,16 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: BookingActionInput & { cancellationReason?: string };
     }) => {
-      return booking.cancel(
-        context.session!.user.id,
-        input.bookingId,
-        input.cancellationReason,
-      );
+      try {
+        return booking.cancel(
+          context.session!.user.id,
+          input.bookingId,
+          input.cancellationReason,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to cancel booking", err);
+      }
     },
 
     proposeReschedule: async ({
@@ -94,13 +116,18 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ProposeRescheduleInput;
     }) => {
-      return booking.proposeReschedule(
-        context.session!.user.id,
-        input.bookingId,
-        new Date(input.proposedStartAt),
-        new Date(input.proposedEndAt),
-        input.reason,
-      );
+      try {
+        return booking.proposeReschedule(
+          context.session!.user.id,
+          input.bookingId,
+          new Date(input.proposedStartAt),
+          new Date(input.proposedEndAt),
+          input.reason,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to propose reschedule", err);
+      }
     },
 
     createGroup: async ({
@@ -110,16 +137,21 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: CreateGroupInput;
     }) => {
-      return booking.createGroup(context.session!.user.id, {
-        tutorId: input.tutorId,
-        availabilitySlotId: input.availabilitySlotId,
-        modality: input.modality,
-        targetGroupSize: input.targetGroupSize,
-        inviteeUserIds: input.inviteeUserIds,
-        scheduledStartAt: new Date(input.scheduledStartAt),
-        scheduledEndAt: new Date(input.scheduledEndAt),
-        timezone: input.timezone,
-      });
+      try {
+        return booking.createGroup(context.session!.user.id, {
+          tutorId: input.tutorId,
+          availabilitySlotId: input.availabilitySlotId,
+          modality: input.modality,
+          targetGroupSize: input.targetGroupSize,
+          inviteeUserIds: input.inviteeUserIds,
+          scheduledStartAt: new Date(input.scheduledStartAt),
+          scheduledEndAt: new Date(input.scheduledEndAt),
+          timezone: input.timezone,
+        });
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to create group booking", err);
+      }
     },
 
     createSeries: async ({
@@ -129,16 +161,21 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: CreateSeriesInput;
     }) => {
-      return booking.createSeries(context.session!.user.id, {
-        tutorId: input.tutorId,
-        availabilitySlotId: input.availabilitySlotId,
-        modality: input.modality,
-        sessions: input.sessions.map((s) => ({
-          scheduledStartAt: new Date(s.scheduledStartAt),
-          scheduledEndAt: new Date(s.scheduledEndAt),
-        })),
-        timezone: input.timezone,
-      });
+      try {
+        return booking.createSeries(context.session!.user.id, {
+          tutorId: input.tutorId,
+          availabilitySlotId: input.availabilitySlotId,
+          modality: input.modality,
+          sessions: input.sessions.map((s) => ({
+            scheduledStartAt: new Date(s.scheduledStartAt),
+            scheduledEndAt: new Date(s.scheduledEndAt),
+          })),
+          timezone: input.timezone,
+        });
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to create booking series", err);
+      }
     },
 
     confirmInvite: async ({
@@ -148,7 +185,12 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ConfirmInviteInput;
     }) => {
-      return booking.confirmInvite(context.session!.user.id, input.bookingId);
+      try {
+        return booking.confirmInvite(context.session!.user.id, input.bookingId);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to confirm invite", err);
+      }
     },
 
     declineInvite: async ({
@@ -158,11 +200,16 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: DeclineInviteInput;
     }) => {
-      return booking.declineInvite(
-        context.session!.user.id,
-        input.bookingId,
-        input.reason,
-      );
+      try {
+        return booking.declineInvite(
+          context.session!.user.id,
+          input.bookingId,
+          input.reason,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to decline invite", err);
+      }
     },
 
     reconfirm: async ({
@@ -172,11 +219,16 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ReconfirmInput;
     }) => {
-      return booking.reconfirm(
-        context.session!.user.id,
-        input.bookingId,
-        input.accept,
-      );
+      try {
+        return booking.reconfirm(
+          context.session!.user.id,
+          input.bookingId,
+          input.accept,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to reconfirm booking", err);
+      }
     },
 
     withdraw: async ({
@@ -186,11 +238,16 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: WithdrawInput;
     }) => {
-      return booking.withdraw(
-        context.session!.user.id,
-        input.bookingId,
-        input.reason,
-      );
+      try {
+        return booking.withdraw(
+          context.session!.user.id,
+          input.bookingId,
+          input.reason,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to withdraw from booking", err);
+      }
     },
 
     listSessions: async ({
@@ -200,7 +257,12 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ListSessionsInput;
     }) => {
-      return booking.listSessions(input.bookingId);
+      try {
+        return booking.listSessions(input.bookingId);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to list sessions", err);
+      }
     },
   };
 }
@@ -214,7 +276,12 @@ export function createTutorActionsHandler(booking: BookingService) {
       context: Context;
       input: BookingActionInput;
     }) => {
-      return booking.tutorAccept(input.bookingId, context.session!.user.id);
+      try {
+        return booking.tutorAccept(input.bookingId, context.session!.user.id);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to accept booking", err);
+      }
     },
 
     declineBooking: async ({
@@ -224,11 +291,16 @@ export function createTutorActionsHandler(booking: BookingService) {
       context: Context;
       input: BookingActionInput & { reason?: string };
     }) => {
-      return booking.tutorDecline(
-        input.bookingId,
-        context.session!.user.id,
-        input.reason,
-      );
+      try {
+        return booking.tutorDecline(
+          input.bookingId,
+          context.session!.user.id,
+          input.reason,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to decline booking", err);
+      }
     },
 
     completeSession: async ({
@@ -238,11 +310,16 @@ export function createTutorActionsHandler(booking: BookingService) {
       context: Context;
       input: CompleteSessionInput;
     }) => {
-      return booking.completeSession(
-        input.bookingId,
-        context.session!.user.id,
-        input.sessionNote,
-      );
+      try {
+        return booking.completeSession(
+          input.bookingId,
+          context.session!.user.id,
+          input.sessionNote,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to complete session", err);
+      }
     },
   };
 }

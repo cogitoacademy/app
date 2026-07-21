@@ -1,5 +1,7 @@
 import type { Context } from "../../context";
-import type { z } from "zod";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
+import { internalServerError } from "../../lib/errors";
 import type { verifyInput, claimInput } from "./invite.types";
 import type { InviteService } from "./invite.service";
 
@@ -10,7 +12,12 @@ export function createInviteHandler(deps: { inviteService: InviteService }) {
   const { inviteService } = deps;
 
   async function verify({ input }: { context: Context; input: VerifyInput }) {
-    return inviteService.verify(input.token);
+    try {
+      return inviteService.verify(input.token);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to verify invite", err);
+    }
   }
 
   async function claim({
@@ -20,8 +27,13 @@ export function createInviteHandler(deps: { inviteService: InviteService }) {
     context: Context;
     input: ClaimInput;
   }) {
-    const user = context.session!.user;
-    return inviteService.claim(user.id, user.email, input.token);
+    try {
+      const user = context.session!.user;
+      return inviteService.claim(user.id, user.email, input.token);
+    } catch (err) {
+      if (err instanceof ORPCError) throw err;
+      throw internalServerError("Failed to claim invite", err);
+    }
   }
 
   return { verify, claim };

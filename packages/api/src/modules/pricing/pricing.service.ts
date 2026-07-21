@@ -25,7 +25,7 @@ export interface PricingPort {
 
 export type PricingService = ReturnType<typeof createPricingService>;
 
-export function getFloorPrices(modality: Modality): Record<number, number> {
+function getFloorPrices(modality: Modality): Record<number, number> {
   if (modality === MODALITY.ONLINE) return ONLINE_FLOOR_PRICES;
   if (modality === MODALITY.OFFLINE) return OFFLINE_FLOOR_PRICES;
   const higher: Record<number, number> = {};
@@ -38,7 +38,7 @@ export function getFloorPrices(modality: Modality): Record<number, number> {
   return higher;
 }
 
-export function validatePrices(
+function validatePrices(
   prices: Record<string, number>,
   modality: Modality,
 ): string | null {
@@ -66,10 +66,7 @@ export function validatePrices(
   return null;
 }
 
-export function computeSplit(
-  totalMarks: number,
-  groupSize: GroupSize,
-): PriceSnapshot {
+function computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot {
   const perStudent = Math.floor(totalMarks / groupSize);
   const cogitoTake = Math.floor(totalMarks * COGITO_TAKE_RATE);
   const tutorShare = totalMarks - cogitoTake;

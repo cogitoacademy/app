@@ -16,7 +16,7 @@ import { BOOKING_STATES } from "./booking-state.types";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
-export async function findBookingById(
+async function findBookingById(
   conn: DbOrTx,
   bookingId: string,
 ): Promise<BookingRow | null> {
@@ -28,7 +28,7 @@ export async function findBookingById(
   return (b as BookingRow | undefined) ?? null;
 }
 
-export async function findTutorProfile(
+async function findTutorProfile(
   conn: DbOrTx,
   tutorId: string,
 ): Promise<typeof tutorProfile.$inferSelect | null> {
@@ -42,7 +42,7 @@ export async function findTutorProfile(
   );
 }
 
-export async function findAvailabilitySlot(
+async function findAvailabilitySlot(
   conn: DbOrTx,
   slotId: string,
   tutorId: string,
@@ -61,7 +61,7 @@ export async function findAvailabilitySlot(
   });
 }
 
-export async function findParticipant(
+async function findParticipant(
   conn: DbOrTx,
   bookingId: string,
   userId: string,
@@ -79,7 +79,7 @@ export async function findParticipant(
   return participant ?? null;
 }
 
-export async function findConfirmedParticipants(
+async function findConfirmedParticipants(
   conn: DbOrTx,
   bookingId: string,
   excludeUserId?: string,
@@ -100,10 +100,7 @@ export async function findConfirmedParticipants(
     .where(and(...conditions));
 }
 
-export async function findReconfirmedParticipants(
-  conn: DbOrTx,
-  bookingId: string,
-) {
+async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
   return conn
     .select()
     .from(bookingParticipant)
@@ -118,7 +115,7 @@ export async function findReconfirmedParticipants(
     );
 }
 
-export async function insertBooking(
+async function insertBooking(
   conn: DbOrTx,
   values: typeof booking.$inferInsert,
 ) {
@@ -126,27 +123,7 @@ export async function insertBooking(
   return b!;
 }
 
-export async function updateBookingState(
-  conn: DbOrTx,
-  bookingId: string,
-  state: string,
-  previousState: string | null,
-  reason?: string | null,
-) {
-  const [updated] = await conn
-    .update(booking)
-    .set({
-      currentState: state,
-      previousState,
-      stateReason: reason ?? undefined,
-      updatedAt: new Date(),
-    })
-    .where(eq(booking.id, bookingId))
-    .returning();
-  return updated!;
-}
-
-export async function updateBookingCancellationReason(
+async function updateBookingCancellationReason(
   conn: DbOrTx,
   bookingId: string,
   reason: string | null,
@@ -157,7 +134,7 @@ export async function updateBookingCancellationReason(
     .where(eq(booking.id, bookingId));
 }
 
-export async function updateBookingHoldAmount(
+async function updateBookingHoldAmount(
   conn: DbOrTx,
   bookingId: string,
   holdAmount: number,
@@ -168,7 +145,7 @@ export async function updateBookingHoldAmount(
     .where(eq(booking.id, bookingId));
 }
 
-export async function updateBookingConfirmedHeadcount(
+async function updateBookingConfirmedHeadcount(
   conn: DbOrTx,
   bookingId: string,
   confirmedHeadcount: number,
@@ -179,14 +156,14 @@ export async function updateBookingConfirmedHeadcount(
     .where(eq(booking.id, bookingId));
 }
 
-export async function insertParticipant(
+async function insertParticipant(
   conn: DbOrTx,
   values: typeof bookingParticipant.$inferInsert,
 ) {
   await conn.insert(bookingParticipant).values(values);
 }
 
-export async function updateParticipantState(
+async function updateParticipantState(
   conn: DbOrTx,
   participantId: string,
   values: Partial<typeof bookingParticipant.$inferInsert>,
@@ -197,7 +174,7 @@ export async function updateParticipantState(
     .where(eq(bookingParticipant.id, participantId));
 }
 
-export async function insertStateHistory(
+async function insertStateHistory(
   conn: DbOrTx,
   entry: {
     bookingId: string;
@@ -220,7 +197,7 @@ export async function insertStateHistory(
   });
 }
 
-export async function insertRescheduleProposal(
+async function insertRescheduleProposal(
   conn: DbOrTx,
   values: {
     bookingId: string;
@@ -233,7 +210,7 @@ export async function insertRescheduleProposal(
   await conn.insert(bookingRescheduleProposal).values(values);
 }
 
-export async function insertBookingSession(
+async function insertBookingSession(
   conn: DbOrTx,
   values: {
     seriesBookingId: string;
@@ -263,7 +240,7 @@ export async function listSessionsBySeriesId(
     .orderBy(bookingSession.scheduledStartAt);
 }
 
-export async function findOverlappingBookings(
+async function findOverlappingBookings(
   conn: DbOrTx,
   tutorId: string,
   startAt: Date,
@@ -297,10 +274,7 @@ export async function findOverlappingBookings(
     .limit(1);
 }
 
-export async function findBookingsExpiringByDeadline(
-  conn: DbOrTx,
-  states: string[],
-) {
+async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
   return conn
     .select()
     .from(booking)
@@ -312,19 +286,7 @@ export async function findBookingsExpiringByDeadline(
     );
 }
 
-export async function findBookingType(
-  conn: DbOrTx,
-  bookingId: string,
-): Promise<string | null> {
-  const [b] = await conn
-    .select({ type: booking.type })
-    .from(booking)
-    .where(eq(booking.id, bookingId))
-    .limit(1);
-  return b?.type ?? null;
-}
-
-export async function updateBookingVersioned(
+async function updateBookingVersioned(
   conn: DbOrTx,
   bookingId: string,
   expectedVersion: number,
@@ -401,7 +363,6 @@ export function createBookingRepo(db: DbType) {
     findConfirmedParticipants,
     findReconfirmedParticipants,
     insertBooking,
-    updateBookingState,
     updateBookingCancellationReason,
     updateBookingHoldAmount,
     updateBookingConfirmedHeadcount,
@@ -412,7 +373,6 @@ export function createBookingRepo(db: DbType) {
     insertBookingSession,
     listSessionsBySeriesId,
     findBookingsExpiringByDeadline,
-    findBookingType,
     findOverlappingBookings,
     updateBookingVersioned,
   };

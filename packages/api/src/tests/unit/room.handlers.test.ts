@@ -5,7 +5,11 @@ function makeRoomService() {
   return {
     listActive: mock(async () => [{ id: "r1" }]),
     createRoom: mock(async () => ({ id: "r1" })),
-    assignRoom: mock(async () => ({ ok: true })),
+    assignRoom: mock(async () => ({
+      id: "rb1",
+      bookingId: "b1",
+      roomId: "r1",
+    })),
   };
 }
 
@@ -62,7 +66,11 @@ describe("roomHandler", () => {
         new Date("2025-01-01T10:00:00Z"),
         new Date("2025-01-01T11:00:00Z"),
       );
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({
+        id: "rb1",
+        bookingId: "b1",
+        roomId: "r1",
+      });
     });
   });
 });

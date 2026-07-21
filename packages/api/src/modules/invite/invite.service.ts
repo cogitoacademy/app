@@ -1,51 +1,31 @@
 import type { tutorInvite, tutorProfile } from "@cogito-app/db/schema";
-import type { ORPCError } from "@orpc/server";
 import type { DbType } from "../../lib/db";
 import { notFound, forbidden, conflict } from "../../lib/errors";
-import type { AuditRecordParams } from "../audit/audit.service";
 import { INVITE_STATUS, USER_ROLE, ACTOR_TYPE } from "../../shared/constants";
 import type { InviteRepo } from "./invite.repo";
-
-interface InviteAuditPort {
-  record(params: AuditRecordParams): Promise<void>;
-}
+import type { InviteAuditPort } from "./index";
 
 type InviteRow = typeof tutorInvite.$inferSelect;
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 
-export type ValidationResult =
-  | { ok: true }
-  | { ok: false; error: ORPCError<any, any> };
-
-export function validateClaim(
+function validateClaim(
   invite: InviteRow | undefined,
   userEmail: string,
   existingProfile: TutorProfileRow | undefined,
-): ValidationResult {
+): void {
   if (!invite) {
-    return {
-      ok: false,
-      error: notFound("Invite not found, already accepted, or expired"),
-    };
+    throw notFound("Invite not found, already accepted, or expired");
   }
 
   if (invite.email.toLowerCase() !== userEmail.toLowerCase()) {
-    return {
-      ok: false,
-      error: forbidden(
-        "This invite is for a different email address. Please log in with the invited email.",
-      ),
-    };
+    throw forbidden(
+      "This invite is for a different email address. Please log in with the invited email.",
+    );
   }
 
   if (existingProfile) {
-    return {
-      ok: false,
-      error: conflict("You already have a tutor profile"),
-    };
+    throw conflict("You already have a tutor profile");
   }
-
-  return { ok: true };
 }
 
 export function createInviteService(deps: {
@@ -74,8 +54,7 @@ export function createInviteService(deps: {
       userId,
     );
 
-    const result = validateClaim(invite, userEmail, existingProfile);
-    if (!result.ok) throw result.error;
+    validateClaim(invite, userEmail, existingProfile);
 
     return db.transaction(async (tx) => {
       const [acceptedInvite] = await inviteRepo.updateInviteStatus(

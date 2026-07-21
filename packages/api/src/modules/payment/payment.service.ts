@@ -1,14 +1,10 @@
 import { eq } from "drizzle-orm";
+import { ORPCError } from "@orpc/server";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
-import type { DbOrTx } from "../../lib/tx";
-import type { CreditParams, WalletSnapshot } from "../wallet/wallet.service";
-import { conflict, notFound } from "../../lib/errors";
+import { conflict, notFound, serviceUnavailable } from "../../lib/errors";
 import { PAYMENT_STATUS } from "../../shared/constants";
-
-interface PaymentWalletPort {
-  credit(db: DbOrTx, params: CreditParams): Promise<WalletSnapshot>;
-}
+import type { PaymentWalletPort } from "./index";
 
 export type PaymentStatus =
   | "PENDING"
@@ -125,7 +121,11 @@ export function createPaymentService(deps: {
         .update(paymentRecord)
         .set({ status: PAYMENT_STATUS.EXPIRED })
         .where(eq(paymentRecord.id, paymentId));
-      throw error;
+      if (error instanceof ORPCError) throw error;
+      throw serviceUnavailable(
+        "Payment provider temporarily unavailable",
+        error,
+      );
     }
   }
 

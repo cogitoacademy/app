@@ -181,6 +181,7 @@ function createService(
   overrides: {
     repo?: Record<string, unknown>;
     wallet?: Record<string, unknown>;
+    meeting?: Record<string, unknown>;
   } = {},
 ) {
   const db = makeDb();
@@ -189,7 +190,9 @@ function createService(
   const pricing = makePricing();
   const audit = makeAudit();
   const notification = makeNotification();
-  const meeting = makeMeeting();
+  const meeting = overrides.meeting
+    ? { ...makeMeeting(), ...overrides.meeting }
+    : makeMeeting();
   const service = createBookingService({
     db,
     repo,
@@ -816,7 +819,7 @@ describe("BookingService", () => {
       expect(meeting.createEvent).not.toHaveBeenCalled();
     });
 
-    test("continues after meeting creation failure for online booking", async () => {
+    test("throws serviceUnavailable when meeting creation fails for online booking", async () => {
       const booking = makeBooking({ modality: "online" });
       let findCallCount = 0;
       const { service } = createService({
@@ -847,8 +850,9 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.tutorAccept("b1", "tutor1");
-      expect(result).toBeDefined();
+      await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
+        "Meeting creation failed; booking was still accepted",
+      );
     });
   });
 

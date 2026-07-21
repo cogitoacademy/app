@@ -475,68 +475,70 @@ describe("AchievementService", () => {
 
 describe("AchievementService validation", () => {
   describe("validateUpdate", () => {
-    test("returns ok for pending achievement", () => {
-      const result = validateUpdate({
-        id: "a1",
-        userId: "u1",
-        status: ACHIEVEMENT_STATUS.PENDING,
-      } as any);
-      expect(result.ok).toBe(true);
+    test("does not throw for pending achievement", () => {
+      expect(() =>
+        validateUpdate({
+          id: "a1",
+          userId: "u1",
+          status: ACHIEVEMENT_STATUS.PENDING,
+        } as any),
+      ).not.toThrow();
     });
 
-    test("returns error when achievement is undefined", () => {
-      const result = validateUpdate(undefined);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws when achievement is undefined", () => {
+      expect(() => validateUpdate(undefined)).toThrow();
     });
 
-    test("returns error for approved achievement", () => {
-      const result = validateUpdate({
-        id: "a1",
-        status: ACHIEVEMENT_STATUS.APPROVED,
-      } as any);
-      expect(result.ok).toBe(false);
+    test("throws for approved achievement", () => {
+      expect(() =>
+        validateUpdate({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.APPROVED,
+        } as any),
+      ).toThrow();
     });
 
-    test("returns error for rejected achievement", () => {
-      const result = validateUpdate({
-        id: "a1",
-        status: ACHIEVEMENT_STATUS.REJECTED,
-      } as any);
-      expect(result.ok).toBe(false);
+    test("throws for rejected achievement", () => {
+      expect(() =>
+        validateUpdate({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.REJECTED,
+        } as any),
+      ).toThrow();
     });
   });
 
   describe("validateDelete", () => {
-    test("returns ok for pending achievement", () => {
-      const result = validateDelete({
-        id: "a1",
-        userId: "u1",
-        status: ACHIEVEMENT_STATUS.PENDING,
-      } as any);
-      expect(result.ok).toBe(true);
+    test("does not throw for pending achievement", () => {
+      expect(() =>
+        validateDelete({
+          id: "a1",
+          userId: "u1",
+          status: ACHIEVEMENT_STATUS.PENDING,
+        } as any),
+      ).not.toThrow();
     });
 
-    test("returns error when achievement is undefined", () => {
-      const result = validateDelete(undefined);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws when achievement is undefined", () => {
+      expect(() => validateDelete(undefined)).toThrow();
     });
 
-    test("returns error for draft achievement", () => {
-      const result = validateDelete({
-        id: "a1",
-        status: ACHIEVEMENT_STATUS.DRAFT,
-      } as any);
-      expect(result.ok).toBe(false);
+    test("throws for draft achievement", () => {
+      expect(() =>
+        validateDelete({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.DRAFT,
+        } as any),
+      ).toThrow();
     });
 
-    test("returns error for archived achievement", () => {
-      const result = validateDelete({
-        id: "a1",
-        status: ACHIEVEMENT_STATUS.ARCHIVED,
-      } as any);
-      expect(result.ok).toBe(false);
+    test("throws for archived achievement", () => {
+      expect(() =>
+        validateDelete({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.ARCHIVED,
+        } as any),
+      ).toThrow();
     });
   });
 });

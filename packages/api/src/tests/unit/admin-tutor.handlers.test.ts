@@ -48,7 +48,10 @@ describe("adminTutorHandlers", () => {
 
   describe("resendInvite", () => {
     test("calls adminTutor.resendInvite with session user id and input.inviteId", async () => {
-      const resendInvite = mock(async () => ({ ok: true }));
+      const resendInvite = mock(async () => ({
+        id: "inv1",
+        status: "invited",
+      }));
       const adminTutorService = { resendInvite } as any;
       const handler = createAdminTutorHandler(adminTutorService);
       const context = { session: { user: { id: "admin1" } } } as any;
@@ -57,13 +60,16 @@ describe("adminTutorHandlers", () => {
       const result = await handler.resendInvite({ context, input });
 
       expect(resendInvite).toHaveBeenCalledWith("admin1", "inv1");
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "inv1", status: "invited" });
     });
   });
 
   describe("revokeInvite", () => {
     test("calls adminTutor.revokeInvite with session user id and input.inviteId", async () => {
-      const revokeInvite = mock(async () => ({ ok: true }));
+      const revokeInvite = mock(async () => ({
+        id: "inv1",
+        status: "revoked",
+      }));
       const adminTutorService = { revokeInvite } as any;
       const handler = createAdminTutorHandler(adminTutorService);
       const context = { session: { user: { id: "admin1" } } } as any;
@@ -72,7 +78,7 @@ describe("adminTutorHandlers", () => {
       const result = await handler.revokeInvite({ context, input });
 
       expect(revokeInvite).toHaveBeenCalledWith("admin1", "inv1");
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "inv1", status: "revoked" });
     });
   });
 
@@ -110,7 +116,10 @@ describe("adminTutorHandlers", () => {
 
   describe("reviewTutorProfile", () => {
     test("calls adminTutor.reviewTutorProfile with session user id and input", async () => {
-      const reviewTutorProfile = mock(async () => ({ ok: true }));
+      const reviewTutorProfile = mock(async () => ({
+        id: "p1",
+        onboardingStatus: "published",
+      }));
       const adminTutorService = { reviewTutorProfile } as any;
       const handler = createAdminTutorHandler(adminTutorService);
       const context = { session: { user: { id: "admin1" } } } as any;
@@ -122,7 +131,10 @@ describe("adminTutorHandlers", () => {
       });
 
       expect(reviewTutorProfile).toHaveBeenCalledWith("admin1", input);
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({
+        id: "p1",
+        onboardingStatus: "published",
+      });
     });
   });
 });

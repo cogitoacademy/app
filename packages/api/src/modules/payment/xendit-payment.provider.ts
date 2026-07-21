@@ -1,5 +1,11 @@
 import { timingSafeEqual } from "crypto";
 import { CircuitBreaker } from "../../lib/circuit-breaker";
+import {
+  internalServerError,
+  serviceUnavailable,
+  unauthorized,
+  badRequest,
+} from "../../lib/errors";
 import { fetchWithTimeout, retryWithBackoff } from "../../lib/retry";
 import type {
   PaymentProvider,
@@ -35,7 +41,7 @@ export function mapXenditStatus(status: string): PaymentStatus {
     EXPIRED: "EXPIRED",
   };
   const mapped = map[status];
-  if (!mapped) throw new Error(`Unknown Xendit status: ${status}`);
+  if (!mapped) throw internalServerError("Unknown payment status: " + status);
   return mapped;
 }
 
@@ -106,8 +112,8 @@ export function createXenditPaymentProvider(opts: {
       } catch {
         errCode = undefined;
       }
-      throw new Error(
-        `Xendit API error: ${res.status} ${errCode ?? res.statusText}`,
+      throw serviceUnavailable(
+        `Payment provider error: ${res.status} ${errCode ?? res.statusText}`,
       );
     }
 
@@ -122,7 +128,7 @@ export function createXenditPaymentProvider(opts: {
       json.data.actions?.[0]?.url ?? json.data.payment_method?.url;
 
     if (!checkoutUrl) {
-      throw new Error("Xendit API error: no checkout URL in response");
+      throw internalServerError("Payment provider returned invalid response");
     }
 
     return { checkoutUrl };
@@ -140,7 +146,7 @@ export function createXenditPaymentProvider(opts: {
       tokenBuf.length !== expectedBuf.length ||
       !timingSafeEqual(tokenBuf, expectedBuf)
     ) {
-      throw new Error("Invalid webhook token");
+      throw unauthorized("Invalid webhook token");
     }
 
     let body: {
@@ -157,7 +163,7 @@ export function createXenditPaymentProvider(opts: {
     try {
       body = JSON.parse(rawBody);
     } catch {
-      throw new Error("Invalid webhook payload: malformed JSON");
+      throw badRequest("Invalid webhook payload: malformed JSON");
     }
 
     const data = (body.data ?? body) as {

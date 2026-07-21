@@ -1,5 +1,7 @@
 import type { Context } from "../../context";
-import type { z } from "zod";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
+import { internalServerError } from "../../lib/errors";
 import type { createPurchaseInput, getPurchaseInput } from "./payment.types";
 import type { PaymentService } from "./payment.service";
 import type { WalletSnapshot } from "../wallet/wallet.service";
@@ -25,12 +27,17 @@ export function createPaymentHandler(
       context: Context;
       input: CreatePurchaseInput;
     }) => {
-      const w = await wallet.getOrCreate(context.session!.user.id);
-      return payment.createIntent(
-        context.session!.user.id,
-        w.id,
-        input.packageCode,
-      );
+      try {
+        const w = await wallet.getOrCreate(context.session!.user.id);
+        return payment.createIntent(
+          context.session!.user.id,
+          w.id,
+          input.packageCode,
+        );
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to create purchase", err);
+      }
     },
 
     getPurchase: async ({
@@ -40,7 +47,12 @@ export function createPaymentHandler(
       context: Context;
       input: GetPurchaseInput;
     }) => {
-      return payment.getPurchase(input.paymentId, context.session!.user.id);
+      try {
+        return payment.getPurchase(input.paymentId, context.session!.user.id);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to fetch purchase", err);
+      }
     },
   };
 }

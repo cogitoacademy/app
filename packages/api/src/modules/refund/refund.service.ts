@@ -1,35 +1,12 @@
 import type { DbType } from "../../lib/db";
-import type { DbOrTx } from "../../lib/tx";
 import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   ACTOR_TYPE,
 } from "../../shared/constants";
-import { badRequest } from "../../lib/errors";
-import type {
-  WalletSnapshot,
-  CompensateParams,
-} from "../wallet/wallet.service";
-import type { AuditRecordParams } from "../audit/audit.service";
+import { badRequest, notFound } from "../../lib/errors";
 import type { RefundRepo } from "./refund.repo";
-
-interface RefundWalletPort {
-  getById(db: DbOrTx, walletId: string): Promise<WalletSnapshot | null>;
-  compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
-  listLedger(
-    walletId: string,
-    opts?: {
-      cursor?: string;
-      limit?: number;
-      bookingId?: string;
-      eventKey?: string;
-    },
-  ): Promise<{ items: unknown[]; nextCursor: string | null }>;
-}
-
-interface RefundAuditPort {
-  record(params: AuditRecordParams): Promise<void>;
-}
+import type { RefundWalletPort, RefundAuditPort } from "./index";
 
 export type RefundService = ReturnType<typeof createRefundService>;
 
@@ -53,7 +30,7 @@ export function createRefundService(deps: {
   ) {
     if (input.amount <= 0) throw badRequest("Amount must be positive");
     const walletSnapshot = await wallet.getById(db, input.walletId);
-    if (!walletSnapshot) throw new Error("Wallet not found");
+    if (!walletSnapshot) throw notFound("Wallet not found");
 
     const beforeState = {
       totalBalance: walletSnapshot.totalBalance,

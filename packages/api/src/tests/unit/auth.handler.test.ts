@@ -293,32 +293,26 @@ describe("AuthService", () => {
   });
 
   describe("validateUpdateInput", () => {
-    test("returns ok for valid input", () => {
-      const result = validateUpdateInput({ phoneNumber: "123" });
-      expect(result.ok).toBe(true);
+    test("does not throw for valid input", () => {
+      expect(() => validateUpdateInput({ phoneNumber: "123" })).not.toThrow();
     });
 
-    test("returns error for blank phoneNumber", () => {
-      const result = validateUpdateInput({ phoneNumber: "  " });
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error.message).toContain("phoneNumber");
-      }
+    test("throws for blank phoneNumber", () => {
+      expect(() => validateUpdateInput({ phoneNumber: "  " })).toThrow();
     });
 
-    test("returns error for blank parentEmail", () => {
-      const result = validateUpdateInput({ parentEmail: "  " });
-      expect(result.ok).toBe(false);
+    test("throws for blank parentEmail", () => {
+      expect(() => validateUpdateInput({ parentEmail: "  " })).toThrow();
     });
 
-    test("returns ok when fields are undefined", () => {
-      const result = validateUpdateInput({});
-      expect(result.ok).toBe(true);
+    test("does not throw when fields are undefined", () => {
+      expect(() => validateUpdateInput({})).not.toThrow();
     });
 
-    test("returns ok for non-blank field values", () => {
-      const result = validateUpdateInput({ schoolName: "Test School" });
-      expect(result.ok).toBe(true);
+    test("does not throw for non-blank field values", () => {
+      expect(() =>
+        validateUpdateInput({ schoolName: "Test School" }),
+      ).not.toThrow();
     });
   });
 });

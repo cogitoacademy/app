@@ -61,7 +61,7 @@ describe("XenditPaymentProvider", () => {
         amountIdr: 0,
         providerReference: "xendit-pay_456",
       }),
-    ).rejects.toThrow("Xendit API error");
+    ).rejects.toThrow("Payment provider error");
   });
 
   test("verifyWebhook accepts valid token and parses PAID", async () => {
@@ -134,7 +134,7 @@ describe("XenditPaymentProvider", () => {
 
     await expect(
       provider.verifyWebhook(body, opts.webhookToken),
-    ).rejects.toThrow("Unknown Xendit status");
+    ).rejects.toThrow("Unknown payment status");
   });
 
   test("verifyWebhook rejects malformed JSON", async () => {
@@ -298,7 +298,7 @@ describe("XenditPaymentProvider - QR_CODE and VIRTUAL_ACCOUNT", () => {
         amountIdr: 50000,
         providerReference: "xendit-pay_999",
       }),
-    ).rejects.toThrow("Xendit API error: no checkout URL in response");
+    ).rejects.toThrow("Payment provider returned invalid response");
   });
 
   test("createIntent handles non-JSON error response", async () => {
@@ -318,6 +318,6 @@ describe("XenditPaymentProvider - QR_CODE and VIRTUAL_ACCOUNT", () => {
         amountIdr: 50000,
         providerReference: "xendit-pay_500",
       }),
-    ).rejects.toThrow("Xendit API error: 500 Internal Server Error");
+    ).rejects.toThrow("Payment provider error: 500 Internal Server Error");
   });
 });

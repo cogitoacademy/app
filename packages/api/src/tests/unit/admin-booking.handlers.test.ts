@@ -4,7 +4,10 @@ import { createAdminBookingHandler } from "../../modules/admin-booking/admin-boo
 describe("adminBookingHandlers", () => {
   describe("applyOverride", () => {
     test("calls adminBooking.applyOverride with session user id and input", async () => {
-      const applyOverride = mock(async () => ({ ok: true }));
+      const applyOverride = mock(async () => ({
+        id: "b1",
+        currentState: "cancelled",
+      }));
       const adminBookingService = { applyOverride } as any;
       const handler = createAdminBookingHandler(adminBookingService);
       const context = { session: { user: { id: "admin1" } } } as any;
@@ -20,7 +23,7 @@ describe("adminBookingHandlers", () => {
         "admin1",
         expect.objectContaining({ bookingId: "b1", reason: "admin override" }),
       );
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "b1", currentState: "cancelled" });
     });
   });
 
@@ -56,7 +59,10 @@ describe("adminBookingHandlers", () => {
 
   describe("adminRefund", () => {
     test("calls adminBooking.adminRefund with session user id and input", async () => {
-      const adminRefund = mock(async () => ({ ok: true }));
+      const adminRefund = mock(async () => ({
+        paymentId: "p1",
+        status: "refunded",
+      }));
       const adminBookingService = { adminRefund } as any;
       const handler = createAdminBookingHandler(adminBookingService);
       const context = { session: { user: { id: "admin1" } } } as any;
@@ -65,7 +71,7 @@ describe("adminBookingHandlers", () => {
       const result = await handler.adminRefund({ context, input });
 
       expect(adminRefund).toHaveBeenCalledWith("admin1", input);
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ paymentId: "p1", status: "refunded" });
     });
   });
 });

@@ -64,29 +64,27 @@ describe("notificationHandler", () => {
   });
 
   describe("markAsRead", () => {
-    test("calls notificationService.markAsRead with userId and input.id, returns { ok: true }", async () => {
+    test("calls notificationService.markAsRead with userId and input.id", async () => {
       const context = {
         session: { user: { id: "u1" } },
       } as any;
       const input = { id: "n1" };
 
-      const result = await handler.markAsRead({ context, input });
+      await handler.markAsRead({ context, input });
 
       expect(markAsRead).toHaveBeenCalledWith("u1", "n1");
-      expect(result).toEqual({ ok: true });
     });
   });
 
   describe("markAllAsRead", () => {
-    test("calls notificationService.markAllAsRead with userId, returns { ok: true }", async () => {
+    test("calls notificationService.markAllAsRead with userId", async () => {
       const context = {
         session: { user: { id: "u1" } },
       } as any;
 
-      const result = await handler.markAllAsRead({ context });
+      await handler.markAllAsRead({ context });
 
       expect(markAllAsRead).toHaveBeenCalledWith("u1");
-      expect(result).toEqual({ ok: true });
     });
   });
 });

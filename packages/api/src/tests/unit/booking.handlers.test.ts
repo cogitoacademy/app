@@ -9,18 +9,24 @@ function makeBookingService() {
     createSolo: mock(async () => ({ id: "b1" })),
     getById: mock(async () => ({ id: "b1" })),
     listMine: mock(async () => ({ items: [] })),
-    cancel: mock(async () => ({ ok: true })),
-    proposeReschedule: mock(async () => ({ ok: true })),
+    cancel: mock(async () => ({ id: "b1", currentState: "cancelled" })),
+    proposeReschedule: mock(async () => ({
+      id: "b1",
+      currentState: "reschedule_proposed",
+    })),
     createGroup: mock(async () => ({ id: "bg1" })),
     createSeries: mock(async () => ({ id: "bs1" })),
-    confirmInvite: mock(async () => ({ ok: true })),
-    declineInvite: mock(async () => ({ ok: true })),
-    reconfirm: mock(async () => ({ ok: true })),
-    withdraw: mock(async () => ({ ok: true })),
+    confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
+    declineInvite: mock(async () => ({ id: "b1", currentState: "declined" })),
+    reconfirm: mock(async () => ({ reconfirmed: true })),
+    withdraw: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     listSessions: mock(async () => ({ items: [] })),
-    tutorAccept: mock(async () => ({ ok: true })),
-    tutorDecline: mock(async () => ({ ok: true })),
-    completeSession: mock(async () => ({ ok: true })),
+    tutorAccept: mock(async () => ({ id: "b1", currentState: "confirmed" })),
+    tutorDecline: mock(async () => ({ id: "b1", currentState: "declined" })),
+    completeSession: mock(async () => ({
+      id: "b1",
+      currentState: "completed",
+    })),
   };
 }
 
@@ -110,7 +116,7 @@ describe("bookingHandler", () => {
         "b1",
         "schedule conflict",
       );
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "b1", currentState: "cancelled" });
     });
   });
 
@@ -138,7 +144,10 @@ describe("bookingHandler", () => {
         new Date("2025-02-01T11:00:00Z"),
         "time change",
       );
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({
+        id: "b1",
+        currentState: "reschedule_proposed",
+      });
     });
   });
 
@@ -237,7 +246,7 @@ describe("bookingHandler", () => {
       });
 
       expect(booking.confirmInvite).toHaveBeenCalledWith("u1", "b1");
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "b1", currentState: "confirmed" });
     });
   });
 
@@ -254,7 +263,7 @@ describe("bookingHandler", () => {
       });
 
       expect(booking.declineInvite).toHaveBeenCalledWith("u1", "b1", "busy");
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "b1", currentState: "declined" });
     });
   });
 
@@ -271,7 +280,7 @@ describe("bookingHandler", () => {
       });
 
       expect(booking.reconfirm).toHaveBeenCalledWith("u1", "b1", true);
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ reconfirmed: true });
     });
   });
 
@@ -288,7 +297,7 @@ describe("bookingHandler", () => {
       });
 
       expect(booking.withdraw).toHaveBeenCalledWith("u1", "b1", "changed mind");
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "b1", currentState: "cancelled" });
     });
   });
 
@@ -324,7 +333,7 @@ describe("tutorActionsHandler", () => {
       });
 
       expect(booking.tutorAccept).toHaveBeenCalledWith("b1", "t1");
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "b1", currentState: "confirmed" });
     });
   });
 
@@ -345,7 +354,7 @@ describe("tutorActionsHandler", () => {
         "t1",
         "unavailable",
       );
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "b1", currentState: "declined" });
     });
   });
 
@@ -366,7 +375,7 @@ describe("tutorActionsHandler", () => {
         "t1",
         "Great session",
       );
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ id: "b1", currentState: "completed" });
     });
   });
 });

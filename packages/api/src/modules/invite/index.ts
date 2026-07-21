@@ -8,7 +8,7 @@ import type { InviteHandler } from "./invite.handler";
 
 export type InviteModule = ReturnType<typeof createInviteModule>;
 
-interface InviteAuditPort {
+export interface InviteAuditPort {
   record(params: AuditRecordParams): Promise<void>;
 }
 

@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import type { AuditRecordParams } from "../audit/audit.service";
 import type {
   WalletSnapshot,
@@ -13,13 +14,13 @@ import type { RefundHandler } from "./refund.handler";
 
 export type RefundModule = ReturnType<typeof createRefundModule>;
 
-interface RefundAuditPort {
+export interface RefundAuditPort {
   record(params: AuditRecordParams): Promise<void>;
 }
 
-interface RefundWalletPort {
-  getById(db: unknown, walletId: string): Promise<WalletSnapshot | null>;
-  compensate(db: unknown, params: CompensateParams): Promise<WalletSnapshot>;
+export interface RefundWalletPort {
+  getById(db: DbOrTx, walletId: string): Promise<WalletSnapshot | null>;
+  compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
   listLedger(
     walletId: string,
     opts?: {

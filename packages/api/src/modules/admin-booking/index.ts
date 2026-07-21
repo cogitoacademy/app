@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import type { AuditRecordParams } from "../audit/audit.service";
 import type {
   WalletSnapshot,
@@ -14,14 +15,14 @@ import type { AdminBookingHandler } from "./admin-booking.handler";
 
 export type AdminBookingModule = ReturnType<typeof createAdminBookingModule>;
 
-interface AdminBookingAuditPort {
+export interface AdminBookingAuditPort {
   record(params: AuditRecordParams): Promise<void>;
 }
 
-interface AdminBookingWalletPort {
-  getByUserId(db: unknown, userId: string): Promise<WalletSnapshot | null>;
-  release(db: unknown, params: ReleaseParams): Promise<WalletSnapshot>;
-  compensate(db: unknown, params: CompensateParams): Promise<WalletSnapshot>;
+export interface AdminBookingWalletPort {
+  getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
+  release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
+  compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
 }
 
 export function createAdminBookingModule(deps: {

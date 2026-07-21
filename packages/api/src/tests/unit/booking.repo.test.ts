@@ -1,28 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
-import {
-  findBookingById,
-  findTutorProfile,
-  findAvailabilitySlot,
-  findParticipant,
-  findConfirmedParticipants,
-  findReconfirmedParticipants,
-  insertBooking,
-  updateBookingState,
-  updateBookingCancellationReason,
-  updateBookingHoldAmount,
-  updateBookingConfirmedHeadcount,
-  insertParticipant,
-  updateParticipantState,
-  insertStateHistory,
-  insertRescheduleProposal,
-  insertBookingSession,
-  listSessionsBySeriesId,
-  findOverlappingBookings,
-  findBookingsExpiringByDeadline,
-  findBookingType,
-  updateBookingVersioned,
-  createBookingRepo,
-} from "../../modules/booking/booking.repo";
+import { createBookingRepo } from "../../modules/booking/booking.repo";
 
 function makeSelectConn(rows: any[] = []) {
   const chain: any = {};
@@ -59,454 +36,20 @@ function makeInsertConn(returningRows?: any[]) {
   return { insert, values };
 }
 
-describe("findBookingById", () => {
-  test("returns row when found", async () => {
-    const row = { id: "b1", currentState: "confirmed" };
-    const conn: any = { ...makeSelectConn([row]) };
-
-    const result = await findBookingById(conn, "b1");
-
-    expect(result).toEqual(row);
-    expect(conn.from).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
-  });
-
-  test("returns null when not found", async () => {
-    const conn: any = { ...makeSelectConn([]) };
-
-    const result = await findBookingById(conn, "missing");
-
-    expect(result).toBeNull();
-  });
-});
-
-describe("findTutorProfile", () => {
-  test("returns profile when found", async () => {
-    const profile = { userId: "t1", onboardingStatus: "published" };
-    const findFirst = mock(() => Promise.resolve(profile));
-    const conn: any = { query: { tutorProfile: { findFirst } } };
-
-    const result = await findTutorProfile(conn, "t1");
-
-    expect(result).toEqual(profile);
-    expect(findFirst).toHaveBeenCalledTimes(1);
-  });
-
-  test("returns null when not found", async () => {
-    const findFirst = mock(() => Promise.resolve(undefined));
-    const conn: any = { query: { tutorProfile: { findFirst } } };
-
-    const result = await findTutorProfile(conn, "nonexistent");
-
-    expect(result).toBeNull();
-  });
-});
-
-describe("findAvailabilitySlot", () => {
-  test("finds slot without futureOnly", async () => {
-    const slot = { id: "s1", tutorId: "t1", isActive: true };
-    const findFirst = mock(() => Promise.resolve(slot));
-    const conn: any = { query: { availabilitySlot: { findFirst } } };
-
-    const result = await findAvailabilitySlot(conn, "s1", "t1");
-
-    expect(result).toEqual(slot);
-    expect(findFirst).toHaveBeenCalledTimes(1);
-  });
-
-  test("finds slot with futureOnly true", async () => {
-    const slot = { id: "s1", tutorId: "t1", isActive: true };
-    const findFirst = mock(() => Promise.resolve(slot));
-    const conn: any = { query: { availabilitySlot: { findFirst } } };
-
-    const result = await findAvailabilitySlot(conn, "s1", "t1", {
-      futureOnly: true,
-    });
-
-    expect(result).toEqual(slot);
-    expect(findFirst).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("findParticipant", () => {
-  test("returns participant when found", async () => {
-    const participant = { id: "p1", bookingId: "b1", userId: "u1" };
-    const conn: any = { ...makeSelectConn([participant]) };
-
-    const result = await findParticipant(conn, "b1", "u1");
-
-    expect(result).toEqual(participant);
-    expect(conn.from).toHaveBeenCalledTimes(1);
-  });
-
-  test("returns null when not found", async () => {
-    const conn: any = { ...makeSelectConn([]) };
-
-    const result = await findParticipant(conn, "b1", "unknown");
-
-    expect(result).toBeNull();
-  });
-});
-
-describe("findConfirmedParticipants", () => {
-  test("returns confirmed and reconfirmed participants", async () => {
-    const rows = [
-      { id: "p1", confirmationState: "confirmed" },
-      { id: "p2", confirmationState: "reconfirmed" },
-    ];
-    const conn: any = { ...makeSelectConn(rows) };
-
-    await findConfirmedParticipants(conn, "b1");
-
-    expect(conn.from).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
-  });
-
-  test("excludes specified user when excludeUserId provided", async () => {
-    const rows = [{ id: "p2", confirmationState: "confirmed" }];
-    const conn: any = { ...makeSelectConn(rows) };
-
-    await findConfirmedParticipants(conn, "b1", "u1");
-
-    expect(conn.from).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("findReconfirmedParticipants", () => {
-  test("returns reconfirmed participants", async () => {
-    const rows = [{ id: "p1", confirmationState: "reconfirmed" }];
-    const conn: any = { ...makeSelectConn(rows) };
-
-    await findReconfirmedParticipants(conn, "b1");
-
-    expect(conn.from).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("insertBooking", () => {
-  test("inserts and returns the booking row", async () => {
-    const row = { id: "b1", currentState: "draft" };
-    const { insert, values } = makeInsertConn([row]);
-    const conn: any = { insert };
-
-    const result = await insertBooking(conn, {
-      id: "b1",
-      currentState: "draft",
-    });
-
-    expect(result).toEqual(row);
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(values).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("updateBookingState", () => {
-  test("updates state and returns updated row", async () => {
-    const updated = { id: "b1", currentState: "confirmed" };
-    const updateConn = makeUpdateConn([updated]);
-    const conn: any = { ...updateConn };
-
-    const result = await updateBookingState(
-      conn,
-      "b1",
-      "confirmed",
-      "draft",
-      "approved",
-    );
-
-    expect(result).toEqual(updated);
-    expect(updateConn.update).toHaveBeenCalledTimes(1);
-    expect(updateConn.set).toHaveBeenCalledTimes(1);
-  });
-
-  test("updates state without reason", async () => {
-    const updated = { id: "b1", currentState: "confirmed" };
-    const updateConn = makeUpdateConn([updated]);
-    const conn: any = { ...updateConn };
-
-    const result = await updateBookingState(conn, "b1", "confirmed", "draft");
-
-    expect(result).toEqual(updated);
-    expect(updateConn.set).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("updateBookingCancellationReason", () => {
-  test("updates cancellation reason without returning", async () => {
-    const updateConn = makeUpdateConn();
-    updateConn.where.mockReturnValue(Promise.resolve(undefined));
-    const conn: any = { ...updateConn };
-
-    await updateBookingCancellationReason(conn, "b1", "sick");
-
-    expect(updateConn.update).toHaveBeenCalledTimes(1);
-    expect(updateConn.set).toHaveBeenCalledWith({ cancellationReason: "sick" });
-  });
-
-  test("sets reason to null", async () => {
-    const updateConn = makeUpdateConn();
-    updateConn.where.mockReturnValue(Promise.resolve(undefined));
-    const conn: any = { ...updateConn };
-
-    await updateBookingCancellationReason(conn, "b1", null);
-
-    expect(updateConn.set).toHaveBeenCalledWith({ cancellationReason: null });
-  });
-});
-
-describe("updateBookingHoldAmount", () => {
-  test("updates hold amount without returning", async () => {
-    const updateConn = makeUpdateConn();
-    updateConn.where.mockReturnValue(Promise.resolve(undefined));
-    const conn: any = { ...updateConn };
-
-    await updateBookingHoldAmount(conn, "b1", 50000);
-
-    expect(updateConn.update).toHaveBeenCalledTimes(1);
-    expect(updateConn.set).toHaveBeenCalledWith({ holdAmount: 50000 });
-  });
-});
-
-describe("updateBookingConfirmedHeadcount", () => {
-  test("updates confirmed headcount without returning", async () => {
-    const updateConn = makeUpdateConn();
-    updateConn.where.mockReturnValue(Promise.resolve(undefined));
-    const conn: any = { ...updateConn };
-
-    await updateBookingConfirmedHeadcount(conn, "b1", 3);
-
-    expect(updateConn.update).toHaveBeenCalledTimes(1);
-    expect(updateConn.set).toHaveBeenCalledWith({ confirmedHeadcount: 3 });
-  });
-});
-
-describe("insertParticipant", () => {
-  test("inserts participant without returning", async () => {
-    const { insert, values } = makeInsertConn();
-    const conn: any = { insert };
-
-    await insertParticipant(conn, {
-      bookingId: "b1",
-      userId: "u1",
-      confirmationState: "pending",
-    });
-
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(values).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("updateParticipantState", () => {
-  test("updates participant state", async () => {
-    const updateConn = makeUpdateConn();
-    updateConn.where.mockReturnValue(Promise.resolve(undefined));
-    const conn: any = { ...updateConn };
-
-    await updateParticipantState(conn, "p1", {
-      confirmationState: "confirmed",
-    });
-
-    expect(updateConn.update).toHaveBeenCalledTimes(1);
-    expect(updateConn.set).toHaveBeenCalledWith({
-      confirmationState: "confirmed",
-    });
-  });
-});
-
-describe("insertStateHistory", () => {
-  test("inserts state history entry", async () => {
-    const { insert, values } = makeInsertConn();
-    const conn: any = { insert };
-
-    await insertStateHistory(conn, {
-      bookingId: "b1",
-      fromState: null,
-      toState: "draft",
-      reason: null,
-      actorId: "u1",
-      actorType: "student",
-    });
-
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(values).toHaveBeenCalledTimes(1);
-  });
-
-  test("inserts state history with metadata", async () => {
-    const { insert, values } = makeInsertConn();
-    const conn: any = { insert };
-
-    await insertStateHistory(conn, {
-      bookingId: "b1",
-      fromState: "draft",
-      toState: "confirmed",
-      reason: "approved",
-      actorId: "u1",
-      actorType: "tutor",
-      metadata: { note: "good" },
-    });
-
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(values).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("insertRescheduleProposal", () => {
-  test("inserts reschedule proposal", async () => {
-    const { insert, values } = makeInsertConn();
-    const conn: any = { insert };
-
-    await insertRescheduleProposal(conn, {
-      bookingId: "b1",
-      proposedBy: "u1",
-      proposedStartAt: new Date("2026-01-01"),
-      proposedEndAt: new Date("2026-01-01T01:30:00"),
-      status: "pending",
-    });
-
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(values).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("insertBookingSession", () => {
-  test("inserts booking session", async () => {
-    const { insert, values } = makeInsertConn();
-    const conn: any = { insert };
-
-    await insertBookingSession(conn, {
-      seriesBookingId: "sb1",
-      scheduledStartAt: new Date("2026-01-01"),
-      scheduledEndAt: new Date("2026-01-01T01:30:00"),
-      currentState: "scheduled",
-      holdAmount: 50000,
-      priceSnapshot: {
-        perStudent: 42000,
-        baseline: 42000,
-        tutorShare: 33600,
-        cogitoTake: 8400,
-      },
-    });
-
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(values).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("listSessionsBySeriesId", () => {
-  test("returns sessions ordered by scheduledStartAt", async () => {
-    const rows = [{ id: "s1" }, { id: "s2" }];
-    const conn: any = { ...makeSelectConn(rows) };
-
-    await listSessionsBySeriesId(conn, "sb1");
-
-    expect(conn.from).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
-    expect(conn.orderBy).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("findOverlappingBookings", () => {
-  test("finds overlapping bookings without excluding booking id", async () => {
-    const rows = [{ id: "b2" }];
-    const conn: any = { ...makeSelectConn(rows) };
-
-    await findOverlappingBookings(
-      conn,
-      "t1",
-      new Date("2026-01-01"),
-      new Date("2026-01-01T01:30:00"),
-    );
-
-    expect(conn.from).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
-  });
-
-  test("finds overlapping bookings excluding specific booking id", async () => {
-    const conn: any = { ...makeSelectConn([]) };
-
-    await findOverlappingBookings(
-      conn,
-      "t1",
-      new Date("2026-01-01"),
-      new Date("2026-01-01T01:30:00"),
-      "b1",
-    );
-
-    expect(conn.from).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("findBookingsExpiringByDeadline", () => {
-  test("finds bookings past deadline with given states", async () => {
-    const rows = [{ id: "b1" }, { id: "b2" }];
-    const conn: any = { ...makeSelectConn(rows) };
-
-    await findBookingsExpiringByDeadline(conn, [
-      "awaiting_participant_confirmation",
-    ]);
-
-    expect(conn.from).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("findBookingType", () => {
-  test("returns type when found", async () => {
-    const row = { type: "solo" };
-    const conn: any = { ...makeSelectConn([row]) };
-
-    const result = await findBookingType(conn, "b1");
-
-    expect(result).toBe("solo");
-  });
-
-  test("returns null when not found", async () => {
-    const conn: any = { ...makeSelectConn([]) };
-
-    const result = await findBookingType(conn, "missing");
-
-    expect(result).toBeNull();
-  });
-});
-
-describe("updateBookingVersioned", () => {
-  test("returns updated row when version matches", async () => {
-    const updated = { id: "b1", currentState: "confirmed", version: 2 };
-    const updateConn = makeUpdateConn([updated]);
-    const conn: any = { ...updateConn };
-
-    const result = await updateBookingVersioned(conn, "b1", 1, {
-      currentState: "confirmed",
-    });
-
-    expect(result).toEqual({ updated, newVersion: 2 });
-    expect(updateConn.update).toHaveBeenCalledTimes(1);
-    expect(updateConn.set).toHaveBeenCalledTimes(1);
-  });
-
-  test("returns null when version does not match", async () => {
-    const updateConn = makeUpdateConn([]);
-    const conn: any = { ...updateConn };
-
-    const result = await updateBookingVersioned(conn, "b1", 5, {
-      currentState: "confirmed",
-    });
-
-    expect(result).toBeNull();
-  });
-});
+function makeBookingRepo() {
+  const db: any = {
+    query: {
+      booking: { findFirst: mock(() => {}), findMany: mock(() => {}) },
+      tutorProfile: { findFirst: mock(() => {}) },
+      availabilitySlot: { findFirst: mock(() => {}) },
+    },
+  };
+  return createBookingRepo(db);
+}
 
 describe("createBookingRepo", () => {
   test("returns object with all repo methods", () => {
-    const db: any = {
-      query: {
-        booking: { findFirst: mock(() => {}), findMany: mock(() => {}) },
-      },
-    };
-    const repo = createBookingRepo(db);
+    const repo = makeBookingRepo();
 
     expect(repo).toHaveProperty("findBookingById");
     expect(repo).toHaveProperty("findBookingWithParticipants");
@@ -517,7 +60,6 @@ describe("createBookingRepo", () => {
     expect(repo).toHaveProperty("findConfirmedParticipants");
     expect(repo).toHaveProperty("findReconfirmedParticipants");
     expect(repo).toHaveProperty("insertBooking");
-    expect(repo).toHaveProperty("updateBookingState");
     expect(repo).toHaveProperty("updateBookingCancellationReason");
     expect(repo).toHaveProperty("updateBookingHoldAmount");
     expect(repo).toHaveProperty("updateBookingConfirmedHeadcount");
@@ -528,52 +70,475 @@ describe("createBookingRepo", () => {
     expect(repo).toHaveProperty("insertBookingSession");
     expect(repo).toHaveProperty("listSessionsBySeriesId");
     expect(repo).toHaveProperty("findBookingsExpiringByDeadline");
-    expect(repo).toHaveProperty("findBookingType");
     expect(repo).toHaveProperty("findOverlappingBookings");
     expect(repo).toHaveProperty("updateBookingVersioned");
   });
 
-  test("findBookingWithParticipants delegates to db.query.booking.findFirst", async () => {
-    const bookingRow = {
-      id: "b1",
-      participants: [],
-      stateHistory: [],
-      meeting: null,
-      roomBookings: [],
-    };
-    const findFirst = mock(() => Promise.resolve(bookingRow));
-    const findMany = mock(() => Promise.resolve([]));
-    const db: any = { query: { booking: { findFirst, findMany } } };
-    const repo = createBookingRepo(db);
+  describe("findBookingById", () => {
+    test("returns row when found", async () => {
+      const row = { id: "b1", currentState: "confirmed" };
+      const conn: any = { ...makeSelectConn([row]) };
+      const repo = makeBookingRepo();
 
-    await repo.findBookingWithParticipants("b1");
+      const result = await repo.findBookingById(conn, "b1");
 
-    expect(findFirst).toHaveBeenCalledTimes(1);
-  });
-
-  test("listBookingsByProposer delegates to db.query.booking.findMany", async () => {
-    const rows = [{ id: "b1" }];
-    const findMany = mock(() => Promise.resolve(rows));
-    const findFirst = mock(() => Promise.resolve(null));
-    const db: any = { query: { booking: { findFirst, findMany } } };
-    const repo = createBookingRepo(db);
-
-    await repo.listBookingsByProposer("u1", { limit: 10 });
-
-    expect(findMany).toHaveBeenCalledTimes(1);
-  });
-
-  test("listBookingsByProposer passes states when provided", async () => {
-    const findMany = mock(() => Promise.resolve([]));
-    const findFirst = mock(() => Promise.resolve(null));
-    const db: any = { query: { booking: { findFirst, findMany } } };
-    const repo = createBookingRepo(db);
-
-    await repo.listBookingsByProposer("u1", {
-      limit: 10,
-      states: ["confirmed", "scheduled"],
+      expect(result).toEqual(row);
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
     });
 
-    expect(findMany).toHaveBeenCalledTimes(1);
+    test("returns null when not found", async () => {
+      const conn: any = { ...makeSelectConn([]) };
+      const repo = makeBookingRepo();
+
+      const result = await repo.findBookingById(conn, "missing");
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("findTutorProfile", () => {
+    test("returns profile when found", async () => {
+      const profile = { userId: "t1", onboardingStatus: "published" };
+      const findFirst = mock(() => Promise.resolve(profile));
+      const conn: any = { query: { tutorProfile: { findFirst } } };
+      const repo = makeBookingRepo();
+
+      const result = await repo.findTutorProfile(conn, "t1");
+
+      expect(result).toEqual(profile);
+      expect(findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    test("returns null when not found", async () => {
+      const findFirst = mock(() => Promise.resolve(undefined));
+      const conn: any = { query: { tutorProfile: { findFirst } } };
+      const repo = makeBookingRepo();
+
+      const result = await repo.findTutorProfile(conn, "nonexistent");
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("findAvailabilitySlot", () => {
+    test("finds slot without futureOnly", async () => {
+      const slot = { id: "s1", tutorId: "t1", isActive: true };
+      const findFirst = mock(() => Promise.resolve(slot));
+      const conn: any = { query: { availabilitySlot: { findFirst } } };
+      const repo = makeBookingRepo();
+
+      const result = await repo.findAvailabilitySlot(conn, "s1", "t1");
+
+      expect(result).toEqual(slot);
+      expect(findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    test("finds slot with futureOnly true", async () => {
+      const slot = { id: "s1", tutorId: "t1", isActive: true };
+      const findFirst = mock(() => Promise.resolve(slot));
+      const conn: any = { query: { availabilitySlot: { findFirst } } };
+      const repo = makeBookingRepo();
+
+      const result = await repo.findAvailabilitySlot(conn, "s1", "t1", {
+        futureOnly: true,
+      });
+
+      expect(result).toEqual(slot);
+      expect(findFirst).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("findParticipant", () => {
+    test("returns participant when found", async () => {
+      const participant = { id: "p1", bookingId: "b1", userId: "u1" };
+      const conn: any = { ...makeSelectConn([participant]) };
+      const repo = makeBookingRepo();
+
+      const result = await repo.findParticipant(conn, "b1", "u1");
+
+      expect(result).toEqual(participant);
+      expect(conn.from).toHaveBeenCalledTimes(1);
+    });
+
+    test("returns null when not found", async () => {
+      const conn: any = { ...makeSelectConn([]) };
+      const repo = makeBookingRepo();
+
+      const result = await repo.findParticipant(conn, "b1", "unknown");
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("findConfirmedParticipants", () => {
+    test("returns confirmed and reconfirmed participants", async () => {
+      const rows = [
+        { id: "p1", confirmationState: "confirmed" },
+        { id: "p2", confirmationState: "reconfirmed" },
+      ];
+      const conn: any = { ...makeSelectConn(rows) };
+      const repo = makeBookingRepo();
+
+      await repo.findConfirmedParticipants(conn, "b1");
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+
+    test("excludes specified user when excludeUserId provided", async () => {
+      const rows = [{ id: "p2", confirmationState: "confirmed" }];
+      const conn: any = { ...makeSelectConn(rows) };
+      const repo = makeBookingRepo();
+
+      await repo.findConfirmedParticipants(conn, "b1", "u1");
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("findReconfirmedParticipants", () => {
+    test("returns reconfirmed participants", async () => {
+      const rows = [{ id: "p1", confirmationState: "reconfirmed" }];
+      const conn: any = { ...makeSelectConn(rows) };
+      const repo = makeBookingRepo();
+
+      await repo.findReconfirmedParticipants(conn, "b1");
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("insertBooking", () => {
+    test("inserts and returns the booking row", async () => {
+      const row = { id: "b1", currentState: "draft" };
+      const { insert, values } = makeInsertConn([row]);
+      const conn: any = { insert };
+      const repo = makeBookingRepo();
+
+      const result = await repo.insertBooking(conn, {
+        id: "b1",
+        currentState: "draft",
+      });
+
+      expect(result).toEqual(row);
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(values).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("updateBookingCancellationReason", () => {
+    test("updates cancellation reason without returning", async () => {
+      const updateConn = makeUpdateConn();
+      updateConn.where.mockReturnValue(Promise.resolve(undefined));
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      await repo.updateBookingCancellationReason(conn, "b1", "sick");
+
+      expect(updateConn.update).toHaveBeenCalledTimes(1);
+      expect(updateConn.set).toHaveBeenCalledWith({
+        cancellationReason: "sick",
+      });
+    });
+
+    test("sets reason to null", async () => {
+      const updateConn = makeUpdateConn();
+      updateConn.where.mockReturnValue(Promise.resolve(undefined));
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      await repo.updateBookingCancellationReason(conn, "b1", null);
+
+      expect(updateConn.set).toHaveBeenCalledWith({ cancellationReason: null });
+    });
+  });
+
+  describe("updateBookingHoldAmount", () => {
+    test("updates hold amount without returning", async () => {
+      const updateConn = makeUpdateConn();
+      updateConn.where.mockReturnValue(Promise.resolve(undefined));
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      await repo.updateBookingHoldAmount(conn, "b1", 50000);
+
+      expect(updateConn.update).toHaveBeenCalledTimes(1);
+      expect(updateConn.set).toHaveBeenCalledWith({ holdAmount: 50000 });
+    });
+  });
+
+  describe("updateBookingConfirmedHeadcount", () => {
+    test("updates confirmed headcount without returning", async () => {
+      const updateConn = makeUpdateConn();
+      updateConn.where.mockReturnValue(Promise.resolve(undefined));
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      await repo.updateBookingConfirmedHeadcount(conn, "b1", 3);
+
+      expect(updateConn.update).toHaveBeenCalledTimes(1);
+      expect(updateConn.set).toHaveBeenCalledWith({ confirmedHeadcount: 3 });
+    });
+  });
+
+  describe("insertParticipant", () => {
+    test("inserts participant without returning", async () => {
+      const { insert, values } = makeInsertConn();
+      const conn: any = { insert };
+      const repo = makeBookingRepo();
+
+      await repo.insertParticipant(conn, {
+        bookingId: "b1",
+        userId: "u1",
+        confirmationState: "pending",
+      });
+
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(values).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("updateParticipantState", () => {
+    test("updates participant state", async () => {
+      const updateConn = makeUpdateConn();
+      updateConn.where.mockReturnValue(Promise.resolve(undefined));
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      await repo.updateParticipantState(conn, "p1", {
+        confirmationState: "confirmed",
+      });
+
+      expect(updateConn.update).toHaveBeenCalledTimes(1);
+      expect(updateConn.set).toHaveBeenCalledWith({
+        confirmationState: "confirmed",
+      });
+    });
+  });
+
+  describe("insertStateHistory", () => {
+    test("inserts state history entry", async () => {
+      const { insert, values } = makeInsertConn();
+      const conn: any = { insert };
+      const repo = makeBookingRepo();
+
+      await repo.insertStateHistory(conn, {
+        bookingId: "b1",
+        fromState: null,
+        toState: "draft",
+        reason: null,
+        actorId: "u1",
+        actorType: "student",
+      });
+
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(values).toHaveBeenCalledTimes(1);
+    });
+
+    test("inserts state history with metadata", async () => {
+      const { insert, values } = makeInsertConn();
+      const conn: any = { insert };
+      const repo = makeBookingRepo();
+
+      await repo.insertStateHistory(conn, {
+        bookingId: "b1",
+        fromState: "draft",
+        toState: "confirmed",
+        reason: "approved",
+        actorId: "u1",
+        actorType: "tutor",
+        metadata: { note: "good" },
+      });
+
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(values).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("insertRescheduleProposal", () => {
+    test("inserts reschedule proposal", async () => {
+      const { insert, values } = makeInsertConn();
+      const conn: any = { insert };
+      const repo = makeBookingRepo();
+
+      await repo.insertRescheduleProposal(conn, {
+        bookingId: "b1",
+        proposedBy: "u1",
+        proposedStartAt: new Date("2026-01-01"),
+        proposedEndAt: new Date("2026-01-01T01:30:00"),
+        status: "pending",
+      });
+
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(values).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("insertBookingSession", () => {
+    test("inserts booking session", async () => {
+      const { insert, values } = makeInsertConn();
+      const conn: any = { insert };
+      const repo = makeBookingRepo();
+
+      await repo.insertBookingSession(conn, {
+        seriesBookingId: "sb1",
+        scheduledStartAt: new Date("2026-01-01"),
+        scheduledEndAt: new Date("2026-01-01T01:30:00"),
+        currentState: "scheduled",
+        holdAmount: 50000,
+        priceSnapshot: {
+          perStudent: 42000,
+          baseline: 42000,
+          tutorShare: 33600,
+          cogitoTake: 8400,
+        },
+      });
+
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(values).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("listSessionsBySeriesId", () => {
+    test("returns sessions ordered by scheduledStartAt", async () => {
+      const rows = [{ id: "s1" }, { id: "s2" }];
+      const conn: any = { ...makeSelectConn(rows) };
+      const repo = makeBookingRepo();
+
+      await repo.listSessionsBySeriesId(conn, "sb1");
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+      expect(conn.orderBy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("findOverlappingBookings", () => {
+    test("finds overlapping bookings without excluding booking id", async () => {
+      const rows = [{ id: "b2" }];
+      const conn: any = { ...makeSelectConn(rows) };
+      const repo = makeBookingRepo();
+
+      await repo.findOverlappingBookings(
+        conn,
+        "t1",
+        new Date("2026-01-01"),
+        new Date("2026-01-01T01:30:00"),
+      );
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+
+    test("finds overlapping bookings excluding specific booking id", async () => {
+      const conn: any = { ...makeSelectConn([]) };
+      const repo = makeBookingRepo();
+
+      await repo.findOverlappingBookings(
+        conn,
+        "t1",
+        new Date("2026-01-01"),
+        new Date("2026-01-01T01:30:00"),
+        "b1",
+      );
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("findBookingsExpiringByDeadline", () => {
+    test("finds bookings past deadline with given states", async () => {
+      const rows = [{ id: "b1" }, { id: "b2" }];
+      const conn: any = { ...makeSelectConn(rows) };
+      const repo = makeBookingRepo();
+
+      await repo.findBookingsExpiringByDeadline(conn, [
+        "awaiting_participant_confirmation",
+      ]);
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("updateBookingVersioned", () => {
+    test("returns updated row when version matches", async () => {
+      const updated = { id: "b1", currentState: "confirmed", version: 2 };
+      const updateConn = makeUpdateConn([updated]);
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      const result = await repo.updateBookingVersioned(conn, "b1", 1, {
+        currentState: "confirmed",
+      });
+
+      expect(result).toEqual({ updated, newVersion: 2 });
+      expect(updateConn.update).toHaveBeenCalledTimes(1);
+      expect(updateConn.set).toHaveBeenCalledTimes(1);
+    });
+
+    test("returns null when version does not match", async () => {
+      const updateConn = makeUpdateConn([]);
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      const result = await repo.updateBookingVersioned(conn, "b1", 5, {
+        currentState: "confirmed",
+      });
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("findBookingWithParticipants", () => {
+    test("delegates to db.query.booking.findFirst", async () => {
+      const bookingRow = {
+        id: "b1",
+        participants: [],
+        stateHistory: [],
+        meeting: null,
+        roomBookings: [],
+      };
+      const findFirst = mock(() => Promise.resolve(bookingRow));
+      const findMany = mock(() => Promise.resolve([]));
+      const db: any = { query: { booking: { findFirst, findMany } } };
+      const repo = createBookingRepo(db);
+
+      await repo.findBookingWithParticipants("b1");
+
+      expect(findFirst).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("listBookingsByProposer", () => {
+    test("delegates to db.query.booking.findMany", async () => {
+      const rows = [{ id: "b1" }];
+      const findMany = mock(() => Promise.resolve(rows));
+      const findFirst = mock(() => Promise.resolve(null));
+      const db: any = { query: { booking: { findFirst, findMany } } };
+      const repo = createBookingRepo(db);
+
+      await repo.listBookingsByProposer("u1", { limit: 10 });
+
+      expect(findMany).toHaveBeenCalledTimes(1);
+    });
+
+    test("passes states when provided", async () => {
+      const findMany = mock(() => Promise.resolve([]));
+      const findFirst = mock(() => Promise.resolve(null));
+      const db: any = { query: { booking: { findFirst, findMany } } };
+      const repo = createBookingRepo(db);
+
+      await repo.listBookingsByProposer("u1", {
+        limit: 10,
+        states: ["confirmed", "scheduled"],
+      });
+
+      expect(findMany).toHaveBeenCalledTimes(1);
+    });
   });
 });

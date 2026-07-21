@@ -10,44 +10,44 @@ function makeAchievement(overrides: Partial<{ status: string }> = {}) {
 
 describe("Achievement Service", () => {
   describe("validateUpdate", () => {
-    test("returns ok for pending achievement", () => {
-      const result = validateUpdate(makeAchievement({ status: "pending" }));
-      expect(result.ok).toBe(true);
+    test("does not throw for pending achievement", () => {
+      expect(() =>
+        validateUpdate(makeAchievement({ status: "pending" })),
+      ).not.toThrow();
     });
 
-    test("returns error for undefined achievement", () => {
-      const result = validateUpdate(undefined);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws for undefined achievement", () => {
+      expect(() => validateUpdate(undefined)).toThrow();
     });
 
-    test("returns error for approved achievement", () => {
-      const result = validateUpdate(makeAchievement({ status: "approved" }));
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws for approved achievement", () => {
+      expect(() =>
+        validateUpdate(makeAchievement({ status: "approved" })),
+      ).toThrow();
     });
 
-    test("returns error for rejected achievement", () => {
-      const result = validateUpdate(makeAchievement({ status: "rejected" }));
-      expect(result.ok).toBe(false);
+    test("throws for rejected achievement", () => {
+      expect(() =>
+        validateUpdate(makeAchievement({ status: "rejected" })),
+      ).toThrow();
     });
   });
 
   describe("validateDelete", () => {
-    test("returns ok for pending achievement", () => {
-      const result = validateDelete(makeAchievement({ status: "pending" }));
-      expect(result.ok).toBe(true);
+    test("does not throw for pending achievement", () => {
+      expect(() =>
+        validateDelete(makeAchievement({ status: "pending" })),
+      ).not.toThrow();
     });
 
-    test("returns error for undefined achievement", () => {
-      const result = validateDelete(undefined);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws for undefined achievement", () => {
+      expect(() => validateDelete(undefined)).toThrow();
     });
 
-    test("returns error for approved achievement", () => {
-      const result = validateDelete(makeAchievement({ status: "approved" }));
-      expect(result.ok).toBe(false);
+    test("throws for approved achievement", () => {
+      expect(() =>
+        validateDelete(makeAchievement({ status: "approved" })),
+      ).toThrow();
     });
   });
 });

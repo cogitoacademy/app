@@ -307,7 +307,7 @@ describe("PaymentService", () => {
         await service.createIntent("user1", "w1", "pkg1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toBe("Provider unavailable");
+        expect(e.message).toBe("Payment provider temporarily unavailable");
       }
 
       expect(db.update).toHaveBeenCalled();

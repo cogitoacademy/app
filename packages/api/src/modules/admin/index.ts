@@ -8,7 +8,7 @@ import type { AdminHandler } from "./admin.handler";
 
 export type AdminModule = ReturnType<typeof createAdminModule>;
 
-interface AdminAuditPort {
+export interface AdminAuditPort {
   record(params: AuditRecordParams): Promise<void>;
 }
 

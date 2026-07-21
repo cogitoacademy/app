@@ -16,55 +16,24 @@ import {
 } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import { notFound, conflict, forbidden, badRequest } from "../../lib/errors";
-import { log } from "../../lib/logger";
-import type {
-  WalletSnapshot,
-  HoldParams,
-  ReleaseParams,
-  DeductParams,
-} from "../wallet/wallet.service";
-import type { GroupSize, PriceSnapshot } from "../pricing/pricing.service";
-import type { AuditRecordParams } from "../audit/audit.service";
-import type { NotificationWriteParams } from "../notification/notification.service";
-import type { MeetingEvent } from "../meeting/meeting.types";
-import type { BookingRepo } from "./booking.repo";
 import {
-  BOOKING_STATES,
-  TERMINAL_STATES,
-  type BookingState,
-} from "./booking-state.types";
+  notFound,
+  conflict,
+  forbidden,
+  badRequest,
+  serviceUnavailable,
+} from "../../lib/errors";
+import { log } from "../../lib/logger";
+import { TERMINAL_STATES, type BookingState } from "./booking-state.types";
 import { canTransition } from "./booking-transitions";
-
-interface BookingWalletPort {
-  hold(db: DbOrTx, params: HoldParams): Promise<WalletSnapshot>;
-  release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
-  deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
-  getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
-}
-
-interface BookingPricingPort {
-  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
-}
-
-interface BookingAuditPort {
-  record(params: AuditRecordParams): Promise<void>;
-}
-
-interface BookingNotificationPort {
-  write(params: NotificationWriteParams): Promise<void>;
-}
-
-interface BookingMeetingPort {
-  createEvent(
-    bookingId: string,
-    scheduledStartAt?: Date,
-    scheduledEndAt?: Date,
-  ): Promise<MeetingEvent>;
-}
-
-export { BOOKING_STATES, TERMINAL_STATES, canTransition };
-export type { BookingState };
+import type { BookingRepo } from "./booking.repo";
+import type {
+  BookingWalletPort,
+  BookingPricingPort,
+  BookingAuditPort,
+  BookingNotificationPort,
+  BookingMeetingPort,
+} from "./index";
 
 export interface CreateSoloInput {
   tutorId: string;
@@ -450,6 +419,10 @@ export function createBookingService(deps: {
           bookingId,
           error: { message: String(error) },
         });
+        throw serviceUnavailable(
+          "Meeting creation failed; booking was still accepted",
+          error,
+        );
       }
     }
 

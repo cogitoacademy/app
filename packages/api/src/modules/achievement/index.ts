@@ -8,7 +8,7 @@ import type { AchievementHandler } from "./achievement.handler";
 
 export type AchievementModule = ReturnType<typeof createAchievementModule>;
 
-interface AchievementAuditPort {
+export interface AchievementAuditPort {
   record(params: AuditRecordParams): Promise<void>;
 }
 

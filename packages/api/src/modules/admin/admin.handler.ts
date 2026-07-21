@@ -1,5 +1,7 @@
 import type { Context } from "../../context";
-import type { z } from "zod";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
+import { internalServerError } from "../../lib/errors";
 import type {
   AdminService,
   ListUsersInput,
@@ -23,7 +25,12 @@ export function createAdminHandler(adminService: AdminService) {
       context: Context;
       input: ListUsersInputZod;
     }) => {
-      return adminService.listUsers(input ?? {});
+      try {
+        return adminService.listUsers(input ?? {});
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to list users", err);
+      }
     },
 
     setRole: async ({
@@ -33,7 +40,12 @@ export function createAdminHandler(adminService: AdminService) {
       context: Context;
       input: SetRoleInputZod;
     }) => {
-      return adminService.setRole(context.session!.user.id, input);
+      try {
+        return adminService.setRole(context.session!.user.id, input);
+      } catch (err) {
+        if (err instanceof ORPCError) throw err;
+        throw internalServerError("Failed to set user role", err);
+      }
     },
   };
 }

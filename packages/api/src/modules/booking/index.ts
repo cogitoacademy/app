@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import type { MeetingEvent } from "../meeting/meeting.types";
 import type { AuditRecordParams } from "../audit/audit.service";
 import type { GroupSize, PriceSnapshot } from "../pricing/pricing.service";
@@ -20,26 +21,26 @@ import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
 export type BookingModule = ReturnType<typeof createBookingModule>;
 
-interface BookingWalletPort {
-  hold(db: unknown, params: HoldParams): Promise<WalletSnapshot>;
-  release(db: unknown, params: ReleaseParams): Promise<WalletSnapshot>;
-  deduct(db: unknown, params: DeductParams): Promise<WalletSnapshot>;
-  getByUserId(db: unknown, userId: string): Promise<WalletSnapshot | null>;
+export interface BookingWalletPort {
+  hold(db: DbOrTx, params: HoldParams): Promise<WalletSnapshot>;
+  release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
+  deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
+  getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
 }
 
-interface BookingPricingPort {
+export interface BookingPricingPort {
   computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
 }
 
-interface BookingAuditPort {
+export interface BookingAuditPort {
   record(params: AuditRecordParams): Promise<void>;
 }
 
-interface BookingNotificationPort {
+export interface BookingNotificationPort {
   write(params: NotificationWriteParams): Promise<void>;
 }
 
-interface BookingMeetingPort {
+export interface BookingMeetingPort {
   createEvent(
     bookingId: string,
     scheduledStartAt?: Date,
