@@ -1,8 +1,8 @@
-import { db } from "../../lib/db";
+import type { DbType } from "../../lib/db";
 import { notFound } from "../../lib/errors";
 import type { WalletPort } from "../../shared/ports/wallet.port";
-import { validateUpdateInput, type UpdateProfileInput } from "./auth.service";
 import type { AuthRepo, StudentProfileRow, TutorProfileRow } from "./auth.repo";
+import { validateUpdateInput, type UpdateProfileInput } from "./auth.service";
 
 export interface MeResult {
   profile: StudentProfileRow | null;
@@ -20,8 +20,34 @@ export type AuthHandler = ReturnType<typeof createAuthHandler>;
 export function createAuthHandler(deps: {
   authRepo: AuthRepo;
   walletPort: WalletPort;
+  authService: ReturnType<typeof createAuthService>;
 }) {
-  const { authRepo, walletPort } = deps;
+  const { authService } = deps;
+
+  async function me(userId: string): Promise<MeResult> {
+    return authService.me(userId);
+  }
+
+  async function getProfile(userId: string): Promise<StudentProfileRow> {
+    return authService.getProfile(userId);
+  }
+
+  async function updateProfile(
+    userId: string,
+    input: UpdateProfileInput,
+  ): Promise<StudentProfileRow> {
+    return authService.updateProfile(userId, input);
+  }
+
+  return { me, getProfile, updateProfile };
+}
+
+export function createAuthService(deps: {
+  authRepo: AuthRepo;
+  walletPort: WalletPort;
+  db: DbType;
+}) {
+  const { authRepo, walletPort, db } = deps;
 
   async function me(userId: string): Promise<MeResult> {
     const [profile, tutorProfile, walletSnapshot] = await Promise.all([

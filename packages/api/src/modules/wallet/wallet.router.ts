@@ -1,9 +1,6 @@
-import { eq } from "drizzle-orm";
 import { protectedProcedure } from "../../procedures";
-import { env } from "@cogito-app/env/server";
-import { db } from "@cogito-app/db";
-import { markPackage } from "@cogito-app/db/schema";
 import { listLedgerInput } from "./wallet.types";
+import { walletHandlers } from "./wallet.handlers";
 
 export const walletRouter = {
   get: protectedProcedure
@@ -13,17 +10,7 @@ export const walletRouter = {
       tags: ["Wallet"],
       summary: "Get wallet",
     })
-    .handler(async ({ context }) => {
-      const w = await context.services.wallet.getOrCreate(
-        context.session!.user.id,
-      );
-      return {
-        id: w.id,
-        totalBalance: w.totalBalance,
-        heldBalance: w.heldBalance,
-        availableBalance: w.availableBalance,
-      };
-    }),
+    .handler(walletHandlers.get),
 
   listLedger: protectedProcedure
     .route({
@@ -33,12 +20,7 @@ export const walletRouter = {
       summary: "List ledger entries",
     })
     .input(listLedgerInput)
-    .handler(async ({ context, input }) => {
-      const w = await context.services.wallet.getOrCreate(
-        context.session!.user.id,
-      );
-      return context.services.wallet.listLedger(w.id, input);
-    }),
+    .handler(walletHandlers.listLedger),
 
   listPackages: protectedProcedure
     .route({
@@ -47,12 +29,7 @@ export const walletRouter = {
       tags: ["Wallet"],
       summary: "List mark packages",
     })
-    .handler(async () => {
-      return db
-        .select()
-        .from(markPackage)
-        .where(eq(markPackage.isActive, true));
-    }),
+    .handler(walletHandlers.listPackages),
 
   knowledgeBankEligible: protectedProcedure
     .route({
@@ -61,11 +38,7 @@ export const walletRouter = {
       tags: ["Wallet"],
       summary: "Knowledge Bank eligibility",
     })
-    .handler(async ({ context }) => {
-      return context.services.wallet.knowledgeBankEligible(
-        context.session!.user.id,
-      );
-    }),
+    .handler(walletHandlers.knowledgeBankEligible),
 
   competitionCalendarLink: protectedProcedure
     .route({
@@ -74,7 +47,5 @@ export const walletRouter = {
       tags: ["Wallet"],
       summary: "Competition calendar link",
     })
-    .handler(() => {
-      return { url: env.COMPETITION_CALENDAR_URL };
-    }),
+    .handler(walletHandlers.competitionCalendarLink),
 };

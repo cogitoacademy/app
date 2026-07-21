@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "notification_eventKey_unique" ON "notification" ("event_key");

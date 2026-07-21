@@ -1,11 +1,62 @@
 import type { DbType } from "../../lib/db";
-import { notFound, badRequest } from "../../lib/errors";
+import { notFound, badRequest, forbidden } from "../../lib/errors";
 import type { AuditPort } from "../../shared/ports/audit.port";
 import type { PricingPort } from "../../shared/ports/pricing.port";
+import { ONBOARDING_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import { validateUpdateInput, validateSubmitForReview } from "./tutor.service";
 
 export function createTutorHandler(deps: {
+  tutorService: ReturnType<typeof createTutorService>;
+}) {
+  const { tutorService } = deps;
+
+  async function getMyProfile(userId: string) {
+    return tutorService.getMyProfile(userId);
+  }
+
+  async function updateMyProfile(userId: string, input: UpdateProfileInput) {
+    return tutorService.updateMyProfile(userId, input);
+  }
+
+  async function submitForReview(userId: string) {
+    return tutorService.submitForReview(userId);
+  }
+
+  async function listAvailability(userId: string) {
+    return tutorService.listAvailability(userId);
+  }
+
+  async function upsertAvailability(
+    userId: string,
+    input: {
+      id?: string;
+      startDate: string | Date;
+      endDate: string | Date;
+      modality: "online" | "offline" | "both";
+      isRecurring?: boolean;
+      recurrenceRule?: string;
+      isActive?: boolean;
+    },
+  ) {
+    return tutorService.upsertAvailability(userId, input);
+  }
+
+  async function deleteAvailability(userId: string, slotId: string) {
+    return tutorService.deleteAvailability(userId, slotId);
+  }
+
+  return {
+    getMyProfile,
+    updateMyProfile,
+    submitForReview,
+    listAvailability,
+    upsertAvailability,
+    deleteAvailability,
+  };
+}
+
+export function createTutorService(deps: {
   tutorRepo: TutorRepo;
   pricingPort: PricingPort;
   auditPort: AuditPort;
@@ -32,17 +83,21 @@ export function createTutorHandler(deps: {
     if (!result.ok) throw result.error;
 
     return db.transaction(async (tx) => {
-      const row = await tutorRepo.updateStatus(tx, userId, "pending_review");
+      const row = await tutorRepo.updateStatus(
+        tx,
+        userId,
+        ONBOARDING_STATUS.PENDING_REVIEW,
+      );
 
       await auditPort.record({
         db: tx,
         actorId: userId,
-        actorType: "tutor",
+        actorType: ACTOR_TYPE.TUTOR,
         action: "tutor_profile_submitted_for_review",
         targetId: profile!.id,
         targetType: "tutor_profile",
         beforeState: { onboardingStatus: profile!.onboardingStatus },
-        afterState: { onboardingStatus: "pending_review" },
+        afterState: { onboardingStatus: ONBOARDING_STATUS.PENDING_REVIEW },
       });
 
       return row;
@@ -88,7 +143,11 @@ export function createTutorHandler(deps: {
     });
   }
 
-  async function deleteAvailability(_userId: string, slotId: string) {
+  async function deleteAvailability(userId: string, slotId: string) {
+    const slots = await tutorRepo.listAvailability(db, userId);
+    const found = slots.find((s) => s.id === slotId);
+    if (!found)
+      throw forbidden("You can only delete your own availability slots");
     await tutorRepo.deleteAvailability(db, slotId);
   }
 

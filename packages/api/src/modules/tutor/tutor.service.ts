@@ -1,6 +1,7 @@
 import type { tutorProfile } from "@cogito-app/db/schema";
 import type { ORPCError } from "@orpc/server";
 import { notFound, forbidden, badRequest } from "../../lib/errors";
+import { ONBOARDING_STATUS, MODALITY } from "../../shared/constants";
 import type { PricingPort } from "../../shared/ports/pricing.port";
 import type { UpdateProfileInput } from "./tutor.repo";
 
@@ -19,7 +20,7 @@ export function validateUpdateInput(
     return { ok: false, error: notFound("Tutor profile not found") };
   }
 
-  if (profile.onboardingStatus === "published") {
+  if (profile.onboardingStatus === ONBOARDING_STATUS.PUBLISHED) {
     return {
       ok: false,
       error: forbidden(
@@ -29,7 +30,7 @@ export function validateUpdateInput(
   }
 
   if (input.prices) {
-    const modality = (input.modality ?? profile.modality ?? "online") as
+    const modality = (input.modality ?? profile.modality ?? MODALITY.ONLINE) as
       | "online"
       | "offline"
       | "both";
@@ -51,8 +52,8 @@ export function validateSubmitForReview(
   }
 
   if (
-    profile.onboardingStatus !== "draft" &&
-    profile.onboardingStatus !== "changes_requested"
+    profile.onboardingStatus !== ONBOARDING_STATUS.DRAFT &&
+    profile.onboardingStatus !== ONBOARDING_STATUS.CHANGES_REQUESTED
   ) {
     return {
       ok: false,
@@ -84,7 +85,7 @@ export function validateSubmitForReview(
   }
 
   if (profile.prices) {
-    const modality = (profile.modality ?? "online") as
+    const modality = (profile.modality ?? MODALITY.ONLINE) as
       | "online"
       | "offline"
       | "both";

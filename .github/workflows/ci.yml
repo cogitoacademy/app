@@ -1,5 +1,4 @@
 name: CI
-
 on:
   pull_request:
   push:
@@ -107,6 +106,7 @@ jobs:
           echo "BETTER_AUTH_URL=${{ env.BETTER_AUTH_URL }}" >> apps/server/.env
           echo "CORS_ORIGIN=${{ env.CORS_ORIGIN }}" >> apps/server/.env
           echo "PAYMENT_WEBHOOK_SECRET=${{ env.PAYMENT_WEBHOOK_SECRET }}" >> apps/server/.env
+          echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
       - run: bun test packages/api/src/tests/ apps/server/src/openapi.test.ts
       - run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts

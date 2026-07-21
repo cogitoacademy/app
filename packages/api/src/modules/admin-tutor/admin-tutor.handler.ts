@@ -1,13 +1,18 @@
 import type { DbType } from "../../lib/db";
 import { notFound, badRequest, conflict } from "../../lib/errors";
 import type { AuditPort } from "../../shared/ports/audit.port";
-import { INVITE_EXPIRY_DAYS } from "../../shared/constants";
+import {
+  INVITE_EXPIRY_DAYS,
+  INVITE_STATUS,
+  USER_ROLE,
+  ADMIN_DEFAULT_PAGE_LIMIT,
+} from "../../shared/constants";
 import type {
   AdminTutorRepo,
-  InviteStatus,
-  OnboardingStatus,
   TutorInviteRow,
   TutorProfileRow,
+  InviteStatus,
+  OnboardingStatus,
 } from "./admin-tutor.repo";
 import {
   validateReviewAction,
@@ -42,6 +47,59 @@ export interface ReviewTutorProfileInput {
 export type AdminTutorHandler = ReturnType<typeof createAdminTutorHandler>;
 
 export function createAdminTutorHandler(deps: {
+  adminTutorService: ReturnType<typeof createAdminTutorService>;
+}) {
+  const { adminTutorService } = deps;
+
+  async function createInvite(
+    adminId: string,
+    input: CreateInviteInput,
+  ): Promise<TutorInviteRow> {
+    return adminTutorService.createInvite(adminId, input);
+  }
+
+  async function listInvites(
+    input: ListInvitesInput = {},
+  ): Promise<TutorInviteRow[]> {
+    return adminTutorService.listInvites(input);
+  }
+
+  async function resendInvite(
+    adminId: string,
+    inviteId: string,
+  ): Promise<TutorInviteRow> {
+    return adminTutorService.resendInvite(adminId, inviteId);
+  }
+
+  async function revokeInvite(
+    adminId: string,
+    inviteId: string,
+  ): Promise<TutorInviteRow> {
+    return adminTutorService.revokeInvite(adminId, inviteId);
+  }
+
+  async function listTutorProfiles(input: ListTutorProfilesInput = {}) {
+    return adminTutorService.listTutorProfiles(input);
+  }
+
+  async function reviewTutorProfile(
+    adminId: string,
+    input: ReviewTutorProfileInput,
+  ): Promise<TutorProfileRow> {
+    return adminTutorService.reviewTutorProfile(adminId, input);
+  }
+
+  return {
+    createInvite,
+    listInvites,
+    resendInvite,
+    revokeInvite,
+    listTutorProfiles,
+    reviewTutorProfile,
+  };
+}
+
+export function createAdminTutorService(deps: {
   adminTutorRepo: AdminTutorRepo;
   auditPort: AuditPort;
   db: DbType;
@@ -52,45 +110,47 @@ export function createAdminTutorHandler(deps: {
     adminId: string,
     input: CreateInviteInput,
   ): Promise<TutorInviteRow> {
-    const existing = await adminTutorRepo.findActiveInviteByEmail(
-      db,
-      input.email,
-    );
-    if (existing) {
-      throw conflict("An active invite already exists for this email");
-    }
+    return db.transaction(async (tx) => {
+      const existing = await adminTutorRepo.findActiveInviteByEmail(
+        tx,
+        input.email,
+      );
+      if (existing) {
+        throw conflict("An active invite already exists for this email");
+      }
 
-    const token = crypto.randomUUID();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
+      const token = crypto.randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
 
-    const invite = await adminTutorRepo.insertInvite(db, {
-      email: input.email,
-      displayName: input.displayName,
-      token,
-      status: "invited",
-      invitedBy: adminId,
-      internalNotes: input.internalNotes ?? null,
-      expiresAt,
+      const invite = await adminTutorRepo.insertInvite(tx, {
+        email: input.email,
+        displayName: input.displayName,
+        token,
+        status: INVITE_STATUS.INVITED,
+        invitedBy: adminId,
+        internalNotes: input.internalNotes ?? null,
+        expiresAt,
+      });
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_invite_created",
+        targetId: invite.id,
+        targetType: "tutor_invite",
+        details: { email: input.email, displayName: input.displayName },
+      });
+
+      return invite;
     });
-
-    await auditPort.record({
-      db,
-      actorId: adminId,
-      actorType: "admin",
-      action: "tutor_invite_created",
-      targetId: invite.id,
-      targetType: "tutor_invite",
-      details: { email: input.email, displayName: input.displayName },
-    });
-
-    return invite;
   }
 
   async function listInvites(
     input: ListInvitesInput = {},
   ): Promise<TutorInviteRow[]> {
-    const limit = input.limit ?? 50;
+    const limit = input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT;
     const offset = input.offset ?? 0;
     return adminTutorRepo.listInvites(db, {
       status: input.status,
@@ -103,63 +163,67 @@ export function createAdminTutorHandler(deps: {
     adminId: string,
     inviteId: string,
   ): Promise<TutorInviteRow> {
-    const invite = await adminTutorRepo.getInviteById(db, inviteId);
-    if (!invite) throw notFound("Invite not found");
-    if (invite.status !== "invited") {
-      throw badRequest("Only invited invites can be resent");
-    }
+    return db.transaction(async (tx) => {
+      const invite = await adminTutorRepo.getInviteById(tx, inviteId);
+      if (!invite) throw notFound("Invite not found");
+      if (invite.status !== INVITE_STATUS.INVITED) {
+        throw badRequest("Only invited invites can be resent");
+      }
 
-    const newToken = crypto.randomUUID();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
+      const newToken = crypto.randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
 
-    const updated = await adminTutorRepo.updateInvite(db, inviteId, {
-      token: newToken,
-      expiresAt,
+      const updated = await adminTutorRepo.updateInvite(tx, inviteId, {
+        token: newToken,
+        expiresAt,
+      });
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "tutor_invite_resent",
+        targetId: inviteId,
+        targetType: "tutor_invite",
+      });
+
+      return updated;
     });
-
-    await auditPort.record({
-      db,
-      actorId: adminId,
-      actorType: "admin",
-      action: "tutor_invite_resent",
-      targetId: inviteId,
-      targetType: "tutor_invite",
-    });
-
-    return updated;
   }
 
   async function revokeInvite(
     adminId: string,
     inviteId: string,
   ): Promise<TutorInviteRow> {
-    const invite = await adminTutorRepo.getInviteById(db, inviteId);
-    if (!invite) throw notFound("Invite not found");
-    if (invite.status !== "invited") {
-      throw badRequest("Only invited invites can be revoked");
-    }
+    return db.transaction(async (tx) => {
+      const invite = await adminTutorRepo.getInviteById(tx, inviteId);
+      if (!invite) throw notFound("Invite not found");
+      if (invite.status !== INVITE_STATUS.INVITED) {
+        throw badRequest("Only invited invites can be revoked");
+      }
 
-    const updated = await adminTutorRepo.updateInvite(db, inviteId, {
-      status: "revoked",
-      revokedBy: adminId,
-      revokedAt: new Date(),
+      const updated = await adminTutorRepo.updateInvite(tx, inviteId, {
+        status: INVITE_STATUS.REVOKED,
+        revokedBy: adminId,
+        revokedAt: new Date(),
+      });
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "tutor_invite_revoked",
+        targetId: inviteId,
+        targetType: "tutor_invite",
+      });
+
+      return updated;
     });
-
-    await auditPort.record({
-      db,
-      actorId: adminId,
-      actorType: "admin",
-      action: "tutor_invite_revoked",
-      targetId: inviteId,
-      targetType: "tutor_invite",
-    });
-
-    return updated;
   }
 
   async function listTutorProfiles(input: ListTutorProfilesInput = {}) {
-    const limit = input.limit ?? 50;
+    const limit = input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT;
     const offset = input.offset ?? 0;
     return adminTutorRepo.listTutorProfiles(db, {
       status: input.status,
@@ -172,21 +236,21 @@ export function createAdminTutorHandler(deps: {
     adminId: string,
     input: ReviewTutorProfileInput,
   ): Promise<TutorProfileRow> {
-    const profile = await adminTutorRepo.getTutorProfileById(
-      db,
-      input.tutorProfileId,
-    );
-
-    const validation = validateReviewAction(input.action, profile);
-    if (!validation.ok) throw validation.error;
-    const existing = validation.profile;
-
-    const { updates, newStatus } = buildReviewUpdates(
-      input.action,
-      input.adminNote,
-    );
-
     return db.transaction(async (tx) => {
+      const profile = await adminTutorRepo.getTutorProfileById(
+        tx,
+        input.tutorProfileId,
+      );
+
+      const validation = validateReviewAction(input.action, profile);
+      if (!validation.ok) throw validation.error;
+      const existing = validation.profile;
+
+      const { updates, newStatus } = buildReviewUpdates(
+        input.action,
+        input.adminNote,
+      );
+
       const row = await adminTutorRepo.updateTutorProfile(
         tx,
         input.tutorProfileId,
@@ -196,7 +260,7 @@ export function createAdminTutorHandler(deps: {
       await auditPort.record({
         db: tx,
         actorId: adminId,
-        actorType: "admin",
+        actorType: USER_ROLE.ADMIN,
         action: `tutor_profile_${input.action}`,
         targetId: input.tutorProfileId,
         targetType: "tutor_profile",

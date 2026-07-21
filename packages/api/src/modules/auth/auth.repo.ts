@@ -14,54 +14,54 @@ export interface ProfileInput {
 export type StudentProfileRow = typeof studentProfile.$inferSelect;
 export type TutorProfileRow = typeof tutorProfile.$inferSelect;
 
+async function getStudentProfile(
+  conn: DbOrTx,
+  userId: string,
+): Promise<StudentProfileRow | null> {
+  return (
+    (await conn.query.studentProfile.findFirst({
+      where: eq(studentProfile.userId, userId),
+    })) ?? null
+  );
+}
+
+async function getTutorProfile(
+  conn: DbOrTx,
+  userId: string,
+): Promise<TutorProfileRow | null> {
+  return (
+    (await conn.query.tutorProfile.findFirst({
+      where: eq(tutorProfile.userId, userId),
+    })) ?? null
+  );
+}
+
+async function upsertProfile(
+  conn: DbOrTx,
+  userId: string,
+  input: ProfileInput,
+): Promise<StudentProfileRow> {
+  const [updated] = await conn
+    .update(studentProfile)
+    .set(input)
+    .where(eq(studentProfile.userId, userId))
+    .returning();
+  return updated!;
+}
+
+async function createProfile(
+  conn: DbOrTx,
+  userId: string,
+  input: ProfileInput,
+): Promise<StudentProfileRow> {
+  const [created] = await conn
+    .insert(studentProfile)
+    .values({ userId, ...input })
+    .returning();
+  return created!;
+}
+
 export function createAuthRepo() {
-  async function getStudentProfile(
-    conn: DbOrTx,
-    userId: string,
-  ): Promise<StudentProfileRow | null> {
-    return (
-      (await conn.query.studentProfile.findFirst({
-        where: eq(studentProfile.userId, userId),
-      })) ?? null
-    );
-  }
-
-  async function getTutorProfile(
-    conn: DbOrTx,
-    userId: string,
-  ): Promise<TutorProfileRow | null> {
-    return (
-      (await conn.query.tutorProfile.findFirst({
-        where: eq(tutorProfile.userId, userId),
-      })) ?? null
-    );
-  }
-
-  async function upsertProfile(
-    conn: DbOrTx,
-    userId: string,
-    input: ProfileInput,
-  ): Promise<StudentProfileRow> {
-    const [updated] = await conn
-      .update(studentProfile)
-      .set(input)
-      .where(eq(studentProfile.userId, userId))
-      .returning();
-    return updated!;
-  }
-
-  async function createProfile(
-    conn: DbOrTx,
-    userId: string,
-    input: ProfileInput,
-  ): Promise<StudentProfileRow> {
-    const [created] = await conn
-      .insert(studentProfile)
-      .values({ userId, ...input })
-      .returning();
-    return created!;
-  }
-
   return { getStudentProfile, getTutorProfile, upsertProfile, createProfile };
 }
 

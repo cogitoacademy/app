@@ -61,9 +61,9 @@ export const refundRecord = pgTable(
   "refund_record",
   {
     id: uuidPrimaryKey,
-    paymentId: text("payment_id")
-      .notNull()
-      .references(() => paymentRecord.id, { onDelete: "cascade" }),
+    paymentId: text("payment_id").references(() => paymentRecord.id, {
+      onDelete: "cascade",
+    }),
     walletId: text("wallet_id")
       .notNull()
       .references(() => wallet.id, { onDelete: "cascade" }),

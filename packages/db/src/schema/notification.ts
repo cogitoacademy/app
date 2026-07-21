@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   index,
+  uniqueIndex,
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -48,7 +49,7 @@ export const notification = pgTable(
       table.isRead,
       table.createdAt,
     ),
-    index("notification_eventKey_idx").on(table.eventKey),
+    uniqueIndex("notification_eventKey_unique").on(table.eventKey),
   ],
 );
 

@@ -17,7 +17,7 @@ import { resetDatabase } from "../helpers/test-client";
 import { createXenditPaymentProvider } from "../../modules/payment/xendit-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
 import { createWalletRepo } from "../../modules/wallet/wallet.repo";
-import { createWalletHandler } from "../../modules/wallet/wallet.handler";
+import { createWalletService } from "../../modules/wallet/wallet.service";
 
 describe("PaymentService", () => {
   beforeAll(async () => {
@@ -33,7 +33,7 @@ describe("PaymentService", () => {
       walletRow.id,
       "starter",
     );
-    expect(intent.providerReference).toContain("stub-");
+    expect(intent.providerReference).toContain("stub:");
 
     await services.payment.confirmFromWebhook({
       provider: "stub",
@@ -131,7 +131,7 @@ describe("PaymentService", () => {
     failureRedirectUrl: "http://localhost:3000/balance?status=failed",
   });
 
-  const xenditWallet = createWalletHandler(createWalletRepo(db), db);
+  const xenditWallet = createWalletService(createWalletRepo(db), db);
   const xenditPayment = createPaymentService({
     db,
     wallet: xenditWallet,
@@ -169,7 +169,7 @@ describe("PaymentService", () => {
       globalThis.fetch = originalFetch;
     });
 
-    test("createIntent creates PENDING record with xendit- prefix", async () => {
+    test("createIntent creates PENDING record with xendit provider reference", async () => {
       const user = await createTestUser("xc01@cogito.test");
       const walletRow = await xenditWallet.getOrCreate(user.id);
 
@@ -178,7 +178,7 @@ describe("PaymentService", () => {
         walletRow.id,
         "starter",
       );
-      expect(intent.providerReference).toContain("xendit-");
+      expect(intent.providerReference).toContain("xendit:");
 
       const [record] = await db
         .select()

@@ -3,19 +3,19 @@ import type {
   WebhookPayload,
 } from "../../shared/ports/payment.port";
 
+export async function createIntent(params: {
+  paymentId: string;
+  amountIdr: number;
+  providerReference: string;
+}): Promise<{ checkoutUrl: string }> {
+  return {
+    checkoutUrl: `/webhooks/payments/stub/checkout?ref=${params.providerReference}`,
+  };
+}
+
 export function createStubPaymentProvider(
   webhookSecret: string,
 ): PaymentProvider {
-  async function createIntent(params: {
-    paymentId: string;
-    amountIdr: number;
-    providerReference: string;
-  }): Promise<{ checkoutUrl: string }> {
-    return {
-      checkoutUrl: `/webhooks/payments/stub/checkout?ref=${params.providerReference}`,
-    };
-  }
-
   async function verifyWebhook(
     rawBody: string,
     signature: string,

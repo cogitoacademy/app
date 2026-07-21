@@ -119,7 +119,7 @@ async function main() {
 
   const perFileRows = records
     .filter((r) => r.linesFound > 0)
-    .sort((a, b) => a.linesHit / a.linesFound - b.linesHit / b.linesFound)
+    .toSorted((a, b) => a.linesHit / a.linesFound - b.linesHit / b.linesFound)
     .slice(0, 15)
     .map((r) => {
       const shortPath = r.file

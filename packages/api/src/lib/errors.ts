@@ -42,3 +42,31 @@ export function badRequest(
 ): ORPCError<"BAD_REQUEST", undefined> {
   return new ORPCError("BAD_REQUEST", { message });
 }
+
+export function internalServerError(
+  message = "Internal server error",
+): ORPCError<"INTERNAL_SERVER_ERROR", undefined> {
+  return new ORPCError("INTERNAL_SERVER_ERROR", { message });
+}
+
+export function serviceUnavailable(
+  message = "Service unavailable",
+): ORPCError<"SERVICE_UNAVAILABLE", undefined> {
+  return new ORPCError("SERVICE_UNAVAILABLE", { message });
+}
+
+export function rateLimited(
+  message = "Too many requests",
+  retryAfterMs?: number,
+): ORPCError<"TOO_MANY_REQUESTS", { retryAfterMs?: number }> {
+  return new ORPCError("TOO_MANY_REQUESTS", {
+    message,
+    data: { retryAfterMs },
+  });
+}
+
+export function timeout(
+  message = "Request timed out",
+): ORPCError<"TIMEOUT", undefined> {
+  return new ORPCError("TIMEOUT", { message });
+}

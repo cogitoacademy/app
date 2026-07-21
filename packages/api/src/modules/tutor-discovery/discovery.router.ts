@@ -1,5 +1,6 @@
 import { protectedProcedure } from "../../procedures";
 import { listPublishedInput, getProfileInput } from "./discovery.types";
+import { discoveryHandlers } from "./discovery.handlers";
 
 export const discoveryRouter = {
   listPublished: protectedProcedure
@@ -12,9 +13,7 @@ export const discoveryRouter = {
         "Returns published tutor profiles with optional search and filters (SQL-level)",
     })
     .input(listPublishedInput)
-    .handler(async ({ context, input }) => {
-      return context.services.discovery.listPublished(input ?? {});
-    }),
+    .handler(discoveryHandlers.listPublished),
 
   getProfile: protectedProcedure
     .route({
@@ -25,7 +24,5 @@ export const discoveryRouter = {
       description: "Returns a published tutor profile with availability slots",
     })
     .input(getProfileInput)
-    .handler(async ({ context, input }) => {
-      return context.services.discovery.getProfile(input.tutorId);
-    }),
+    .handler(discoveryHandlers.getProfile),
 };

@@ -26,10 +26,12 @@ describe("Tutor availability", () => {
     tutorClient = createTestClient(ctx);
   });
 
+  // eslint-disable-next-line unicorn/consistent-function-scoping
   function slotStart(minutesFromNow = 60) {
     return new Date(Date.now() + minutesFromNow * 60_000).toISOString();
   }
 
+  // eslint-disable-next-line unicorn/consistent-function-scoping
   function slotEnd(minutesFromNow = 120) {
     return new Date(Date.now() + minutesFromNow * 60_000).toISOString();
   }

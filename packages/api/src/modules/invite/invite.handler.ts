@@ -1,10 +1,27 @@
 import type { DbType } from "../../lib/db";
 import { notFound } from "../../lib/errors";
 import type { AuditPort } from "../../shared/ports/audit.port";
+import { INVITE_STATUS, USER_ROLE, ACTOR_TYPE } from "../../shared/constants";
 import { validateClaim } from "./invite.service";
 import type { InviteRepo } from "./invite.repo";
 
 export function createInviteHandler(deps: {
+  inviteService: ReturnType<typeof createInviteService>;
+}) {
+  const { inviteService } = deps;
+
+  async function verify(token: string) {
+    return inviteService.verify(token);
+  }
+
+  async function claim(userId: string, userEmail: string, token: string) {
+    return inviteService.claim(userId, userEmail, token);
+  }
+
+  return { verify, claim };
+}
+
+export function createInviteService(deps: {
   inviteRepo: InviteRepo;
   auditPort: AuditPort;
   db: DbType;
@@ -38,11 +55,11 @@ export function createInviteHandler(deps: {
         tx,
         invite!.id,
         {
-          status: "accepted",
+          status: INVITE_STATUS.ACCEPTED,
           acceptedBy: userId,
           acceptedAt: new Date(),
         },
-        { status: "invited", expiresAt: new Date() },
+        { status: INVITE_STATUS.INVITED, expiresAt: new Date() },
       );
 
       if (!acceptedInvite) {
@@ -55,12 +72,12 @@ export function createInviteHandler(deps: {
         displayName: invite!.displayName,
       });
 
-      await inviteRepo.updateUserRole(tx, userId, "tutor");
+      await inviteRepo.updateUserRole(tx, userId, USER_ROLE.TUTOR);
 
       await auditPort.record({
         db: tx,
         actorId: userId,
-        actorType: "tutor",
+        actorType: ACTOR_TYPE.TUTOR,
         action: "tutor_invite_claimed",
         targetId: invite!.id,
         targetType: "tutor_invite",

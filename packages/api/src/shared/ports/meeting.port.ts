@@ -9,5 +9,9 @@ export interface MeetingEvent {
 }
 
 export interface MeetingPort {
-  createEvent(bookingId: string): Promise<MeetingEvent>;
+  createEvent(
+    bookingId: string,
+    scheduledStartAt?: Date,
+    scheduledEndAt?: Date,
+  ): Promise<MeetingEvent>;
 }

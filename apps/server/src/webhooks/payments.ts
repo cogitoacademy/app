@@ -1,5 +1,31 @@
 import { Elysia, type Context as ElysiaContext } from "elysia";
 import { services } from "@cogito-app/api";
+import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
+import { log } from "@cogito-app/api/lib/logger";
+import { env } from "@cogito-app/env/server";
+
+const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
+
+function validateWebhookTimestamp(request: Request): void {
+  const timestamp =
+    request.headers.get("x-timestamp") ?? request.headers.get("date");
+  if (!timestamp) {
+    if (env.NODE_ENV === "production") {
+      throw new Error("Webhook timestamp header is required");
+    }
+    return;
+  }
+  const webhookTime = new Date(timestamp).getTime();
+  if (Number.isNaN(webhookTime)) {
+    if (env.NODE_ENV === "production") {
+      throw new Error("Invalid webhook timestamp");
+    }
+    return;
+  }
+  if (Math.abs(Date.now() - webhookTime) > MAX_WEBHOOK_AGE_MS) {
+    throw new Error("Webhook timestamp too old or too far in the future");
+  }
+}
 
 export function paymentsWebhook(app: Elysia) {
   app.post(
@@ -11,8 +37,24 @@ export function paymentsWebhook(app: Elysia) {
           ? (request.headers.get("x-callback-token") ?? "")
           : (request.headers.get("x-webhook-signature") ?? "");
       const rawBody = typeof body === "string" ? body : JSON.stringify(body);
+      const idempotencyKey = `${provider}:${request.headers.get("x-event-id") ?? crypto.randomUUID()}`;
+
+      log({
+        level: "info",
+        action: "webhook_received",
+        provider,
+        contentLength: request.headers.get("content-length"),
+        hasSignature: !!signature,
+      });
+
+      if (webhookIdempotency.isProcessed(idempotencyKey)) {
+        set.status = 200;
+        return { ok: true, idempotent: true };
+      }
 
       try {
+        validateWebhookTimestamp(request);
+
         const payload = await services.payment.provider.verifyWebhook(
           rawBody,
           signature,
@@ -27,17 +69,57 @@ export function paymentsWebhook(app: Elysia) {
           failureReason: payload.failureReason,
         });
 
+        webhookIdempotency.markProcessed(idempotencyKey, { ok: true });
+
         set.status = 200;
         return { ok: true };
-      } catch {
-        set.status = 401;
-        return { error: "Invalid webhook signature" };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        if (
+          message.toLowerCase().includes("signature") ||
+          message.toLowerCase().includes("unauthorized")
+        ) {
+          log({
+            level: "error",
+            action: "webhook_signature_failed",
+            provider,
+            error: { message },
+          });
+          set.status = 401;
+          return { error: "Invalid webhook signature" };
+        }
+
+        if (message.toLowerCase().includes("timestamp")) {
+          log({
+            level: "warn",
+            action: "webhook_timestamp_rejected",
+            provider,
+            error: { message },
+          });
+          set.status = 408;
+          return { error: message };
+        }
+
+        log({
+          level: "error",
+          action: "webhook_processing_error",
+          provider,
+          error: { message },
+        });
+        set.status = 500;
+        return { error: "Webhook processing failed" };
       }
     },
     { parse: "text" },
   );
 
   app.get("/webhooks/payments/stub/checkout", async ({ query, set }) => {
+    if (env.NODE_ENV === "production" || env.PAYMENT_PROVIDER !== "stub") {
+      set.status = 404;
+      return { error: "Not found" };
+    }
+
     const ref = query.ref as string;
     const eventId = "evt_" + crypto.randomUUID();
 

@@ -4,9 +4,9 @@ import type {
 } from "../../shared/ports/audit.port";
 import type { AuditRepo } from "./audit.repo";
 
-export type AuditHandler = ReturnType<typeof createAuditHandler>;
+export type AuditService = ReturnType<typeof createAuditService>;
 
-export function createAuditHandler(repo: AuditRepo): AuditPort {
+export function createAuditService(repo: AuditRepo): AuditPort {
   async function record(params: AuditRecordParams): Promise<void> {
     await repo.insertAuditLog(params.db, {
       actorId: params.actorId,

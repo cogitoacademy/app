@@ -1,9 +1,9 @@
 import { describe, test, expect } from "bun:test";
+import { createPricingService } from "../../modules/pricing/pricing.service";
 import {
-  createPricingService,
   ONLINE_FLOOR_PRICES,
   OFFLINE_FLOOR_PRICES,
-} from "../../modules/pricing/pricing.service";
+} from "../../shared/constants";
 
 describe("Pricing Service", () => {
   const pricing = createPricingService();

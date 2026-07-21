@@ -38,7 +38,7 @@ export function createAuth() {
     session: {
       cookieCache: {
         enabled: true,
-        maxAge: 60,
+        maxAge: env.SESSION_COOKIE_CACHE_MAX_AGE,
       },
     },
     emailAndPassword: {

@@ -7,9 +7,14 @@ import type {
   MeetingEvent,
   MeetingPort,
 } from "../../shared/ports/meeting.port";
+import { log } from "../../lib/logger";
 
 export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
-  async function createEvent(bookingId: string): Promise<MeetingEvent> {
+  async function createEvent(
+    bookingId: string,
+    _scheduledStartAt?: Date,
+    _scheduledEndAt?: Date,
+  ): Promise<MeetingEvent> {
     const [row] = await db
       .insert(meetingEvent)
       .values({
@@ -20,6 +25,15 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
         externalEventId: null,
       })
       .returning();
+
+    log({
+      level: "warn",
+      action: "meeting_manual_created",
+      message:
+        "Meeting created with manual provider — admin needs to assign a meeting link",
+      bookingId,
+    });
+
     return row as unknown as typeof meetingEventTable.$inferSelect;
   }
 

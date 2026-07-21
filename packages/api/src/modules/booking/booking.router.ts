@@ -16,6 +16,7 @@ import {
   proposeRescheduleInput,
   completeSessionInput,
 } from "./booking.types";
+import { bookingHandlers, tutorActionsHandlers } from "./booking.handlers";
 
 export const bookingRouter = {
   createSolo: protectedProcedure
@@ -27,16 +28,7 @@ export const bookingRouter = {
       description: "Creates a solo booking request and holds Marks",
     })
     .input(createSoloInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.createSolo(context.session.user.id, {
-        tutorId: input.tutorId,
-        availabilitySlotId: input.availabilitySlotId,
-        modality: input.modality,
-        scheduledStartAt: new Date(input.scheduledStartAt),
-        scheduledEndAt: new Date(input.scheduledEndAt),
-        timezone: input.timezone,
-      });
-    }),
+    .handler(bookingHandlers.createSolo),
 
   get: protectedProcedure
     .route({
@@ -47,9 +39,7 @@ export const bookingRouter = {
       description: "Returns a booking with participants and history",
     })
     .input(getBookingInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.getById(input.bookingId);
-    }),
+    .handler(bookingHandlers.get),
 
   listMine: protectedProcedure
     .route({
@@ -60,9 +50,7 @@ export const bookingRouter = {
       description: "Returns bookings where the user is proposer",
     })
     .input(listMineInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.listMine(context.session.user.id, input);
-    }),
+    .handler(bookingHandlers.listMine),
 
   cancel: protectedProcedure
     .route({
@@ -77,13 +65,7 @@ export const bookingRouter = {
         cancellationReason: z.string().optional(),
       }),
     )
-    .handler(async ({ context, input }) => {
-      return context.services.booking.cancel(
-        context.session.user.id,
-        input.bookingId,
-        input.cancellationReason,
-      );
-    }),
+    .handler(bookingHandlers.cancel),
 
   proposeReschedule: protectedProcedure
     .route({
@@ -94,15 +76,7 @@ export const bookingRouter = {
       description: "Student proposes a new slot for an existing booking",
     })
     .input(proposeRescheduleInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.proposeReschedule(
-        context.session.user.id,
-        input.bookingId,
-        new Date(input.proposedStartAt),
-        new Date(input.proposedEndAt),
-        input.reason,
-      );
-    }),
+    .handler(bookingHandlers.proposeReschedule),
 
   createGroup: protectedProcedure
     .route({
@@ -114,18 +88,7 @@ export const bookingRouter = {
         "Creates a group booking, holds proposer Marks, invites participants",
     })
     .input(createGroupInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.createGroup(context.session.user.id, {
-        tutorId: input.tutorId,
-        availabilitySlotId: input.availabilitySlotId,
-        modality: input.modality,
-        targetGroupSize: input.targetGroupSize,
-        inviteeUserIds: input.inviteeUserIds,
-        scheduledStartAt: new Date(input.scheduledStartAt),
-        scheduledEndAt: new Date(input.scheduledEndAt),
-        timezone: input.timezone,
-      });
-    }),
+    .handler(bookingHandlers.createGroup),
 
   createSeries: protectedProcedure
     .route({
@@ -136,18 +99,7 @@ export const bookingRouter = {
       description: "Creates a multi-session series booking (2-4 sessions)",
     })
     .input(createSeriesInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.createSeries(context.session.user.id, {
-        tutorId: input.tutorId,
-        availabilitySlotId: input.availabilitySlotId,
-        modality: input.modality,
-        sessions: input.sessions.map((s) => ({
-          scheduledStartAt: new Date(s.scheduledStartAt),
-          scheduledEndAt: new Date(s.scheduledEndAt),
-        })),
-        timezone: input.timezone,
-      });
-    }),
+    .handler(bookingHandlers.createSeries),
 
   confirmInvite: protectedProcedure
     .route({
@@ -158,12 +110,7 @@ export const bookingRouter = {
       description: "Invitee confirms participation and holds Marks",
     })
     .input(confirmInviteInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.confirmInvite(
-        context.session.user.id,
-        input.bookingId,
-      );
-    }),
+    .handler(bookingHandlers.confirmInvite),
 
   declineInvite: protectedProcedure
     .route({
@@ -174,13 +121,7 @@ export const bookingRouter = {
       description: "Invitee declines participation",
     })
     .input(declineInviteInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.declineInvite(
-        context.session.user.id,
-        input.bookingId,
-        input.reason,
-      );
-    }),
+    .handler(bookingHandlers.declineInvite),
 
   reconfirm: protectedProcedure
     .route({
@@ -191,13 +132,7 @@ export const bookingRouter = {
       description: "Participant accepts or rejects new price after repricing",
     })
     .input(reconfirmInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.reconfirm(
-        context.session.user.id,
-        input.bookingId,
-        input.accept,
-      );
-    }),
+    .handler(bookingHandlers.reconfirm),
 
   withdraw: protectedProcedure
     .route({
@@ -209,13 +144,7 @@ export const bookingRouter = {
         "Participant withdraws; pre-H2 releases held Marks, post-H2 late-cancel",
     })
     .input(withdrawInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.withdraw(
-        context.session.user.id,
-        input.bookingId,
-        input.reason,
-      );
-    }),
+    .handler(bookingHandlers.withdraw),
 
   listSessions: protectedProcedure
     .route({
@@ -226,9 +155,7 @@ export const bookingRouter = {
       description: "Returns child sessions for a series booking",
     })
     .input(listSessionsInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.listSessions(input.bookingId);
-    }),
+    .handler(bookingHandlers.listSessions),
 };
 
 export const tutorActionsRouter = {
@@ -241,12 +168,7 @@ export const tutorActionsRouter = {
       description: "Tutor accepts a solo booking; online goes scheduled",
     })
     .input(bookingActionInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.tutorAccept(
-        input.bookingId,
-        context.session.user.id,
-      );
-    }),
+    .handler(tutorActionsHandlers.acceptBooking),
 
   declineBooking: protectedProcedure
     .route({
@@ -261,13 +183,7 @@ export const tutorActionsRouter = {
         reason: z.string().optional(),
       }),
     )
-    .handler(async ({ context, input }) => {
-      return context.services.booking.tutorDecline(
-        input.bookingId,
-        context.session.user.id,
-        input.reason,
-      );
-    }),
+    .handler(tutorActionsHandlers.declineBooking),
 
   completeSession: protectedProcedure
     .route({
@@ -278,11 +194,5 @@ export const tutorActionsRouter = {
       description: "Tutor marks a scheduled session as completed",
     })
     .input(completeSessionInput)
-    .handler(async ({ context, input }) => {
-      return context.services.booking.completeSession(
-        input.bookingId,
-        context.session.user.id,
-        input.sessionNote,
-      );
-    }),
+    .handler(tutorActionsHandlers.completeSession),
 };

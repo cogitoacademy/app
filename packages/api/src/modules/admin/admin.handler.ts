@@ -1,16 +1,12 @@
-import { db } from "../../lib/db";
+import type { DbType } from "../../lib/db";
 import type { AuditPort } from "../../shared/ports/audit.port";
-import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
-import { validateRoleChange } from "./admin.service";
+import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
+import type { AdminRepo, UserRow } from "./admin.repo";
+import { validateRoleChange, type SetRoleInput } from "./admin.service";
 
 export interface ListUsersInput {
   limit?: number;
   offset?: number;
-}
-
-export interface SetRoleInput {
-  userId: string;
-  role: UserRole;
 }
 
 export interface ListUsersResult {
@@ -23,15 +19,37 @@ export interface ListUsersResult {
 export type AdminHandler = ReturnType<typeof createAdminHandler>;
 
 export function createAdminHandler(deps: {
-  adminRepo: AdminRepo;
-  auditPort: AuditPort;
+  adminService: ReturnType<typeof createAdminService>;
 }) {
-  const { adminRepo, auditPort } = deps;
+  const { adminService } = deps;
 
   async function listUsers(
     input: ListUsersInput = {},
   ): Promise<ListUsersResult> {
-    const limit = input.limit ?? 50;
+    return adminService.listUsers(input);
+  }
+
+  async function setRole(
+    adminId: string,
+    input: SetRoleInput,
+  ): Promise<UserRow> {
+    return adminService.setRole(adminId, input);
+  }
+
+  return { listUsers, setRole };
+}
+
+export function createAdminService(deps: {
+  adminRepo: AdminRepo;
+  auditPort: AuditPort;
+  db: DbType;
+}) {
+  const { adminRepo, auditPort, db } = deps;
+
+  async function listUsers(
+    input: ListUsersInput = {},
+  ): Promise<ListUsersResult> {
+    const limit = input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT;
     const offset = input.offset ?? 0;
 
     const [users, total] = await Promise.all([
@@ -49,7 +67,9 @@ export function createAdminHandler(deps: {
     const target = await adminRepo.getById(db, input.userId);
 
     const needsAdminCount =
-      target !== null && target.role === "admin" && input.role !== "admin";
+      target !== null &&
+      target.role === USER_ROLE.ADMIN &&
+      input.role !== USER_ROLE.ADMIN;
     const adminCount = needsAdminCount ? await adminRepo.countAdmins(db) : 0;
 
     const result = validateRoleChange(target, input.role, adminCount);
@@ -62,7 +82,7 @@ export function createAdminHandler(deps: {
       await auditPort.record({
         db: tx,
         actorId: adminId,
-        actorType: "admin",
+        actorType: USER_ROLE.ADMIN,
         action: "user_role_changed",
         targetId: input.userId,
         targetType: "user",

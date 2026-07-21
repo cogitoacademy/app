@@ -1,5 +1,6 @@
 import { publicProcedure, protectedProcedure } from "../../procedures";
 import { verifyInput, claimInput } from "./invite.types";
+import { inviteHandlers } from "./invite.handlers";
 
 export const inviteRouter = {
   verify: publicProcedure
@@ -11,9 +12,7 @@ export const inviteRouter = {
       description: "Validates a tutor invite token",
     })
     .input(verifyInput)
-    .handler(async ({ context, input }) => {
-      return context.services.invite.verify(input.token);
-    }),
+    .handler(inviteHandlers.verify),
 
   claim: protectedProcedure
     .route({
@@ -24,8 +23,5 @@ export const inviteRouter = {
       description: "Claims a tutor invite and creates a tutor profile",
     })
     .input(claimInput)
-    .handler(async ({ context, input }) => {
-      const user = context.session.user;
-      return context.services.invite.claim(user.id, user.email, input.token);
-    }),
+    .handler(inviteHandlers.claim),
 };

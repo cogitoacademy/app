@@ -92,4 +92,16 @@ export interface WalletPort {
     balance: number;
     threshold: number;
   }>;
+  listActivePackages(): Promise<
+    {
+      id: string;
+      code: string;
+      name: string;
+      marks: number;
+      priceIdr: number;
+      isActive: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    }[]
+  >;
 }
