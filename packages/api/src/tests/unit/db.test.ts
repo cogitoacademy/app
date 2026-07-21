@@ -8,10 +8,12 @@ mock.module("@cogito-app/env/server", () => ({
   },
 }));
 
+function mockPostgres() {
+  return {};
+}
+
 mock.module("postgres", () => ({
-  default: function postgres() {
-    return {};
-  },
+  default: mockPostgres,
 }));
 
 mock.module("drizzle-orm/postgres-js", () => ({
