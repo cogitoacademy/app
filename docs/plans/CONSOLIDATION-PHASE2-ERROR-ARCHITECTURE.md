@@ -64,17 +64,17 @@ The initial consolidation (Phase 1) restructured file layout and wiring. But err
 
 ### Phase Summary
 
-| Phase | Focus | Tasks | Est. |
-| ----- | ----- | ----- | ---- |
-| 0 | Green baseline | Verify CI passes | 0 |
-| 1 | Foundation | Domain error base class, handler utils, all error files, new repos/types | 1 |
-| 2 | BOOKING_STATE | Mechanical constant replacement | 0.5 |
-| 3 | Layer cleanup | Repo purity, Zod schemas, type dedup, new files | 1 |
-| 4 | Simple modules | achievement, room, invite, admin, auth, refund | 1 |
-| 5 | Medium modules | wallet, admin-tutor, admin-booking, payment, tutor, tutor-discovery | 1.5 |
-| 6 | Complex modules | (reserved if needed) | 0 |
-| 7 | Booking module | 24 error classes, most complex | 1.5 |
-| 8 | Cleanup | Remove unused factories, final verification | 0.5 |
+| Phase | Focus           | Tasks                                                                    | Est. |
+| ----- | --------------- | ------------------------------------------------------------------------ | ---- |
+| 0     | Green baseline  | Verify CI passes                                                         | 0    |
+| 1     | Foundation      | Domain error base class, handler utils, all error files, new repos/types | 1    |
+| 2     | BOOKING_STATE   | Mechanical constant replacement                                          | 0.5  |
+| 3     | Layer cleanup   | Repo purity, Zod schemas, type dedup, new files                          | 1    |
+| 4     | Simple modules  | achievement, room, invite, admin, auth, refund                           | 1    |
+| 5     | Medium modules  | wallet, admin-tutor, admin-booking, payment, tutor, tutor-discovery      | 1.5  |
+| 6     | Complex modules | (reserved if needed)                                                     | 0    |
+| 7     | Booking module  | 24 error classes, most complex                                           | 1.5  |
+| 8     | Cleanup         | Remove unused factories, final verification                              | 0.5  |
 
 **Total: ~6 days**
 
@@ -220,24 +220,25 @@ Create 14 error definition files. Each contains domain error classes and a mappe
 
 **Files to create:**
 
-| # | File | Classes | Mapper |
-|---|------|---------|--------|
-| 1.3.1 | `modules/achievement/achievement.errors.ts` | `AchievementNotFoundError`, `AchievementNotEditableError` | `mapAchievementError` |
-| 1.3.2 | `modules/admin/admin.errors.ts` | `UserNotFoundError`, `LastAdminError` | `mapAdminError` |
-| 1.3.3 | `modules/admin-booking/admin-booking.errors.ts` | `BookingNotFoundError`, `TerminalStateOverrideError`, `InvalidRefundStateError` | `mapAdminBookingError` |
-| 1.3.4 | `modules/admin-tutor/admin-tutor.errors.ts` | `InviteNotFoundError`, `TutorProfileNotFoundError`, `InvalidInviteActionError` | `mapAdminTutorError` |
-| 1.3.5 | `modules/auth/auth.errors.ts` | `ProfileNotFoundError`, `ValidationRequiredError` | `mapAuthError` |
-| 1.3.6 | `modules/booking/booking.errors.ts` | 24 classes (see spec) | `mapBookingError` |
-| 1.3.7 | `modules/invite/invite.errors.ts` | `InviteNotFoundError`, `InviteEmailMismatchError`, `ProfileAlreadyExistsError` | `mapInviteError` |
-| 1.3.8 | `modules/payment/payment.errors.ts` | `PackageNotFoundError`, `PackageAlreadyPurchasedError`, `PaymentProviderError` | `mapPaymentError` |
-| 1.3.9 | `modules/refund/refund.errors.ts` | `WalletNotFoundError`, `InvalidRefundAmountError` | `mapRefundError` |
-| 1.3.10 | `modules/room/room.errors.ts` | `RoomNotFoundError`, `RoomBookingConflictError` | `mapRoomError` |
-| 1.3.11 | `modules/tutor/tutor.errors.ts` | `TutorProfileNotFoundError`, `TutorProfileNotEditableError`, `InvalidTutorStatusError`, `AvailabilitySlotOverlapError` | `mapTutorError` |
-| 1.3.12 | `modules/tutor-discovery/discovery.errors.ts` | `TutorProfileNotFoundError` | `mapDiscoveryError` |
-| 1.3.13 | `modules/wallet/wallet.errors.ts` | `WalletNotFoundError`, `InsufficientBalanceError` | `mapWalletError` |
-| 1.3.14 | `modules/booking/booking-state.types.ts` | No new file — update existing | — |
+| #      | File                                            | Classes                                                                                                                | Mapper                 |
+| ------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 1.3.1  | `modules/achievement/achievement.errors.ts`     | `AchievementNotFoundError`, `AchievementNotEditableError`                                                              | `mapAchievementError`  |
+| 1.3.2  | `modules/admin/admin.errors.ts`                 | `UserNotFoundError`, `LastAdminError`                                                                                  | `mapAdminError`        |
+| 1.3.3  | `modules/admin-booking/admin-booking.errors.ts` | `BookingNotFoundError`, `TerminalStateOverrideError`, `InvalidRefundStateError`                                        | `mapAdminBookingError` |
+| 1.3.4  | `modules/admin-tutor/admin-tutor.errors.ts`     | `InviteNotFoundError`, `TutorProfileNotFoundError`, `InvalidInviteActionError`                                         | `mapAdminTutorError`   |
+| 1.3.5  | `modules/auth/auth.errors.ts`                   | `ProfileNotFoundError`, `ValidationRequiredError`                                                                      | `mapAuthError`         |
+| 1.3.6  | `modules/booking/booking.errors.ts`             | 24 classes (see spec)                                                                                                  | `mapBookingError`      |
+| 1.3.7  | `modules/invite/invite.errors.ts`               | `InviteNotFoundError`, `InviteEmailMismatchError`, `ProfileAlreadyExistsError`                                         | `mapInviteError`       |
+| 1.3.8  | `modules/payment/payment.errors.ts`             | `PackageNotFoundError`, `PackageAlreadyPurchasedError`, `PaymentProviderError`                                         | `mapPaymentError`      |
+| 1.3.9  | `modules/refund/refund.errors.ts`               | `WalletNotFoundError`, `InvalidRefundAmountError`                                                                      | `mapRefundError`       |
+| 1.3.10 | `modules/room/room.errors.ts`                   | `RoomNotFoundError`, `RoomBookingConflictError`                                                                        | `mapRoomError`         |
+| 1.3.11 | `modules/tutor/tutor.errors.ts`                 | `TutorProfileNotFoundError`, `TutorProfileNotEditableError`, `InvalidTutorStatusError`, `AvailabilitySlotOverlapError` | `mapTutorError`        |
+| 1.3.12 | `modules/tutor-discovery/discovery.errors.ts`   | `TutorProfileNotFoundError`                                                                                            | `mapDiscoveryError`    |
+| 1.3.13 | `modules/wallet/wallet.errors.ts`               | `WalletNotFoundError`, `InsufficientBalanceError`                                                                      | `mapWalletError`       |
+| 1.3.14 | `modules/booking/booking-state.types.ts`        | No new file — update existing                                                                                          | —                      |
 
 **Test:** Create a test for each error file verifying:
+
 - `instanceof DomainError` works
 - `err.code`, `err.domain`, `err.message`, `err.details` are correct
 - `err.name` equals constructor name
@@ -277,6 +278,7 @@ export const listRoomsInput = z.void();
 Extract all direct DB queries from `payment.service.ts` into a repo, following the same pattern as other modules (`createPaymentRepo(db)`).
 
 Functions to extract:
+
 - `findPackageById(db, id)`
 - `findPaymentByEventKey(db, eventKey)`
 - `findPaymentById(db, id)`
@@ -311,6 +313,7 @@ Change `TERMINAL_STATES` to use `BOOKING_STATE` constants instead of raw strings
 ### 2.2 Update `booking.service.ts`
 
 Replace all 78+ raw state strings with `BOOKING_STATE.XXX`. For example:
+
 - `"awaiting_tutor_review"` → `BOOKING_STATE.AWAITING_TUTOR_REVIEW`
 - `"cancelled"` → `BOOKING_STATE.CANCELLED`
 - etc.
@@ -322,7 +325,7 @@ Replace all state string keys and values with `BOOKING_STATE.XXX`.
 ### 2.4 Update `booking.repo.ts`
 
 - Replace inline terminal states filter in `findOverlappingBookings` with `TERMINAL_STATES` constant passed as parameter
-- Update method signature: `findOverlappingBookings(conn, tutorId, startAt, endAt, excludeBookingId?, { excludeStates })` 
+- Update method signature: `findOverlappingBookings(conn, tutorId, startAt, endAt, excludeBookingId?, { excludeStates })`
 
 ### 2.5 Update `admin-booking.service.ts`
 
@@ -355,7 +358,7 @@ bun run check && bun run check-types && bun run build && bun test
 Change `atomicHold` and `atomicDeduct` to return result objects instead of throwing `badRequest`:
 
 ```ts
-type AtomicResult = 
+type AtomicResult =
   | { success: true; wallet: WalletSnapshot }
   | { success: false; reason: "insufficient_balance" | "insufficient_held" };
 ```
@@ -658,17 +661,17 @@ bun run check && bun run check-types && bun run build && bun test
 
 The following modules require **no changes** in this phase. They are explicitly listed here for completeness:
 
-| Module | Reason |
-|--------|--------|
-| `pricing` | Pure computation, no errors thrown, no handler |
-| `scheduler` | BullMQ worker, no errors thrown, no handler |
-| `email` | Provider wrappers only, `resend-email.provider.ts` keeps ORPCError (infra adapter) |
-| `meeting` | Provider wrappers only, no errors thrown in service |
-| `audit` | Simple port implementation, no errors thrown, no handler |
-| `lib/circuit-breaker.ts` | Infrastructure, keeps `serviceUnavailable` from `lib/errors` |
-| `lib/db-errors.ts` | Infrastructure, keeps `classifyDbError` as-is |
-| `lib/db.ts`, `lib/tx.ts` | Pure utilities, no changes |
-| `lib/logger.ts`, `lib/retry.ts`, `lib/rate-limit.ts`, `lib/request-id.ts`, `lib/security-headers.ts`, `lib/metrics.ts`, `lib/db-health.ts`, `lib/idempotency.ts` | No changes |
+| Module                                                                                                                                                           | Reason                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `pricing`                                                                                                                                                        | Pure computation, no errors thrown, no handler                                     |
+| `scheduler`                                                                                                                                                      | BullMQ worker, no errors thrown, no handler                                        |
+| `email`                                                                                                                                                          | Provider wrappers only, `resend-email.provider.ts` keeps ORPCError (infra adapter) |
+| `meeting`                                                                                                                                                        | Provider wrappers only, no errors thrown in service                                |
+| `audit`                                                                                                                                                          | Simple port implementation, no errors thrown, no handler                           |
+| `lib/circuit-breaker.ts`                                                                                                                                         | Infrastructure, keeps `serviceUnavailable` from `lib/errors`                       |
+| `lib/db-errors.ts`                                                                                                                                               | Infrastructure, keeps `classifyDbError` as-is                                      |
+| `lib/db.ts`, `lib/tx.ts`                                                                                                                                         | Pure utilities, no changes                                                         |
+| `lib/logger.ts`, `lib/retry.ts`, `lib/rate-limit.ts`, `lib/request-id.ts`, `lib/security-headers.ts`, `lib/metrics.ts`, `lib/db-health.ts`, `lib/idempotency.ts` | No changes                                                                         |
 
 ---
 
@@ -679,6 +682,7 @@ The following modules require **no changes** in this phase. They are explicitly 
 ### 7.1 Migrate booking service
 
 **Modify:** `booking.service.ts`
+
 - Replace all `notFound`/`conflict`/`forbidden`/`badRequest`/`serviceUnavailable` imports with domain error imports from `./booking.errors`
 - Replace every `throw notFound("Booking not found")` with `throw new BookingNotFoundError(bookingId)`
 - Replace every `throw conflict(...)` with the appropriate domain error
@@ -690,6 +694,7 @@ The following modules require **no changes** in this phase. They are explicitly 
 ### 7.2 Migrate booking handler
 
 **Modify:** `booking.handler.ts`
+
 - Replace all try/catch blocks with `withDomainMap`
 - Import `mapBookingError` from `./booking.errors`
 - Import `withDomainMap` from `../../lib/handler-utils`
@@ -697,6 +702,7 @@ The following modules require **no changes** in this phase. They are explicitly 
 ### 7.3 Migrate booking repo
 
 **Modify:** `booking.repo.ts`
+
 - Already updated in Phase 2 (BOOKING_STATE) and Phase 3 (excludeStates param)
 - Verify no HTTP error imports remain
 
@@ -727,6 +733,7 @@ bun run check && bun run check-types && bun run build && bun test
 **Modify:** `packages/api/src/lib/errors.ts`
 
 Remove these functions (never used anywhere):
+
 - `preconditionFailed`
 - `unprocessableContent`
 - `rateLimited`
@@ -808,18 +815,18 @@ git push origin improvement/consolidation
 
 ## 12. Risk Register
 
-| # | Risk | Likelihood | Impact | Mitigation |
-|---|------|------------|--------|------------|
-| R1 | Domain error class names collide across modules | Low | Medium | Use module-prefixed codes (e.g., `BOOKING_NOT_FOUND` vs `ADMIN_BOOKING_NOT_FOUND`) |
-| R2 | Mapper not exhaustive — unhandled domain error | Medium | High | Every mapper has a fallback `return internalServerError(err.message, err)`. TypeScript strict mode catches missing `instanceof` branches if using discriminated unions. |
-| R3 | Service still imports from `lib/errors` after migration | Low | High | Phase 8 grep verification catches this. CI fails on any remaining `lib/errors` imports in services. |
-| R4 | `z.coerce.date()` changes API contract | Low | Medium | oRPC serializes Date objects to ISO strings. Zod coercion happens at parse time. Test that date fields are correctly coerced. |
-| R5 | Wallet repo result object breaks existing tests | Medium | High | Update `wallet.repo.test.ts` and `wallet.service.test.ts` in same commit as repo change. |
-| R6 | Payment repo extraction misses a query | Medium | High | Grep `payment.service.ts` for direct Drizzle imports. Every query must be in `payment.repo.ts`. |
-| R7 | BOOKING_STATE replacement introduces typo | Low | High | TypeScript type checking catches invalid `BOOKING_STATE.XXX` references. `BOOKING_STATE` is `as const` so all values are string literals. |
-| R8 | Booking module migration is complex — risk of partial breakage | Medium | High | Migrate booking last after all other modules are proven. Run booking-specific tests after every change. |
-| R9 | `withDomainMap` changes error response format | Low | Medium | Domain errors are preserved as `cause` in ORPCError. The HTTP response body format doesn't change — only the internal error chain is richer. |
-| R10 | Admin-booking Zod enum validation breaks existing requests | Low | Medium | The enum values are the same. Zod `.enum()` validates the same set of values that `validateCategory` was checking. |
+| #   | Risk                                                           | Likelihood | Impact | Mitigation                                                                                                                                                              |
+| --- | -------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Domain error class names collide across modules                | Low        | Medium | Use module-prefixed codes (e.g., `BOOKING_NOT_FOUND` vs `ADMIN_BOOKING_NOT_FOUND`)                                                                                      |
+| R2  | Mapper not exhaustive — unhandled domain error                 | Medium     | High   | Every mapper has a fallback `return internalServerError(err.message, err)`. TypeScript strict mode catches missing `instanceof` branches if using discriminated unions. |
+| R3  | Service still imports from `lib/errors` after migration        | Low        | High   | Phase 8 grep verification catches this. CI fails on any remaining `lib/errors` imports in services.                                                                     |
+| R4  | `z.coerce.date()` changes API contract                         | Low        | Medium | oRPC serializes Date objects to ISO strings. Zod coercion happens at parse time. Test that date fields are correctly coerced.                                           |
+| R5  | Wallet repo result object breaks existing tests                | Medium     | High   | Update `wallet.repo.test.ts` and `wallet.service.test.ts` in same commit as repo change.                                                                                |
+| R6  | Payment repo extraction misses a query                         | Medium     | High   | Grep `payment.service.ts` for direct Drizzle imports. Every query must be in `payment.repo.ts`.                                                                         |
+| R7  | BOOKING_STATE replacement introduces typo                      | Low        | High   | TypeScript type checking catches invalid `BOOKING_STATE.XXX` references. `BOOKING_STATE` is `as const` so all values are string literals.                               |
+| R8  | Booking module migration is complex — risk of partial breakage | Medium     | High   | Migrate booking last after all other modules are proven. Run booking-specific tests after every change.                                                                 |
+| R9  | `withDomainMap` changes error response format                  | Low        | Medium | Domain errors are preserved as `cause` in ORPCError. The HTTP response body format doesn't change — only the internal error chain is richer.                            |
+| R10 | Admin-booking Zod enum validation breaks existing requests     | Low        | Medium | The enum values are the same. Zod `.enum()` validates the same set of values that `validateCategory` was checking.                                                      |
 
 ---
 

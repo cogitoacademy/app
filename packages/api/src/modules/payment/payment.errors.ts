@@ -1,0 +1,48 @@
+import { ORPCError } from "@orpc/server";
+import { DomainError } from "../../lib/domain-errors";
+import {
+  notFound,
+  conflict,
+  serviceUnavailable,
+  internalServerError,
+} from "../../lib/errors";
+
+export class PackageNotFoundError extends DomainError {
+  readonly domain = "payment";
+  constructor(code: string) {
+    super("PACKAGE_NOT_FOUND", "Package not found", { code });
+  }
+}
+
+export class PackageAlreadyPurchasedError extends DomainError {
+  readonly domain = "payment";
+  constructor(code: string, userId: string) {
+    super(
+      "PACKAGE_ALREADY_PURCHASED",
+      "Package already purchased for this user",
+      { code, userId },
+    );
+  }
+}
+
+export class PaymentProviderError extends DomainError {
+  readonly domain = "payment";
+  constructor(provider: string, originalError: unknown) {
+    super(
+      "PAYMENT_PROVIDER_ERROR",
+      "Payment provider temporarily unavailable",
+      { provider, originalError: String(originalError) },
+    );
+  }
+}
+
+export function mapPaymentError(
+  err: DomainError,
+): ORPCError<string, undefined> {
+  if (err instanceof PackageNotFoundError) return notFound(err.message, err);
+  if (err instanceof PackageAlreadyPurchasedError)
+    return conflict(err.message, err);
+  if (err instanceof PaymentProviderError)
+    return serviceUnavailable(err.message, err);
+  return internalServerError(err.message, err);
+}

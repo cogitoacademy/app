@@ -67,10 +67,10 @@ export interface BookingTransition {
 }
 
 export const TERMINAL_STATES: BookingState[] = [
-  "declined",
-  "cancelled",
-  "late_cancelled",
-  "no_show",
-  "expired",
-  "completed",
+  BOOKING_STATE.DECLINED,
+  BOOKING_STATE.CANCELLED,
+  BOOKING_STATE.LATE_CANCELLED,
+  BOOKING_STATE.NO_SHOW,
+  BOOKING_STATE.EXPIRED,
+  BOOKING_STATE.COMPLETED,
 ];
