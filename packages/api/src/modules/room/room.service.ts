@@ -1,16 +1,11 @@
 import { eq, and, gte, lte, ne } from "drizzle-orm";
 import { room, roomBooking } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
-import { notFound, conflict } from "../../lib/errors";
 import { ROOM_BOOKING_STATUS } from "../../shared/constants";
+import { RoomNotFoundError, RoomBookingConflictError } from "./room.errors";
+import type { CreateRoomInput } from "./room.types";
 
 export type RoomService = ReturnType<typeof createRoomService>;
-
-export interface CreateRoomInput {
-  name: string;
-  location: string;
-  capacity: number;
-}
 
 export function createRoomService(db: DbType) {
   async function listActive() {
@@ -54,7 +49,7 @@ export function createRoomService(db: DbType) {
     const roomRow = await db.query.room.findFirst({
       where: and(eq(room.id, roomId), eq(room.isActive, true)),
     });
-    if (!roomRow) throw notFound("Room not found");
+    if (!roomRow) throw new RoomNotFoundError(roomId);
 
     const available = await checkAvailability(
       roomId,
@@ -62,7 +57,12 @@ export function createRoomService(db: DbType) {
       endAt,
       bookingId,
     );
-    if (!available) throw conflict("Room is already booked for this time");
+    if (!available)
+      throw new RoomBookingConflictError(
+        roomId,
+        startAt.toISOString(),
+        endAt.toISOString(),
+      );
 
     const [row] = await db
       .insert(roomBooking)

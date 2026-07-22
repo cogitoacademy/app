@@ -14,3 +14,6 @@ export const assignRoomInput = z.object({
   startAt: z.coerce.date(),
   endAt: z.coerce.date(),
 });
+
+export type CreateRoomInput = z.infer<typeof createRoomInput>;
+export type AssignRoomInput = z.infer<typeof assignRoomInput>;

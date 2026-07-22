@@ -150,7 +150,7 @@ describe("AchievementHandler", () => {
 
       const result = await handler.adminList({
         context: makeContext(),
-        input: {},
+        input: { limit: 50, offset: 0 },
       });
 
       expect(result).toEqual([{ id: "a1" }]);
@@ -374,7 +374,11 @@ describe("AchievementService", () => {
       const input = { status: "pending_review", limit: 10 };
       await service.adminList(input);
 
-      expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), input);
+      expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
+        status: "pending_review",
+        limit: 10,
+        offset: 0,
+      });
     });
 
     test("uses default empty object when no input", async () => {
@@ -389,7 +393,10 @@ describe("AchievementService", () => {
 
       await service.adminList();
 
-      expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {});
+      expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
+        limit: 50,
+        offset: 0,
+      });
     });
   });
 

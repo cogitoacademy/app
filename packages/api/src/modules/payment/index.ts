@@ -4,6 +4,7 @@ import type { CreditParams, WalletSnapshot } from "../wallet/wallet.service";
 import type { PaymentProvider } from "./payment.service";
 import { createPaymentService } from "./payment.service";
 import { createPaymentHandler } from "./payment.handler";
+import { createPaymentRepo } from "./payment.repo";
 import { createStubPaymentProvider } from "./stub-payment.provider";
 import { createXenditPaymentProvider } from "./xendit-payment.provider";
 import type { PaymentService } from "./payment.service";
@@ -44,9 +45,11 @@ export function createPaymentModule(deps: {
     : createStubPaymentProvider(deps.webhookSecret);
   const providerName = useXendit ? "xendit" : "stub";
 
+  const repo = createPaymentRepo(deps.db);
   const service = createPaymentService({
     db: deps.db,
     wallet: deps.wallet,
+    repo,
     provider,
     providerName,
   });

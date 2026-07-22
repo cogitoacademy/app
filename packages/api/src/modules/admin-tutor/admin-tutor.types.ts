@@ -1,38 +1,5 @@
 import { z } from "zod";
 
-import type { InviteStatus, OnboardingStatus } from "./admin-tutor.repo";
-
-export type ReviewAction =
-  | "request_changes"
-  | "approve_unpublished"
-  | "publish"
-  | "unpublish"
-  | "suspend";
-
-export interface CreateInviteInput {
-  email: string;
-  displayName: string;
-  internalNotes?: string;
-}
-
-export interface ListInvitesInput {
-  status?: InviteStatus;
-  limit?: number;
-  offset?: number;
-}
-
-export interface ListTutorProfilesInput {
-  status?: OnboardingStatus;
-  limit?: number;
-  offset?: number;
-}
-
-export interface ReviewTutorProfileInput {
-  tutorProfileId: string;
-  action: ReviewAction;
-  adminNote?: string;
-}
-
 export const createInviteInput = z.object({
   email: z.string().email(),
   displayName: z.string().min(1),
@@ -67,6 +34,13 @@ export const listTutorProfilesInput = z
     offset: z.number().min(0).default(0),
   })
   .optional();
+
+export type ReviewAction =
+  | "request_changes"
+  | "approve_unpublished"
+  | "publish"
+  | "unpublish"
+  | "suspend";
 
 export const reviewTutorProfileInput = z.object({
   tutorProfileId: z.string(),

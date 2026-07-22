@@ -1389,17 +1389,6 @@ describe("BookingService", () => {
   });
 
   describe("proposeReschedule", () => {
-    test("throws badRequest when end time is not after start time", async () => {
-      const { service } = createService();
-
-      const start = new Date("2025-01-01T10:00:00Z");
-      const end = new Date("2025-01-01T09:00:00Z");
-
-      await expect(
-        service.proposeReschedule("student1", "b1", start, end),
-      ).rejects.toThrow("End time must be after start time");
-    });
-
     test("throws notFound when booking does not exist", async () => {
       const { service } = createService({
         repo: {

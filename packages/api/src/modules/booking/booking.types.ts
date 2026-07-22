@@ -1,24 +1,34 @@
 import { z } from "zod";
 
-export const createSoloInput = z.object({
-  tutorId: z.string(),
-  availabilitySlotId: z.string(),
-  modality: z.enum(["online", "offline"]),
-  scheduledStartAt: z.string().datetime(),
-  scheduledEndAt: z.string().datetime(),
-  timezone: z.string().default("Asia/Jakarta"),
-});
+export const createSoloInput = z
+  .object({
+    tutorId: z.string(),
+    availabilitySlotId: z.string(),
+    modality: z.enum(["online", "offline"]),
+    scheduledStartAt: z.coerce.date(),
+    scheduledEndAt: z.coerce.date(),
+    timezone: z.string().default("Asia/Jakarta"),
+  })
+  .refine((d) => d.scheduledEndAt > d.scheduledStartAt, {
+    message: "scheduledEndAt must be after scheduledStartAt",
+    path: ["scheduledEndAt"],
+  });
 
-export const createGroupInput = z.object({
-  tutorId: z.string(),
-  availabilitySlotId: z.string(),
-  modality: z.enum(["online", "offline"]),
-  targetGroupSize: z.number().int().min(2).max(6),
-  inviteeUserIds: z.array(z.string()).min(1),
-  scheduledStartAt: z.string().datetime(),
-  scheduledEndAt: z.string().datetime(),
-  timezone: z.string().default("Asia/Jakarta"),
-});
+export const createGroupInput = z
+  .object({
+    tutorId: z.string(),
+    availabilitySlotId: z.string(),
+    modality: z.enum(["online", "offline"]),
+    targetGroupSize: z.number().int().min(2).max(6),
+    inviteeUserIds: z.array(z.string()).min(1),
+    scheduledStartAt: z.coerce.date(),
+    scheduledEndAt: z.coerce.date(),
+    timezone: z.string().default("Asia/Jakarta"),
+  })
+  .refine((d) => d.scheduledEndAt > d.scheduledStartAt, {
+    message: "scheduledEndAt must be after scheduledStartAt",
+    path: ["scheduledEndAt"],
+  });
 
 export const createSeriesInput = z.object({
   tutorId: z.string(),
@@ -26,10 +36,15 @@ export const createSeriesInput = z.object({
   modality: z.enum(["online", "offline"]),
   sessions: z
     .array(
-      z.object({
-        scheduledStartAt: z.string().datetime(),
-        scheduledEndAt: z.string().datetime(),
-      }),
+      z
+        .object({
+          scheduledStartAt: z.coerce.date(),
+          scheduledEndAt: z.coerce.date(),
+        })
+        .refine((d) => d.scheduledEndAt > d.scheduledStartAt, {
+          message: "scheduledEndAt must be after scheduledStartAt",
+          path: ["scheduledEndAt"],
+        }),
     )
     .min(2)
     .max(4),
@@ -59,12 +74,17 @@ export const withdrawInput = z.object({
   reason: z.string().optional(),
 });
 
-export const proposeRescheduleInput = z.object({
-  bookingId: z.string(),
-  proposedStartAt: z.string().datetime(),
-  proposedEndAt: z.string().datetime(),
-  reason: z.string().optional(),
-});
+export const proposeRescheduleInput = z
+  .object({
+    bookingId: z.string(),
+    proposedStartAt: z.coerce.date(),
+    proposedEndAt: z.coerce.date(),
+    reason: z.string().optional(),
+  })
+  .refine((d) => d.proposedEndAt > d.proposedStartAt, {
+    message: "proposedEndAt must be after proposedStartAt",
+    path: ["proposedEndAt"],
+  });
 
 export const completeSessionInput = z.object({
   bookingId: z.string(),

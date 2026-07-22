@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { notFound, badRequest, conflict } from "../../lib/errors";
 import type { DbType } from "../../lib/db";
 import {
@@ -12,17 +13,21 @@ import type {
   TutorInviteRow,
   TutorProfileRow,
 } from "./admin-tutor.repo";
-import type {
-  CreateInviteInput,
-  ListInvitesInput,
-  ListTutorProfilesInput,
-  ReviewTutorProfileInput,
-  ReviewAction,
+import {
+  createInviteInput,
+  listInvitesInput,
+  listTutorProfilesInput,
+  reviewTutorProfileInput,
+  type ReviewAction,
 } from "./admin-tutor.types";
 import type { AdminTutorAuditPort } from "./index";
 
 export type { ReviewAction };
 
+type CreateInviteInput = z.infer<typeof createInviteInput>;
+type ListInvitesInput = z.infer<typeof listInvitesInput>;
+type ListTutorProfilesInput = z.infer<typeof listTutorProfilesInput>;
+type ReviewTutorProfileInput = z.infer<typeof reviewTutorProfileInput>;
 export interface TutorProfileSnapshot {
   id: string;
   onboardingStatus: string;
@@ -126,12 +131,15 @@ export function createAdminTutorService(deps: {
   }
 
   async function listInvites(
-    input: ListInvitesInput = {},
+    input?: ListInvitesInput,
   ): Promise<TutorInviteRow[]> {
-    const limit = input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT;
-    const offset = input.offset ?? 0;
+    const {
+      status,
+      limit = ADMIN_DEFAULT_PAGE_LIMIT,
+      offset = 0,
+    } = input ?? {};
     return adminTutorRepo.listInvites(db, {
-      status: input.status,
+      status,
       limit,
       offset,
     });
@@ -200,11 +208,14 @@ export function createAdminTutorService(deps: {
     });
   }
 
-  async function listTutorProfiles(input: ListTutorProfilesInput = {}) {
-    const limit = input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT;
-    const offset = input.offset ?? 0;
+  async function listTutorProfiles(input?: ListTutorProfilesInput) {
+    const {
+      status,
+      limit = ADMIN_DEFAULT_PAGE_LIMIT,
+      offset = 0,
+    } = input ?? {};
     return adminTutorRepo.listTutorProfiles(db, {
-      status: input.status,
+      status,
       limit,
       offset,
     });

@@ -1,9 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createAuthHandler } from "../../modules/auth/auth.handler";
-import {
-  createAuthService,
-  validateUpdateInput,
-} from "../../modules/auth/auth.service";
+import { createAuthService } from "../../modules/auth/auth.service";
 
 function makeDb() {
   return {
@@ -259,60 +256,6 @@ describe("AuthService", () => {
         { phoneNumber: "123" },
       );
       expect(result).toEqual(created);
-    });
-
-    test("throws validation error for blank phoneNumber", async () => {
-      const service = createAuthService({
-        authRepo: makeAuthRepo() as any,
-        walletPort: makeWalletPort() as any,
-        db: makeDb(),
-      });
-
-      try {
-        await service.updateProfile("u1", { phoneNumber: "  " });
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
-      }
-    });
-
-    test("throws validation error for blank schoolName", async () => {
-      const service = createAuthService({
-        authRepo: makeAuthRepo() as any,
-        walletPort: makeWalletPort() as any,
-        db: makeDb(),
-      });
-
-      try {
-        await service.updateProfile("u1", { schoolName: "  " });
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
-      }
-    });
-  });
-
-  describe("validateUpdateInput", () => {
-    test("does not throw for valid input", () => {
-      expect(() => validateUpdateInput({ phoneNumber: "123" })).not.toThrow();
-    });
-
-    test("throws for blank phoneNumber", () => {
-      expect(() => validateUpdateInput({ phoneNumber: "  " })).toThrow();
-    });
-
-    test("throws for blank parentEmail", () => {
-      expect(() => validateUpdateInput({ parentEmail: "  " })).toThrow();
-    });
-
-    test("does not throw when fields are undefined", () => {
-      expect(() => validateUpdateInput({})).not.toThrow();
-    });
-
-    test("does not throw for non-blank field values", () => {
-      expect(() =>
-        validateUpdateInput({ schoolName: "Test School" }),
-      ).not.toThrow();
     });
   });
 });

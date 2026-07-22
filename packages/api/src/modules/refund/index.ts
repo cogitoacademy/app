@@ -38,7 +38,7 @@ export function createRefundModule(deps: {
   wallet: RefundWalletPort;
   repo?: RefundRepo;
 }) {
-  const repo = deps.repo ?? createRefundRepo(deps.db);
+  const repo = deps.repo ?? createRefundRepo();
   const service = createRefundService({
     db: deps.db,
     repo,

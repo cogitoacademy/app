@@ -1,5 +1,6 @@
 import { eq, desc, and, sql, type SQL } from "drizzle-orm";
 import { tutorProfile } from "@cogito-app/db/schema";
+import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 
 export interface ListPublishedInput {
@@ -54,8 +55,15 @@ async function getProfileById(conn: DbOrTx, tutorId: string) {
   });
 }
 
-export function createDiscoveryRepo() {
-  return { listPublished, getProfileById };
+export function createDiscoveryRepo(db: DbType) {
+  return {
+    listPublished(input: ListPublishedInput = {}, conn?: DbOrTx) {
+      return listPublished(conn ?? db, input);
+    },
+    getProfileById(tutorId: string, conn?: DbOrTx) {
+      return getProfileById(conn ?? db, tutorId);
+    },
+  };
 }
 
 export type DiscoveryRepo = ReturnType<typeof createDiscoveryRepo>;

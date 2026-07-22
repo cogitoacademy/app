@@ -16,7 +16,7 @@ function makeUpdateConn(returned: any[] = [{}]) {
   return { update, set, where, returning };
 }
 
-const repo = createRefundRepo(undefined as any);
+const repo = createRefundRepo();
 
 describe("insertRefundRecord", () => {
   test("inserts and returns refund record", async () => {
@@ -100,7 +100,7 @@ describe("updatePaymentStatus", () => {
 
 describe("createRefundRepo", () => {
   test("returns object with all repo methods", () => {
-    const r = createRefundRepo(undefined as any);
+    const r = createRefundRepo();
 
     expect(r).toHaveProperty("insertRefundRecord");
     expect(r).toHaveProperty("updatePaymentStatus");

@@ -40,8 +40,8 @@ describe("bookingHandler", () => {
         tutorId: "t1",
         availabilitySlotId: "slot1",
         modality: "online",
-        scheduledStartAt: "2025-01-01T10:00:00Z",
-        scheduledEndAt: "2025-01-01T11:00:00Z",
+        scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
         timezone: "Asia/Jakarta",
       };
 
@@ -127,8 +127,8 @@ describe("bookingHandler", () => {
       const context = { session: { user: { id: "u1" } } };
       const input = {
         bookingId: "b1",
-        proposedStartAt: "2025-02-01T10:00:00Z",
-        proposedEndAt: "2025-02-01T11:00:00Z",
+        proposedStartAt: new Date("2025-02-01T10:00:00Z"),
+        proposedEndAt: new Date("2025-02-01T11:00:00Z"),
         reason: "time change",
       };
 
@@ -162,8 +162,8 @@ describe("bookingHandler", () => {
         modality: "online",
         targetGroupSize: 5,
         inviteeUserIds: ["u2", "u3"],
-        scheduledStartAt: "2025-01-01T10:00:00Z",
-        scheduledEndAt: "2025-01-01T11:00:00Z",
+        scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
         timezone: "Asia/Jakarta",
       };
 
@@ -197,12 +197,12 @@ describe("bookingHandler", () => {
         modality: "online",
         sessions: [
           {
-            scheduledStartAt: "2025-01-01T10:00:00Z",
-            scheduledEndAt: "2025-01-01T11:00:00Z",
+            scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
+            scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
           },
           {
-            scheduledStartAt: "2025-01-08T10:00:00Z",
-            scheduledEndAt: "2025-01-08T11:00:00Z",
+            scheduledStartAt: new Date("2025-01-08T10:00:00Z"),
+            scheduledEndAt: new Date("2025-01-08T11:00:00Z"),
           },
         ],
         timezone: "Asia/Jakarta",

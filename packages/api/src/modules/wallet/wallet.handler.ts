@@ -1,7 +1,7 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { internalServerError } from "../../lib/errors";
+import { withDomainMap } from "../../lib/handler-utils";
+import { mapWalletError } from "./wallet.errors";
 import type { listLedgerInput } from "./wallet.types";
 import type { WalletService } from "./wallet.service";
 
@@ -20,7 +20,7 @@ export function createWalletHandler({
 }: WalletHandlerDeps) {
   return {
     get: async ({ context }: { context: Context }) => {
-      try {
+      return withDomainMap(async () => {
         const w = await wallet.getOrCreate(context.session!.user.id);
         return {
           id: w.id,
@@ -28,10 +28,7 @@ export function createWalletHandler({
           heldBalance: w.heldBalance,
           availableBalance: w.availableBalance,
         };
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to fetch wallet", err);
-      }
+      }, mapWalletError);
     },
 
     listLedger: async ({
@@ -41,46 +38,28 @@ export function createWalletHandler({
       context: Context;
       input: ListLedgerInput;
     }) => {
-      try {
+      return withDomainMap(async () => {
         const w = await wallet.getOrCreate(context.session!.user.id);
         return wallet.listLedger(w.id, input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list ledger entries", err);
-      }
+      }, mapWalletError);
     },
 
     listPackages: async ({ context: _context }: { context: Context }) => {
-      try {
+      return withDomainMap(async () => {
         return wallet.listActivePackages();
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list packages", err);
-      }
+      }, mapWalletError);
     },
 
     knowledgeBankEligible: async ({ context }: { context: Context }) => {
-      try {
+      return withDomainMap(async () => {
         return wallet.knowledgeBankEligible(context.session!.user.id);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError(
-          "Failed to check knowledge bank eligibility",
-          err,
-        );
-      }
+      }, mapWalletError);
     },
 
     competitionCalendarLink: async () => {
-      try {
+      return withDomainMap(async () => {
         return { url: competitionCalendarUrl };
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError(
-          "Failed to fetch competition calendar link",
-          err,
-        );
-      }
+      }, mapWalletError);
     },
   };
 }

@@ -442,7 +442,40 @@ describe("createBookingRepo", () => {
         "t1",
         new Date("2026-01-01"),
         new Date("2026-01-01T01:30:00"),
-        "b1",
+        { excludeBookingId: "b1" },
+      );
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+
+    test("finds overlapping bookings excluding terminal states", async () => {
+      const rows = [{ id: "b2" }];
+      const conn: any = { ...makeSelectConn(rows) };
+      const repo = makeBookingRepo();
+
+      await repo.findOverlappingBookings(
+        conn,
+        "t1",
+        new Date("2026-01-01"),
+        new Date("2026-01-01T01:30:00"),
+        { excludeStates: ["declined", "cancelled", "completed"] },
+      );
+
+      expect(conn.from).toHaveBeenCalledTimes(1);
+      expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+
+    test("finds overlapping bookings with both excludeBookingId and excludeStates", async () => {
+      const conn: any = { ...makeSelectConn([]) };
+      const repo = makeBookingRepo();
+
+      await repo.findOverlappingBookings(
+        conn,
+        "t1",
+        new Date("2026-01-01"),
+        new Date("2026-01-01T01:30:00"),
+        { excludeBookingId: "b1", excludeStates: ["declined", "cancelled"] },
       );
 
       expect(conn.from).toHaveBeenCalledTimes(1);

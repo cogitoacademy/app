@@ -42,6 +42,6 @@ async function updatePaymentStatus(
   return updated ?? null;
 }
 
-export function createRefundRepo(_db: unknown) {
+export function createRefundRepo() {
   return { insertRefundRecord, updatePaymentStatus };
 }

@@ -29,12 +29,8 @@ function makeAuthService() {
 }
 
 describe("Auth Service", () => {
-  describe("validateUpdateInput (via updateProfile)", () => {
+  describe("updateProfile (blank string validation handled by Zod)", () => {
     const service = makeAuthService();
-
-    test("does not throw for empty input", async () => {
-      await expect(service.updateProfile("u1", {})).resolves.toBeDefined();
-    });
 
     test("does not throw for valid non-empty fields", async () => {
       await expect(
@@ -43,42 +39,6 @@ describe("Auth Service", () => {
           schoolName: "SMA 1",
         }),
       ).resolves.toBeDefined();
-    });
-
-    test("throws for blank phoneNumber", async () => {
-      await expect(
-        service.updateProfile("u1", { phoneNumber: "   " }),
-      ).rejects.toThrow();
-    });
-
-    test("throws for blank schoolName", async () => {
-      await expect(
-        service.updateProfile("u1", { schoolName: "" }),
-      ).rejects.toThrow();
-    });
-
-    test("throws for blank gradeLevel", async () => {
-      await expect(
-        service.updateProfile("u1", { gradeLevel: "  " }),
-      ).rejects.toThrow();
-    });
-
-    test("throws for blank parentName", async () => {
-      await expect(
-        service.updateProfile("u1", { parentName: " " }),
-      ).rejects.toThrow();
-    });
-
-    test("throws for blank parentPhone", async () => {
-      await expect(
-        service.updateProfile("u1", { parentPhone: "\t" }),
-      ).rejects.toThrow();
-    });
-
-    test("throws for blank parentEmail", async () => {
-      await expect(
-        service.updateProfile("u1", { parentEmail: " " }),
-      ).rejects.toThrow();
     });
 
     test("does not throw for undefined optional fields", async () => {

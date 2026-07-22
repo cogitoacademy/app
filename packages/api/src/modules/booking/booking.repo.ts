@@ -1,4 +1,14 @@
-import { eq, and, gte, desc, inArray, ne, lte, sql } from "drizzle-orm";
+import {
+  eq,
+  and,
+  gte,
+  desc,
+  inArray,
+  notInArray,
+  ne,
+  lte,
+  sql,
+} from "drizzle-orm";
 import {
   booking,
   bookingParticipant,
@@ -12,7 +22,6 @@ import {
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { CONFIRMATION_STATE, ONBOARDING_STATUS } from "../../shared/constants";
-import { BOOKING_STATES, TERMINAL_STATES } from "./booking-state.types";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
@@ -245,19 +254,18 @@ async function findOverlappingBookings(
   tutorId: string,
   startAt: Date,
   endAt: Date,
-  excludeBookingId?: string,
+  opts?: { excludeBookingId?: string; excludeStates?: string[] },
 ) {
-  const activeStates = BOOKING_STATES.filter(
-    (s) => !TERMINAL_STATES.includes(s),
-  );
   const conditions = [
     eq(booking.tutorId, tutorId),
-    inArray(booking.currentState, activeStates),
     lte(booking.scheduledStartAt, endAt),
     gte(booking.scheduledEndAt, startAt),
   ];
-  if (excludeBookingId) {
-    conditions.push(ne(booking.id, excludeBookingId));
+  if (opts?.excludeStates?.length) {
+    conditions.push(notInArray(booking.currentState, opts.excludeStates));
+  }
+  if (opts?.excludeBookingId) {
+    conditions.push(ne(booking.id, opts.excludeBookingId));
   }
   return conn
     .select({ id: booking.id })

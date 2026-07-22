@@ -157,7 +157,7 @@ function createServices() {
   });
 
   // Shared repo between refund and adminBooking
-  const refundRepo = createRefundRepo(db);
+  const refundRepo = createRefundRepo();
 
   const refund = createRefundModule({
     db,

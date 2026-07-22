@@ -137,20 +137,16 @@ export function createTutorService(deps: {
     userId: string,
     input: {
       id?: string;
-      startDate: string | Date;
-      endDate: string | Date;
+      startDate: Date;
+      endDate: Date;
       modality: "online" | "offline" | "both";
       isRecurring?: boolean;
       recurrenceRule?: string;
       isActive?: boolean;
     },
   ) {
-    const start = new Date(input.startDate);
-    const end = new Date(input.endDate);
-
-    if (end <= start) {
-      throw badRequest("endDate must be after startDate");
-    }
+    const start = input.startDate;
+    const end = input.endDate;
 
     const existing = await tutorRepo.listAvailability(db, userId);
     const overlapping = existing.find((slot) => {

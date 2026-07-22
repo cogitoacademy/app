@@ -45,14 +45,16 @@ describe("roomHandler", () => {
   });
 
   describe("assign", () => {
-    test("calls room.assignRoom with bookingId, roomId, and Date-converted startAt/endAt", async () => {
+    test("calls room.assignRoom with bookingId, roomId, startAt, and endAt as Date objects", async () => {
       const roomService = makeRoomService();
       const handler = createRoomHandler(roomService as any);
+      const startAt = new Date("2025-01-01T10:00:00Z");
+      const endAt = new Date("2025-01-01T11:00:00Z");
       const input = {
         bookingId: "b1",
         roomId: "r1",
-        startAt: "2025-01-01T10:00:00Z",
-        endAt: "2025-01-01T11:00:00Z",
+        startAt,
+        endAt,
       };
 
       const result = await handler.assign({
@@ -63,8 +65,8 @@ describe("roomHandler", () => {
       expect(roomService.assignRoom).toHaveBeenCalledWith(
         "b1",
         "r1",
-        new Date("2025-01-01T10:00:00Z"),
-        new Date("2025-01-01T11:00:00Z"),
+        startAt,
+        endAt,
       );
       expect(result).toEqual({
         id: "rb1",

@@ -16,6 +16,7 @@ import { createTestUser } from "../helpers/factories";
 import { resetDatabase } from "../helpers/test-client";
 import { createXenditPaymentProvider } from "../../modules/payment/xendit-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
+import { createPaymentRepo } from "../../modules/payment/payment.repo";
 import { createWalletRepo } from "../../modules/wallet/wallet.repo";
 import { createWalletService } from "../../modules/wallet/wallet.service";
 
@@ -135,6 +136,7 @@ describe("PaymentService", () => {
   const xenditPayment = createPaymentService({
     db,
     wallet: xenditWallet,
+    repo: createPaymentRepo(db),
     provider: xenditProvider,
     providerName: "xendit",
   });

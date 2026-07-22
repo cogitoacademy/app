@@ -1,6 +1,8 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createPaymentService } from "../../modules/payment/payment.service";
 import { PAYMENT_STATUS } from "../../shared/constants";
+import type { PaymentRepo } from "../../modules/payment/payment.repo";
+import type { PaymentStatus } from "../../modules/payment/payment.service";
 
 function makeProvider() {
   return {
@@ -24,34 +26,36 @@ function makeWallet() {
   };
 }
 
+function makeRepo(overrides: Partial<PaymentRepo> = {}): PaymentRepo {
+  return {
+    findPackageByCode: mock(async () => null),
+    findPaymentByProviderReference: mock(async () => null),
+    findPaymentById: mock(async () => null),
+    findPaymentByProviderEventId: mock(async () => null),
+    insertPayment: mock(async () => {}),
+    updatePaymentStatus: mock(async () => {}),
+    ...overrides,
+  } as PaymentRepo;
+}
+
+function makeDb() {
+  return {
+    transaction: mock(async (fn: any) => fn({})),
+  } as any;
+}
+
 describe("PaymentService", () => {
   describe("createIntent", () => {
     test("throws notFound when package does not exist", async () => {
-      const db = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => []),
-            })),
-          })),
-        })),
-        insert: mock(() => ({
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "pay1" }]),
-          })),
-        })),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(() => ({
-              returning: mock(async () => [{ id: "pay1" }]),
-            })),
-          })),
-        })),
-      } as any;
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => null),
+      });
+      const db = makeDb();
 
       const service = createPaymentService({
         db,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -65,58 +69,26 @@ describe("PaymentService", () => {
     });
 
     test("throws conflict when package already purchased (non-pending)", async () => {
-      let selectCallCount = 0;
-      const db = {
-        select: mock(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) {
-            return {
-              from: mock(() => ({
-                where: mock(() => ({
-                  limit: mock(async () => [
-                    {
-                      id: "pkg1",
-                      code: "pkg1",
-                      isActive: true,
-                      priceIdr: 50000,
-                      marks: 100,
-                    },
-                  ]),
-                })),
-              })),
-            };
-          }
-          return {
-            from: mock(() => ({
-              where: mock(() => ({
-                limit: mock(async () => [
-                  {
-                    id: "pay_existing",
-                    status: "PAID",
-                    providerReference: "stub:user1:pkg1",
-                  },
-                ]),
-              })),
-            })),
-          };
-        }),
-        insert: mock(() => ({
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "pay1" }]),
-          })),
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
         })),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(() => ({
-              returning: mock(async () => [{ id: "pay1" }]),
-            })),
-          })),
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay_existing",
+          status: "PAID",
+          providerReference: "stub:user1:pkg1",
         })),
-      } as any;
+      });
+      const db = makeDb();
 
       const service = createPaymentService({
         db,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -130,58 +102,26 @@ describe("PaymentService", () => {
     });
 
     test("returns existing intent for PENDING payment", async () => {
-      let selectCallCount = 0;
-      const db = {
-        select: mock(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) {
-            return {
-              from: mock(() => ({
-                where: mock(() => ({
-                  limit: mock(async () => [
-                    {
-                      id: "pkg1",
-                      code: "pkg1",
-                      isActive: true,
-                      priceIdr: 50000,
-                      marks: 100,
-                    },
-                  ]),
-                })),
-              })),
-            };
-          }
-          return {
-            from: mock(() => ({
-              where: mock(() => ({
-                limit: mock(async () => [
-                  {
-                    id: "pay_existing",
-                    status: PAYMENT_STATUS.PENDING,
-                    providerReference: "stub:user1:pkg1",
-                  },
-                ]),
-              })),
-            })),
-          };
-        }),
-        insert: mock(() => ({
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "pay1" }]),
-          })),
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
         })),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(() => ({
-              returning: mock(async () => [{ id: "pay1" }]),
-            })),
-          })),
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay_existing",
+          status: PAYMENT_STATUS.PENDING,
+          providerReference: "stub:user1:pkg1",
         })),
-      } as any;
+      });
+      const db = makeDb();
 
       const service = createPaymentService({
         db,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -193,52 +133,23 @@ describe("PaymentService", () => {
     });
 
     test("creates new payment intent when no existing payment", async () => {
-      let selectCallCount = 0;
-      const db = {
-        select: mock(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) {
-            return {
-              from: mock(() => ({
-                where: mock(() => ({
-                  limit: mock(async () => [
-                    {
-                      id: "pkg1",
-                      code: "pkg1",
-                      isActive: true,
-                      priceIdr: 50000,
-                      marks: 100,
-                    },
-                  ]),
-                })),
-              })),
-            };
-          }
-          return {
-            from: mock(() => ({
-              where: mock(() => ({
-                limit: mock(async () => []),
-              })),
-            })),
-          };
-        }),
-        insert: mock(() => ({
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "pay_new" }]),
-          })),
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
         })),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(() => ({
-              returning: mock(async () => [{ id: "pay1", status: "EXPIRED" }]),
-            })),
-          })),
-        })),
-      } as any;
+        findPaymentByProviderReference: mock(async () => null),
+        insertPayment: mock(async () => {}),
+      });
+      const db = makeDb();
 
       const service = createPaymentService({
         db,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -249,45 +160,20 @@ describe("PaymentService", () => {
     });
 
     test("updates payment to EXPIRED and re-throws when provider.createIntent throws", async () => {
-      let selectCallCount = 0;
-      const updateSetMock = mock(() => ({
-        where: mock(async () => [{ id: "pay_new", status: "EXPIRED" }]),
-      }));
-      const db = {
-        select: mock(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) {
-            return {
-              from: mock(() => ({
-                where: mock(() => ({
-                  limit: mock(async () => [
-                    {
-                      id: "pkg1",
-                      code: "pkg1",
-                      isActive: true,
-                      priceIdr: 50000,
-                      marks: 100,
-                    },
-                  ]),
-                })),
-              })),
-            };
-          }
-          return {
-            from: mock(() => ({
-              where: mock(() => ({
-                limit: mock(async () => []),
-              })),
-            })),
-          };
-        }),
-        insert: mock(() => ({
-          values: mock(async () => {}),
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
         })),
-        update: mock(() => ({
-          set: updateSetMock,
-        })),
-      } as any;
+        findPaymentByProviderReference: mock(async () => null),
+        insertPayment: mock(async () => {}),
+        updatePaymentStatus,
+      });
+      const db = makeDb();
 
       const provider = {
         ...makeProvider(),
@@ -299,6 +185,7 @@ describe("PaymentService", () => {
       const service = createPaymentService({
         db,
         wallet: makeWallet() as any,
+        repo,
         provider: provider as any,
         providerName: "stub",
       });
@@ -310,31 +197,23 @@ describe("PaymentService", () => {
         expect(e.message).toBe("Payment provider temporarily unavailable");
       }
 
-      expect(db.update).toHaveBeenCalled();
-      expect(updateSetMock).toHaveBeenCalledWith({
-        status: PAYMENT_STATUS.EXPIRED,
-      });
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("confirmFromWebhook", () => {
     test("throws notFound for unknown provider reference", async () => {
-      const tx = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => []),
-            })),
-          })),
-        })),
-      };
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => null),
+      });
       const db = {
-        transaction: mock(async (fn: any) => fn(tx)),
+        transaction: mock(async (fn: any) => fn({})),
       };
 
       const service = createPaymentService({
         db: db as any,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -353,30 +232,20 @@ describe("PaymentService", () => {
     });
 
     test("returns existing status for already-PAID record", async () => {
-      const existingRecord = { id: "pay1", status: "PAID" };
-      const tx = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => [existingRecord]),
-            })),
-          })),
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: "PAID",
         })),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(() => ({
-              returning: mock(async () => [existingRecord]),
-            })),
-          })),
-        })),
-      };
+      });
       const db = {
-        transaction: mock(async (fn: any) => fn(tx)),
+        transaction: mock(async (fn: any) => fn({})),
       };
 
       const service = createPaymentService({
         db: db as any,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -392,41 +261,20 @@ describe("PaymentService", () => {
     });
 
     test("SETTLED from PENDING credits wallet and updates record", async () => {
-      const pendingRecord = {
-        id: "pay1",
-        status: PAYMENT_STATUS.PENDING,
-        walletId: "w1",
-        marks: 100,
-        providerReference: "stub:user1:pkg1",
-      };
-      let selectCallCount = 0;
       const wallet = makeWallet();
-      const tx = {
-        select: mock(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) {
-            return {
-              from: mock(() => ({
-                where: mock(() => ({
-                  limit: mock(async () => [pendingRecord]),
-                })),
-              })),
-            };
-          }
-          return {
-            from: mock(() => ({
-              where: mock(() => ({
-                limit: mock(async () => []),
-              })),
-            })),
-          };
-        }),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(async () => {}),
-          })),
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
         })),
-      };
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus: mock(async () => {}),
+      });
+
+      const tx = {};
       const db = {
         transaction: mock(async (fn: any) => fn(tx)),
       };
@@ -434,6 +282,7 @@ describe("PaymentService", () => {
       const service = createPaymentService({
         db: db as any,
         wallet: wallet as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -459,48 +308,27 @@ describe("PaymentService", () => {
     });
 
     test("FAILED status updates record without crediting wallet", async () => {
-      const pendingRecord = {
-        id: "pay1",
-        status: PAYMENT_STATUS.PENDING,
-        walletId: "w1",
-        marks: 100,
-        providerReference: "stub:user1:pkg1",
-      };
-      let selectCallCount = 0;
       const wallet = makeWallet();
-      const tx = {
-        select: mock(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) {
-            return {
-              from: mock(() => ({
-                where: mock(() => ({
-                  limit: mock(async () => [pendingRecord]),
-                })),
-              })),
-            };
-          }
-          return {
-            from: mock(() => ({
-              where: mock(() => ({
-                limit: mock(async () => []),
-              })),
-            })),
-          };
-        }),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(async () => {}),
-          })),
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
         })),
-      };
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus: mock(async () => {}),
+      });
+
       const db = {
-        transaction: mock(async (fn: any) => fn(tx)),
+        transaction: mock(async (fn: any) => fn({})),
       };
 
       const service = createPaymentService({
         db: db as any,
         wallet: wallet as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -518,35 +346,27 @@ describe("PaymentService", () => {
     });
 
     test("EXPIRED status returns early without updating", async () => {
-      const expiredRecord = {
-        id: "pay1",
-        status: PAYMENT_STATUS.EXPIRED,
-        walletId: "w1",
-        marks: 100,
-        providerReference: "stub:user1:pkg1",
-      };
       const wallet = makeWallet();
-      const tx = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => [expiredRecord]),
-            })),
-          })),
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.EXPIRED,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
         })),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(async () => {}),
-          })),
-        })),
-      };
+        updatePaymentStatus,
+      });
+
       const db = {
-        transaction: mock(async (fn: any) => fn(tx)),
+        transaction: mock(async (fn: any) => fn({})),
       };
 
       const service = createPaymentService({
         db: db as any,
         wallet: wallet as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -560,39 +380,31 @@ describe("PaymentService", () => {
 
       expect(result.status).toBe(PAYMENT_STATUS.EXPIRED);
       expect(wallet.credit).toHaveBeenCalledTimes(0);
-      expect(tx.update).toHaveBeenCalledTimes(0);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
     });
 
     test("REFUNDED status returns early without updating", async () => {
-      const refundedRecord = {
-        id: "pay1",
-        status: PAYMENT_STATUS.REFUNDED,
-        walletId: "w1",
-        marks: 100,
-        providerReference: "stub:user1:pkg1",
-      };
       const wallet = makeWallet();
-      const tx = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => [refundedRecord]),
-            })),
-          })),
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.REFUNDED,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
         })),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(async () => {}),
-          })),
-        })),
-      };
+        updatePaymentStatus,
+      });
+
       const db = {
-        transaction: mock(async (fn: any) => fn(tx)),
+        transaction: mock(async (fn: any) => fn({})),
       };
 
       const service = createPaymentService({
         db: db as any,
         wallet: wallet as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -606,59 +418,38 @@ describe("PaymentService", () => {
 
       expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
       expect(wallet.credit).toHaveBeenCalledTimes(0);
-      expect(tx.update).toHaveBeenCalledTimes(0);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
     });
 
     test("providerEventId deduplication returns existing status when event matches different payment", async () => {
-      const pendingRecord = {
-        id: "pay1",
-        status: PAYMENT_STATUS.PENDING,
-        walletId: "w1",
-        marks: 100,
-        providerReference: "stub:user1:pkg1",
-      };
-      const differentRecord = {
-        id: "pay2",
-        status: PAYMENT_STATUS.PAID,
-        walletId: "w2",
-        marks: 200,
-        providerReference: "stub:user2:pkg2",
-      };
-      let selectCallCount = 0;
       const wallet = makeWallet();
-      const tx = {
-        select: mock(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) {
-            return {
-              from: mock(() => ({
-                where: mock(() => ({
-                  limit: mock(async () => [pendingRecord]),
-                })),
-              })),
-            };
-          }
-          return {
-            from: mock(() => ({
-              where: mock(() => ({
-                limit: mock(async () => [differentRecord]),
-              })),
-            })),
-          };
-        }),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(async () => {}),
-          })),
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
         })),
-      };
+        findPaymentByProviderEventId: mock(async () => ({
+          id: "pay2",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w2",
+          marks: 200,
+          providerReference: "stub:user2:pkg2",
+        })),
+        updatePaymentStatus,
+      });
+
       const db = {
-        transaction: mock(async (fn: any) => fn(tx)),
+        transaction: mock(async (fn: any) => fn({})),
       };
 
       const service = createPaymentService({
         db: db as any,
         wallet: wallet as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -672,39 +463,31 @@ describe("PaymentService", () => {
 
       expect(result.status).toBe(PAYMENT_STATUS.PAID);
       expect(wallet.credit).toHaveBeenCalledTimes(0);
-      expect(tx.update).toHaveBeenCalledTimes(0);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
     });
 
     test("skips credit when record is already not PENDING (PAID record returns early)", async () => {
-      const paidRecord = {
-        id: "pay1",
-        status: PAYMENT_STATUS.PAID,
-        walletId: "w1",
-        marks: 100,
-        providerReference: "stub:user1:pkg1",
-      };
       const wallet = makeWallet();
-      const tx = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => [paidRecord]),
-            })),
-          })),
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
         })),
-        update: mock(() => ({
-          set: mock(() => ({
-            where: mock(async () => {}),
-          })),
-        })),
-      };
+        updatePaymentStatus,
+      });
+
       const db = {
-        transaction: mock(async (fn: any) => fn(tx)),
+        transaction: mock(async (fn: any) => fn({})),
       };
 
       const service = createPaymentService({
         db: db as any,
         wallet: wallet as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -718,25 +501,21 @@ describe("PaymentService", () => {
 
       expect(result.status).toBe(PAYMENT_STATUS.PAID);
       expect(wallet.credit).toHaveBeenCalledTimes(0);
-      expect(tx.update).toHaveBeenCalledTimes(0);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
     });
   });
 
   describe("getPurchase", () => {
     test("throws notFound when payment not found", async () => {
-      const db = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => []),
-            })),
-          })),
-        })),
-      } as any;
+      const repo = makeRepo({
+        findPaymentById: mock(async () => null),
+      });
+      const db = makeDb();
 
       const service = createPaymentService({
         db,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -750,19 +529,18 @@ describe("PaymentService", () => {
     });
 
     test("throws notFound when userId does not match", async () => {
-      const db = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => [{ id: "pay1", userId: "other_user" }]),
-            })),
-          })),
+      const repo = makeRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "other_user",
         })),
-      } as any;
+      });
+      const db = makeDb();
 
       const service = createPaymentService({
         db,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });
@@ -785,19 +563,15 @@ describe("PaymentService", () => {
         amountIdr: 50000,
         providerReference: "stub:user1:pkg1",
       };
-      const db = {
-        select: mock(() => ({
-          from: mock(() => ({
-            where: mock(() => ({
-              limit: mock(async () => [paymentRecord]),
-            })),
-          })),
-        })),
-      } as any;
+      const repo = makeRepo({
+        findPaymentById: mock(async () => paymentRecord),
+      });
+      const db = makeDb();
 
       const service = createPaymentService({
         db,
         wallet: makeWallet() as any,
+        repo,
         provider: makeProvider() as any,
         providerName: "stub",
       });

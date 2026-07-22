@@ -217,11 +217,11 @@ function makeAdminListConn(rows: any[]) {
 }
 
 describe("adminList", () => {
-  test("lists achievements with default limit and offset", async () => {
+  test("passes limit and offset to query", async () => {
     const rows = [{ id: "a1" }, { id: "a2" }];
     const conn = makeAdminListConn(rows);
 
-    const result = await repo.adminList(conn as any);
+    const result = await repo.adminList(conn as any, { limit: 50, offset: 0 });
 
     expect(result).toEqual(rows);
     expect(conn.limit).toHaveBeenCalledWith(50);
@@ -232,7 +232,11 @@ describe("adminList", () => {
     const rows = [{ id: "a1", status: "approved" }];
     const conn = makeAdminListConn(rows);
 
-    const result = await repo.adminList(conn as any, { status: "approved" });
+    const result = await repo.adminList(conn as any, {
+      status: "approved",
+      limit: 50,
+      offset: 0,
+    });
 
     expect(result).toEqual(rows);
     expect(conn.where).toHaveBeenCalledTimes(1);

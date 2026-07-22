@@ -1,5 +1,10 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createWalletService } from "../../modules/wallet/wallet.service";
+import {
+  WalletNotFoundError,
+  InsufficientBalanceError,
+} from "../../modules/wallet/wallet.errors";
+import type { AtomicResult } from "../../modules/wallet/wallet.repo";
 
 function makeWallet(overrides: Record<string, unknown> = {}) {
   return {
@@ -18,9 +23,12 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
     getByUserId: mock(async () => wallet),
     getOrCreate: mock(async () => wallet),
     atomicHold: mock(async () => ({
-      ...wallet,
-      heldBalance: wallet.heldBalance + 10,
-      availableBalance: wallet.availableBalance - 10,
+      success: true as const,
+      wallet: {
+        ...wallet,
+        heldBalance: wallet.heldBalance + 10,
+        availableBalance: wallet.availableBalance - 10,
+      },
     })),
     atomicRelease: mock(async () => ({
       ...wallet,
@@ -28,8 +36,8 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
       availableBalance: wallet.availableBalance + 10,
     })),
     atomicDeduct: mock(async () => ({
-      ...wallet,
-      totalBalance: wallet.totalBalance - 10,
+      success: true as const,
+      wallet: { ...wallet, totalBalance: wallet.totalBalance - 10 },
     })),
     atomicCredit: mock(async () => ({
       ...wallet,
@@ -56,7 +64,7 @@ function makeDb() {
 
 describe("WalletService", () => {
   describe("hold", () => {
-    test("throws notFound when wallet not found", async () => {
+    test("throws WalletNotFoundError when wallet not found", async () => {
       const repo = makeRepo({ getById: mock(async () => null) });
       const service = createWalletService(repo as any, makeDb());
       await expect(
@@ -66,12 +74,18 @@ describe("WalletService", () => {
           eventKey: "hold.1",
           actorType: "system",
         }),
-      ).rejects.toThrow("Wallet not found");
+      ).rejects.toThrow(WalletNotFoundError);
     });
 
-    test("throws badRequest when insufficient balance", async () => {
+    test("throws InsufficientBalanceError when atomicHold fails", async () => {
       const repo = makeRepo({
         getById: mock(async () => makeWallet({ availableBalance: 5 })),
+        atomicHold: mock(
+          async (): Promise<AtomicResult> => ({
+            success: false,
+            reason: "insufficient_balance",
+          }),
+        ),
       });
       const service = createWalletService(repo as any, makeDb());
       await expect(
@@ -81,12 +95,14 @@ describe("WalletService", () => {
           eventKey: "hold.1",
           actorType: "system",
         }),
-      ).rejects.toThrow("Insufficient available balance");
+      ).rejects.toThrow(InsufficientBalanceError);
     });
 
     test("holds funds and inserts ledger entry", async () => {
       const updated = makeWallet({ heldBalance: 30, availableBalance: 70 });
-      const repo = makeRepo({ atomicHold: mock(async () => updated) });
+      const repo = makeRepo({
+        atomicHold: mock(async () => ({ success: true, wallet: updated })),
+      });
       const service = createWalletService(repo as any, makeDb());
 
       const result = await service.hold(makeDb(), {
@@ -103,7 +119,7 @@ describe("WalletService", () => {
   });
 
   describe("release", () => {
-    test("throws notFound when wallet not found", async () => {
+    test("throws WalletNotFoundError when wallet not found", async () => {
       const repo = makeRepo({ getById: mock(async () => null) });
       const service = createWalletService(repo as any, makeDb());
       await expect(
@@ -113,7 +129,7 @@ describe("WalletService", () => {
           eventKey: "release.1",
           actorType: "system",
         }),
-      ).rejects.toThrow("Wallet not found");
+      ).rejects.toThrow(WalletNotFoundError);
     });
 
     test("releases funds and inserts ledger entry", async () => {
@@ -135,7 +151,7 @@ describe("WalletService", () => {
   });
 
   describe("deduct", () => {
-    test("throws notFound when wallet not found", async () => {
+    test("throws WalletNotFoundError when wallet not found", async () => {
       const repo = makeRepo({ getById: mock(async () => null) });
       const service = createWalletService(repo as any, makeDb());
       await expect(
@@ -145,12 +161,34 @@ describe("WalletService", () => {
           eventKey: "deduct.1",
           actorType: "system",
         }),
-      ).rejects.toThrow("Wallet not found");
+      ).rejects.toThrow(WalletNotFoundError);
+    });
+
+    test("throws InsufficientBalanceError when atomicDeduct fails", async () => {
+      const repo = makeRepo({
+        atomicDeduct: mock(
+          async (): Promise<AtomicResult> => ({
+            success: false,
+            reason: "insufficient_held",
+          }),
+        ),
+      });
+      const service = createWalletService(repo as any, makeDb());
+      await expect(
+        service.deduct(makeDb(), {
+          walletId: "wallet1",
+          amount: 50,
+          eventKey: "deduct.1",
+          actorType: "system",
+        }),
+      ).rejects.toThrow(InsufficientBalanceError);
     });
 
     test("deducts funds and inserts ledger entry", async () => {
       const updated = makeWallet({ totalBalance: 90 });
-      const repo = makeRepo({ atomicDeduct: mock(async () => updated) });
+      const repo = makeRepo({
+        atomicDeduct: mock(async () => ({ success: true, wallet: updated })),
+      });
       const service = createWalletService(repo as any, makeDb());
 
       const result = await service.deduct(makeDb(), {
@@ -166,7 +204,7 @@ describe("WalletService", () => {
   });
 
   describe("credit", () => {
-    test("throws notFound when wallet not found", async () => {
+    test("throws WalletNotFoundError when wallet not found", async () => {
       const repo = makeRepo({ getById: mock(async () => null) });
       const service = createWalletService(repo as any, makeDb());
       await expect(
@@ -176,7 +214,7 @@ describe("WalletService", () => {
           eventKey: "credit.1",
           actorType: "system",
         }),
-      ).rejects.toThrow("Wallet not found");
+      ).rejects.toThrow(WalletNotFoundError);
     });
 
     test("credits funds and inserts ledger entry", async () => {
@@ -197,7 +235,7 @@ describe("WalletService", () => {
   });
 
   describe("compensate", () => {
-    test("throws notFound when wallet not found", async () => {
+    test("throws WalletNotFoundError when wallet not found", async () => {
       const repo = makeRepo({ getById: mock(async () => null) });
       const service = createWalletService(repo as any, makeDb());
       await expect(
@@ -208,7 +246,7 @@ describe("WalletService", () => {
           actorType: "system",
           type: "compensate_credit",
         }),
-      ).rejects.toThrow("Wallet not found");
+      ).rejects.toThrow(WalletNotFoundError);
     });
 
     test("compensate_credit calls atomicCompensateCredit", async () => {

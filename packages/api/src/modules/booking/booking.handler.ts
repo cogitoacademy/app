@@ -50,8 +50,8 @@ export function createBookingHandler(booking: BookingService) {
           tutorId: input.tutorId,
           availabilitySlotId: input.availabilitySlotId,
           modality: input.modality,
-          scheduledStartAt: new Date(input.scheduledStartAt),
-          scheduledEndAt: new Date(input.scheduledEndAt),
+          scheduledStartAt: input.scheduledStartAt,
+          scheduledEndAt: input.scheduledEndAt,
           timezone: input.timezone,
         });
       } catch (err) {
@@ -120,8 +120,8 @@ export function createBookingHandler(booking: BookingService) {
         return booking.proposeReschedule(
           context.session!.user.id,
           input.bookingId,
-          new Date(input.proposedStartAt),
-          new Date(input.proposedEndAt),
+          input.proposedStartAt,
+          input.proposedEndAt,
           input.reason,
         );
       } catch (err) {
@@ -144,8 +144,8 @@ export function createBookingHandler(booking: BookingService) {
           modality: input.modality,
           targetGroupSize: input.targetGroupSize,
           inviteeUserIds: input.inviteeUserIds,
-          scheduledStartAt: new Date(input.scheduledStartAt),
-          scheduledEndAt: new Date(input.scheduledEndAt),
+          scheduledStartAt: input.scheduledStartAt,
+          scheduledEndAt: input.scheduledEndAt,
           timezone: input.timezone,
         });
       } catch (err) {
@@ -166,10 +166,7 @@ export function createBookingHandler(booking: BookingService) {
           tutorId: input.tutorId,
           availabilitySlotId: input.availabilitySlotId,
           modality: input.modality,
-          sessions: input.sessions.map((s) => ({
-            scheduledStartAt: new Date(s.scheduledStartAt),
-            scheduledEndAt: new Date(s.scheduledEndAt),
-          })),
+          sessions: input.sessions,
           timezone: input.timezone,
         });
       } catch (err) {

@@ -140,27 +140,24 @@ describe("updateBalances", () => {
 });
 
 describe("atomicHold", () => {
-  test("returns updated wallet on success", async () => {
+  test("returns success result with updated wallet on success", async () => {
     const updated = { id: "w1", heldBalance: 50, availableBalance: 50 };
     const updateConn = makeUpdateConn([updated]);
     const conn: any = { ...updateConn };
 
     const result = await atomicHold(conn, "w1", 50);
 
-    expect(result).toEqual(updated);
+    expect(result).toEqual({ success: true, wallet: updated });
     expect(updateConn.set).toHaveBeenCalledTimes(1);
   });
 
-  test("throws badRequest on insufficient balance", async () => {
+  test("returns failure result on insufficient balance", async () => {
     const updateConn = makeUpdateConn([]);
     const conn: any = { ...updateConn };
 
-    try {
-      await atomicHold(conn, "w1", 999);
-      expect.unreachable("should have thrown");
-    } catch (e: any) {
-      expect(e.code).toBe("BAD_REQUEST");
-    }
+    const result = await atomicHold(conn, "w1", 999);
+
+    expect(result).toEqual({ success: false, reason: "insufficient_balance" });
   });
 });
 
@@ -178,26 +175,23 @@ describe("atomicRelease", () => {
 });
 
 describe("atomicDeduct", () => {
-  test("deducts held balance and returns updated wallet", async () => {
+  test("returns success result with deducted wallet", async () => {
     const updated = { id: "w1", heldBalance: 0, totalBalance: 50 };
     const updateConn = makeUpdateConn([updated]);
     const conn: any = { ...updateConn };
 
     const result = await atomicDeduct(conn, "w1", 50);
 
-    expect(result).toEqual(updated);
+    expect(result).toEqual({ success: true, wallet: updated });
   });
 
-  test("throws badRequest on insufficient held balance", async () => {
+  test("returns failure result on insufficient held balance", async () => {
     const updateConn = makeUpdateConn([]);
     const conn: any = { ...updateConn };
 
-    try {
-      await atomicDeduct(conn, "w1", 999);
-      expect.unreachable("should have thrown");
-    } catch (e: any) {
-      expect(e.code).toBe("BAD_REQUEST");
-    }
+    const result = await atomicDeduct(conn, "w1", 999);
+
+    expect(result).toEqual({ success: false, reason: "insufficient_held" });
   });
 });
 

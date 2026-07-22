@@ -1,8 +1,8 @@
-import { notFound, badRequest } from "../../lib/errors";
 import { KNOWLEDGE_BANK_THRESHOLD } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import type { WalletRepo } from "./wallet.repo";
+import type { WalletRepo, AtomicResult } from "./wallet.repo";
+import { WalletNotFoundError, InsufficientBalanceError } from "./wallet.errors";
 
 export type EntryType =
   | "credit"
@@ -136,11 +136,15 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     params: HoldParams,
   ): Promise<WalletSnapshot> {
     const w = await repo.getById(conn, params.walletId);
-    if (!w) throw notFound("Wallet not found");
-    if (w.availableBalance < params.amount) {
-      throw badRequest("Insufficient available balance");
-    }
-    const updated = await repo.atomicHold(conn, params.walletId, params.amount);
+    if (!w) throw new WalletNotFoundError(params.walletId);
+    const result: AtomicResult = await repo.atomicHold(
+      conn,
+      params.walletId,
+      params.amount,
+    );
+    if (!result.success)
+      throw new InsufficientBalanceError(w.availableBalance, params.amount);
+    const updated = result.wallet;
     await repo.insertLedger(conn, {
       walletId: params.walletId,
       entryType: "hold",
@@ -163,7 +167,7 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     params: ReleaseParams,
   ): Promise<WalletSnapshot> {
     const w = await repo.getById(conn, params.walletId);
-    if (!w) throw notFound("Wallet not found");
+    if (!w) throw new WalletNotFoundError(params.walletId);
     const updated = await repo.atomicRelease(
       conn,
       params.walletId,
@@ -191,12 +195,15 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     params: DeductParams,
   ): Promise<WalletSnapshot> {
     const w = await repo.getById(conn, params.walletId);
-    if (!w) throw notFound("Wallet not found");
-    const updated = await repo.atomicDeduct(
+    if (!w) throw new WalletNotFoundError(params.walletId);
+    const result: AtomicResult = await repo.atomicDeduct(
       conn,
       params.walletId,
       params.amount,
     );
+    if (!result.success)
+      throw new InsufficientBalanceError(w.availableBalance, params.amount);
+    const updated = result.wallet;
     await repo.insertLedger(conn, {
       walletId: params.walletId,
       entryType: "deduct",
@@ -219,7 +226,7 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     params: CreditParams,
   ): Promise<WalletSnapshot> {
     const w = await repo.getById(conn, params.walletId);
-    if (!w) throw notFound("Wallet not found");
+    if (!w) throw new WalletNotFoundError(params.walletId);
     const updated = await repo.atomicCredit(
       conn,
       params.walletId,
@@ -247,7 +254,7 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     params: CompensateParams,
   ): Promise<WalletSnapshot> {
     const w = await repo.getById(conn, params.walletId);
-    if (!w) throw notFound("Wallet not found");
+    if (!w) throw new WalletNotFoundError(params.walletId);
     const updated =
       params.type === "compensate_credit"
         ? await repo.atomicCompensateCredit(

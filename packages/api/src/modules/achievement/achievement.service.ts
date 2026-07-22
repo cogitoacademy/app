@@ -69,8 +69,13 @@ export function createAchievementService(deps: {
     return achievementRepo.deleteRow(db, id, userId);
   }
 
-  async function adminList(input: AdminListInput = {}) {
-    return achievementRepo.adminList(db, input);
+  async function adminList(input?: AdminListInput) {
+    const withDefaults: AdminListInput = {
+      limit: input?.limit ?? 50,
+      offset: input?.offset ?? 0,
+      status: input?.status,
+    };
+    return achievementRepo.adminList(db, withDefaults);
   }
 
   async function adminReview(adminId: string, input: AdminReviewInput) {

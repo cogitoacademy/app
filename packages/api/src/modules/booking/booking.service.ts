@@ -24,7 +24,11 @@ import {
   serviceUnavailable,
 } from "../../lib/errors";
 import { log } from "../../lib/logger";
-import { BOOKING_STATE, TERMINAL_STATES, type BookingState } from "./booking-state.types";
+import {
+  BOOKING_STATE,
+  TERMINAL_STATES,
+  type BookingState,
+} from "./booking-state.types";
 import { canTransition } from "./booking-transitions";
 import type { BookingRepo } from "./booking.repo";
 import type {
@@ -207,6 +211,7 @@ export function createBookingService(deps: {
       input.tutorId,
       input.scheduledStartAt,
       input.scheduledEndAt,
+      { excludeStates: [...TERMINAL_STATES] },
     );
     if (overlapping.length > 0) {
       throw conflict("Tutor already has a booking at this time");
@@ -316,7 +321,9 @@ export function createBookingService(deps: {
         b.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
       const isLate = now > h2;
-      const toState: BookingState = isLate ? BOOKING_STATE.LATE_CANCELLED : BOOKING_STATE.CANCELLED;
+      const toState: BookingState = isLate
+        ? BOOKING_STATE.LATE_CANCELLED
+        : BOOKING_STATE.CANCELLED;
 
       if (b.holdAmount > 0) {
         const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
@@ -534,22 +541,23 @@ export function createBookingService(deps: {
     proposedEndAt: Date,
     reason?: string,
   ) {
-    if (proposedEndAt <= proposedStartAt) {
-      throw badRequest("End time must be after start time");
-    }
-
     return db.transaction(async (tx) => {
       const b = await assertStudentBookingAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw conflict("Booking is already in a terminal state");
       }
 
-      const updated = await transition(tx, bookingId, BOOKING_STATE.RESCHEDULE_PROPOSED, {
-        actorId: userId,
-        actorType: ACTOR_TYPE.STUDENT,
-        reason,
-        metadata: { proposedStartAt, proposedEndAt },
-      });
+      const updated = await transition(
+        tx,
+        bookingId,
+        BOOKING_STATE.RESCHEDULE_PROPOSED,
+        {
+          actorId: userId,
+          actorType: ACTOR_TYPE.STUDENT,
+          reason,
+          metadata: { proposedStartAt, proposedEndAt },
+        },
+      );
 
       await repo.insertRescheduleProposal(tx, {
         bookingId,
@@ -591,6 +599,7 @@ export function createBookingService(deps: {
       input.tutorId,
       input.scheduledStartAt,
       input.scheduledEndAt,
+      { excludeStates: [...TERMINAL_STATES] },
     );
     if (overlapping.length > 0) {
       throw conflict("Tutor already has a booking at this time");
@@ -889,11 +898,16 @@ export function createBookingService(deps: {
           currentState === BOOKING_STATE.AWAITING_TUTOR_REVIEW ||
           currentState === BOOKING_STATE.AWAITING_MARKS_HOLD
         ) {
-          await transition(tx, bookingId, BOOKING_STATE.AWAITING_RECONFIRMATION, {
-            actorId: userId,
-            actorType: ACTOR_TYPE.STUDENT,
-            reason: "Participant withdrew before H-2",
-          });
+          await transition(
+            tx,
+            bookingId,
+            BOOKING_STATE.AWAITING_RECONFIRMATION,
+            {
+              actorId: userId,
+              actorType: ACTOR_TYPE.STUDENT,
+              reason: "Participant withdrew before H-2",
+            },
+          );
         } else {
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,
@@ -934,6 +948,7 @@ export function createBookingService(deps: {
         input.tutorId,
         session.scheduledStartAt,
         session.scheduledEndAt,
+        { excludeStates: [...TERMINAL_STATES] },
       );
       if (overlapping.length > 0) {
         throw conflict("Tutor already has a booking at this time");

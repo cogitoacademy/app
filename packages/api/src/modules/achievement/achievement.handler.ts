@@ -83,7 +83,7 @@ export function createAchievementHandler(deps: {
     input: AdminListInput;
   }) {
     try {
-      return achievementService.adminList(input ?? {});
+      return achievementService.adminList(input);
     } catch (err) {
       if (err instanceof ORPCError) throw err;
       throw internalServerError("Failed to list achievements (admin)", err);

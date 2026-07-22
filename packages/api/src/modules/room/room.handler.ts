@@ -1,19 +1,15 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
-import { internalServerError } from "../../lib/errors";
+import { withDomainMap } from "../../lib/handler-utils";
+import { mapRoomError } from "./room.errors";
 import type { RoomService } from "./room.service";
+import type { CreateRoomInput, AssignRoomInput } from "./room.types";
 
 export type RoomHandler = ReturnType<typeof createRoomHandler>;
 
 export function createRoomHandler(room: RoomService) {
   return {
     list: async ({ context: _context }: { context: Context }) => {
-      try {
-        return room.listActive();
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list rooms", err);
-      }
+      return withDomainMap(() => room.listActive(), mapRoomError);
     },
 
     create: async ({
@@ -21,14 +17,9 @@ export function createRoomHandler(room: RoomService) {
       input,
     }: {
       context: Context;
-      input: { name: string; location: string; capacity: number };
+      input: CreateRoomInput;
     }) => {
-      try {
-        return room.createRoom(input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to create room", err);
-      }
+      return withDomainMap(() => room.createRoom(input), mapRoomError);
     },
 
     assign: async ({
@@ -36,24 +27,18 @@ export function createRoomHandler(room: RoomService) {
       input,
     }: {
       context: Context;
-      input: {
-        bookingId: string;
-        roomId: string;
-        startAt: string;
-        endAt: string;
-      };
+      input: AssignRoomInput;
     }) => {
-      try {
-        return room.assignRoom(
-          input.bookingId,
-          input.roomId,
-          new Date(input.startAt),
-          new Date(input.endAt),
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to assign room", err);
-      }
+      return withDomainMap(
+        () =>
+          room.assignRoom(
+            input.bookingId,
+            input.roomId,
+            input.startAt,
+            input.endAt,
+          ),
+        mapRoomError,
+      );
     },
   };
 }

@@ -3,7 +3,10 @@ import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { WalletSnapshot } from "./wallet.service";
-import { badRequest } from "../../lib/errors";
+
+export type AtomicResult =
+  | { success: true; wallet: WalletSnapshot }
+  | { success: false; reason: "insufficient_balance" | "insufficient_held" };
 
 export type WalletRepo = ReturnType<typeof createWalletRepo>;
 
@@ -77,7 +80,7 @@ export async function atomicHold(
   conn: DbOrTx,
   walletId: string,
   amount: number,
-): Promise<WalletSnapshot> {
+): Promise<AtomicResult> {
   const rows = await conn
     .update(wallet)
     .set({
@@ -86,8 +89,8 @@ export async function atomicHold(
     })
     .where(and(eq(wallet.id, walletId), gte(wallet.availableBalance, amount)))
     .returning();
-  if (!rows.length) throw badRequest("Insufficient available balance");
-  return rows[0] as WalletSnapshot;
+  if (!rows.length) return { success: false, reason: "insufficient_balance" };
+  return { success: true, wallet: rows[0] as WalletSnapshot };
 }
 
 export async function atomicRelease(
@@ -110,7 +113,7 @@ export async function atomicDeduct(
   conn: DbOrTx,
   walletId: string,
   amount: number,
-): Promise<WalletSnapshot> {
+): Promise<AtomicResult> {
   const rows = await conn
     .update(wallet)
     .set({
@@ -121,8 +124,8 @@ export async function atomicDeduct(
       and(eq(wallet.id, walletId), sql`${wallet.heldBalance} >= ${amount}`),
     )
     .returning();
-  if (!rows.length) throw badRequest("Insufficient held balance");
-  return rows[0] as WalletSnapshot;
+  if (!rows.length) return { success: false, reason: "insufficient_held" };
+  return { success: true, wallet: rows[0] as WalletSnapshot };
 }
 
 export async function atomicCredit(

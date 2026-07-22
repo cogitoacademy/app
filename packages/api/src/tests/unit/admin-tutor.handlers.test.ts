@@ -42,7 +42,7 @@ describe("adminTutorHandlers", () => {
         input: undefined as any,
       });
 
-      expect(listInvites).toHaveBeenCalledWith({});
+      expect(listInvites).toHaveBeenCalledWith(undefined);
     });
   });
 
@@ -110,7 +110,7 @@ describe("adminTutorHandlers", () => {
         input: undefined as any,
       });
 
-      expect(listTutorProfiles).toHaveBeenCalledWith({});
+      expect(listTutorProfiles).toHaveBeenCalledWith(undefined);
     });
   });
 

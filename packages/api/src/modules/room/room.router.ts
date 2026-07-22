@@ -1,5 +1,4 @@
-import { z } from "zod";
-
+import { listRoomsInput, createRoomInput, assignRoomInput } from "./room.types";
 import { adminProcedure, protectedProcedure } from "../../procedures";
 import type { RoomHandler } from "./room.handler";
 
@@ -13,7 +12,7 @@ export function createRoomRouter(handler: RoomHandler) {
         summary: "List active rooms",
         description: "Returns all active rooms for offline scheduling",
       })
-      .input(z.void())
+      .input(listRoomsInput)
       .handler(handler.list),
 
     create: adminProcedure
@@ -24,13 +23,7 @@ export function createRoomRouter(handler: RoomHandler) {
         summary: "Create a room",
         description: "Adds a new physical room to the platform",
       })
-      .input(
-        z.object({
-          name: z.string().min(1),
-          location: z.string().min(1),
-          capacity: z.number().int().min(1),
-        }),
-      )
+      .input(createRoomInput)
       .handler(handler.create),
 
     assign: adminProcedure
@@ -41,14 +34,7 @@ export function createRoomRouter(handler: RoomHandler) {
         summary: "Assign room to booking",
         description: "Confirms a room for an offline booking",
       })
-      .input(
-        z.object({
-          bookingId: z.string(),
-          roomId: z.string(),
-          startAt: z.string().datetime(),
-          endAt: z.string().datetime(),
-        }),
-      )
+      .input(assignRoomInput)
       .handler(handler.assign),
   };
 }

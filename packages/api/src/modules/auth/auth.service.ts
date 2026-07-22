@@ -1,29 +1,11 @@
 import type { z } from "zod";
 import type { DbType } from "../../lib/db";
-import { badRequest, notFound } from "../../lib/errors";
+import { notFound } from "../../lib/errors";
 import type { AuthRepo, StudentProfileRow, TutorProfileRow } from "./auth.repo";
 import { updateProfileInput } from "./auth.types";
 import type { AuthWalletPort } from "./index";
 
 export type UpdateProfileInput = z.infer<typeof updateProfileInput>;
-
-export function validateUpdateInput(input: UpdateProfileInput): void {
-  const stringFields = [
-    "phoneNumber",
-    "schoolName",
-    "gradeLevel",
-    "parentName",
-    "parentPhone",
-    "parentEmail",
-  ] as const;
-
-  for (const field of stringFields) {
-    const value = input[field];
-    if (value !== undefined && value.trim() === "") {
-      throw badRequest(`${field} cannot be blank`);
-    }
-  }
-}
 
 export interface MeResult {
   profile: StudentProfileRow | null;
@@ -74,8 +56,6 @@ export function createAuthService(deps: {
     userId: string,
     input: UpdateProfileInput,
   ): Promise<StudentProfileRow> {
-    validateUpdateInput(input);
-
     const existing = await authRepo.getStudentProfile(db, userId);
     if (existing) return authRepo.upsertProfile(db, userId, input);
     return authRepo.createProfile(db, userId, input);

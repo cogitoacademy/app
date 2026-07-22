@@ -46,7 +46,7 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       input: ListInvitesInput;
     }) => {
       try {
-        return adminTutorService.listInvites(input ?? {});
+        return adminTutorService.listInvites(input);
       } catch (err) {
         if (err instanceof ORPCError) throw err;
         throw internalServerError("Failed to list invites", err);
@@ -97,7 +97,7 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       input: ListTutorProfilesInput;
     }) => {
       try {
-        return adminTutorService.listTutorProfiles(input ?? {});
+        return adminTutorService.listTutorProfiles(input);
       } catch (err) {
         if (err instanceof ORPCError) throw err;
         throw internalServerError("Failed to list tutor profiles", err);

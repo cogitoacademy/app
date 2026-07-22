@@ -67,13 +67,34 @@ export async function updatePaymentStatus(
   await conn.update(paymentRecord).set(data).where(eq(paymentRecord.id, id));
 }
 
-export function createPaymentRepo(_db: DbType) {
+export function createPaymentRepo(db: DbType) {
   return {
-    findPackageByCode,
-    findPaymentByProviderReference,
-    findPaymentById,
-    findPaymentByProviderEventId,
-    insertPayment,
-    updatePaymentStatus,
+    findPackageByCode(code: string, conn?: DbOrTx) {
+      return findPackageByCode(conn ?? db, code);
+    },
+    findPaymentByProviderReference(providerReference: string, conn?: DbOrTx) {
+      return findPaymentByProviderReference(conn ?? db, providerReference);
+    },
+    findPaymentById(id: string, conn?: DbOrTx) {
+      return findPaymentById(conn ?? db, id);
+    },
+    findPaymentByProviderEventId(providerEventId: string, conn?: DbOrTx) {
+      return findPaymentByProviderEventId(conn ?? db, providerEventId);
+    },
+    insertPayment(values: typeof paymentRecord.$inferInsert, conn?: DbOrTx) {
+      return insertPayment(conn ?? db, values);
+    },
+    updatePaymentStatus(
+      id: string,
+      data: {
+        status: string;
+        providerEventId?: string;
+        receiptUrl?: string | null;
+        failureReason?: string | null;
+      },
+      conn?: DbOrTx,
+    ) {
+      return updatePaymentStatus(conn ?? db, id, data);
+    },
   };
 }
