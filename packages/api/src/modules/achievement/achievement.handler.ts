@@ -1,7 +1,7 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { internalServerError } from "../../lib/errors";
+import { withDomainMap } from "../../lib/handler-utils";
+import { mapAchievementError } from "./achievement.errors";
 import type {
   achievementInput,
   updateAchievementInput,
@@ -23,12 +23,10 @@ export function createAchievementHandler(deps: {
   const { achievementService } = deps;
 
   async function list({ context }: { context: Context }) {
-    try {
-      return achievementService.list(context.session!.user.id);
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to list achievements", err);
-    }
+    return withDomainMap(
+      () => achievementService.list(context.session!.user.id),
+      mapAchievementError,
+    );
   }
 
   async function create({
@@ -38,12 +36,10 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: AchievementInput;
   }) {
-    try {
-      return achievementService.create(context.session!.user.id, input);
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to create achievement", err);
-    }
+    return withDomainMap(
+      () => achievementService.create(context.session!.user.id, input),
+      mapAchievementError,
+    );
   }
 
   async function update({
@@ -53,12 +49,10 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: UpdateAchievementInput;
   }) {
-    try {
-      return achievementService.update(context.session!.user.id, input);
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to update achievement", err);
-    }
+    return withDomainMap(
+      () => achievementService.update(context.session!.user.id, input),
+      mapAchievementError,
+    );
   }
 
   async function remove({
@@ -68,12 +62,10 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: DeleteAchievementInput;
   }) {
-    try {
-      return achievementService.remove(context.session!.user.id, input.id);
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to delete achievement", err);
-    }
+    return withDomainMap(
+      () => achievementService.remove(context.session!.user.id, input.id),
+      mapAchievementError,
+    );
   }
 
   async function adminList({
@@ -82,12 +74,10 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: AdminListInput;
   }) {
-    try {
-      return achievementService.adminList(input);
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to list achievements (admin)", err);
-    }
+    return withDomainMap(
+      () => achievementService.adminList(input),
+      mapAchievementError,
+    );
   }
 
   async function adminReview({
@@ -97,12 +87,10 @@ export function createAchievementHandler(deps: {
     context: Context;
     input: AdminReviewInput;
   }) {
-    try {
-      return achievementService.adminReview(context.session!.user.id, input);
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to review achievement", err);
-    }
+    return withDomainMap(
+      () => achievementService.adminReview(context.session!.user.id, input),
+      mapAchievementError,
+    );
   }
 
   return { list, create, update, remove, adminList, adminReview };

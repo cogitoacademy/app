@@ -1,7 +1,7 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
+import { withDomainMap } from "../../lib/handler-utils";
 import { z } from "zod";
-import { internalServerError } from "../../lib/errors";
+import { mapAuthError } from "./auth.errors";
 import type { updateProfileInput } from "./auth.types";
 import type { AuthService, MeResult } from "./auth.service";
 
@@ -14,7 +14,7 @@ export type AuthHandler = ReturnType<typeof createAuthHandler>;
 export function createAuthHandler(authService: AuthService) {
   return {
     me: async ({ context }: { context: Context }) => {
-      try {
+      return withDomainMap(async () => {
         const result = await authService.me(context.session!.user.id);
         return {
           user: context.session!.user,
@@ -22,19 +22,14 @@ export function createAuthHandler(authService: AuthService) {
           tutorProfile: result.tutorProfile,
           wallet: result.wallet,
         };
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to fetch user profile", err);
-      }
+      }, mapAuthError);
     },
 
     getProfile: async ({ context }: { context: Context }) => {
-      try {
-        return authService.getProfile(context.session!.user.id);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to fetch profile", err);
-      }
+      return withDomainMap(
+        () => authService.getProfile(context.session!.user.id),
+        mapAuthError,
+      );
     },
 
     updateProfile: async ({
@@ -44,12 +39,10 @@ export function createAuthHandler(authService: AuthService) {
       context: Context;
       input: UpdateProfileInput;
     }) => {
-      try {
-        return authService.updateProfile(context.session!.user.id, input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to update profile", err);
-      }
+      return withDomainMap(
+        () => authService.updateProfile(context.session!.user.id, input),
+        mapAuthError,
+      );
     },
   };
 }

@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { DbType } from "../../lib/db";
-import { notFound } from "../../lib/errors";
+import { ProfileNotFoundError } from "./auth.errors";
 import type { AuthRepo, StudentProfileRow, TutorProfileRow } from "./auth.repo";
 import { updateProfileInput } from "./auth.types";
 import type { AuthWalletPort } from "./index";
@@ -48,7 +48,7 @@ export function createAuthService(deps: {
 
   async function getProfile(userId: string): Promise<StudentProfileRow> {
     const profile = await authRepo.getStudentProfile(db, userId);
-    if (!profile) throw notFound("Profile not found");
+    if (!profile) throw new ProfileNotFoundError(userId);
     return profile;
   }
 

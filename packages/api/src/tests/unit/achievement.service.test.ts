@@ -3,6 +3,7 @@ import {
   validateUpdate,
   validateDelete,
 } from "../../modules/achievement/achievement.service";
+import { AchievementNotEditableError } from "../../modules/achievement/achievement.errors";
 
 function makeAchievement(overrides: Partial<{ status: string }> = {}) {
   return { id: "a1", status: "pending", ...overrides } as any;
@@ -16,20 +17,22 @@ describe("Achievement Service", () => {
       ).not.toThrow();
     });
 
-    test("throws for undefined achievement", () => {
-      expect(() => validateUpdate(undefined)).toThrow();
+    test("throws AchievementNotEditableError for undefined achievement", () => {
+      expect(() => validateUpdate(undefined)).toThrow(
+        AchievementNotEditableError,
+      );
     });
 
-    test("throws for approved achievement", () => {
+    test("throws AchievementNotEditableError for approved achievement", () => {
       expect(() =>
         validateUpdate(makeAchievement({ status: "approved" })),
-      ).toThrow();
+      ).toThrow(AchievementNotEditableError);
     });
 
-    test("throws for rejected achievement", () => {
+    test("throws AchievementNotEditableError for rejected achievement", () => {
       expect(() =>
         validateUpdate(makeAchievement({ status: "rejected" })),
-      ).toThrow();
+      ).toThrow(AchievementNotEditableError);
     });
   });
 
@@ -40,14 +43,16 @@ describe("Achievement Service", () => {
       ).not.toThrow();
     });
 
-    test("throws for undefined achievement", () => {
-      expect(() => validateDelete(undefined)).toThrow();
+    test("throws AchievementNotEditableError for undefined achievement", () => {
+      expect(() => validateDelete(undefined)).toThrow(
+        AchievementNotEditableError,
+      );
     });
 
-    test("throws for approved achievement", () => {
+    test("throws AchievementNotEditableError for approved achievement", () => {
       expect(() =>
         validateDelete(makeAchievement({ status: "approved" })),
-      ).toThrow();
+      ).toThrow(AchievementNotEditableError);
     });
   });
 });

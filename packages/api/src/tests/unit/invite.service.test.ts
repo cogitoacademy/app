@@ -2,6 +2,11 @@ import { describe, test, expect } from "bun:test";
 import { createInviteService } from "../../modules/invite/invite.service";
 import type { InviteRepo } from "../../modules/invite/invite.repo";
 import type { tutorInvite, tutorProfile } from "@cogito-app/db/schema";
+import {
+  InviteNotFoundError,
+  InviteEmailMismatchError,
+  ProfileAlreadyExistsError,
+} from "../../modules/invite/invite.errors";
 
 type InviteRow = typeof tutorInvite.$inferSelect;
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
@@ -50,24 +55,24 @@ function makeService(
 
 describe("Invite Service", () => {
   describe("validateClaim (via claim)", () => {
-    test("throws for null invite", async () => {
+    test("throws InviteNotFoundError for null invite", async () => {
       const service = makeService(undefined, undefined);
       await expect(
         service.claim("u1", "tutor@example.com", "tok1"),
-      ).rejects.toThrow();
+      ).rejects.toThrow(InviteNotFoundError);
     });
 
-    test("throws when email does not match", async () => {
+    test("throws InviteEmailMismatchError when email does not match", async () => {
       const service = makeService(
         makeInvite({ email: "other@example.com" }),
         undefined,
       );
       await expect(
         service.claim("u1", "tutor@example.com", "tok1"),
-      ).rejects.toThrow();
+      ).rejects.toThrow(InviteEmailMismatchError);
     });
 
-    test("throws when user already has tutor profile", async () => {
+    test("throws ProfileAlreadyExistsError when user already has tutor profile", async () => {
       const profile = { id: "tp1" } as TutorProfileRow;
       const service = makeService(
         makeInvite({ email: "tutor@example.com" }),
@@ -75,7 +80,7 @@ describe("Invite Service", () => {
       );
       await expect(
         service.claim("u1", "tutor@example.com", "tok1"),
-      ).rejects.toThrow();
+      ).rejects.toThrow(ProfileAlreadyExistsError);
     });
   });
 });

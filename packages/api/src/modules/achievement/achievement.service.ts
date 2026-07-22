@@ -1,6 +1,9 @@
 import type { achievement } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
-import { badRequest, notFound } from "../../lib/errors";
+import {
+  AchievementNotFoundError,
+  AchievementNotEditableError,
+} from "./achievement.errors";
 import { ACHIEVEMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import type {
   AchievementRepo,
@@ -25,13 +28,13 @@ export interface AdminReviewInput {
 
 export function validateUpdate(existing: AchievementRow | undefined): void {
   if (!existing || existing.status !== ACHIEVEMENT_STATUS.PENDING) {
-    throw badRequest("Can only edit pending achievements");
+    throw new AchievementNotEditableError(existing?.id ?? "unknown");
   }
 }
 
 export function validateDelete(existing: AchievementRow | undefined): void {
   if (!existing || existing.status !== ACHIEVEMENT_STATUS.PENDING) {
-    throw badRequest("Can only delete pending achievements");
+    throw new AchievementNotEditableError(existing?.id ?? "unknown");
   }
 }
 
@@ -80,7 +83,7 @@ export function createAchievementService(deps: {
 
   async function adminReview(adminId: string, input: AdminReviewInput) {
     const existing = await achievementRepo.getById(db, input.achievementId);
-    if (!existing) throw notFound("Achievement not found");
+    if (!existing) throw new AchievementNotFoundError(input.achievementId);
 
     return db.transaction(async (tx) => {
       const updated = await achievementRepo.updateStatus(

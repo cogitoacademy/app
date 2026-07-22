@@ -5,6 +5,10 @@ import {
   validateRoleChange,
 } from "../../modules/admin/admin.service";
 import { USER_ROLE } from "../../shared/constants";
+import {
+  UserNotFoundError,
+  LastAdminError,
+} from "../../modules/admin/admin.errors";
 
 function makeDb() {
   return {
@@ -151,7 +155,7 @@ describe("AdminService", () => {
   });
 
   describe("setRole", () => {
-    test("throws notFound when target user does not exist", async () => {
+    test("throws UserNotFoundError when target user does not exist", async () => {
       const repo = makeAdminRepo({
         getById: mock(async () => null),
       });
@@ -165,11 +169,12 @@ describe("AdminService", () => {
         await service.setRole("admin1", { userId: "u1", role: "tutor" });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("NOT_FOUND");
+        expect(e).toBeInstanceOf(UserNotFoundError);
+        expect(e.code).toBe("USER_NOT_FOUND");
       }
     });
 
-    test("throws conflict when demoting the last admin", async () => {
+    test("throws LastAdminError when demoting the last admin", async () => {
       const repo = makeAdminRepo({
         getById: mock(async () => ({
           id: "u1",
@@ -187,7 +192,8 @@ describe("AdminService", () => {
         await service.setRole("admin1", { userId: "u1", role: "student" });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("CONFLICT");
+        expect(e).toBeInstanceOf(LastAdminError);
+        expect(e.code).toBe("LAST_ADMIN");
       }
     });
 
@@ -251,8 +257,10 @@ describe("AdminService", () => {
 });
 
 describe("validateRoleChange", () => {
-  test("throws for null target", () => {
-    expect(() => validateRoleChange(null, "tutor", 2)).toThrow();
+  test("throws UserNotFoundError for null target", () => {
+    expect(() => validateRoleChange(null, "tutor", 2, "u1")).toThrow(
+      UserNotFoundError,
+    );
   });
 
   test("returns previousRole for student to tutor change", () => {
@@ -260,14 +268,15 @@ describe("validateRoleChange", () => {
       { id: "u1", role: "student" },
       "tutor",
       2,
+      "u1",
     );
     expect(result.previousRole).toBe("student");
   });
 
-  test("throws for demoting last admin", () => {
+  test("throws LastAdminError for demoting last admin", () => {
     expect(() =>
-      validateRoleChange({ id: "u1", role: "admin" }, "student", 1),
-    ).toThrow();
+      validateRoleChange({ id: "u1", role: "admin" }, "student", 1, "u1"),
+    ).toThrow(LastAdminError);
   });
 
   test("returns previousRole for demoting admin with multiple admins", () => {
@@ -275,12 +284,18 @@ describe("validateRoleChange", () => {
       { id: "u1", role: "admin" },
       "student",
       3,
+      "u1",
     );
     expect(result.previousRole).toBe("admin");
   });
 
   test("returns previousRole for admin to admin (no change)", () => {
-    const result = validateRoleChange({ id: "u1", role: "admin" }, "admin", 1);
+    const result = validateRoleChange(
+      { id: "u1", role: "admin" },
+      "admin",
+      1,
+      "u1",
+    );
     expect(result.previousRole).toBe("admin");
   });
 });

@@ -1,5 +1,9 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createRefundService } from "../../modules/refund/refund.service";
+import {
+  WalletNotFoundError,
+  InvalidRefundAmountError,
+} from "../../modules/refund/refund.errors";
 
 function makeDb() {
   return {
@@ -67,7 +71,7 @@ describe("RefundService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(WalletNotFoundError);
       }
     });
 
@@ -88,7 +92,7 @@ describe("RefundService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("positive");
+        expect(e).toBeInstanceOf(InvalidRefundAmountError);
       }
     });
 

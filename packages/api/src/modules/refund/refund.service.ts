@@ -4,7 +4,7 @@ import {
   MAX_PAGE_LIMIT,
   ACTOR_TYPE,
 } from "../../shared/constants";
-import { badRequest, notFound } from "../../lib/errors";
+import { WalletNotFoundError, InvalidRefundAmountError } from "./refund.errors";
 import type { RefundRepo } from "./refund.repo";
 import type { RefundWalletPort, RefundAuditPort } from "./index";
 
@@ -28,9 +28,13 @@ export function createRefundService(deps: {
       bookingId?: string;
     },
   ) {
-    if (input.amount <= 0) throw badRequest("Amount must be positive");
+    if (input.amount <= 0)
+      throw new InvalidRefundAmountError(
+        input.amount,
+        "Amount must be positive",
+      );
     const walletSnapshot = await wallet.getById(db, input.walletId);
-    if (!walletSnapshot) throw notFound("Wallet not found");
+    if (!walletSnapshot) throw new WalletNotFoundError(input.walletId);
 
     const beforeState = {
       totalBalance: walletSnapshot.totalBalance,

@@ -1,5 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createAuthHandler } from "../../modules/auth/auth.handler";
+import { ProfileNotFoundError } from "../../modules/auth/auth.errors";
 import { createAuthService } from "../../modules/auth/auth.service";
 
 function makeDb() {
@@ -189,7 +190,7 @@ describe("AuthService", () => {
       expect(result).toEqual(profile);
     });
 
-    test("throws notFound when profile is null", async () => {
+    test("throws ProfileNotFoundError when profile is null", async () => {
       const authRepo = makeAuthRepo({
         getStudentProfile: mock(async () => null),
       });
@@ -203,7 +204,9 @@ describe("AuthService", () => {
         await service.getProfile("u1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("NOT_FOUND");
+        expect(e).toBeInstanceOf(ProfileNotFoundError);
+        expect(e.code).toBe("PROFILE_NOT_FOUND");
+        expect(e.details).toEqual({ userId: "u1" });
       }
     });
   });

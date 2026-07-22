@@ -1,8 +1,8 @@
-import { notFound, conflict } from "../../lib/errors";
 import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
 import type { AdminAuditPort } from "./index";
+import { UserNotFoundError, LastAdminError } from "./admin.errors";
 
 export interface ListUsersInput {
   limit?: number;
@@ -30,9 +30,10 @@ export function validateRoleChange(
   target: TargetUser | null,
   newRole: UserRole,
   adminCount: number,
+  userId: string,
 ): { previousRole: string } {
   if (!target) {
-    throw notFound("User not found");
+    throw new UserNotFoundError(userId);
   }
 
   const previousRole = target.role;
@@ -42,7 +43,7 @@ export function validateRoleChange(
     newRole !== USER_ROLE.ADMIN &&
     adminCount <= 1
   ) {
-    throw conflict("Cannot demote the last admin user");
+    throw new LastAdminError(target.id);
   }
 
   return { previousRole };
@@ -81,7 +82,12 @@ export function createAdminService(deps: {
       input.role !== USER_ROLE.ADMIN;
     const adminCount = needsAdminCount ? await adminRepo.countAdmins(db) : 0;
 
-    const { previousRole } = validateRoleChange(target, input.role, adminCount);
+    const { previousRole } = validateRoleChange(
+      target,
+      input.role,
+      adminCount,
+      input.userId,
+    );
 
     return db.transaction(async (tx) => {
       const row = await adminRepo.updateRole(tx, input.userId, input.role);

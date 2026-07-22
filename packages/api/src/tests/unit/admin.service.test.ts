@@ -3,6 +3,10 @@ import {
   validateRoleChange,
   type TargetUser,
 } from "../../modules/admin/admin.service";
+import {
+  UserNotFoundError,
+  LastAdminError,
+} from "../../modules/admin/admin.errors";
 
 function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
   return { id: "u1", role: "student", ...overrides };
@@ -15,6 +19,7 @@ describe("Admin Service", () => {
         makeTarget({ role: "student" }),
         "tutor",
         2,
+        "u1",
       );
       expect(result.previousRole).toBe("student");
     });
@@ -24,6 +29,7 @@ describe("Admin Service", () => {
         makeTarget({ role: "tutor" }),
         "student",
         2,
+        "u1",
       );
       expect(result.previousRole).toBe("tutor");
     });
@@ -33,18 +39,21 @@ describe("Admin Service", () => {
         makeTarget({ role: "admin" }),
         "admin",
         1,
+        "u1",
       );
       expect(result.previousRole).toBe("admin");
     });
 
-    test("throws NOT_FOUND for null target", () => {
-      expect(() => validateRoleChange(null, "tutor", 2)).toThrow();
+    test("throws UserNotFoundError for null target", () => {
+      expect(() => validateRoleChange(null, "tutor", 2, "u1")).toThrow(
+        UserNotFoundError,
+      );
     });
 
-    test("throws CONFLICT when demoting last admin", () => {
+    test("throws LastAdminError when demoting last admin", () => {
       expect(() =>
-        validateRoleChange(makeTarget({ role: "admin" }), "student", 1),
-      ).toThrow();
+        validateRoleChange(makeTarget({ role: "admin" }), "student", 1, "u1"),
+      ).toThrow(LastAdminError);
     });
 
     test("returns previousRole when demoting admin with other admins present", () => {
@@ -52,6 +61,7 @@ describe("Admin Service", () => {
         makeTarget({ role: "admin" }),
         "student",
         3,
+        "u1",
       );
       expect(result.previousRole).toBe("admin");
     });

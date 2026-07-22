@@ -1,4 +1,9 @@
 import { describe, test, expect, mock } from "bun:test";
+import {
+  InviteNotFoundError,
+  InviteEmailMismatchError,
+  ProfileAlreadyExistsError,
+} from "../../modules/invite/invite.errors";
 
 function makeInviteRepo(overrides: Record<string, unknown> = {}) {
   return {
@@ -48,7 +53,7 @@ function makeValidInvite() {
 
 describe("InviteHandler", () => {
   describe("claim", () => {
-    test("throws notFound when updateInviteStatus returns empty array (race condition)", async () => {
+    test("throws InviteNotFoundError when updateInviteStatus returns empty array (race condition)", async () => {
       const { createInviteService } =
         await import("../../modules/invite/invite.service");
       const validInvite = makeValidInvite();
@@ -63,15 +68,12 @@ describe("InviteHandler", () => {
         db: makeDb(),
       });
 
-      try {
-        await service.claim("user1", "tutor@example.com", "tok1");
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e.message).toContain("not found");
-      }
+      await expect(
+        service.claim("user1", "tutor@example.com", "tok1"),
+      ).rejects.toThrow(InviteNotFoundError);
     });
 
-    test("throws notFound when invite is null", async () => {
+    test("throws InviteNotFoundError when invite is null", async () => {
       const { createInviteService } =
         await import("../../modules/invite/invite.service");
       const inviteRepo = makeInviteRepo({
@@ -84,15 +86,12 @@ describe("InviteHandler", () => {
         db: makeDb(),
       });
 
-      try {
-        await service.claim("user1", "tutor@example.com", "tok1");
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e.message).toContain("not found");
-      }
+      await expect(
+        service.claim("user1", "tutor@example.com", "tok1"),
+      ).rejects.toThrow(InviteNotFoundError);
     });
 
-    test("throws forbidden when email does not match", async () => {
+    test("throws InviteEmailMismatchError when email does not match", async () => {
       const { createInviteService } =
         await import("../../modules/invite/invite.service");
       const invite = makeValidInvite();
@@ -106,15 +105,12 @@ describe("InviteHandler", () => {
         db: makeDb(),
       });
 
-      try {
-        await service.claim("user1", "other@example.com", "tok1");
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e.message).toContain("different email");
-      }
+      await expect(
+        service.claim("user1", "other@example.com", "tok1"),
+      ).rejects.toThrow(InviteEmailMismatchError);
     });
 
-    test("throws conflict when user already has a tutor profile", async () => {
+    test("throws ProfileAlreadyExistsError when user already has a tutor profile", async () => {
       const { createInviteService } =
         await import("../../modules/invite/invite.service");
       const invite = makeValidInvite();
@@ -130,12 +126,9 @@ describe("InviteHandler", () => {
         db: makeDb(),
       });
 
-      try {
-        await service.claim("user1", "tutor@example.com", "tok1");
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e.message).toContain("already have a tutor profile");
-      }
+      await expect(
+        service.claim("user1", "tutor@example.com", "tok1"),
+      ).rejects.toThrow(ProfileAlreadyExistsError);
     });
 
     test("successfully claims invite", async () => {

@@ -1,7 +1,7 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { internalServerError } from "../../lib/errors";
+import { withDomainMap } from "../../lib/handler-utils";
+import { mapAdminError } from "./admin.errors";
 import type {
   AdminService,
   ListUsersInput,
@@ -25,12 +25,10 @@ export function createAdminHandler(adminService: AdminService) {
       context: Context;
       input: ListUsersInputZod;
     }) => {
-      try {
-        return adminService.listUsers(input ?? {});
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list users", err);
-      }
+      return withDomainMap(
+        () => adminService.listUsers(input ?? {}),
+        mapAdminError,
+      );
     },
 
     setRole: async ({
@@ -40,12 +38,10 @@ export function createAdminHandler(adminService: AdminService) {
       context: Context;
       input: SetRoleInputZod;
     }) => {
-      try {
-        return adminService.setRole(context.session!.user.id, input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to set user role", err);
-      }
+      return withDomainMap(
+        () => adminService.setRole(context.session!.user.id, input),
+        mapAdminError,
+      );
     },
   };
 }

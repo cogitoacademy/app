@@ -6,6 +6,10 @@ import {
   validateDelete,
 } from "../../modules/achievement/achievement.service";
 import { ACHIEVEMENT_STATUS } from "../../shared/constants";
+import {
+  AchievementNotFoundError,
+  AchievementNotEditableError,
+} from "../../modules/achievement/achievement.errors";
 
 function makeDb() {
   return {
@@ -253,7 +257,7 @@ describe("AchievementService", () => {
       expect(result.id).toBe("a1");
     });
 
-    test("throws when achievement not found", async () => {
+    test("throws AchievementNotEditableError when achievement not found", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => undefined),
       });
@@ -267,11 +271,11 @@ describe("AchievementService", () => {
         await service.update("u1", { id: "a1", data: { eventName: "X" } });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
+        expect(e).toBeInstanceOf(AchievementNotEditableError);
       }
     });
 
-    test("throws when achievement status is not pending", async () => {
+    test("throws AchievementNotEditableError when achievement status is not pending", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => ({
           id: "a1",
@@ -289,7 +293,7 @@ describe("AchievementService", () => {
         await service.update("u1", { id: "a1", data: { eventName: "X" } });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
+        expect(e).toBeInstanceOf(AchievementNotEditableError);
       }
     });
   });
@@ -319,7 +323,7 @@ describe("AchievementService", () => {
       );
     });
 
-    test("throws when achievement not found", async () => {
+    test("throws AchievementNotEditableError when achievement not found", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => undefined),
       });
@@ -333,11 +337,11 @@ describe("AchievementService", () => {
         await service.remove("u1", "a1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
+        expect(e).toBeInstanceOf(AchievementNotEditableError);
       }
     });
 
-    test("throws when achievement status is not pending", async () => {
+    test("throws AchievementNotEditableError when achievement status is not pending", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => ({
           id: "a1",
@@ -355,7 +359,7 @@ describe("AchievementService", () => {
         await service.remove("u1", "a1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
+        expect(e).toBeInstanceOf(AchievementNotEditableError);
       }
     });
   });
@@ -401,7 +405,7 @@ describe("AchievementService", () => {
   });
 
   describe("adminReview", () => {
-    test("throws notFound when achievement does not exist", async () => {
+    test("throws AchievementNotFoundError when achievement does not exist", async () => {
       const repo = makeAchievementRepo({
         getById: mock(async () => undefined),
       });
@@ -418,7 +422,7 @@ describe("AchievementService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("NOT_FOUND");
+        expect(e).toBeInstanceOf(AchievementNotFoundError);
       }
     });
 
@@ -492,26 +496,28 @@ describe("AchievementService validation", () => {
       ).not.toThrow();
     });
 
-    test("throws when achievement is undefined", () => {
-      expect(() => validateUpdate(undefined)).toThrow();
+    test("throws AchievementNotEditableError when achievement is undefined", () => {
+      expect(() => validateUpdate(undefined)).toThrow(
+        AchievementNotEditableError,
+      );
     });
 
-    test("throws for approved achievement", () => {
+    test("throws AchievementNotEditableError for approved achievement", () => {
       expect(() =>
         validateUpdate({
           id: "a1",
           status: ACHIEVEMENT_STATUS.APPROVED,
         } as any),
-      ).toThrow();
+      ).toThrow(AchievementNotEditableError);
     });
 
-    test("throws for rejected achievement", () => {
+    test("throws AchievementNotEditableError for rejected achievement", () => {
       expect(() =>
         validateUpdate({
           id: "a1",
           status: ACHIEVEMENT_STATUS.REJECTED,
         } as any),
-      ).toThrow();
+      ).toThrow(AchievementNotEditableError);
     });
   });
 
@@ -526,26 +532,28 @@ describe("AchievementService validation", () => {
       ).not.toThrow();
     });
 
-    test("throws when achievement is undefined", () => {
-      expect(() => validateDelete(undefined)).toThrow();
+    test("throws AchievementNotEditableError when achievement is undefined", () => {
+      expect(() => validateDelete(undefined)).toThrow(
+        AchievementNotEditableError,
+      );
     });
 
-    test("throws for draft achievement", () => {
+    test("throws AchievementNotEditableError for draft achievement", () => {
       expect(() =>
         validateDelete({
           id: "a1",
           status: ACHIEVEMENT_STATUS.DRAFT,
         } as any),
-      ).toThrow();
+      ).toThrow(AchievementNotEditableError);
     });
 
-    test("throws for archived achievement", () => {
+    test("throws AchievementNotEditableError for archived achievement", () => {
       expect(() =>
         validateDelete({
           id: "a1",
           status: ACHIEVEMENT_STATUS.ARCHIVED,
         } as any),
-      ).toThrow();
+      ).toThrow(AchievementNotEditableError);
     });
   });
 });
