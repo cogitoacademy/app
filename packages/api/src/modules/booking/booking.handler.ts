@@ -1,7 +1,7 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { internalServerError } from "../../lib/errors";
+import { withDomainMap } from "../../lib/handler-utils";
+import { mapBookingError } from "./booking.errors";
 import type {
   createSoloInput,
   createGroupInput,
@@ -45,19 +45,14 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: CreateSoloInput;
     }) => {
-      try {
-        return booking.createSolo(context.session!.user.id, {
-          tutorId: input.tutorId,
-          availabilitySlotId: input.availabilitySlotId,
-          modality: input.modality,
-          scheduledStartAt: input.scheduledStartAt,
-          scheduledEndAt: input.scheduledEndAt,
-          timezone: input.timezone,
-        });
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to create solo booking", err);
-      }
+      return withDomainMap(() => booking.createSolo(context.session!.user.id, {
+        tutorId: input.tutorId,
+        availabilitySlotId: input.availabilitySlotId,
+        modality: input.modality,
+        scheduledStartAt: input.scheduledStartAt,
+        scheduledEndAt: input.scheduledEndAt,
+        timezone: input.timezone,
+      }), mapBookingError);
     },
 
     get: async ({
@@ -67,12 +62,7 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: GetBookingInput;
     }) => {
-      try {
-        return booking.getById(input.bookingId);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to fetch booking", err);
-      }
+      return withDomainMap(() => booking.getById(input.bookingId), mapBookingError);
     },
 
     listMine: async ({
@@ -82,12 +72,7 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ListMineInput;
     }) => {
-      try {
-        return booking.listMine(context.session!.user.id, input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list bookings", err);
-      }
+      return withDomainMap(() => booking.listMine(context.session!.user.id, input), mapBookingError);
     },
 
     cancel: async ({
@@ -97,16 +82,11 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: BookingActionInput & { cancellationReason?: string };
     }) => {
-      try {
-        return booking.cancel(
-          context.session!.user.id,
-          input.bookingId,
-          input.cancellationReason,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to cancel booking", err);
-      }
+      return withDomainMap(() => booking.cancel(
+        context.session!.user.id,
+        input.bookingId,
+        input.cancellationReason,
+      ), mapBookingError);
     },
 
     proposeReschedule: async ({
@@ -116,18 +96,13 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ProposeRescheduleInput;
     }) => {
-      try {
-        return booking.proposeReschedule(
-          context.session!.user.id,
-          input.bookingId,
-          input.proposedStartAt,
-          input.proposedEndAt,
-          input.reason,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to propose reschedule", err);
-      }
+      return withDomainMap(() => booking.proposeReschedule(
+        context.session!.user.id,
+        input.bookingId,
+        input.proposedStartAt,
+        input.proposedEndAt,
+        input.reason,
+      ), mapBookingError);
     },
 
     createGroup: async ({
@@ -137,21 +112,16 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: CreateGroupInput;
     }) => {
-      try {
-        return booking.createGroup(context.session!.user.id, {
-          tutorId: input.tutorId,
-          availabilitySlotId: input.availabilitySlotId,
-          modality: input.modality,
-          targetGroupSize: input.targetGroupSize,
-          inviteeUserIds: input.inviteeUserIds,
-          scheduledStartAt: input.scheduledStartAt,
-          scheduledEndAt: input.scheduledEndAt,
-          timezone: input.timezone,
-        });
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to create group booking", err);
-      }
+      return withDomainMap(() => booking.createGroup(context.session!.user.id, {
+        tutorId: input.tutorId,
+        availabilitySlotId: input.availabilitySlotId,
+        modality: input.modality,
+        targetGroupSize: input.targetGroupSize,
+        inviteeUserIds: input.inviteeUserIds,
+        scheduledStartAt: input.scheduledStartAt,
+        scheduledEndAt: input.scheduledEndAt,
+        timezone: input.timezone,
+      }), mapBookingError);
     },
 
     createSeries: async ({
@@ -161,18 +131,13 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: CreateSeriesInput;
     }) => {
-      try {
-        return booking.createSeries(context.session!.user.id, {
-          tutorId: input.tutorId,
-          availabilitySlotId: input.availabilitySlotId,
-          modality: input.modality,
-          sessions: input.sessions,
-          timezone: input.timezone,
-        });
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to create booking series", err);
-      }
+      return withDomainMap(() => booking.createSeries(context.session!.user.id, {
+        tutorId: input.tutorId,
+        availabilitySlotId: input.availabilitySlotId,
+        modality: input.modality,
+        sessions: input.sessions,
+        timezone: input.timezone,
+      }), mapBookingError);
     },
 
     confirmInvite: async ({
@@ -182,12 +147,7 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ConfirmInviteInput;
     }) => {
-      try {
-        return booking.confirmInvite(context.session!.user.id, input.bookingId);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to confirm invite", err);
-      }
+      return withDomainMap(() => booking.confirmInvite(context.session!.user.id, input.bookingId), mapBookingError);
     },
 
     declineInvite: async ({
@@ -197,16 +157,11 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: DeclineInviteInput;
     }) => {
-      try {
-        return booking.declineInvite(
-          context.session!.user.id,
-          input.bookingId,
-          input.reason,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to decline invite", err);
-      }
+      return withDomainMap(() => booking.declineInvite(
+        context.session!.user.id,
+        input.bookingId,
+        input.reason,
+      ), mapBookingError);
     },
 
     reconfirm: async ({
@@ -216,16 +171,11 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ReconfirmInput;
     }) => {
-      try {
-        return booking.reconfirm(
-          context.session!.user.id,
-          input.bookingId,
-          input.accept,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to reconfirm booking", err);
-      }
+      return withDomainMap(() => booking.reconfirm(
+        context.session!.user.id,
+        input.bookingId,
+        input.accept,
+      ), mapBookingError);
     },
 
     withdraw: async ({
@@ -235,16 +185,11 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: WithdrawInput;
     }) => {
-      try {
-        return booking.withdraw(
-          context.session!.user.id,
-          input.bookingId,
-          input.reason,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to withdraw from booking", err);
-      }
+      return withDomainMap(() => booking.withdraw(
+        context.session!.user.id,
+        input.bookingId,
+        input.reason,
+      ), mapBookingError);
     },
 
     listSessions: async ({
@@ -254,12 +199,7 @@ export function createBookingHandler(booking: BookingService) {
       context: Context;
       input: ListSessionsInput;
     }) => {
-      try {
-        return booking.listSessions(input.bookingId);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list sessions", err);
-      }
+      return withDomainMap(() => booking.listSessions(input.bookingId), mapBookingError);
     },
   };
 }
@@ -273,12 +213,7 @@ export function createTutorActionsHandler(booking: BookingService) {
       context: Context;
       input: BookingActionInput;
     }) => {
-      try {
-        return booking.tutorAccept(input.bookingId, context.session!.user.id);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to accept booking", err);
-      }
+      return withDomainMap(() => booking.tutorAccept(input.bookingId, context.session!.user.id), mapBookingError);
     },
 
     declineBooking: async ({
@@ -288,16 +223,11 @@ export function createTutorActionsHandler(booking: BookingService) {
       context: Context;
       input: BookingActionInput & { reason?: string };
     }) => {
-      try {
-        return booking.tutorDecline(
-          input.bookingId,
-          context.session!.user.id,
-          input.reason,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to decline booking", err);
-      }
+      return withDomainMap(() => booking.tutorDecline(
+        input.bookingId,
+        context.session!.user.id,
+        input.reason,
+      ), mapBookingError);
     },
 
     completeSession: async ({
@@ -307,16 +237,11 @@ export function createTutorActionsHandler(booking: BookingService) {
       context: Context;
       input: CompleteSessionInput;
     }) => {
-      try {
-        return booking.completeSession(
-          input.bookingId,
-          context.session!.user.id,
-          input.sessionNote,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to complete session", err);
-      }
+      return withDomainMap(() => booking.completeSession(
+        input.bookingId,
+        context.session!.user.id,
+        input.sessionNote,
+      ), mapBookingError);
     },
   };
 }

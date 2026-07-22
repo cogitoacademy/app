@@ -1,5 +1,21 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createBookingService } from "../../modules/booking/booking.service";
+import {
+  BookingNotFoundError,
+  BookingNotOwnedError,
+  BookingConflictError,
+  BookingStateTransitionError,
+  BookingNotEditableError,
+  InsufficientMarksError,
+  BookingNotAwaitingConfirmationError,
+  BookingNotAwaitingReconfirmationError,
+  BookingNotAwaitingReviewError,
+  BookingSeriesSizeError,
+  BookingParticipantNotFoundError,
+  BookingParticipantAlreadyConfirmedError,
+  BookingHoldExpiredError,
+  BookingCancelledError,
+} from "../../modules/booking/booking.errors";
 
 function makeDb() {
   return {
@@ -217,13 +233,13 @@ describe("BookingService", () => {
       expect(result).toEqual(booking);
     });
 
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingWithParticipants: mock(async () => null) },
       });
 
       await expect(service.getById("nonexistent")).rejects.toThrow(
-        "Booking not found",
+        BookingNotFoundError,
       );
     });
   });
@@ -294,17 +310,17 @@ describe("BookingService", () => {
       timezone: "Asia/Jakarta",
     };
 
-    test("throws notFound when tutor profile not found", async () => {
+    test("throws BookingNotFoundError when tutor profile not found", async () => {
       const { service } = createService({
         repo: { findTutorProfile: mock(async () => null) },
       });
 
       await expect(service.createSolo("student1", soloInput)).rejects.toThrow(
-        "Tutor profile not found",
+        BookingNotFoundError,
       );
     });
 
-    test("throws badRequest when availability slot not found", async () => {
+    test("throws BookingNotEditableError when availability slot not found", async () => {
       const { service } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
@@ -313,11 +329,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.createSolo("student1", soloInput)).rejects.toThrow(
-        "Selected availability slot is not available",
+        BookingNotEditableError,
       );
     });
 
-    test("throws badRequest when tutor does not support offline sessions", async () => {
+    test("throws BookingNotEditableError when tutor does not support offline sessions", async () => {
       const { service } = createService({
         repo: {
           findTutorProfile: mock(async () =>
@@ -330,10 +346,10 @@ describe("BookingService", () => {
 
       await expect(
         service.createSolo("student1", { ...soloInput, modality: "offline" }),
-      ).rejects.toThrow("Tutor does not support offline sessions");
+      ).rejects.toThrow(BookingNotEditableError);
     });
 
-    test("throws badRequest when tutor does not support online sessions", async () => {
+    test("throws BookingNotEditableError when tutor does not support online sessions", async () => {
       const { service } = createService({
         repo: {
           findTutorProfile: mock(async () =>
@@ -346,10 +362,10 @@ describe("BookingService", () => {
 
       await expect(
         service.createSolo("student1", { ...soloInput, modality: "online" }),
-      ).rejects.toThrow("Tutor does not support online sessions");
+      ).rejects.toThrow(BookingNotEditableError);
     });
 
-    test("throws conflict when tutor has overlapping booking", async () => {
+    test("throws BookingConflictError when tutor has overlapping booking", async () => {
       const { service } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
@@ -359,11 +375,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.createSolo("student1", soloInput)).rejects.toThrow(
-        "Tutor already has a booking at this time",
+        BookingConflictError,
       );
     });
 
-    test("throws conflict when insufficient available marks", async () => {
+    test("throws InsufficientMarksError when insufficient available marks", async () => {
       const { service } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
@@ -382,11 +398,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.createSolo("student1", soloInput)).rejects.toThrow(
-        "Insufficient available Marks",
+        InsufficientMarksError,
       );
     });
 
-    test("throws notFound when wallet not found", async () => {
+    test("throws BookingNotFoundError when wallet not found", async () => {
       const { service } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
@@ -400,7 +416,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.createSolo("student1", soloInput)).rejects.toThrow(
-        "Wallet not found",
+        BookingNotFoundError,
       );
     });
 
@@ -449,13 +465,13 @@ describe("BookingService", () => {
       timezone: "Asia/Jakarta",
     };
 
-    test("throws notFound when tutor profile not found", async () => {
+    test("throws BookingNotFoundError when tutor profile not found", async () => {
       const { service } = createService({
         repo: { findTutorProfile: mock(async () => null) },
       });
 
       await expect(service.createGroup("student1", groupInput)).rejects.toThrow(
-        "Tutor profile not found",
+        BookingNotFoundError,
       );
     });
 
@@ -478,7 +494,7 @@ describe("BookingService", () => {
       expect(notification.write).toHaveBeenCalledTimes(2);
     });
 
-    test("throws conflict when insufficient marks for proposer hold", async () => {
+    test("throws InsufficientMarksError when insufficient marks for proposer hold", async () => {
       const { service } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
@@ -497,7 +513,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.createGroup("student1", groupInput)).rejects.toThrow(
-        "Insufficient available Marks",
+        InsufficientMarksError,
       );
     });
   });
@@ -524,7 +540,7 @@ describe("BookingService", () => {
       timezone: "Asia/Jakarta",
     };
 
-    test("throws badRequest when session count is below minimum", async () => {
+    test("throws BookingSeriesSizeError when session count is below minimum", async () => {
       const { service } = createService({
         repo: { findTutorProfile: mock(async () => makeTutorProfile()) },
       });
@@ -534,10 +550,10 @@ describe("BookingService", () => {
           ...seriesInput,
           sessions: [seriesInput.sessions[0]],
         }),
-      ).rejects.toThrow("Series must have 2-4 sessions");
+      ).rejects.toThrow(BookingSeriesSizeError);
     });
 
-    test("throws badRequest when session count exceeds maximum", async () => {
+    test("throws BookingSeriesSizeError when session count exceeds maximum", async () => {
       const { service } = createService({
         repo: { findTutorProfile: mock(async () => makeTutorProfile()) },
       });
@@ -554,7 +570,7 @@ describe("BookingService", () => {
             ),
           })),
         }),
-      ).rejects.toThrow("Series must have 2-4 sessions");
+      ).rejects.toThrow(BookingSeriesSizeError);
     });
 
     test("creates series booking with sessions", async () => {
@@ -578,7 +594,7 @@ describe("BookingService", () => {
       expect(repo.insertStateHistory).toHaveBeenCalledTimes(1);
     });
 
-    test("throws conflict when overlapping booking exists for a session", async () => {
+    test("throws BookingConflictError when overlapping booking exists for a session", async () => {
       const { service } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
@@ -589,12 +605,12 @@ describe("BookingService", () => {
 
       await expect(
         service.createSeries("student1", seriesInput),
-      ).rejects.toThrow("Tutor already has a booking at this time");
+      ).rejects.toThrow(BookingConflictError);
     });
   });
 
   describe("cancel", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () => null),
@@ -603,11 +619,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.cancel("student1", "nonexistent")).rejects.toThrow(
-        "Booking not found",
+        BookingNotFoundError,
       );
     });
 
-    test("throws forbidden when user has no access", async () => {
+    test("throws BookingNotOwnedError when user has no access", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -618,11 +634,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.cancel("student1", "b1")).rejects.toThrow(
-        "You do not have access",
+        BookingNotOwnedError,
       );
     });
 
-    test("throws conflict when booking is already terminal", async () => {
+    test("throws BookingStateTransitionError when booking is already terminal", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -633,7 +649,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.cancel("student1", "b1")).rejects.toThrow(
-        "already in a terminal state",
+        BookingStateTransitionError,
       );
     });
 
@@ -713,17 +729,17 @@ describe("BookingService", () => {
   });
 
   describe("tutorAccept", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingById: mock(async () => null) },
       });
 
       await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
-        "Booking not found",
+        BookingNotFoundError,
       );
     });
 
-    test("throws forbidden when tutor does not own the booking", async () => {
+    test("throws BookingNotOwnedError when tutor does not own the booking", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -733,11 +749,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
-        "Not your booking",
+        BookingNotOwnedError,
       );
     });
 
-    test("throws conflict when booking is not awaiting_tutor_review", async () => {
+    test("throws BookingNotAwaitingReviewError when booking is not awaiting_tutor_review", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -747,7 +763,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
-        "not awaiting tutor review",
+        BookingNotAwaitingReviewError,
       );
     });
 
@@ -814,12 +830,12 @@ describe("BookingService", () => {
       });
 
       await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
-        "Cannot transition",
+        BookingStateTransitionError,
       );
       expect(meeting.createEvent).not.toHaveBeenCalled();
     });
 
-    test("throws serviceUnavailable when meeting creation fails for online booking", async () => {
+    test("throws BookingHoldExpiredError when meeting creation fails for online booking", async () => {
       const booking = makeBooking({ modality: "online" });
       let findCallCount = 0;
       const { service } = createService({
@@ -851,23 +867,23 @@ describe("BookingService", () => {
       });
 
       await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
-        "Meeting creation failed; booking was still accepted",
+        BookingHoldExpiredError,
       );
     });
   });
 
   describe("tutorDecline", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingById: mock(async () => null) },
       });
 
       await expect(service.tutorDecline("b1", "tutor1")).rejects.toThrow(
-        "Booking not found",
+        BookingNotFoundError,
       );
     });
 
-    test("throws forbidden when tutor does not own the booking", async () => {
+    test("throws BookingNotOwnedError when tutor does not own the booking", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -877,7 +893,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.tutorDecline("b1", "tutor1")).rejects.toThrow(
-        "Not your booking",
+        BookingNotOwnedError,
       );
     });
 
@@ -926,17 +942,17 @@ describe("BookingService", () => {
   });
 
   describe("completeSession", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingById: mock(async () => null) },
       });
 
       await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
-        "Booking not found",
+        BookingNotFoundError,
       );
     });
 
-    test("throws forbidden when not the tutor", async () => {
+    test("throws BookingNotOwnedError when not the tutor", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () => makeBooking({ tutorId: "other" })),
@@ -944,11 +960,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
-        "Not your booking",
+        BookingNotOwnedError,
       );
     });
 
-    test("throws badRequest for series bookings", async () => {
+    test("throws BookingNotEditableError for series bookings", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () => makeBooking({ type: "series" })),
@@ -956,11 +972,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
-        "Series bookings must be completed per session",
+        BookingNotEditableError,
       );
     });
 
-    test("throws conflict when not in scheduled state", async () => {
+    test("throws BookingStateTransitionError when not in scheduled state", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -970,7 +986,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
-        "Only scheduled bookings can be completed",
+        BookingStateTransitionError,
       );
     });
 
@@ -1010,17 +1026,17 @@ describe("BookingService", () => {
   });
 
   describe("confirmInvite", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingById: mock(async () => null) },
       });
 
       await expect(service.confirmInvite("student2", "b1")).rejects.toThrow(
-        "Booking not found",
+        BookingNotFoundError,
       );
     });
 
-    test("throws conflict when booking is not awaiting participant confirmation", async () => {
+    test("throws BookingNotAwaitingConfirmationError when booking is not awaiting participant confirmation", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1030,11 +1046,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.confirmInvite("student2", "b1")).rejects.toThrow(
-        "not awaiting participant confirmation",
+        BookingNotAwaitingConfirmationError,
       );
     });
 
-    test("throws forbidden when user is not a participant", async () => {
+    test("throws BookingNotOwnedError when user is not a participant", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1045,11 +1061,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.confirmInvite("student2", "b1")).rejects.toThrow(
-        "You are not a participant",
+        BookingNotOwnedError,
       );
     });
 
-    test("throws badRequest when user is not an invitee", async () => {
+    test("throws BookingNotEditableError when user is not an invitee", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1062,11 +1078,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.confirmInvite("student1", "b1")).rejects.toThrow(
-        "Only invitees confirm",
+        BookingNotEditableError,
       );
     });
 
-    test("throws conflict when invite already confirmed or declined", async () => {
+    test("throws BookingParticipantAlreadyConfirmedError when invite already confirmed or declined", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1082,7 +1098,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.confirmInvite("student2", "b1")).rejects.toThrow(
-        "Invite already confirmed or declined",
+        BookingParticipantAlreadyConfirmedError,
       );
     });
 
@@ -1194,7 +1210,7 @@ describe("BookingService", () => {
       });
     });
 
-    test("throws badRequest when user is not an invitee", async () => {
+    test("throws BookingNotEditableError when user is not an invitee", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1207,13 +1223,13 @@ describe("BookingService", () => {
       });
 
       await expect(service.declineInvite("student1", "b1")).rejects.toThrow(
-        "Only invitees decline",
+        BookingNotEditableError,
       );
     });
   });
 
   describe("reconfirm", () => {
-    test("throws conflict when booking is not awaiting reconfirmation", async () => {
+    test("throws BookingNotAwaitingReconfirmationError when booking is not awaiting reconfirmation", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1224,7 +1240,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.reconfirm("student1", "b1", true)).rejects.toThrow(
-        "not awaiting reconfirmation",
+        BookingNotAwaitingReconfirmationError,
       );
     });
 
@@ -1283,7 +1299,7 @@ describe("BookingService", () => {
   });
 
   describe("withdraw", () => {
-    test("throws forbidden when user is not a participant", async () => {
+    test("throws BookingParticipantNotFoundError when user is not a participant", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () => makeBooking()),
@@ -1292,11 +1308,11 @@ describe("BookingService", () => {
       });
 
       await expect(service.withdraw("student1", "b1")).rejects.toThrow(
-        "You are not a participant",
+        BookingParticipantNotFoundError,
       );
     });
 
-    test("throws conflict when booking is already terminal", async () => {
+    test("throws BookingCancelledError when booking is already terminal", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1307,7 +1323,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.withdraw("student1", "b1")).rejects.toThrow(
-        "already terminal",
+        BookingCancelledError,
       );
     });
 
@@ -1389,7 +1405,7 @@ describe("BookingService", () => {
   });
 
   describe("proposeReschedule", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () => null),
@@ -1402,7 +1418,7 @@ describe("BookingService", () => {
 
       await expect(
         service.proposeReschedule("student1", "nonexistent", start, end),
-      ).rejects.toThrow("Booking not found");
+      ).rejects.toThrow(BookingNotFoundError);
     });
 
     test("proposes reschedule successfully", async () => {
@@ -1446,17 +1462,17 @@ describe("BookingService", () => {
   });
 
   describe("listSessions", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingById: mock(async () => null) },
       });
 
       await expect(service.listSessions("nonexistent")).rejects.toThrow(
-        "Booking not found",
+        BookingNotFoundError,
       );
     });
 
-    test("throws badRequest when booking is not a series", async () => {
+    test("throws BookingNotEditableError when booking is not a series", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () => makeBooking({ type: "solo" })),
@@ -1464,7 +1480,7 @@ describe("BookingService", () => {
       });
 
       await expect(service.listSessions("b1")).rejects.toThrow(
-        "Booking is not a series",
+        BookingNotEditableError,
       );
     });
 
@@ -1592,7 +1608,7 @@ describe("BookingService", () => {
   });
 
   describe("transition", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingById: mock(async () => null) },
       });
@@ -1602,10 +1618,10 @@ describe("BookingService", () => {
           actorId: "tutor1",
           actorType: "tutor",
         }),
-      ).rejects.toThrow("Booking not found");
+      ).rejects.toThrow(BookingNotFoundError);
     });
 
-    test("throws conflict when transition is invalid", async () => {
+    test("throws BookingStateTransitionError when transition is invalid", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1619,10 +1635,10 @@ describe("BookingService", () => {
           actorId: "tutor1",
           actorType: "tutor",
         }),
-      ).rejects.toThrow("Cannot transition");
+      ).rejects.toThrow(BookingStateTransitionError);
     });
 
-    test("throws conflict when versioned update fails", async () => {
+    test("throws BookingStateTransitionError when versioned update fails", async () => {
       const { service } = createService({
         repo: {
           findBookingById: mock(async () =>
@@ -1637,7 +1653,7 @@ describe("BookingService", () => {
           actorId: "tutor1",
           actorType: "tutor",
         }),
-      ).rejects.toThrow("Booking was modified by another request");
+      ).rejects.toThrow(BookingStateTransitionError);
     });
   });
 });

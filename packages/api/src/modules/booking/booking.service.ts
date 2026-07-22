@@ -17,12 +17,21 @@ import {
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import {
-  notFound,
-  conflict,
-  forbidden,
-  badRequest,
-  serviceUnavailable,
-} from "../../lib/errors";
+  BookingNotFoundError,
+  BookingNotOwnedError,
+  BookingConflictError,
+  BookingStateTransitionError,
+  BookingNotEditableError,
+  InsufficientMarksError,
+  BookingNotAwaitingConfirmationError,
+  BookingNotAwaitingReconfirmationError,
+  BookingNotAwaitingReviewError,
+  BookingSeriesSizeError,
+  BookingParticipantNotFoundError,
+  BookingParticipantAlreadyConfirmedError,
+  BookingHoldExpiredError,
+  BookingCancelledError,
+} from "./booking.errors";
 import { log } from "../../lib/logger";
 import {
   BOOKING_STATE,
@@ -96,11 +105,11 @@ export function createBookingService(deps: {
     bookingId: string,
   ) {
     const b = await repo.findBookingById(conn, bookingId);
-    if (!b) throw notFound("Booking not found");
+    if (!b) throw new BookingNotFoundError(bookingId);
     if (b.proposerId !== userId) {
       const participant = await repo.findParticipant(conn, bookingId, userId);
       if (!participant) {
-        throw forbidden("You do not have access to this booking");
+        throw new BookingNotOwnedError(bookingId, userId);
       }
     }
     return b;
@@ -130,13 +139,11 @@ export function createBookingService(deps: {
     },
   ) {
     const b = await repo.findBookingById(conn, bookingId);
-    if (!b) throw notFound("Booking not found");
+    if (!b) throw new BookingNotFoundError(bookingId);
     const fromState = b.currentState as BookingState;
 
     if (!canTransition(fromState, toState)) {
-      throw conflict(
-        `Cannot transition booking from ${fromState} to ${toState}`,
-      );
+      throw new BookingStateTransitionError(fromState, "transition", toState);
     }
 
     const versioned = await repo.updateBookingVersioned(
@@ -150,7 +157,7 @@ export function createBookingService(deps: {
       },
     );
     if (!versioned) {
-      throw conflict("Booking was modified by another request. Please retry.");
+      throw new BookingStateTransitionError(fromState, "version_conflict", toState);
     }
 
     await recordTransition(conn, {
@@ -168,7 +175,7 @@ export function createBookingService(deps: {
 
   async function getById(bookingId: string) {
     const b = await repo.findBookingWithParticipants(bookingId);
-    if (!b) throw notFound("Booking not found");
+    if (!b) throw new BookingNotFoundError(bookingId);
     return b;
   }
 
@@ -188,7 +195,7 @@ export function createBookingService(deps: {
 
   async function createSolo(proposerId: string, input: CreateSoloInput) {
     const profile = await repo.findTutorProfile(db, input.tutorId);
-    if (!profile) throw notFound("Tutor profile not found");
+    if (!profile) throw new BookingNotFoundError(input.tutorId);
 
     const slot = await repo.findAvailabilitySlot(
       db,
@@ -196,14 +203,14 @@ export function createBookingService(deps: {
       input.tutorId,
       { futureOnly: true },
     );
-    if (!slot) throw badRequest("Selected availability slot is not available");
+    if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
     const modality = input.modality;
     if (modality === MODALITY.OFFLINE && profile.modality === MODALITY.ONLINE) {
-      throw badRequest("Tutor does not support offline sessions");
+      throw new BookingNotEditableError(input.tutorId);
     }
     if (modality === MODALITY.ONLINE && profile.modality === MODALITY.OFFLINE) {
-      throw badRequest("Tutor does not support online sessions");
+      throw new BookingNotEditableError(input.tutorId);
     }
 
     const overlapping = await repo.findOverlappingBookings(
@@ -214,7 +221,7 @@ export function createBookingService(deps: {
       { excludeStates: [...TERMINAL_STATES] },
     );
     if (overlapping.length > 0) {
-      throw conflict("Tutor already has a booking at this time");
+      throw new BookingConflictError(input.tutorId, input.scheduledStartAt.toISOString(), input.scheduledEndAt.toISOString());
     }
 
     const priceSnapshot = pricing.computeSplit(
@@ -224,9 +231,9 @@ export function createBookingService(deps: {
     const totalMarks = priceSnapshot.baseline;
 
     const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw notFound("Wallet not found");
+    if (!w) throw new BookingNotFoundError(proposerId);
     if (w.availableBalance < totalMarks) {
-      throw conflict("Insufficient available Marks");
+      throw new InsufficientMarksError(totalMarks, w.availableBalance);
     }
 
     const bookingId = crypto.randomUUID();
@@ -313,7 +320,7 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await assertStudentBookingAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
-        throw conflict("Booking is already in a terminal state");
+        throw new BookingStateTransitionError(b.currentState, "cancel", b.currentState);
       }
 
       const now = new Date();
@@ -327,7 +334,7 @@ export function createBookingService(deps: {
 
       if (b.holdAmount > 0) {
         const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw notFound("Wallet not found");
+        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
         await wallet.release(tx, {
           walletId: proposerWallet.id,
           amount: b.holdAmount,
@@ -369,10 +376,10 @@ export function createBookingService(deps: {
   async function tutorAccept(bookingId: string, tutorId: string) {
     const result = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
-      if (!b) throw notFound("Booking not found");
-      if (b.tutorId !== tutorId) throw forbidden("Not your booking");
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.tutorId !== tutorId) throw new BookingNotOwnedError(bookingId, tutorId);
       if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
-        throw conflict("Booking is not awaiting tutor review");
+        throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
       }
 
       const isOffline = b.modality === MODALITY.OFFLINE;
@@ -426,10 +433,7 @@ export function createBookingService(deps: {
           bookingId,
           error: { message: String(error) },
         });
-        throw serviceUnavailable(
-          "Meeting creation failed; booking was still accepted",
-          error,
-        );
+        throw new BookingHoldExpiredError(bookingId);
       }
     }
 
@@ -443,15 +447,15 @@ export function createBookingService(deps: {
   ) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
-      if (!b) throw notFound("Booking not found");
-      if (b.tutorId !== tutorId) throw forbidden("Not your booking");
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.tutorId !== tutorId) throw new BookingNotOwnedError(bookingId, tutorId);
       if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
-        throw conflict("Booking is not awaiting tutor review");
+        throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
       }
 
       if (b.holdAmount > 0) {
         const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw notFound("Wallet not found");
+        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
         await wallet.release(tx, {
           walletId: proposerWallet.id,
           amount: b.holdAmount,
@@ -489,19 +493,19 @@ export function createBookingService(deps: {
     tutorId: string,
     _sessionNote?: string,
   ) {
-    return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
-      if (!b) throw notFound("Booking not found");
-      if (b.tutorId !== tutorId) throw forbidden("Not your booking");
+     return db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.tutorId !== tutorId) throw new BookingNotOwnedError(bookingId, tutorId);
       if (b.type === BOOKING_TYPE.SERIES) {
-        throw badRequest("Series bookings must be completed per session");
+        throw new BookingNotEditableError(bookingId);
       }
       if (b.currentState !== BOOKING_STATE.SCHEDULED) {
-        throw conflict("Only scheduled bookings can be completed");
+        throw new BookingStateTransitionError(b.currentState, "complete", BOOKING_STATE.COMPLETED);
       }
 
       const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-      if (!proposerWallet) throw notFound("Wallet not found");
+      if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
       await wallet.deduct(tx, {
         walletId: proposerWallet.id,
         amount: b.holdAmount,
@@ -544,7 +548,7 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await assertStudentBookingAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
-        throw conflict("Booking is already in a terminal state");
+        throw new BookingStateTransitionError(b.currentState, "reschedule", BOOKING_STATE.RESCHEDULE_PROPOSED);
       }
 
       const updated = await transition(
@@ -584,7 +588,7 @@ export function createBookingService(deps: {
 
   async function createGroup(proposerId: string, input: CreateGroupInput) {
     const profile = await repo.findTutorProfile(db, input.tutorId);
-    if (!profile) throw notFound("Tutor profile not found");
+    if (!profile) throw new BookingNotFoundError(input.tutorId);
 
     const slot = await repo.findAvailabilitySlot(
       db,
@@ -592,7 +596,7 @@ export function createBookingService(deps: {
       input.tutorId,
       { futureOnly: true },
     );
-    if (!slot) throw badRequest("Selected availability slot is not available");
+    if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
     const overlapping = await repo.findOverlappingBookings(
       db,
@@ -602,7 +606,7 @@ export function createBookingService(deps: {
       { excludeStates: [...TERMINAL_STATES] },
     );
     if (overlapping.length > 0) {
-      throw conflict("Tutor already has a booking at this time");
+      throw new BookingConflictError(input.tutorId, input.scheduledStartAt.toISOString(), input.scheduledEndAt.toISOString());
     }
 
     const size = input.targetGroupSize;
@@ -615,9 +619,9 @@ export function createBookingService(deps: {
     const totalMarks = priceSnapshot.baseline;
 
     const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw notFound("Wallet not found");
+    if (!w) throw new BookingNotFoundError(proposerId);
     if (w.availableBalance < totalMarks) {
-      throw conflict("Insufficient available Marks for proposer hold");
+      throw new InsufficientMarksError(totalMarks, w.availableBalance);
     }
 
     const bookingId = crypto.randomUUID();
@@ -698,17 +702,17 @@ export function createBookingService(deps: {
   async function confirmInvite(userId: string, bookingId: string) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
-      if (!b) throw notFound("Booking not found");
+      if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
-        throw conflict("Booking is not awaiting participant confirmation");
+        throw new BookingNotAwaitingConfirmationError(bookingId, b.currentState);
       }
 
       const participant = await repo.findParticipant(tx, bookingId, userId);
-      if (!participant) throw forbidden("You are not a participant");
+      if (!participant) throw new BookingNotOwnedError(bookingId, userId);
       if (participant.role !== "invitee")
-        throw badRequest("Only invitees confirm");
+        throw new BookingNotEditableError(bookingId);
       if (participant.confirmationState !== CONFIRMATION_STATE.PENDING) {
-        throw conflict("Invite already confirmed or declined");
+        throw new BookingParticipantAlreadyConfirmedError(participant.id);
       }
 
       const size = b.targetGroupSize;
@@ -717,9 +721,9 @@ export function createBookingService(deps: {
       const holdAmount = pricePerStudent;
 
       const w = await wallet.getByUserId(tx, userId);
-      if (!w) throw notFound("Wallet not found");
+      if (!w) throw new BookingNotFoundError(userId);
       if (w.availableBalance < holdAmount) {
-        throw conflict("Insufficient available Marks");
+        throw new InsufficientMarksError(holdAmount, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -770,17 +774,17 @@ export function createBookingService(deps: {
   ) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
-      if (!b) throw notFound("Booking not found");
+      if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
-        throw conflict("Booking is not awaiting participant confirmation");
+        throw new BookingNotAwaitingConfirmationError(bookingId, b.currentState);
       }
 
       const participant = await repo.findParticipant(tx, bookingId, userId);
-      if (!participant) throw forbidden("You are not a participant");
+      if (!participant) throw new BookingNotOwnedError(bookingId, userId);
       if (participant.role !== "invitee")
-        throw badRequest("Only invitees decline");
+        throw new BookingNotEditableError(bookingId);
       if (participant.confirmationState !== CONFIRMATION_STATE.PENDING) {
-        throw conflict("Invite already confirmed or declined");
+        throw new BookingParticipantAlreadyConfirmedError(participant.id);
       }
 
       await repo.updateParticipantState(tx, participant.id, {
@@ -796,13 +800,13 @@ export function createBookingService(deps: {
   async function reconfirm(userId: string, bookingId: string, accept: boolean) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
-      if (!b) throw notFound("Booking not found");
+      if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_RECONFIRMATION) {
-        throw conflict("Booking is not awaiting reconfirmation");
+        throw new BookingNotAwaitingReconfirmationError(bookingId, b.currentState);
       }
 
       const participant = await repo.findParticipant(tx, bookingId, userId);
-      if (!participant) throw forbidden("You are not a participant");
+      if (!participant) throw new BookingNotOwnedError(bookingId, userId);
 
       if (accept) {
         await repo.updateParticipantState(tx, participant.id, {
@@ -841,11 +845,11 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await assertStudentBookingAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
-        throw conflict("Booking is already terminal");
+        throw new BookingCancelledError(bookingId);
       }
 
       const participant = await repo.findParticipant(tx, bookingId, userId);
-      if (!participant) throw forbidden("You are not a participant");
+      if (!participant) throw new BookingParticipantNotFoundError(userId);
 
       const now = new Date();
       const h2 = new Date(
@@ -858,7 +862,7 @@ export function createBookingService(deps: {
 
       if (participant.heldAmount > 0) {
         const participantWallet = await wallet.getByUserId(tx, userId);
-        if (!participantWallet) throw notFound("Wallet not found");
+        if (!participantWallet) throw new BookingNotFoundError(userId);
         await wallet.release(tx, {
           walletId: participantWallet.id,
           amount: participant.heldAmount,
@@ -923,15 +927,13 @@ export function createBookingService(deps: {
 
   async function createSeries(proposerId: string, input: CreateSeriesInput) {
     const profile = await repo.findTutorProfile(db, input.tutorId);
-    if (!profile) throw notFound("Tutor profile not found");
+    if (!profile) throw new BookingNotFoundError(input.tutorId);
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
       input.sessions.length > MAX_SERIES_SESSIONS
     ) {
-      throw badRequest(
-        `Series must have ${MIN_SERIES_SESSIONS}-${MAX_SERIES_SESSIONS} sessions`,
-      );
+      throw new BookingSeriesSizeError("", MIN_SERIES_SESSIONS, MAX_SERIES_SESSIONS);
     }
 
     const slot = await repo.findAvailabilitySlot(
@@ -939,7 +941,7 @@ export function createBookingService(deps: {
       input.availabilitySlotId,
       input.tutorId,
     );
-    if (!slot) throw badRequest("Selected availability slot is not available");
+    if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
     for (const session of input.sessions) {
       // eslint-disable-next-line no-await-in-loop
@@ -951,7 +953,7 @@ export function createBookingService(deps: {
         { excludeStates: [...TERMINAL_STATES] },
       );
       if (overlapping.length > 0) {
-        throw conflict("Tutor already has a booking at this time");
+        throw new BookingConflictError(input.tutorId, session.scheduledStartAt.toISOString(), session.scheduledEndAt.toISOString());
       }
     }
 
@@ -962,9 +964,9 @@ export function createBookingService(deps: {
     const totalMarks = perSession * input.sessions.length;
 
     const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw notFound("Wallet not found");
+    if (!w) throw new BookingNotFoundError(proposerId);
     if (w.availableBalance < totalMarks) {
-      throw conflict("Insufficient available Marks for series");
+      throw new InsufficientMarksError(totalMarks, w.availableBalance);
     }
 
     const bookingId = crypto.randomUUID();
@@ -1033,9 +1035,9 @@ export function createBookingService(deps: {
 
   async function listSessions(bookingId: string) {
     const b = await repo.findBookingById(db, bookingId);
-    if (!b) throw notFound("Booking not found");
+    if (!b) throw new BookingNotFoundError(bookingId);
     if (b.type !== BOOKING_TYPE.SERIES)
-      throw badRequest("Booking is not a series");
+      throw new BookingNotEditableError(bookingId);
     return repo.listSessionsBySeriesId(db, bookingId);
   }
 
