@@ -5,7 +5,7 @@ import {
   MAX_PAGE_LIMIT,
   PAYMENT_STATUS,
 } from "../../shared/constants";
-import { TERMINAL_STATES } from "../booking/booking-state.types";
+import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
 import type { DbType } from "../../lib/db";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import type { RefundRepo } from "../refund/refund.repo";
@@ -31,12 +31,12 @@ export const MARKS_ACTIONS = [
 export type MarksAction = (typeof MARKS_ACTIONS)[number];
 
 const CATEGORY_STATE_MAP: Record<OverrideCategory, string> = {
-  tutor_no_show: "no_show",
-  medical_emergency: "cancelled",
-  technical_failure: "cancelled",
-  admin_correction: "cancelled",
-  student_no_show: "no_show",
-  force_cancel: "cancelled",
+  tutor_no_show: BOOKING_STATE.NO_SHOW,
+  medical_emergency: BOOKING_STATE.CANCELLED,
+  technical_failure: BOOKING_STATE.CANCELLED,
+  admin_correction: BOOKING_STATE.CANCELLED,
+  student_no_show: BOOKING_STATE.NO_SHOW,
+  force_cancel: BOOKING_STATE.CANCELLED,
 };
 
 export type AdminBookingService = ReturnType<typeof createAdminBookingService>;

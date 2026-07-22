@@ -1,49 +1,49 @@
-import type { BookingState } from "./booking-state.types";
+import { BOOKING_STATE, type BookingState } from "./booking-state.types";
 
 const TRANSITIONS: Record<
   BookingState,
   { to: BookingState[]; auto?: boolean }
 > = {
-  draft: { to: ["awaiting_marks_hold"] },
-  awaiting_marks_hold: { to: ["awaiting_tutor_review", "expired"] },
-  awaiting_tutor_review: {
+  [BOOKING_STATE.DRAFT]: { to: [BOOKING_STATE.AWAITING_MARKS_HOLD] },
+  [BOOKING_STATE.AWAITING_MARKS_HOLD]: { to: [BOOKING_STATE.AWAITING_TUTOR_REVIEW, BOOKING_STATE.EXPIRED] },
+  [BOOKING_STATE.AWAITING_TUTOR_REVIEW]: {
     to: [
-      "declined",
-      "confirmed",
-      "reschedule_proposed",
-      "expired",
-      "cancelled",
-      "late_cancelled",
+      BOOKING_STATE.DECLINED,
+      BOOKING_STATE.CONFIRMED,
+      BOOKING_STATE.RESCHEDULE_PROPOSED,
+      BOOKING_STATE.EXPIRED,
+      BOOKING_STATE.CANCELLED,
+      BOOKING_STATE.LATE_CANCELLED,
     ],
   },
-  awaiting_participant_confirmation: {
-    to: ["awaiting_reconfirmation", "awaiting_tutor_review", "expired"],
+  [BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION]: {
+    to: [BOOKING_STATE.AWAITING_RECONFIRMATION, BOOKING_STATE.AWAITING_TUTOR_REVIEW, BOOKING_STATE.EXPIRED],
   },
-  awaiting_reconfirmation: {
-    to: ["confirmed", "expired"],
+  [BOOKING_STATE.AWAITING_RECONFIRMATION]: {
+    to: [BOOKING_STATE.CONFIRMED, BOOKING_STATE.EXPIRED],
   },
-  awaiting_admin_room_approval: {
-    to: ["scheduled", "reschedule_proposed", "cancelled"],
+  [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: {
+    to: [BOOKING_STATE.SCHEDULED, BOOKING_STATE.RESCHEDULE_PROPOSED, BOOKING_STATE.CANCELLED],
   },
-  confirmed: {
+  [BOOKING_STATE.CONFIRMED]: {
     to: [
-      "awaiting_admin_room_approval",
-      "scheduled",
-      "cancelled",
-      "late_cancelled",
+      BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+      BOOKING_STATE.SCHEDULED,
+      BOOKING_STATE.CANCELLED,
+      BOOKING_STATE.LATE_CANCELLED,
     ],
   },
-  scheduled: {
-    to: ["completed", "cancelled", "late_cancelled", "no_show"],
+  [BOOKING_STATE.SCHEDULED]: {
+    to: [BOOKING_STATE.COMPLETED, BOOKING_STATE.CANCELLED, BOOKING_STATE.LATE_CANCELLED, BOOKING_STATE.NO_SHOW],
   },
-  completed: { to: [] },
-  declined: { to: [] },
-  cancelled: { to: [] },
-  late_cancelled: { to: [] },
-  no_show: { to: [] },
-  expired: { to: [] },
-  reschedule_proposed: {
-    to: ["awaiting_reconfirmation", "declined"],
+  [BOOKING_STATE.COMPLETED]: { to: [] },
+  [BOOKING_STATE.DECLINED]: { to: [] },
+  [BOOKING_STATE.CANCELLED]: { to: [] },
+  [BOOKING_STATE.LATE_CANCELLED]: { to: [] },
+  [BOOKING_STATE.NO_SHOW]: { to: [] },
+  [BOOKING_STATE.EXPIRED]: { to: [] },
+  [BOOKING_STATE.RESCHEDULE_PROPOSED]: {
+    to: [BOOKING_STATE.AWAITING_RECONFIRMATION, BOOKING_STATE.DECLINED],
   },
 };
 

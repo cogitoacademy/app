@@ -24,7 +24,7 @@ import {
   serviceUnavailable,
 } from "../../lib/errors";
 import { log } from "../../lib/logger";
-import { TERMINAL_STATES, type BookingState } from "./booking-state.types";
+import { BOOKING_STATE, TERMINAL_STATES, type BookingState } from "./booking-state.types";
 import { canTransition } from "./booking-transitions";
 import type { BookingRepo } from "./booking.repo";
 import type {
@@ -247,7 +247,7 @@ export function createBookingService(deps: {
         targetGroupSize: 1,
         minConfirmedHeadcount: 1,
         confirmedHeadcount: 1,
-        currentState: "awaiting_tutor_review",
+        currentState: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
         scheduledStartAt: input.scheduledStartAt,
         scheduledEndAt: input.scheduledEndAt,
         timezone: input.timezone,
@@ -268,7 +268,7 @@ export function createBookingService(deps: {
       await recordTransition(tx, {
         bookingId,
         fromState: null,
-        toState: "awaiting_tutor_review",
+        toState: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
         actorId: proposerId,
         actorType: ACTOR_TYPE.STUDENT,
       });
@@ -281,7 +281,7 @@ export function createBookingService(deps: {
         targetId: bookingId,
         targetType: "booking",
         beforeState: {},
-        afterState: { currentState: "awaiting_tutor_review" },
+        afterState: { currentState: BOOKING_STATE.AWAITING_TUTOR_REVIEW },
         details: { type: BOOKING_TYPE.SOLO, tutorId: input.tutorId, modality },
       });
 
@@ -316,7 +316,7 @@ export function createBookingService(deps: {
         b.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
       const isLate = now > h2;
-      const toState: BookingState = isLate ? "late_cancelled" : "cancelled";
+      const toState: BookingState = isLate ? BOOKING_STATE.LATE_CANCELLED : BOOKING_STATE.CANCELLED;
 
       if (b.holdAmount > 0) {
         const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
@@ -364,14 +364,14 @@ export function createBookingService(deps: {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw notFound("Booking not found");
       if (b.tutorId !== tutorId) throw forbidden("Not your booking");
-      if (b.currentState !== "awaiting_tutor_review") {
+      if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
         throw conflict("Booking is not awaiting tutor review");
       }
 
       const isOffline = b.modality === MODALITY.OFFLINE;
       const toState: BookingState = isOffline
-        ? "awaiting_admin_room_approval"
-        : "confirmed";
+        ? BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
+        : BOOKING_STATE.CONFIRMED;
 
       await transition(tx, bookingId, toState, {
         actorId: tutorId,
@@ -380,7 +380,7 @@ export function createBookingService(deps: {
 
       let updated;
       if (!isOffline) {
-        updated = await transition(tx, bookingId, "scheduled", {
+        updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
           actorId: tutorId,
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Meeting created automatically",
@@ -438,7 +438,7 @@ export function createBookingService(deps: {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw notFound("Booking not found");
       if (b.tutorId !== tutorId) throw forbidden("Not your booking");
-      if (b.currentState !== "awaiting_tutor_review") {
+      if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
         throw conflict("Booking is not awaiting tutor review");
       }
 
@@ -456,7 +456,7 @@ export function createBookingService(deps: {
         });
       }
 
-      const updated = await transition(tx, bookingId, "declined", {
+      const updated = await transition(tx, bookingId, BOOKING_STATE.DECLINED, {
         actorId: tutorId,
         actorType: ACTOR_TYPE.TUTOR,
         reason,
@@ -489,7 +489,7 @@ export function createBookingService(deps: {
       if (b.type === BOOKING_TYPE.SERIES) {
         throw badRequest("Series bookings must be completed per session");
       }
-      if (b.currentState !== "scheduled") {
+      if (b.currentState !== BOOKING_STATE.SCHEDULED) {
         throw conflict("Only scheduled bookings can be completed");
       }
 
@@ -505,7 +505,7 @@ export function createBookingService(deps: {
         reason: "Session completed",
       });
 
-      const updated = await transition(tx, bookingId, "completed", {
+      const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
         actorId: tutorId,
         actorType: ACTOR_TYPE.TUTOR,
       });
@@ -544,7 +544,7 @@ export function createBookingService(deps: {
         throw conflict("Booking is already in a terminal state");
       }
 
-      const updated = await transition(tx, bookingId, "reschedule_proposed", {
+      const updated = await transition(tx, bookingId, BOOKING_STATE.RESCHEDULE_PROPOSED, {
         actorId: userId,
         actorType: ACTOR_TYPE.STUDENT,
         reason,
@@ -634,7 +634,7 @@ export function createBookingService(deps: {
         targetGroupSize: size,
         minConfirmedHeadcount: MIN_GROUP_HEADCOUNT,
         confirmedHeadcount: 1,
-        currentState: "awaiting_participant_confirmation",
+        currentState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
         scheduledStartAt: input.scheduledStartAt,
         scheduledEndAt: input.scheduledEndAt,
         timezone: input.timezone,
@@ -677,7 +677,7 @@ export function createBookingService(deps: {
       await recordTransition(tx, {
         bookingId,
         fromState: null,
-        toState: "awaiting_participant_confirmation",
+        toState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
         actorId: proposerId,
         actorType: ACTOR_TYPE.STUDENT,
       });
@@ -690,7 +690,7 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw notFound("Booking not found");
-      if (b.currentState !== "awaiting_participant_confirmation") {
+      if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
         throw conflict("Booking is not awaiting participant confirmation");
       }
 
@@ -733,7 +733,7 @@ export function createBookingService(deps: {
       await repo.updateBookingConfirmedHeadcount(tx, bookingId, newHeadcount);
 
       if (newHeadcount >= b.targetGroupSize) {
-        await transition(tx, bookingId, "awaiting_tutor_review", {
+        await transition(tx, bookingId, BOOKING_STATE.AWAITING_TUTOR_REVIEW, {
           actorId: userId,
           actorType: ACTOR_TYPE.STUDENT,
           reason: "Full headcount reached",
@@ -762,7 +762,7 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw notFound("Booking not found");
-      if (b.currentState !== "awaiting_participant_confirmation") {
+      if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
         throw conflict("Booking is not awaiting participant confirmation");
       }
 
@@ -788,7 +788,7 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw notFound("Booking not found");
-      if (b.currentState !== "awaiting_reconfirmation") {
+      if (b.currentState !== BOOKING_STATE.AWAITING_RECONFIRMATION) {
         throw conflict("Booking is not awaiting reconfirmation");
       }
 
@@ -811,7 +811,7 @@ export function createBookingService(deps: {
         );
 
         if (reconfirmed.length === confirmedCount.length) {
-          await transition(tx, bookingId, "awaiting_tutor_review", {
+          await transition(tx, bookingId, BOOKING_STATE.AWAITING_TUTOR_REVIEW, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
             reason: "All reconfirmed",
@@ -877,7 +877,7 @@ export function createBookingService(deps: {
         b.type === BOOKING_TYPE.GROUP &&
         remaining.length < MIN_GROUP_HEADCOUNT
       ) {
-        await transition(tx, bookingId, "cancelled", {
+        await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
           actorId: userId,
           actorType: ACTOR_TYPE.STUDENT,
           reason: "Not enough participants after withdrawal",
@@ -885,17 +885,17 @@ export function createBookingService(deps: {
       } else if (!isLate) {
         const currentState = b.currentState as BookingState;
         if (
-          currentState === "awaiting_participant_confirmation" ||
-          currentState === "awaiting_tutor_review" ||
-          currentState === "awaiting_marks_hold"
+          currentState === BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION ||
+          currentState === BOOKING_STATE.AWAITING_TUTOR_REVIEW ||
+          currentState === BOOKING_STATE.AWAITING_MARKS_HOLD
         ) {
-          await transition(tx, bookingId, "awaiting_reconfirmation", {
+          await transition(tx, bookingId, BOOKING_STATE.AWAITING_RECONFIRMATION, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
             reason: "Participant withdrew before H-2",
           });
         } else {
-          await transition(tx, bookingId, "cancelled", {
+          await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
             reason: "Participant withdrew",
@@ -974,7 +974,7 @@ export function createBookingService(deps: {
         targetGroupSize: 1,
         minConfirmedHeadcount: 1,
         confirmedHeadcount: 1,
-        currentState: "awaiting_tutor_review",
+        currentState: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
         scheduledStartAt: input.sessions[0]!.scheduledStartAt,
         scheduledEndAt:
           input.sessions[input.sessions.length - 1]!.scheduledEndAt,
@@ -998,7 +998,7 @@ export function createBookingService(deps: {
           seriesBookingId: bookingId,
           scheduledStartAt: session.scheduledStartAt,
           scheduledEndAt: session.scheduledEndAt,
-          currentState: "scheduled",
+          currentState: BOOKING_STATE.SCHEDULED,
           holdAmount: perSession,
           priceSnapshot,
         });
@@ -1007,7 +1007,7 @@ export function createBookingService(deps: {
       await recordTransition(tx, {
         bookingId,
         fromState: null,
-        toState: "awaiting_tutor_review",
+        toState: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
         actorId: proposerId,
         actorType: ACTOR_TYPE.STUDENT,
       });
@@ -1026,10 +1026,10 @@ export function createBookingService(deps: {
 
   async function expireBookings() {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
-      "awaiting_participant_confirmation",
-      "awaiting_reconfirmation",
-      "awaiting_marks_hold",
-      "awaiting_tutor_review",
+      BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+      BOOKING_STATE.AWAITING_RECONFIRMATION,
+      BOOKING_STATE.AWAITING_MARKS_HOLD,
+      BOOKING_STATE.AWAITING_TUTOR_REVIEW,
     ]);
 
     for (const b of candidates) {
@@ -1050,7 +1050,7 @@ export function createBookingService(deps: {
               });
             }
           }
-          await transition(tx, b.id, "expired", {
+          await transition(tx, b.id, BOOKING_STATE.EXPIRED, {
             actorId: "system",
             actorType: ACTOR_TYPE.SYSTEM,
             reason: "Deadline passed",

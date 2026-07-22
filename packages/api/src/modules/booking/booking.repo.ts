@@ -12,7 +12,7 @@ import {
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { CONFIRMATION_STATE, ONBOARDING_STATUS } from "../../shared/constants";
-import { BOOKING_STATES } from "./booking-state.types";
+import { BOOKING_STATES, TERMINAL_STATES } from "./booking-state.types";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
@@ -248,15 +248,7 @@ async function findOverlappingBookings(
   excludeBookingId?: string,
 ) {
   const activeStates = BOOKING_STATES.filter(
-    (s) =>
-      ![
-        "declined",
-        "cancelled",
-        "late_cancelled",
-        "no_show",
-        "expired",
-        "completed",
-      ].includes(s),
+    (s) => !TERMINAL_STATES.includes(s),
   );
   const conditions = [
     eq(booking.tutorId, tutorId),
