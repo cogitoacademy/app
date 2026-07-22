@@ -205,7 +205,7 @@ describe("achievementHandler", () => {
       expect(result).toEqual([{ id: "a1" }]);
     });
 
-    test("calls achievementService.adminList with empty object when input is undefined", async () => {
+    test("calls achievementService.adminList with undefined when input is undefined", async () => {
       const adminList = mock(async () => []);
       const handler = createAchievementHandler({
         achievementService: { adminList } as any,
@@ -216,7 +216,7 @@ describe("achievementHandler", () => {
 
       await handler.adminList({ context, input: undefined as any });
 
-      expect(adminList).toHaveBeenCalledWith({});
+      expect(adminList).toHaveBeenCalledWith(undefined);
     });
   });
 
