@@ -4,13 +4,9 @@ import {
   forbidden,
   unauthorized,
   conflict,
-  preconditionFailed,
-  unprocessableContent,
   badRequest,
   internalServerError,
   serviceUnavailable,
-  rateLimited,
-  timeout,
 } from "../../lib/errors";
 
 describe("Error helpers", () => {
@@ -44,25 +40,6 @@ describe("Error helpers", () => {
     expect(err.message).toBe("Already exists");
   });
 
-  test("preconditionFailed creates PRECONDITION_FAILED error", () => {
-    const err = preconditionFailed("Version mismatch");
-    expect(err.status).toBe(412);
-    expect(err.message).toBe("Version mismatch");
-  });
-
-  test("unprocessableContent creates UNPROCESSABLE_CONTENT error without field errors", () => {
-    const err = unprocessableContent("Invalid data");
-    expect(err.status).toBe(422);
-    expect(err.message).toBe("Invalid data");
-  });
-
-  test("unprocessableContent creates UNPROCESSABLE_CONTENT error with field errors", () => {
-    const fieldErrors = { email: ["Invalid email"], name: ["Required"] };
-    const err = unprocessableContent("Validation failed", fieldErrors);
-    expect(err.status).toBe(422);
-    expect(err.message).toBe("Validation failed");
-  });
-
   test("badRequest creates BAD_REQUEST error", () => {
     const err = badRequest("Missing parameter");
     expect(err.status).toBe(400);
@@ -93,27 +70,5 @@ describe("Error helpers", () => {
     expect(err.message).toBe("Payment provider down");
   });
 
-  test("rateLimited creates TOO_MANY_REQUESTS with default message", () => {
-    const err = rateLimited();
-    expect(err.status).toBe(429);
-    expect(err.message).toBe("Too many requests");
-  });
 
-  test("rateLimited creates TOO_MANY_REQUESTS with retryAfterMs", () => {
-    const err = rateLimited("Slow down", 5000);
-    expect(err.status).toBe(429);
-    expect(err.message).toBe("Slow down");
-  });
-
-  test("timeout creates TIMEOUT with default message", () => {
-    const err = timeout();
-    expect(err.status).toBe(408);
-    expect(err.message).toBe("Request timed out");
-  });
-
-  test("timeout creates TIMEOUT with custom message", () => {
-    const err = timeout("Payment took too long");
-    expect(err.status).toBe(408);
-    expect(err.message).toBe("Payment took too long");
-  });
 });

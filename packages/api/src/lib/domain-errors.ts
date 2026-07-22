@@ -1,3 +1,7 @@
+/**
+ * Abstract base class for domain-specific errors.
+ * Services throw DomainError subclasses; handlers map them to HTTP responses via withDomainMap.
+ */
 export abstract class DomainError extends Error {
   readonly code: string;
   abstract readonly domain: string;

@@ -31,31 +31,6 @@ export function conflict(
   return new ORPCError("CONFLICT", { message, ...(cause ? { cause } : {}) });
 }
 
-export function preconditionFailed(
-  message: string,
-  cause?: unknown,
-): ORPCError<"PRECONDITION_FAILED", undefined> {
-  return new ORPCError("PRECONDITION_FAILED", {
-    message,
-    ...(cause ? { cause } : {}),
-  });
-}
-
-export function unprocessableContent(
-  message: string,
-  fieldErrors?: Record<string, string[]>,
-  cause?: unknown,
-): ORPCError<
-  "UNPROCESSABLE_CONTENT",
-  { fieldErrors?: Record<string, string[]> }
-> {
-  return new ORPCError("UNPROCESSABLE_CONTENT", {
-    message,
-    data: { fieldErrors },
-    ...(cause ? { cause } : {}),
-  });
-}
-
 export function badRequest(
   message: string,
   cause?: unknown,
@@ -83,21 +58,4 @@ export function serviceUnavailable(
   });
 }
 
-export function rateLimited(
-  message = "Too many requests",
-  retryAfterMs?: number,
-  cause?: unknown,
-): ORPCError<"TOO_MANY_REQUESTS", { retryAfterMs?: number }> {
-  return new ORPCError("TOO_MANY_REQUESTS", {
-    message,
-    data: { retryAfterMs },
-    ...(cause ? { cause } : {}),
-  });
-}
 
-export function timeout(
-  message = "Request timed out",
-  cause?: unknown,
-): ORPCError<"TIMEOUT", undefined> {
-  return new ORPCError("TIMEOUT", { message, ...(cause ? { cause } : {}) });
-}

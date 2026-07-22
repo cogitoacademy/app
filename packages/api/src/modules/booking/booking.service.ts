@@ -157,7 +157,11 @@ export function createBookingService(deps: {
       },
     );
     if (!versioned) {
-      throw new BookingStateTransitionError(fromState, "version_conflict", toState);
+      throw new BookingStateTransitionError(
+        fromState,
+        "version_conflict",
+        toState,
+      );
     }
 
     await recordTransition(conn, {
@@ -221,7 +225,11 @@ export function createBookingService(deps: {
       { excludeStates: [...TERMINAL_STATES] },
     );
     if (overlapping.length > 0) {
-      throw new BookingConflictError(input.tutorId, input.scheduledStartAt.toISOString(), input.scheduledEndAt.toISOString());
+      throw new BookingConflictError(
+        input.tutorId,
+        input.scheduledStartAt.toISOString(),
+        input.scheduledEndAt.toISOString(),
+      );
     }
 
     const priceSnapshot = pricing.computeSplit(
@@ -320,7 +328,11 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await assertStudentBookingAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
-        throw new BookingStateTransitionError(b.currentState, "cancel", b.currentState);
+        throw new BookingStateTransitionError(
+          b.currentState,
+          "cancel",
+          b.currentState,
+        );
       }
 
       const now = new Date();
@@ -377,7 +389,8 @@ export function createBookingService(deps: {
     const result = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
-      if (b.tutorId !== tutorId) throw new BookingNotOwnedError(bookingId, tutorId);
+      if (b.tutorId !== tutorId)
+        throw new BookingNotOwnedError(bookingId, tutorId);
       if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
       }
@@ -448,7 +461,8 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
-      if (b.tutorId !== tutorId) throw new BookingNotOwnedError(bookingId, tutorId);
+      if (b.tutorId !== tutorId)
+        throw new BookingNotOwnedError(bookingId, tutorId);
       if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
       }
@@ -493,15 +507,20 @@ export function createBookingService(deps: {
     tutorId: string,
     _sessionNote?: string,
   ) {
-     return db.transaction(async (tx) => {
-       const b = await repo.findBookingById(tx, bookingId);
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
-      if (b.tutorId !== tutorId) throw new BookingNotOwnedError(bookingId, tutorId);
+      if (b.tutorId !== tutorId)
+        throw new BookingNotOwnedError(bookingId, tutorId);
       if (b.type === BOOKING_TYPE.SERIES) {
         throw new BookingNotEditableError(bookingId);
       }
       if (b.currentState !== BOOKING_STATE.SCHEDULED) {
-        throw new BookingStateTransitionError(b.currentState, "complete", BOOKING_STATE.COMPLETED);
+        throw new BookingStateTransitionError(
+          b.currentState,
+          "complete",
+          BOOKING_STATE.COMPLETED,
+        );
       }
 
       const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
@@ -548,7 +567,11 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await assertStudentBookingAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
-        throw new BookingStateTransitionError(b.currentState, "reschedule", BOOKING_STATE.RESCHEDULE_PROPOSED);
+        throw new BookingStateTransitionError(
+          b.currentState,
+          "reschedule",
+          BOOKING_STATE.RESCHEDULE_PROPOSED,
+        );
       }
 
       const updated = await transition(
@@ -606,7 +629,11 @@ export function createBookingService(deps: {
       { excludeStates: [...TERMINAL_STATES] },
     );
     if (overlapping.length > 0) {
-      throw new BookingConflictError(input.tutorId, input.scheduledStartAt.toISOString(), input.scheduledEndAt.toISOString());
+      throw new BookingConflictError(
+        input.tutorId,
+        input.scheduledStartAt.toISOString(),
+        input.scheduledEndAt.toISOString(),
+      );
     }
 
     const size = input.targetGroupSize;
@@ -704,7 +731,10 @@ export function createBookingService(deps: {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
-        throw new BookingNotAwaitingConfirmationError(bookingId, b.currentState);
+        throw new BookingNotAwaitingConfirmationError(
+          bookingId,
+          b.currentState,
+        );
       }
 
       const participant = await repo.findParticipant(tx, bookingId, userId);
@@ -776,7 +806,10 @@ export function createBookingService(deps: {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
-        throw new BookingNotAwaitingConfirmationError(bookingId, b.currentState);
+        throw new BookingNotAwaitingConfirmationError(
+          bookingId,
+          b.currentState,
+        );
       }
 
       const participant = await repo.findParticipant(tx, bookingId, userId);
@@ -802,7 +835,10 @@ export function createBookingService(deps: {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_RECONFIRMATION) {
-        throw new BookingNotAwaitingReconfirmationError(bookingId, b.currentState);
+        throw new BookingNotAwaitingReconfirmationError(
+          bookingId,
+          b.currentState,
+        );
       }
 
       const participant = await repo.findParticipant(tx, bookingId, userId);
@@ -933,7 +969,11 @@ export function createBookingService(deps: {
       input.sessions.length < MIN_SERIES_SESSIONS ||
       input.sessions.length > MAX_SERIES_SESSIONS
     ) {
-      throw new BookingSeriesSizeError("", MIN_SERIES_SESSIONS, MAX_SERIES_SESSIONS);
+      throw new BookingSeriesSizeError(
+        "",
+        MIN_SERIES_SESSIONS,
+        MAX_SERIES_SESSIONS,
+      );
     }
 
     const slot = await repo.findAvailabilitySlot(
@@ -953,7 +993,11 @@ export function createBookingService(deps: {
         { excludeStates: [...TERMINAL_STATES] },
       );
       if (overlapping.length > 0) {
-        throw new BookingConflictError(input.tutorId, session.scheduledStartAt.toISOString(), session.scheduledEndAt.toISOString());
+        throw new BookingConflictError(
+          input.tutorId,
+          session.scheduledStartAt.toISOString(),
+          session.scheduledEndAt.toISOString(),
+        );
       }
     }
 
