@@ -69,6 +69,4 @@ describe("Error helpers", () => {
     expect(err.status).toBe(503);
     expect(err.message).toBe("Payment provider down");
   });
-
-
 });

@@ -57,5 +57,3 @@ export function serviceUnavailable(
     ...(cause ? { cause } : {}),
   });
 }
-
-

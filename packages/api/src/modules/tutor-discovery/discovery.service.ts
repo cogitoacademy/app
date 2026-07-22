@@ -17,9 +17,9 @@ export interface ProfileProjection {
   credentialsSummary: string | null;
   expertise: string[];
   modality: string | null;
-  prices: unknown;
+  prices: Record<string, number> | null;
   availabilitySummary: string | null;
-  proofUrls: unknown;
+  proofUrls: string[] | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
 }
