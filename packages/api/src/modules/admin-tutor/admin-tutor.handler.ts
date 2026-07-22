@@ -1,8 +1,8 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { internalServerError } from "../../lib/errors";
+import { withDomainMap } from "../../lib/handler-utils";
 import type { AdminTutorService } from "./admin-tutor.service";
+import { mapAdminTutorError } from "./admin-tutor.errors";
 import {
   createInviteInput,
   listInvitesInput,
@@ -30,12 +30,10 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       context: Context;
       input: CreateInviteInput;
     }) => {
-      try {
-        return adminTutorService.createInvite(context.session!.user.id, input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to create invite", err);
-      }
+      return withDomainMap(
+        () => adminTutorService.createInvite(context.session!.user.id, input),
+        mapAdminTutorError,
+      );
     },
 
     listInvites: async ({
@@ -45,12 +43,10 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       context: Context;
       input: ListInvitesInput;
     }) => {
-      try {
-        return adminTutorService.listInvites(input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list invites", err);
-      }
+      return withDomainMap(
+        () => adminTutorService.listInvites(input),
+        mapAdminTutorError,
+      );
     },
 
     resendInvite: async ({
@@ -60,15 +56,14 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       context: Context;
       input: ResendInviteInput;
     }) => {
-      try {
-        return adminTutorService.resendInvite(
-          context.session!.user.id,
-          input.inviteId,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to resend invite", err);
-      }
+      return withDomainMap(
+        () =>
+          adminTutorService.resendInvite(
+            context.session!.user.id,
+            input.inviteId,
+          ),
+        mapAdminTutorError,
+      );
     },
 
     revokeInvite: async ({
@@ -78,15 +73,14 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       context: Context;
       input: RevokeInviteInput;
     }) => {
-      try {
-        return adminTutorService.revokeInvite(
-          context.session!.user.id,
-          input.inviteId,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to revoke invite", err);
-      }
+      return withDomainMap(
+        () =>
+          adminTutorService.revokeInvite(
+            context.session!.user.id,
+            input.inviteId,
+          ),
+        mapAdminTutorError,
+      );
     },
 
     listTutorProfiles: async ({
@@ -96,12 +90,10 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       context: Context;
       input: ListTutorProfilesInput;
     }) => {
-      try {
-        return adminTutorService.listTutorProfiles(input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list tutor profiles", err);
-      }
+      return withDomainMap(
+        () => adminTutorService.listTutorProfiles(input),
+        mapAdminTutorError,
+      );
     },
 
     reviewTutorProfile: async ({
@@ -111,15 +103,11 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       context: Context;
       input: ReviewTutorProfileInput;
     }) => {
-      try {
-        return adminTutorService.reviewTutorProfile(
-          context.session!.user.id,
-          input,
-        );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to review tutor profile", err);
-      }
+      return withDomainMap(
+        () =>
+          adminTutorService.reviewTutorProfile(context.session!.user.id, input),
+        mapAdminTutorError,
+      );
     },
   };
 }

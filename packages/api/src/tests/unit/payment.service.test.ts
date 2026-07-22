@@ -1,5 +1,11 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createPaymentService } from "../../modules/payment/payment.service";
+import {
+  PackageNotFoundError,
+  PaymentNotFoundError,
+  PackageAlreadyPurchasedError,
+  PaymentProviderError,
+} from "../../modules/payment/payment.errors";
 import { PAYMENT_STATUS } from "../../shared/constants";
 import type { PaymentRepo } from "../../modules/payment/payment.repo";
 import type { PaymentStatus } from "../../modules/payment/payment.service";
@@ -46,7 +52,7 @@ function makeDb() {
 
 describe("PaymentService", () => {
   describe("createIntent", () => {
-    test("throws notFound when package does not exist", async () => {
+    test("throws PackageNotFoundError when package does not exist", async () => {
       const repo = makeRepo({
         findPackageByCode: mock(async () => null),
       });
@@ -64,11 +70,12 @@ describe("PaymentService", () => {
         await service.createIntent("user1", "w1", "nonexistent_pkg");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(PackageNotFoundError);
+        expect(e.code).toBe("PACKAGE_NOT_FOUND");
       }
     });
 
-    test("throws conflict when package already purchased (non-pending)", async () => {
+    test("throws PackageAlreadyPurchasedError when package already purchased (non-pending)", async () => {
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
           id: "pkg1",
@@ -97,7 +104,8 @@ describe("PaymentService", () => {
         await service.createIntent("user1", "w1", "pkg1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("already");
+        expect(e).toBeInstanceOf(PackageAlreadyPurchasedError);
+        expect(e.code).toBe("PACKAGE_ALREADY_PURCHASED");
       }
     });
 
@@ -159,7 +167,7 @@ describe("PaymentService", () => {
       expect(result.providerReference).toBe("stub:user1:pkg1");
     });
 
-    test("updates payment to EXPIRED and re-throws when provider.createIntent throws", async () => {
+    test("updates payment to EXPIRED and throws PaymentProviderError when provider.createIntent throws", async () => {
       const updatePaymentStatus = mock(async () => {});
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
@@ -194,7 +202,8 @@ describe("PaymentService", () => {
         await service.createIntent("user1", "w1", "pkg1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toBe("Payment provider temporarily unavailable");
+        expect(e).toBeInstanceOf(PaymentProviderError);
+        expect(e.code).toBe("PAYMENT_PROVIDER_ERROR");
       }
 
       expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
@@ -202,7 +211,7 @@ describe("PaymentService", () => {
   });
 
   describe("confirmFromWebhook", () => {
-    test("throws notFound for unknown provider reference", async () => {
+    test("throws PaymentNotFoundError for unknown provider reference", async () => {
       const repo = makeRepo({
         findPaymentByProviderReference: mock(async () => null),
       });
@@ -227,7 +236,8 @@ describe("PaymentService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(PaymentNotFoundError);
+        expect(e.code).toBe("PAYMENT_NOT_FOUND");
       }
     });
 
@@ -506,7 +516,7 @@ describe("PaymentService", () => {
   });
 
   describe("getPurchase", () => {
-    test("throws notFound when payment not found", async () => {
+    test("throws PaymentNotFoundError when payment not found", async () => {
       const repo = makeRepo({
         findPaymentById: mock(async () => null),
       });
@@ -524,11 +534,12 @@ describe("PaymentService", () => {
         await service.getPurchase("nonexistent", "user1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(PaymentNotFoundError);
+        expect(e.code).toBe("PAYMENT_NOT_FOUND");
       }
     });
 
-    test("throws notFound when userId does not match", async () => {
+    test("throws PaymentNotFoundError when userId does not match", async () => {
       const repo = makeRepo({
         findPaymentById: mock(async () => ({
           id: "pay1",
@@ -549,7 +560,8 @@ describe("PaymentService", () => {
         await service.getPurchase("pay1", "user1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(PaymentNotFoundError);
+        expect(e.code).toBe("PAYMENT_NOT_FOUND");
       }
     });
 

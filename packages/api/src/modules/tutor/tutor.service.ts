@@ -1,5 +1,5 @@
 import type { DbType } from "../../lib/db";
-import { notFound, badRequest, forbidden } from "../../lib/errors";
+import { badRequest } from "../../lib/errors";
 import {
   ONBOARDING_STATUS,
   MODALITY,
@@ -8,6 +8,12 @@ import {
 import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
 import type { TutorAuditPort, TutorPricingPort } from "./index";
+import {
+  TutorProfileNotFoundError,
+  TutorProfileNotEditableError,
+  InvalidTutorStatusError,
+  AvailabilitySlotOverlapError,
+} from "./tutor.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 
@@ -17,12 +23,13 @@ export function validateUpdateInput(
   pricingPort: TutorPricingPort,
 ): void {
   if (!profile) {
-    throw notFound("Tutor profile not found");
+    throw new TutorProfileNotFoundError("unknown");
   }
 
   if (profile.onboardingStatus === ONBOARDING_STATUS.PUBLISHED) {
-    throw forbidden(
-      "Published profiles cannot be edited directly. Contact admin.",
+    throw new TutorProfileNotEditableError(
+      profile.id,
+      profile.onboardingStatus,
     );
   }
 
@@ -43,14 +50,14 @@ export function validateSubmitForReview(
   pricingPort: TutorPricingPort,
 ): void {
   if (!profile) {
-    throw notFound("Tutor profile not found");
+    throw new TutorProfileNotFoundError("unknown");
   }
 
   if (
     profile.onboardingStatus !== ONBOARDING_STATUS.DRAFT &&
     profile.onboardingStatus !== ONBOARDING_STATUS.CHANGES_REQUESTED
   ) {
-    throw badRequest(`Cannot submit from status: ${profile.onboardingStatus}`);
+    throw new InvalidTutorStatusError(profile.id, profile.onboardingStatus);
   }
 
   const requiredFields = [
@@ -93,7 +100,7 @@ export function createTutorService(deps: {
 
   async function getMyProfile(userId: string) {
     const profile = await tutorRepo.getByUserId(db, userId);
-    if (!profile) throw notFound("Tutor profile not found");
+    if (!profile) throw new TutorProfileNotFoundError(userId);
     return profile;
   }
 
@@ -154,7 +161,7 @@ export function createTutorService(deps: {
       return start < slot.endDate && end > slot.startDate;
     });
     if (overlapping) {
-      throw badRequest("Availability window overlaps with an existing slot");
+      throw new AvailabilitySlotOverlapError(userId);
     }
 
     return tutorRepo.upsertAvailability(db, userId, {
@@ -167,8 +174,7 @@ export function createTutorService(deps: {
   async function deleteAvailability(userId: string, slotId: string) {
     const slots = await tutorRepo.listAvailability(db, userId);
     const found = slots.find((s) => s.id === slotId);
-    if (!found)
-      throw forbidden("You can only delete your own availability slots");
+    if (!found) throw new TutorProfileNotFoundError(userId);
     await tutorRepo.deleteAvailability(db, slotId);
   }
 

@@ -1,5 +1,9 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createAdminTutorHandler } from "../../modules/admin-tutor/admin-tutor.handler";
+import {
+  InviteNotFoundError,
+  InvalidInviteActionError,
+} from "../../modules/admin-tutor/admin-tutor.errors";
 
 describe("adminTutorHandlers", () => {
   describe("createInvite", () => {
@@ -135,6 +139,37 @@ describe("adminTutorHandlers", () => {
         id: "p1",
         onboardingStatus: "published",
       });
+    });
+  });
+
+  describe("error propagation", () => {
+    test("createInvite maps InvalidInviteActionError to conflict", async () => {
+      const createInvite = mock(async () => {
+        throw new InvalidInviteActionError(
+          "test@example.com",
+          "create_duplicate",
+        );
+      });
+      const adminTutorService = { createInvite } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
+      const input = { email: "test@example.com" };
+
+      const result = handler.createInvite({ context, input });
+      await expect(result).rejects.toThrow();
+    });
+
+    test("resendInvite maps InviteNotFoundError to notFound", async () => {
+      const resendInvite = mock(async () => {
+        throw new InviteNotFoundError("inv1");
+      });
+      const adminTutorService = { resendInvite } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
+      const input = { inviteId: "inv1" };
+
+      const result = handler.resendInvite({ context, input });
+      await expect(result).rejects.toThrow();
     });
   });
 });

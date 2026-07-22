@@ -1,7 +1,7 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { internalServerError } from "../../lib/errors";
+import { withDomainMap } from "../../lib/handler-utils";
+import { mapPaymentError } from "./payment.errors";
 import type { createPurchaseInput, getPurchaseInput } from "./payment.types";
 import type { PaymentService } from "./payment.service";
 import type { WalletSnapshot } from "../wallet/wallet.service";
@@ -27,17 +27,14 @@ export function createPaymentHandler(
       context: Context;
       input: CreatePurchaseInput;
     }) => {
-      try {
+      return withDomainMap(async () => {
         const w = await wallet.getOrCreate(context.session!.user.id);
         return payment.createIntent(
           context.session!.user.id,
           w.id,
           input.packageCode,
         );
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to create purchase", err);
-      }
+      }, mapPaymentError);
     },
 
     getPurchase: async ({
@@ -47,12 +44,10 @@ export function createPaymentHandler(
       context: Context;
       input: GetPurchaseInput;
     }) => {
-      try {
-        return payment.getPurchase(input.paymentId, context.session!.user.id);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to fetch purchase", err);
-      }
+      return withDomainMap(
+        () => payment.getPurchase(input.paymentId, context.session!.user.id),
+        mapPaymentError,
+      );
     },
   };
 }

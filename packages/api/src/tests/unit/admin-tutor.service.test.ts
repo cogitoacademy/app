@@ -5,6 +5,10 @@ import {
   type ReviewAction,
   type TutorProfileSnapshot,
 } from "../../modules/admin-tutor/admin-tutor.service";
+import {
+  TutorProfileNotFoundError,
+  InvalidInviteActionError,
+} from "../../modules/admin-tutor/admin-tutor.errors";
 
 function makeProfile(
   overrides: Partial<TutorProfileSnapshot> = {},
@@ -27,8 +31,10 @@ describe("AdminTutor Service", () => {
       expect(result.profile.onboardingStatus).toBe("approved_unpublished");
     });
 
-    test("throws for null profile", () => {
-      expect(() => validateReviewAction("publish", null)).toThrow();
+    test("throws TutorProfileNotFoundError for null profile", () => {
+      expect(() => validateReviewAction("publish", null)).toThrow(
+        TutorProfileNotFoundError,
+      );
     });
 
     const actions: ReviewAction[] = [
@@ -45,10 +51,10 @@ describe("AdminTutor Service", () => {
       });
     }
 
-    test("throws for invalid action string", () => {
+    test("throws InvalidInviteActionError for invalid action string", () => {
       expect(() =>
         validateReviewAction("invalid_action" as ReviewAction, makeProfile()),
-      ).toThrow();
+      ).toThrow(InvalidInviteActionError);
     });
   });
 
@@ -86,10 +92,10 @@ describe("AdminTutor Service", () => {
       expect(updates.adminReviewNote).toBe("looks good");
     });
 
-    test("buildReviewUpdates throws for invalid action", () => {
+    test("buildReviewUpdates throws InvalidInviteActionError for invalid action", () => {
       expect(() =>
         buildReviewUpdates("invalid_action" as ReviewAction),
-      ).toThrow("Invalid action");
+      ).toThrow(InvalidInviteActionError);
     });
   });
 });

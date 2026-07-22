@@ -1,12 +1,17 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
+import { withDomainMap } from "../../lib/handler-utils";
+import { DomainError } from "../../lib/domain-errors";
 import { internalServerError } from "../../lib/errors";
 import type { listInput, idInput } from "./notification.types";
 import type { NotificationService } from "./notification.service";
 
 type ListInput = z.infer<typeof listInput>;
 type IdInput = z.infer<typeof idInput>;
+
+function mapNotificationError(err: DomainError) {
+  return internalServerError(err.message, err);
+}
 
 export function createNotificationHandler(deps: {
   notificationService: NotificationService;
@@ -20,24 +25,19 @@ export function createNotificationHandler(deps: {
     context: Context;
     input: ListInput;
   }) {
-    try {
-      return notificationService.list(context.session!.user.id, input ?? {});
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to list notifications", err);
-    }
+    return withDomainMap(
+      () => notificationService.list(context.session!.user.id, input ?? {}),
+      mapNotificationError,
+    );
   }
 
   async function getUnreadCount({ context }: { context: Context }) {
-    try {
+    return withDomainMap(async () => {
       const count = await notificationService.getUnreadCount(
         context.session!.user.id,
       );
       return { count };
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to get unread count", err);
-    }
+    }, mapNotificationError);
   }
 
   async function markAsRead({
@@ -47,24 +47,17 @@ export function createNotificationHandler(deps: {
     context: Context;
     input: IdInput;
   }) {
-    try {
-      await notificationService.markAsRead(context.session!.user.id, input.id);
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError("Failed to mark notification as read", err);
-    }
+    return withDomainMap(
+      () => notificationService.markAsRead(context.session!.user.id, input.id),
+      mapNotificationError,
+    );
   }
 
   async function markAllAsRead({ context }: { context: Context }) {
-    try {
-      await notificationService.markAllAsRead(context.session!.user.id);
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      throw internalServerError(
-        "Failed to mark all notifications as read",
-        err,
-      );
-    }
+    return withDomainMap(
+      () => notificationService.markAllAsRead(context.session!.user.id),
+      mapNotificationError,
+    );
   }
 
   return { list, getUnreadCount, markAsRead, markAllAsRead };

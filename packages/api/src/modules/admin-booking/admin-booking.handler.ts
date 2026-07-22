@@ -1,8 +1,8 @@
 import type { Context } from "../../context";
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { internalServerError } from "../../lib/errors";
+import { withDomainMap } from "../../lib/handler-utils";
 import type { AdminBookingService } from "./admin-booking.service";
+import { mapAdminBookingError } from "./admin-booking.errors";
 import {
   applyOverrideInput,
   listOverridesInput,
@@ -28,20 +28,19 @@ export function createAdminBookingHandler(
       context: Context;
       input: ApplyOverrideInput;
     }) => {
-      try {
-        return adminBookingService.applyOverride(context.session!.user.id, {
-          bookingId: input.bookingId,
-          category: input.category,
-          reason: input.reason,
-          affectedParticipants: input.affectedParticipants,
-          marksAction: input.marksAction,
-          userNote: input.userNote,
-          internalNote: input.internalNote,
-        });
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to apply override", err);
-      }
+      return withDomainMap(
+        () =>
+          adminBookingService.applyOverride(context.session!.user.id, {
+            bookingId: input.bookingId,
+            category: input.category,
+            reason: input.reason,
+            affectedParticipants: input.affectedParticipants,
+            marksAction: input.marksAction,
+            userNote: input.userNote,
+            internalNote: input.internalNote,
+          }),
+        mapAdminBookingError,
+      );
     },
 
     listBookings: async ({
@@ -51,12 +50,10 @@ export function createAdminBookingHandler(
       context: Context;
       input: ListOverridesInput;
     }) => {
-      try {
-        return adminBookingService.listBookings(input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to list bookings", err);
-      }
+      return withDomainMap(
+        () => adminBookingService.listBookings(input),
+        mapAdminBookingError,
+      );
     },
 
     getBookingStateHistory: async ({
@@ -66,12 +63,10 @@ export function createAdminBookingHandler(
       context: Context;
       input: GetBookingStateHistoryInput;
     }) => {
-      try {
-        return adminBookingService.getBookingStateHistory(input.bookingId);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to fetch booking state history", err);
-      }
+      return withDomainMap(
+        () => adminBookingService.getBookingStateHistory(input.bookingId),
+        mapAdminBookingError,
+      );
     },
 
     adminRefund: async ({
@@ -81,12 +76,10 @@ export function createAdminBookingHandler(
       context: Context;
       input: AdminRefundInput;
     }) => {
-      try {
-        return adminBookingService.adminRefund(context.session!.user.id, input);
-      } catch (err) {
-        if (err instanceof ORPCError) throw err;
-        throw internalServerError("Failed to process admin refund", err);
-      }
+      return withDomainMap(
+        () => adminBookingService.adminRefund(context.session!.user.id, input),
+        mapAdminBookingError,
+      );
     },
   };
 }

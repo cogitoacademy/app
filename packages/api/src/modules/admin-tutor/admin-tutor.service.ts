@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { notFound, badRequest, conflict } from "../../lib/errors";
+import {
+  InviteNotFoundError,
+  TutorProfileNotFoundError,
+  InvalidInviteActionError,
+} from "./admin-tutor.errors";
 import type { DbType } from "../../lib/db";
 import {
   INVITE_EXPIRY_DAYS,
@@ -53,10 +57,10 @@ export function validateReviewAction(
   profile: TutorProfileSnapshot | null,
 ): { profile: TutorProfileSnapshot } {
   if (!profile) {
-    throw notFound("Tutor profile not found");
+    throw new TutorProfileNotFoundError("");
   }
   if (!STATUS_MAP[action]) {
-    throw badRequest("Invalid action");
+    throw new InvalidInviteActionError("", action);
   }
   return { profile };
 }
@@ -66,7 +70,7 @@ export function buildReviewUpdates(
   adminNote?: string,
 ): { updates: ReviewUpdates; newStatus: string } {
   const newStatus = STATUS_MAP[action];
-  if (!newStatus) throw badRequest("Invalid action");
+  if (!newStatus) throw new InvalidInviteActionError("", action);
 
   const updates: ReviewUpdates = {
     onboardingStatus: newStatus,
@@ -99,7 +103,7 @@ export function createAdminTutorService(deps: {
         input.email,
       );
       if (existing) {
-        throw conflict("An active invite already exists for this email");
+        throw new InvalidInviteActionError(input.email, "create_duplicate");
       }
 
       const token = crypto.randomUUID();
@@ -151,9 +155,9 @@ export function createAdminTutorService(deps: {
   ): Promise<TutorInviteRow> {
     return db.transaction(async (tx) => {
       const invite = await adminTutorRepo.getInviteById(tx, inviteId);
-      if (!invite) throw notFound("Invite not found");
+      if (!invite) throw new InviteNotFoundError(inviteId);
       if (invite.status !== INVITE_STATUS.INVITED) {
-        throw badRequest("Only invited invites can be resent");
+        throw new InvalidInviteActionError(inviteId, "resend_non_invited");
       }
 
       const newToken = crypto.randomUUID();
@@ -184,9 +188,9 @@ export function createAdminTutorService(deps: {
   ): Promise<TutorInviteRow> {
     return db.transaction(async (tx) => {
       const invite = await adminTutorRepo.getInviteById(tx, inviteId);
-      if (!invite) throw notFound("Invite not found");
+      if (!invite) throw new InviteNotFoundError(inviteId);
       if (invite.status !== INVITE_STATUS.INVITED) {
-        throw badRequest("Only invited invites can be revoked");
+        throw new InvalidInviteActionError(inviteId, "revoke_non_invited");
       }
 
       const updated = await adminTutorRepo.updateInvite(tx, inviteId, {

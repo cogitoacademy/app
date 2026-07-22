@@ -1,7 +1,12 @@
 import { ORPCError } from "@orpc/server";
 import type { DbType } from "../../lib/db";
-import { conflict, notFound, serviceUnavailable } from "../../lib/errors";
 import { PAYMENT_STATUS } from "../../shared/constants";
+import {
+  PackageNotFoundError,
+  PaymentNotFoundError,
+  PackageAlreadyPurchasedError,
+  PaymentProviderError,
+} from "./payment.errors";
 import type { PaymentWalletPort } from "./index";
 import type { PaymentRepo } from "./payment.repo";
 
@@ -64,7 +69,7 @@ export function createPaymentService(deps: {
     packageCode: string,
   ): Promise<CreateIntentResult> {
     const pkg = await repo.findPackageByCode(packageCode);
-    if (!pkg || !pkg.isActive) throw notFound("Package not found");
+    if (!pkg || !pkg.isActive) throw new PackageNotFoundError(packageCode);
 
     const idempotencyKey = `${providerName}:${userId}:${packageCode}`;
     const existing = await repo.findPaymentByProviderReference(idempotencyKey);
@@ -81,9 +86,7 @@ export function createPaymentService(deps: {
           checkoutUrl: existingIntent.checkoutUrl,
         };
       }
-      throw conflict(
-        `Package already ${existing.status.toLowerCase()} for this user`,
-      );
+      throw new PackageAlreadyPurchasedError(packageCode, userId);
     }
 
     const paymentId = crypto.randomUUID();
@@ -113,10 +116,7 @@ export function createPaymentService(deps: {
         status: PAYMENT_STATUS.EXPIRED,
       });
       if (error instanceof ORPCError) throw error;
-      throw serviceUnavailable(
-        "Payment provider temporarily unavailable",
-        error,
-      );
+      throw new PaymentProviderError(providerName, error);
     }
   }
 
@@ -129,7 +129,7 @@ export function createPaymentService(deps: {
         tx,
       );
 
-      if (!record) throw notFound("Payment not found");
+      if (!record) throw new PaymentNotFoundError(input.providerReference);
       if (record.status === PAYMENT_STATUS.PAID)
         return { status: PAYMENT_STATUS.PAID };
       if (record.status === PAYMENT_STATUS.FAILED)
@@ -195,7 +195,7 @@ export function createPaymentService(deps: {
   async function getPurchase(paymentId: string, userId: string) {
     const record = await repo.findPaymentById(paymentId);
     if (!record || record.userId !== userId)
-      throw notFound("Payment not found");
+      throw new PaymentNotFoundError(paymentId);
     return record;
   }
 

@@ -4,6 +4,11 @@ import {
   validateSubmitForReview,
 } from "../../modules/tutor/tutor.service";
 import type { PricingPort } from "../../modules/pricing/pricing.service";
+import {
+  TutorProfileNotFoundError,
+  TutorProfileNotEditableError,
+  InvalidTutorStatusError,
+} from "../../modules/tutor/tutor.errors";
 
 function makeProfile(overrides: Record<string, unknown> = {}) {
   return {
@@ -57,20 +62,20 @@ describe("Tutor Service", () => {
       ).not.toThrow();
     });
 
-    test("throws NOT_FOUND for null profile", () => {
+    test("throws TutorProfileNotFoundError for null profile", () => {
       expect(() =>
         validateUpdateInput(null, { displayName: "X" }, mockPricingPort),
-      ).toThrow();
+      ).toThrow(TutorProfileNotFoundError);
     });
 
-    test("throws FORBIDDEN for published profile", () => {
+    test("throws TutorProfileNotEditableError for published profile", () => {
       expect(() =>
         validateUpdateInput(
           makeProfile({ onboardingStatus: "published" }),
           { displayName: "X" },
           mockPricingPort,
         ),
-      ).toThrow();
+      ).toThrow(TutorProfileNotEditableError);
     });
 
     test("throws when pricing validation fails", () => {
@@ -133,17 +138,19 @@ describe("Tutor Service", () => {
       ).not.toThrow();
     });
 
-    test("throws for null profile", () => {
-      expect(() => validateSubmitForReview(null, mockPricingPort)).toThrow();
+    test("throws TutorProfileNotFoundError for null profile", () => {
+      expect(() => validateSubmitForReview(null, mockPricingPort)).toThrow(
+        TutorProfileNotFoundError,
+      );
     });
 
-    test("throws for invalid status", () => {
+    test("throws InvalidTutorStatusError for invalid status", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({ onboardingStatus: "pending_review" }),
           mockPricingPort,
         ),
-      ).toThrow();
+      ).toThrow(InvalidTutorStatusError);
     });
 
     test("throws for missing required fields", () => {

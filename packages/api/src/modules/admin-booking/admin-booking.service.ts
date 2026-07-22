@@ -1,11 +1,15 @@
-import { badRequest, notFound } from "../../lib/errors";
+import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
+import {
+  BookingNotFoundError,
+  InvalidRefundStateError,
+  TerminalStateOverrideError,
+} from "./admin-booking.errors";
 import {
   ACTOR_TYPE,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   PAYMENT_STATUS,
 } from "../../shared/constants";
-import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
 import type { DbType } from "../../lib/db";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import type { RefundRepo } from "../refund/refund.repo";
@@ -76,12 +80,15 @@ export function createAdminBookingService(deps: {
 
     const result = await db.transaction(async (tx) => {
       const bookingRow = await repo.findBookingById(tx, input.bookingId);
-      if (!bookingRow) throw notFound("Booking not found");
+      if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
 
       if (
         (TERMINAL_STATES as readonly string[]).includes(bookingRow.currentState)
       ) {
-        throw badRequest("Cannot override a terminal booking state");
+        throw new TerminalStateOverrideError(
+          input.bookingId,
+          bookingRow.currentState,
+        );
       }
 
       const updateResult = await repo.updateBookingWithOverride(
@@ -91,7 +98,7 @@ export function createAdminBookingService(deps: {
         input.reason,
         overrideMeta,
       );
-      if (!updateResult) throw notFound("Booking not found");
+      if (!updateResult) throw new BookingNotFoundError(input.bookingId);
 
       await repo.insertStateHistoryEntry(tx, {
         bookingId: input.bookingId,
@@ -197,7 +204,7 @@ export function createAdminBookingService(deps: {
 
   async function getBookingStateHistory(bookingId: string) {
     const bookingRow = await repo.findBookingById(db, bookingId);
-    if (!bookingRow) throw notFound("Booking not found");
+    if (!bookingRow) throw new BookingNotFoundError(bookingId);
 
     return repo.getStateHistory(db, bookingId);
   }
@@ -207,18 +214,18 @@ export function createAdminBookingService(deps: {
     input: { paymentId: string; reason: string },
   ) {
     const payment = await repo.findPaymentById(db, input.paymentId);
-    if (!payment) throw notFound("Payment not found");
+    if (!payment) throw new BookingNotFoundError(input.paymentId);
 
     if (
       payment.status !== PAYMENT_STATUS.PAID &&
       payment.status !== PAYMENT_STATUS.SETTLED
     ) {
-      throw badRequest("Only PAID or SETTLED payments can be refunded");
+      throw new InvalidRefundStateError(input.paymentId, payment.status);
     }
 
     return db.transaction(async (tx) => {
       const participantWallet = await wallet.getByUserId(tx, payment.userId);
-      if (!participantWallet) throw notFound("Wallet not found");
+      if (!participantWallet) throw new BookingNotFoundError(payment.userId);
 
       await wallet.compensate(tx, {
         walletId: participantWallet.id,

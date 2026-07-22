@@ -1,5 +1,10 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createAdminBookingService } from "../../modules/admin-booking/admin-booking.service";
+import {
+  BookingNotFoundError,
+  InvalidRefundStateError,
+  TerminalStateOverrideError,
+} from "../../modules/admin-booking/admin-booking.errors";
 
 function makeDb() {
   return {
@@ -86,7 +91,7 @@ function makeRefundRepo() {
 
 describe("AdminBookingService", () => {
   describe("applyOverride", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const repo = mockRepo({
         findBookingById: mock(async () => null),
       });
@@ -106,11 +111,12 @@ describe("AdminBookingService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(BookingNotFoundError);
+        expect(e.code).toBe("ADMIN_BOOKING_NOT_FOUND");
       }
     });
 
-    test("throws badRequest when booking is in terminal state", async () => {
+    test("throws TerminalStateOverrideError when booking is in terminal state", async () => {
       const repo = mockRepo({
         findBookingById: mock(async () => ({
           id: "b1",
@@ -134,7 +140,8 @@ describe("AdminBookingService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("terminal");
+        expect(e).toBeInstanceOf(TerminalStateOverrideError);
+        expect(e.code).toBe("TERMINAL_STATE_OVERRIDE");
       }
     });
 
@@ -483,7 +490,7 @@ describe("AdminBookingService", () => {
   });
 
   describe("getBookingStateHistory", () => {
-    test("throws notFound when booking does not exist", async () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
       const repo = mockRepo({
         findBookingById: mock(async () => null),
       });
@@ -499,7 +506,8 @@ describe("AdminBookingService", () => {
         await service.getBookingStateHistory("nonexistent");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(BookingNotFoundError);
+        expect(e.code).toBe("ADMIN_BOOKING_NOT_FOUND");
       }
     });
 
@@ -529,7 +537,7 @@ describe("AdminBookingService", () => {
   });
 
   describe("adminRefund", () => {
-    test("throws notFound when payment does not exist", async () => {
+    test("throws BookingNotFoundError when payment does not exist", async () => {
       const repo = mockRepo({
         findPaymentById: mock(async () => null),
       });
@@ -548,11 +556,12 @@ describe("AdminBookingService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(BookingNotFoundError);
+        expect(e.code).toBe("ADMIN_BOOKING_NOT_FOUND");
       }
     });
 
-    test("throws badRequest when payment is not in refundable state", async () => {
+    test("throws InvalidRefundStateError when payment is not in refundable state", async () => {
       const repo = mockRepo({
         findPaymentById: mock(async () => ({
           id: "pay1",
@@ -576,7 +585,8 @@ describe("AdminBookingService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("PAID or SETTLED");
+        expect(e).toBeInstanceOf(InvalidRefundStateError);
+        expect(e.code).toBe("INVALID_REFUND_STATE");
       }
     });
 
@@ -692,7 +702,7 @@ describe("AdminBookingService", () => {
       expect(auditPort.record).toHaveBeenCalledTimes(1);
     });
 
-    test("throws notFound when wallet not found for user", async () => {
+    test("throws BookingNotFoundError when wallet not found for user", async () => {
       const wallet = makeWalletPort({
         getByUserId: mock(async () => null),
       });
@@ -719,7 +729,8 @@ describe("AdminBookingService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
+        expect(e).toBeInstanceOf(BookingNotFoundError);
+        expect(e.code).toBe("ADMIN_BOOKING_NOT_FOUND");
       }
     });
   });
