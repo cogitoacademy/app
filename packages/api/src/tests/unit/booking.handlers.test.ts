@@ -74,7 +74,7 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.getById).toHaveBeenCalledWith("b1");
+      expect(booking.getById).toHaveBeenCalledWith("b1", "u1");
       expect(result).toEqual({ id: "b1" });
     });
   });
@@ -313,7 +313,7 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.listSessions).toHaveBeenCalledWith("b1");
+      expect(booking.listSessions).toHaveBeenCalledWith("b1", "u1");
       expect(result).toEqual({ items: [] });
     });
   });

@@ -201,9 +201,13 @@ export function createServer() {
       { parse: "none" },
     )
     .get("/openapi.json", async ({ request }) => {
+      if (env.NODE_ENV === "production")
+        return new Response("Not Found", { status: 404 });
       return Response.json(await generateOpenAPISpec(request));
     })
     .get("/api-reference", () => {
+      if (env.NODE_ENV === "production")
+        return new Response("Not Found", { status: 404 });
       return new Response(scalarHtml(), {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });

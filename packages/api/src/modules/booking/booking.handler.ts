@@ -60,14 +60,14 @@ export function createBookingHandler(booking: BookingService) {
     },
 
     get: async ({
-      context: _context,
+      context,
       input,
     }: {
       context: Context;
       input: GetBookingInput;
     }) => {
       return withDomainMap(
-        () => booking.getById(input.bookingId),
+        () => booking.getById(input.bookingId, context.session!.user.id),
         mapBookingError,
       );
     },
@@ -234,14 +234,14 @@ export function createBookingHandler(booking: BookingService) {
     },
 
     listSessions: async ({
-      context: _context,
+      context,
       input,
     }: {
       context: Context;
       input: ListSessionsInput;
     }) => {
       return withDomainMap(
-        () => booking.listSessions(input.bookingId),
+        () => booking.listSessions(input.bookingId, context.session!.user.id),
         mapBookingError,
       );
     },

@@ -107,6 +107,7 @@ export function createBookingService(deps: {
     const b = await repo.findBookingById(conn, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     if (b.proposerId !== userId) {
+      if (b.tutorId === userId) return b;
       const participant = await repo.findParticipant(conn, bookingId, userId);
       if (!participant) {
         throw new BookingNotOwnedError(bookingId, userId);
@@ -214,7 +215,8 @@ export function createBookingService(deps: {
     }
   }
 
-  async function getById(bookingId: string) {
+  async function getById(bookingId: string, userId: string) {
+    await assertStudentBookingAccess(db, userId, bookingId);
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     return b;
@@ -1146,7 +1148,8 @@ export function createBookingService(deps: {
     });
   }
 
-  async function listSessions(bookingId: string) {
+  async function listSessions(bookingId: string, userId: string) {
+    await assertStudentBookingAccess(db, userId, bookingId);
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     if (b.type !== BOOKING_TYPE.SERIES)

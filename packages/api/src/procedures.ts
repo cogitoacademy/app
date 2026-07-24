@@ -39,3 +39,21 @@ export const requireAdmin = o.middleware(async ({ context, next }) => {
 
 export const protectedProcedure = publicProcedure.use(requireAuth);
 export const adminProcedure = publicProcedure.use(requireAdmin);
+
+export const requireTutor = o.middleware(async ({ context, next }) => {
+  if (!context.session?.user) {
+    throw new ORPCError("UNAUTHORIZED");
+  }
+  const user = context.session.user as CogitoUser;
+  if (user.role !== USER_ROLE.TUTOR) {
+    throw new ORPCError("FORBIDDEN", { message: "Tutor access required" });
+  }
+  return next({
+    context: {
+      session: context.session,
+      services: context.services,
+    },
+  });
+});
+
+export const tutorProcedure = publicProcedure.use(requireTutor);

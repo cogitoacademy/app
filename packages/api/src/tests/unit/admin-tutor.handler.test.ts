@@ -195,4 +195,52 @@ describe("AdminTutorService", () => {
       expect(callArgs.email).toBe("new@example.com");
     });
   });
+
+  describe("Story 3 C4: resendInvite token invalidation", () => {
+    test("resendInvite replaces the token on the existing invite row, invalidating the old token", async () => {
+      const originalToken = "original-token-uuid";
+      const invite = {
+        id: "inv1",
+        email: "tutor@example.com",
+        displayName: "Tutor",
+        token: originalToken,
+        status: "invited",
+        invitedBy: "admin1",
+        expiresAt: new Date("2025-01-01"),
+      };
+
+      const updatedInvite = {
+        ...invite,
+        token: "new-token-uuid",
+        expiresAt: new Date("2025-01-08"),
+      };
+
+      const repo = makeAdminTutorRepo({
+        getInviteById: mock(async () => invite),
+        updateInvite: mock(async () => updatedInvite),
+      });
+
+      const service = createAdminTutorService({
+        adminTutorRepo: repo,
+        auditPort: makeAuditPort(),
+        db: makeDb(),
+      });
+
+      const result = await service.resendInvite("admin1", "inv1");
+
+      expect(repo.getInviteById).toHaveBeenCalledWith(
+        expect.anything(),
+        "inv1",
+      );
+      expect(repo.updateInvite).toHaveBeenCalledTimes(1);
+
+      const updateCall = repo.updateInvite.mock.calls[0];
+      expect(updateCall[1]).toBe("inv1");
+      const updatePayload = updateCall[2];
+      expect(updatePayload.token).not.toBe(originalToken);
+      expect(updatePayload.expiresAt).toBeInstanceOf(Date);
+
+      expect(result.token).not.toBe(originalToken);
+    });
+  });
 });

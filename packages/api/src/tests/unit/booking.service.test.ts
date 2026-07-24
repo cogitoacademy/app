@@ -226,23 +226,75 @@ function createService(
 
 describe("BookingService", () => {
   describe("getById", () => {
-    test("returns booking with participants when found", async () => {
-      const booking = { id: "b1", currentState: "confirmed" };
+    test("returns booking with participants when found and user is proposer", async () => {
+      const booking = {
+        id: "b1",
+        currentState: "confirmed",
+        proposerId: "student1",
+      };
       const { service } = createService({
-        repo: { findBookingWithParticipants: mock(async () => booking) },
+        repo: {
+          findBookingById: mock(async () => ({
+            id: "b1",
+            proposerId: "student1",
+            tutorId: "tutor1",
+          })),
+          findBookingWithParticipants: mock(async () => booking),
+        },
       });
 
-      const result = await service.getById("b1");
+      const result = await service.getById("b1", "student1");
+      expect(result).toEqual(booking);
+    });
+
+    test("returns booking when user is assigned tutor", async () => {
+      const booking = {
+        id: "b1",
+        currentState: "confirmed",
+        proposerId: "student1",
+      };
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => ({
+            id: "b1",
+            proposerId: "other",
+            tutorId: "tutor1",
+          })),
+          findBookingWithParticipants: mock(async () => booking),
+        },
+      });
+
+      const result = await service.getById("b1", "tutor1");
       expect(result).toEqual(booking);
     });
 
     test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
-        repo: { findBookingWithParticipants: mock(async () => null) },
+        repo: {
+          findBookingById: mock(async () => null),
+          findBookingWithParticipants: mock(async () => null),
+        },
       });
 
-      await expect(service.getById("nonexistent")).rejects.toThrow(
+      await expect(service.getById("nonexistent", "user1")).rejects.toThrow(
         BookingNotFoundError,
+      );
+    });
+
+    test("throws BookingNotOwnedError when user has no access", async () => {
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => ({
+            id: "b1",
+            proposerId: "other",
+            tutorId: "other_tutor",
+          })),
+          findParticipant: mock(async () => null),
+        },
+      });
+
+      await expect(service.getById("b1", "userB")).rejects.toThrow(
+        BookingNotOwnedError,
       );
     });
   });
@@ -1517,9 +1569,9 @@ describe("BookingService", () => {
         repo: { findBookingById: mock(async () => null) },
       });
 
-      await expect(service.listSessions("nonexistent")).rejects.toThrow(
-        BookingNotFoundError,
-      );
+      await expect(
+        service.listSessions("nonexistent", "user1"),
+      ).rejects.toThrow(BookingNotFoundError);
     });
 
     test("throws BookingNotEditableError when booking is not a series", async () => {
@@ -1529,12 +1581,12 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.listSessions("b1")).rejects.toThrow(
+      await expect(service.listSessions("b1", "student1")).rejects.toThrow(
         BookingNotEditableError,
       );
     });
 
-    test("returns sessions for a series booking", async () => {
+    test("returns sessions for a series booking when user is proposer", async () => {
       const sessions = [
         { id: "s1", seriesBookingId: "b1", scheduledStartAt: new Date() },
         { id: "s2", seriesBookingId: "b1", scheduledStartAt: new Date() },
@@ -1546,8 +1598,25 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.listSessions("b1");
+      const result = await service.listSessions("b1", "student1");
       expect(result).toEqual(sessions);
+    });
+
+    test("throws BookingNotOwnedError when user has no access", async () => {
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => ({
+            id: "b1",
+            proposerId: "other",
+            tutorId: "other_tutor",
+          })),
+          findParticipant: mock(async () => null),
+        },
+      });
+
+      await expect(service.listSessions("b1", "userB")).rejects.toThrow(
+        BookingNotOwnedError,
+      );
     });
   });
 
