@@ -1,17 +1,12 @@
 import type { Context } from "../../context";
 import { z } from "zod";
 import { withDomainMap } from "../../lib/handler-utils";
-import { DomainError } from "../../lib/domain-errors";
-import { internalServerError } from "../../lib/errors";
+import { mapNotificationError } from "./notification.errors";
 import type { listInput, idInput } from "./notification.types";
 import type { NotificationService } from "./notification.service";
 
 type ListInput = z.infer<typeof listInput>;
 type IdInput = z.infer<typeof idInput>;
-
-function mapNotificationError(err: DomainError) {
-  return internalServerError(err.message, err);
-}
 
 export function createNotificationHandler(deps: {
   notificationService: NotificationService;

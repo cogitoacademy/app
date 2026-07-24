@@ -1,5 +1,6 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
 import { createNotificationService } from "../../modules/notification/notification.service";
+import { NotificationNotFoundError } from "../../modules/notification/notification.errors";
 import type { NotificationRepo } from "../../modules/notification/notification.repo";
 
 let logCaptures: any[] = [];
@@ -41,6 +42,7 @@ afterEach(() => {
 function makeRepo(overrides: Partial<NotificationRepo> = {}): NotificationRepo {
   return {
     findNotificationByEventKey: mock(async () => null),
+    findNotificationByIdForUser: mock(async () => ({ id: "n1" })),
     insertNotification: mock(async () => ({ id: "n1" })),
     findUserEmail: mock(async () => ""),
     insertDispatch: mock(async () => {}),
@@ -516,6 +518,26 @@ describe("NotificationService (unit)", () => {
     await service.markAsRead("user1", "n1");
 
     expect(repo.updateReadStatus).toHaveBeenCalledWith("n1", "user1", true);
+  });
+
+  test("markAsRead throws NotificationNotFoundError when notification does not exist for user", async () => {
+    const repo = makeRepo({
+      findNotificationByIdForUser: mock(async () => null),
+    });
+
+    const service = createNotificationService(repo);
+
+    try {
+      await service.markAsRead("user1", "nonexistent");
+      expect.unreachable("Should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(NotificationNotFoundError);
+      expect((err as NotificationNotFoundError).code).toBe(
+        "NOTIFICATION_NOT_FOUND",
+      );
+    }
+
+    expect(repo.updateReadStatus).not.toHaveBeenCalled();
   });
 
   test("markAllAsRead delegates to repo", async () => {

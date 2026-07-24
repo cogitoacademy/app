@@ -9,6 +9,19 @@ import type { DbOrTx } from "../../lib/tx";
 
 export type NotificationRepo = ReturnType<typeof createNotificationRepo>;
 
+export async function findNotificationByIdForUser(
+  conn: DbOrTx,
+  id: string,
+  userId: string,
+) {
+  const [row] = await conn
+    .select({ id: notification.id })
+    .from(notification)
+    .where(and(eq(notification.id, id), eq(notification.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function findNotificationByEventKey(
   conn: DbOrTx,
   eventKey: string,
@@ -153,6 +166,8 @@ export async function findDispatch(conn: DbOrTx, notificationId: string) {
 export function createNotificationRepo(db: DbType) {
   return {
     findNotificationByEventKey,
+    findNotificationByIdForUser: (id: string, userId: string) =>
+      findNotificationByIdForUser(db, id, userId),
     insertNotification,
     findUserEmail,
     insertDispatch,

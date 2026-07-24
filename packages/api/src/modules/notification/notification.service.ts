@@ -1,5 +1,6 @@
 import type { DbOrTx } from "../../lib/tx";
 import type { NotificationRepo } from "./notification.repo";
+import { NotificationNotFoundError } from "./notification.errors";
 import {
   NOTIFICATION_SEVERITY,
   DEFAULT_PAGE_LIMIT,
@@ -211,6 +212,8 @@ export function createNotificationService(
   }
 
   async function markAsRead(userId: string, id: string): Promise<void> {
+    const existing = await repo.findNotificationByIdForUser(id, userId);
+    if (!existing) throw new NotificationNotFoundError(id);
     await repo.updateReadStatus(id, userId, true);
   }
 
