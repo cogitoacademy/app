@@ -45,6 +45,27 @@ export class AvailabilitySlotOverlapError extends DomainError {
   }
 }
 
+export class TutorProfileIncompleteError extends DomainError {
+  readonly domain = "tutor";
+  constructor(id: string, missingFields: string[]) {
+    super(
+      "TUTOR_PROFILE_INCOMPLETE",
+      "All required fields must be filled before submission",
+      { id, missingFields },
+    );
+  }
+}
+
+export class InvalidTutorPricingError extends DomainError {
+  readonly domain = "tutor";
+  constructor(id: string, pricingError: string) {
+    super("INVALID_TUTOR_PRICING", "Tutor pricing validation failed", {
+      id,
+      pricingError,
+    });
+  }
+}
+
 export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof TutorProfileNotFoundError)
     return notFound(err.message, err);
@@ -53,5 +74,9 @@ export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof InvalidTutorStatusError) return conflict(err.message, err);
   if (err instanceof AvailabilitySlotOverlapError)
     return conflict(err.message, err);
+  if (err instanceof TutorProfileIncompleteError)
+    return badRequest(err.message, err);
+  if (err instanceof InvalidTutorPricingError)
+    return badRequest(err.message, err);
   return internalServerError(err.message, err);
 }

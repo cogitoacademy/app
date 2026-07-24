@@ -5,6 +5,8 @@ import {
   TutorProfileNotEditableError,
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
+  TutorProfileIncompleteError,
+  InvalidTutorPricingError,
   mapTutorError,
 } from "../../modules/tutor/tutor.errors";
 
@@ -76,6 +78,50 @@ describe("tutor.errors", () => {
       expect(err.name).toBe("AvailabilitySlotOverlapError");
     });
   });
+  describe("TutorProfileIncompleteError", () => {
+    it("should be instance of DomainError", () => {
+      const err = new TutorProfileIncompleteError("tp_1", [
+        "displayName",
+        "prices",
+      ]);
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err).toBeInstanceOf(Error);
+    });
+    it("should have correct properties", () => {
+      const err = new TutorProfileIncompleteError("tp_1", [
+        "displayName",
+        "prices",
+      ]);
+      expect(err.code).toBe("TUTOR_PROFILE_INCOMPLETE");
+      expect(err.domain).toBe("tutor");
+      expect(err.message).toBe(
+        "All required fields must be filled before submission",
+      );
+      expect(err.details).toEqual({
+        id: "tp_1",
+        missingFields: ["displayName", "prices"],
+      });
+      expect(err.name).toBe("TutorProfileIncompleteError");
+    });
+  });
+  describe("InvalidTutorPricingError", () => {
+    it("should be instance of DomainError", () => {
+      const err = new InvalidTutorPricingError("tp_1", "Prices are invalid");
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err).toBeInstanceOf(Error);
+    });
+    it("should have correct properties", () => {
+      const err = new InvalidTutorPricingError("tp_1", "Prices are invalid");
+      expect(err.code).toBe("INVALID_TUTOR_PRICING");
+      expect(err.domain).toBe("tutor");
+      expect(err.message).toBe("Tutor pricing validation failed");
+      expect(err.details).toEqual({
+        id: "tp_1",
+        pricingError: "Prices are invalid",
+      });
+      expect(err.name).toBe("InvalidTutorPricingError");
+    });
+  });
   describe("mapTutorError", () => {
     it("should map TutorProfileNotFoundError to NOT_FOUND", () => {
       const result = mapTutorError(new TutorProfileNotFoundError("tp_1"));
@@ -96,6 +142,18 @@ describe("tutor.errors", () => {
     it("should map AvailabilitySlotOverlapError to CONFLICT", () => {
       const result = mapTutorError(new AvailabilitySlotOverlapError("tp_1"));
       expect(result.status).toBe(409);
+    });
+    it("should map TutorProfileIncompleteError to BAD_REQUEST", () => {
+      const result = mapTutorError(
+        new TutorProfileIncompleteError("tp_1", ["displayName"]),
+      );
+      expect(result.status).toBe(400);
+    });
+    it("should map InvalidTutorPricingError to BAD_REQUEST", () => {
+      const result = mapTutorError(
+        new InvalidTutorPricingError("tp_1", "Prices are invalid"),
+      );
+      expect(result.status).toBe(400);
     });
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {
       const result = mapTutorError(new TestDomainError());

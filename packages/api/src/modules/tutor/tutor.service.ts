@@ -1,5 +1,4 @@
 import type { DbType } from "../../lib/db";
-import { badRequest } from "../../lib/errors";
 import {
   ONBOARDING_STATUS,
   MODALITY,
@@ -13,6 +12,8 @@ import {
   TutorProfileNotEditableError,
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
+  TutorProfileIncompleteError,
+  InvalidTutorPricingError,
 } from "./tutor.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
@@ -40,7 +41,7 @@ export function validateUpdateInput(
       | "both";
     const error = pricingPort.validatePrices(input.prices, modality);
     if (error) {
-      throw badRequest(error);
+      throw new InvalidTutorPricingError(profile.id, error);
     }
   }
 }
@@ -60,19 +61,22 @@ export function validateSubmitForReview(
     throw new InvalidTutorStatusError(profile.id, profile.onboardingStatus);
   }
 
-  const requiredFields = [
-    profile.displayName,
-    profile.shortBio,
-    profile.credentialsSummary,
-    profile.modality,
-    profile.prices,
+  const requiredFields: { key: string; value: unknown }[] = [
+    { key: "displayName", value: profile.displayName },
+    { key: "shortBio", value: profile.shortBio },
+    { key: "credentialsSummary", value: profile.credentialsSummary },
+    { key: "modality", value: profile.modality },
+    { key: "prices", value: profile.prices },
   ];
-  if (requiredFields.some((f) => !f)) {
-    throw badRequest("All required fields must be filled before submission");
+  const missingFields = requiredFields
+    .filter((f) => !f.value)
+    .map((f) => f.key);
+  if (missingFields.length > 0) {
+    throw new TutorProfileIncompleteError(profile.id, missingFields);
   }
 
   if (!profile.expertise || profile.expertise.length === 0) {
-    throw badRequest("At least one expertise track is required");
+    throw new TutorProfileIncompleteError(profile.id, ["expertise"]);
   }
 
   if (profile.prices) {
@@ -85,7 +89,7 @@ export function validateSubmitForReview(
       modality,
     );
     if (error) {
-      throw badRequest(error);
+      throw new InvalidTutorPricingError(profile.id, error);
     }
   }
 }

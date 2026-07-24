@@ -8,6 +8,8 @@ import {
   TutorProfileNotFoundError,
   TutorProfileNotEditableError,
   InvalidTutorStatusError,
+  TutorProfileIncompleteError,
+  InvalidTutorPricingError,
 } from "../../modules/tutor/tutor.errors";
 
 function makeProfile(overrides: Record<string, unknown> = {}) {
@@ -78,14 +80,14 @@ describe("Tutor Service", () => {
       ).toThrow(TutorProfileNotEditableError);
     });
 
-    test("throws when pricing validation fails", () => {
+    test("throws InvalidTutorPricingError when pricing validation fails", () => {
       expect(() =>
         validateUpdateInput(
           makeProfile({ onboardingStatus: "draft" }),
           { prices: { "1": 0 } },
           failPricingPort,
         ),
-      ).toThrow();
+      ).toThrow(InvalidTutorPricingError);
     });
 
     test("does not throw when input has no prices (skip pricing validation)", () => {
@@ -118,7 +120,7 @@ describe("Tutor Service", () => {
           { prices: { "1": 0 }, modality: "both" },
           failPricingPort,
         ),
-      ).toThrow();
+      ).toThrow(InvalidTutorPricingError);
     });
   });
 
@@ -153,28 +155,28 @@ describe("Tutor Service", () => {
       ).toThrow(InvalidTutorStatusError);
     });
 
-    test("throws for missing required fields", () => {
+    test("throws TutorProfileIncompleteError for missing required fields", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({ displayName: null }),
           mockPricingPort,
         ),
-      ).toThrow();
+      ).toThrow(TutorProfileIncompleteError);
     });
 
-    test("throws for empty expertise", () => {
+    test("throws TutorProfileIncompleteError for empty expertise", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({ expertise: [] }),
           mockPricingPort,
         ),
-      ).toThrow();
+      ).toThrow(TutorProfileIncompleteError);
     });
 
-    test("throws when pricing validation fails", () => {
+    test("throws InvalidTutorPricingError when pricing validation fails", () => {
       expect(() =>
         validateSubmitForReview(makeProfile(), failPricingPort),
-      ).toThrow();
+      ).toThrow(InvalidTutorPricingError);
     });
   });
 });
