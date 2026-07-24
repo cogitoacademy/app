@@ -290,6 +290,25 @@ async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
     );
 }
 
+async function decrementBookingConfirmedHeadcount(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  await conn
+    .update(booking)
+    .set({
+      confirmedHeadcount: sql`GREATEST(${booking.confirmedHeadcount} - 1, 0)`,
+    })
+    .where(eq(booking.id, bookingId));
+}
+
+async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
+  await conn
+    .update(bookingSession)
+    .set({ currentState: "cancelled" })
+    .where(eq(bookingSession.seriesBookingId, bookingId));
+}
+
 async function updateBookingVersioned(
   conn: DbOrTx,
   bookingId: string,
@@ -379,6 +398,8 @@ export function createBookingRepo(db: DbType) {
     findBookingsExpiringByDeadline,
     findOverlappingBookings,
     updateBookingVersioned,
+    decrementBookingConfirmedHeadcount,
+    cancelAllSessions,
   };
 }
 

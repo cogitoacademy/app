@@ -177,6 +177,43 @@ export function createBookingService(deps: {
     return versioned.updated;
   }
 
+  async function releaseAllParticipantHolds(
+    tx: DbOrTx,
+    bookingId: string,
+    reason: string,
+    actorType: "student" | "tutor" | "system",
+    excludeUserId?: string,
+  ): Promise<void> {
+    const participants = await repo.findConfirmedParticipants(
+      tx,
+      bookingId,
+      excludeUserId,
+    );
+    for (const p of participants) {
+      if (p.heldAmount > 0) {
+        const w = await wallet.getByUserId(tx, p.userId);
+        if (w) {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: w.id,
+            amount: p.heldAmount,
+            eventKey: `booking.${bookingId}.release.${p.userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType,
+            reason,
+          });
+        }
+      }
+      // eslint-disable-next-line no-await-in-loop
+      await repo.updateParticipantState(tx, p.id, {
+        confirmationState: CONFIRMATION_STATE.WITHDRAWN_PRE_H2,
+        withdrawnAt: new Date(),
+        withdrawnReason: reason,
+      });
+    }
+  }
+
   async function getById(bookingId: string) {
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
@@ -346,19 +383,18 @@ export function createBookingService(deps: {
         ? BOOKING_STATE.LATE_CANCELLED
         : BOOKING_STATE.CANCELLED;
 
-      if (b.holdAmount > 0) {
-        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-        await wallet.release(tx, {
-          walletId: proposerWallet.id,
-          amount: b.holdAmount,
-          eventKey: `booking.${bookingId}.cancel_release`,
-          sourceReference: bookingId,
-          bookingId,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
-        });
+      if (b.type === BOOKING_TYPE.SERIES) {
+        await repo.cancelAllSessions(tx, bookingId);
       }
+
+      await releaseAllParticipantHolds(
+        tx,
+        bookingId,
+        `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
+        ACTOR_TYPE.STUDENT,
+      );
+
+      await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
       const updated = await transition(tx, bookingId, toState, {
         actorId: userId,
@@ -469,19 +505,14 @@ export function createBookingService(deps: {
         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
       }
 
-      if (b.holdAmount > 0) {
-        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-        await wallet.release(tx, {
-          walletId: proposerWallet.id,
-          amount: b.holdAmount,
-          eventKey: `booking.${bookingId}.decline_release`,
-          sourceReference: bookingId,
-          bookingId,
-          actorType: ACTOR_TYPE.TUTOR,
-          reason: reason ?? "Tutor declined",
-        });
-      }
+      await releaseAllParticipantHolds(
+        tx,
+        bookingId,
+        reason ?? "Tutor declined",
+        ACTOR_TYPE.TUTOR,
+      );
+
+      await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
       const updated = await transition(tx, bookingId, BOOKING_STATE.DECLINED, {
         actorId: tutorId,
@@ -920,6 +951,8 @@ export function createBookingService(deps: {
         withdrawnReason: reason,
       });
 
+      await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
+
       const remaining = await repo.findConfirmedParticipants(
         tx,
         bookingId,
@@ -930,6 +963,16 @@ export function createBookingService(deps: {
         b.type === BOOKING_TYPE.GROUP &&
         remaining.length < MIN_GROUP_HEADCOUNT
       ) {
+        await releaseAllParticipantHolds(
+          tx,
+          bookingId,
+          "Group cancelled: not enough participants",
+          ACTOR_TYPE.STUDENT,
+          userId,
+        );
+
+        await repo.updateBookingHoldAmount(tx, bookingId, 0);
+
         await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
           actorId: userId,
           actorType: ACTOR_TYPE.STUDENT,
@@ -1103,20 +1146,15 @@ export function createBookingService(deps: {
       try {
         // eslint-disable-next-line no-await-in-loop
         await db.transaction(async (tx) => {
-          if (b.holdAmount > 0) {
-            const w = await wallet.getByUserId(tx, b.proposerId);
-            if (w) {
-              await wallet.release(tx, {
-                walletId: w.id,
-                amount: b.holdAmount,
-                eventKey: `booking.${b.id}.expire_release`,
-                sourceReference: b.id,
-                bookingId: b.id,
-                actorType: ACTOR_TYPE.SYSTEM,
-                reason: "Booking expired",
-              });
-            }
-          }
+          await releaseAllParticipantHolds(
+            tx,
+            b.id,
+            "Booking expired",
+            ACTOR_TYPE.SYSTEM,
+          );
+
+          await repo.updateBookingHoldAmount(tx, b.id, 0);
+
           await transition(tx, b.id, BOOKING_STATE.EXPIRED, {
             actorId: "system",
             actorType: ACTOR_TYPE.SYSTEM,
