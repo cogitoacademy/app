@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
@@ -113,5 +114,19 @@ export function createRefundService(deps: {
     };
   }
 
-  return { createCorrection, listCorrections };
+  async function createRefundRecord(
+    db: DbOrTx,
+    params: {
+      paymentId: string | null;
+      walletId: string;
+      amountIdr: number;
+      marks: number;
+      reason: string;
+      actorId?: string;
+    },
+  ): Promise<void> {
+    await repo.insertRefundRecord(db, params);
+  }
+
+  return { createCorrection, listCorrections, createRefundRecord };
 }

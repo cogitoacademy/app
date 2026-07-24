@@ -16,7 +16,7 @@ import { createEmailModule } from "./modules/email";
 import { createPaymentModule } from "./modules/payment";
 import { createRoomModule } from "./modules/room";
 import { createAdminBookingModule } from "./modules/admin-booking";
-import { createRefundModule, createRefundRepo } from "./modules/refund";
+import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
 
 import type { AuditPort } from "./modules/audit/audit.service";
@@ -156,21 +156,17 @@ function createServices() {
     meeting,
   });
 
-  // Shared repo between refund and adminBooking
-  const refundRepo = createRefundRepo();
-
   const refund = createRefundModule({
     db,
     audit: audit.service,
     wallet: wallet.service,
-    repo: refundRepo,
   });
 
   const adminBooking = createAdminBookingModule({
     db,
     audit: audit.service,
     wallet: wallet.service,
-    refundRepo,
+    refund: refund.service,
   });
 
   const services: ServiceRegistry = {

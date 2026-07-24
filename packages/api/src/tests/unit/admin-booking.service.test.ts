@@ -81,11 +81,9 @@ function makeWalletPort(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeRefundRepo() {
+function makeRefundPort() {
   return {
-    insertRefundRecord: mock(async () => ({})),
-    findPaymentByReference: mock(async () => null),
-    updatePaymentStatus: mock(async () => null),
+    createRefundRecord: mock(async () => {}),
   };
 }
 
@@ -100,7 +98,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       try {
@@ -129,7 +127,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       try {
@@ -153,7 +151,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       const result = await service.applyOverride("admin1", {
@@ -180,7 +178,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       await service.applyOverride("admin1", {
@@ -223,7 +221,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       await service.applyOverride("admin1", {
@@ -259,7 +257,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       await service.applyOverride("admin1", {
@@ -297,7 +295,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       await service.applyOverride("admin1", {
@@ -326,7 +324,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       await service.applyOverride("admin1", {
@@ -354,7 +352,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       await service.applyOverride("admin1", {
@@ -395,7 +393,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       await service.applyOverride("admin1", {
@@ -419,7 +417,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       const result = await service.listBookings();
@@ -436,7 +434,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       const result = await service.listBookings({ bookingId: "b1" });
@@ -452,7 +450,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       const result = await service.listBookings({ bookingId: "nonexistent" });
@@ -473,7 +471,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       const result = await service.listBookings({ limit: 2 });
@@ -499,7 +497,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       try {
@@ -524,7 +522,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       const result = await service.getBookingStateHistory("b1");
@@ -546,7 +544,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       try {
@@ -575,7 +573,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       try {
@@ -593,7 +591,7 @@ describe("AdminBookingService", () => {
     test("success with PAID payment", async () => {
       const wallet = makeWalletPort();
       const auditPort = makeAuditPort();
-      const refundRepo = makeRefundRepo();
+      const refund = makeRefundPort();
       const repo = mockRepo({
         findPaymentById: mock(async () => ({
           id: "pay1",
@@ -608,7 +606,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: refundRepo as any,
+        refund,
       });
 
       const result = await service.adminRefund("admin1", {
@@ -632,7 +630,7 @@ describe("AdminBookingService", () => {
         "pay1",
         "REFUNDED",
       );
-      expect(refundRepo.insertRefundRecord).toHaveBeenCalledWith(
+      expect(refund.createRefundRecord).toHaveBeenCalledWith(
         expect.anything(),
         {
           paymentId: "pay1",
@@ -649,7 +647,7 @@ describe("AdminBookingService", () => {
     test("success with SETTLED payment", async () => {
       const wallet = makeWalletPort();
       const auditPort = makeAuditPort();
-      const refundRepo = makeRefundRepo();
+      const refund = makeRefundPort();
       const repo = mockRepo({
         findPaymentById: mock(async () => ({
           id: "pay2",
@@ -664,7 +662,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort,
         wallet: wallet as any,
-        refundRepo: refundRepo as any,
+        refund,
       });
 
       const result = await service.adminRefund("admin1", {
@@ -688,7 +686,7 @@ describe("AdminBookingService", () => {
         "pay2",
         "REFUNDED",
       );
-      expect(refundRepo.insertRefundRecord).toHaveBeenCalledWith(
+      expect(refund.createRefundRecord).toHaveBeenCalledWith(
         expect.anything(),
         {
           paymentId: "pay2",
@@ -719,7 +717,7 @@ describe("AdminBookingService", () => {
         repo,
         auditPort: makeAuditPort(),
         wallet: wallet as any,
-        refundRepo: makeRefundRepo() as any,
+        refund: makeRefundPort(),
       });
 
       try {

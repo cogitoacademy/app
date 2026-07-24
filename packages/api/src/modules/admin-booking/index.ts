@@ -6,7 +6,6 @@ import type {
   ReleaseParams,
   CompensateParams,
 } from "../wallet/wallet.service";
-import type { RefundRepo } from "../refund/refund.repo";
 import { createAdminBookingRepo } from "./admin-booking.repo";
 import { createAdminBookingService } from "./admin-booking.service";
 import { createAdminBookingHandler } from "./admin-booking.handler";
@@ -25,11 +24,25 @@ export interface AdminBookingWalletPort {
   compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
 }
 
+export interface AdminBookingRefundPort {
+  createRefundRecord(
+    db: DbOrTx,
+    params: {
+      paymentId: string | null;
+      walletId: string;
+      amountIdr: number;
+      marks: number;
+      reason: string;
+      actorId?: string;
+    },
+  ): Promise<void>;
+}
+
 export function createAdminBookingModule(deps: {
   db: DbType;
   audit: AdminBookingAuditPort;
   wallet: AdminBookingWalletPort;
-  refundRepo: RefundRepo;
+  refund: AdminBookingRefundPort;
 }) {
   const repo = createAdminBookingRepo();
   const service = createAdminBookingService({
@@ -37,7 +50,7 @@ export function createAdminBookingModule(deps: {
     repo,
     auditPort: deps.audit,
     wallet: deps.wallet,
-    refundRepo: deps.refundRepo,
+    refund: deps.refund,
   });
   const handler = createAdminBookingHandler(service);
   return { service, handler };
