@@ -14,7 +14,18 @@ describe("scheduleBookingExpiryCheck", () => {
       {},
       {
         repeat: { every: 5 * 60 * 1000 },
+        attempts: 3,
       },
     );
+  });
+
+  test("includes retry attempts option", async () => {
+    const mockAdd = mock(async () => ({}));
+    const queue = { add: mockAdd } as any;
+
+    await scheduleBookingExpiryCheck(queue);
+
+    const opts = mockAdd.mock.calls[0][2];
+    expect(opts.attempts).toBe(3);
   });
 });

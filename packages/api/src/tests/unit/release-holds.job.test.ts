@@ -14,7 +14,18 @@ describe("scheduleHoldReleaseCheck", () => {
       {},
       {
         repeat: { every: 10 * 60 * 1000 },
+        attempts: 3,
       },
     );
+  });
+
+  test("includes retry attempts option", async () => {
+    const mockAdd = mock(async () => ({}));
+    const queue = { add: mockAdd } as any;
+
+    await scheduleHoldReleaseCheck(queue);
+
+    const opts = mockAdd.mock.calls[0][2];
+    expect(opts.attempts).toBe(3);
   });
 });

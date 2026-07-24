@@ -298,7 +298,8 @@ async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
         lte(booking.deadlineAt, new Date()),
         inArray(booking.currentState, states),
       ),
-    );
+    )
+    .limit(500);
 }
 
 async function decrementBookingConfirmedHeadcount(

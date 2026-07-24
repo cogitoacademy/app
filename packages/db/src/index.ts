@@ -21,7 +21,12 @@ export function createDb(connectionString?: string) {
     }),
     ...(env.NODE_ENV === "development" && {
       onquery: (query: { sql: string; params: unknown[] }) => {
-        console.log(`[DB] ${query.sql} | ${JSON.stringify(query.params)}`);
+        const redactedParams = query.params.map((p) =>
+          typeof p === "string" && (p.includes("@") || p.length > 100)
+            ? "[REDACTED]"
+            : p,
+        );
+        console.log(`[DB] ${query.sql} | ${JSON.stringify(redactedParams)}`);
       },
     }),
   });
