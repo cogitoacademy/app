@@ -17,6 +17,7 @@ export const requireAuth = o.middleware(async ({ context, next }) => {
     context: {
       session: context.session,
       services: context.services,
+      headers: context.headers,
     },
   });
 });
@@ -33,6 +34,7 @@ export const requireAdmin = o.middleware(async ({ context, next }) => {
     context: {
       session: context.session,
       services: context.services,
+      headers: context.headers,
     },
   });
 });
@@ -52,6 +54,7 @@ export const requireTutor = o.middleware(async ({ context, next }) => {
     context: {
       session: context.session,
       services: context.services,
+      headers: context.headers,
     },
   });
 });

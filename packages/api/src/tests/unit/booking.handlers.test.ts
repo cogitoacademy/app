@@ -1,8 +1,9 @@
-import { describe, test, expect, mock } from "bun:test";
+import { describe, test, expect, mock, beforeEach } from "bun:test";
 import {
   createBookingHandler,
   createTutorActionsHandler,
 } from "../../modules/booking/booking.handler";
+import { bookingIdempotency } from "../../lib/idempotency";
 
 function makeBookingService() {
   return {
@@ -30,12 +31,32 @@ function makeBookingService() {
   };
 }
 
+function makeHeaders(idempotencyKey?: string) {
+  const headers = new Headers();
+  if (idempotencyKey !== undefined) {
+    headers.set("idempotency-key", idempotencyKey);
+  }
+  return headers;
+}
+
+function makeContext(userId = "u1") {
+  return {
+    session: { user: { id: userId } },
+    services: {} as any,
+    headers: makeHeaders(),
+  } as any;
+}
+
 describe("bookingHandler", () => {
+  beforeEach(() => {
+    bookingIdempotency["store"].clear();
+  });
+
   describe("createSolo", () => {
     test("calls booking.createSolo with session user id and transformed input", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = {
         tutorId: "t1",
         availabilitySlotId: "slot1",
@@ -66,7 +87,7 @@ describe("bookingHandler", () => {
     test("calls booking.getById with input.bookingId", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = { bookingId: "b1" };
 
       const result = await handler.get({
@@ -83,7 +104,7 @@ describe("bookingHandler", () => {
     test("calls booking.listMine with session user id and input", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = { status: "confirmed" };
 
       const result = await handler.listMine({
@@ -100,7 +121,7 @@ describe("bookingHandler", () => {
     test("calls booking.cancel with session user id, bookingId, and cancellationReason", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = {
         bookingId: "b1",
         cancellationReason: "schedule conflict",
@@ -124,7 +145,7 @@ describe("bookingHandler", () => {
     test("calls booking.proposeReschedule with session user id, bookingId, Date-converted times, and reason", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = {
         bookingId: "b1",
         proposedStartAt: new Date("2025-02-01T10:00:00Z"),
@@ -155,7 +176,7 @@ describe("bookingHandler", () => {
     test("calls booking.createGroup with session user id and transformed input", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = {
         tutorId: "t1",
         availabilitySlotId: "slot1",
@@ -190,7 +211,7 @@ describe("bookingHandler", () => {
     test("calls booking.createSeries with session user id and transformed input including session Date conversions", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = {
         tutorId: "t1",
         availabilitySlotId: "slot1",
@@ -237,7 +258,7 @@ describe("bookingHandler", () => {
     test("calls booking.confirmInvite with session user id and bookingId", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = { bookingId: "b1" };
 
       const result = await handler.confirmInvite({
@@ -254,7 +275,7 @@ describe("bookingHandler", () => {
     test("calls booking.declineInvite with session user id, bookingId, and reason", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = { bookingId: "b1", reason: "busy" };
 
       const result = await handler.declineInvite({
@@ -271,7 +292,7 @@ describe("bookingHandler", () => {
     test("calls booking.reconfirm with session user id, bookingId, and accept", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = { bookingId: "b1", accept: true };
 
       const result = await handler.reconfirm({
@@ -288,7 +309,7 @@ describe("bookingHandler", () => {
     test("calls booking.withdraw with session user id, bookingId, and reason", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = { bookingId: "b1", reason: "changed mind" };
 
       const result = await handler.withdraw({
@@ -305,7 +326,7 @@ describe("bookingHandler", () => {
     test("calls booking.listSessions with input.bookingId", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const context = { session: { user: { id: "u1" } } };
+      const context = makeContext("u1");
       const input = { bookingId: "b1" };
 
       const result = await handler.listSessions({
@@ -320,11 +341,15 @@ describe("bookingHandler", () => {
 });
 
 describe("tutorActionsHandler", () => {
+  beforeEach(() => {
+    bookingIdempotency["store"].clear();
+  });
+
   describe("acceptBooking", () => {
     test("calls booking.tutorAccept with bookingId and session user id", async () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
-      const context = { session: { user: { id: "t1" } } };
+      const context = makeContext("t1");
       const input = { bookingId: "b1" };
 
       const result = await handler.acceptBooking({
@@ -341,7 +366,7 @@ describe("tutorActionsHandler", () => {
     test("calls booking.tutorDecline with bookingId, session user id, and reason", async () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
-      const context = { session: { user: { id: "t1" } } };
+      const context = makeContext("t1");
       const input = { bookingId: "b1", reason: "unavailable" };
 
       const result = await handler.declineBooking({
@@ -362,7 +387,7 @@ describe("tutorActionsHandler", () => {
     test("calls booking.completeSession with bookingId, session user id, and sessionNote", async () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
-      const context = { session: { user: { id: "t1" } } };
+      const context = makeContext("t1");
       const input = { bookingId: "b1", sessionNote: "Great session" };
 
       const result = await handler.completeSession({
