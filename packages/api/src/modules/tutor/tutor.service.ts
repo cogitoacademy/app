@@ -113,14 +113,21 @@ export function createTutorService(deps: {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateUpdateInput(profile, input, pricingPort);
     const { version, ...data } = input;
-    const rows = await tutorRepo.updateProfileWithVersion(
-      db,
-      userId,
-      version,
-      data,
-    );
-    if (rows.length === 0) throw new OptimisticLockError(profile!.id, version);
-    return rows[0];
+    let result;
+    if (version !== undefined) {
+      const rows = await tutorRepo.updateProfileWithVersion(
+        db,
+        userId,
+        version,
+        data,
+      );
+      if (rows.length === 0)
+        throw new OptimisticLockError(profile!.id, version);
+      result = rows[0];
+    } else {
+      result = await tutorRepo.updateProfile(db, userId, data);
+    }
+    return result;
   }
 
   async function submitForReview(userId: string) {

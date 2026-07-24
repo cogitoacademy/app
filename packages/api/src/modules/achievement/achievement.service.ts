@@ -18,7 +18,7 @@ type AchievementRow = typeof achievement.$inferSelect;
 
 export interface UpdateAchievementInput {
   id: string;
-  version: number;
+  version?: number;
   data: UpdateAchievementData;
 }
 
@@ -65,29 +65,35 @@ export function createAchievementService(deps: {
       userId,
     );
     validateUpdate(existing);
-    const rows = await achievementRepo.updateWithVersion(
-      db,
-      input.id,
-      userId,
-      input.version,
-      input.data,
-    );
-    if (rows.length === 0)
-      throw new OptimisticLockError(input.id, input.version);
-    return rows[0];
+    if (input.version !== undefined) {
+      const rows = await achievementRepo.updateWithVersion(
+        db,
+        input.id,
+        userId,
+        input.version,
+        input.data,
+      );
+      if (rows.length === 0)
+        throw new OptimisticLockError(input.id, input.version);
+      return rows[0];
+    }
+    return achievementRepo.update(db, input.id, userId, input.data);
   }
 
-  async function remove(userId: string, id: string, expectedVersion: number) {
+  async function remove(userId: string, id: string, expectedVersion?: number) {
     const existing = await achievementRepo.findByIdForUser(db, id, userId);
     validateDelete(existing);
-    const rows = await achievementRepo.deleteWithVersion(
-      db,
-      id,
-      userId,
-      expectedVersion,
-    );
-    if (rows.length === 0) throw new OptimisticLockError(id, expectedVersion);
-    return rows;
+    if (expectedVersion !== undefined) {
+      const rows = await achievementRepo.deleteWithVersion(
+        db,
+        id,
+        userId,
+        expectedVersion,
+      );
+      if (rows.length === 0) throw new OptimisticLockError(id, expectedVersion);
+      return;
+    }
+    await achievementRepo.deleteRow(db, id, userId);
   }
 
   async function adminList(input?: AdminListInput) {
