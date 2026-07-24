@@ -109,12 +109,14 @@ jobs:
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
       - run: bun test packages/api/src/tests/ apps/server/src/openapi.test.ts
-      - run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts
-        continue-on-error: true
-      - name: Post coverage comment
-        if: github.event_name == 'pull_request'
+      - name: Test with coverage
+        run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts
+      - name: Post coverage comment + enforce gate
+        if: always()
         run: bun .github/scripts/coverage-comment.ts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LCOV_FILE: ./coverage/lcov.info
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          COVERAGE_API_THRESHOLD: 90
+          COVERAGE_OVERALL_THRESHOLD: 80
