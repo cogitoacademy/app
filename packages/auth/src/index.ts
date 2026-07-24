@@ -36,6 +36,7 @@ export function createAuth() {
       },
     },
     session: {
+      expiresIn: 60 * 60 * 24 * 7,
       cookieCache: {
         enabled: true,
         maxAge: env.SESSION_COOKIE_CACHE_MAX_AGE,
@@ -43,13 +44,17 @@ export function createAuth() {
     },
     emailAndPassword: {
       enabled: true,
+      minPasswordLength: 8,
     },
-    socialProviders: {
-      google: {
-        clientId: env.GOOGLE_CLIENT_ID ?? "",
-        clientSecret: env.GOOGLE_CLIENT_SECRET ?? "",
-      },
-    },
+    socialProviders:
+      env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+        ? {
+            google: {
+              clientId: env.GOOGLE_CLIENT_ID,
+              clientSecret: env.GOOGLE_CLIENT_SECRET,
+            },
+          }
+        : {},
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     advanced: {

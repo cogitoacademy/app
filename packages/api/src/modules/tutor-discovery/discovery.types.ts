@@ -2,8 +2,8 @@ import { z } from "zod";
 
 export const listPublishedInput = z
   .object({
-    search: z.string().optional(),
-    expertise: z.string().optional(),
+    search: z.string().max(200).optional(),
+    expertise: z.string().max(255).optional(),
     modality: z.enum(["online", "offline", "both"]).optional(),
     limit: z.number().min(1).max(50).default(20),
     offset: z.number().min(0).default(0),
@@ -11,5 +11,5 @@ export const listPublishedInput = z
   .optional();
 
 export const getProfileInput = z.object({
-  tutorId: z.string(),
+  tutorId: z.string().max(100),
 });

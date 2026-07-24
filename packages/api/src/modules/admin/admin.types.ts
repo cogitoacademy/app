@@ -8,7 +8,7 @@ export const listUsersInput = z
   .optional();
 
 export const setRoleInput = z.object({
-  userId: z.string(),
+  userId: z.string().max(100),
   role: z.enum(["student", "tutor", "admin"]),
   expectedRole: z.enum(["student", "tutor", "admin"]),
 });

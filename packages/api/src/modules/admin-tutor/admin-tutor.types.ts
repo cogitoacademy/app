@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 export const createInviteInput = z.object({
-  email: z.string().email(),
-  displayName: z.string().min(1),
-  internalNotes: z.string().optional(),
+  email: z.string().email().max(320),
+  displayName: z.string().min(1).max(255),
+  internalNotes: z.string().max(2000).optional(),
 });
 
 export const listInvitesInput = z
@@ -14,9 +14,9 @@ export const listInvitesInput = z
   })
   .optional();
 
-export const resendInviteInput = z.object({ inviteId: z.string() });
+export const resendInviteInput = z.object({ inviteId: z.string().max(100) });
 
-export const revokeInviteInput = z.object({ inviteId: z.string() });
+export const revokeInviteInput = z.object({ inviteId: z.string().max(100) });
 
 export const listTutorProfilesInput = z
   .object({
@@ -43,7 +43,7 @@ export type ReviewAction =
   | "suspend";
 
 export const reviewTutorProfileInput = z.object({
-  tutorProfileId: z.string(),
+  tutorProfileId: z.string().max(100),
   action: z.enum([
     "request_changes",
     "approve_unpublished",
@@ -51,5 +51,5 @@ export const reviewTutorProfileInput = z.object({
     "unpublish",
     "suspend",
   ]),
-  adminNote: z.string().optional(),
+  adminNote: z.string().max(2000).optional(),
 });
