@@ -1,6 +1,7 @@
 import type { DbType } from "../../lib/db";
 import { createNotificationService } from "./notification.service";
 import { createNotificationHandler } from "./notification.handler";
+import { createNotificationRepo } from "./notification.repo";
 import type { NotificationService } from "./notification.service";
 import type { NotificationHandler } from "./notification.handler";
 
@@ -19,7 +20,8 @@ export function createNotificationModule(deps: {
   db: DbType;
   email: NotificationEmailPort;
 }) {
-  const service = createNotificationService(deps.db, deps.email);
+  const repo = createNotificationRepo(deps.db);
+  const service = createNotificationService(repo, deps.email);
   const handler = createNotificationHandler({ notificationService: service });
   return { service, handler };
 }

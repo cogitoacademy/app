@@ -1,4 +1,6 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
+import { createNotificationService } from "../../modules/notification/notification.service";
+import type { NotificationRepo } from "../../modules/notification/notification.repo";
 
 let logCaptures: any[] = [];
 const originalConsoleLog = console.log;
@@ -36,33 +38,20 @@ afterEach(() => {
   console.warn = originalConsoleWarn;
 });
 
-import { createNotificationService } from "../../modules/notification/notification.service";
-
-function createMainDbMock(overrides: {
-  selectResult?: any[];
-  updateResult?: any;
-}) {
-  const { selectResult = [], updateResult } = overrides;
-
-  const chain = {
-    from: mock(() => chain),
-    where: mock(() => chain),
-    orderBy: mock(() => chain),
-    limit: mock(async () => selectResult),
-  };
-
-  const selectFn = mock(() => ({ from: chain.from }));
-
-  const updateSetWhere = mock(async () => updateResult);
-  const updateSet = mock(() => ({ where: updateSetWhere }));
-  const updateFn = mock(() => ({ set: updateSet }));
-
-  const db = {
-    select: selectFn,
-    update: updateFn,
+function makeRepo(overrides: Partial<NotificationRepo> = {}): NotificationRepo {
+  return {
+    findNotificationByEventKey: mock(async () => null),
+    insertNotification: mock(async () => ({ id: "n1" })),
+    findUserEmail: mock(async () => ""),
+    insertDispatch: mock(async () => {}),
+    updateDispatchStatus: mock(async () => {}),
+    listNotifications: mock(async () => []),
+    countUnread: mock(async () => 0),
+    updateReadStatus: mock(async () => {}),
+    markAllRead: mock(async () => {}),
+    findDispatch: mock(async () => null),
+    ...overrides,
   } as any;
-
-  return { db, selectFn, updateFn, chain };
 }
 
 describe("NotificationService (unit)", () => {
@@ -71,29 +60,15 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal deduplicates by eventKey when existing notification found", async () => {
-    let insertCalled = false;
-    const selectFromWhereLimit = mock(async () => [{ id: "existing_n1" }]);
-    const selectFromWhere = mock(() => ({ limit: selectFromWhereLimit }));
-    const selectFrom = mock(() => ({ where: selectFromWhere }));
-    const selectFn = mock(() => ({ from: selectFrom }));
-
-    const insertFn = mock(() => {
-      insertCalled = true;
-      return { values: mock(() => ({ returning: mock(async () => [{}]) })) };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => ({ id: "existing_n1" })),
     });
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "Test",
@@ -101,87 +76,40 @@ describe("NotificationService (unit)", () => {
       eventKey: "booking.b1.created",
     });
 
-    expect(insertCalled).toBe(false);
+    expect(repo.insertNotification).toHaveBeenCalledTimes(0);
   });
 
   test("writeInternal inserts when no eventKey provided", async () => {
-    let insertCalled = false;
-    const selectFromWhereLimit = mock(async () => []);
-    const selectFromWhere = mock(() => ({ limit: selectFromWhereLimit }));
-    const selectFrom = mock(() => ({ where: selectFromWhere }));
-    const selectFn = mock(() => ({ from: selectFrom }));
-
-    const insertFn = mock(() => {
-      insertCalled = true;
-      return {
-        values: mock(() => ({
-          returning: mock(async () => [{ id: "n_new" }]),
-        })),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
     });
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "system",
       title: "Test",
       body: "Test body",
     });
 
-    expect(insertCalled).toBe(true);
+    expect(repo.insertNotification).toHaveBeenCalledTimes(1);
   });
 
   test("writeInternal dispatches email for action severity with supported category and updates status to sent", async () => {
-    const selectResults: any[][] = [[{ email: "user@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_action" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_action" })),
+      findUserEmail: mock(async () => "user@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "Booking Confirmed",
@@ -196,50 +124,21 @@ describe("NotificationService (unit)", () => {
       html: "Your booking is confirmed",
       category: "booking",
     });
-    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
   });
 
   test("writeInternal dispatches email for critical severity with supported category", async () => {
-    const selectResults: any[][] = [[{ email: "critical@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_critical" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_critical" })),
+      findUserEmail: mock(async () => "critical@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m2" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "payment",
       title: "Payment Required",
@@ -248,54 +147,25 @@ describe("NotificationService (unit)", () => {
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
-    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
   });
 
   test("writeInternal updates dispatch status to failed when email send fails", async () => {
-    const selectResults: any[][] = [[{ email: "user@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_fail" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_fail" })),
+      findUserEmail: mock(async () => "user@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = {
       send: mock(async () => {
         throw new Error("SMTP failure");
       }),
     };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "Booking Failed",
@@ -304,7 +174,11 @@ describe("NotificationService (unit)", () => {
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
-    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(repo.updateDispatchStatus).toHaveBeenCalledWith(
+      expect.anything(),
+      "n_fail",
+      "failed",
+    );
 
     const errorCalls = logCaptures.filter(
       (c: any) => c.action === "notification_email_dispatch_failed",
@@ -313,32 +187,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal skips email dispatch when recipient email is empty string", async () => {
-    const selectResults: any[][] = [[{ email: "" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    const insertFn = mock(() => ({
-      values: mock(() => ({
-        returning: mock(async () => [{ id: "n_no_email" }]),
-      })),
-    }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-    } as any;
-
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_no_email" })),
+      findUserEmail: mock(async () => ""),
+    });
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "No Email",
@@ -350,32 +209,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal skips email dispatch when recipient email is undefined (no user row)", async () => {
-    const selectResults: any[][] = [[]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    const insertFn = mock(() => ({
-      values: mock(() => ({
-        returning: mock(async () => [{ id: "n_no_user" }]),
-      })),
-    }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-    } as any;
-
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_no_user" })),
+      findUserEmail: mock(async () => ""),
+    });
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "No User",
@@ -387,32 +231,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal logs debug for unsupported category (achievement) with emailPort and recipient email", async () => {
-    const selectResults: any[][] = [[{ email: "user@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    const insertFn = mock(() => ({
-      values: mock(() => ({
-        returning: mock(async () => [{ id: "n_achievement" }]),
-      })),
-    }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-    } as any;
-
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_achievement" })),
+      findUserEmail: mock(async () => "user@example.com"),
+    });
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "achievement",
       title: "Achievement Unlocked",
@@ -429,32 +258,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal logs debug for unsupported category (system) with emailPort and recipient email", async () => {
-    const selectResults: any[][] = [[{ email: "user@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    const insertFn = mock(() => ({
-      values: mock(() => ({
-        returning: mock(async () => [{ id: "n_system" }]),
-      })),
-    }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-    } as any;
-
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_system" })),
+      findUserEmail: mock(async () => "user@example.com"),
+    });
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "system",
       title: "System Notice",
@@ -471,46 +285,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal dispatches email with eventKey dedup check passing (no existing)", async () => {
-    const selectResults: any[][] = [[], [{ email: "user@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_dedup_pass" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_dedup_pass" })),
+      findUserEmail: mock(async () => "user@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "New Booking",
@@ -520,31 +305,21 @@ describe("NotificationService (unit)", () => {
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
-    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
   });
 
   test("write catches and logs errors", async () => {
-    const selectFromWhereLimit = mock(async () => {
-      throw new Error("db error");
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => {
+        throw new Error("db error");
+      }),
     });
-    const selectFromWhere = mock(() => ({ limit: selectFromWhereLimit }));
-    const selectFrom = mock(() => ({ where: selectFromWhere }));
-    const selectFn = mock(() => ({ from: selectFrom }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: mock(() => ({
-        values: mock(() => ({ returning: mock(async () => [{}]) })),
-      })),
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "system",
       title: "Test",
@@ -559,8 +334,8 @@ describe("NotificationService (unit)", () => {
   });
 
   test("service exposes expected methods", async () => {
-    const db = {} as any;
-    const service = createNotificationService(db);
+    const repo = makeRepo();
+    const service = createNotificationService(repo);
 
     expect(typeof service.write).toBe("function");
     expect(typeof service.list).toBe("function");
@@ -571,28 +346,16 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal does not dispatch email for info severity", async () => {
-    const insertFn = mock(() => ({
-      values: mock(() => ({
-        returning: mock(async () => [{ id: "n_info" }]),
-      })),
-    }));
-
-    const paramsDb = {
-      select: mock(() => ({
-        from: mock(() => ({
-          where: mock(() => ({ limit: mock(async () => []) })),
-        })),
-      })),
-      insert: insertFn,
-    } as any;
-
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_info" })),
+    });
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "Info Notification",
@@ -604,27 +367,15 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal without emailPort does not attempt email dispatch even for action severity", async () => {
-    const insertFn = mock(() => ({
-      values: mock(() => ({
-        returning: mock(async () => [{ id: "n_no_port" }]),
-      })),
-    }));
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_no_port" })),
+    });
 
-    const paramsDb = {
-      select: mock(() => ({
-        from: mock(() => ({
-          where: mock(() => ({ limit: mock(async () => []) })),
-        })),
-      })),
-      insert: insertFn,
-    } as any;
-
-    const mainDb = {} as any;
-
-    const service = createNotificationService(mainDb, undefined as any);
+    const service = createNotificationService(repo, undefined as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "No email port",
@@ -651,9 +402,11 @@ describe("NotificationService (unit)", () => {
       bookingId: null,
     }));
 
-    const { db } = createMainDbMock({ selectResult: items });
+    const repo = makeRepo({
+      listNotifications: mock(async () => items),
+    });
 
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     const result = await service.list("user1", { limit: 5 });
 
     expect(result.items.length).toBe(5);
@@ -676,156 +429,105 @@ describe("NotificationService (unit)", () => {
       bookingId: null,
     }));
 
-    const { db } = createMainDbMock({ selectResult: items });
+    const repo = makeRepo({
+      listNotifications: mock(async () => items),
+    });
 
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     const result = await service.list("user1", { limit: 5 });
 
     expect(result.items.length).toBe(3);
     expect(result.nextCursor).toBeNull();
   });
 
-  test("list filters by unreadOnly", async () => {
-    const items = [
-      {
-        id: "n1",
-        userId: "user1",
-        category: "booking",
-        title: "Unread",
-        body: "Unread body",
-        severity: "info",
-        isRead: false,
-        createdAt: new Date(2025, 0, 1),
-        readAt: null,
-        eventKey: null,
-        metadata: {},
-        bookingId: null,
-      },
-    ];
+  test("list passes unreadOnly flag to repo", async () => {
+    const repo = makeRepo({
+      listNotifications: mock(async () => [
+        {
+          id: "n1",
+          userId: "user1",
+          category: "booking",
+          title: "Unread",
+          body: "Unread body",
+          severity: "info",
+          isRead: false,
+          createdAt: new Date(2025, 0, 1),
+          readAt: null,
+          eventKey: null,
+          metadata: {},
+          bookingId: null,
+        },
+      ]),
+    });
 
-    const { db, chain } = createMainDbMock({ selectResult: items });
+    const service = createNotificationService(repo);
+    await service.list("user1", { unreadOnly: true });
 
-    const service = createNotificationService(db, undefined as any);
-    const result = await service.list("user1", { unreadOnly: true });
-
-    expect(result.items.length).toBe(1);
-    expect(chain.where).toHaveBeenCalled();
+    expect(repo.listNotifications).toHaveBeenCalledWith("user1", {
+      unreadOnly: true,
+      cursor: undefined,
+      limit: 20,
+    });
   });
 
   test("list uses default limit when not specified", async () => {
-    const items = Array.from({ length: 5 }, (_, i) => ({
-      id: `n${i}`,
-      userId: "user1",
-      category: "booking",
-      title: `Title ${i}`,
-      body: `Body ${i}`,
-      severity: "info",
-      isRead: false,
-      createdAt: new Date(2025, 0, i + 1),
-      readAt: null,
-      eventKey: null,
-      metadata: {},
-      bookingId: null,
-    }));
+    const repo = makeRepo({
+      listNotifications: mock(async () => []),
+    });
 
-    const { db } = createMainDbMock({ selectResult: items });
-
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     const result = await service.list("user1");
 
     expect(result.items).toBeDefined();
+    expect(repo.listNotifications).toHaveBeenCalledWith("user1", {
+      limit: 20,
+      cursor: undefined,
+      unreadOnly: undefined,
+    });
   });
 
-  test("list with cursor includes createdAt filter", async () => {
-    const items = Array.from({ length: 2 }, (_, i) => ({
-      id: `n${i}`,
-      userId: "user1",
-      category: "booking",
-      title: `Title ${i}`,
-      body: `Body ${i}`,
-      severity: "info",
-      isRead: false,
-      createdAt: new Date(2025, 0, i + 1),
-      readAt: null,
-      eventKey: null,
-      metadata: {},
-      bookingId: null,
-    }));
-
-    const { db, chain } = createMainDbMock({ selectResult: items });
-
-    const service = createNotificationService(db, undefined as any);
-    const result = await service.list("user1", {
-      cursor: "2025-01-10T00:00:00.000Z",
+  test("getUnreadCount delegates to repo", async () => {
+    const repo = makeRepo({
+      countUnread: mock(async () => 5),
     });
 
-    expect(result.items.length).toBe(2);
-    expect(chain.where).toHaveBeenCalled();
-  });
-
-  test("getUnreadCount returns count from database", async () => {
-    const chain = {
-      from: mock(() => chain),
-      where: mock(async () => [{ value: 5 }]),
-    };
-
-    const selectFn = mock(() => ({ from: chain.from }));
-
-    const db = { select: selectFn } as any;
-
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     const count = await service.getUnreadCount("user1");
 
     expect(count).toBe(5);
+    expect(repo.countUnread).toHaveBeenCalledWith("user1");
   });
 
-  test("getUnreadCount returns 0 when no rows", async () => {
-    const chain = {
-      from: mock(() => chain),
-      where: mock(async () => []),
-    };
+  test("getUnreadCount returns 0 when repo returns 0", async () => {
+    const repo = makeRepo({
+      countUnread: mock(async () => 0),
+    });
 
-    const selectFn = mock(() => ({ from: chain.from }));
-
-    const db = { select: selectFn } as any;
-
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     const count = await service.getUnreadCount("user1");
 
     expect(count).toBe(0);
   });
 
-  test("markAsRead updates single notification", async () => {
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
+  test("markAsRead delegates to repo", async () => {
+    const repo = makeRepo();
 
-    const db = { update: updateFn } as any;
-
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     await service.markAsRead("user1", "n1");
 
-    expect(updateFn).toHaveBeenCalledTimes(1);
-    expect(updateSet).toHaveBeenCalledTimes(1);
-    expect(updateSetWhere).toHaveBeenCalledTimes(1);
+    expect(repo.updateReadStatus).toHaveBeenCalledWith("n1", "user1", true);
   });
 
-  test("markAllAsRead updates all unread for user", async () => {
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
+  test("markAllAsRead delegates to repo", async () => {
+    const repo = makeRepo();
 
-    const db = { update: updateFn } as any;
-
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     await service.markAllAsRead("user1");
 
-    expect(updateFn).toHaveBeenCalledTimes(1);
-    expect(updateSet).toHaveBeenCalledTimes(1);
-    expect(updateSetWhere).toHaveBeenCalledTimes(1);
+    expect(repo.markAllRead).toHaveBeenCalledWith("user1");
   });
 
-  test("dispatchStatus returns dispatch record when found", async () => {
+  test("dispatchStatus delegates to repo and returns result when found", async () => {
     const dispatchRecord = {
       id: "d1",
       notificationId: "n1",
@@ -835,74 +537,39 @@ describe("NotificationService (unit)", () => {
       createdAt: new Date(),
     };
 
-    const selectFromWhereLimit = mock(async () => [dispatchRecord]);
-    const selectFromWhere = mock(() => ({ limit: selectFromWhereLimit }));
-    const selectFrom = mock(() => ({ where: selectFromWhere }));
-    const selectFn = mock(() => ({ from: selectFrom }));
+    const repo = makeRepo({
+      findDispatch: mock(async () => dispatchRecord),
+    });
 
-    const db = { select: selectFn } as any;
-
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     const result = await service.dispatchStatus("n1");
 
     expect(result).toEqual(dispatchRecord);
   });
 
   test("dispatchStatus returns null when not found", async () => {
-    const selectFromWhereLimit = mock(async () => []);
-    const selectFromWhere = mock(() => ({ limit: selectFromWhereLimit }));
-    const selectFrom = mock(() => ({ where: selectFromWhere }));
-    const selectFn = mock(() => ({ from: selectFrom }));
+    const repo = makeRepo({
+      findDispatch: mock(async () => null),
+    });
 
-    const db = { select: selectFn } as any;
-
-    const service = createNotificationService(db, undefined as any);
+    const service = createNotificationService(repo);
     const result = await service.dispatchStatus("nonexistent");
 
     expect(result).toBeNull();
   });
 
   test("writeInternal dispatches email for refund category with action severity", async () => {
-    const selectResults: any[][] = [[{ email: "refund@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_refund" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_refund" })),
+      findUserEmail: mock(async () => "refund@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "refund",
       title: "Refund Processed",
@@ -914,46 +581,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal dispatches email for schedule category with critical severity", async () => {
-    const selectResults: any[][] = [[{ email: "schedule@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_schedule" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_schedule" })),
+      findUserEmail: mock(async () => "schedule@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "schedule",
       title: "Schedule Changed",
@@ -965,46 +603,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal dispatches email for override category with action severity", async () => {
-    const selectResults: any[][] = [[{ email: "override@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_override" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_override" })),
+      findUserEmail: mock(async () => "override@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "override",
       title: "Override Applied",
@@ -1016,46 +625,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("writeInternal dispatches email for payment category with action severity", async () => {
-    const selectResults: any[][] = [[{ email: "payment@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_payment" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_payment" })),
+      findUserEmail: mock(async () => "payment@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "payment",
       title: "Payment Received",
@@ -1067,32 +647,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("skips email dispatch for unsupported categories (achievement) with emailPort", async () => {
-    const selectResults: any[][] = [[{ email: "user@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    const insertFn = mock(() => ({
-      values: mock(() => ({
-        returning: mock(async () => [{ id: "n_achievement" }]),
-      })),
-    }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-    } as any;
-
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_achievement" })),
+      findUserEmail: mock(async () => "user@example.com"),
+    });
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "achievement",
       title: "Achievement Unlocked",
@@ -1109,46 +674,17 @@ describe("NotificationService (unit)", () => {
   });
 
   test("dispatches email for supported categories (booking)", async () => {
-    const selectResults: any[][] = [[{ email: "user@example.com" }]];
-    let selectIndex = 0;
-
-    const selectLimitFn = mock(async () => selectResults[selectIndex++]);
-    const selectWhereFn = mock(() => ({ limit: selectLimitFn }));
-    const selectFromFn = mock(() => ({ where: selectWhereFn }));
-    const selectFn = mock(() => ({ from: selectFromFn }));
-
-    let insertIndex = 0;
-    const insertFn = mock(() => {
-      insertIndex++;
-      if (insertIndex === 1) {
-        return {
-          values: mock(() => ({
-            returning: mock(async () => [{ id: "n_booking" }]),
-          })),
-        };
-      }
-      return {
-        values: mock(async () => {}),
-      };
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => null),
+      insertNotification: mock(async () => ({ id: "n_booking" })),
+      findUserEmail: mock(async () => "user@example.com"),
     });
-
-    const updateSetWhere = mock(async () => {});
-    const updateSet = mock(() => ({ where: updateSetWhere }));
-    const updateFn = mock(() => ({ set: updateSet }));
-
-    const paramsDb = {
-      select: selectFn,
-      insert: insertFn,
-      update: updateFn,
-    } as any;
-
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
-    const mainDb = {} as any;
 
-    const service = createNotificationService(mainDb, emailPort as any);
+    const service = createNotificationService(repo, emailPort as any);
 
     await service.write({
-      db: paramsDb,
+      db: {} as any,
       userId: "user1",
       category: "booking",
       title: "Booking Confirmed",
@@ -1160,8 +696,8 @@ describe("NotificationService (unit)", () => {
   });
 
   test("getUnreadCount is exposed as a function", async () => {
-    const db = {} as any;
-    const service = createNotificationService(db);
+    const repo = makeRepo();
+    const service = createNotificationService(repo);
     expect(typeof service.getUnreadCount).toBe("function");
   });
 });
