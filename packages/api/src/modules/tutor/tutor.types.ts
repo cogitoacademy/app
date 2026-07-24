@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const updateMyProfileInput = z.object({
+  version: z.number().int(),
   displayName: z.string().min(1).optional(),
   shortBio: z.string().optional(),
   credentialsSummary: z.string().optional(),

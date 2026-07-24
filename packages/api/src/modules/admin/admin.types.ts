@@ -10,4 +10,5 @@ export const listUsersInput = z
 export const setRoleInput = z.object({
   userId: z.string(),
   role: z.enum(["student", "tutor", "admin"]),
+  expectedRole: z.enum(["student", "tutor", "admin"]),
 });

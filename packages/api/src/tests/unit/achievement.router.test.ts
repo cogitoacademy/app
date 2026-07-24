@@ -68,13 +68,19 @@ describe("achievementRouter", () => {
     test("updateAchievementInput accepts partial data", () => {
       const result = updateAchievementInput.safeParse({
         id: "a1",
+        version: 1,
         data: { eventName: "Updated" },
       });
       expect(result.success).toBe(true);
     });
 
-    test("deleteAchievementInput requires id", () => {
-      expect(deleteAchievementInput.safeParse({ id: "a1" }).success).toBe(true);
+    test("deleteAchievementInput requires id and version", () => {
+      expect(
+        deleteAchievementInput.safeParse({ id: "a1", version: 1 }).success,
+      ).toBe(true);
+      expect(deleteAchievementInput.safeParse({ id: "a1" }).success).toBe(
+        false,
+      );
       expect(deleteAchievementInput.safeParse({}).success).toBe(false);
     });
 
@@ -162,7 +168,7 @@ describe("achievementHandler", () => {
       const context = {
         session: { user: { id: "u1" } },
       } as any;
-      const input = { id: "a1", data: { eventName: "Updated" } };
+      const input = { id: "a1", version: 1, data: { eventName: "Updated" } };
 
       const result = await handler.update({ context, input });
 
@@ -172,7 +178,7 @@ describe("achievementHandler", () => {
   });
 
   describe("remove", () => {
-    test("calls achievementService.remove with userId and input.id", async () => {
+    test("calls achievementService.remove with userId, input.id and version", async () => {
       const remove = mock(async () => undefined);
       const handler = createAchievementHandler({
         achievementService: { remove } as any,
@@ -180,11 +186,11 @@ describe("achievementHandler", () => {
       const context = {
         session: { user: { id: "u1" } },
       } as any;
-      const input = { id: "a1" };
+      const input = { id: "a1", version: 1 };
 
       await handler.remove({ context, input });
 
-      expect(remove).toHaveBeenCalledWith("u1", "a1");
+      expect(remove).toHaveBeenCalledWith("u1", "a1", 1);
     });
   });
 

@@ -1,5 +1,12 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, index, check } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  index,
+  uniqueIndex,
+  check,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { uuidPrimaryKey } from "./auth";
 import { user } from "./auth";
@@ -40,6 +47,9 @@ export const tutorInvite = pgTable(
     index("tutor_invite_token_idx").on(table.token),
     index("tutor_invite_status_idx").on(table.status),
     index("tutor_invite_invitedBy_idx").on(table.invitedBy),
+    uniqueIndex("tutor_invite_email_invited_uniq")
+      .on(table.email)
+      .where(sql`${table.status} = 'invited'`),
   ],
 );
 

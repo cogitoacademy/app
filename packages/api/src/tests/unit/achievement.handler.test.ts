@@ -29,9 +29,12 @@ function makeAchievementRepo(overrides: Record<string, unknown> = {}) {
       id: "a1",
       userId: "u1",
       status: ACHIEVEMENT_STATUS.PENDING,
+      version: 1,
     })),
     update: mock(async () => ({ id: "a1", userId: "u1" })),
+    updateWithVersion: mock(async () => [{ id: "a1", userId: "u1" }]),
     deleteRow: mock(async () => undefined),
+    deleteWithVersion: mock(async () => [{ id: "a1" }]),
     adminList: mock(async () => []),
     getById: mock(async () => ({
       id: "a1",
@@ -114,7 +117,7 @@ describe("AchievementHandler", () => {
 
       const result = await handler.update({
         context: makeContext(),
-        input: { id: "a1", data: { eventName: "Updated" } },
+        input: { id: "a1", version: 1, data: { eventName: "Updated" } },
       });
 
       expect(result.id).toBe("a1");
@@ -133,10 +136,10 @@ describe("AchievementHandler", () => {
 
       await handler.remove({
         context: makeContext(),
-        input: { id: "a1" },
+        input: { id: "a1", version: 1 },
       });
 
-      expect(repo.deleteRow).toHaveBeenCalled();
+      expect(repo.deleteWithVersion).toHaveBeenCalled();
     });
   });
 
@@ -237,8 +240,11 @@ describe("AchievementService", () => {
           id: "a1",
           userId: "u1",
           status: ACHIEVEMENT_STATUS.PENDING,
+          version: 1,
         })),
-        update: mock(async () => ({ id: "a1", eventName: "Updated" })),
+        updateWithVersion: mock(async () => [
+          { id: "a1", eventName: "Updated" },
+        ]),
       });
       const service = createAchievementService({
         achievementRepo: repo as any,
@@ -248,12 +254,17 @@ describe("AchievementService", () => {
 
       const result = await service.update("u1", {
         id: "a1",
+        version: 1,
         data: { eventName: "Updated" },
       });
 
-      expect(repo.update).toHaveBeenCalledWith(expect.anything(), "a1", "u1", {
-        eventName: "Updated",
-      });
+      expect(repo.updateWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "a1",
+        "u1",
+        1,
+        { eventName: "Updated" },
+      );
       expect(result.id).toBe("a1");
     });
 
@@ -268,7 +279,11 @@ describe("AchievementService", () => {
       });
 
       try {
-        await service.update("u1", { id: "a1", data: { eventName: "X" } });
+        await service.update("u1", {
+          id: "a1",
+          version: 1,
+          data: { eventName: "X" },
+        });
         expect(true).toBe(false);
       } catch (e: any) {
         expect(e).toBeInstanceOf(AchievementNotEditableError);
@@ -281,6 +296,7 @@ describe("AchievementService", () => {
           id: "a1",
           userId: "u1",
           status: ACHIEVEMENT_STATUS.APPROVED,
+          version: 1,
         })),
       });
       const service = createAchievementService({
@@ -290,7 +306,11 @@ describe("AchievementService", () => {
       });
 
       try {
-        await service.update("u1", { id: "a1", data: { eventName: "X" } });
+        await service.update("u1", {
+          id: "a1",
+          version: 1,
+          data: { eventName: "X" },
+        });
         expect(true).toBe(false);
       } catch (e: any) {
         expect(e).toBeInstanceOf(AchievementNotEditableError);
@@ -305,8 +325,9 @@ describe("AchievementService", () => {
           id: "a1",
           userId: "u1",
           status: ACHIEVEMENT_STATUS.PENDING,
+          version: 1,
         })),
-        deleteRow: mock(async () => undefined),
+        deleteWithVersion: mock(async () => [{ id: "a1" }]),
       });
       const service = createAchievementService({
         achievementRepo: repo as any,
@@ -314,12 +335,13 @@ describe("AchievementService", () => {
         db: makeDb(),
       });
 
-      await service.remove("u1", "a1");
+      await service.remove("u1", "a1", 1);
 
-      expect(repo.deleteRow).toHaveBeenCalledWith(
+      expect(repo.deleteWithVersion).toHaveBeenCalledWith(
         expect.anything(),
         "a1",
         "u1",
+        1,
       );
     });
 
@@ -334,7 +356,7 @@ describe("AchievementService", () => {
       });
 
       try {
-        await service.remove("u1", "a1");
+        await service.remove("u1", "a1", 1);
         expect(true).toBe(false);
       } catch (e: any) {
         expect(e).toBeInstanceOf(AchievementNotEditableError);
@@ -347,6 +369,7 @@ describe("AchievementService", () => {
           id: "a1",
           userId: "u1",
           status: ACHIEVEMENT_STATUS.REJECTED,
+          version: 1,
         })),
       });
       const service = createAchievementService({
@@ -356,7 +379,7 @@ describe("AchievementService", () => {
       });
 
       try {
-        await service.remove("u1", "a1");
+        await service.remove("u1", "a1", 1);
         expect(true).toBe(false);
       } catch (e: any) {
         expect(e).toBeInstanceOf(AchievementNotEditableError);

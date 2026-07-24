@@ -72,7 +72,8 @@ function pctNum(hit: number, found: number): number {
 function isApiFile(f: string): boolean {
   const normalized = f.replace(process.cwd() + "/", "");
   return (
-    normalized.startsWith("packages/api/src/") && !normalized.includes("/tests/")
+    normalized.startsWith("packages/api/src/") &&
+    !normalized.includes("/tests/")
   );
 }
 

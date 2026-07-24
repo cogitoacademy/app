@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   jsonb,
+  integer,
   index,
   check,
 } from "drizzle-orm/pg-core";
@@ -34,6 +35,7 @@ export const tutorProfile = pgTable(
     onboardingStatus: text("onboarding_status").notNull().default("draft"),
     adminReviewNote: text("admin_review_note"),
     publishedAt: timestamp("published_at"),
+    version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

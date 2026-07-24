@@ -337,7 +337,9 @@ describe("createAchievementRepo", () => {
     expect(r).toHaveProperty("insert");
     expect(r).toHaveProperty("findByIdForUser");
     expect(r).toHaveProperty("update");
+    expect(r).toHaveProperty("updateWithVersion");
     expect(r).toHaveProperty("deleteRow");
+    expect(r).toHaveProperty("deleteWithVersion");
     expect(r).toHaveProperty("adminList");
     expect(r).toHaveProperty("getById");
     expect(r).toHaveProperty("updateStatus");
@@ -345,7 +347,9 @@ describe("createAchievementRepo", () => {
     expect(typeof r.insert).toBe("function");
     expect(typeof r.findByIdForUser).toBe("function");
     expect(typeof r.update).toBe("function");
+    expect(typeof r.updateWithVersion).toBe("function");
     expect(typeof r.deleteRow).toBe("function");
+    expect(typeof r.deleteWithVersion).toBe("function");
     expect(typeof r.adminList).toBe("function");
     expect(typeof r.getById).toBe("function");
     expect(typeof r.updateStatus).toBe("function");

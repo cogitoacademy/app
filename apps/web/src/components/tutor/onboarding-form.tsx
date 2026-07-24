@@ -56,6 +56,7 @@ interface OnboardingFormProps {
     proofUrls: string[];
     onboardingStatus: string;
     adminReviewNote: string | null;
+    version: number;
   };
 }
 
@@ -126,7 +127,17 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
   );
 
   function getSavePayload() {
-    const payload: Record<string, unknown> = {};
+    const payload: {
+      version: number;
+      displayName?: string;
+      shortBio?: string;
+      credentialsSummary?: string;
+      expertise?: string[];
+      modality?: Modality;
+      prices?: Record<string, number>;
+      availabilitySummary?: string;
+      proofUrls?: string[];
+    } = { version: profile.version };
     if (form.displayName) payload.displayName = form.displayName;
     if (form.shortBio) payload.shortBio = form.shortBio;
     if (form.credentialsSummary)

@@ -105,7 +105,9 @@ export function AchivementsPage() {
                 ...a,
                 status: a.status as "pending" | "approved" | "rejected",
               }}
-              onDelete={(id) => deleteMutation.mutate({ id })}
+              onDelete={(id) =>
+                deleteMutation.mutate({ id, version: a.version })
+              }
               onEdit={() => {}}
             />
           ))}

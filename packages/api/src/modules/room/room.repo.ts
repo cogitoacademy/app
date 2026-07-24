@@ -47,6 +47,30 @@ export async function findRoomBookings(
     .limit(1);
 }
 
+export async function findRoomBookingsForUpdate(
+  conn: DbOrTx,
+  roomId: string,
+  startAt: Date,
+  endAt: Date,
+  excludeBookingId?: string,
+) {
+  const conditions = [
+    eq(roomBooking.roomId, roomId),
+    eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
+    lte(roomBooking.startAt, endAt),
+    gte(roomBooking.endAt, startAt),
+  ];
+  if (excludeBookingId) {
+    conditions.push(ne(roomBooking.bookingId, excludeBookingId));
+  }
+  return conn
+    .select()
+    .from(roomBooking)
+    .where(and(...conditions))
+    .for("update")
+    .limit(1);
+}
+
 export async function insertRoomBooking(
   conn: DbOrTx,
   values: {
@@ -76,6 +100,13 @@ export function createRoomRepo(db: DbType) {
       endAt: Date,
       excludeBookingId?: string,
     ) => findRoomBookings(db, roomId, startAt, endAt, excludeBookingId),
+    findRoomBookingsForUpdate: (
+      roomId: string,
+      startAt: Date,
+      endAt: Date,
+      excludeBookingId?: string,
+    ) =>
+      findRoomBookingsForUpdate(db, roomId, startAt, endAt, excludeBookingId),
     insertRoomBooking: (values: {
       roomId: string;
       bookingId: string;

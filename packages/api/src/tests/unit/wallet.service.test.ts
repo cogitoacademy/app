@@ -503,4 +503,152 @@ describe("WalletService", () => {
       expect(repo.listActivePackages).toHaveBeenCalledWith(db);
     });
   });
+
+  describe("atomicity (D1)", () => {
+    test("hold rolls back when insertLedger throws (db.transaction propagates)", async () => {
+      const wallet = makeWallet();
+      const updated = makeWallet({ heldBalance: 30, availableBalance: 70 });
+      let txCommitted = false;
+      const txClient = {
+        getById: mock(async () => wallet),
+        atomicHold: mock(async () => ({ success: true, wallet: updated })),
+        insertLedger: mock(async () => {
+          throw new Error("ledger insert failed");
+        }),
+      };
+      const db = {
+        transaction: mock(async (fn: any) => {
+          await fn(txClient);
+          txCommitted = true;
+        }),
+      } as any;
+
+      const repo = {
+        getById: txClient.getById,
+        atomicHold: txClient.atomicHold,
+        insertLedger: txClient.insertLedger,
+      } as any;
+
+      const service = createWalletService(repo, db);
+
+      await expect(
+        service.hold(db, {
+          walletId: "wallet1",
+          amount: 10,
+          eventKey: "hold.1",
+          actorType: "system",
+        }),
+      ).rejects.toThrow("ledger insert failed");
+
+      expect(txClient.atomicHold).toHaveBeenCalledTimes(1);
+      expect(txClient.insertLedger).toHaveBeenCalledTimes(1);
+      expect(txCommitted).toBe(false);
+    });
+
+    test("credit rolls back when insertLedger throws", async () => {
+      const wallet = makeWallet();
+      const updated = makeWallet({ totalBalance: 110 });
+      let txCommitted = false;
+      const txClient = {
+        getById: mock(async () => wallet),
+        atomicCredit: mock(async () => updated),
+        insertLedger: mock(async () => {
+          throw new Error("ledger insert failed");
+        }),
+      };
+      const db = {
+        transaction: mock(async (fn: any) => {
+          await fn(txClient);
+          txCommitted = true;
+        }),
+      } as any;
+
+      const repo = {
+        getById: txClient.getById,
+        atomicCredit: txClient.atomicCredit,
+        insertLedger: txClient.insertLedger,
+      } as any;
+
+      const service = createWalletService(repo, db);
+
+      await expect(
+        service.credit(db, {
+          walletId: "wallet1",
+          amount: 10,
+          eventKey: "credit.1",
+          actorType: "system",
+        }),
+      ).rejects.toThrow("ledger insert failed");
+
+      expect(txClient.insertLedger).toHaveBeenCalledTimes(1);
+      expect(txCommitted).toBe(false);
+    });
+
+    test("hold uses passed-in tx directly when conn !== db (nested tx)", async () => {
+      const wallet = makeWallet();
+      const updated = makeWallet({ heldBalance: 30, availableBalance: 70 });
+      const outerTx = {
+        getById: mock(async () => wallet),
+        atomicHold: mock(async () => ({ success: true, wallet: updated })),
+        insertLedger: mock(async () => {}),
+      };
+      const db = { transaction: mock(async () => {}) } as any;
+
+      const repo = {
+        getById: outerTx.getById,
+        atomicHold: outerTx.atomicHold,
+        insertLedger: outerTx.insertLedger,
+      } as any;
+
+      const service = createWalletService(repo, db);
+
+      const result = await service.hold(outerTx as any, {
+        walletId: "wallet1",
+        amount: 10,
+        eventKey: "hold.1",
+        actorType: "system",
+      });
+
+      expect(result).toEqual(updated);
+      expect(db.transaction).not.toHaveBeenCalled();
+      expect(outerTx.atomicHold).toHaveBeenCalledWith(outerTx, "wallet1", 10);
+    });
+  });
+
+  describe("reconcile", () => {
+    test("returns expected, actual, and drift", async () => {
+      let selectCallCount = 0;
+      const db = {
+        select: mock(() => {
+          selectCallCount++;
+          if (selectCallCount === 1) {
+            return {
+              from: mock(() => ({
+                where: mock(async () => [{ total: 150 }]),
+              })),
+            };
+          }
+          if (selectCallCount === 2) {
+            return {
+              from: mock(() => ({
+                where: mock(async () => [{ total: 50 }]),
+              })),
+            };
+          }
+          return {
+            from: mock(async () => [{ totalBalance: 80 }]),
+          };
+        }),
+      } as any;
+
+      const repo = makeRepo();
+      const service = createWalletService(repo as any, db);
+
+      const result = await service.reconcile();
+
+      expect(result.expected).toBe(100);
+      expect(result.actual).toBe(80);
+      expect(result.drift).toBe(-20);
+    });
+  });
 });

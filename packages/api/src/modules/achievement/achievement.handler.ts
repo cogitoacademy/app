@@ -63,7 +63,12 @@ export function createAchievementHandler(deps: {
     input: DeleteAchievementInput;
   }) {
     return withDomainMap(
-      () => achievementService.remove(context.session!.user.id, input.id),
+      () =>
+        achievementService.remove(
+          context.session!.user.id,
+          input.id,
+          input.version,
+        ),
       mapAchievementError,
     );
   }

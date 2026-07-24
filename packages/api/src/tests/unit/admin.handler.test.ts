@@ -33,6 +33,7 @@ function makeAdminRepo(overrides: Record<string, unknown> = {}) {
       id: "u1",
       role: "tutor",
     })),
+    updateRoleWithExpected: mock(async () => [{ id: "u1", role: "tutor" }]),
     ...overrides,
   };
 }
@@ -79,7 +80,7 @@ describe("AdminHandler", () => {
       const context = {
         session: { user: { id: "admin1" } },
       } as any;
-      const input = { userId: "u1", role: "tutor" };
+      const input = { userId: "u1", role: "tutor", expectedRole: "student" };
 
       const result = await handler.setRole({ context, input });
 
@@ -166,7 +167,11 @@ describe("AdminService", () => {
       });
 
       try {
-        await service.setRole("admin1", { userId: "u1", role: "tutor" });
+        await service.setRole("admin1", {
+          userId: "u1",
+          role: "tutor",
+          expectedRole: "student",
+        });
         expect(true).toBe(false);
       } catch (e: any) {
         expect(e).toBeInstanceOf(UserNotFoundError);
@@ -189,7 +194,11 @@ describe("AdminService", () => {
       });
 
       try {
-        await service.setRole("admin1", { userId: "u1", role: "student" });
+        await service.setRole("admin1", {
+          userId: "u1",
+          role: "student",
+          expectedRole: "admin",
+        });
         expect(true).toBe(false);
       } catch (e: any) {
         expect(e).toBeInstanceOf(LastAdminError);
@@ -204,7 +213,7 @@ describe("AdminService", () => {
           id: "u1",
           role: "student",
         })),
-        updateRole: mock(async () => updatedUser),
+        updateRoleWithExpected: mock(async () => [updatedUser]),
       });
       const auditPort = makeAuditPort();
       const service = createAdminService({
@@ -216,6 +225,7 @@ describe("AdminService", () => {
       const result = await service.setRole("admin1", {
         userId: "u1",
         role: "tutor",
+        expectedRole: "student",
       });
 
       expect(result.role).toBe("tutor");
@@ -237,7 +247,7 @@ describe("AdminService", () => {
           role: USER_ROLE.ADMIN,
         })),
         countAdmins: mock(async () => 3),
-        updateRole: mock(async () => updatedUser),
+        updateRoleWithExpected: mock(async () => [updatedUser]),
       });
       const auditPort = makeAuditPort();
       const service = createAdminService({
@@ -249,6 +259,7 @@ describe("AdminService", () => {
       const result = await service.setRole("admin1", {
         userId: "u1",
         role: "student",
+        expectedRole: "admin",
       });
 
       expect(result.role).toBe("student");

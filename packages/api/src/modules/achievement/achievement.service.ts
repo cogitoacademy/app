@@ -3,6 +3,7 @@ import type { DbType } from "../../lib/db";
 import {
   AchievementNotFoundError,
   AchievementNotEditableError,
+  OptimisticLockError,
 } from "./achievement.errors";
 import { ACHIEVEMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import type {
@@ -17,6 +18,7 @@ type AchievementRow = typeof achievement.$inferSelect;
 
 export interface UpdateAchievementInput {
   id: string;
+  version: number;
   data: UpdateAchievementData;
 }
 
@@ -63,13 +65,29 @@ export function createAchievementService(deps: {
       userId,
     );
     validateUpdate(existing);
-    return achievementRepo.update(db, input.id, userId, input.data);
+    const rows = await achievementRepo.updateWithVersion(
+      db,
+      input.id,
+      userId,
+      input.version,
+      input.data,
+    );
+    if (rows.length === 0)
+      throw new OptimisticLockError(input.id, input.version);
+    return rows[0];
   }
 
-  async function remove(userId: string, id: string) {
+  async function remove(userId: string, id: string, expectedVersion: number) {
     const existing = await achievementRepo.findByIdForUser(db, id, userId);
     validateDelete(existing);
-    return achievementRepo.deleteRow(db, id, userId);
+    const rows = await achievementRepo.deleteWithVersion(
+      db,
+      id,
+      userId,
+      expectedVersion,
+    );
+    if (rows.length === 0) throw new OptimisticLockError(id, expectedVersion);
+    return rows;
   }
 
   async function adminList(input?: AdminListInput) {

@@ -29,16 +29,16 @@ export function createRefundService(deps: {
       bookingId?: string;
     },
   ) {
-    const walletSnapshot = await wallet.getById(db, input.walletId);
-    if (!walletSnapshot) throw new WalletNotFoundError(input.walletId);
+    return db.transaction(async (tx) => {
+      const walletSnapshot = await wallet.getById(tx, input.walletId);
+      if (!walletSnapshot) throw new WalletNotFoundError(input.walletId);
 
-    const beforeState = {
-      totalBalance: walletSnapshot.totalBalance,
-      heldBalance: walletSnapshot.heldBalance,
-      availableBalance: walletSnapshot.availableBalance,
-    };
+      const beforeState = {
+        totalBalance: walletSnapshot.totalBalance,
+        heldBalance: walletSnapshot.heldBalance,
+        availableBalance: walletSnapshot.availableBalance,
+      };
 
-    await db.transaction(async (tx) => {
       const walletResult = await wallet.compensate(tx, {
         walletId: input.walletId,
         amount: input.amount,
@@ -80,10 +80,12 @@ export function createRefundService(deps: {
         },
       });
 
-      return walletResult;
+      return {
+        walletId: input.walletId,
+        type: input.type,
+        amount: input.amount,
+      };
     });
-
-    return { walletId: input.walletId, type: input.type, amount: input.amount };
   }
 
   async function listCorrections(input: {
