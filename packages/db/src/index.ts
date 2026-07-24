@@ -16,6 +16,9 @@ export function createDb(connectionString?: string) {
     max: 20,
     idle_timeout: 20,
     connect_timeout: 10,
+    connection: {
+      statement_timeout: 30_000,
+    },
     ...(env.NODE_ENV === "production" && {
       ssl: { rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED },
     }),

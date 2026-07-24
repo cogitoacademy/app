@@ -38,6 +38,7 @@ export interface BookingAuditPort {
 
 export interface BookingNotificationPort {
   write(params: NotificationWriteParams): Promise<void>;
+  writeBestEffort(params: NotificationWriteParams): Promise<void>;
 }
 
 export interface BookingMeetingPort {

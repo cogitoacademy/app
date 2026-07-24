@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { createContext } from "@cogito-app/api/context";
 import { appRouter } from "@cogito-app/api/routers";
 import { rateLimit } from "@cogito-app/api/lib/rate-limit";
@@ -34,6 +35,7 @@ const paymentRateLimit = rateLimit({
 });
 
 const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
 function logRpcError(error: unknown) {
   if (error instanceof ORPCError) {
@@ -135,17 +137,17 @@ export function createServer() {
       }),
     )
     .onRequest(({ request }) => {
-      if (!request.url.includes("/webhooks/")) {
-        const contentLength = request.headers.get("content-length");
-        if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
-          return new Response(
-            JSON.stringify({ error: "Request body too large" }),
-            {
-              status: 413,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
+      const isWebhook = request.url.includes("/webhooks/");
+      const limit = isWebhook ? MAX_WEBHOOK_BODY_BYTES : MAX_BODY_BYTES;
+      const contentLength = request.headers.get("content-length");
+      if (contentLength && parseInt(contentLength, 10) > limit) {
+        return new Response(
+          JSON.stringify({ error: "Request body too large" }),
+          {
+            status: 413,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
     })
     .onRequest(({ request }) => {
@@ -231,8 +233,15 @@ export function createServer() {
     })
     .get("/metrics", ({ request }) => {
       if (!env.METRICS_TOKEN) return new Response("Not Found", { status: 404 });
-      const authHeader = request.headers.get("authorization");
-      if (authHeader !== `Bearer ${env.METRICS_TOKEN}`) {
+      const authHeader = request.headers.get("authorization") ?? "";
+      const expected = `Bearer ${env.METRICS_TOKEN}`;
+      if (
+        authHeader.length !== expected.length ||
+        !timingSafeEqual(
+          new TextEncoder().encode(authHeader),
+          new TextEncoder().encode(expected),
+        )
+      ) {
         return new Response("Unauthorized", { status: 401 });
       }
       return Response.json(getMetrics());

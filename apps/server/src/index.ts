@@ -17,6 +17,15 @@ process.on("unhandledRejection", (reason) => {
   });
 });
 
+process.on("uncaughtException", (error) => {
+  log({
+    level: "error",
+    action: "uncaught_exception",
+    error: { message: String(error), stack: error.stack },
+  });
+  setTimeout(() => process.exit(1), 1000);
+});
+
 async function waitForDb(maxAttempts = 10, delayMs = 2000): Promise<void> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {

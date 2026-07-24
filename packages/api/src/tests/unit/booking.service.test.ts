@@ -116,7 +116,7 @@ function makeAudit() {
 }
 
 function makeNotification() {
-  return { write: mock(async () => {}) };
+  return { write: mock(async () => {}), writeBestEffort: mock(async () => {}) };
 }
 
 function makeMeeting() {
@@ -497,8 +497,8 @@ describe("BookingService", () => {
       expect(repo.insertParticipant).toHaveBeenCalledTimes(1);
       expect(repo.insertStateHistory).toHaveBeenCalledTimes(1);
       expect(audit.record).toHaveBeenCalledTimes(1);
-      expect(notification.write).toHaveBeenCalledTimes(1);
-      expect(notification.write.mock.calls[0][0]).toMatchObject({
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort.mock.calls[0][0]).toMatchObject({
         userId: "tutor1",
         category: "booking",
         title: "New booking request",
@@ -739,8 +739,8 @@ describe("BookingService", () => {
         "b1",
         0,
       );
-      expect(notification.write).toHaveBeenCalledTimes(1);
-      expect(notification.write.mock.calls[0][0]).toMatchObject({
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort.mock.calls[0][0]).toMatchObject({
         userId: "tutor1",
         title: "Booking cancelled",
       });
@@ -1019,8 +1019,8 @@ describe("BookingService", () => {
         "b1",
         0,
       );
-      expect(notification.write).toHaveBeenCalledTimes(1);
-      expect(notification.write.mock.calls[0][0].title).toBe(
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort.mock.calls[0][0].title).toBe(
         "Booking declined",
       );
     });
@@ -1120,8 +1120,8 @@ describe("BookingService", () => {
         "b1",
         0,
       );
-      expect(notification.write).toHaveBeenCalledTimes(1);
-      expect(notification.write.mock.calls[0][0].title).toBe(
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort.mock.calls[0][0].title).toBe(
         "Session completed",
       );
     });

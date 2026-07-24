@@ -310,7 +310,7 @@ describe("NotificationService (unit)", () => {
     expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
   });
 
-  test("write catches and logs errors", async () => {
+  test("writeBestEffort catches and logs errors", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => {
         throw new Error("db error");
@@ -320,7 +320,7 @@ describe("NotificationService (unit)", () => {
 
     const service = createNotificationService(repo, emailPort as any);
 
-    await service.write({
+    await service.writeBestEffort({
       db: {} as any,
       userId: "user1",
       category: "system",
@@ -335,11 +335,34 @@ describe("NotificationService (unit)", () => {
     expect(errorCalls.length).toBeGreaterThanOrEqual(1);
   });
 
+  test("write propagates errors", async () => {
+    const repo = makeRepo({
+      findNotificationByEventKey: mock(async () => {
+        throw new Error("db error");
+      }),
+    });
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+
+    const service = createNotificationService(repo, emailPort as any);
+
+    await expect(
+      service.write({
+        db: {} as any,
+        userId: "user1",
+        category: "system",
+        title: "Test",
+        body: "Test body",
+        eventKey: "test.error",
+      }),
+    ).rejects.toThrow("db error");
+  });
+
   test("service exposes expected methods", async () => {
     const repo = makeRepo();
     const service = createNotificationService(repo);
 
     expect(typeof service.write).toBe("function");
+    expect(typeof service.writeBestEffort).toBe("function");
     expect(typeof service.list).toBe("function");
     expect(typeof service.getUnreadCount).toBe("function");
     expect(typeof service.markAsRead).toBe("function");
@@ -721,5 +744,85 @@ describe("NotificationService (unit)", () => {
     const repo = makeRepo();
     const service = createNotificationService(repo);
     expect(typeof service.getUnreadCount).toBe("function");
+  });
+});
+
+describe("write vs writeBestEffort", () => {
+  const makeTestRepo = (overrides: Record<string, unknown> = {}) => ({
+    findNotificationByEventKey: mock(async () => null),
+    insertNotification: mock(async () => ({ id: "n1" })),
+    findUserEmail: mock(async () => null),
+    insertDispatch: mock(async () => {}),
+    updateDispatchStatus: mock(async () => {}),
+    listNotifications: mock(async () => []),
+    countUnread: mock(async () => 0),
+    findNotificationByIdForUser: mock(async () => null),
+    updateReadStatus: mock(async () => {}),
+    markAllRead: mock(async () => {}),
+    findDispatch: mock(async () => null),
+    ...overrides,
+  });
+
+  const baseParams = {
+    db: {} as any,
+    userId: "u1",
+    bookingId: "b1",
+    category: "booking" as const,
+    title: "Test",
+    body: "Test body",
+    severity: "info" as const,
+    eventKey: "test.key",
+  };
+
+  test("write propagates errors from writeInternal", async () => {
+    const repo = makeTestRepo({
+      insertNotification: mock(async () => {
+        throw new Error("DB insert failed");
+      }),
+    });
+
+    const service = createNotificationService(repo);
+    await expect(service.write(baseParams)).rejects.toThrow("DB insert failed");
+  });
+
+  test("write succeeds when writeInternal succeeds", async () => {
+    const repo = makeTestRepo();
+    const service = createNotificationService(repo);
+    await expect(service.write(baseParams)).resolves.toBeUndefined();
+  });
+
+  test("writeBestEffort swallows errors from writeInternal", async () => {
+    const repo = makeTestRepo({
+      insertNotification: mock(async () => {
+        throw new Error("DB insert failed");
+      }),
+    });
+
+    const logCaptures: any[] = [];
+    const origError = console.error;
+    console.error = (...args: unknown[]) => {
+      try {
+        logCaptures.push(JSON.parse(args[0] as string));
+      } catch {
+        logCaptures.push(args);
+      }
+    };
+
+    const service = createNotificationService(repo);
+    await expect(service.writeBestEffort(baseParams)).resolves.toBeUndefined();
+
+    console.error = origError;
+
+    const errorLog = logCaptures.find(
+      (e: any) => e.action === "notification_write_failed",
+    );
+    expect(errorLog).toBeDefined();
+    expect(errorLog.error.message).toContain("DB insert failed");
+  });
+
+  test("writeBestEffort succeeds when writeInternal succeeds", async () => {
+    const repo = makeTestRepo();
+    const service = createNotificationService(repo);
+    await expect(service.writeBestEffort(baseParams)).resolves.toBeUndefined();
   });
 });

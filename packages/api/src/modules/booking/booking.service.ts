@@ -346,7 +346,7 @@ export function createBookingService(deps: {
         details: { type: BOOKING_TYPE.SOLO, tutorId: input.tutorId, modality },
       });
 
-      await notification.write({
+      await notification.writeBestEffort({
         db: tx,
         userId: input.tutorId,
         bookingId,
@@ -410,7 +410,7 @@ export function createBookingService(deps: {
         cancellationReason ?? null,
       );
 
-      await notification.write({
+      await notification.writeBestEffort({
         db: tx,
         userId: b.tutorId,
         bookingId,
@@ -537,7 +537,7 @@ export function createBookingService(deps: {
         reason,
       });
 
-      await notification.write({
+      await notification.writeBestEffort({
         db: tx,
         userId: b.proposerId,
         bookingId,
@@ -592,7 +592,7 @@ export function createBookingService(deps: {
 
       await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
-      await notification.write({
+      await notification.writeBestEffort({
         db: tx,
         userId: b.proposerId,
         bookingId,
