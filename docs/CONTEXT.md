@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-07-21
+Last updated: 2026-07-24
 
 ## Architecture
 
@@ -20,7 +20,7 @@ cogito-app/
 ├── packages/
 │   ├── api/                 # Business logic (4-layer modules)
 │   │   └── src/
-│   │       ├── procedures.ts # publicProcedure, protectedProcedure, adminProcedure
+│   │       ├── procedures.ts # publicProcedure, protectedProcedure, adminProcedure (tutorProcedure after foundation hardening)
 │   │       ├── routers.ts    # appRouter composition
 │   │       ├── services.ts   # Composition root: createModule() calls (~60 lines)
 │   │       ├── context.ts    # Per-request: { session, services }
@@ -121,11 +121,12 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ## Infrastructure
 
-- **Database:** PostgreSQL 16 via `postgres.js` (after consolidation; currently `pg`)
+- **Database:** PostgreSQL 16 via `postgres.js` (consolidated — driver migration complete)
 - **Redis:** Shared instance for sessions, idempotency, rate limiting, circuit breaker state, BullMQ persistence (after production readiness)
 - **Scheduler:** BullMQ with Redis persistence for booking expiry, hold release, email dispatch
 - **Email:** Resend (production) / stub (development) via EmailService
 - **Meeting:** Google Meet (production) / manual link fallback via CircuitBreaker
+- **Deployment:** Coolify on Hetzner VPS (after infrastructure branch)
 
 ## DB Schema (18 tables)
 
@@ -229,32 +230,48 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ## Auth Config
 
-- Email/password enabled. No OAuth yet.
+- Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening).
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
-- Cookies: sameSite=Strict (after B5 fix), secure=true (production), httpOnly=true.
+- Cookies: sameSite=lax (dev) / none (production, requires CSRF — after foundation hardening), secure=true (production), httpOnly=true.
 - `CogitoUser` type exported with role field.
+- **Pending (foundation hardening):** password policy (min 8, upper/lower/digit), session expiry (7 days), conditional OAuth. **Email verification (G2) deferred** to production-readiness / PRD-gaps branch (additive; depends on Resend wiring + frontend route).
 
 ## CI/CD
 
 - **GitHub Actions** (`.github/workflows/ci.yml`): 4 parallel jobs (lint, typecheck, build, test+coverage)
-- **CD** (after production readiness): build → push to GHCR → migrate → deploy to Coolify
+- **CD** (after infrastructure branch): build → push to GHCR → Coolify auto-deploys
 - **Lefthook** pre-commit: oxlint + oxfmt. Pre-push: typecheck.
 - **Dependabot**: weekly npm + GitHub Actions updates.
-- **Coverage**: 80% overall threshold, 90% for `packages/api` (after production readiness)
+- **Coverage**: 90% for `packages/api`, 80% overall (after foundation hardening)
 - **Health**: `GET /health` with DB ping + Redis ping (after production readiness)
+- **Deployment platform**: Coolify (self-hosted PaaS on Hetzner VPS)
 
 ## Active Plans
 
 | Plan                                      | Branch                             | Status                                                  |
 | ----------------------------------------- | ---------------------------------- | ------------------------------------------------------- |
-| `docs/plans/CONSOLIDATION-PLAN.md`        | `improvement/consolidation`        | Next to execute                                         |
-| `docs/plans/PRODUCTION-READINESS-PLAN.md` | `improvement/production-readiness` | Parallel with infrastructure, after consolidation       |
-| `docs/plans/INFRASTRUCTURE-PLAN.md`       | `improvement/infrastructure`       | Parallel with production readiness, after consolidation |
-| `docs/plans/PRD-GAPS-SPEC.md`             | `feature/prd-gaps` (future)        | Reference spec, after both merge to main                |
+| `docs/plans/CONSOLIDATION-PLAN.md`        | `improvement/consolidation`        | Complete (merge to main pending)                        |
+| `docs/plans/FOUNDATION-HARDENING.md`       | `improvement/foundation-hardening` | Next to execute (after consolidation merges to main)    |
+| `docs/plans/PRODUCTION-READINESS-PLAN.md`  | `improvement/production-readiness` | After foundation hardening, parallel with infrastructure |
+| `docs/plans/INFRASTRUCTURE-PLAN.md`       | `improvement/infrastructure`       | After foundation hardening, parallel with production readiness (Coolify) |
+| `docs/plans/PRD-GAPS-SPEC.md`             | `feature/prd-gaps` (future)        | Reference spec, after all three above merge to main     |
 | `docs/plans/EXECUTION-PLAN-v2.md`         | —                                  | Superseded                                              |
-| `docs/plans/REFACTORING-PLAN.md`          | —                                  | Historical reference                                    |
+| `docs/plans/REFACTORING-PLAN.md`           | —                                  | Historical reference                                    |
+
+### Execution Order
+
+```
+1. Consolidation (complete) → merge to main
+2. Foundation Hardening (9 stories, ~12 days) → establishes solid baseline
+3. Production Readiness + Infrastructure (parallel, ~10 + ~4 days)
+4. PRD Gaps (G1-G18, ~15 days) → feature completeness
+```
+
+Foundation Hardening must complete before production-readiness and infrastructure because it fixes data integrity, security, and auth issues that those plans depend on.
 
 ## Known Bugs
+
+### Existing bugs (planned in PRODUCTION-READINESS-PLAN.md)
 
 | ID  | Bug                                                  | Priority |
 | --- | ---------------------------------------------------- | -------- |
@@ -272,6 +289,57 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 | N8  | withdraw doesn't release other participants' holds   | P2       |
 | N9  | adminBooking.listBookings returns null cursor        | P2       |
 | N15 | applyOverride doesn't update booking.holdAmount      | P1       |
+
+### New findings (planned in FOUNDATION-HARDENING.md)
+
+| ID  | Bug                                                          | Priority | Story |
+| --- | ------------------------------------------------------------ | -------- | ----- |
+| A1  | Group booking cancel doesn't release invitee holds           | P0       | 1     |
+| A2  | Group booking tutorDecline doesn't release invitee holds     | P0       | 1     |
+| A3  | expireBookings doesn't release invitee holds                 | P0       | 1     |
+| A4  | withdraw→cancel doesn't release other participants' holds   | P0       | 1     |
+| A5  | confirmedHeadcount not decremented on withdraw              | P0       | 1     |
+| A6  | holdAmount not zeroed on cancel/decline/expire               | P0       | 1     |
+| A7  | Series cancel doesn't cascade to bookingSession rows        | P0       | 1     |
+| B1  | RESCHEDULE_PROPOSED has no expiry — booking stuck forever    | P0       | 2     |
+| B2  | AWAITING_ADMIN_ROOM_APPROVAL/SCHEDULED not in expiry cron   | P0       | 2     |
+| C1  | booking.get() IDOR — no ownership check                      | P0       | 3     |
+| C2  | booking.listSessions() IDOR — no ownership check             | P0       | 3     |
+| C3  | Tutor actions lack tutorProcedure role guard                 | P1       | 3     |
+| C4  | resendInvite doesn't invalidate old token                   | P1       | 3     |
+| C5  | OpenAPI spec exposed without auth                            | P1       | 3     |
+| C6  | No password policy                                           | P1       | 4     |
+| D1  | Wallet ledger insert not atomic with balance update         | P0       | 5     |
+| D2  | 8 read-then-write race conditions without optimistic lock   | P1       | 5     |
+| D3  | Payment webhook out-of-order delivery — user not credited   | P0       | 5     |
+| D4  | Booking creation has no idempotency key                     | P1       | 7     |
+| E1  | notification.write() swallows all errors silently            | P1       | 6     |
+| E2  | Google Meet + Resend calls have no timeout                  | P1       | 6     |
+| E3  | No statement_timeout on DB pool                              | P1       | 6     |
+| E4  | No uncaughtException handler                                | P1       | 6     |
+| E5  | Webhook timestamp validation disabled outside production    | P1       | 6     |
+| F1  | Unbounded string inputs (no .max()) — DoS vector             | P2       | 4     |
+| F2  | Unbounded array inputs (no .max())                          | P2       | 4     |
+| F3  | Dates not validated to be in the future                      | P2       | 4     |
+| G1  | No session expiry configured                                | P1       | 4     |
+| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1 | 4 |
+| G3  | Google OAuth credentials fall back to empty string           | P2       | 4     |
+| G4  | No CSRF token (sameSite=none in production)                 | P0       | 4     |
+| H1  | CSP incomplete — production-breaking (no connect-src)        | P0       | 8     |
+| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk       | P1       | 8     |
+| I2  | Missing composite index for overlap check query             | P2       | 8     |
+| I3  | Dev DB logging may expose sensitive params                  | P2       | 8     |
+| J1  | No React error boundary — blank page on crash               | P1       | 9     |
+| J2  | No auth session expiry handling on frontend                 | P1       | 9     |
+| J3  | 4 dead frontend components                                  | P2       | 9     |
+| J4  | `any` type casts in route files                              | P2       | 9     |
+| K1  | No constant-time comparison for signatures/tokens            | P2       | 6     |
+| K2  | No body size limit on webhook endpoints                     | P2       | 6     |
+| K3  | Scheduler jobs have no retry attempts                       | P2       | 8     |
+| K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states    | P3       | 2     |
+| K5  | repricedMarks column is dead — never set or read             | P3       | 2     |
+| K6  | timezone field stored but never used                         | P3       | 2     |
+| K7  | metrics.ts has no TTL eviction for stale path entries        | P3       | 9     |
 
 ## Common Commands
 
