@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+import type { CogitoUser } from "@cogito-app/auth";
 import { authClient } from "@/lib/auth-client";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -7,7 +8,7 @@ export const Route = createFileRoute("/auth/callback")({
     const session = await authClient.getSession({
       query: { disableCookieCache: true },
     });
-    const role = (session.data?.user as { role?: string } | undefined)?.role;
+    const role = (session.data?.user as CogitoUser | undefined)?.role;
     if (!session.data) {
       throw redirect({ to: "/login" });
     }

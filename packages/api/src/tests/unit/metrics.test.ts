@@ -1,8 +1,9 @@
-import { describe, test, expect } from "bun:test";
-import { recordRequest, getMetrics } from "../../lib/metrics";
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { recordRequest, getMetrics, _resetForTest } from "../../lib/metrics";
 
 describe("Metrics", () => {
   test("records a request and retrieves it", () => {
+    _resetForTest();
     recordRequest("/api/test", 50);
     const metrics = getMetrics();
     expect(metrics["/api/test"]).toBeDefined();
@@ -12,6 +13,7 @@ describe("Metrics", () => {
   });
 
   test("accumulates counts for the same path", () => {
+    _resetForTest();
     recordRequest("/api/accumulate", 100);
     recordRequest("/api/accumulate", 200);
     const metrics = getMetrics();
@@ -20,6 +22,7 @@ describe("Metrics", () => {
   });
 
   test("tracks different paths independently", () => {
+    _resetForTest();
     recordRequest("/api/a", 10);
     recordRequest("/api/b", 20);
     const metrics = getMetrics();
@@ -30,6 +33,7 @@ describe("Metrics", () => {
   });
 
   test("caps duration array at 1000 entries and computes correct rolling avgMs", () => {
+    _resetForTest();
     for (let i = 0; i < 1050; i++) {
       recordRequest("/api/capped", i);
     }
@@ -43,8 +47,50 @@ describe("Metrics", () => {
   });
 
   test("handles zero-duration requests", () => {
+    _resetForTest();
     recordRequest("/api/zero", 0);
     const metrics = getMetrics();
     expect(metrics["/api/zero"].avgMs).toBe(0);
+  });
+
+  describe("TTL eviction", () => {
+    const realDateNow = Date.now;
+    let now: number;
+
+    beforeEach(() => {
+      _resetForTest();
+      now = 1_000_000;
+      Date.now = () => now;
+    });
+
+    afterEach(() => {
+      Date.now = realDateNow;
+    });
+
+    test("evicts stale paths after TTL expires", () => {
+      recordRequest("/api/stale", 100);
+      now = 1_000_000 + 11 * 60 * 1000;
+      recordRequest("/api/fresh", 200);
+      const metrics = getMetrics();
+      expect(metrics["/api/stale"]).toBeUndefined();
+      expect(metrics["/api/fresh"]).toBeDefined();
+      expect(metrics["/api/fresh"].count).toBe(1);
+    });
+
+    test("does not evict paths within TTL", () => {
+      recordRequest("/api/recent", 100);
+      now = 1_000_000 + 5 * 60 * 1000;
+      recordRequest("/api/recent", 150);
+      const metrics = getMetrics();
+      expect(metrics["/api/recent"]).toBeDefined();
+      expect(metrics["/api/recent"].count).toBe(2);
+    });
+
+    test("getMetrics triggers cleanup of stale paths", () => {
+      recordRequest("/api/stale-metrics", 100);
+      now = 1_000_000 + 11 * 60 * 1000;
+      const metrics = getMetrics();
+      expect(metrics["/api/stale-metrics"]).toBeUndefined();
+    });
   });
 });
