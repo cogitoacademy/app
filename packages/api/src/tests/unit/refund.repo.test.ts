@@ -1,14 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createRefundRepo } from "../../modules/refund/refund.repo";
 
-function makeSelectConn(rows: any[] = []) {
-  const limit = mock(async () => rows);
-  const where = mock(() => ({ limit }));
-  const from = mock(() => ({ where }));
-  const select = mock(() => ({ from }));
-  return { select, from, where, limit };
-}
-
 function makeInsertConn(returned: any[] = [{}]) {
   const returning = mock(async () => returned);
   const values = mock(() => ({ returning }));
@@ -24,28 +16,7 @@ function makeUpdateConn(returned: any[] = [{}]) {
   return { update, set, where, returning };
 }
 
-const repo = createRefundRepo(undefined as any);
-
-describe("findPaymentByReference", () => {
-  test("returns matching payment row", async () => {
-    const row = { id: "pay1", providerReference: "ref1" };
-    const conn = { ...makeSelectConn([row]) } as any;
-
-    const result = await repo.findPaymentByReference(conn, "ref1");
-
-    expect(result).toEqual(row);
-    expect(conn.select).toHaveBeenCalledTimes(1);
-    expect(conn.limit).toHaveBeenCalledTimes(1);
-  });
-
-  test("returns null when no row found", async () => {
-    const conn = { ...makeSelectConn([]) } as any;
-
-    const result = await repo.findPaymentByReference(conn, "missing");
-
-    expect(result).toBeNull();
-  });
-});
+const repo = createRefundRepo();
 
 describe("insertRefundRecord", () => {
   test("inserts and returns refund record", async () => {
@@ -129,12 +100,10 @@ describe("updatePaymentStatus", () => {
 
 describe("createRefundRepo", () => {
   test("returns object with all repo methods", () => {
-    const r = createRefundRepo(undefined as any);
+    const r = createRefundRepo();
 
-    expect(r).toHaveProperty("findPaymentByReference");
     expect(r).toHaveProperty("insertRefundRecord");
     expect(r).toHaveProperty("updatePaymentStatus");
-    expect(typeof r.findPaymentByReference).toBe("function");
     expect(typeof r.insertRefundRecord).toBe("function");
     expect(typeof r.updatePaymentStatus).toBe("function");
   });

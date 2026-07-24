@@ -35,6 +35,13 @@ export const listTutorProfilesInput = z
   })
   .optional();
 
+export type ReviewAction =
+  | "request_changes"
+  | "approve_unpublished"
+  | "publish"
+  | "unpublish"
+  | "suspend";
+
 export const reviewTutorProfileInput = z.object({
   tutorProfileId: z.string(),
   action: z.enum([

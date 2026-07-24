@@ -16,6 +16,7 @@ import { createTestUser } from "../helpers/factories";
 import { resetDatabase } from "../helpers/test-client";
 import { createXenditPaymentProvider } from "../../modules/payment/xendit-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
+import { createPaymentRepo } from "../../modules/payment/payment.repo";
 import { createWalletRepo } from "../../modules/wallet/wallet.repo";
 import { createWalletService } from "../../modules/wallet/wallet.service";
 
@@ -131,10 +132,11 @@ describe("PaymentService", () => {
     failureRedirectUrl: "http://localhost:3000/balance?status=failed",
   });
 
-  const xenditWallet = createWalletService(createWalletRepo(db), db);
+  const xenditWallet = createWalletService(createWalletRepo(), db);
   const xenditPayment = createPaymentService({
     db,
     wallet: xenditWallet,
+    repo: createPaymentRepo(db),
     provider: xenditProvider,
     providerName: "xendit",
   });

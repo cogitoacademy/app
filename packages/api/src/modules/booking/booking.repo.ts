@@ -1,4 +1,14 @@
-import { eq, and, gte, desc, inArray, ne, lte, sql } from "drizzle-orm";
+import {
+  eq,
+  and,
+  gte,
+  desc,
+  inArray,
+  notInArray,
+  ne,
+  lte,
+  sql,
+} from "drizzle-orm";
 import {
   booking,
   bookingParticipant,
@@ -12,11 +22,10 @@ import {
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { CONFIRMATION_STATE, ONBOARDING_STATUS } from "../../shared/constants";
-import { BOOKING_STATES } from "./booking-state.types";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
-export async function findBookingById(
+async function findBookingById(
   conn: DbOrTx,
   bookingId: string,
 ): Promise<BookingRow | null> {
@@ -28,21 +37,25 @@ export async function findBookingById(
   return (b as BookingRow | undefined) ?? null;
 }
 
-export async function findTutorProfile(
+async function findTutorProfile(
   conn: DbOrTx,
   tutorId: string,
+  opts?: { publishedOnly?: boolean },
 ): Promise<typeof tutorProfile.$inferSelect | null> {
+  const conditions = [eq(tutorProfile.userId, tutorId)];
+  if (opts?.publishedOnly) {
+    conditions.push(
+      eq(tutorProfile.onboardingStatus, ONBOARDING_STATUS.PUBLISHED),
+    );
+  }
   return (
     (await conn.query.tutorProfile.findFirst({
-      where: and(
-        eq(tutorProfile.userId, tutorId),
-        eq(tutorProfile.onboardingStatus, ONBOARDING_STATUS.PUBLISHED),
-      ),
+      where: and(...conditions),
     })) ?? null
   );
 }
 
-export async function findAvailabilitySlot(
+async function findAvailabilitySlot(
   conn: DbOrTx,
   slotId: string,
   tutorId: string,
@@ -61,7 +74,7 @@ export async function findAvailabilitySlot(
   });
 }
 
-export async function findParticipant(
+async function findParticipant(
   conn: DbOrTx,
   bookingId: string,
   userId: string,
@@ -79,7 +92,7 @@ export async function findParticipant(
   return participant ?? null;
 }
 
-export async function findConfirmedParticipants(
+async function findConfirmedParticipants(
   conn: DbOrTx,
   bookingId: string,
   excludeUserId?: string,
@@ -100,10 +113,7 @@ export async function findConfirmedParticipants(
     .where(and(...conditions));
 }
 
-export async function findReconfirmedParticipants(
-  conn: DbOrTx,
-  bookingId: string,
-) {
+async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
   return conn
     .select()
     .from(bookingParticipant)
@@ -118,7 +128,7 @@ export async function findReconfirmedParticipants(
     );
 }
 
-export async function insertBooking(
+async function insertBooking(
   conn: DbOrTx,
   values: typeof booking.$inferInsert,
 ) {
@@ -126,27 +136,7 @@ export async function insertBooking(
   return b!;
 }
 
-export async function updateBookingState(
-  conn: DbOrTx,
-  bookingId: string,
-  state: string,
-  previousState: string | null,
-  reason?: string | null,
-) {
-  const [updated] = await conn
-    .update(booking)
-    .set({
-      currentState: state,
-      previousState,
-      stateReason: reason ?? undefined,
-      updatedAt: new Date(),
-    })
-    .where(eq(booking.id, bookingId))
-    .returning();
-  return updated!;
-}
-
-export async function updateBookingCancellationReason(
+async function updateBookingCancellationReason(
   conn: DbOrTx,
   bookingId: string,
   reason: string | null,
@@ -157,7 +147,7 @@ export async function updateBookingCancellationReason(
     .where(eq(booking.id, bookingId));
 }
 
-export async function updateBookingHoldAmount(
+async function updateBookingHoldAmount(
   conn: DbOrTx,
   bookingId: string,
   holdAmount: number,
@@ -168,7 +158,7 @@ export async function updateBookingHoldAmount(
     .where(eq(booking.id, bookingId));
 }
 
-export async function updateBookingConfirmedHeadcount(
+async function updateBookingConfirmedHeadcount(
   conn: DbOrTx,
   bookingId: string,
   confirmedHeadcount: number,
@@ -179,14 +169,14 @@ export async function updateBookingConfirmedHeadcount(
     .where(eq(booking.id, bookingId));
 }
 
-export async function insertParticipant(
+async function insertParticipant(
   conn: DbOrTx,
   values: typeof bookingParticipant.$inferInsert,
 ) {
   await conn.insert(bookingParticipant).values(values);
 }
 
-export async function updateParticipantState(
+async function updateParticipantState(
   conn: DbOrTx,
   participantId: string,
   values: Partial<typeof bookingParticipant.$inferInsert>,
@@ -197,7 +187,7 @@ export async function updateParticipantState(
     .where(eq(bookingParticipant.id, participantId));
 }
 
-export async function insertStateHistory(
+async function insertStateHistory(
   conn: DbOrTx,
   entry: {
     bookingId: string;
@@ -220,7 +210,7 @@ export async function insertStateHistory(
   });
 }
 
-export async function insertRescheduleProposal(
+async function insertRescheduleProposal(
   conn: DbOrTx,
   values: {
     bookingId: string;
@@ -233,7 +223,7 @@ export async function insertRescheduleProposal(
   await conn.insert(bookingRescheduleProposal).values(values);
 }
 
-export async function insertBookingSession(
+async function insertBookingSession(
   conn: DbOrTx,
   values: {
     seriesBookingId: string;
@@ -263,32 +253,23 @@ export async function listSessionsBySeriesId(
     .orderBy(bookingSession.scheduledStartAt);
 }
 
-export async function findOverlappingBookings(
+async function findOverlappingBookings(
   conn: DbOrTx,
   tutorId: string,
   startAt: Date,
   endAt: Date,
-  excludeBookingId?: string,
+  opts?: { excludeBookingId?: string; excludeStates?: string[] },
 ) {
-  const activeStates = BOOKING_STATES.filter(
-    (s) =>
-      ![
-        "declined",
-        "cancelled",
-        "late_cancelled",
-        "no_show",
-        "expired",
-        "completed",
-      ].includes(s),
-  );
   const conditions = [
     eq(booking.tutorId, tutorId),
-    inArray(booking.currentState, activeStates),
     lte(booking.scheduledStartAt, endAt),
     gte(booking.scheduledEndAt, startAt),
   ];
-  if (excludeBookingId) {
-    conditions.push(ne(booking.id, excludeBookingId));
+  if (opts?.excludeStates?.length) {
+    conditions.push(notInArray(booking.currentState, opts.excludeStates));
+  }
+  if (opts?.excludeBookingId) {
+    conditions.push(ne(booking.id, opts.excludeBookingId));
   }
   return conn
     .select({ id: booking.id })
@@ -297,10 +278,7 @@ export async function findOverlappingBookings(
     .limit(1);
 }
 
-export async function findBookingsExpiringByDeadline(
-  conn: DbOrTx,
-  states: string[],
-) {
+async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
   return conn
     .select()
     .from(booking)
@@ -312,19 +290,7 @@ export async function findBookingsExpiringByDeadline(
     );
 }
 
-export async function findBookingType(
-  conn: DbOrTx,
-  bookingId: string,
-): Promise<string | null> {
-  const [b] = await conn
-    .select({ type: booking.type })
-    .from(booking)
-    .where(eq(booking.id, bookingId))
-    .limit(1);
-  return b?.type ?? null;
-}
-
-export async function updateBookingVersioned(
+async function updateBookingVersioned(
   conn: DbOrTx,
   bookingId: string,
   expectedVersion: number,
@@ -401,7 +367,6 @@ export function createBookingRepo(db: DbType) {
     findConfirmedParticipants,
     findReconfirmedParticipants,
     insertBooking,
-    updateBookingState,
     updateBookingCancellationReason,
     updateBookingHoldAmount,
     updateBookingConfirmedHeadcount,
@@ -412,7 +377,6 @@ export function createBookingRepo(db: DbType) {
     insertBookingSession,
     listSessionsBySeriesId,
     findBookingsExpiringByDeadline,
-    findBookingType,
     findOverlappingBookings,
     updateBookingVersioned,
   };

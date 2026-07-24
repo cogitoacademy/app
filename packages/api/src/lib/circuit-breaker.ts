@@ -1,3 +1,5 @@
+import { serviceUnavailable } from "./errors";
+
 export type CircuitState = "closed" | "open" | "half-open";
 
 export interface CircuitBreakerOptions {
@@ -18,7 +20,7 @@ export class CircuitBreaker {
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     if (this.state === "open") {
       if (Date.now() - this.lastFailureTime < this.options.resetTimeoutMs) {
-        throw new Error("Circuit breaker is open");
+        throw serviceUnavailable("Circuit breaker is open");
       }
       this.state = "half-open";
       this.halfOpenAttempts = 0;

@@ -1,32 +1,37 @@
+import type { DbType } from "../../lib/db";
+import {
+  ONBOARDING_STATUS,
+  MODALITY,
+  ACTOR_TYPE,
+} from "../../shared/constants";
+import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
-import type { ORPCError } from "@orpc/server";
-import { notFound, forbidden, badRequest } from "../../lib/errors";
-import { ONBOARDING_STATUS, MODALITY } from "../../shared/constants";
-import type { PricingPort } from "../../shared/ports/pricing.port";
-import type { UpdateProfileInput } from "./tutor.repo";
+import type { TutorAuditPort, TutorPricingPort } from "./index";
+import {
+  TutorProfileNotFoundError,
+  TutorProfileNotEditableError,
+  InvalidTutorStatusError,
+  AvailabilitySlotOverlapError,
+  TutorProfileIncompleteError,
+  InvalidTutorPricingError,
+} from "./tutor.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
-
-export type ValidationResult =
-  | { ok: true }
-  | { ok: false; error: ORPCError<any, any> };
 
 export function validateUpdateInput(
   profile: TutorProfileRow | undefined,
   input: UpdateProfileInput,
-  pricingPort: PricingPort,
-): ValidationResult {
+  pricingPort: TutorPricingPort,
+): void {
   if (!profile) {
-    return { ok: false, error: notFound("Tutor profile not found") };
+    throw new TutorProfileNotFoundError("unknown");
   }
 
   if (profile.onboardingStatus === ONBOARDING_STATUS.PUBLISHED) {
-    return {
-      ok: false,
-      error: forbidden(
-        "Published profiles cannot be edited directly. Contact admin.",
-      ),
-    };
+    throw new TutorProfileNotEditableError(
+      profile.id,
+      profile.onboardingStatus,
+    );
   }
 
   if (input.prices) {
@@ -36,52 +41,42 @@ export function validateUpdateInput(
       | "both";
     const error = pricingPort.validatePrices(input.prices, modality);
     if (error) {
-      return { ok: false, error: badRequest(error) };
+      throw new InvalidTutorPricingError(profile.id, error);
     }
   }
-
-  return { ok: true };
 }
 
 export function validateSubmitForReview(
   profile: TutorProfileRow | undefined,
-  pricingPort: PricingPort,
-): ValidationResult {
+  pricingPort: TutorPricingPort,
+): void {
   if (!profile) {
-    return { ok: false, error: notFound("Tutor profile not found") };
+    throw new TutorProfileNotFoundError("unknown");
   }
 
   if (
     profile.onboardingStatus !== ONBOARDING_STATUS.DRAFT &&
     profile.onboardingStatus !== ONBOARDING_STATUS.CHANGES_REQUESTED
   ) {
-    return {
-      ok: false,
-      error: badRequest(
-        `Cannot submit from status: ${profile.onboardingStatus}`,
-      ),
-    };
+    throw new InvalidTutorStatusError(profile.id, profile.onboardingStatus);
   }
 
-  const requiredFields = [
-    profile.displayName,
-    profile.shortBio,
-    profile.credentialsSummary,
-    profile.modality,
-    profile.prices,
+  const requiredFields: { key: string; value: unknown }[] = [
+    { key: "displayName", value: profile.displayName },
+    { key: "shortBio", value: profile.shortBio },
+    { key: "credentialsSummary", value: profile.credentialsSummary },
+    { key: "modality", value: profile.modality },
+    { key: "prices", value: profile.prices },
   ];
-  if (requiredFields.some((f) => !f)) {
-    return {
-      ok: false,
-      error: badRequest("All required fields must be filled before submission"),
-    };
+  const missingFields = requiredFields
+    .filter((f) => !f.value)
+    .map((f) => f.key);
+  if (missingFields.length > 0) {
+    throw new TutorProfileIncompleteError(profile.id, missingFields);
   }
 
   if (!profile.expertise || profile.expertise.length === 0) {
-    return {
-      ok: false,
-      error: badRequest("At least one expertise track is required"),
-    };
+    throw new TutorProfileIncompleteError(profile.id, ["expertise"]);
   }
 
   if (profile.prices) {
@@ -94,9 +89,111 @@ export function validateSubmitForReview(
       modality,
     );
     if (error) {
-      return { ok: false, error: badRequest(error) };
+      throw new InvalidTutorPricingError(profile.id, error);
     }
   }
-
-  return { ok: true };
 }
+
+export function createTutorService(deps: {
+  tutorRepo: TutorRepo;
+  pricingPort: TutorPricingPort;
+  auditPort: TutorAuditPort;
+  db: DbType;
+}) {
+  const { tutorRepo, pricingPort, auditPort, db } = deps;
+
+  async function getMyProfile(userId: string) {
+    const profile = await tutorRepo.getByUserId(db, userId);
+    if (!profile) throw new TutorProfileNotFoundError(userId);
+    return profile;
+  }
+
+  async function updateMyProfile(userId: string, input: UpdateProfileInput) {
+    const profile = await tutorRepo.getByUserId(db, userId);
+    validateUpdateInput(profile, input, pricingPort);
+    return tutorRepo.updateProfile(db, userId, input);
+  }
+
+  async function submitForReview(userId: string) {
+    const profile = await tutorRepo.getByUserId(db, userId);
+    validateSubmitForReview(profile, pricingPort);
+
+    return db.transaction(async (tx) => {
+      const row = await tutorRepo.updateStatus(
+        tx,
+        userId,
+        ONBOARDING_STATUS.PENDING_REVIEW,
+      );
+
+      await auditPort.record({
+        db: tx,
+        actorId: userId,
+        actorType: ACTOR_TYPE.TUTOR,
+        action: "tutor_profile_submitted_for_review",
+        targetId: profile!.id,
+        targetType: "tutor_profile",
+        beforeState: { onboardingStatus: profile!.onboardingStatus },
+        afterState: { onboardingStatus: ONBOARDING_STATUS.PENDING_REVIEW },
+      });
+
+      return row;
+    });
+  }
+
+  async function listAvailability(userId: string) {
+    return tutorRepo.listAvailability(db, userId, { from: new Date() });
+  }
+
+  async function upsertAvailability(
+    userId: string,
+    input: {
+      id?: string;
+      startDate: Date;
+      endDate: Date;
+      modality: "online" | "offline" | "both";
+      isRecurring?: boolean;
+      recurrenceRule?: string;
+      isActive?: boolean;
+    },
+  ) {
+    const start = input.startDate;
+    const end = input.endDate;
+
+    const existing = await tutorRepo.listAvailability(db, userId, {
+      from: new Date(),
+    });
+    const overlapping = existing.find((slot) => {
+      if (input.id && slot.id === input.id) return false;
+      return start < slot.endDate && end > slot.startDate;
+    });
+    if (overlapping) {
+      throw new AvailabilitySlotOverlapError(userId);
+    }
+
+    return tutorRepo.upsertAvailability(db, userId, {
+      ...input,
+      startDate: start,
+      endDate: end,
+    });
+  }
+
+  async function deleteAvailability(userId: string, slotId: string) {
+    const slots = await tutorRepo.listAvailability(db, userId, {
+      from: new Date(),
+    });
+    const found = slots.find((s) => s.id === slotId);
+    if (!found) throw new TutorProfileNotFoundError(userId);
+    await tutorRepo.deleteAvailability(db, slotId);
+  }
+
+  return {
+    getMyProfile,
+    updateMyProfile,
+    submitForReview,
+    listAvailability,
+    upsertAvailability,
+    deleteAvailability,
+  };
+}
+
+export type TutorService = ReturnType<typeof createTutorService>;

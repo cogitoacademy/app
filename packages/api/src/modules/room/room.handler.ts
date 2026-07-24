@@ -1,0 +1,44 @@
+import type { Context } from "../../context";
+import { withDomainMap } from "../../lib/handler-utils";
+import { mapRoomError } from "./room.errors";
+import type { RoomService } from "./room.service";
+import type { CreateRoomInput, AssignRoomInput } from "./room.types";
+
+export type RoomHandler = ReturnType<typeof createRoomHandler>;
+
+export function createRoomHandler(room: RoomService) {
+  return {
+    list: async ({ context: _context }: { context: Context }) => {
+      return withDomainMap(() => room.listActive(), mapRoomError);
+    },
+
+    create: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: CreateRoomInput;
+    }) => {
+      return withDomainMap(() => room.createRoom(input), mapRoomError);
+    },
+
+    assign: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: AssignRoomInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          room.assignRoom(
+            input.bookingId,
+            input.roomId,
+            input.startAt,
+            input.endAt,
+          ),
+        mapRoomError,
+      );
+    },
+  };
+}

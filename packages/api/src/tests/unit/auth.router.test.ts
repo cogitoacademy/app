@@ -1,11 +1,17 @@
 import { describe, test, expect, mock } from "bun:test";
 
-const { authRouter } = await import("../../modules/auth/auth.router");
+const { createAuthRouter } = await import("../../modules/auth/auth.router");
 import { updateProfileInput } from "../../modules/auth/auth.types";
-import { authHandlers } from "../../modules/auth/auth.handlers";
+import { createAuthHandler } from "../../modules/auth/auth.handler";
 
 describe("authRouter", () => {
   test("exports expected route keys", () => {
+    const handler = createAuthHandler({
+      me: mock(),
+      getProfile: mock(),
+      updateProfile: mock(),
+    } as any);
+    const authRouter = createAuthRouter(handler);
     expect(Object.keys(authRouter).toSorted()).toEqual([
       "getProfile",
       "me",
@@ -45,20 +51,20 @@ describe("authRouter", () => {
   });
 });
 
-describe("authHandlers", () => {
+describe("authHandler", () => {
   describe("me", () => {
-    test("returns user, profile, tutorProfile, and wallet from auth.me", async () => {
+    test("returns user, profile, tutorProfile, and wallet from authService.me", async () => {
       const me = mock(async () => ({
         profile: { id: "p1" },
         tutorProfile: { id: "t1" },
         wallet: { id: "w1", totalBalance: 100 },
       }));
+      const handler = createAuthHandler({ me } as any);
       const context = {
         session: { user: { id: "u1", email: "u1@test.com" } },
-        services: { auth: { me } },
       };
 
-      const result = await authHandlers.me({ context });
+      const result = await handler.me({ context } as any);
 
       expect(me).toHaveBeenCalledWith("u1");
       expect(result).toEqual({
@@ -71,14 +77,14 @@ describe("authHandlers", () => {
   });
 
   describe("getProfile", () => {
-    test("calls auth.getProfile with userId", async () => {
+    test("calls authService.getProfile with userId", async () => {
       const getProfile = mock(async () => ({ id: "p1", userId: "u1" }));
+      const handler = createAuthHandler({ getProfile } as any);
       const context = {
         session: { user: { id: "u1" } },
-        services: { auth: { getProfile } },
       };
 
-      const result = await authHandlers.getProfile({ context });
+      const result = await handler.getProfile({ context } as any);
 
       expect(getProfile).toHaveBeenCalledWith("u1");
       expect(result).toEqual({ id: "p1", userId: "u1" });
@@ -86,15 +92,15 @@ describe("authHandlers", () => {
   });
 
   describe("updateProfile", () => {
-    test("calls auth.updateProfile with userId and input", async () => {
+    test("calls authService.updateProfile with userId and input", async () => {
       const updateProfile = mock(async () => ({ id: "p1", userId: "u1" }));
+      const handler = createAuthHandler({ updateProfile } as any);
       const context = {
         session: { user: { id: "u1" } },
-        services: { auth: { updateProfile } },
       };
       const input = { phoneNumber: "0812" };
 
-      const result = await authHandlers.updateProfile({ context, input });
+      const result = await handler.updateProfile({ context, input } as any);
 
       expect(updateProfile).toHaveBeenCalledWith("u1", input);
       expect(result).toEqual({ id: "p1", userId: "u1" });

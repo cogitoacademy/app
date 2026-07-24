@@ -1,13 +1,40 @@
-import { eq } from "drizzle-orm";
-import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
-import type { WalletPort } from "../../shared/ports/wallet.port";
-import type {
-  PaymentProvider,
-  PaymentStatus,
-} from "../../shared/ports/payment.port";
-import { conflict, notFound } from "../../lib/errors";
 import { PAYMENT_STATUS } from "../../shared/constants";
+import {
+  PackageNotFoundError,
+  PaymentNotFoundError,
+  PackageAlreadyPurchasedError,
+  PaymentProviderError,
+} from "./payment.errors";
+import type { PaymentWalletPort } from "./index";
+import type { PaymentRepo } from "./payment.repo";
+
+export type PaymentStatus =
+  | "PENDING"
+  | "PAID"
+  | "SETTLED"
+  | "FAILED"
+  | "EXPIRED"
+  | "REFUNDED";
+
+export interface WebhookPayload {
+  providerReference: string;
+  providerEventId: string;
+  status: PaymentStatus;
+  receiptUrl?: string | null;
+  failureReason?: string | null;
+}
+
+export interface PaymentProvider {
+  createIntent(params: {
+    paymentId: string;
+    amountIdr: number;
+    providerReference: string;
+  }): Promise<{ checkoutUrl: string }>;
+  verifyWebhook(rawBody: string, signature: string): Promise<WebhookPayload>;
+}
+
+export type PaymentPort = PaymentProvider;
 
 export interface CreateIntentResult {
   paymentId: string;
@@ -28,30 +55,23 @@ export type PaymentService = ReturnType<typeof createPaymentService>;
 
 export function createPaymentService(deps: {
   db: DbType;
-  wallet: WalletPort;
+  wallet: PaymentWalletPort;
+  repo: PaymentRepo;
   provider: PaymentProvider;
   providerName: string;
 }) {
-  const { db, wallet, provider, providerName } = deps;
+  const { db, wallet, repo, provider, providerName } = deps;
 
   async function createIntent(
     userId: string,
     walletId: string,
     packageCode: string,
   ): Promise<CreateIntentResult> {
-    const [pkg] = await db
-      .select()
-      .from(markPackage)
-      .where(eq(markPackage.code, packageCode))
-      .limit(1);
-    if (!pkg || !pkg.isActive) throw notFound("Package not found");
+    const pkg = await repo.findPackageByCode(packageCode);
+    if (!pkg || !pkg.isActive) throw new PackageNotFoundError(packageCode);
 
     const idempotencyKey = `${providerName}:${userId}:${packageCode}`;
-    const [existing] = await db
-      .select()
-      .from(paymentRecord)
-      .where(eq(paymentRecord.providerReference, idempotencyKey))
-      .limit(1);
+    const existing = await repo.findPaymentByProviderReference(idempotencyKey);
     if (existing) {
       if (existing.status === PAYMENT_STATUS.PENDING) {
         const existingIntent = await provider.createIntent({
@@ -65,15 +85,13 @@ export function createPaymentService(deps: {
           checkoutUrl: existingIntent.checkoutUrl,
         };
       }
-      throw conflict(
-        `Package already ${existing.status.toLowerCase()} for this user`,
-      );
+      throw new PackageAlreadyPurchasedError(packageCode, userId);
     }
 
     const paymentId = crypto.randomUUID();
     const providerReference = idempotencyKey;
 
-    await db.insert(paymentRecord).values({
+    await repo.insertPayment({
       id: paymentId,
       userId,
       walletId,
@@ -93,11 +111,10 @@ export function createPaymentService(deps: {
       });
       return { paymentId, providerReference, checkoutUrl: intent.checkoutUrl };
     } catch (error) {
-      await db
-        .update(paymentRecord)
-        .set({ status: PAYMENT_STATUS.EXPIRED })
-        .where(eq(paymentRecord.id, paymentId));
-      throw error;
+      await repo.updatePaymentStatus(paymentId, {
+        status: PAYMENT_STATUS.EXPIRED,
+      });
+      throw new PaymentProviderError(providerName, error);
     }
   }
 
@@ -105,13 +122,12 @@ export function createPaymentService(deps: {
     input: ConfirmInput,
   ): Promise<{ status: string }> {
     return db.transaction(async (tx) => {
-      const [record] = await tx
-        .select()
-        .from(paymentRecord)
-        .where(eq(paymentRecord.providerReference, input.providerReference))
-        .limit(1);
+      const record = await repo.findPaymentByProviderReference(
+        input.providerReference,
+        tx,
+      );
 
-      if (!record) throw notFound("Payment not found");
+      if (!record) throw new PaymentNotFoundError(input.providerReference);
       if (record.status === PAYMENT_STATUS.PAID)
         return { status: PAYMENT_STATUS.PAID };
       if (record.status === PAYMENT_STATUS.FAILED)
@@ -124,11 +140,10 @@ export function createPaymentService(deps: {
         return { status: PAYMENT_STATUS.REFUNDED };
 
       if (input.providerEventId) {
-        const [existing] = await tx
-          .select()
-          .from(paymentRecord)
-          .where(eq(paymentRecord.providerEventId, input.providerEventId))
-          .limit(1);
+        const existing = await repo.findPaymentByProviderEventId(
+          input.providerEventId,
+          tx,
+        );
         if (existing && existing.id !== record.id) {
           return { status: existing.status };
         }
@@ -139,14 +154,15 @@ export function createPaymentService(deps: {
         input.status === PAYMENT_STATUS.SETTLED
       ) {
         const shouldCredit = record.status === PAYMENT_STATUS.PENDING;
-        await tx
-          .update(paymentRecord)
-          .set({
+        await repo.updatePaymentStatus(
+          record.id,
+          {
             status: input.status,
             providerEventId: input.providerEventId,
             receiptUrl: input.receiptUrl ?? null,
-          })
-          .where(eq(paymentRecord.id, record.id));
+          },
+          tx,
+        );
 
         if (shouldCredit) {
           await wallet.credit(tx, {
@@ -159,14 +175,15 @@ export function createPaymentService(deps: {
           });
         }
       } else {
-        await tx
-          .update(paymentRecord)
-          .set({
+        await repo.updatePaymentStatus(
+          record.id,
+          {
             status: input.status,
             providerEventId: input.providerEventId,
             failureReason: input.failureReason ?? null,
-          })
-          .where(eq(paymentRecord.id, record.id));
+          },
+          tx,
+        );
       }
 
       return { status: input.status };
@@ -174,13 +191,9 @@ export function createPaymentService(deps: {
   }
 
   async function getPurchase(paymentId: string, userId: string) {
-    const [record] = await db
-      .select()
-      .from(paymentRecord)
-      .where(eq(paymentRecord.id, paymentId))
-      .limit(1);
+    const record = await repo.findPaymentById(paymentId);
     if (!record || record.userId !== userId)
-      throw notFound("Payment not found");
+      throw new PaymentNotFoundError(paymentId);
     return record;
   }
 

@@ -15,15 +15,16 @@ This branch restructures the architecture first, so that subsequent bug fixes an
 
 1. [Overview](#1-overview)
 2. [Architecture Decisions](#2-architecture-decisions)
-3. [Phase 1: Extract Co-Located Services](#3-phase-1-extract-co-located-services)
-4. [Phase 2: Unify Handlers](#4-phase-2-unify-handlers)
-5. [Phase 3: Consumer-Driven Ports](#5-phase-3-consumer-driven-ports)
-6. [Phase 4: pg → postgres.js Migration](#6-phase-4-pg--postgresjs-migration)
-7. [Phase 5: createModule Pattern](#7-phase-5-createmodule-pattern)
-8. [Phase 6: Dead Code + Error Helpers](#8-phase-6-dead-code--error-helpers)
-9. [Phase 7: Verify](#9-phase-7-verify)
-10. [Risk Register](#10-risk-register)
-11. [Execution Checklist](#11-execution-checklist)
+3. [Phase 0: Create Branch + Green Baseline](#3-phase-0-create-branch--green-baseline)
+4. [Phase 1: Extract Co-Located Services](#4-phase-1-extract-co-located-services)
+5. [Phase 2: Unify Handlers](#5-phase-2-unify-handlers)
+6. [Phase 3: Consumer-Driven Ports](#6-phase-3-consumer-driven-ports)
+7. [Phase 4: pg → postgres.js Migration](#7-phase-4-pg--postgresjs-migration)
+8. [Phase 5: createModule Pattern](#8-phase-5-createmodule-pattern)
+9. [Phase 6: Dead Code + Error Helpers](#9-phase-6-dead-code--error-helpers)
+10. [Phase 7: Verify](#10-phase-7-verify)
+11. [Risk Register](#11-risk-register)
+12. [Execution Checklist](#12-execution-checklist)
 
 ---
 
@@ -43,12 +44,13 @@ The handler/service/port restructuring touches every module. Doing it before bug
 
 | Phase | Focus                                                 | Tasks                                        | Days |
 | ----- | ----------------------------------------------------- | -------------------------------------------- | ---- |
+| 0     | Create branch + green baseline                        | Branch + verify CI green                     | 0    |
 | 1     | Extract co-located services                           | 6 modules                                    | 0.5  |
-| 2     | Unify handlers (merge `.handler.ts` + `.handlers.ts`) | 14 modules                                   | 2-3  |
-| 3     | Consumer-driven ports (remove `shared/ports/`)        | 5 port files                                 | 1    |
+| 2     | Unify handlers (merge `.handler.ts` + `.handlers.ts`) | 14 modules + pure DI migration               | 2-3  |
+| 3     | Consumer-driven ports (remove `shared/ports/`)        | 7 port files                                 | 1    |
 | 4     | pg → postgres.js                                      | 1 migration + verify                         | 1-2  |
 | 5     | createModule pattern                                  | 18 modules + simplify services.ts            | 0.5  |
-| 6     | Dead code + error helpers                             | Cleanup                                      | 0.5  |
+| 6     | Dead code + error helpers + config extraction         | Cleanup + config module                      | 0.5  |
 | 7     | Verify                                                | Full test suite, typecheck, build, benchmark | 0.5  |
 
 **Total: ~6-8 days**
@@ -100,7 +102,7 @@ modules/{module}/
 
 ### AD-1: Handler Unification (Not Inlining)
 
-**Decision:** Merge `.handler.ts` + `.handlers.ts` → single `.handler.ts`. Keep handler as a separate layer from the router.
+**Decision:** Merge `.handler.ts` + `.handlers.ts` → single `.handler.ts`. Keep handler as a separate layer from the router. Handlers receive services via DI — no `context.services` access.
 
 **Rationale:**
 
@@ -109,6 +111,7 @@ modules/{module}/
 - Service is pure business logic — no HTTP, no DB
 - This gives clean separation: Router (HTTP) → Handler (transport) → Service (logic) → Repo (data)
 - The current dual-handler pattern exists because `.handler.ts` was a DI wrapper and `.handlers.ts` was the transport adapter. Merging them eliminates the redundancy.
+- **Pure DI**: Current `.handlers.ts` files access services via `context.services.xxx`. After unification, handlers receive services through constructor injection (DI factory params). This makes dependencies explicit, testable, and removes the need for handlers to know about the full ServiceRegistry.
 
 **What a unified handler looks like:**
 
@@ -211,7 +214,32 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ---
 
-## 3. Phase 1: Extract Co-Located Services
+## 3. Phase 0: Create Branch + Green Baseline
+
+**Goal:** Create the `improvement/consolidation` branch and verify CI is green before starting.
+
+### 0.1 Create branch
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b improvement/consolidation
+```
+
+### 0.2 Verify green baseline
+
+```bash
+bun run check
+bun run check-types
+bun run build
+bun test
+```
+
+**Acceptance:** All CI checks pass on the new branch. This is the rollback point.
+
+---
+
+## 4. Phase 1: Extract Co-Located Services
 
 **Goal:** Move `createXxxService` functions that are currently inside `xxx.handler.ts` into their own `xxx.service.ts` files.
 
@@ -278,7 +306,7 @@ The auth module already has `auth.service.ts` with `validateUpdateInput`. Move `
 
 ---
 
-## 4. Phase 2: Unify Handlers
+## 5. Phase 2: Unify Handlers
 
 **Goal:** Merge `.handler.ts` + `.handlers.ts` into a single `.handler.ts` per module. Delete all `.handlers.ts` files.
 
@@ -290,6 +318,62 @@ The current two-file handler pattern serves two purposes:
 - `.handlers.ts` — `{ context, input }` adapter that bridges HTTP transport to service methods
 
 These should be one file. The DI factory and the transport adapter are tightly coupled — every method in the handler has a corresponding method in the handlers. Merging them eliminates the redundancy.
+
+### Key Change: Pure DI (No More `context.services`)
+
+Current `.handlers.ts` files access services through `context.services.xxx`:
+
+```ts
+// BEFORE: handlers reach into global service registry
+export const walletHandlers = {
+  get: async ({ context }: { context: Context }) => {
+    const w = await context.services.wallet.getOrCreate(
+      context.session!.user.id,
+    );
+  },
+};
+```
+
+After unification, handlers receive services through constructor injection:
+
+```ts
+// AFTER: handlers receive services via DI factory params
+export function createWalletHandler(wallet: WalletService) {
+  return {
+    get: async ({ context }: { context: Context }) => {
+      const w = await wallet.getOrCreate(context.session!.user.id);
+    },
+  };
+}
+```
+
+This makes dependencies explicit, enables easy unit testing, and removes the need for handlers to know about the full ServiceRegistry. The only thing handlers need from `context` is `session` (auth info).
+
+### Special Case: Cross-Module Calls in Handlers
+
+Some current handlers call services from other modules directly (e.g., `payment.handlers.ts` calls `context.services.wallet.getOrCreate()`). After unification, these cross-module calls must be handled via DI:
+
+```ts
+// BEFORE: payment handler calls wallet directly from context.services
+export const paymentHandlers = {
+  createPurchase: async ({ context, input }) => {
+    const w = await context.services.wallet.getOrCreate(context.session!.user.id);
+    return context.services.payment.createIntent(...);
+  },
+};
+
+// AFTER: payment handler receives wallet port via DI
+export function createPaymentHandler(payment: PaymentService, wallet: PaymentWalletPort) {
+  return {
+    createPurchase: async ({ context, input }) => {
+      const w = await wallet.getOrCreate(context.session!.user.id);
+      return payment.createIntent(context.session!.user.id, w.id, input.packageCode);
+    },
+  };
+}
+```
+
+This applies to: `payment` (calls wallet), and any other handler that currently reaches into `context.services` for cross-module calls.
 
 ### What Each Unified Handler Looks Like
 
@@ -384,19 +468,44 @@ This is exactly what the `.handler.ts` DI wrapper + `.handlers.ts` adapter curre
 
 #### 2.8 wallet module
 
-**Files:** `wallet.handlers.ts` → rename to `wallet.handler.ts`
+**Files:** `wallet.handlers.ts` → `wallet.handler.ts`
 
-Wallet has no `.handler.ts` (singular) — only `.handlers.ts`. Wrap in a `createWalletHandler` DI factory and rename.
+Wallet has no `.handler.ts` (singular) — only `.handlers.ts`. Wrap in a `createWalletHandler` DI factory and rename. Note: `wallet.handlers.ts` has a `competitionCalendarLink` method that just reads `env.COMPETITION_CALENDAR_URL` — this does not belong in the wallet handler. It will be moved to a new config module in Phase 6.
 
-**Acceptance:** `wallet.handlers.ts` deleted, `wallet.handler.ts` created. Wallet tests pass.
+**Acceptance:** `wallet.handlers.ts` deleted, `wallet.handler.ts` created (without `competitionCalendarLink`). Wallet tests pass.
 
 #### 2.9 booking module
 
-**Files:** `booking.handlers.ts` → rename to `booking.handler.ts`
+**Files:** `booking.handlers.ts` → `booking.handler.ts`
 
-Booking has no `.handler.ts` (singular). Wrap `bookingHandlers` + `tutorActionsHandlers` in a `createBookingHandler` DI factory.
+Booking has no `.handler.ts` (singular). Booking has two handler groups: `bookingHandlers` (student-facing) and `tutorActionsHandlers` (tutor-facing). Create two separate handler factory functions:
 
-**Acceptance:** `booking.handlers.ts` deleted, `booking.handler.ts` created. Booking tests pass.
+```ts
+// modules/booking/booking.handler.ts
+export function createBookingHandler(booking: BookingService) {
+  return {
+    createSolo: async ({ context, input }: { context: Context; input: any }) => {
+      return booking.createSolo(context.session!.user.id, { ... });
+    },
+    // ... other student-facing methods
+  };
+}
+export type BookingHandler = ReturnType<typeof createBookingHandler>;
+
+export function createTutorActionsHandler(booking: BookingService) {
+  return {
+    acceptBooking: async ({ context, input }: { context: Context; input: any }) => {
+      return booking.tutorAccept(input.bookingId, context.session!.user.id);
+    },
+    // ... other tutor-facing methods
+  };
+}
+export type TutorActionsHandler = ReturnType<typeof createTutorActionsHandler>;
+```
+
+Two separate factories keep the route separation clean (student vs tutor endpoints have different auth requirements).
+
+**Acceptance:** `booking.handlers.ts` deleted, `booking.handler.ts` created with two factories. Booking tests pass.
 
 #### 2.10 payment module
 
@@ -462,19 +571,21 @@ Update `services.ts` to:
 
 ---
 
-## 5. Phase 3: Consumer-Driven Ports
+## 6. Phase 3: Consumer-Driven Ports
 
 **Goal:** Remove `shared/ports/` directory. Each consuming module defines its own narrow port interface inline.
 
 ### Current State
 
-`shared/ports/` contains 5 port files:
+`shared/ports/` contains 7 port files:
 
 - `audit.port.ts` — used by admin, adminTutor, tutor, invite, achievement, adminBooking, refund
 - `wallet.port.ts` — used by booking, payment, adminBooking, refund, auth
 - `pricing.port.ts` — used by booking, tutor
 - `notification.port.ts` — used by booking
 - `meeting.port.ts` — used by booking
+- `email.port.ts` — used by notification
+- `payment.port.ts` — used by booking (webhook handlers)
 
 Each port file is ~100 lines, defining both the interface and the param/result types.
 
@@ -575,6 +686,7 @@ export function createBookingService(deps: {
 | payment      | wallet                                        |
 | adminBooking | audit, wallet, refund                         |
 | refund       | audit, wallet                                 |
+| notification | email                                         |
 
 **Acceptance:** Each consuming module has inline port interfaces that declare only the methods it needs.
 
@@ -587,6 +699,8 @@ Delete the following files:
 - `shared/ports/pricing.port.ts`
 - `shared/ports/notification.port.ts`
 - `shared/ports/meeting.port.ts`
+- `shared/ports/email.port.ts`
+- `shared/ports/payment.port.ts`
 
 Update all imports across the codebase to point to the new locations:
 
@@ -605,7 +719,7 @@ Update all imports across the codebase to point to the new locations:
 
 ---
 
-## 6. Phase 4: pg → postgres.js Migration
+## 7. Phase 4: pg → postgres.js Migration
 
 **Goal:** Replace the `pg` driver with `postgres.js` for better performance, TypeScript support, and Drizzle compatibility.
 
@@ -691,7 +805,7 @@ const client = postgres(env.DATABASE_URL, {
 
 ---
 
-## 7. Phase 5: createModule Pattern
+## 8. Phase 5: createModule Pattern
 
 **Goal:** Simplify `services.ts` by giving each module a factory function.
 
@@ -714,6 +828,10 @@ export function createWalletModule(deps: { db: DbType }) {
 }
 
 export type WalletModule = ReturnType<typeof createWalletModule>;
+
+// Barrel re-exports for consumers
+export type { WalletService } from "./wallet.service";
+export type { WalletHandler } from "./wallet.handler";
 ```
 
 Modules that need cross-module dependencies declare them in their deps:
@@ -834,7 +952,7 @@ export type Services = typeof services;
 
 ---
 
-## 8. Phase 6: Dead Code + Error Helpers
+## 9. Phase 6: Dead Code + Error Helpers
 
 ### 6.1 Remove duplicate `createFallbackMeetingProvider`
 
@@ -879,7 +997,7 @@ export type Services = typeof services;
 
 ---
 
-## 9. Phase 7: Verify
+## 10. Phase 7: Verify
 
 ### 7.1 Full test suite with coverage
 
@@ -922,22 +1040,29 @@ Run `EXPLAIN ANALYZE` on key queries to verify `postgres.js` hasn't regressed:
 
 ---
 
-## 10. Risk Register
+## 11. Risk Register
 
-| #   | Risk                                                              | Likelihood | Impact | Mitigation                                                                                                                                                       |
-| --- | ----------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | Handler unification misses a method                               | Low        | High   | TypeScript catches all missing methods at compile time. Run full test suite after each module.                                                                   |
-| R2  | Consumer port interface omits a method that provider has          | Low        | Medium | TypeScript catches this at the `services.ts` wiring site. If `wallet.service` doesn't satisfy `BookingWalletPort`, compile error.                                |
-| R3  | Provider changes a method signature                               | Medium     | High   | All consumers that declare that method in their port interface will get compile errors. This is a feature, not a bug — it surfaces breaking changes immediately. |
-| R4  | `postgres.js` migration breaks Drizzle ORM compatibility          | Medium     | High   | Test all queries before/after. Drizzle 0.36+ supports `postgres.js`. Verify version.                                                                             |
-| R5  | `createModule` pattern creates circular dependency                | Low        | Medium | TypeScript catches this at compile time. Keep dependency graph explicit in `services.ts`.                                                                        |
-| R6  | Moving types from `shared/ports/` to service files breaks imports | Medium     | Low    | Use IDE "Find all references" to update every import. TypeScript catches missing imports.                                                                        |
-| R7  | `DbOrTx` type compatibility with `postgres.js` transactions       | Medium     | High   | Test transactions explicitly. The type may need adjustment.                                                                                                      |
-| R8  | Dual handler pattern causes confusion during merge                | Low        | Low    | Each module is merged individually and tested. The pattern is mechanical: take `xxx.handlers.ts` content, put it inside `createXxxHandler`.                      |
+| #   | Risk                                                                | Likelihood | Impact | Mitigation                                                                                                                                                       |
+| --- | ------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Handler unification misses a method                                 | Low        | High   | TypeScript catches all missing methods at compile time. Run full test suite after each module.                                                                   |
+| R2  | Consumer port interface omits a method that provider has            | Low        | Medium | TypeScript catches this at the `services.ts` wiring site. If `wallet.service` doesn't satisfy `BookingWalletPort`, compile error.                                |
+| R3  | Provider changes a method signature                                 | Medium     | High   | All consumers that declare that method in their port interface will get compile errors. This is a feature, not a bug — it surfaces breaking changes immediately. |
+| R4  | `postgres.js` migration breaks Drizzle ORM compatibility            | Medium     | High   | Test all queries before/after. Drizzle 0.36+ supports `postgres.js`. Verify version.                                                                             |
+| R5  | `createModule` pattern creates circular dependency                  | Low        | Medium | TypeScript catches this at compile time. Keep dependency graph explicit in `services.ts`.                                                                        |
+| R6  | Moving types from `shared/ports/` to service files breaks imports   | Medium     | Low    | Use IDE "Find all references" to update every import. TypeScript catches missing imports.                                                                        |
+| R7  | `DbOrTx` type compatibility with `postgres.js` transactions         | Medium     | High   | Test transactions explicitly. The type may need adjustment.                                                                                                      |
+| R8  | Dual handler pattern causes confusion during merge                  | Low        | Low    | Each module is merged individually and tested. The pattern is mechanical: take `xxx.handlers.ts` content, put it inside `createXxxHandler`.                      |
+| R9  | Removing `context.services` from handlers breaks cross-module calls | Medium     | High   | Some handlers (e.g., payment) call `context.services.wallet` directly. These must be converted to receive a port via DI. TypeScript will catch any missed calls. |
+| R10 | Config route extraction breaks wallet API                           | Low        | Low    | `competitionCalendarLink` is a single endpoint. Move to config module or add as a simple env-read route.                                                         |
 
 ---
 
-## 11. Execution Checklist
+## 12. Execution Checklist
+
+### Phase 0: Create Branch + Green Baseline
+
+- [ ] 0.1 Create `improvement/consolidation` branch from `main`
+- [ ] 0.2 Verify CI green (`bun run check && bun run check-types && bun run build && bun test`)
 
 ### Phase 1: Extract Co-Located Services
 
@@ -959,21 +1084,22 @@ Run `EXPLAIN ANALYZE` on key queries to verify `postgres.js` hasn't regressed:
 - [ ] 2.6 Unify invite handler
 - [ ] 2.7 Unify achievement handler
 - [ ] 2.8 Unify wallet handler (rename `wallet.handlers.ts` → `wallet.handler.ts`, add DI factory)
-- [ ] 2.9 Unify booking handler (rename + add DI factory)
-- [ ] 2.10 Unify payment handler
+- [ ] 2.9 Unify booking handler (two separate factories: `createBookingHandler` + `createTutorActionsHandler`)
+- [ ] 2.10 Unify payment handler (receives `PaymentWalletPort` via DI, not `context.services.wallet`)
 - [ ] 2.11 Unify notification handler
 - [ ] 2.12 Unify adminBooking handler
 - [ ] 2.13 Unify refund handler
 - [ ] 2.14 Unify room handler
-- [ ] 2.15 Update all router imports
-- [ ] 2.16 Update services.ts
-- [ ] Verify: all module tests pass, no `.handlers.ts` files remain
+- [ ] 2.15 Update all router imports (from `.handlers.ts` → `.handler.ts`)
+- [ ] 2.16 Update services.ts — remove all `import { xxxHandlers }`, wire through unified `createXxxHandler` functions, remove `context.services` from handlers (pure DI)
+- [ ] 2.17 Move `wallet.competitionCalendarLink` to config module/route
+- [ ] Verify: all module tests pass, no `.handlers.ts` files remain, no handler accesses `context.services`
 
 ### Phase 3: Consumer-Driven Ports
 
 - [ ] 3.1 Move param/result types from `shared/ports/` to provider service files
-- [ ] 3.2 Add consumer-driven port interfaces inline in each consuming service
-- [ ] 3.3 Delete `shared/ports/` directory
+- [ ] 3.2 Add consumer-driven port interfaces inline in each consuming service (including `email.port.ts` and `payment.port.ts` consumers)
+- [ ] 3.3 Delete `shared/ports/` directory (7 files: audit, wallet, pricing, notification, meeting, email, payment)
 - [ ] 3.4 Verify port migration (full test suite + type check)
 
 ### Phase 4: pg → postgres.js
@@ -995,8 +1121,9 @@ Run `EXPLAIN ANALYZE` on key queries to verify `postgres.js` hasn't regressed:
 
 - [ ] 6.1 Remove duplicate createFallbackMeetingProvider
 - [ ] 6.2 Consolidate error helpers (no raw `new ORPCError`)
-- [ ] 6.3 Remove dead code and unused dependencies
-- [ ] 6.4 Verify cleanup (full CI run)
+- [ ] 6.3 Extract `competitionCalendarLink` from wallet to a config module (`modules/config/`)
+- [ ] 6.4 Remove dead code and unused dependencies
+- [ ] 6.5 Verify cleanup (full CI run)
 
 ### Phase 7: Verify
 
@@ -1011,3 +1138,4 @@ Run `EXPLAIN ANALYZE` on key queries to verify `postgres.js` hasn't regressed:
 
 - v1.0 (2026-07-21): Created. Handler inlining, pg→postgres.js, createModule, dead code.
 - v2.0 (2026-07-21): Rewritten. Handler unification (not inlining), consumer-driven ports (not shared/ports/), 7 phases, ~6-8 days.
+- v3.0 (2026-07-21): Amendments. Added Phase 0 (green baseline). Booking uses two separate handler factories. All handlers migrate to pure DI (no context.services). Added email.port.ts and payment.port.ts to port list. Move competitionCalendarLink to config module. Added barrel re-exports to index.ts pattern. Added risks R9-R10.

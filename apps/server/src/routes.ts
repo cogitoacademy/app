@@ -8,7 +8,7 @@ import { env } from "@cogito-app/env/server";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { onError } from "@orpc/server";
+import { onError, ORPCError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Elysia } from "elysia";
@@ -35,19 +35,33 @@ const paymentRateLimit = rateLimit({
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
+function logRpcError(error: unknown) {
+  if (error instanceof ORPCError) {
+    appLog({
+      level: "warn",
+      action: "rpc_error",
+      error: {
+        code: error.code,
+        message: error.message,
+      },
+    });
+  } else {
+    appLog({
+      level: "error",
+      action: "rpc_error",
+      error: {
+        message: String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        ...(error instanceof Error && error.cause
+          ? { cause: String(error.cause) }
+          : {}),
+      },
+    });
+  }
+}
+
 const rpcHandler = new RPCHandler(appRouter, {
-  interceptors: [
-    onError((error) => {
-      appLog({
-        level: "error",
-        action: "rpc_error",
-        error: {
-          message: String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        },
-      });
-    }),
-  ],
+  interceptors: [onError(logRpcError)],
 });
 
 const openAPIGenerator = new OpenAPIGenerator({
@@ -69,18 +83,7 @@ async function generateOpenAPISpec(request: Request) {
 }
 
 const apiHandler = new OpenAPIHandler(appRouter, {
-  interceptors: [
-    onError((error) => {
-      appLog({
-        level: "error",
-        action: "rpc_error",
-        error: {
-          message: String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        },
-      });
-    }),
-  ],
+  interceptors: [onError(logRpcError)],
 });
 
 export function createServer() {

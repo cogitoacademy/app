@@ -1,24 +1,85 @@
-import { eq, and, desc, lt, count } from "drizzle-orm";
-import {
-  notification,
-  notificationDispatch,
-  user,
-} from "@cogito-app/db/schema";
-import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
+import type { NotificationRepo } from "./notification.repo";
+import { NotificationNotFoundError } from "./notification.errors";
 import {
   NOTIFICATION_SEVERITY,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
 } from "../../shared/constants";
 import { log } from "../../lib/logger";
-import type {
-  InAppNotificationPort,
-  NotificationWriteParams,
-  NotificationListInput,
-  NotificationListResult,
-  NotificationListItem,
-} from "../../shared/ports/notification.port";
-import type { EmailPort, EmailMessage } from "../../shared/ports/email.port";
+
+interface NotificationEmailPort {
+  send(message: {
+    to: string;
+    subject: string;
+    html: string;
+    category: "booking" | "payment" | "refund" | "schedule" | "override";
+  }): Promise<{ messageId: string } | { skipped: true }>;
+}
+
+export type NotificationCategory =
+  | "booking"
+  | "payment"
+  | "refund"
+  | "schedule"
+  | "achievement"
+  | "system"
+  | "override";
+
+export type NotificationSeverity = "info" | "action" | "critical";
+
+export interface NotificationWriteParams {
+  db: DbOrTx;
+  userId: string;
+  bookingId?: string;
+  category: NotificationCategory;
+  title: string;
+  body: string;
+  severity?: NotificationSeverity;
+  eventKey: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface NotificationListItem {
+  id: string;
+  userId: string;
+  bookingId: string | null;
+  category: string;
+  title: string;
+  body: string;
+  severity: string;
+  isRead: boolean;
+  readAt: Date | null;
+  eventKey: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
+export interface NotificationListInput {
+  unreadOnly?: boolean;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface NotificationListResult {
+  items: NotificationListItem[];
+  nextCursor: string | null;
+}
+
+export interface NotificationIdInput {
+  id: string;
+}
+
+export interface InAppNotificationPort {
+  write(params: NotificationWriteParams): Promise<void>;
+  list(
+    userId: string,
+    opts?: NotificationListInput,
+  ): Promise<NotificationListResult>;
+  getUnreadCount(userId: string): Promise<number>;
+  markAsRead(userId: string, id: string): Promise<void>;
+  markAllAsRead(userId: string): Promise<void>;
+}
 
 const EMAIL_SUPPORTED_CATEGORIES: Set<string> = new Set([
   "booking",
@@ -31,53 +92,46 @@ const EMAIL_SUPPORTED_CATEGORIES: Set<string> = new Set([
 export type NotificationService = ReturnType<typeof createNotificationService>;
 
 export function createNotificationService(
-  db: DbType,
-  emailPort?: EmailPort,
+  repo: NotificationRepo,
+  emailPort?: NotificationEmailPort,
 ): InAppNotificationPort & {
   dispatchStatus: (notificationId: string) => Promise<unknown>;
 } {
   async function writeInternal(params: NotificationWriteParams): Promise<void> {
+    const conn = params.db;
+
     if (params.eventKey) {
-      const [existing] = await params.db
-        .select({ id: notification.id })
-        .from(notification)
-        .where(eq(notification.eventKey, params.eventKey))
-        .limit(1);
+      const existing = await repo.findNotificationByEventKey(
+        conn,
+        params.eventKey,
+      );
       if (existing) return;
     }
 
-    const [inserted] = await params.db
-      .insert(notification)
-      .values({
-        userId: params.userId,
-        bookingId: params.bookingId ?? null,
-        category: params.category,
-        title: params.title,
-        body: params.body,
-        severity: params.severity ?? NOTIFICATION_SEVERITY.INFO,
-        eventKey: params.eventKey,
-        metadata: params.metadata ?? {},
-      })
-      .returning();
+    const inserted = await repo.insertNotification(conn, {
+      userId: params.userId,
+      bookingId: params.bookingId ?? null,
+      category: params.category,
+      title: params.title,
+      body: params.body,
+      severity: params.severity ?? NOTIFICATION_SEVERITY.INFO,
+      eventKey: params.eventKey,
+      metadata: params.metadata ?? {},
+    });
 
     if (
       inserted &&
       (params.severity === NOTIFICATION_SEVERITY.ACTION ||
         params.severity === NOTIFICATION_SEVERITY.CRITICAL)
     ) {
-      const [userRow] = await params.db
-        .select({ email: user.email })
-        .from(user)
-        .where(eq(user.id, params.userId))
-        .limit(1);
-      const recipientEmail = userRow?.email ?? "";
+      const recipientEmail = await repo.findUserEmail(conn, params.userId);
 
       if (
         emailPort &&
         recipientEmail &&
         EMAIL_SUPPORTED_CATEGORIES.has(params.category)
       ) {
-        await params.db.insert(notificationDispatch).values({
+        await repo.insertDispatch(conn, {
           notificationId: inserted.id,
           channel: "email",
           recipientEmail,
@@ -89,19 +143,18 @@ export function createNotificationService(
             to: recipientEmail,
             subject: params.title,
             html: params.body,
-            category: params.category as EmailMessage["category"],
+            category: params.category as
+              | "booking"
+              | "payment"
+              | "refund"
+              | "schedule"
+              | "override",
           })
           .then(async () => {
-            await params.db
-              .update(notificationDispatch)
-              .set({ status: "sent" })
-              .where(eq(notificationDispatch.notificationId, inserted.id));
+            await repo.updateDispatchStatus(conn, inserted.id, "sent");
           })
           .catch(async (error) => {
-            await params.db
-              .update(notificationDispatch)
-              .set({ status: "failed" })
-              .where(eq(notificationDispatch.notificationId, inserted.id));
+            await repo.updateDispatchStatus(conn, inserted.id, "failed");
             log({
               level: "error",
               action: "notification_email_dispatch_failed",
@@ -139,20 +192,11 @@ export function createNotificationService(
     opts: NotificationListInput = {},
   ): Promise<NotificationListResult> {
     const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
-    const conditions = [eq(notification.userId, userId)];
-    if (opts.unreadOnly) {
-      conditions.push(eq(notification.isRead, false));
-    }
-    if (opts.cursor) {
-      conditions.push(lt(notification.createdAt, new Date(opts.cursor)));
-    }
-
-    const rows = await db
-      .select()
-      .from(notification)
-      .where(and(...conditions))
-      .orderBy(desc(notification.createdAt))
-      .limit(limit + 1);
+    const rows = await repo.listNotifications(userId, {
+      unreadOnly: opts.unreadOnly,
+      cursor: opts.cursor,
+      limit,
+    });
 
     const items = rows.slice(0, limit) as NotificationListItem[];
     const nextCursor =
@@ -164,38 +208,21 @@ export function createNotificationService(
   }
 
   async function getUnreadCount(userId: string): Promise<number> {
-    const [row] = await db
-      .select({ value: count() })
-      .from(notification)
-      .where(
-        and(eq(notification.userId, userId), eq(notification.isRead, false)),
-      );
-    return Number(row?.value ?? 0);
+    return repo.countUnread(userId);
   }
 
   async function markAsRead(userId: string, id: string): Promise<void> {
-    await db
-      .update(notification)
-      .set({ isRead: true, readAt: new Date() })
-      .where(and(eq(notification.id, id), eq(notification.userId, userId)));
+    const existing = await repo.findNotificationByIdForUser(id, userId);
+    if (!existing) throw new NotificationNotFoundError(id);
+    await repo.updateReadStatus(id, userId, true);
   }
 
   async function markAllAsRead(userId: string): Promise<void> {
-    await db
-      .update(notification)
-      .set({ isRead: true, readAt: new Date() })
-      .where(
-        and(eq(notification.userId, userId), eq(notification.isRead, false)),
-      );
+    await repo.markAllRead(userId);
   }
 
   async function dispatchStatus(notificationId: string) {
-    const [row] = await db
-      .select()
-      .from(notificationDispatch)
-      .where(eq(notificationDispatch.notificationId, notificationId))
-      .limit(1);
-    return row ?? null;
+    return repo.findDispatch(notificationId);
   }
 
   return {

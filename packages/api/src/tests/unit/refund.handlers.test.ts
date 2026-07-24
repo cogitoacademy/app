@@ -1,17 +1,22 @@
 import { describe, test, expect, mock } from "bun:test";
-import { refundHandlers } from "../../modules/refund/refund.handlers";
+import { createRefundHandler } from "../../modules/refund/refund.handler";
 
-describe("refundHandlers", () => {
+describe("refundHandler", () => {
   describe("createCorrection", () => {
-    test("calls refund.createCorrection with session user id and input", async () => {
+    test("calls refundService.createCorrection with session user id and input", async () => {
       const createCorrection = mock(async () => ({ id: "c1" }));
+      const handler = createRefundHandler({
+        refundService: {
+          createCorrection,
+          listCorrections: mock(async () => ({})),
+        } as any,
+      });
       const context = {
         session: { user: { id: "u1" } },
-        services: { refund: { createCorrection } },
-      };
+      } as any;
       const input = { bookingId: "b1", amount: 1000, reason: "overcharge" };
 
-      const result = await refundHandlers.createCorrection({ context, input });
+      const result = await handler.createCorrection({ context, input });
 
       expect(createCorrection).toHaveBeenCalledWith("u1", input);
       expect(result).toEqual({ id: "c1" });
@@ -19,15 +24,20 @@ describe("refundHandlers", () => {
   });
 
   describe("listCorrections", () => {
-    test("calls refund.listCorrections with input", async () => {
+    test("calls refundService.listCorrections with input", async () => {
       const listCorrections = mock(async () => ({ items: [] }));
+      const handler = createRefundHandler({
+        refundService: {
+          createCorrection: mock(async () => ({})),
+          listCorrections,
+        } as any,
+      });
       const context = {
         session: { user: { id: "u1" } },
-        services: { refund: { listCorrections } },
-      };
+      } as any;
       const input = { bookingId: "b1" };
 
-      const result = await refundHandlers.listCorrections({ context, input });
+      const result = await handler.listCorrections({ context, input });
 
       expect(listCorrections).toHaveBeenCalledWith(input);
       expect(result).toEqual({ items: [] });

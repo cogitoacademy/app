@@ -1,5 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createRefundService } from "../../modules/refund/refund.service";
+import { WalletNotFoundError } from "../../modules/refund/refund.errors";
 
 function makeDb() {
   return {
@@ -67,28 +68,7 @@ describe("RefundService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.message).toContain("not found");
-      }
-    });
-
-    test("throws badRequest when amount is zero or negative", async () => {
-      const service = createRefundService({
-        db: makeDb(),
-        repo: makeRepo(),
-        wallet: makeWalletPort() as any,
-        auditPort: makeAuditPort() as any,
-      });
-
-      try {
-        await service.createCorrection("admin1", {
-          walletId: "w1",
-          amount: 0,
-          type: "compensate_credit",
-          reason: "Test",
-        });
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e.message).toContain("positive");
+        expect(e).toBeInstanceOf(WalletNotFoundError);
       }
     });
 

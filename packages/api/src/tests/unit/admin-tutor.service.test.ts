@@ -5,6 +5,10 @@ import {
   type ReviewAction,
   type TutorProfileSnapshot,
 } from "../../modules/admin-tutor/admin-tutor.service";
+import {
+  TutorProfileNotFoundError,
+  InvalidInviteActionError,
+} from "../../modules/admin-tutor/admin-tutor.errors";
 
 function makeProfile(
   overrides: Partial<TutorProfileSnapshot> = {},
@@ -19,18 +23,18 @@ function makeProfile(
 
 describe("AdminTutor Service", () => {
   describe("validateReviewAction", () => {
-    test("returns ok for valid action with profile", () => {
+    test("returns profile for valid action with profile", () => {
       const result = validateReviewAction(
         "publish",
         makeProfile({ onboardingStatus: "approved_unpublished" }),
       );
-      expect(result.ok).toBe(true);
+      expect(result.profile.onboardingStatus).toBe("approved_unpublished");
     });
 
-    test("returns error for null profile", () => {
-      const result = validateReviewAction("publish", null);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    test("throws TutorProfileNotFoundError for null profile", () => {
+      expect(() => validateReviewAction("publish", null)).toThrow(
+        TutorProfileNotFoundError,
+      );
     });
 
     const actions: ReviewAction[] = [
@@ -41,13 +45,17 @@ describe("AdminTutor Service", () => {
       "suspend",
     ];
     for (const action of actions) {
-      test(`returns ok for action: ${action}`, () => {
+      test(`returns profile for action: ${action}`, () => {
         const result = validateReviewAction(action, makeProfile());
-        expect(result.ok).toBe(true);
-        if (result.ok)
-          expect(result.profile.onboardingStatus).toBe("pending_review");
+        expect(result.profile.onboardingStatus).toBe("pending_review");
       });
     }
+
+    test("throws InvalidInviteActionError for invalid action string", () => {
+      expect(() =>
+        validateReviewAction("invalid_action" as ReviewAction, makeProfile()),
+      ).toThrow(InvalidInviteActionError);
+    });
   });
 
   describe("buildReviewUpdates", () => {
@@ -84,19 +92,10 @@ describe("AdminTutor Service", () => {
       expect(updates.adminReviewNote).toBe("looks good");
     });
 
-    test("buildReviewUpdates throws for invalid action", () => {
+    test("buildReviewUpdates throws InvalidInviteActionError for invalid action", () => {
       expect(() =>
         buildReviewUpdates("invalid_action" as ReviewAction),
-      ).toThrow("Invalid action");
-    });
-
-    test("validateReviewAction returns error for invalid action string", () => {
-      const result = validateReviewAction(
-        "invalid_action" as ReviewAction,
-        makeProfile(),
-      );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+      ).toThrow(InvalidInviteActionError);
     });
   });
 });

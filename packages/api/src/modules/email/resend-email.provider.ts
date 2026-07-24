@@ -1,4 +1,5 @@
-import type { EmailPort, EmailMessage } from "../../shared/ports/email.port";
+import type { EmailPort, EmailMessage } from "./email.service";
+import { serviceUnavailable } from "../../lib/errors";
 import { log } from "../../lib/logger";
 
 export function createResendEmailProvider(
@@ -24,7 +25,9 @@ export function createResendEmailProvider(
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(`Resend API error: ${response.status} ${text}`);
+        throw serviceUnavailable(
+          `Email service unavailable: ${response.status} ${text}`,
+        );
       }
 
       const data = (await response.json()) as { id: string };

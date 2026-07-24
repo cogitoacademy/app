@@ -4,15 +4,6 @@ import type { DbOrTx } from "../../lib/tx";
 
 export type RefundRepo = ReturnType<typeof createRefundRepo>;
 
-async function findPaymentByReference(conn: DbOrTx, providerReference: string) {
-  const [row] = await conn
-    .select()
-    .from(paymentRecord)
-    .where(eq(paymentRecord.providerReference, providerReference))
-    .limit(1);
-  return row ?? null;
-}
-
 async function insertRefundRecord(
   conn: DbOrTx,
   record: {
@@ -51,6 +42,6 @@ async function updatePaymentStatus(
   return updated ?? null;
 }
 
-export function createRefundRepo(_db: unknown) {
-  return { findPaymentByReference, insertRefundRecord, updatePaymentStatus };
+export function createRefundRepo() {
+  return { insertRefundRecord, updatePaymentStatus };
 }

@@ -3,7 +3,14 @@ import {
   validateUpdateInput,
   validateSubmitForReview,
 } from "../../modules/tutor/tutor.service";
-import type { PricingPort } from "../../shared/ports/pricing.port";
+import type { PricingPort } from "../../modules/pricing/pricing.service";
+import {
+  TutorProfileNotFoundError,
+  TutorProfileNotEditableError,
+  InvalidTutorStatusError,
+  TutorProfileIncompleteError,
+  InvalidTutorPricingError,
+} from "../../modules/tutor/tutor.errors";
 
 function makeProfile(overrides: Record<string, unknown> = {}) {
   return {
@@ -37,137 +44,139 @@ const failPricingPort: PricingPort = {
 
 describe("Tutor Service", () => {
   describe("validateUpdateInput", () => {
-    test("returns ok for draft profile with valid input", () => {
-      const result = validateUpdateInput(
-        makeProfile({ onboardingStatus: "draft" }),
-        { displayName: "New Name" },
-        mockPricingPort,
-      );
-      expect(result.ok).toBe(true);
+    test("does not throw for draft profile with valid input", () => {
+      expect(() =>
+        validateUpdateInput(
+          makeProfile({ onboardingStatus: "draft" }),
+          { displayName: "New Name" },
+          mockPricingPort,
+        ),
+      ).not.toThrow();
     });
 
-    test("returns ok for changes_requested profile", () => {
-      const result = validateUpdateInput(
-        makeProfile({ onboardingStatus: "changes_requested" }),
-        { displayName: "Updated" },
-        mockPricingPort,
-      );
-      expect(result.ok).toBe(true);
+    test("does not throw for changes_requested profile", () => {
+      expect(() =>
+        validateUpdateInput(
+          makeProfile({ onboardingStatus: "changes_requested" }),
+          { displayName: "Updated" },
+          mockPricingPort,
+        ),
+      ).not.toThrow();
     });
 
-    test("returns error for null profile", () => {
-      const result = validateUpdateInput(
-        null,
-        { displayName: "X" },
-        mockPricingPort,
-      );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    test("throws TutorProfileNotFoundError for null profile", () => {
+      expect(() =>
+        validateUpdateInput(null, { displayName: "X" }, mockPricingPort),
+      ).toThrow(TutorProfileNotFoundError);
     });
 
-    test("returns error for published profile", () => {
-      const result = validateUpdateInput(
-        makeProfile({ onboardingStatus: "published" }),
-        { displayName: "X" },
-        mockPricingPort,
-      );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("FORBIDDEN");
+    test("throws TutorProfileNotEditableError for published profile", () => {
+      expect(() =>
+        validateUpdateInput(
+          makeProfile({ onboardingStatus: "published" }),
+          { displayName: "X" },
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileNotEditableError);
     });
 
-    test("returns error when pricing validation fails", () => {
-      const result = validateUpdateInput(
-        makeProfile({ onboardingStatus: "draft" }),
-        { prices: { "1": 0 } },
-        failPricingPort,
-      );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws InvalidTutorPricingError when pricing validation fails", () => {
+      expect(() =>
+        validateUpdateInput(
+          makeProfile({ onboardingStatus: "draft" }),
+          { prices: { "1": 0 } },
+          failPricingPort,
+        ),
+      ).toThrow(InvalidTutorPricingError);
     });
 
-    test("returns ok when input has no prices (skip pricing validation)", () => {
-      const result = validateUpdateInput(
-        makeProfile({ onboardingStatus: "draft" }),
-        { displayName: "New Name" },
-        failPricingPort,
-      );
-      expect(result.ok).toBe(true);
+    test("does not throw when input has no prices (skip pricing validation)", () => {
+      expect(() =>
+        validateUpdateInput(
+          makeProfile({ onboardingStatus: "draft" }),
+          { displayName: "New Name" },
+          failPricingPort,
+        ),
+      ).not.toThrow();
     });
 
-    test("returns ok when input provides modality override with prices", () => {
-      const result = validateUpdateInput(
-        makeProfile({ onboardingStatus: "draft", modality: "online" }),
-        { prices: { "1": 50 }, modality: "both" },
-        {
-          ...mockPricingPort,
-          validatePrices: () => null,
-        },
-      );
-      expect(result.ok).toBe(true);
+    test("does not throw when input provides modality override with prices", () => {
+      expect(() =>
+        validateUpdateInput(
+          makeProfile({ onboardingStatus: "draft", modality: "online" }),
+          { prices: { "1": 50 }, modality: "both" },
+          {
+            ...mockPricingPort,
+            validatePrices: () => null,
+          },
+        ),
+      ).not.toThrow();
     });
 
-    test("returns error when modality override prices fail validation", () => {
-      const result = validateUpdateInput(
-        makeProfile({ onboardingStatus: "draft", modality: "online" }),
-        { prices: { "1": 0 }, modality: "both" },
-        failPricingPort,
-      );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws when modality override prices fail validation", () => {
+      expect(() =>
+        validateUpdateInput(
+          makeProfile({ onboardingStatus: "draft", modality: "online" }),
+          { prices: { "1": 0 }, modality: "both" },
+          failPricingPort,
+        ),
+      ).toThrow(InvalidTutorPricingError);
     });
   });
 
   describe("validateSubmitForReview", () => {
-    test("returns ok for complete draft profile", () => {
-      const result = validateSubmitForReview(makeProfile(), mockPricingPort);
-      expect(result.ok).toBe(true);
+    test("does not throw for complete draft profile", () => {
+      expect(() =>
+        validateSubmitForReview(makeProfile(), mockPricingPort),
+      ).not.toThrow();
     });
 
-    test("returns ok for changes_requested profile", () => {
-      const result = validateSubmitForReview(
-        makeProfile({ onboardingStatus: "changes_requested" }),
-        mockPricingPort,
+    test("does not throw for changes_requested profile", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ onboardingStatus: "changes_requested" }),
+          mockPricingPort,
+        ),
+      ).not.toThrow();
+    });
+
+    test("throws TutorProfileNotFoundError for null profile", () => {
+      expect(() => validateSubmitForReview(null, mockPricingPort)).toThrow(
+        TutorProfileNotFoundError,
       );
-      expect(result.ok).toBe(true);
     });
 
-    test("returns error for null profile", () => {
-      const result = validateSubmitForReview(null, mockPricingPort);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    test("throws InvalidTutorStatusError for invalid status", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ onboardingStatus: "pending_review" }),
+          mockPricingPort,
+        ),
+      ).toThrow(InvalidTutorStatusError);
     });
 
-    test("returns error for invalid status", () => {
-      const result = validateSubmitForReview(
-        makeProfile({ onboardingStatus: "pending_review" }),
-        mockPricingPort,
-      );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws TutorProfileIncompleteError for missing required fields", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ displayName: null }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
     });
 
-    test("returns error for missing required fields", () => {
-      const result = validateSubmitForReview(
-        makeProfile({ displayName: null }),
-        mockPricingPort,
-      );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.message).toContain("required");
+    test("throws TutorProfileIncompleteError for empty expertise", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ expertise: [] }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
     });
 
-    test("returns error for empty expertise", () => {
-      const result = validateSubmitForReview(
-        makeProfile({ expertise: [] }),
-        mockPricingPort,
-      );
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.message).toContain("expertise");
-    });
-
-    test("returns error when pricing validation fails", () => {
-      const result = validateSubmitForReview(makeProfile(), failPricingPort);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws InvalidTutorPricingError when pricing validation fails", () => {
+      expect(() =>
+        validateSubmitForReview(makeProfile(), failPricingPort),
+      ).toThrow(InvalidTutorPricingError);
     });
   });
 });

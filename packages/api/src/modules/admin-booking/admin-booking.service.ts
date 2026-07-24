@@ -1,16 +1,22 @@
-import { badRequest, notFound } from "../../lib/errors";
+import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
+import {
+  BookingNotFoundError,
+  InvalidRefundStateError,
+  TerminalStateOverrideError,
+} from "./admin-booking.errors";
 import {
   ACTOR_TYPE,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   PAYMENT_STATUS,
 } from "../../shared/constants";
-import { TERMINAL_STATES } from "../booking/booking-state.types";
 import type { DbType } from "../../lib/db";
-import type { AuditPort } from "../../shared/ports/audit.port";
-import type { WalletPort } from "../../shared/ports/wallet.port";
 import type { AdminBookingRepo } from "./admin-booking.repo";
-import type { RefundRepo } from "../refund/refund.repo";
+import type {
+  AdminBookingAuditPort,
+  AdminBookingWalletPort,
+  AdminBookingRefundPort,
+} from "./index";
 
 export const OVERRIDE_CATEGORIES = [
   "tutor_no_show",
@@ -32,12 +38,12 @@ export const MARKS_ACTIONS = [
 export type MarksAction = (typeof MARKS_ACTIONS)[number];
 
 const CATEGORY_STATE_MAP: Record<OverrideCategory, string> = {
-  tutor_no_show: "no_show",
-  medical_emergency: "cancelled",
-  technical_failure: "cancelled",
-  admin_correction: "cancelled",
-  student_no_show: "no_show",
-  force_cancel: "cancelled",
+  tutor_no_show: BOOKING_STATE.NO_SHOW,
+  medical_emergency: BOOKING_STATE.CANCELLED,
+  technical_failure: BOOKING_STATE.CANCELLED,
+  admin_correction: BOOKING_STATE.CANCELLED,
+  student_no_show: BOOKING_STATE.NO_SHOW,
+  force_cancel: BOOKING_STATE.CANCELLED,
 };
 
 export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
@@ -45,11 +51,11 @@ export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
 export function createAdminBookingService(deps: {
   db: DbType;
   repo: AdminBookingRepo;
-  auditPort: AuditPort;
-  wallet: WalletPort;
-  refundRepo: RefundRepo;
+  auditPort: AdminBookingAuditPort;
+  wallet: AdminBookingWalletPort;
+  refund: AdminBookingRefundPort;
 }) {
-  const { db, repo, auditPort, wallet, refundRepo } = deps;
+  const { db, repo, auditPort, wallet, refund } = deps;
 
   async function applyOverride(
     adminId: string,
@@ -77,12 +83,15 @@ export function createAdminBookingService(deps: {
 
     const result = await db.transaction(async (tx) => {
       const bookingRow = await repo.findBookingById(tx, input.bookingId);
-      if (!bookingRow) throw notFound("Booking not found");
+      if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
 
       if (
         (TERMINAL_STATES as readonly string[]).includes(bookingRow.currentState)
       ) {
-        throw badRequest("Cannot override a terminal booking state");
+        throw new TerminalStateOverrideError(
+          input.bookingId,
+          bookingRow.currentState,
+        );
       }
 
       const updateResult = await repo.updateBookingWithOverride(
@@ -92,7 +101,7 @@ export function createAdminBookingService(deps: {
         input.reason,
         overrideMeta,
       );
-      if (!updateResult) throw notFound("Booking not found");
+      if (!updateResult) throw new BookingNotFoundError(input.bookingId);
 
       await repo.insertStateHistoryEntry(tx, {
         bookingId: input.bookingId,
@@ -198,7 +207,7 @@ export function createAdminBookingService(deps: {
 
   async function getBookingStateHistory(bookingId: string) {
     const bookingRow = await repo.findBookingById(db, bookingId);
-    if (!bookingRow) throw notFound("Booking not found");
+    if (!bookingRow) throw new BookingNotFoundError(bookingId);
 
     return repo.getStateHistory(db, bookingId);
   }
@@ -208,18 +217,18 @@ export function createAdminBookingService(deps: {
     input: { paymentId: string; reason: string },
   ) {
     const payment = await repo.findPaymentById(db, input.paymentId);
-    if (!payment) throw notFound("Payment not found");
+    if (!payment) throw new BookingNotFoundError(input.paymentId);
 
     if (
       payment.status !== PAYMENT_STATUS.PAID &&
       payment.status !== PAYMENT_STATUS.SETTLED
     ) {
-      throw badRequest("Only PAID or SETTLED payments can be refunded");
+      throw new InvalidRefundStateError(input.paymentId, payment.status);
     }
 
     return db.transaction(async (tx) => {
       const participantWallet = await wallet.getByUserId(tx, payment.userId);
-      if (!participantWallet) throw notFound("Wallet not found");
+      if (!participantWallet) throw new BookingNotFoundError(payment.userId);
 
       await wallet.compensate(tx, {
         walletId: participantWallet.id,
@@ -237,7 +246,7 @@ export function createAdminBookingService(deps: {
         PAYMENT_STATUS.REFUNDED,
       );
 
-      await refundRepo.insertRefundRecord(tx, {
+      await refund.createRefundRecord(tx, {
         paymentId: input.paymentId,
         walletId: participantWallet.id,
         amountIdr: payment.amountIdr ?? 0,

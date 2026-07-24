@@ -6,73 +6,75 @@ import {
   upsertAvailabilityInput,
   deleteAvailabilityInput,
 } from "./availability.types";
-import { tutorHandlers } from "./tutor.handlers";
+import type { TutorHandler } from "./tutor.handler";
 
-export const tutorRouter = {
-  getMyProfile: protectedProcedure
-    .route({
-      method: "POST",
-      path: "/tutor/profile/get",
-      tags: ["Tutor"],
-      summary: "Get tutor profile",
-      description: "Returns the authenticated tutor's profile",
-    })
-    .input(z.void())
-    .handler(tutorHandlers.getMyProfile),
+export function createTutorRouter(handler: TutorHandler) {
+  return {
+    getMyProfile: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/profile/get",
+        tags: ["Tutor"],
+        summary: "Get tutor profile",
+        description: "Returns the authenticated tutor's profile",
+      })
+      .input(z.void())
+      .handler(handler.getMyProfile),
 
-  updateMyProfile: protectedProcedure
-    .route({
-      method: "POST",
-      path: "/tutor/profile/update",
-      tags: ["Tutor"],
-      summary: "Update tutor profile",
-      description: "Updates the authenticated tutor's draft profile",
-    })
-    .input(updateMyProfileInput)
-    .handler(tutorHandlers.updateMyProfile),
+    updateMyProfile: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/profile/update",
+        tags: ["Tutor"],
+        summary: "Update tutor profile",
+        description: "Updates the authenticated tutor's draft profile",
+      })
+      .input(updateMyProfileInput)
+      .handler(handler.updateMyProfile),
 
-  submitForReview: protectedProcedure
-    .route({
-      method: "POST",
-      path: "/tutor/profile/submit",
-      tags: ["Tutor"],
-      summary: "Submit tutor profile",
-      description: "Submits a tutor profile for admin review",
-    })
-    .input(z.void())
-    .handler(tutorHandlers.submitForReview),
+    submitForReview: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/profile/submit",
+        tags: ["Tutor"],
+        summary: "Submit tutor profile",
+        description: "Submits a tutor profile for admin review",
+      })
+      .input(z.void())
+      .handler(handler.submitForReview),
 
-  listAvailability: protectedProcedure
-    .route({
-      method: "POST",
-      path: "/tutor/availability/list",
-      tags: ["Tutor"],
-      summary: "List availability",
-      description:
-        "Returns the authenticated tutor's active availability slots",
-    })
-    .input(z.void())
-    .handler(tutorHandlers.listAvailability),
+    listAvailability: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/availability/list",
+        tags: ["Tutor"],
+        summary: "List availability",
+        description:
+          "Returns the authenticated tutor's active availability slots",
+      })
+      .input(z.void())
+      .handler(handler.listAvailability),
 
-  upsertAvailability: protectedProcedure
-    .route({
-      method: "POST",
-      path: "/tutor/availability/upsert",
-      tags: ["Tutor"],
-      summary: "Upsert availability",
-      description: "Creates or updates a tutor availability window",
-    })
-    .input(upsertAvailabilityInput)
-    .handler(tutorHandlers.upsertAvailability),
+    upsertAvailability: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/availability/upsert",
+        tags: ["Tutor"],
+        summary: "Upsert availability",
+        description: "Creates or updates a tutor availability window",
+      })
+      .input(upsertAvailabilityInput)
+      .handler(handler.upsertAvailability),
 
-  deleteAvailability: protectedProcedure
-    .route({
-      method: "POST",
-      path: "/tutor/availability/delete",
-      tags: ["Tutor"],
-      summary: "Delete availability",
-      description: "Deletes a tutor availability window",
-    })
-    .input(deleteAvailabilityInput)
-    .handler(tutorHandlers.deleteAvailability),
-};
+    deleteAvailability: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/availability/delete",
+        tags: ["Tutor"],
+        summary: "Delete availability",
+        description: "Deletes a tutor availability window",
+      })
+      .input(deleteAvailabilityInput)
+      .handler(handler.deleteAvailability),
+  };
+}

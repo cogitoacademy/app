@@ -55,17 +55,22 @@ export async function updateStatus(
   return updated;
 }
 
-export async function listAvailability(conn: DbOrTx, userId: string) {
+export async function listAvailability(
+  conn: DbOrTx,
+  userId: string,
+  opts?: { from?: Date },
+) {
+  const conditions = [
+    eq(availabilitySlot.tutorId, userId),
+    eq(availabilitySlot.isActive, true),
+  ];
+  if (opts?.from) {
+    conditions.push(gte(availabilitySlot.startDate, opts.from));
+  }
   return conn
     .select()
     .from(availabilitySlot)
-    .where(
-      and(
-        eq(availabilitySlot.tutorId, userId),
-        eq(availabilitySlot.isActive, true),
-        gte(availabilitySlot.startDate, new Date()),
-      ),
-    );
+    .where(and(...conditions));
 }
 
 export async function upsertAvailability(

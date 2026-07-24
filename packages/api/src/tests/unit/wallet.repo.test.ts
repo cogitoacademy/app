@@ -11,8 +11,9 @@ import {
   atomicCompensateCredit,
   atomicCompensateDeduct,
   insertLedger,
-  listLedger,
+  findLedgerEntries,
   listActivePackages,
+  upsert,
   createWalletRepo,
 } from "../../modules/wallet/wallet.repo";
 
@@ -140,27 +141,24 @@ describe("updateBalances", () => {
 });
 
 describe("atomicHold", () => {
-  test("returns updated wallet on success", async () => {
+  test("returns success result with updated wallet on success", async () => {
     const updated = { id: "w1", heldBalance: 50, availableBalance: 50 };
     const updateConn = makeUpdateConn([updated]);
     const conn: any = { ...updateConn };
 
     const result = await atomicHold(conn, "w1", 50);
 
-    expect(result).toEqual(updated);
+    expect(result).toEqual({ success: true, wallet: updated });
     expect(updateConn.set).toHaveBeenCalledTimes(1);
   });
 
-  test("throws badRequest on insufficient balance", async () => {
+  test("returns failure result on insufficient balance", async () => {
     const updateConn = makeUpdateConn([]);
     const conn: any = { ...updateConn };
 
-    try {
-      await atomicHold(conn, "w1", 999);
-      expect.unreachable("should have thrown");
-    } catch (e: any) {
-      expect(e.code).toBe("BAD_REQUEST");
-    }
+    const result = await atomicHold(conn, "w1", 999);
+
+    expect(result).toEqual({ success: false, reason: "insufficient_balance" });
   });
 });
 
@@ -178,26 +176,23 @@ describe("atomicRelease", () => {
 });
 
 describe("atomicDeduct", () => {
-  test("deducts held balance and returns updated wallet", async () => {
+  test("returns success result with deducted wallet", async () => {
     const updated = { id: "w1", heldBalance: 0, totalBalance: 50 };
     const updateConn = makeUpdateConn([updated]);
     const conn: any = { ...updateConn };
 
     const result = await atomicDeduct(conn, "w1", 50);
 
-    expect(result).toEqual(updated);
+    expect(result).toEqual({ success: true, wallet: updated });
   });
 
-  test("throws badRequest on insufficient held balance", async () => {
+  test("returns failure result on insufficient held balance", async () => {
     const updateConn = makeUpdateConn([]);
     const conn: any = { ...updateConn };
 
-    try {
-      await atomicDeduct(conn, "w1", 999);
-      expect.unreachable("should have thrown");
-    } catch (e: any) {
-      expect(e.code).toBe("BAD_REQUEST");
-    }
+    const result = await atomicDeduct(conn, "w1", 999);
+
+    expect(result).toEqual({ success: false, reason: "insufficient_held" });
   });
 });
 
@@ -284,8 +279,8 @@ describe("insertLedger", () => {
   });
 });
 
-describe("listLedger", () => {
-  test("returns items and nextCursor when more rows exist", async () => {
+describe("findLedgerEntries", () => {
+  test("returns raw rows with limit + 1", async () => {
     const rows = Array.from({ length: 21 }, (_, i) => ({
       id: `l${i}`,
       walletId: "w1",
@@ -293,14 +288,13 @@ describe("listLedger", () => {
     const { select, chain } = makeSelectConn(rows);
     const conn: any = { select };
 
-    const result = await listLedger(conn, "w1", { limit: 20 });
+    const result = await findLedgerEntries(conn, "w1", { limit: 20 });
 
-    expect(result.items).toHaveLength(20);
-    expect(result.nextCursor).toBe("l19");
+    expect(result).toHaveLength(21);
     expect(chain.limit).toHaveBeenCalledWith(21);
   });
 
-  test("returns null nextCursor when no more rows", async () => {
+  test("returns fewer rows when available", async () => {
     const rows = Array.from({ length: 5 }, (_, i) => ({
       id: `l${i}`,
       walletId: "w1",
@@ -308,19 +302,9 @@ describe("listLedger", () => {
     const { select } = makeSelectConn(rows);
     const conn: any = { select };
 
-    const result = await listLedger(conn, "w1", { limit: 20 });
+    const result = await findLedgerEntries(conn, "w1", { limit: 20 });
 
-    expect(result.items).toHaveLength(5);
-    expect(result.nextCursor).toBeNull();
-  });
-
-  test("uses default limit of 20", async () => {
-    const { select, chain } = makeSelectConn([]);
-    const conn: any = { select };
-
-    await listLedger(conn, "w1");
-
-    expect(chain.limit).toHaveBeenCalledWith(21);
+    expect(result).toHaveLength(5);
   });
 });
 
@@ -337,14 +321,56 @@ describe("listActivePackages", () => {
   });
 });
 
+describe("upsert", () => {
+  test("returns created wallet on successful insert", async () => {
+    const created = { id: "w1", userId: "u1", totalBalance: 0 };
+
+    const returning = mock(() => Promise.resolve([created]));
+    const onConflictDoNothing = mock(() => ({ returning }));
+    const values = mock(() => ({ onConflictDoNothing }));
+    const mockInsert = mock(() => ({ values }));
+
+    const db: any = { insert: mockInsert };
+
+    const result = await upsert(db, {
+      userId: "u1",
+      totalBalance: 0,
+      heldBalance: 0,
+      availableBalance: 0,
+    });
+
+    expect(result).toEqual(created);
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(values).toHaveBeenCalledTimes(1);
+    expect(onConflictDoNothing).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns null when conflict occurs", async () => {
+    const returning = mock(() => Promise.resolve([undefined as any]));
+    const onConflictDoNothing = mock(() => ({ returning }));
+    const values = mock(() => ({ onConflictDoNothing }));
+    const mockInsert = mock(() => ({ values }));
+
+    const db: any = { insert: mockInsert };
+
+    const result = await upsert(db, {
+      userId: "u1",
+      totalBalance: 0,
+      heldBalance: 0,
+      availableBalance: 0,
+    });
+
+    expect(result).toBeNull();
+  });
+});
+
 describe("createWalletRepo", () => {
   test("returns object with all repo methods", () => {
-    const db: any = {};
-    const repo = createWalletRepo(db);
+    const repo = createWalletRepo();
 
     expect(repo).toHaveProperty("getById");
     expect(repo).toHaveProperty("getByUserId");
-    expect(repo).toHaveProperty("getOrCreate");
+    expect(repo).toHaveProperty("upsert");
     expect(repo).toHaveProperty("insert");
     expect(repo).toHaveProperty("updateBalances");
     expect(repo).toHaveProperty("atomicHold");
@@ -354,67 +380,7 @@ describe("createWalletRepo", () => {
     expect(repo).toHaveProperty("atomicCompensateCredit");
     expect(repo).toHaveProperty("atomicCompensateDeduct");
     expect(repo).toHaveProperty("insertLedger");
-    expect(repo).toHaveProperty("listLedger");
+    expect(repo).toHaveProperty("findLedgerEntries");
     expect(repo).toHaveProperty("listActivePackages");
-  });
-
-  describe("getOrCreate", () => {
-    test("returns existing wallet if found", async () => {
-      const existing = { id: "w1", userId: "u1", totalBalance: 0 };
-
-      const { promise: selectPromise } = makeQueryChain([existing]);
-      const select = mock(() => selectPromise);
-
-      const db: any = { select };
-
-      const repo = createWalletRepo(db);
-      const result = await repo.getOrCreate("u1");
-
-      expect(result).toEqual(existing);
-    });
-
-    test("inserts new wallet when not found", async () => {
-      const created = { id: "w1", userId: "u1", totalBalance: 0 };
-
-      const { promise: selectPromise } = makeQueryChain([]);
-      const select = mock(() => selectPromise);
-
-      const returning = mock(() => Promise.resolve([created]));
-      const onConflictDoNothing = mock(() => ({ returning }));
-      const values = mock(() => ({ onConflictDoNothing }));
-      const mockInsert = mock(() => ({ values }));
-
-      const db: any = { select, insert: mockInsert };
-
-      const repo = createWalletRepo(db);
-      const result = await repo.getOrCreate("u1");
-
-      expect(result).toEqual(created);
-      expect(mockInsert).toHaveBeenCalledTimes(1);
-      expect(values).toHaveBeenCalledTimes(1);
-      expect(onConflictDoNothing).toHaveBeenCalledTimes(1);
-    });
-
-    test("falls back to select when insert returns nothing due to conflict", async () => {
-      const existingAfter = { id: "w1", userId: "u1", totalBalance: 0 };
-
-      const { promise: selectPromise1 } = makeQueryChain([]);
-      const { promise: selectPromise2 } = makeQueryChain([existingAfter]);
-      const select = mock(() => selectPromise1)
-        .mockImplementationOnce(() => selectPromise1)
-        .mockImplementationOnce(() => selectPromise2);
-
-      const returning = mock(() => Promise.resolve([undefined as any]));
-      const onConflictDoNothing = mock(() => ({ returning }));
-      const values = mock(() => ({ onConflictDoNothing }));
-      const mockInsert = mock(() => ({ values }));
-
-      const db: any = { select, insert: mockInsert };
-
-      const repo = createWalletRepo(db);
-      const result = await repo.getOrCreate("u1");
-
-      expect(result).toEqual(existingAfter);
-    });
   });
 });

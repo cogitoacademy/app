@@ -1,8 +1,11 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, mock } from "bun:test";
 import {
   buildProjection,
+  createDiscoveryService,
   type ProfileWithUser,
 } from "../../modules/tutor-discovery/discovery.service";
+import { TutorProfileNotFoundError } from "../../modules/tutor-discovery/discovery.errors";
+import type { DiscoveryRepo } from "../../modules/tutor-discovery/discovery.repo";
 
 function makeProfile(
   overrides: Partial<ProfileWithUser> = {},
@@ -28,6 +31,14 @@ function makeProfile(
     user: { name: "Dr. Smith", image: "https://img.example.com/smith.jpg" },
     ...overrides,
   } as unknown as ProfileWithUser;
+}
+
+function makeRepo(overrides: Partial<DiscoveryRepo> = {}): DiscoveryRepo {
+  return {
+    listPublished: mock(async () => []),
+    getProfileById: mock(async () => null),
+    ...overrides,
+  } as DiscoveryRepo;
 }
 
 describe("Discovery Service", () => {
@@ -64,6 +75,80 @@ describe("Discovery Service", () => {
     test("defaults expertise to empty array when null", () => {
       const result = buildProjection(makeProfile({ expertise: null as any }));
       expect(result.expertise).toEqual([]);
+    });
+  });
+
+  describe("listPublished", () => {
+    test("calls repo.listPublished and maps results", async () => {
+      const profile = makeProfile();
+      const listPublished = mock(async () => [profile]);
+      const repo = makeRepo({ listPublished });
+
+      const service = createDiscoveryService({ repo });
+      const result = await service.listPublished({ search: "math" });
+
+      expect(listPublished).toHaveBeenCalledWith({
+        search: "math",
+        expertise: undefined,
+        modality: undefined,
+        limit: 20,
+        offset: 0,
+      });
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe("tp1");
+    });
+
+    test("passes custom limit and offset to repo", async () => {
+      const listPublished = mock(async () => []);
+      const repo = makeRepo({ listPublished });
+
+      const service = createDiscoveryService({ repo });
+      await service.listPublished({ limit: 10, offset: 5 });
+
+      expect(listPublished).toHaveBeenCalledWith({
+        search: undefined,
+        expertise: undefined,
+        modality: undefined,
+        limit: 10,
+        offset: 5,
+      });
+    });
+
+    test("returns empty array when no profiles", async () => {
+      const repo = makeRepo({ listPublished: mock(async () => []) });
+      const service = createDiscoveryService({ repo });
+
+      const result = await service.listPublished();
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("getProfile", () => {
+    test("returns projected profile when found", async () => {
+      const profile = makeProfile();
+      const getProfileById = mock(async () => profile);
+      const repo = makeRepo({ getProfileById });
+
+      const service = createDiscoveryService({ repo });
+      const result = await service.getProfile("tp1");
+
+      expect(getProfileById).toHaveBeenCalledWith("tp1");
+      expect(result.id).toBe("tp1");
+    });
+
+    test("throws TutorProfileNotFoundError when not found", async () => {
+      const repo = makeRepo({ getProfileById: mock(async () => null) });
+      const service = createDiscoveryService({ repo });
+
+      try {
+        await service.getProfile("missing");
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(TutorProfileNotFoundError);
+        expect((e as TutorProfileNotFoundError).details).toEqual({
+          id: "missing",
+        });
+      }
     });
   });
 });

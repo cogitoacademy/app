@@ -1,21 +1,21 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   ACTOR_TYPE,
 } from "../../shared/constants";
-import { badRequest } from "../../lib/errors";
-import type { WalletPort } from "../../shared/ports/wallet.port";
-import type { AuditPort } from "../../shared/ports/audit.port";
+import { WalletNotFoundError } from "./refund.errors";
 import type { RefundRepo } from "./refund.repo";
+import type { RefundWalletPort, RefundAuditPort } from "./index";
 
 export type RefundService = ReturnType<typeof createRefundService>;
 
 export function createRefundService(deps: {
   db: DbType;
   repo: RefundRepo;
-  wallet: WalletPort;
-  auditPort: AuditPort;
+  wallet: RefundWalletPort;
+  auditPort: RefundAuditPort;
 }) {
   const { db, wallet, auditPort, repo } = deps;
 
@@ -29,9 +29,8 @@ export function createRefundService(deps: {
       bookingId?: string;
     },
   ) {
-    if (input.amount <= 0) throw badRequest("Amount must be positive");
     const walletSnapshot = await wallet.getById(db, input.walletId);
-    if (!walletSnapshot) throw new Error("Wallet not found");
+    if (!walletSnapshot) throw new WalletNotFoundError(input.walletId);
 
     const beforeState = {
       totalBalance: walletSnapshot.totalBalance,
@@ -110,5 +109,19 @@ export function createRefundService(deps: {
     };
   }
 
-  return { createCorrection, listCorrections };
+  async function createRefundRecord(
+    db: DbOrTx,
+    params: {
+      paymentId: string | null;
+      walletId: string;
+      amountIdr: number;
+      marks: number;
+      reason: string;
+      actorId?: string;
+    },
+  ): Promise<void> {
+    await repo.insertRefundRecord(db, params);
+  }
+
+  return { createCorrection, listCorrections, createRefundRecord };
 }

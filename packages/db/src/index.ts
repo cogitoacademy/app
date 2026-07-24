@@ -1,20 +1,8 @@
 import { env } from "@cogito-app/env/server";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool, type PoolConfig } from "pg";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
 import * as schema from "./schema";
-
-const poolConfig: PoolConfig = {
-  max: 20,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
-  maxUses: 7500,
-  allowExitOnIdle: false,
-  connectionString: env.DATABASE_URL,
-  ...(env.NODE_ENV === "production"
-    ? { ssl: { rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED } }
-    : {}),
-};
 
 if (env.NODE_ENV === "production" && !env.DB_SSL_REJECT_UNAUTHORIZED) {
   console.warn(
@@ -22,14 +10,22 @@ if (env.NODE_ENV === "production" && !env.DB_SSL_REJECT_UNAUTHORIZED) {
   );
 }
 
-const pool = new Pool(poolConfig);
-
-pool.on("error", (err) => {
-  console.error("Unexpected database pool error:", err);
-});
-
-export function createDb() {
-  return drizzle(pool, { schema });
+export function createDb(connectionString?: string) {
+  const url = connectionString ?? env.DATABASE_URL;
+  const client = postgres(url, {
+    max: 20,
+    idle_timeout: 20,
+    connect_timeout: 10,
+    ...(env.NODE_ENV === "production" && {
+      ssl: { rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED },
+    }),
+    ...(env.NODE_ENV === "development" && {
+      onquery: (query: { sql: string; params: unknown[] }) => {
+        console.log(`[DB] ${query.sql} | ${JSON.stringify(query.params)}`);
+      },
+    }),
+  });
+  return drizzle(client, { schema });
 }
 
 export const db = createDb();

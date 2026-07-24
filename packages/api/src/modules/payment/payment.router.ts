@@ -1,25 +1,27 @@
 import { protectedProcedure } from "../../procedures";
 import { createPurchaseInput, getPurchaseInput } from "./payment.types";
-import { paymentHandlers } from "./payment.handlers";
+import type { PaymentHandler } from "./payment.handler";
 
-export const paymentRouter = {
-  createPurchase: protectedProcedure
-    .route({
-      method: "POST",
-      path: "/payment/purchase",
-      tags: ["Payments"],
-      summary: "Create purchase intent",
-    })
-    .input(createPurchaseInput)
-    .handler(paymentHandlers.createPurchase),
+export function createPaymentRouter(handler: PaymentHandler) {
+  return {
+    createPurchase: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/payment/purchase",
+        tags: ["Payments"],
+        summary: "Create purchase intent",
+      })
+      .input(createPurchaseInput)
+      .handler(handler.createPurchase),
 
-  getPurchase: protectedProcedure
-    .route({
-      method: "POST",
-      path: "/payment/get",
-      tags: ["Payments"],
-      summary: "Get purchase status",
-    })
-    .input(getPurchaseInput)
-    .handler(paymentHandlers.getPurchase),
-};
+    getPurchase: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/payment/get",
+        tags: ["Payments"],
+        summary: "Get purchase status",
+      })
+      .input(getPurchaseInput)
+      .handler(handler.getPurchase),
+  };
+}

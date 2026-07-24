@@ -1,10 +1,18 @@
 import { z } from "zod";
 
+const nonBlankString = z
+  .string()
+  .refine((val) => val.trim() !== "", "Cannot be blank");
+
 export const updateProfileInput = z.object({
-  phoneNumber: z.string().optional(),
-  schoolName: z.string().optional(),
-  gradeLevel: z.string().optional(),
-  parentName: z.string().optional(),
-  parentPhone: z.string().optional(),
-  parentEmail: z.string().email().optional(),
+  phoneNumber: nonBlankString.optional(),
+  schoolName: nonBlankString.optional(),
+  gradeLevel: nonBlankString.optional(),
+  parentName: nonBlankString.optional(),
+  parentPhone: nonBlankString.optional(),
+  parentEmail: z
+    .string()
+    .email()
+    .refine((val) => val.trim() !== "", "Cannot be blank")
+    .optional(),
 });

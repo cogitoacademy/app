@@ -1,164 +1,82 @@
-import type { DbType } from "../../lib/db";
-import { notFound, badRequest, forbidden } from "../../lib/errors";
-import type { AuditPort } from "../../shared/ports/audit.port";
-import type { PricingPort } from "../../shared/ports/pricing.port";
-import { ONBOARDING_STATUS, ACTOR_TYPE } from "../../shared/constants";
-import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
-import { validateUpdateInput, validateSubmitForReview } from "./tutor.service";
+import type { Context } from "../../context";
+import { z } from "zod";
+import { withDomainMap } from "../../lib/handler-utils";
+import type { TutorService } from "./tutor.service";
+import { updateMyProfileInput } from "./tutor.types";
+import {
+  upsertAvailabilityInput,
+  deleteAvailabilityInput,
+} from "./availability.types";
+import { mapTutorError } from "./tutor.errors";
 
-export function createTutorHandler(deps: {
-  tutorService: ReturnType<typeof createTutorService>;
-}) {
-  const { tutorService } = deps;
-
-  async function getMyProfile(userId: string) {
-    return tutorService.getMyProfile(userId);
-  }
-
-  async function updateMyProfile(userId: string, input: UpdateProfileInput) {
-    return tutorService.updateMyProfile(userId, input);
-  }
-
-  async function submitForReview(userId: string) {
-    return tutorService.submitForReview(userId);
-  }
-
-  async function listAvailability(userId: string) {
-    return tutorService.listAvailability(userId);
-  }
-
-  async function upsertAvailability(
-    userId: string,
-    input: {
-      id?: string;
-      startDate: string | Date;
-      endDate: string | Date;
-      modality: "online" | "offline" | "both";
-      isRecurring?: boolean;
-      recurrenceRule?: string;
-      isActive?: boolean;
-    },
-  ) {
-    return tutorService.upsertAvailability(userId, input);
-  }
-
-  async function deleteAvailability(userId: string, slotId: string) {
-    return tutorService.deleteAvailability(userId, slotId);
-  }
-
-  return {
-    getMyProfile,
-    updateMyProfile,
-    submitForReview,
-    listAvailability,
-    upsertAvailability,
-    deleteAvailability,
-  };
-}
-
-export function createTutorService(deps: {
-  tutorRepo: TutorRepo;
-  pricingPort: PricingPort;
-  auditPort: AuditPort;
-  db: DbType;
-}) {
-  const { tutorRepo, pricingPort, auditPort, db } = deps;
-
-  async function getMyProfile(userId: string) {
-    const profile = await tutorRepo.getByUserId(db, userId);
-    if (!profile) throw notFound("Tutor profile not found");
-    return profile;
-  }
-
-  async function updateMyProfile(userId: string, input: UpdateProfileInput) {
-    const profile = await tutorRepo.getByUserId(db, userId);
-    const result = validateUpdateInput(profile, input, pricingPort);
-    if (!result.ok) throw result.error;
-    return tutorRepo.updateProfile(db, userId, input);
-  }
-
-  async function submitForReview(userId: string) {
-    const profile = await tutorRepo.getByUserId(db, userId);
-    const result = validateSubmitForReview(profile, pricingPort);
-    if (!result.ok) throw result.error;
-
-    return db.transaction(async (tx) => {
-      const row = await tutorRepo.updateStatus(
-        tx,
-        userId,
-        ONBOARDING_STATUS.PENDING_REVIEW,
-      );
-
-      await auditPort.record({
-        db: tx,
-        actorId: userId,
-        actorType: ACTOR_TYPE.TUTOR,
-        action: "tutor_profile_submitted_for_review",
-        targetId: profile!.id,
-        targetType: "tutor_profile",
-        beforeState: { onboardingStatus: profile!.onboardingStatus },
-        afterState: { onboardingStatus: ONBOARDING_STATUS.PENDING_REVIEW },
-      });
-
-      return row;
-    });
-  }
-
-  async function listAvailability(userId: string) {
-    return tutorRepo.listAvailability(db, userId);
-  }
-
-  async function upsertAvailability(
-    userId: string,
-    input: {
-      id?: string;
-      startDate: string | Date;
-      endDate: string | Date;
-      modality: "online" | "offline" | "both";
-      isRecurring?: boolean;
-      recurrenceRule?: string;
-      isActive?: boolean;
-    },
-  ) {
-    const start = new Date(input.startDate);
-    const end = new Date(input.endDate);
-
-    if (end <= start) {
-      throw badRequest("endDate must be after startDate");
-    }
-
-    const existing = await tutorRepo.listAvailability(db, userId);
-    const overlapping = existing.find((slot) => {
-      if (input.id && slot.id === input.id) return false;
-      return start < slot.endDate && end > slot.startDate;
-    });
-    if (overlapping) {
-      throw badRequest("Availability window overlaps with an existing slot");
-    }
-
-    return tutorRepo.upsertAvailability(db, userId, {
-      ...input,
-      startDate: start,
-      endDate: end,
-    });
-  }
-
-  async function deleteAvailability(userId: string, slotId: string) {
-    const slots = await tutorRepo.listAvailability(db, userId);
-    const found = slots.find((s) => s.id === slotId);
-    if (!found)
-      throw forbidden("You can only delete your own availability slots");
-    await tutorRepo.deleteAvailability(db, slotId);
-  }
-
-  return {
-    getMyProfile,
-    updateMyProfile,
-    submitForReview,
-    listAvailability,
-    upsertAvailability,
-    deleteAvailability,
-  };
-}
+type UpdateMyProfileInput = z.infer<typeof updateMyProfileInput>;
+type UpsertAvailabilityInput = z.infer<typeof upsertAvailabilityInput>;
+type DeleteAvailabilityInput = z.infer<typeof deleteAvailabilityInput>;
 
 export type TutorHandler = ReturnType<typeof createTutorHandler>;
+
+export function createTutorHandler(tutorService: TutorService) {
+  return {
+    getMyProfile: async ({ context }: { context: Context }) => {
+      return withDomainMap(
+        () => tutorService.getMyProfile(context.session!.user.id),
+        mapTutorError,
+      );
+    },
+
+    updateMyProfile: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: UpdateMyProfileInput;
+    }) => {
+      return withDomainMap(
+        () => tutorService.updateMyProfile(context.session!.user.id, input),
+        mapTutorError,
+      );
+    },
+
+    submitForReview: async ({ context }: { context: Context }) => {
+      return withDomainMap(
+        () => tutorService.submitForReview(context.session!.user.id),
+        mapTutorError,
+      );
+    },
+
+    listAvailability: async ({ context }: { context: Context }) => {
+      return withDomainMap(
+        () => tutorService.listAvailability(context.session!.user.id),
+        mapTutorError,
+      );
+    },
+
+    upsertAvailability: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: UpsertAvailabilityInput;
+    }) => {
+      return withDomainMap(
+        () => tutorService.upsertAvailability(context.session!.user.id, input),
+        mapTutorError,
+      );
+    },
+
+    deleteAvailability: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: DeleteAvailabilityInput;
+    }) => {
+      return withDomainMap(async () => {
+        await tutorService.deleteAvailability(
+          context.session!.user.id,
+          input.id,
+        );
+      }, mapTutorError);
+    },
+  };
+}

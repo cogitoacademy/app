@@ -1,19 +1,17 @@
 import { eq, desc, and, sql, type SQL } from "drizzle-orm";
 import { tutorProfile } from "@cogito-app/db/schema";
+import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 
 export interface ListPublishedInput {
   search?: string;
   expertise?: string;
   modality?: "online" | "offline" | "both";
-  limit?: number;
-  offset?: number;
+  limit: number;
+  offset: number;
 }
 
-async function listPublished(conn: DbOrTx, input: ListPublishedInput = {}) {
-  const limit = input.limit ?? 20;
-  const offset = input.offset ?? 0;
-
+async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
   const conditions: SQL<unknown>[] = [
     eq(tutorProfile.onboardingStatus, "published"),
   ];
@@ -38,8 +36,8 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput = {}) {
   return conn.query.tutorProfile.findMany({
     where: and(...conditions),
     orderBy: [desc(tutorProfile.publishedAt)],
-    limit,
-    offset,
+    limit: input.limit,
+    offset: input.offset,
     with: { user: true },
   });
 }
@@ -54,8 +52,15 @@ async function getProfileById(conn: DbOrTx, tutorId: string) {
   });
 }
 
-export function createDiscoveryRepo() {
-  return { listPublished, getProfileById };
+export function createDiscoveryRepo(db: DbType) {
+  return {
+    listPublished(input: ListPublishedInput, conn?: DbOrTx) {
+      return listPublished(conn ?? db, input);
+    },
+    getProfileById(tutorId: string, conn?: DbOrTx) {
+      return getProfileById(conn ?? db, tutorId);
+    },
+  };
 }
 
 export type DiscoveryRepo = ReturnType<typeof createDiscoveryRepo>;

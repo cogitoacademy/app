@@ -1,128 +1,96 @@
-import type { DbType } from "../../lib/db";
-import { notFound } from "../../lib/errors";
-import type { AuditPort } from "../../shared/ports/audit.port";
-import { ACTOR_TYPE } from "../../shared/constants";
+import type { Context } from "../../context";
+import { z } from "zod";
+import { withDomainMap } from "../../lib/handler-utils";
+import { mapAchievementError } from "./achievement.errors";
 import type {
-  AchievementRepo,
-  InsertAchievementParams,
-  UpdateAchievementData,
-  AdminListInput,
-} from "./achievement.repo";
-import { validateUpdate, validateDelete } from "./achievement.service";
+  achievementInput,
+  updateAchievementInput,
+  deleteAchievementInput,
+  adminListInput,
+  adminReviewInput,
+} from "./achievement.types";
+import type { AchievementService } from "./achievement.service";
 
-export interface UpdateAchievementInput {
-  id: string;
-  data: UpdateAchievementData;
-}
-
-export interface AdminReviewInput {
-  achievementId: string;
-  status: "approved" | "rejected";
-  adminNote?: string;
-}
+type AchievementInput = z.infer<typeof achievementInput>;
+type UpdateAchievementInput = z.infer<typeof updateAchievementInput>;
+type DeleteAchievementInput = z.infer<typeof deleteAchievementInput>;
+type AdminListInput = z.infer<typeof adminListInput>;
+type AdminReviewInput = z.infer<typeof adminReviewInput>;
 
 export function createAchievementHandler(deps: {
-  achievementService: ReturnType<typeof createAchievementService>;
+  achievementService: AchievementService;
 }) {
   const { achievementService } = deps;
 
-  async function list(userId: string) {
-    return achievementService.list(userId);
-  }
-
-  async function create(
-    userId: string,
-    input: Omit<InsertAchievementParams, "userId">,
-  ) {
-    return achievementService.create(userId, input);
-  }
-
-  async function update(userId: string, input: UpdateAchievementInput) {
-    return achievementService.update(userId, input);
-  }
-
-  async function remove(userId: string, id: string) {
-    return achievementService.remove(userId, id);
-  }
-
-  async function adminList(input: AdminListInput = {}) {
-    return achievementService.adminList(input);
-  }
-
-  async function adminReview(adminId: string, input: AdminReviewInput) {
-    return achievementService.adminReview(adminId, input);
-  }
-
-  return { list, create, update, remove, adminList, adminReview };
-}
-
-export function createAchievementService(deps: {
-  achievementRepo: AchievementRepo;
-  auditPort: AuditPort;
-  db: DbType;
-}) {
-  const { achievementRepo, auditPort, db } = deps;
-
-  async function list(userId: string) {
-    return achievementRepo.listByUserId(db, userId);
-  }
-
-  async function create(
-    userId: string,
-    input: Omit<InsertAchievementParams, "userId">,
-  ) {
-    return achievementRepo.insert(db, { ...input, userId });
-  }
-
-  async function update(userId: string, input: UpdateAchievementInput) {
-    const existing = await achievementRepo.findByIdForUser(
-      db,
-      input.id,
-      userId,
+  async function list({ context }: { context: Context }) {
+    return withDomainMap(
+      () => achievementService.list(context.session!.user.id),
+      mapAchievementError,
     );
-    const result = validateUpdate(existing);
-    if (!result.ok) throw result.error;
-    return achievementRepo.update(db, input.id, userId, input.data);
   }
 
-  async function remove(userId: string, id: string) {
-    const existing = await achievementRepo.findByIdForUser(db, id, userId);
-    const result = validateDelete(existing);
-    if (!result.ok) throw result.error;
-    return achievementRepo.deleteRow(db, id, userId);
+  async function create({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: AchievementInput;
+  }) {
+    return withDomainMap(
+      () => achievementService.create(context.session!.user.id, input),
+      mapAchievementError,
+    );
   }
 
-  async function adminList(input: AdminListInput = {}) {
-    return achievementRepo.adminList(db, input);
+  async function update({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: UpdateAchievementInput;
+  }) {
+    return withDomainMap(
+      () => achievementService.update(context.session!.user.id, input),
+      mapAchievementError,
+    );
   }
 
-  async function adminReview(adminId: string, input: AdminReviewInput) {
-    const existing = await achievementRepo.getById(db, input.achievementId);
-    if (!existing) throw notFound("Achievement not found");
+  async function remove({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: DeleteAchievementInput;
+  }) {
+    return withDomainMap(
+      () => achievementService.remove(context.session!.user.id, input.id),
+      mapAchievementError,
+    );
+  }
 
-    return db.transaction(async (tx) => {
-      const updated = await achievementRepo.updateStatus(
-        tx,
-        input.achievementId,
-        input.status,
-        input.adminNote,
-      );
+  async function adminList({
+    input,
+  }: {
+    context: Context;
+    input: AdminListInput;
+  }) {
+    return withDomainMap(
+      () => achievementService.adminList(input),
+      mapAchievementError,
+    );
+  }
 
-      await auditPort.record({
-        db: tx,
-        actorId: adminId,
-        actorType: ACTOR_TYPE.ADMIN,
-        action: `achievement_${input.status}`,
-        targetId: input.achievementId,
-        targetType: "achievement",
-        details: {
-          adminNote: input.adminNote,
-          previousStatus: existing.status,
-        },
-      });
-
-      return updated;
-    });
+  async function adminReview({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: AdminReviewInput;
+  }) {
+    return withDomainMap(
+      () => achievementService.adminReview(context.session!.user.id, input),
+      mapAchievementError,
+    );
   }
 
   return { list, create, update, remove, adminList, adminReview };

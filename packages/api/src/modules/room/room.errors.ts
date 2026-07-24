@@ -1,0 +1,28 @@
+import { ORPCError } from "@orpc/server";
+import { DomainError } from "../../lib/domain-errors";
+import { notFound, conflict, internalServerError } from "../../lib/errors";
+
+export class RoomNotFoundError extends DomainError {
+  readonly domain = "room";
+  constructor(id: string) {
+    super("ROOM_NOT_FOUND", "Room not found", { id });
+  }
+}
+
+export class RoomBookingConflictError extends DomainError {
+  readonly domain = "room";
+  constructor(roomId: string, startAt: string, endAt: string) {
+    super(
+      "ROOM_BOOKING_CONFLICT",
+      "Room is already booked for this time slot",
+      { roomId, startAt, endAt },
+    );
+  }
+}
+
+export function mapRoomError(err: DomainError): ORPCError<string, undefined> {
+  if (err instanceof RoomNotFoundError) return notFound(err.message, err);
+  if (err instanceof RoomBookingConflictError)
+    return conflict(err.message, err);
+  return internalServerError(err.message, err);
+}

@@ -1,25 +1,16 @@
-import { eq, and, gte, lte, ne } from "drizzle-orm";
-import { room, roomBooking } from "@cogito-app/db/schema";
-import type { DbType } from "../../lib/db";
-import { notFound, conflict } from "../../lib/errors";
-import { ROOM_BOOKING_STATUS } from "../../shared/constants";
+import { RoomNotFoundError, RoomBookingConflictError } from "./room.errors";
+import type { RoomRepo } from "./room.repo";
+import type { CreateRoomInput } from "./room.types";
 
 export type RoomService = ReturnType<typeof createRoomService>;
 
-export interface CreateRoomInput {
-  name: string;
-  location: string;
-  capacity: number;
-}
-
-export function createRoomService(db: DbType) {
+export function createRoomService(repo: RoomRepo) {
   async function listActive() {
-    return db.select().from(room).where(eq(room.isActive, true));
+    return repo.findActiveRooms();
   }
 
   async function createRoom(input: CreateRoomInput) {
-    const [row] = await db.insert(room).values(input).returning();
-    return row!;
+    return repo.insertRoom(input);
   }
 
   async function checkAvailability(
@@ -28,20 +19,12 @@ export function createRoomService(db: DbType) {
     endAt: Date,
     excludeBookingId?: string,
   ) {
-    const conditions = [
-      eq(roomBooking.roomId, roomId),
-      eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
-      lte(roomBooking.startAt, endAt),
-      gte(roomBooking.endAt, startAt),
-    ];
-    if (excludeBookingId) {
-      conditions.push(ne(roomBooking.bookingId, excludeBookingId));
-    }
-    const existing = await db
-      .select()
-      .from(roomBooking)
-      .where(and(...conditions))
-      .limit(1);
+    const existing = await repo.findRoomBookings(
+      roomId,
+      startAt,
+      endAt,
+      excludeBookingId,
+    );
     return existing.length === 0;
   }
 
@@ -51,10 +34,8 @@ export function createRoomService(db: DbType) {
     startAt: Date,
     endAt: Date,
   ) {
-    const roomRow = await db.query.room.findFirst({
-      where: and(eq(room.id, roomId), eq(room.isActive, true)),
-    });
-    if (!roomRow) throw notFound("Room not found");
+    const roomRow = await repo.findRoomById(roomId);
+    if (!roomRow) throw new RoomNotFoundError(roomId);
 
     const available = await checkAvailability(
       roomId,
@@ -62,19 +43,20 @@ export function createRoomService(db: DbType) {
       endAt,
       bookingId,
     );
-    if (!available) throw conflict("Room is already booked for this time");
-
-    const [row] = await db
-      .insert(roomBooking)
-      .values({
+    if (!available)
+      throw new RoomBookingConflictError(
         roomId,
-        bookingId,
-        startAt,
-        endAt,
-        status: ROOM_BOOKING_STATUS.CONFIRMED,
-      })
-      .returning();
-    return row!;
+        startAt.toISOString(),
+        endAt.toISOString(),
+      );
+
+    return repo.insertRoomBooking({
+      roomId,
+      bookingId,
+      startAt,
+      endAt,
+      status: "confirmed",
+    });
   }
 
   return { listActive, createRoom, checkAvailability, assignRoom };

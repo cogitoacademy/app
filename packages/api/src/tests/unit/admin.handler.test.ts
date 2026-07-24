@@ -1,10 +1,14 @@
 import { describe, test, expect, mock } from "bun:test";
+import { createAdminHandler } from "../../modules/admin/admin.handler";
 import {
-  createAdminHandler,
   createAdminService,
-} from "../../modules/admin/admin.handler";
-import { validateRoleChange } from "../../modules/admin/admin.service";
+  validateRoleChange,
+} from "../../modules/admin/admin.service";
 import { USER_ROLE } from "../../shared/constants";
+import {
+  UserNotFoundError,
+  LastAdminError,
+} from "../../modules/admin/admin.errors";
 
 function makeDb() {
   return {
@@ -39,7 +43,7 @@ function makeAuditPort() {
 
 describe("AdminHandler", () => {
   describe("listUsers", () => {
-    test("delegates to adminService.listUsers", async () => {
+    test("calls adminService.listUsers with input from handler", async () => {
       const repo = makeAdminRepo();
       const auditPort = makeAuditPort();
       const db = makeDb();
@@ -48,9 +52,13 @@ describe("AdminHandler", () => {
         auditPort: auditPort as any,
         db,
       });
-      const handler = createAdminHandler({ adminService: service });
+      const handler = createAdminHandler(service);
+      const context = {
+        session: { user: { id: "admin1" } },
+      } as any;
+      const input = { limit: 10, offset: 0 };
 
-      const result = await handler.listUsers({ limit: 10, offset: 0 });
+      const result = await handler.listUsers({ context, input });
 
       expect(result.users).toEqual([{ id: "u1", role: "student" }]);
       expect(result.total).toBe(1);
@@ -58,7 +66,7 @@ describe("AdminHandler", () => {
   });
 
   describe("setRole", () => {
-    test("delegates to adminService.setRole", async () => {
+    test("calls adminService.setRole with session user id and input", async () => {
       const repo = makeAdminRepo();
       const auditPort = makeAuditPort();
       const db = makeDb();
@@ -67,12 +75,13 @@ describe("AdminHandler", () => {
         auditPort: auditPort as any,
         db,
       });
-      const handler = createAdminHandler({ adminService: service });
+      const handler = createAdminHandler(service);
+      const context = {
+        session: { user: { id: "admin1" } },
+      } as any;
+      const input = { userId: "u1", role: "tutor" };
 
-      const result = await handler.setRole("admin1", {
-        userId: "u1",
-        role: "tutor",
-      });
+      const result = await handler.setRole({ context, input });
 
       expect(result.id).toBe("u1");
     });
@@ -146,7 +155,7 @@ describe("AdminService", () => {
   });
 
   describe("setRole", () => {
-    test("throws notFound when target user does not exist", async () => {
+    test("throws UserNotFoundError when target user does not exist", async () => {
       const repo = makeAdminRepo({
         getById: mock(async () => null),
       });
@@ -160,11 +169,12 @@ describe("AdminService", () => {
         await service.setRole("admin1", { userId: "u1", role: "tutor" });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("NOT_FOUND");
+        expect(e).toBeInstanceOf(UserNotFoundError);
+        expect(e.code).toBe("USER_NOT_FOUND");
       }
     });
 
-    test("throws conflict when demoting the last admin", async () => {
+    test("throws LastAdminError when demoting the last admin", async () => {
       const repo = makeAdminRepo({
         getById: mock(async () => ({
           id: "u1",
@@ -182,7 +192,8 @@ describe("AdminService", () => {
         await service.setRole("admin1", { userId: "u1", role: "student" });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("CONFLICT");
+        expect(e).toBeInstanceOf(LastAdminError);
+        expect(e.code).toBe("LAST_ADMIN");
       }
     });
 
@@ -246,44 +257,45 @@ describe("AdminService", () => {
 });
 
 describe("validateRoleChange", () => {
-  test("returns error for null target", () => {
-    const result = validateRoleChange(null, "tutor", 2);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+  test("throws UserNotFoundError for null target", () => {
+    expect(() => validateRoleChange(null, "tutor", 2, "u1")).toThrow(
+      UserNotFoundError,
+    );
   });
 
-  test("returns ok for student to tutor change", () => {
+  test("returns previousRole for student to tutor change", () => {
     const result = validateRoleChange(
       { id: "u1", role: "student" },
       "tutor",
       2,
+      "u1",
     );
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.previousRole).toBe("student");
+    expect(result.previousRole).toBe("student");
   });
 
-  test("returns error for demoting last admin", () => {
-    const result = validateRoleChange(
-      { id: "u1", role: "admin" },
-      "student",
-      1,
-    );
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("CONFLICT");
+  test("throws LastAdminError for demoting last admin", () => {
+    expect(() =>
+      validateRoleChange({ id: "u1", role: "admin" }, "student", 1, "u1"),
+    ).toThrow(LastAdminError);
   });
 
-  test("returns ok for demoting admin with multiple admins", () => {
+  test("returns previousRole for demoting admin with multiple admins", () => {
     const result = validateRoleChange(
       { id: "u1", role: "admin" },
       "student",
       3,
+      "u1",
     );
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.previousRole).toBe("admin");
+    expect(result.previousRole).toBe("admin");
   });
 
-  test("returns ok for admin to admin (no change)", () => {
-    const result = validateRoleChange({ id: "u1", role: "admin" }, "admin", 1);
-    expect(result.ok).toBe(true);
+  test("returns previousRole for admin to admin (no change)", () => {
+    const result = validateRoleChange(
+      { id: "u1", role: "admin" },
+      "admin",
+      1,
+      "u1",
+    );
+    expect(result.previousRole).toBe("admin");
   });
 });

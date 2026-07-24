@@ -29,8 +29,8 @@ export interface UpdateAchievementData {
 
 export interface AdminListInput {
   status?: string;
-  limit?: number;
-  offset?: number;
+  limit: number;
+  offset: number;
 }
 
 async function listByUserId(conn: DbOrTx, userId: string) {
@@ -50,11 +50,11 @@ async function insert(conn: DbOrTx, params: InsertAchievementParams) {
       category: params.category,
       award: params.award,
       level: params.level,
-      eventDate: params.eventDate || null,
-      location: params.location || null,
-      description: params.description || null,
-      subjects: params.subjects || [],
-      imageUrl: params.imageUrl || null,
+      eventDate: params.eventDate ?? null,
+      location: params.location ?? null,
+      description: params.description ?? null,
+      subjects: params.subjects ?? [],
+      imageUrl: params.imageUrl ?? null,
     })
     .returning();
   return result;
@@ -89,16 +89,12 @@ async function deleteRow(conn: DbOrTx, id: string, userId: string) {
     .where(and(eq(achievement.id, id), eq(achievement.userId, userId)));
 }
 
-async function adminList(conn: DbOrTx, input: AdminListInput = {}) {
-  const limit = input.limit ?? 50;
-  const offset = input.offset ?? 0;
-  const conditions = input.status
-    ? eq(achievement.status, input.status)
-    : undefined;
+async function adminList(conn: DbOrTx, input: AdminListInput) {
+  const { limit, offset, status } = input;
   return conn
     .select()
     .from(achievement)
-    .where(conditions)
+    .where(status ? eq(achievement.status, status) : undefined)
     .orderBy(desc(achievement.createdAt))
     .limit(limit)
     .offset(offset);

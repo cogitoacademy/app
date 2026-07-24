@@ -24,7 +24,9 @@ describe("Xendit Payment Provider", () => {
     });
 
     test("throws for unknown status", () => {
-      expect(() => mapXenditStatus("UNKNOWN")).toThrow("Unknown Xendit status");
+      expect(() => mapXenditStatus("UNKNOWN")).toThrow(
+        "Unknown payment status",
+      );
     });
   });
 });

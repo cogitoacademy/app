@@ -5,5 +5,5 @@ export {
 } from "./procedures";
 export type { AppRouter, AppRouterClient } from "./routers";
 export { appRouter } from "./routers";
-export type { ServiceRegistry } from "./services";
-export { services } from "./services";
+export type { ServiceRegistry, HandlerRegistry } from "./services";
+export { services, handlers } from "./services";

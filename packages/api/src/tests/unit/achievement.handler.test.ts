@@ -1,13 +1,15 @@
 import { describe, test, expect, mock } from "bun:test";
-import {
-  createAchievementHandler,
-  createAchievementService,
-} from "../../modules/achievement/achievement.handler";
+import { createAchievementHandler } from "../../modules/achievement/achievement.handler";
+import { createAchievementService } from "../../modules/achievement/achievement.service";
 import {
   validateUpdate,
   validateDelete,
 } from "../../modules/achievement/achievement.service";
 import { ACHIEVEMENT_STATUS } from "../../shared/constants";
+import {
+  AchievementNotFoundError,
+  AchievementNotEditableError,
+} from "../../modules/achievement/achievement.errors";
 
 function makeDb() {
   return {
@@ -47,6 +49,10 @@ function makeAuditPort() {
   return { record: mock(async () => {}) };
 }
 
+function makeContext(userId = "u1") {
+  return { session: { user: { id: userId } } } as any;
+}
+
 describe("AchievementHandler", () => {
   describe("list", () => {
     test("delegates to achievementService.list", async () => {
@@ -62,7 +68,7 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      const result = await handler.list("u1");
+      const result = await handler.list({ context: makeContext() });
 
       expect(result).toEqual([{ id: "a1" }]);
     });
@@ -90,7 +96,7 @@ describe("AchievementHandler", () => {
         award: "1st",
         level: "regional",
       };
-      const result = await handler.create("u1", input);
+      const result = await handler.create({ context: makeContext(), input });
 
       expect(result.userId).toBe("u1");
     });
@@ -106,9 +112,9 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      const result = await handler.update("u1", {
-        id: "a1",
-        data: { eventName: "Updated" },
+      const result = await handler.update({
+        context: makeContext(),
+        input: { id: "a1", data: { eventName: "Updated" } },
       });
 
       expect(result.id).toBe("a1");
@@ -125,7 +131,10 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      await handler.remove("u1", "a1");
+      await handler.remove({
+        context: makeContext(),
+        input: { id: "a1" },
+      });
 
       expect(repo.deleteRow).toHaveBeenCalled();
     });
@@ -143,7 +152,10 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      const result = await handler.adminList({});
+      const result = await handler.adminList({
+        context: makeContext(),
+        input: { limit: 50, offset: 0 },
+      });
 
       expect(result).toEqual([{ id: "a1" }]);
     });
@@ -160,9 +172,12 @@ describe("AchievementHandler", () => {
       });
       const handler = createAchievementHandler({ achievementService: service });
 
-      const result = await handler.adminReview("admin1", {
-        achievementId: "a1",
-        status: "approved",
+      const result = await handler.adminReview({
+        context: makeContext("admin1"),
+        input: {
+          achievementId: "a1",
+          status: "approved",
+        },
       });
 
       expect(result.id).toBe("a1");
@@ -242,7 +257,7 @@ describe("AchievementService", () => {
       expect(result.id).toBe("a1");
     });
 
-    test("throws when achievement not found", async () => {
+    test("throws AchievementNotEditableError when achievement not found", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => undefined),
       });
@@ -256,11 +271,11 @@ describe("AchievementService", () => {
         await service.update("u1", { id: "a1", data: { eventName: "X" } });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
+        expect(e).toBeInstanceOf(AchievementNotEditableError);
       }
     });
 
-    test("throws when achievement status is not pending", async () => {
+    test("throws AchievementNotEditableError when achievement status is not pending", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => ({
           id: "a1",
@@ -278,7 +293,7 @@ describe("AchievementService", () => {
         await service.update("u1", { id: "a1", data: { eventName: "X" } });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
+        expect(e).toBeInstanceOf(AchievementNotEditableError);
       }
     });
   });
@@ -308,7 +323,7 @@ describe("AchievementService", () => {
       );
     });
 
-    test("throws when achievement not found", async () => {
+    test("throws AchievementNotEditableError when achievement not found", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => undefined),
       });
@@ -322,11 +337,11 @@ describe("AchievementService", () => {
         await service.remove("u1", "a1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
+        expect(e).toBeInstanceOf(AchievementNotEditableError);
       }
     });
 
-    test("throws when achievement status is not pending", async () => {
+    test("throws AchievementNotEditableError when achievement status is not pending", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => ({
           id: "a1",
@@ -344,7 +359,7 @@ describe("AchievementService", () => {
         await service.remove("u1", "a1");
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("BAD_REQUEST");
+        expect(e).toBeInstanceOf(AchievementNotEditableError);
       }
     });
   });
@@ -363,7 +378,11 @@ describe("AchievementService", () => {
       const input = { status: "pending_review", limit: 10 };
       await service.adminList(input);
 
-      expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), input);
+      expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
+        status: "pending_review",
+        limit: 10,
+        offset: 0,
+      });
     });
 
     test("uses default empty object when no input", async () => {
@@ -378,12 +397,15 @@ describe("AchievementService", () => {
 
       await service.adminList();
 
-      expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {});
+      expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
+        limit: 50,
+        offset: 0,
+      });
     });
   });
 
   describe("adminReview", () => {
-    test("throws notFound when achievement does not exist", async () => {
+    test("throws AchievementNotFoundError when achievement does not exist", async () => {
       const repo = makeAchievementRepo({
         getById: mock(async () => undefined),
       });
@@ -400,7 +422,7 @@ describe("AchievementService", () => {
         });
         expect(true).toBe(false);
       } catch (e: any) {
-        expect(e.code).toBe("NOT_FOUND");
+        expect(e).toBeInstanceOf(AchievementNotFoundError);
       }
     });
 
@@ -464,68 +486,74 @@ describe("AchievementService", () => {
 
 describe("AchievementService validation", () => {
   describe("validateUpdate", () => {
-    test("returns ok for pending achievement", () => {
-      const result = validateUpdate({
-        id: "a1",
-        userId: "u1",
-        status: ACHIEVEMENT_STATUS.PENDING,
-      } as any);
-      expect(result.ok).toBe(true);
+    test("does not throw for pending achievement", () => {
+      expect(() =>
+        validateUpdate({
+          id: "a1",
+          userId: "u1",
+          status: ACHIEVEMENT_STATUS.PENDING,
+        } as any),
+      ).not.toThrow();
     });
 
-    test("returns error when achievement is undefined", () => {
-      const result = validateUpdate(undefined);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws AchievementNotEditableError when achievement is undefined", () => {
+      expect(() => validateUpdate(undefined)).toThrow(
+        AchievementNotEditableError,
+      );
     });
 
-    test("returns error for approved achievement", () => {
-      const result = validateUpdate({
-        id: "a1",
-        status: ACHIEVEMENT_STATUS.APPROVED,
-      } as any);
-      expect(result.ok).toBe(false);
+    test("throws AchievementNotEditableError for approved achievement", () => {
+      expect(() =>
+        validateUpdate({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.APPROVED,
+        } as any),
+      ).toThrow(AchievementNotEditableError);
     });
 
-    test("returns error for rejected achievement", () => {
-      const result = validateUpdate({
-        id: "a1",
-        status: ACHIEVEMENT_STATUS.REJECTED,
-      } as any);
-      expect(result.ok).toBe(false);
+    test("throws AchievementNotEditableError for rejected achievement", () => {
+      expect(() =>
+        validateUpdate({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.REJECTED,
+        } as any),
+      ).toThrow(AchievementNotEditableError);
     });
   });
 
   describe("validateDelete", () => {
-    test("returns ok for pending achievement", () => {
-      const result = validateDelete({
-        id: "a1",
-        userId: "u1",
-        status: ACHIEVEMENT_STATUS.PENDING,
-      } as any);
-      expect(result.ok).toBe(true);
+    test("does not throw for pending achievement", () => {
+      expect(() =>
+        validateDelete({
+          id: "a1",
+          userId: "u1",
+          status: ACHIEVEMENT_STATUS.PENDING,
+        } as any),
+      ).not.toThrow();
     });
 
-    test("returns error when achievement is undefined", () => {
-      const result = validateDelete(undefined);
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("BAD_REQUEST");
+    test("throws AchievementNotEditableError when achievement is undefined", () => {
+      expect(() => validateDelete(undefined)).toThrow(
+        AchievementNotEditableError,
+      );
     });
 
-    test("returns error for draft achievement", () => {
-      const result = validateDelete({
-        id: "a1",
-        status: ACHIEVEMENT_STATUS.DRAFT,
-      } as any);
-      expect(result.ok).toBe(false);
+    test("throws AchievementNotEditableError for draft achievement", () => {
+      expect(() =>
+        validateDelete({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.DRAFT,
+        } as any),
+      ).toThrow(AchievementNotEditableError);
     });
 
-    test("returns error for archived achievement", () => {
-      const result = validateDelete({
-        id: "a1",
-        status: ACHIEVEMENT_STATUS.ARCHIVED,
-      } as any);
-      expect(result.ok).toBe(false);
+    test("throws AchievementNotEditableError for archived achievement", () => {
+      expect(() =>
+        validateDelete({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.ARCHIVED,
+        } as any),
+      ).toThrow(AchievementNotEditableError);
     });
   });
 });
