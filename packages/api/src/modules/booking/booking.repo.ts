@@ -278,6 +278,17 @@ async function findOverlappingBookings(
     .limit(1);
 }
 
+async function updateBookingDeadline(
+  conn: DbOrTx,
+  bookingId: string,
+  deadlineAt: Date,
+) {
+  await conn
+    .update(booking)
+    .set({ deadlineAt, updatedAt: new Date() })
+    .where(eq(booking.id, bookingId));
+}
+
 async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
   return conn
     .select()
@@ -398,6 +409,7 @@ export function createBookingRepo(db: DbType) {
     findBookingsExpiringByDeadline,
     findOverlappingBookings,
     updateBookingVersioned,
+    updateBookingDeadline,
     decrementBookingConfirmedHeadcount,
     cancelAllSessions,
   };

@@ -1,6 +1,4 @@
 export const BOOKING_STATE = {
-  DRAFT: "draft",
-  AWAITING_MARKS_HOLD: "awaiting_marks_hold",
   AWAITING_TUTOR_REVIEW: "awaiting_tutor_review",
   DECLINED: "declined",
   RESCHEDULE_PROPOSED: "reschedule_proposed",
@@ -17,8 +15,6 @@ export const BOOKING_STATE = {
 } as const;
 
 export const BOOKING_STATES = [
-  BOOKING_STATE.DRAFT,
-  BOOKING_STATE.AWAITING_MARKS_HOLD,
   BOOKING_STATE.AWAITING_TUTOR_REVIEW,
   BOOKING_STATE.DECLINED,
   BOOKING_STATE.RESCHEDULE_PROPOSED,

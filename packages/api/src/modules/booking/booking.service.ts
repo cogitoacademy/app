@@ -434,11 +434,8 @@ export function createBookingService(deps: {
       }
 
       const isOffline = b.modality === MODALITY.OFFLINE;
-      const toState: BookingState = isOffline
-        ? BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
-        : BOOKING_STATE.CONFIRMED;
 
-      await transition(tx, bookingId, toState, {
+      await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
         actorId: tutorId,
         actorType: ACTOR_TYPE.TUTOR,
       });
@@ -450,7 +447,25 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Meeting created automatically",
         });
+
+        await repo.updateBookingDeadline(
+          tx,
+          bookingId,
+          new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+        );
       } else {
+        await transition(
+          tx,
+          bookingId,
+          BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+          {
+            actorId: tutorId,
+            actorType: ACTOR_TYPE.TUTOR,
+            reason: "Offline booking requires room assignment",
+          },
+        );
+
+        await repo.updateBookingDeadline(tx, bookingId, b.scheduledStartAt);
         updated = await repo.findBookingById(tx, bookingId);
       }
 
@@ -626,6 +641,12 @@ export function createBookingService(deps: {
         proposedEndAt,
         status: CONFIRMATION_STATE.PENDING,
       });
+
+      await repo.updateBookingDeadline(
+        tx,
+        bookingId,
+        new Date(Date.now() + 24 * 60 * 60 * 1000),
+      );
 
       await notification.write({
         db: tx,
@@ -982,8 +1003,7 @@ export function createBookingService(deps: {
         const currentState = b.currentState as BookingState;
         if (
           currentState === BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION ||
-          currentState === BOOKING_STATE.AWAITING_TUTOR_REVIEW ||
-          currentState === BOOKING_STATE.AWAITING_MARKS_HOLD
+          currentState === BOOKING_STATE.AWAITING_TUTOR_REVIEW
         ) {
           await transition(
             tx,
@@ -1138,9 +1158,17 @@ export function createBookingService(deps: {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
       BOOKING_STATE.AWAITING_RECONFIRMATION,
-      BOOKING_STATE.AWAITING_MARKS_HOLD,
       BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+      BOOKING_STATE.RESCHEDULE_PROPOSED,
+      BOOKING_STATE.SCHEDULED,
+      BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
     ]);
+
+    const EXPIRY_TARGET: Record<string, BookingState> = {
+      [BOOKING_STATE.RESCHEDULE_PROPOSED]: BOOKING_STATE.EXPIRED,
+      [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
+      [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
+    };
 
     for (const b of candidates) {
       try {
@@ -1155,7 +1183,10 @@ export function createBookingService(deps: {
 
           await repo.updateBookingHoldAmount(tx, b.id, 0);
 
-          await transition(tx, b.id, BOOKING_STATE.EXPIRED, {
+          const targetState =
+            EXPIRY_TARGET[b.currentState as string] ?? BOOKING_STATE.EXPIRED;
+
+          await transition(tx, b.id, targetState, {
             actorId: "system",
             actorType: ACTOR_TYPE.SYSTEM,
             reason: "Deadline passed",
