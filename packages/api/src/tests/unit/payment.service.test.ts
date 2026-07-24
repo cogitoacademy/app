@@ -1,4 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
+import { ORPCError } from "@orpc/server";
 import { createPaymentService } from "../../modules/payment/payment.service";
 import {
   PackageNotFoundError,
@@ -165,6 +166,52 @@ describe("PaymentService", () => {
       const result = await service.createIntent("user1", "w1", "pkg1");
       expect(result.checkoutUrl).toBe("https://checkout.test/123");
       expect(result.providerReference).toBe("stub:user1:pkg1");
+    });
+
+    test("wraps ORPCError as PaymentProviderError instead of re-throwing", async () => {
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => null),
+        insertPayment: mock(async () => {}),
+        updatePaymentStatus,
+      });
+      const db = makeDb();
+
+      const orpcError = new ORPCError("BAD_REQUEST", {
+        message: "Invalid request",
+      });
+      const provider = {
+        ...makeProvider(),
+        createIntent: mock(async () => {
+          throw orpcError;
+        }),
+      };
+
+      const service = createPaymentService({
+        db,
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+
+      try {
+        await service.createIntent("user1", "w1", "pkg1");
+        expect(true).toBe(false);
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(PaymentProviderError);
+        expect(e).not.toBeInstanceOf(ORPCError);
+        expect(e.code).toBe("PAYMENT_PROVIDER_ERROR");
+      }
+
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
     });
 
     test("updates payment to EXPIRED and throws PaymentProviderError when provider.createIntent throws", async () => {

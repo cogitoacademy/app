@@ -1,4 +1,3 @@
-import { ORPCError } from "@orpc/server";
 import type { DbType } from "../../lib/db";
 import { PAYMENT_STATUS } from "../../shared/constants";
 import {
@@ -115,7 +114,6 @@ export function createPaymentService(deps: {
       await repo.updatePaymentStatus(paymentId, {
         status: PAYMENT_STATUS.EXPIRED,
       });
-      if (error instanceof ORPCError) throw error;
       throw new PaymentProviderError(providerName, error);
     }
   }
