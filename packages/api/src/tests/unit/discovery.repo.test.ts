@@ -20,7 +20,7 @@ describe("DiscoveryRepo", () => {
       const conn = makeConn(findMany);
       const repo = createDiscoveryRepo(conn);
 
-      const result = await repo.listPublished({});
+      const result = await repo.listPublished({ limit: 20, offset: 0 });
 
       expect(result).toEqual(profiles);
     });
@@ -31,7 +31,11 @@ describe("DiscoveryRepo", () => {
       const conn = makeConn(findMany);
       const repo = createDiscoveryRepo(conn);
 
-      const result = await repo.listPublished({ modality: "online" });
+      const result = await repo.listPublished({
+        modality: "online",
+        limit: 20,
+        offset: 0,
+      });
 
       expect(result).toEqual(profiles);
       expect(findMany).toHaveBeenCalledTimes(1);
@@ -45,7 +49,11 @@ describe("DiscoveryRepo", () => {
       const conn = makeConn(findMany);
       const repo = createDiscoveryRepo(conn);
 
-      const result = await repo.listPublished({ search: "math" });
+      const result = await repo.listPublished({
+        search: "math",
+        limit: 20,
+        offset: 0,
+      });
 
       expect(result).toEqual(profiles);
       expect(findMany).toHaveBeenCalledTimes(1);
@@ -59,7 +67,11 @@ describe("DiscoveryRepo", () => {
       const conn = makeConn(findMany);
       const repo = createDiscoveryRepo(conn);
 
-      const result = await repo.listPublished({ expertise: "algebra" });
+      const result = await repo.listPublished({
+        expertise: "algebra",
+        limit: 20,
+        offset: 0,
+      });
 
       expect(result).toEqual(profiles);
       expect(findMany).toHaveBeenCalledTimes(1);
@@ -77,6 +89,8 @@ describe("DiscoveryRepo", () => {
         modality: "online",
         search: "math",
         expertise: "algebra",
+        limit: 20,
+        offset: 0,
       });
 
       expect(result).toEqual(profiles);
@@ -90,7 +104,7 @@ describe("DiscoveryRepo", () => {
       const conn = makeConn(findMany);
       const repo = createDiscoveryRepo(conn);
 
-      await repo.listPublished({});
+      await repo.listPublished({ limit: 20, offset: 0 });
 
       const callArg = findMany.mock.calls[0]![0];
       expect(callArg.limit).toBe(20);

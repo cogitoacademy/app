@@ -141,7 +141,7 @@ export function createTutorService(deps: {
   }
 
   async function listAvailability(userId: string) {
-    return tutorRepo.listAvailability(db, userId);
+    return tutorRepo.listAvailability(db, userId, { from: new Date() });
   }
 
   async function upsertAvailability(
@@ -159,7 +159,9 @@ export function createTutorService(deps: {
     const start = input.startDate;
     const end = input.endDate;
 
-    const existing = await tutorRepo.listAvailability(db, userId);
+    const existing = await tutorRepo.listAvailability(db, userId, {
+      from: new Date(),
+    });
     const overlapping = existing.find((slot) => {
       if (input.id && slot.id === input.id) return false;
       return start < slot.endDate && end > slot.startDate;
@@ -176,7 +178,9 @@ export function createTutorService(deps: {
   }
 
   async function deleteAvailability(userId: string, slotId: string) {
-    const slots = await tutorRepo.listAvailability(db, userId);
+    const slots = await tutorRepo.listAvailability(db, userId, {
+      from: new Date(),
+    });
     const found = slots.find((s) => s.id === slotId);
     if (!found) throw new TutorProfileNotFoundError(userId);
     await tutorRepo.deleteAvailability(db, slotId);

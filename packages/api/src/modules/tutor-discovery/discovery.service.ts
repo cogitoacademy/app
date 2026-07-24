@@ -1,5 +1,5 @@
 import type { tutorProfile, user } from "@cogito-app/db/schema";
-import type { DiscoveryRepo, ListPublishedInput } from "./discovery.repo";
+import type { DiscoveryRepo } from "./discovery.repo";
 import { TutorProfileNotFoundError } from "./discovery.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
@@ -48,8 +48,20 @@ export type DiscoveryService = ReturnType<typeof createDiscoveryService>;
 export function createDiscoveryService(deps: { repo: DiscoveryRepo }) {
   const { repo } = deps;
 
-  async function listPublished(opts: ListPublishedInput = {}) {
-    const profiles = await repo.listPublished(opts);
+  async function listPublished(opts?: {
+    search?: string;
+    expertise?: string;
+    modality?: "online" | "offline" | "both";
+    limit?: number;
+    offset?: number;
+  }) {
+    const profiles = await repo.listPublished({
+      search: opts?.search,
+      expertise: opts?.expertise,
+      modality: opts?.modality,
+      limit: opts?.limit ?? 20,
+      offset: opts?.offset ?? 0,
+    });
     return profiles.map(buildProjection);
   }
 

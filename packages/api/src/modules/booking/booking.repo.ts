@@ -40,13 +40,17 @@ async function findBookingById(
 async function findTutorProfile(
   conn: DbOrTx,
   tutorId: string,
+  opts?: { publishedOnly?: boolean },
 ): Promise<typeof tutorProfile.$inferSelect | null> {
+  const conditions = [eq(tutorProfile.userId, tutorId)];
+  if (opts?.publishedOnly) {
+    conditions.push(
+      eq(tutorProfile.onboardingStatus, ONBOARDING_STATUS.PUBLISHED),
+    );
+  }
   return (
     (await conn.query.tutorProfile.findFirst({
-      where: and(
-        eq(tutorProfile.userId, tutorId),
-        eq(tutorProfile.onboardingStatus, ONBOARDING_STATUS.PUBLISHED),
-      ),
+      where: and(...conditions),
     })) ?? null
   );
 }

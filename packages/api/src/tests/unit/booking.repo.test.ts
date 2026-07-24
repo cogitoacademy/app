@@ -98,8 +98,22 @@ describe("createBookingRepo", () => {
   });
 
   describe("findTutorProfile", () => {
-    test("returns profile when found", async () => {
+    test("returns profile when found with publishedOnly", async () => {
       const profile = { userId: "t1", onboardingStatus: "published" };
+      const findFirst = mock(() => Promise.resolve(profile));
+      const conn: any = { query: { tutorProfile: { findFirst } } };
+      const repo = makeBookingRepo();
+
+      const result = await repo.findTutorProfile(conn, "t1", {
+        publishedOnly: true,
+      });
+
+      expect(result).toEqual(profile);
+      expect(findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    test("returns profile without publishedOnly filter", async () => {
+      const profile = { userId: "t1", onboardingStatus: "draft" };
       const findFirst = mock(() => Promise.resolve(profile));
       const conn: any = { query: { tutorProfile: { findFirst } } };
       const repo = makeBookingRepo();

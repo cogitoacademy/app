@@ -198,7 +198,9 @@ export function createBookingService(deps: {
   }
 
   async function createSolo(proposerId: string, input: CreateSoloInput) {
-    const profile = await repo.findTutorProfile(db, input.tutorId);
+    const profile = await repo.findTutorProfile(db, input.tutorId, {
+      publishedOnly: true,
+    });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
 
     const slot = await repo.findAvailabilitySlot(
@@ -610,7 +612,9 @@ export function createBookingService(deps: {
   }
 
   async function createGroup(proposerId: string, input: CreateGroupInput) {
-    const profile = await repo.findTutorProfile(db, input.tutorId);
+    const profile = await repo.findTutorProfile(db, input.tutorId, {
+      publishedOnly: true,
+    });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
 
     const slot = await repo.findAvailabilitySlot(
@@ -962,7 +966,9 @@ export function createBookingService(deps: {
   }
 
   async function createSeries(proposerId: string, input: CreateSeriesInput) {
-    const profile = await repo.findTutorProfile(db, input.tutorId);
+    const profile = await repo.findTutorProfile(db, input.tutorId, {
+      publishedOnly: true,
+    });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
 
     if (

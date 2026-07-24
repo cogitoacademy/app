@@ -50,11 +50,11 @@ async function insert(conn: DbOrTx, params: InsertAchievementParams) {
       category: params.category,
       award: params.award,
       level: params.level,
-      eventDate: params.eventDate || null,
-      location: params.location || null,
-      description: params.description || null,
-      subjects: params.subjects || [],
-      imageUrl: params.imageUrl || null,
+      eventDate: params.eventDate ?? null,
+      location: params.location ?? null,
+      description: params.description ?? null,
+      subjects: params.subjects ?? [],
+      imageUrl: params.imageUrl ?? null,
     })
     .returning();
   return result;

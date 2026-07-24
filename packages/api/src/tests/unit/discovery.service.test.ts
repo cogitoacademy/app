@@ -87,9 +87,31 @@ describe("Discovery Service", () => {
       const service = createDiscoveryService({ repo });
       const result = await service.listPublished({ search: "math" });
 
-      expect(listPublished).toHaveBeenCalledWith({ search: "math" });
+      expect(listPublished).toHaveBeenCalledWith({
+        search: "math",
+        expertise: undefined,
+        modality: undefined,
+        limit: 20,
+        offset: 0,
+      });
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe("tp1");
+    });
+
+    test("passes custom limit and offset to repo", async () => {
+      const listPublished = mock(async () => []);
+      const repo = makeRepo({ listPublished });
+
+      const service = createDiscoveryService({ repo });
+      await service.listPublished({ limit: 10, offset: 5 });
+
+      expect(listPublished).toHaveBeenCalledWith({
+        search: undefined,
+        expertise: undefined,
+        modality: undefined,
+        limit: 10,
+        offset: 5,
+      });
     });
 
     test("returns empty array when no profiles", async () => {
