@@ -36,15 +36,15 @@ It runs in parallel with the production-readiness branch because they touch diff
 
 ### What This Branch Does
 
-| Phase     | Focus                                          | Days        |
-| --------- | ---------------------------------------------- | ----------- |
-| 1         | Dockerfiles (server + web)                     | 0.5         |
-| 2         | CI pipeline (feature branches)                 | 0.5         |
-| 3         | CD pipeline (Coolify webhook trigger)          | 0.5         |
-| 4         | Hetzner VPS + Coolify provisioning             | 1           |
-| 5         | Monitoring + observability                     | 1           |
-| 6         | Code scanning + bot maximization               | 0.5         |
-| **Total** |                                                | **~4 days** |
+| Phase     | Focus                                 | Days        |
+| --------- | ------------------------------------- | ----------- |
+| 1         | Dockerfiles (server + web)            | 0.5         |
+| 2         | CI pipeline (feature branches)        | 0.5         |
+| 3         | CD pipeline (Coolify webhook trigger) | 0.5         |
+| 4         | Hetzner VPS + Coolify provisioning    | 1           |
+| 5         | Monitoring + observability            | 1           |
+| 6         | Code scanning + bot maximization      | 0.5         |
+| **Total** |                                       | **~4 days** |
 
 ### Principles
 
@@ -56,16 +56,16 @@ It runs in parallel with the production-readiness branch because they touch diff
 
 ### Why Coolify (not custom deploy.sh)
 
-| Aspect              | Custom deploy.sh (v1)              | Coolify (v2)                          |
-| ------------------- | ----------------------------------- | ------------------------------------- |
-| Reverse proxy       | Manual Caddyfile config            | Coolify-managed Caddy (auto-HTTPS)   |
-| Deployment          | SSH + deploy.sh script              | Coolify webhook or git integration    |
+| Aspect              | Custom deploy.sh (v1)               | Coolify (v2)                                    |
+| ------------------- | ----------------------------------- | ----------------------------------------------- |
+| Reverse proxy       | Manual Caddyfile config             | Coolify-managed Caddy (auto-HTTPS)              |
+| Deployment          | SSH + deploy.sh script              | Coolify webhook or git integration              |
 | SSL certificates    | Caddy auto-provisions               | Coolify auto-provisions via Caddy/Let's Encrypt |
-| Rollback            | Manual docker tag swap              | Coolify UI: one-click rollback        |
-| Environment vars    | `.env` files on VPS                 | Coolify UI: per-service env vars      |
-| Log viewing         | `docker logs` via SSH               | Coolify UI: per-service log viewer     |
-| Health monitoring   | Uptime Kuma only                    | Coolify built-in health checks + Uptime Kuma |
-| Multi-service setup | Manual docker-compose orchestration | Coolify service groups + dependencies |
+| Rollback            | Manual docker tag swap              | Coolify UI: one-click rollback                  |
+| Environment vars    | `.env` files on VPS                 | Coolify UI: per-service env vars                |
+| Log viewing         | `docker logs` via SSH               | Coolify UI: per-service log viewer              |
+| Health monitoring   | Uptime Kuma only                    | Coolify built-in health checks + Uptime Kuma    |
+| Multi-service setup | Manual docker-compose orchestration | Coolify service groups + dependencies           |
 
 ---
 
@@ -471,6 +471,7 @@ For each environment (staging, production), create 4 Coolify services:
 4. **Web** — Docker image from GHCR: `ghcr.io/<repo>/web:latest` (or `:staging`)
 
 Each service gets:
+
 - Environment variables (from `infra/.env.prod.example` / `.env.staging.example`)
 - Health check endpoint (`/health` for server, HTTP 200 for web)
 - Volume mounts (data for postgres/redis)
@@ -549,17 +550,20 @@ echo "7. Set up environment variables for each service in Coolify UI"
 # Coolify Service Setup Guide
 
 ## Prerequisites
+
 - Coolify installed and running on VPS (http://<ip>:8000)
 - GitHub Container Registry (GHCR) accessible
 - DNS configured: cogitoacademy.id, app.cogitoacademy.id → VPS IP
 
 ## Step 1: Add Docker Registry
+
 1. Coolify → Settings → Docker Registries
 2. Add registry: `ghcr.io`
 3. Username: your GitHub username
 4. Password: GitHub Personal Access Token (with `read:packages` scope)
 
 ## Step 2: Create PostgreSQL Service
+
 1. Coolify → Projects → New Project "cogito-prod"
 2. Add Service → Database → PostgreSQL 16
 3. Name: `postgres-prod`
@@ -569,6 +573,7 @@ echo "7. Set up environment variables for each service in Coolify UI"
 7. Deploy
 
 ## Step 3: Create Redis Service
+
 1. Add Service → Database → Redis 7
 2. Name: `redis-prod`
 3. Volume: `redis_prod_data:/data`
@@ -576,6 +581,7 @@ echo "7. Set up environment variables for each service in Coolify UI"
 5. Deploy
 
 ## Step 4: Create Server Service
+
 1. Add Service → Docker Image
 2. Image: `ghcr.io/<org>/cogito-app/server:latest`
 3. Name: `cogito-server`
@@ -597,6 +603,7 @@ echo "7. Set up environment variables for each service in Coolify UI"
 10. Deploy
 
 ## Step 5: Create Web Service
+
 1. Add Service → Docker Image
 2. Image: `ghcr.io/<org>/cogito-app/web:latest`
 3. Name: `cogito-web`
@@ -607,18 +614,23 @@ echo "7. Set up environment variables for each service in Coolify UI"
 8. Deploy
 
 ## Step 6: Configure Caddy Routing
+
 Coolify automatically configures Caddy reverse proxy:
-- cogitoacademy.id/rpc/* → cogito-server:3001
-- cogitoacademy.id/api/* → cogito-server:3001
+
+- cogitoacademy.id/rpc/\* → cogito-server:3001
+- cogitoacademy.id/api/\* → cogito-server:3001
 - cogitoacademy.id/health → cogito-server:3001
-- cogitoacademy.id/* → cogito-web:80
+- cogitoacademy.id/\* → cogito-web:80
 
 Or use separate domains:
+
 - app.cogitoacademy.id → cogito-web:80
 - cogitoacademy.id/rpc, /api, /health → cogito-server:3001
 
 ## Step 7: Repeat for Staging
+
 Same as above but:
+
 - Project: "cogito-staging"
 - Images tagged :staging
 - Domains: staging.cogitoacademy.id, staging-app.cogitoacademy.id
@@ -626,6 +638,7 @@ Same as above but:
 - SCHEDULER_ENABLED=true
 
 ## Step 8: Verify
+
 - curl https://cogitoacademy.id/health → 200
 - curl https://app.cogitoacademy.id → frontend HTML
 - Coolify dashboard shows all services as "running"
@@ -657,7 +670,7 @@ DB_SSL_REJECT_UNAUTHORIZED=true
 METRICS_TOKEN=CHANGE_ME
 ```
 
-**File:** `infra/.env.prod.example**
+**File:** `infra/.env.prod.example\*\*
 
 ```env
 NODE_ENV=production
@@ -986,18 +999,18 @@ Secrets for CI/CD (GHCR tokens, Coolify webhook URLs) are set via GitHub Actions
 
 ## 10. Risk Register
 
-| #   | Risk                                              | Likelihood | Impact | Mitigation                                                                                                                  |
-| --- | ------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------------------- |
-| R1  | VPS runs out of resources (RAM/CPU)               | Medium     | High   | Monitor with Coolify + Uptime Kuma. Start with 8GB RAM. Upgrade Hetzner plan if needed.                                     |
-| R2  | Docker image build fails in CI                    | Medium     | Low    | Cache Docker layers. Test locally first. Use buildkit.                                                                      |
-| R3  | Database migration fails on deploy                | Low        | High   | Coolify runs the container → migration runs on startup. If migration fails, container restarts. Use Coolify rollback.    |
-| R4  | Staging and production on same VPS = blast radius | Medium     | High   | Separate Docker networks and databases. Staging data isolated. If VPS goes down, both go down — accept risk for now.      |
-| R5  | Coolify certificate provisioning fails             | Low        | Medium | Coolify uses Caddy/Let's Encrypt auto-provisioning. If it fails, check DNS and port 80/443 availability.                   |
-| R6  | Coolify upgrade breaks services                   | Low        | High   | Coolify updates are non-breaking for running services. Test on staging first.                                               |
-| R7  | Uptime Kuma uses too much memory                  | Low        | Low    | Uptime Kuma uses ~50MB. Monitor with Docker stats.                                                                          |
-| R8  | Dependabot PRs break CI                           | Medium     | Low    | CI runs on all Dependabot PRs. Only merge passing PRs.                                                                      |
-| R9  | GHCR rate limit on image pulls                    | Low        | Medium | Use authenticated pulls (GHCR PAT). Coolify authenticates with registry credentials.                                       |
-| R10 | Coolify dashboard exposed publicly                | Medium     | High   | Restrict port 8000 to SSH tunnel or specific IPs. Or: use Coolify's built-in auth + HTTPS via Coolify's own proxy.         |
+| #   | Risk                                              | Likelihood | Impact | Mitigation                                                                                                            |
+| --- | ------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------------- |
+| R1  | VPS runs out of resources (RAM/CPU)               | Medium     | High   | Monitor with Coolify + Uptime Kuma. Start with 8GB RAM. Upgrade Hetzner plan if needed.                               |
+| R2  | Docker image build fails in CI                    | Medium     | Low    | Cache Docker layers. Test locally first. Use buildkit.                                                                |
+| R3  | Database migration fails on deploy                | Low        | High   | Coolify runs the container → migration runs on startup. If migration fails, container restarts. Use Coolify rollback. |
+| R4  | Staging and production on same VPS = blast radius | Medium     | High   | Separate Docker networks and databases. Staging data isolated. If VPS goes down, both go down — accept risk for now.  |
+| R5  | Coolify certificate provisioning fails            | Low        | Medium | Coolify uses Caddy/Let's Encrypt auto-provisioning. If it fails, check DNS and port 80/443 availability.              |
+| R6  | Coolify upgrade breaks services                   | Low        | High   | Coolify updates are non-breaking for running services. Test on staging first.                                         |
+| R7  | Uptime Kuma uses too much memory                  | Low        | Low    | Uptime Kuma uses ~50MB. Monitor with Docker stats.                                                                    |
+| R8  | Dependabot PRs break CI                           | Medium     | Low    | CI runs on all Dependabot PRs. Only merge passing PRs.                                                                |
+| R9  | GHCR rate limit on image pulls                    | Low        | Medium | Use authenticated pulls (GHCR PAT). Coolify authenticates with registry credentials.                                  |
+| R10 | Coolify dashboard exposed publicly                | Medium     | High   | Restrict port 8000 to SSH tunnel or specific IPs. Or: use Coolify's built-in auth + HTTPS via Coolify's own proxy.    |
 
 ---
 

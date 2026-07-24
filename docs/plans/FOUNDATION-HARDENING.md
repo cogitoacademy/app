@@ -35,105 +35,105 @@ It runs BEFORE production-readiness — the bug fixes in production-readiness (B
 
 ### CRITICAL — Money/State Integrity (A1-A7)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| A1  | `booking.service.ts:325-388` (cancel)            | Group booking cancel releases only proposer's hold. Invitee holds NOT released. Participant states NOT updated. |
-| A2  | `booking.service.ts:458-505` (tutorDecline)      | Tutor decline releases only proposer's hold. Invitee holds NOT released.           |
-| A3  | `booking.service.ts:1094-1136` (expireBookings)  | Expiry releases only proposer's hold. Invitee holds NOT released.                  |
-| A4  | `booking.service.ts:884-966` (withdraw→cancel)   | When withdraw triggers group cancel, other confirmed participants' holds NOT released. |
-| A5  | `booking.service.ts:780,884-966`                 | `confirmedHeadcount` incremented on confirm but NOT decremented on withdraw.       |
-| A6  | `booking.service.ts:325-505,1094-1136`           | `holdAmount` NOT zeroed on cancel/decline/expire. Stale value persists.             |
-| A7  | `booking.service.ts:325-388`                     | Series booking cancel doesn't cascade to `bookingSession` rows.                     |
+| ID  | Location                                        | Issue                                                                                                           |
+| --- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| A1  | `booking.service.ts:325-388` (cancel)           | Group booking cancel releases only proposer's hold. Invitee holds NOT released. Participant states NOT updated. |
+| A2  | `booking.service.ts:458-505` (tutorDecline)     | Tutor decline releases only proposer's hold. Invitee holds NOT released.                                        |
+| A3  | `booking.service.ts:1094-1136` (expireBookings) | Expiry releases only proposer's hold. Invitee holds NOT released.                                               |
+| A4  | `booking.service.ts:884-966` (withdraw→cancel)  | When withdraw triggers group cancel, other confirmed participants' holds NOT released.                          |
+| A5  | `booking.service.ts:780,884-966`                | `confirmedHeadcount` incremented on confirm but NOT decremented on withdraw.                                    |
+| A6  | `booking.service.ts:325-505,1094-1136`          | `holdAmount` NOT zeroed on cancel/decline/expire. Stale value persists.                                         |
+| A7  | `booking.service.ts:325-388`                    | Series booking cancel doesn't cascade to `bookingSession` rows.                                                 |
 
 ### CRITICAL — Stuck State Machine (B1-B2)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| B1  | `booking-transitions.ts:60-62`                  | `RESCHEDULE_PROPOSED` not in expiry cron. No deadline. Booking stuck forever.       |
-| B2  | `booking.service.ts:1094-1100`                   | `AWAITING_ADMIN_ROOM_APPROVAL`, `SCHEDULED` not in expiry cron. No timeout.         |
+| ID  | Location                       | Issue                                                                         |
+| --- | ------------------------------ | ----------------------------------------------------------------------------- |
+| B1  | `booking-transitions.ts:60-62` | `RESCHEDULE_PROPOSED` not in expiry cron. No deadline. Booking stuck forever. |
+| B2  | `booking.service.ts:1094-1100` | `AWAITING_ADMIN_ROOM_APPROVAL`, `SCHEDULED` not in expiry cron. No timeout.   |
 
 ### CRITICAL — Security / IDOR (C1-C6)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| C1  | `booking.handler.ts:62-73`                      | `booking.get(bookingId)` — no ownership check. Any user views any booking.         |
-| C2  | `booking.handler.ts:236-247`                     | `booking.listSessions(bookingId)` — same IDOR.                                     |
-| C3  | `booking.router.ts:165-201`                     | Tutor actions use `protectedProcedure`, not a `tutorProcedure`. No role guard.     |
-| C4  | `admin-tutor.service.ts:152-183`                | `resendInvite()` doesn't invalidate old token. Intercepted links stay valid.        |
-| C5  | `routes.ts` — `/openapi.json`, `/api-reference`  | OpenAPI spec + Scalar UI exposed without auth. Leaks API structure.                |
-| C6  | `packages/auth/src/index.ts:44-46`               | No password policy. Any password length accepted.                                  |
+| ID  | Location                                        | Issue                                                                          |
+| --- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| C1  | `booking.handler.ts:62-73`                      | `booking.get(bookingId)` — no ownership check. Any user views any booking.     |
+| C2  | `booking.handler.ts:236-247`                    | `booking.listSessions(bookingId)` — same IDOR.                                 |
+| C3  | `booking.router.ts:165-201`                     | Tutor actions use `protectedProcedure`, not a `tutorProcedure`. No role guard. |
+| C4  | `admin-tutor.service.ts:152-183`                | `resendInvite()` doesn't invalidate old token. Intercepted links stay valid.   |
+| C5  | `routes.ts` — `/openapi.json`, `/api-reference` | OpenAPI spec + Scalar UI exposed without auth. Leaks API structure.            |
+| C6  | `packages/auth/src/index.ts:44-46`              | No password policy. Any password length accepted.                              |
 
 ### HIGH — Transaction & Wallet Integrity (D1-D4)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| D1  | `wallet.service.ts:145-296`                     | Wallet ops: atomic balance UPDATE then separate ledger INSERT. Not in same tx.    |
-| D2  | 8 service files                                 | Read-then-write race conditions without optimistic locking.                        |
-| D3  | `payment.service.ts:121-191`                     | Webhook out-of-order: `PAID` before `PENDING` → user never credited.               |
-| D4  | `booking.service.ts:249,658,1022`               | Booking creation has no idempotency key. Retries create duplicate bookings.        |
+| ID  | Location                          | Issue                                                                          |
+| --- | --------------------------------- | ------------------------------------------------------------------------------ |
+| D1  | `wallet.service.ts:145-296`       | Wallet ops: atomic balance UPDATE then separate ledger INSERT. Not in same tx. |
+| D2  | 8 service files                   | Read-then-write race conditions without optimistic locking.                    |
+| D3  | `payment.service.ts:121-191`      | Webhook out-of-order: `PAID` before `PENDING` → user never credited.           |
+| D4  | `booking.service.ts:249,658,1022` | Booking creation has no idempotency key. Retries create duplicate bookings.    |
 
 ### HIGH — Resilience (E1-E5)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| E1  | `notification.service.ts:178-188`               | `write()` swallows ALL errors via `.catch()`. Notifications silently lost.          |
-| E2  | `google-meeting.provider.ts:37-51`               | Google Meet call has no timeout. Request hangs forever.                            |
-| E2  | `resend-email.provider.ts:11-24`                | Resend call has no timeout.                                                         |
-| E3  | `db/src/index.ts:16-18`                          | No `statement_timeout`. Slow query holds connection indefinitely.                 |
-| E4  | `apps/server/src/index.ts:12-18`                | No `uncaughtException` handler. Sync errors crash silently.                        |
-| E5  | `webhooks/payments.ts:13-16,20-23`              | Webhook timestamp validation disabled outside production.                          |
+| ID  | Location                           | Issue                                                                      |
+| --- | ---------------------------------- | -------------------------------------------------------------------------- |
+| E1  | `notification.service.ts:178-188`  | `write()` swallows ALL errors via `.catch()`. Notifications silently lost. |
+| E2  | `google-meeting.provider.ts:37-51` | Google Meet call has no timeout. Request hangs forever.                    |
+| E2  | `resend-email.provider.ts:11-24`   | Resend call has no timeout.                                                |
+| E3  | `db/src/index.ts:16-18`            | No `statement_timeout`. Slow query holds connection indefinitely.          |
+| E4  | `apps/server/src/index.ts:12-18`   | No `uncaughtException` handler. Sync errors crash silently.                |
+| E5  | `webhooks/payments.ts:13-16,20-23` | Webhook timestamp validation disabled outside production.                  |
 
 ### MEDIUM — Input Validation (F1-F3)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| F1  | All `*.types.ts` (11+ files)                    | Unbounded string inputs (no `.max()`). DoS vector.                                 |
-| F2  | 6 Zod schemas                                   | Unbounded array inputs (no `.max()`).                                              |
-| F3  | `booking.types.ts:8-9`                           | Dates not validated to be in the future. Can book sessions in the past.            |
+| ID  | Location                     | Issue                                                                   |
+| --- | ---------------------------- | ----------------------------------------------------------------------- |
+| F1  | All `*.types.ts` (11+ files) | Unbounded string inputs (no `.max()`). DoS vector.                      |
+| F2  | 6 Zod schemas                | Unbounded array inputs (no `.max()`).                                   |
+| F3  | `booking.types.ts:8-9`       | Dates not validated to be in the future. Can book sessions in the past. |
 
 ### MEDIUM — Auth & Session (G1-G4)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| G1  | `packages/auth/src/index.ts:38-42`               | No session `expiresIn`. Sessions may last indefinitely.                             |
-| G2  | `packages/auth/src/index.ts`                     | No email verification flow. Users sign up with unverified emails.                  |
-| G3  | `packages/auth/src/index.ts:48-51`               | Google OAuth credentials fall back to `""` if not set.                             |
-| G4  | `packages/auth/src/index.ts:57`                  | `sameSite: "none"` in production but no CSRF token. (Already documented as B5.)     |
+| ID  | Location                           | Issue                                                                           |
+| --- | ---------------------------------- | ------------------------------------------------------------------------------- |
+| G1  | `packages/auth/src/index.ts:38-42` | No session `expiresIn`. Sessions may last indefinitely.                         |
+| G2  | `packages/auth/src/index.ts`       | No email verification flow. Users sign up with unverified emails.               |
+| G3  | `packages/auth/src/index.ts:48-51` | Google OAuth credentials fall back to `""` if not set.                          |
+| G4  | `packages/auth/src/index.ts:57`    | `sameSite: "none"` in production but no CSRF token. (Already documented as B5.) |
 
 ### MEDIUM — CSP Broken (H1)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| H1  | `security-headers.ts:6`                          | CSP only has `default-src 'self'`. No `connect-src`, `script-src`, etc. Production-breaking. |
+| ID  | Location                | Issue                                                                                        |
+| --- | ----------------------- | -------------------------------------------------------------------------------------------- |
+| H1  | `security-headers.ts:6` | CSP only has `default-src 'self'`. No `connect-src`, `script-src`, etc. Production-breaking. |
 
 ### MEDIUM — Performance (I1-I3)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| I1  | `booking.repo.ts:281-291`                        | `findBookingsExpiringByDeadline` has NO LIMIT. OOM risk.                            |
-| I2  | `booking.repo.ts:256-279`                        | Missing composite index on `(tutorId, scheduledStartAt, scheduledEndAt)`.          |
-| I3  | `db/src/index.ts:28-30`                          | Dev `onquery` logs all SQL + params to console. May log sensitive data.           |
+| ID  | Location                  | Issue                                                                     |
+| --- | ------------------------- | ------------------------------------------------------------------------- |
+| I1  | `booking.repo.ts:281-291` | `findBookingsExpiringByDeadline` has NO LIMIT. OOM risk.                  |
+| I2  | `booking.repo.ts:256-279` | Missing composite index on `(tutorId, scheduledStartAt, scheduledEndAt)`. |
+| I3  | `db/src/index.ts:28-30`   | Dev `onquery` logs all SQL + params to console. May log sensitive data.   |
 
 ### MEDIUM — Frontend (J1-J4)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| J1  | `apps/web/src/`                                 | No React error boundary. Component crash = blank page.                             |
-| J2  | `apps/web/src/utils/orpc.ts`                    | No auth session expiry handling. 401 shows toast but user stuck.                   |
-| J3  | 4 component files                               | Dead code: `header.tsx`, `not-found-page.tsx`, `default-page.tsx`, `booking-detail.tsx`. |
-| J4  | `routes/_app.tsx:47`, `auth.callback.tsx:10`    | `any` type casts for role access. Type safety gaps.                                 |
+| ID  | Location                                     | Issue                                                                                    |
+| --- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| J1  | `apps/web/src/`                              | No React error boundary. Component crash = blank page.                                   |
+| J2  | `apps/web/src/utils/orpc.ts`                 | No auth session expiry handling. 401 shows toast but user stuck.                         |
+| J3  | 4 component files                            | Dead code: `header.tsx`, `not-found-page.tsx`, `default-page.tsx`, `booking-detail.tsx`. |
+| J4  | `routes/_app.tsx:47`, `auth.callback.tsx:10` | `any` type casts for role access. Type safety gaps.                                      |
 
 ### LOW — Operational / Hygiene (K1-K7)
 
-| ID  | Location                                        | Issue                                                                               |
-| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| K1  | `routes.ts:231`, `webhooks/payments.ts:36-38`   | No constant-time comparison for metrics token / webhook signatures.                |
-| K2  | `routes.ts:138-149`                             | No request body size limit on webhook endpoints.                                   |
-| K3  | `scheduler/jobs/*.ts`                           | No `attempts` configured. Failed jobs not retried.                                  |
-| K4  | `booking-state.types.ts:1-17`                   | `DRAFT` and `AWAITING_MARKS_HOLD` are unreachable dead states.                     |
-| K5  | `db/schema/booking.ts:74`                        | `repricedMarks` column is dead — never set or read.                                 |
-| K6  | `booking.types.ts:10`                           | `timezone` field stored but never used in calculations.                             |
-| K7  | `packages/api/src/lib/metrics.ts`               | No TTL eviction for stale path entries.                                            |
+| ID  | Location                                      | Issue                                                               |
+| --- | --------------------------------------------- | ------------------------------------------------------------------- |
+| K1  | `routes.ts:231`, `webhooks/payments.ts:36-38` | No constant-time comparison for metrics token / webhook signatures. |
+| K2  | `routes.ts:138-149`                           | No request body size limit on webhook endpoints.                    |
+| K3  | `scheduler/jobs/*.ts`                         | No `attempts` configured. Failed jobs not retried.                  |
+| K4  | `booking-state.types.ts:1-17`                 | `DRAFT` and `AWAITING_MARKS_HOLD` are unreachable dead states.      |
+| K5  | `db/schema/booking.ts:74`                     | `repricedMarks` column is dead — never set or read.                 |
+| K6  | `booking.types.ts:10`                         | `timezone` field stored but never used in calculations.             |
+| K7  | `packages/api/src/lib/metrics.ts`             | No TTL eviction for stale path entries.                             |
 
 ---
 
@@ -202,8 +202,11 @@ async function releaseAllParticipantHolds(
 - Add `decrementBookingConfirmedHeadcount` to `booking.repo.ts`:
   ```ts
   async function decrementBookingConfirmedHeadcount(conn, bookingId) {
-    await conn.update(booking)
-      .set({ confirmedHeadcount: sql`GREATEST(${booking.confirmedHeadcount} - 1, 0)` })
+    await conn
+      .update(booking)
+      .set({
+        confirmedHeadcount: sql`GREATEST(${booking.confirmedHeadcount} - 1, 0)`,
+      })
       .where(eq(booking.id, bookingId));
   }
   ```
@@ -214,7 +217,8 @@ async function releaseAllParticipantHolds(
 - Add `cancelAllSessions` to `booking.repo.ts`:
   ```ts
   async function cancelAllSessions(conn, bookingId) {
-    await conn.update(bookingSession)
+    await conn
+      .update(bookingSession)
       .set({ currentState: "cancelled" })
       .where(eq(bookingSession.seriesBookingId, bookingId));
   }
@@ -312,13 +316,15 @@ async function assertBookingAccess(tx, bookingId, userId) {
 
 - `procedures.ts`: Add `tutorProcedure` that checks `user.role === USER_ROLE.TUTOR`
   ```ts
-  export const tutorProcedure = protectedProcedure.use(async ({ context, next }) => {
-    const user = context.session?.user as CogitoUser;
-    if (user?.role !== USER_ROLE.TUTOR) {
-      throw new ORPCError("FORBIDDEN", "Tutor access required");
-    }
-    return next({ context });
-  });
+  export const tutorProcedure = protectedProcedure.use(
+    async ({ context, next }) => {
+      const user = context.session?.user as CogitoUser;
+      if (user?.role !== USER_ROLE.TUTOR) {
+        throw new ORPCError("FORBIDDEN", "Tutor access required");
+      }
+      return next({ context });
+    },
+  );
   ```
 - `booking.router.ts:165-201`: Change `protectedProcedure` to `tutorProcedure` for `acceptBooking`, `declineBooking`, `completeSession`
 
@@ -354,28 +360,28 @@ async function assertBookingAccess(tx, bookingId, userId) {
 
 Add `.max()` to every string field in all Zod schemas. Suggested limits:
 
-| Field type | Max length | Files |
-|-----------|-----------|-------|
-| ID fields (userId, bookingId, etc.) | 100 | All `*.types.ts` |
-| Short text (name, displayName, category) | 255 | `tutor.types.ts`, `achievement.types.ts`, `admin-tutor.types.ts` |
-| Long text (bio, reason, description, notes) | 2000 | `tutor.types.ts`, `achievement.types.ts`, `booking.types.ts`, `refund.types.ts`, `admin-booking.types.ts` |
-| URL (imageUrl, proofUrls) | 2048 | `tutor.types.ts`, `achievement.types.ts` |
-| Email | 320 (RFC 5321 max) | `admin-tutor.types.ts` |
-| Token | 256 | `invite.types.ts` |
-| Search query | 200 | `discovery.types.ts` |
-| Timezone | 50 | `booking.types.ts` |
+| Field type                                  | Max length         | Files                                                                                                     |
+| ------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------- |
+| ID fields (userId, bookingId, etc.)         | 100                | All `*.types.ts`                                                                                          |
+| Short text (name, displayName, category)    | 255                | `tutor.types.ts`, `achievement.types.ts`, `admin-tutor.types.ts`                                          |
+| Long text (bio, reason, description, notes) | 2000               | `tutor.types.ts`, `achievement.types.ts`, `booking.types.ts`, `refund.types.ts`, `admin-booking.types.ts` |
+| URL (imageUrl, proofUrls)                   | 2048               | `tutor.types.ts`, `achievement.types.ts`                                                                  |
+| Email                                       | 320 (RFC 5321 max) | `admin-tutor.types.ts`                                                                                    |
+| Token                                       | 256                | `invite.types.ts`                                                                                         |
+| Search query                                | 200                | `discovery.types.ts`                                                                                      |
+| Timezone                                    | 50                 | `booking.types.ts`                                                                                        |
 
 #### 4.2 Bound all array inputs
 
-| Field | Max | File |
-|-------|-----|------|
-| `inviteeUserIds` | 5 (group max 6 minus proposer) | `booking.types.ts` |
-| `expertise` | 20 | `tutor.types.ts` |
-| `proofUrls` | 10 | `tutor.types.ts` |
-| `subjects` | 20 | `achievement.types.ts` |
-| `affectedParticipants` | 6 | `admin-booking.types.ts` |
-| `sessions` | 4 (already has `.min(2)`) | `booking.types.ts` |
-| `states` | 15 (total state count) | `booking.types.ts` |
+| Field                  | Max                            | File                     |
+| ---------------------- | ------------------------------ | ------------------------ |
+| `inviteeUserIds`       | 5 (group max 6 minus proposer) | `booking.types.ts`       |
+| `expertise`            | 20                             | `tutor.types.ts`         |
+| `proofUrls`            | 10                             | `tutor.types.ts`         |
+| `subjects`             | 20                             | `achievement.types.ts`   |
+| `affectedParticipants` | 6                              | `admin-booking.types.ts` |
+| `sessions`             | 4 (already has `.min(2)`)      | `booking.types.ts`       |
+| `states`               | 15 (total state count)         | `booking.types.ts`       |
 
 #### 4.3 Validate dates are in the future
 
@@ -417,10 +423,11 @@ Add `.max()` to every string field in all Zod schemas. Suggested limits:
 > **Rationale:** Email verification (finding G2) requires (a) a working Resend integration with a verification template, (b) a DB migration grandfathering existing users to `emailVerified = true`, (c) a new frontend `/verify-email` route + signup→login redirect changes. These are additive features that depend on infrastructure and email-wiring work that lives outside this hardening branch. Implementing them here risks blocking the merge of the 8 other stories on an unrelated feature.
 >
 > **Carry-forward tasks (for production-readiness / PRD-gaps branch):**
+>
 > - `packages/auth/src/index.ts`: set `requireEmailVerification: true` + `sendVerificationEmail` handler (delegate to EmailService; log URL in dev).
 > - Frontend: add "verify your email" screen, `/verify-email` route calling `authClient.verifyEmail()`, post-signup redirect to "check your email" page, post-verification redirect to login.
 > - Migration: set existing users `emailVerified = true` (grandfather clause — risk R2).
-> - Wire the `sendVerificationEmail` callback to the EmailService port (depends on Story 6's email provider timeout wiring, which *is* in this branch).
+> - Wire the `sendVerificationEmail` callback to the EmailService port (depends on Story 6's email provider timeout wiring, which _is_ in this branch).
 >
 > **On this branch:** Story 4 still implements 4.4 (password policy), 4.5 (session expiry), 4.7 (conditional OAuth). Only email verification is deferred. The auth config added here must NOT set `requireEmailVerification: true` — it stays at its default (false) so existing signup/login flows keep working.
 
@@ -475,16 +482,16 @@ Add `.max()` to every string field in all Zod schemas. Suggested limits:
 
 Add `version` columns (or use existing ones) to the 8 tables with read-then-write patterns:
 
-| Service | Table | Approach |
-|---------|-------|---------|
-| auth (profile upsert) | `student_profile` | Use `ON CONFLICT DO UPDATE` (already atomic) |
-| achievement (update/delete) | `achievement` | Add `version` column + `WHERE version = expected` in UPDATE |
-| room (assignment) | `room_booking` | Add exclusion constraint for overlapping time ranges |
-| tutor (profile update) | `tutor_profile` | Add `version` column |
-| tutor (availability upsert) | `availability_slot` | Use `ON CONFLICT DO UPDATE` on (tutorId, startDate) |
-| admin (role change) | `user` | Use `WHERE role = expected` in UPDATE (optimistic) |
-| admin-tutor (invite creation) | `tutor_invite` | Add unique constraint on (email, status) WHERE status = 'invited' |
-| refund (correction) | Already in transaction | Ensure `beforeState` is read within the tx |
+| Service                       | Table                  | Approach                                                          |
+| ----------------------------- | ---------------------- | ----------------------------------------------------------------- |
+| auth (profile upsert)         | `student_profile`      | Use `ON CONFLICT DO UPDATE` (already atomic)                      |
+| achievement (update/delete)   | `achievement`          | Add `version` column + `WHERE version = expected` in UPDATE       |
+| room (assignment)             | `room_booking`         | Add exclusion constraint for overlapping time ranges              |
+| tutor (profile update)        | `tutor_profile`        | Add `version` column                                              |
+| tutor (availability upsert)   | `availability_slot`    | Use `ON CONFLICT DO UPDATE` on (tutorId, startDate)               |
+| admin (role change)           | `user`                 | Use `WHERE role = expected` in UPDATE (optimistic)                |
+| admin-tutor (invite creation) | `tutor_invite`         | Add unique constraint on (email, status) WHERE status = 'invited' |
+| refund (correction)           | Already in transaction | Ensure `beforeState` is read within the tx                        |
 
 > **Note:** Adding `version` columns requires migrations (0007, 0008, etc. — 0006 is assigned to Story 8's composite index). Keep migrations additive — `version` defaults to 1.
 
@@ -659,11 +666,11 @@ Add `version` columns (or use existing ones) to the 8 tables with read-then-writ
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Content-Security-Policy": [
       "default-src 'self'",
-      `connect-src 'self' ${env.CORS_ORIGIN}`,  // Allow API calls to server origin
+      `connect-src 'self' ${env.CORS_ORIGIN}`, // Allow API calls to server origin
       "script-src 'self'",
-      "style-src 'self' 'unsafe-inline'",       // TailwindCSS v4 injects some inline styles
-      "img-src 'self' data: https:",            // Allow data URIs and HTTPS images
-      "font-src 'self' https://fonts.gstatic.com",  // If using Google Fonts
+      "style-src 'self' 'unsafe-inline'", // TailwindCSS v4 injects some inline styles
+      "img-src 'self' data: https:", // Allow data URIs and HTTPS images
+      "font-src 'self' https://fonts.gstatic.com", // If using Google Fonts
       "frame-ancestors 'none'",
     ].join("; "),
   };
@@ -728,6 +735,7 @@ Add `version` columns (or use existing ones) to the 8 tables with read-then-writ
 #### 9.1 Add React error boundary
 
 - Create `apps/web/src/components/error-boundary.tsx`:
+
   ```tsx
   import { Component, type ReactNode } from "react";
 
@@ -736,13 +744,17 @@ Add `version` columns (or use existing ones) to the 8 tables with read-then-writ
     { hasError: boolean }
   > {
     state = { hasError: false };
-    static getDerivedStateFromError() { return { hasError: true }; }
+    static getDerivedStateFromError() {
+      return { hasError: true };
+    }
     render() {
-      if (this.state.hasError) return this.props.fallback ?? <div>Something went wrong.</div>;
+      if (this.state.hasError)
+        return this.props.fallback ?? <div>Something went wrong.</div>;
       return this.props.children;
     }
   }
   ```
+
 - `main.tsx`: Wrap router in `<ErrorBoundary>` with a user-friendly fallback.
 
 #### 9.2 Add auth session expiry handler
@@ -799,21 +811,21 @@ This plan establishes patterns that all subsequent plans build on. The codebase 
 
 ### Established Patterns (new baseline)
 
-| Pattern | Where established | Used by subsequent plans |
-|---------|-------------------|------------------------|
-| `releaseAllParticipantHolds()` | Story 1 | PRD-gaps: group series bookings (G15-G18) |
-| `assertBookingAccess()` | Story 3 | PRD-gaps: all new booking endpoints |
-| `tutorProcedure` middleware | Story 3 | PRD-gaps: tutor reschedule endpoints (G6) |
-| Bounded Zod schemas | Story 4 | PRD-gaps: all new endpoints inherit bounds |
-| Transactional wallet ops | Story 5 | Production-readiness: Redis wallet caching |
-| Optimistic locking | Story 5 | Production-readiness: all future mutations |
-| Payment state machine | Story 5 | PRD-gaps: refund endpoints (G16) |
-| `writeBestEffort()` / `write()` | Story 6 | PRD-gaps: notification matrix (G17) |
-| `fetchWithTimeout` on all external calls | Story 6 | Production-readiness: circuit breaker wiring |
-| `Idempotency-Key` header support | Story 7 | Production-readiness: Redis-backed idempotency (Phase 2.3) |
-| Production-strict CSP | Story 8 | Infrastructure: Caddy doesn't need security headers (CSP at app level) |
-| Batched expiry (LIMIT 500) | Story 8 | Production-readiness: scheduler optimization |
-| Error boundary + auth redirect | Story 9 | PRD-gaps: all new frontend routes |
+| Pattern                                  | Where established | Used by subsequent plans                                               |
+| ---------------------------------------- | ----------------- | ---------------------------------------------------------------------- |
+| `releaseAllParticipantHolds()`           | Story 1           | PRD-gaps: group series bookings (G15-G18)                              |
+| `assertBookingAccess()`                  | Story 3           | PRD-gaps: all new booking endpoints                                    |
+| `tutorProcedure` middleware              | Story 3           | PRD-gaps: tutor reschedule endpoints (G6)                              |
+| Bounded Zod schemas                      | Story 4           | PRD-gaps: all new endpoints inherit bounds                             |
+| Transactional wallet ops                 | Story 5           | Production-readiness: Redis wallet caching                             |
+| Optimistic locking                       | Story 5           | Production-readiness: all future mutations                             |
+| Payment state machine                    | Story 5           | PRD-gaps: refund endpoints (G16)                                       |
+| `writeBestEffort()` / `write()`          | Story 6           | PRD-gaps: notification matrix (G17)                                    |
+| `fetchWithTimeout` on all external calls | Story 6           | Production-readiness: circuit breaker wiring                           |
+| `Idempotency-Key` header support         | Story 7           | Production-readiness: Redis-backed idempotency (Phase 2.3)             |
+| Production-strict CSP                    | Story 8           | Infrastructure: Caddy doesn't need security headers (CSP at app level) |
+| Batched expiry (LIMIT 500)               | Story 8           | Production-readiness: scheduler optimization                           |
+| Error boundary + auth redirect           | Story 9           | PRD-gaps: all new frontend routes                                      |
 
 ### How Production-Readiness Plan Adapts
 
@@ -847,16 +859,16 @@ The PRD-gaps branch (future) builds all 18 gap features on the established patte
 
 ## Risk Register
 
-| #   | Risk                                                           | Likelihood | Impact | Mitigation                                                                                  |
-| --- | -------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------- |
-| R1  | `releaseAllParticipantHolds` changes group booking behavior    | Medium     | High   | Comprehensive integration tests for every terminal transition with group bookings.          |
-| R2  | Email verification breaks existing user login flow             | Medium     | High   | Add a migration to set all existing users' `emailVerified = true` (grandfather clause).     |
-| R3  | Password policy rejects existing weak passwords                | Low        | Medium | Policy only applies to new signups. Existing users keep their passwords.                    |
-| R4  | CSP blocks a legitimate third-party resource                  | Medium     | Low    | Start with report-only CSP, monitor violations, then enforce. Or: use the specified policy and test. |
-| R5  | Optimistic locking adds version column migration overhead     | Low        | Low    | Migrations are additive (version defaults to 1). No data loss.                              |
-| R6  | Notification `write()` throws break booking flows              | Medium     | High   | Use `writeBestEffort` for all non-critical notifications. Only use `write()` where the caller already has error handling. |
-| R7  | Session expiry (7 days) interrupts active users                | Low        | Medium | 7 days is generous. Cookie cache re-authenticates transparently within the session window. |
-| R8  | Idempotency natural key has false-positive dedup               | Low        | Medium | Include `Idempotency-Key` header in the composite key. Without header, fall back to input fields which should be unique per intent. |
+| #   | Risk                                                        | Likelihood | Impact | Mitigation                                                                                                                          |
+| --- | ----------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | `releaseAllParticipantHolds` changes group booking behavior | Medium     | High   | Comprehensive integration tests for every terminal transition with group bookings.                                                  |
+| R2  | Email verification breaks existing user login flow          | Medium     | High   | Add a migration to set all existing users' `emailVerified = true` (grandfather clause).                                             |
+| R3  | Password policy rejects existing weak passwords             | Low        | Medium | Policy only applies to new signups. Existing users keep their passwords.                                                            |
+| R4  | CSP blocks a legitimate third-party resource                | Medium     | Low    | Start with report-only CSP, monitor violations, then enforce. Or: use the specified policy and test.                                |
+| R5  | Optimistic locking adds version column migration overhead   | Low        | Low    | Migrations are additive (version defaults to 1). No data loss.                                                                      |
+| R6  | Notification `write()` throws break booking flows           | Medium     | High   | Use `writeBestEffort` for all non-critical notifications. Only use `write()` where the caller already has error handling.           |
+| R7  | Session expiry (7 days) interrupts active users             | Low        | Medium | 7 days is generous. Cookie cache re-authenticates transparently within the session window.                                          |
+| R8  | Idempotency natural key has false-positive dedup            | Low        | Medium | Include `Idempotency-Key` header in the composite key. Without header, fall back to input fields which should be unique per intent. |
 
 ---
 

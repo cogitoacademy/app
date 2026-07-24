@@ -248,15 +248,15 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ## Active Plans
 
-| Plan                                      | Branch                             | Status                                                  |
-| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------- |
-| `docs/plans/CONSOLIDATION-PLAN.md`        | `improvement/consolidation`        | Complete (merge to main pending)                        |
-| `docs/plans/FOUNDATION-HARDENING.md`       | `improvement/foundation-hardening` | Next to execute (after consolidation merges to main)    |
-| `docs/plans/PRODUCTION-READINESS-PLAN.md`  | `improvement/production-readiness` | After foundation hardening, parallel with infrastructure |
+| Plan                                      | Branch                             | Status                                                                   |
+| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
+| `docs/plans/CONSOLIDATION-PLAN.md`        | `improvement/consolidation`        | Complete (merge to main pending)                                         |
+| `docs/plans/FOUNDATION-HARDENING.md`      | `improvement/foundation-hardening` | Next to execute (after consolidation merges to main)                     |
+| `docs/plans/PRODUCTION-READINESS-PLAN.md` | `improvement/production-readiness` | After foundation hardening, parallel with infrastructure                 |
 | `docs/plans/INFRASTRUCTURE-PLAN.md`       | `improvement/infrastructure`       | After foundation hardening, parallel with production readiness (Coolify) |
-| `docs/plans/PRD-GAPS-SPEC.md`             | `feature/prd-gaps` (future)        | Reference spec, after all three above merge to main     |
-| `docs/plans/EXECUTION-PLAN-v2.md`         | —                                  | Superseded                                              |
-| `docs/plans/REFACTORING-PLAN.md`           | —                                  | Historical reference                                    |
+| `docs/plans/PRD-GAPS-SPEC.md`             | `feature/prd-gaps` (future)        | Reference spec, after all three above merge to main                      |
+| `docs/plans/EXECUTION-PLAN-v2.md`         | —                                  | Superseded                                                               |
+| `docs/plans/REFACTORING-PLAN.md`          | —                                  | Historical reference                                                     |
 
 ### Execution Order
 
@@ -292,54 +292,54 @@ Foundation Hardening must complete before production-readiness and infrastructur
 
 ### New findings (planned in FOUNDATION-HARDENING.md)
 
-| ID  | Bug                                                          | Priority | Story |
-| --- | ------------------------------------------------------------ | -------- | ----- |
-| A1  | Group booking cancel doesn't release invitee holds           | P0       | 1     |
-| A2  | Group booking tutorDecline doesn't release invitee holds     | P0       | 1     |
-| A3  | expireBookings doesn't release invitee holds                 | P0       | 1     |
-| A4  | withdraw→cancel doesn't release other participants' holds   | P0       | 1     |
-| A5  | confirmedHeadcount not decremented on withdraw              | P0       | 1     |
-| A6  | holdAmount not zeroed on cancel/decline/expire               | P0       | 1     |
-| A7  | Series cancel doesn't cascade to bookingSession rows        | P0       | 1     |
-| B1  | RESCHEDULE_PROPOSED has no expiry — booking stuck forever    | P0       | 2     |
-| B2  | AWAITING_ADMIN_ROOM_APPROVAL/SCHEDULED not in expiry cron   | P0       | 2     |
-| C1  | booking.get() IDOR — no ownership check                      | P0       | 3     |
-| C2  | booking.listSessions() IDOR — no ownership check             | P0       | 3     |
-| C3  | Tutor actions lack tutorProcedure role guard                 | P1       | 3     |
-| C4  | resendInvite doesn't invalidate old token                   | P1       | 3     |
-| C5  | OpenAPI spec exposed without auth                            | P1       | 3     |
-| C6  | No password policy                                           | P1       | 4     |
-| D1  | Wallet ledger insert not atomic with balance update         | P0       | 5     |
-| D2  | 8 read-then-write race conditions without optimistic lock   | P1       | 5     |
-| D3  | Payment webhook out-of-order delivery — user not credited   | P0       | 5     |
-| D4  | Booking creation has no idempotency key                     | P1       | 7     |
-| E1  | notification.write() swallows all errors silently            | P1       | 6     |
-| E2  | Google Meet + Resend calls have no timeout                  | P1       | 6     |
-| E3  | No statement_timeout on DB pool                              | P1       | 6     |
-| E4  | No uncaughtException handler                                | P1       | 6     |
-| E5  | Webhook timestamp validation disabled outside production    | P1       | 6     |
-| F1  | Unbounded string inputs (no .max()) — DoS vector             | P2       | 4     |
-| F2  | Unbounded array inputs (no .max())                          | P2       | 4     |
-| F3  | Dates not validated to be in the future                      | P2       | 4     |
-| G1  | No session expiry configured                                | P1       | 4     |
-| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1 | 4 |
-| G3  | Google OAuth credentials fall back to empty string           | P2       | 4     |
-| G4  | No CSRF token (sameSite=none in production)                 | P0       | 4     |
-| H1  | CSP incomplete — production-breaking (no connect-src)        | P0       | 8     |
-| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk       | P1       | 8     |
-| I2  | Missing composite index for overlap check query             | P2       | 8     |
-| I3  | Dev DB logging may expose sensitive params                  | P2       | 8     |
-| J1  | No React error boundary — blank page on crash               | P1       | 9     |
-| J2  | No auth session expiry handling on frontend                 | P1       | 9     |
-| J3  | 4 dead frontend components                                  | P2       | 9     |
-| J4  | `any` type casts in route files                              | P2       | 9     |
-| K1  | No constant-time comparison for signatures/tokens            | P2       | 6     |
-| K2  | No body size limit on webhook endpoints                     | P2       | 6     |
-| K3  | Scheduler jobs have no retry attempts                       | P2       | 8     |
-| K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states    | P3       | 2     |
-| K5  | repricedMarks column is dead — never set or read             | P3       | 2     |
-| K6  | timezone field stored but never used                         | P3       | 2     |
-| K7  | metrics.ts has no TTL eviction for stale path entries        | P3       | 9     |
+| ID  | Bug                                                                    | Priority | Story |
+| --- | ---------------------------------------------------------------------- | -------- | ----- |
+| A1  | Group booking cancel doesn't release invitee holds                     | P0       | 1     |
+| A2  | Group booking tutorDecline doesn't release invitee holds               | P0       | 1     |
+| A3  | expireBookings doesn't release invitee holds                           | P0       | 1     |
+| A4  | withdraw→cancel doesn't release other participants' holds              | P0       | 1     |
+| A5  | confirmedHeadcount not decremented on withdraw                         | P0       | 1     |
+| A6  | holdAmount not zeroed on cancel/decline/expire                         | P0       | 1     |
+| A7  | Series cancel doesn't cascade to bookingSession rows                   | P0       | 1     |
+| B1  | RESCHEDULE_PROPOSED has no expiry — booking stuck forever              | P0       | 2     |
+| B2  | AWAITING_ADMIN_ROOM_APPROVAL/SCHEDULED not in expiry cron              | P0       | 2     |
+| C1  | booking.get() IDOR — no ownership check                                | P0       | 3     |
+| C2  | booking.listSessions() IDOR — no ownership check                       | P0       | 3     |
+| C3  | Tutor actions lack tutorProcedure role guard                           | P1       | 3     |
+| C4  | resendInvite doesn't invalidate old token                              | P1       | 3     |
+| C5  | OpenAPI spec exposed without auth                                      | P1       | 3     |
+| C6  | No password policy                                                     | P1       | 4     |
+| D1  | Wallet ledger insert not atomic with balance update                    | P0       | 5     |
+| D2  | 8 read-then-write race conditions without optimistic lock              | P1       | 5     |
+| D3  | Payment webhook out-of-order delivery — user not credited              | P0       | 5     |
+| D4  | Booking creation has no idempotency key                                | P1       | 7     |
+| E1  | notification.write() swallows all errors silently                      | P1       | 6     |
+| E2  | Google Meet + Resend calls have no timeout                             | P1       | 6     |
+| E3  | No statement_timeout on DB pool                                        | P1       | 6     |
+| E4  | No uncaughtException handler                                           | P1       | 6     |
+| E5  | Webhook timestamp validation disabled outside production               | P1       | 6     |
+| F1  | Unbounded string inputs (no .max()) — DoS vector                       | P2       | 4     |
+| F2  | Unbounded array inputs (no .max())                                     | P2       | 4     |
+| F3  | Dates not validated to be in the future                                | P2       | 4     |
+| G1  | No session expiry configured                                           | P1       | 4     |
+| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1       | 4     |
+| G3  | Google OAuth credentials fall back to empty string                     | P2       | 4     |
+| G4  | No CSRF token (sameSite=none in production)                            | P0       | 4     |
+| H1  | CSP incomplete — production-breaking (no connect-src)                  | P0       | 8     |
+| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk                 | P1       | 8     |
+| I2  | Missing composite index for overlap check query                        | P2       | 8     |
+| I3  | Dev DB logging may expose sensitive params                             | P2       | 8     |
+| J1  | No React error boundary — blank page on crash                          | P1       | 9     |
+| J2  | No auth session expiry handling on frontend                            | P1       | 9     |
+| J3  | 4 dead frontend components                                             | P2       | 9     |
+| J4  | `any` type casts in route files                                        | P2       | 9     |
+| K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     |
+| K2  | No body size limit on webhook endpoints                                | P2       | 6     |
+| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     |
+| K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states              | P3       | 2     |
+| K5  | repricedMarks column is dead — never set or read                       | P3       | 2     |
+| K6  | timezone field stored but never used                                   | P3       | 2     |
+| K7  | metrics.ts has no TTL eviction for stale path entries                  | P3       | 9     |
 
 ## Common Commands
 
