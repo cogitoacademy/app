@@ -347,7 +347,9 @@ describe("WalletService", () => {
     test("re-fetches when upsert returns null (conflict case)", async () => {
       const afterConflict = makeWallet();
       const repo = makeRepo({
-        getByUserId: mock(async () => null).mockImplementationOnce(async () => null).mockImplementationOnce(async () => afterConflict),
+        getByUserId: mock(async () => null)
+          .mockImplementationOnce(async () => null)
+          .mockImplementationOnce(async () => afterConflict),
         upsert: mock(async () => null),
       });
       const service = createWalletService(repo as any, makeDb());
@@ -364,7 +366,9 @@ describe("WalletService", () => {
       });
       const service = createWalletService(repo as any, makeDb());
 
-      await expect(service.getOrCreate("user1")).rejects.toThrow(WalletNotFoundError);
+      await expect(service.getOrCreate("user1")).rejects.toThrow(
+        WalletNotFoundError,
+      );
     });
   });
 

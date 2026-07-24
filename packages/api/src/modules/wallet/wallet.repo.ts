@@ -212,7 +212,12 @@ export async function insertLedger(
 export async function findLedgerEntries(
   conn: DbOrTx,
   walletId: string,
-  opts: { limit: number; cursor?: string; bookingId?: string; eventKey?: string },
+  opts: {
+    limit: number;
+    cursor?: string;
+    bookingId?: string;
+    eventKey?: string;
+  },
 ) {
   return conn
     .select()
@@ -228,7 +233,12 @@ export async function listActivePackages(conn: DbOrTx) {
 
 export async function upsert(
   db: DbType,
-  values: { userId: string; totalBalance: number; heldBalance: number; availableBalance: number },
+  values: {
+    userId: string;
+    totalBalance: number;
+    heldBalance: number;
+    availableBalance: number;
+  },
 ): Promise<WalletSnapshot | null> {
   const [created] = await db
     .insert(wallet)
