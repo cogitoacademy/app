@@ -128,7 +128,18 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
   }
 
   async function getOrCreate(userId: string): Promise<WalletSnapshot> {
-    return repo.getOrCreate(userId);
+    const existing = await repo.getByUserId(db, userId);
+    if (existing) return existing;
+    const created = await repo.upsert(db, {
+      userId,
+      totalBalance: 0,
+      heldBalance: 0,
+      availableBalance: 0,
+    });
+    if (created) return created;
+    const afterConflict = await repo.getByUserId(db, userId);
+    if (!afterConflict) throw new WalletNotFoundError(userId);
+    return afterConflict;
   }
 
   async function hold(
@@ -285,7 +296,16 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
   }
 
   async function listLedger(walletId: string, opts?: LedgerQueryOptions) {
-    return repo.listLedger(db, walletId, opts);
+    const limit = Math.min(opts?.limit ?? 20, 100);
+    const rows = await repo.findLedgerEntries(db, walletId, {
+      limit,
+      cursor: opts?.cursor,
+      bookingId: opts?.bookingId,
+      eventKey: opts?.eventKey,
+    });
+    const items = rows.slice(0, limit);
+    const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+    return { items, nextCursor };
   }
 
   async function knowledgeBankEligible(userId: string) {

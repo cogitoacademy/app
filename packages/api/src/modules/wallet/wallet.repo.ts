@@ -209,68 +209,40 @@ export async function insertLedger(
   });
 }
 
-export async function listLedger(
+export async function findLedgerEntries(
   conn: DbOrTx,
   walletId: string,
-  opts?: {
-    cursor?: string;
-    limit?: number;
-    bookingId?: string;
-    eventKey?: string;
-  },
+  opts: { limit: number; cursor?: string; bookingId?: string; eventKey?: string },
 ) {
-  const limit = Math.min(opts?.limit ?? 20, 100);
-  const rows = await conn
+  return conn
     .select()
     .from(ledgerEntry)
     .where(eq(ledgerEntry.walletId, walletId))
     .orderBy(desc(ledgerEntry.createdAt))
-    .limit(limit + 1);
-  const items = rows.slice(0, limit);
-  const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
-  return { items, nextCursor };
+    .limit(opts.limit + 1);
 }
 
 export async function listActivePackages(conn: DbOrTx) {
   return conn.select().from(markPackage).where(eq(markPackage.isActive, true));
 }
 
-export function createWalletRepo(db: DbType) {
-  async function getOrCreate(userId: string): Promise<WalletSnapshot> {
-    const existing = await db
-      .select()
-      .from(wallet)
-      .where(eq(wallet.userId, userId))
-      .limit(1);
-    if (existing[0]) return existing[0] as WalletSnapshot;
+export async function upsert(
+  db: DbType,
+  values: { userId: string; totalBalance: number; heldBalance: number; availableBalance: number },
+): Promise<WalletSnapshot | null> {
+  const [created] = await db
+    .insert(wallet)
+    .values(values)
+    .onConflictDoNothing()
+    .returning();
+  return created ? (created as WalletSnapshot) : null;
+}
 
-    const [created] = await db
-      .insert(wallet)
-      .values({
-        userId,
-        totalBalance: 0,
-        heldBalance: 0,
-        availableBalance: 0,
-      })
-      .onConflictDoNothing()
-      .returning();
-
-    if (!created) {
-      const [existingAfter] = await db
-        .select()
-        .from(wallet)
-        .where(eq(wallet.userId, userId))
-        .limit(1);
-      return existingAfter as WalletSnapshot;
-    }
-
-    return created as WalletSnapshot;
-  }
-
+export function createWalletRepo() {
   return {
     getById,
     getByUserId,
-    getOrCreate,
+    upsert,
     insert,
     updateBalances,
     atomicHold,
@@ -280,7 +252,7 @@ export function createWalletRepo(db: DbType) {
     atomicCompensateCredit,
     atomicCompensateDeduct,
     insertLedger,
-    listLedger,
+    findLedgerEntries,
     listActivePackages,
   };
 }

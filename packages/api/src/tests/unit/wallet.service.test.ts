@@ -21,7 +21,7 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
   return {
     getById: mock(async () => wallet),
     getByUserId: mock(async () => wallet),
-    getOrCreate: mock(async () => wallet),
+    upsert: mock(async () => wallet),
     atomicHold: mock(async () => ({
       success: true as const,
       wallet: {
@@ -52,7 +52,7 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
       totalBalance: wallet.totalBalance - 10,
     })),
     insertLedger: mock(async () => {}),
-    listLedger: mock(async () => ({ items: [], nextCursor: null })),
+    findLedgerEntries: mock(async () => []),
     listActivePackages: mock(async () => []),
     ...overrides,
   };
@@ -315,25 +315,128 @@ describe("WalletService", () => {
   });
 
   describe("getOrCreate", () => {
-    test("delegates to repo", async () => {
-      const wallet = makeWallet();
-      const repo = makeRepo({ getOrCreate: mock(async () => wallet) });
+    test("returns existing wallet when found", async () => {
+      const existing = makeWallet();
+      const repo = makeRepo({ getByUserId: mock(async () => existing) });
       const service = createWalletService(repo as any, makeDb());
 
       const result = await service.getOrCreate("user1");
-      expect(result).toEqual(wallet);
-      expect(repo.getOrCreate).toHaveBeenCalledWith("user1");
+      expect(result).toEqual(existing);
+      expect(repo.getByUserId).toHaveBeenCalledWith(makeDb(), "user1");
+      expect(repo.upsert).not.toHaveBeenCalled();
+    });
+
+    test("creates new wallet via upsert when not found", async () => {
+      const created = makeWallet();
+      const repo = makeRepo({
+        getByUserId: mock(async () => null),
+        upsert: mock(async () => created),
+      });
+      const service = createWalletService(repo as any, makeDb());
+
+      const result = await service.getOrCreate("user1");
+      expect(result).toEqual(created);
+      expect(repo.upsert).toHaveBeenCalledWith(makeDb(), {
+        userId: "user1",
+        totalBalance: 0,
+        heldBalance: 0,
+        availableBalance: 0,
+      });
+    });
+
+    test("re-fetches when upsert returns null (conflict case)", async () => {
+      const afterConflict = makeWallet();
+      const repo = makeRepo({
+        getByUserId: mock(async () => null).mockImplementationOnce(async () => null).mockImplementationOnce(async () => afterConflict),
+        upsert: mock(async () => null),
+      });
+      const service = createWalletService(repo as any, makeDb());
+
+      const result = await service.getOrCreate("user1");
+      expect(result).toEqual(afterConflict);
+      expect(repo.getByUserId).toHaveBeenCalledTimes(2);
+    });
+
+    test("throws WalletNotFoundError when upsert returns null and re-fetch fails", async () => {
+      const repo = makeRepo({
+        getByUserId: mock(async () => null),
+        upsert: mock(async () => null),
+      });
+      const service = createWalletService(repo as any, makeDb());
+
+      await expect(service.getOrCreate("user1")).rejects.toThrow(WalletNotFoundError);
     });
   });
 
   describe("listLedger", () => {
-    test("delegates to repo with db instance", async () => {
+    test("computes pagination from findLedgerEntries results", async () => {
+      const rows = Array.from({ length: 21 }, (_, i) => ({
+        id: `l${i}`,
+        walletId: "w1",
+      }));
       const db = makeDb();
-      const repo = makeRepo();
+      const repo = makeRepo({
+        findLedgerEntries: mock(async () => rows),
+      });
       const service = createWalletService(repo as any, db);
 
-      await service.listLedger("wallet1");
-      expect(repo.listLedger).toHaveBeenCalledWith(db, "wallet1", undefined);
+      const result = await service.listLedger("w1", { limit: 20 });
+      expect(result.items).toHaveLength(20);
+      expect(result.nextCursor).toBe("l19");
+      expect(repo.findLedgerEntries).toHaveBeenCalledWith(db, "w1", {
+        limit: 20,
+        cursor: undefined,
+        bookingId: undefined,
+        eventKey: undefined,
+      });
+    });
+
+    test("returns null nextCursor when no more rows", async () => {
+      const rows = Array.from({ length: 5 }, (_, i) => ({
+        id: `l${i}`,
+        walletId: "w1",
+      }));
+      const db = makeDb();
+      const repo = makeRepo({
+        findLedgerEntries: mock(async () => rows),
+      });
+      const service = createWalletService(repo as any, db);
+
+      const result = await service.listLedger("w1", { limit: 20 });
+      expect(result.items).toHaveLength(5);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    test("uses default limit of 20", async () => {
+      const db = makeDb();
+      const repo = makeRepo({
+        findLedgerEntries: mock(async () => []),
+      });
+      const service = createWalletService(repo as any, db);
+
+      await service.listLedger("w1");
+      expect(repo.findLedgerEntries).toHaveBeenCalledWith(db, "w1", {
+        limit: 20,
+        cursor: undefined,
+        bookingId: undefined,
+        eventKey: undefined,
+      });
+    });
+
+    test("caps limit at 100", async () => {
+      const db = makeDb();
+      const repo = makeRepo({
+        findLedgerEntries: mock(async () => []),
+      });
+      const service = createWalletService(repo as any, db);
+
+      await service.listLedger("w1", { limit: 200 });
+      expect(repo.findLedgerEntries).toHaveBeenCalledWith(db, "w1", {
+        limit: 100,
+        cursor: undefined,
+        bookingId: undefined,
+        eventKey: undefined,
+      });
     });
   });
 

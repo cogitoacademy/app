@@ -132,7 +132,7 @@ describe("PaymentService", () => {
     failureRedirectUrl: "http://localhost:3000/balance?status=failed",
   });
 
-  const xenditWallet = createWalletService(createWalletRepo(db), db);
+  const xenditWallet = createWalletService(createWalletRepo(), db);
   const xenditPayment = createPaymentService({
     db,
     wallet: xenditWallet,

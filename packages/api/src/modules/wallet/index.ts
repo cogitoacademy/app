@@ -10,7 +10,7 @@ import { env } from "@cogito-app/env/server";
 export type WalletModule = ReturnType<typeof createWalletModule>;
 
 export function createWalletModule(deps: { db: DbType }) {
-  const repo = createWalletRepo(deps.db);
+  const repo = createWalletRepo();
   const service = createWalletService(repo, deps.db);
   const handler = createWalletHandler({
     wallet: service,
