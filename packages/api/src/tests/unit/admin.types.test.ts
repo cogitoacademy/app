@@ -38,9 +38,16 @@ describe("Admin Types (Zod schemas)", () => {
     ).toBe(false);
   });
 
-  test("setRoleInput requires expectedRole", () => {
+  test("setRoleInput makes expectedRole optional", () => {
     expect(
       setRoleInput.safeParse({ userId: "u1", role: "student" }).success,
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      setRoleInput.safeParse({
+        userId: "u1",
+        role: "student",
+        expectedRole: "tutor",
+      }).success,
+    ).toBe(true);
   });
 });
