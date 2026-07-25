@@ -23,7 +23,7 @@ export interface ListUsersResult {
 export interface SetRoleInput {
   userId: string;
   role: UserRole;
-  expectedRole?: string;
+  expectedRole: string;
 }
 
 export interface TargetUser {
@@ -95,20 +95,15 @@ export function createAdminService(deps: {
     );
 
     return db.transaction(async (tx) => {
-      let row: UserRow;
-      if (input.expectedRole) {
-        const rows = await adminRepo.updateRoleWithExpected(
-          tx,
-          input.userId,
-          input.role,
-          input.expectedRole,
-        );
-        if (rows.length === 0)
-          throw new OptimisticLockError(input.userId, input.expectedRole);
-        row = rows[0]!;
-      } else {
-        row = await adminRepo.updateRole(tx, input.userId, input.role);
-      }
+      const rows = await adminRepo.updateRoleWithExpected(
+        tx,
+        input.userId,
+        input.role,
+        input.expectedRole,
+      );
+      if (rows.length === 0)
+        throw new OptimisticLockError(input.userId, input.expectedRole);
+      const row = rows[0]!;
 
       await auditPort.record({
         db: tx,

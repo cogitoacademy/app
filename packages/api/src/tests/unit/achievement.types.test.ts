@@ -32,12 +32,13 @@ describe("Achievement Types (Zod schemas)", () => {
     expect(result.success).toBe(true);
   });
 
-  test("updateAchievementInput makes version optional", () => {
-    const result = updateAchievementInput.safeParse({
-      id: "a1",
-      data: { eventName: "Updated" },
-    });
-    expect(result.success).toBe(true);
+  test("updateAchievementInput requires version", () => {
+    expect(
+      updateAchievementInput.safeParse({
+        id: "a1",
+        data: { eventName: "Updated" },
+      }).success,
+    ).toBe(false);
     const withVersion = updateAchievementInput.safeParse({
       id: "a1",
       version: 2,
@@ -46,11 +47,11 @@ describe("Achievement Types (Zod schemas)", () => {
     expect(withVersion.success).toBe(true);
   });
 
-  test("deleteAchievementInput requires id and makes version optional", () => {
+  test("deleteAchievementInput requires id and version", () => {
     expect(
       deleteAchievementInput.safeParse({ id: "a1", version: 1 }).success,
     ).toBe(true);
-    expect(deleteAchievementInput.safeParse({ id: "a1" }).success).toBe(true);
+    expect(deleteAchievementInput.safeParse({ id: "a1" }).success).toBe(false);
     expect(deleteAchievementInput.safeParse({}).success).toBe(false);
   });
 

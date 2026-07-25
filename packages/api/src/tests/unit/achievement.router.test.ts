@@ -74,11 +74,13 @@ describe("achievementRouter", () => {
       expect(result.success).toBe(true);
     });
 
-    test("deleteAchievementInput requires id and makes version optional", () => {
+    test("deleteAchievementInput requires id and version", () => {
       expect(
         deleteAchievementInput.safeParse({ id: "a1", version: 1 }).success,
       ).toBe(true);
-      expect(deleteAchievementInput.safeParse({ id: "a1" }).success).toBe(true);
+      expect(deleteAchievementInput.safeParse({ id: "a1" }).success).toBe(
+        false,
+      );
       expect(deleteAchievementInput.safeParse({}).success).toBe(false);
     });
 

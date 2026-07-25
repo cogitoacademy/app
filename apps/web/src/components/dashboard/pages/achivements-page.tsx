@@ -22,6 +22,10 @@ export function AchivementsPage() {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editAchievement, setEditAchievement] = useState<
+    (typeof items)[number] | null
+  >(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const achievements = useQuery(orpc.achievement.list.queryOptions());
 
@@ -108,10 +112,40 @@ export function AchivementsPage() {
               onDelete={(id) =>
                 deleteMutation.mutate({ id, version: a.version })
               }
-              onEdit={() => {}}
+              onEdit={(id) => {
+                const found = items.find((item) => item.id === id);
+                if (found) {
+                  setEditAchievement(found);
+                  setEditOpen(true);
+                }
+              }}
             />
           ))}
         </div>
+      )}
+
+      {editAchievement && (
+        <AchievementForm
+          mode="edit"
+          editId={editAchievement.id}
+          expectedVersion={editAchievement.version}
+          defaultValues={{
+            eventName: editAchievement.eventName,
+            category: editAchievement.category,
+            award: editAchievement.award,
+            level: editAchievement.level,
+            eventDate: editAchievement.eventDate ?? "",
+            location: editAchievement.location ?? "",
+            description: editAchievement.description ?? "",
+            subjects: editAchievement.subjects ?? [],
+            imageUrl: editAchievement.imageUrl ?? "",
+          }}
+          open={editOpen}
+          onOpenChange={(open) => {
+            setEditOpen(open);
+            if (!open) setEditAchievement(null);
+          }}
+        />
       )}
     </Stack>
   );

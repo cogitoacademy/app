@@ -50,6 +50,7 @@ describe("Admin setRole audit + last-admin guard", () => {
     const result = await adminClient.admin.setRole({
       userId: studentId,
       role: "tutor",
+      expectedRole: "student",
     });
 
     expect(result.role).toBe("tutor");
@@ -72,6 +73,7 @@ describe("Admin setRole audit + last-admin guard", () => {
       adminClient.admin.setRole({
         userId: adminId,
         role: "student",
+        expectedRole: "admin",
       }),
     ).rejects.toThrow();
   });

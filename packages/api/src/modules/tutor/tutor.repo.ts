@@ -3,7 +3,7 @@ import { tutorProfile, availabilitySlot } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
 export interface UpdateProfileInput {
-  version?: number;
+  version: number;
   displayName?: string;
   shortBio?: string;
   credentialsSummary?: string;

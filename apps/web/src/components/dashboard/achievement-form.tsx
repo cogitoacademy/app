@@ -141,9 +141,11 @@ export function AchievementForm({
     defaultValues: { ...DEFAULT_VALUES, ...defaultValues },
     onSubmit: async ({ value }) => {
       if (mode === "edit" && editId) {
+        if (expectedVersion === undefined)
+          throw new Error("expectedVersion is required in edit mode");
         updateMutation.mutate({
           id: editId,
-          version: expectedVersion ?? 1,
+          version: expectedVersion,
           data: {
             eventName: value.eventName,
             category: value.category,

@@ -14,13 +14,13 @@ export const achievementInput = z.object({
 
 export const updateAchievementInput = z.object({
   id: z.string().max(100),
-  version: z.number().int().optional(),
+  version: z.number().int(),
   data: achievementInput.partial(),
 });
 
 export const deleteAchievementInput = z.object({
   id: z.string().max(100),
-  version: z.number().int().optional(),
+  version: z.number().int(),
 });
 
 export const adminListInput = z
