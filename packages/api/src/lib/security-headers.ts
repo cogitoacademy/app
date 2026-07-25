@@ -1,3 +1,5 @@
+import { env } from "@cogito-app/env/server";
+
 const STATIC_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -18,18 +20,9 @@ export function buildCSP(corsOrigin: string): string {
   ].join("; ");
 }
 
-let cachedCsp: string | undefined;
-
 const SECURITY_HEADERS: Record<string, string> = {
   ...STATIC_HEADERS,
-  get "Content-Security-Policy"() {
-    if (!cachedCsp) {
-      const { env } =
-        require("@cogito-app/env/server") as typeof import("@cogito-app/env/server");
-      cachedCsp = buildCSP(env.CORS_ORIGIN);
-    }
-    return cachedCsp;
-  },
+  "Content-Security-Policy": buildCSP(env.CORS_ORIGIN),
 };
 
 export { SECURITY_HEADERS };

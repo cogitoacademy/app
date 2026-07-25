@@ -147,7 +147,7 @@ describe("insertRoomBooking", () => {
 
 describe("createRoomRepo", () => {
   test("returns object with all repo methods", () => {
-    const r = createRoomRepo({} as any);
+    const r = createRoomRepo();
 
     expect(r).toHaveProperty("findActiveRooms");
     expect(r).toHaveProperty("insertRoom");

@@ -9,8 +9,8 @@ let lastCleanup = 0;
 
 export function recordRequest(path: string, durationMs: number) {
   const now = Date.now();
-  lastAccess.set(path, now);
   if (requestCounts.has(path) || requestCounts.size < MAX_PATHS) {
+    lastAccess.set(path, now);
     requestCounts.set(path, (requestCounts.get(path) ?? 0) + 1);
     const durations = requestDurations.get(path) ?? [];
     durations.push(durationMs);
@@ -28,6 +28,9 @@ function maybeCleanup(now: number) {
       requestDurations.delete(path);
       lastAccess.delete(path);
     }
+  }
+  for (const path of lastAccess.keys()) {
+    if (!requestCounts.has(path)) lastAccess.delete(path);
   }
   lastCleanup = now;
 }

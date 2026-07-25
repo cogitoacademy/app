@@ -7,11 +7,11 @@ export type RoomService = ReturnType<typeof createRoomService>;
 
 export function createRoomService(repo: RoomRepo, db: DbType) {
   async function listActive() {
-    return repo.findActiveRooms();
+    return repo.findActiveRooms(db);
   }
 
   async function createRoom(input: CreateRoomInput) {
-    return repo.insertRoom(input);
+    return repo.insertRoom(db, input);
   }
 
   async function checkAvailability(
@@ -21,6 +21,7 @@ export function createRoomService(repo: RoomRepo, db: DbType) {
     excludeBookingId?: string,
   ) {
     const existing = await repo.findRoomBookings(
+      db,
       roomId,
       startAt,
       endAt,
@@ -35,11 +36,12 @@ export function createRoomService(repo: RoomRepo, db: DbType) {
     startAt: Date,
     endAt: Date,
   ) {
-    return db.transaction(async (_tx) => {
-      const roomRow = await repo.findRoomById(roomId);
+    return db.transaction(async (tx) => {
+      const roomRow = await repo.findRoomById(tx, roomId);
       if (!roomRow) throw new RoomNotFoundError(roomId);
 
       const conflicting = await repo.findRoomBookingsForUpdate(
+        tx,
         roomId,
         startAt,
         endAt,
@@ -52,7 +54,7 @@ export function createRoomService(repo: RoomRepo, db: DbType) {
           endAt.toISOString(),
         );
 
-      return repo.insertRoomBooking({
+      return repo.insertRoomBooking(tx, {
         roomId,
         bookingId,
         startAt,

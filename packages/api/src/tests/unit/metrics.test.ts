@@ -92,5 +92,36 @@ describe("Metrics", () => {
       const metrics = getMetrics();
       expect(metrics["/api/stale-metrics"]).toBeUndefined();
     });
+
+    test("does not add lastAccess entry for paths beyond MAX_PATHS", () => {
+      _resetForTest();
+      for (let i = 0; i < 201; i++) {
+        recordRequest(`/api/path-${i}`, i);
+      }
+      recordRequest("/api/extra", 1);
+      const metrics = getMetrics();
+      expect(metrics["/api/extra"]).toBeUndefined();
+    });
+
+    test("cleans up orphaned lastAccess entries", () => {
+      _resetForTest();
+      const realDateNow = Date.now;
+      let now = 1_000_000;
+      Date.now = () => now;
+
+      for (let i = 0; i < 5; i++) {
+        recordRequest(`/api/orphan-${i}`, i);
+      }
+      now = 1_000_000 + 11 * 60 * 1000;
+      recordRequest("/api/keep", 10);
+
+      const metrics = getMetrics();
+      expect(metrics["/api/keep"]).toBeDefined();
+      for (let i = 0; i < 5; i++) {
+        expect(metrics[`/api/orphan-${i}`]).toBeUndefined();
+      }
+
+      Date.now = realDateNow;
+    });
   });
 });

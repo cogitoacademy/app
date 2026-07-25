@@ -9,7 +9,7 @@ import type { RoomHandler } from "./room.handler";
 export type RoomModule = ReturnType<typeof createRoomModule>;
 
 export function createRoomModule(deps: { db: DbType }) {
-  const repo = createRoomRepo(deps.db);
+  const repo = createRoomRepo();
   const service = createRoomService(repo, deps.db);
   const handler = createRoomHandler(service);
   return { service, handler, repo };

@@ -15,12 +15,12 @@ function makeRoom(overrides: Record<string, unknown> = {}) {
 
 function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
   return {
-    findActiveRooms: mock(async () => []),
-    insertRoom: mock(async () => ({})),
-    findRoomById: mock(async () => null),
-    findRoomBookings: mock(async () => []),
-    findRoomBookingsForUpdate: mock(async () => []),
-    insertRoomBooking: mock(async () => ({})),
+    findActiveRooms: mock(async (_conn: any) => []),
+    insertRoom: mock(async (_conn: any, _values: any) => ({})),
+    findRoomById: mock(async (_conn: any, _roomId: string) => null),
+    findRoomBookings: mock(async (_conn: any) => []),
+    findRoomBookingsForUpdate: mock(async (_conn: any) => []),
+    insertRoomBooking: mock(async (_conn: any, _values: any) => ({})),
     ...overrides,
   } as RoomRepo;
 }
