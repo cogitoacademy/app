@@ -1222,6 +1222,43 @@ export function createBookingService(deps: {
     return { expired: succeeded, failed };
   }
 
+  async function releaseExpiredHolds(): Promise<{ released: number }> {
+    const candidates = await repo.findBookingsExpiringByDeadline(db, [
+      BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+      BOOKING_STATE.AWAITING_RECONFIRMATION,
+      BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+      BOOKING_STATE.RESCHEDULE_PROPOSED,
+      BOOKING_STATE.SCHEDULED,
+      BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+    ]);
+
+    let released = 0;
+    for (const b of candidates) {
+      if (b.holdAmount <= 0) continue;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await db.transaction(async (tx) => {
+          await releaseAllParticipantHolds(
+            tx,
+            b.id,
+            "Hold released: deadline passed",
+            ACTOR_TYPE.SYSTEM,
+          );
+          await repo.updateBookingHoldAmount(tx, b.id, 0);
+        });
+        released++;
+      } catch (error) {
+        log({
+          level: "error",
+          action: "release_hold_failed",
+          bookingId: b.id,
+          error: { message: String(error) },
+        });
+      }
+    }
+    return { released };
+  }
+
   return {
     getById,
     listMine,
@@ -1239,6 +1276,7 @@ export function createBookingService(deps: {
     proposeReschedule,
     listSessions,
     expireBookings,
+    releaseExpiredHolds,
     transition,
     canTransition,
   };
