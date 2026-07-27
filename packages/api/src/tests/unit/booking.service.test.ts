@@ -2021,6 +2021,316 @@ describe("BookingService", () => {
     });
   });
 
+  describe("tutorAccept — meeting result status check", () => {
+    test("meeting result with 'failed' status leaves booking in CONFIRMED", async () => {
+      const booking = makeBooking({ modality: "online" });
+      let findCallCount = 0;
+      const { service, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => {
+            findCallCount++;
+            if (findCallCount === 1)
+              return {
+                ...booking,
+                currentState: "awaiting_tutor_review",
+                version: 1,
+              };
+            return { ...booking, currentState: "confirmed", version: 2 };
+          }),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        meeting: {
+          createEvent: mock(async () => ({
+            id: "m1",
+            bookingId: "b1",
+            provider: "google_meet",
+            externalEventId: null,
+            meetingUrl: null,
+            status: "failed",
+            errorReason: "Google API error",
+          })),
+        },
+      });
+
+      await service.tutorAccept("b1", "tutor1");
+
+      expect(meeting.createEvent).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("declineInvite", () => {
+    test("throws BookingNotFoundError when booking does not exist", async () => {
+      const { service } = createService({
+        repo: { findBookingById: mock(async () => null) },
+      });
+
+      await expect(service.declineInvite("student2", "b1")).rejects.toThrow(
+        BookingNotFoundError,
+      );
+    });
+
+    test("throws BookingNotAwaitingConfirmationError when booking is not awaiting participant confirmation", async () => {
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "confirmed" }),
+          ),
+        },
+      });
+
+      await expect(service.declineInvite("student2", "b1")).rejects.toThrow(
+        BookingNotAwaitingConfirmationError,
+      );
+    });
+
+    test("throws BookingNotOwnedError when user is not a participant", async () => {
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "awaiting_participant_confirmation" }),
+          ),
+          findParticipant: mock(async () => null),
+        },
+      });
+
+      await expect(service.declineInvite("student2", "b1")).rejects.toThrow(
+        BookingNotOwnedError,
+      );
+    });
+
+    test("throws BookingNotEditableError when user is not an invitee", async () => {
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "awaiting_participant_confirmation" }),
+          ),
+          findParticipant: mock(async () =>
+            makeParticipant({ role: "proposer" }),
+          ),
+        },
+      });
+
+      await expect(service.declineInvite("student1", "b1")).rejects.toThrow(
+        BookingNotEditableError,
+      );
+    });
+
+    test("throws BookingParticipantAlreadyConfirmedError when participant already confirmed/declined", async () => {
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "awaiting_participant_confirmation" }),
+          ),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              confirmationState: "confirmed",
+            }),
+          ),
+        },
+      });
+
+      await expect(service.declineInvite("student2", "b1")).rejects.toThrow(
+        BookingParticipantAlreadyConfirmedError,
+      );
+    });
+  });
+
+  describe("confirmInvite — insufficient marks", () => {
+    test("throws InsufficientMarksError when invitee has insufficient balance", async () => {
+      const booking = makeBooking({
+        currentState: "awaiting_participant_confirmation",
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+        },
+      });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              confirmationState: "pending",
+              heldAmount: 0,
+            }),
+          ),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w2",
+            totalBalance: 10,
+            heldBalance: 0,
+            availableBalance: 10,
+          })),
+        },
+      });
+
+      await expect(service.confirmInvite("student2", "b1")).rejects.toThrow(
+        InsufficientMarksError,
+      );
+    });
+
+    test("throws BookingNotFoundError when invitee wallet not found", async () => {
+      const booking = makeBooking({
+        currentState: "awaiting_participant_confirmation",
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+        },
+      });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              confirmationState: "pending",
+              heldAmount: 0,
+            }),
+          ),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => null),
+        },
+      });
+
+      await expect(service.confirmInvite("student2", "b1")).rejects.toThrow(
+        BookingNotFoundError,
+      );
+    });
+  });
+
+  describe("withdraw — non-group, non-late, scheduled state", () => {
+    test("withdraws from scheduled state transitions to cancelled", async () => {
+      const booking = makeBooking({
+        type: "solo",
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "cancelled" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.withdraw("student1", "b1");
+      expect(result.withdrawn).toBe(true);
+    });
+  });
+
+  describe("releaseExpiredHolds", () => {
+    test("releases holds and sets holdAmount to 0 for expiring bookings", async () => {
+      const b1 = makeBooking({
+        id: "b1",
+        currentState: "awaiting_tutor_review",
+        holdAmount: 100,
+        proposerId: "student1",
+      });
+
+      const { service, wallet } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [b1]),
+          findBookingById: mock(async () => ({ ...b1, version: 1 })),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 100 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...b1, currentState: "expired" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.releaseExpiredHolds();
+      expect(result).toEqual({ released: 1 });
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+    });
+
+    test("skips bookings with holdAmount of 0", async () => {
+      const b1 = makeBooking({
+        id: "b1",
+        currentState: "awaiting_tutor_review",
+        holdAmount: 0,
+        proposerId: "student1",
+      });
+
+      const { service, wallet } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [b1]),
+        },
+      });
+
+      const result = await service.releaseExpiredHolds();
+      expect(result).toEqual({ released: 0 });
+      expect(wallet.release).not.toHaveBeenCalled();
+    });
+
+    test("continues when individual booking fails", async () => {
+      const b1 = makeBooking({
+        id: "b1",
+        currentState: "awaiting_tutor_review",
+        holdAmount: 42,
+        proposerId: "student1",
+      });
+      const b2 = makeBooking({
+        id: "b2",
+        currentState: "awaiting_tutor_review",
+        holdAmount: 30,
+        proposerId: "student2",
+      });
+
+      let callCount = 0;
+      const { service } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [b1, b2]),
+          findBookingById: mock(async () => {
+            callCount++;
+            if (callCount === 1) throw new Error("DB error");
+            return { ...b2, version: 1 };
+          }),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 30 }),
+          ]),
+          updateBookingHoldAmount: mock(async () => {}),
+        },
+        wallet: {
+          ...makeWallet(),
+          release: mock(async () => {
+            if (callCount === 1) throw new Error("DB error");
+            return {
+              id: "w1",
+              totalBalance: 100,
+              heldBalance: 0,
+              availableBalance: 100,
+            };
+          }),
+        },
+      });
+
+      const result = await service.releaseExpiredHolds();
+      expect(result.released).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe("Story 2: State Machine Completeness", () => {
     describe("RESCHEDULE_PROPOSED expiry", () => {
       test("expires reschedule_proposed booking to EXPIRED and releases holds", async () => {

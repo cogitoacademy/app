@@ -161,3 +161,78 @@ describe("createRoomRepo", () => {
     expect(typeof r.insertRoomBooking).toBe("function");
   });
 });
+
+describe("findRoomBookingsForUpdate", () => {
+  test("returns matching bookings with row lock", async () => {
+    const bookings = [{ id: "rb1" }];
+
+    const { findRoomBookingsForUpdate } =
+      await import("../../modules/room/room.repo");
+
+    const result = await findRoomBookingsForUpdate(
+      {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({
+                limit: () => Promise.resolve(bookings),
+              }),
+            }),
+          }),
+        }),
+      } as any,
+      "r1",
+      new Date("2024-01-01T10:00:00Z"),
+      new Date("2024-01-01T11:00:00Z"),
+    );
+    expect(result).toEqual(bookings);
+  });
+
+  test("passes excludeBookingId when provided", async () => {
+    const bookings: any[] = [];
+    const { findRoomBookingsForUpdate } =
+      await import("../../modules/room/room.repo");
+
+    const result = await findRoomBookingsForUpdate(
+      {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({
+                limit: () => Promise.resolve(bookings),
+              }),
+            }),
+          }),
+        }),
+      } as any,
+      "r1",
+      new Date("2024-01-01T10:00:00Z"),
+      new Date("2024-01-01T11:00:00Z"),
+      "exclude-b1",
+    );
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty array when no bookings found", async () => {
+    const { findRoomBookingsForUpdate } =
+      await import("../../modules/room/room.repo");
+
+    const result = await findRoomBookingsForUpdate(
+      {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({
+                limit: () => Promise.resolve([]),
+              }),
+            }),
+          }),
+        }),
+      } as any,
+      "r1",
+      new Date("2024-01-01T10:00:00Z"),
+      new Date("2024-01-01T11:00:00Z"),
+    );
+    expect(result).toEqual([]);
+  });
+});

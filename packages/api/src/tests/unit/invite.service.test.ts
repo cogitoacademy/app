@@ -34,13 +34,15 @@ function makeInvite(overrides: Partial<InviteRow> = {}): InviteRow {
 function makeService(
   invite: InviteRow | undefined,
   existingProfile: TutorProfileRow | undefined,
+  overrides: Partial<InviteRepo> = {},
 ) {
   const inviteRepo: Partial<InviteRepo> = {
     findInviteByToken: async () => invite,
     findTutorProfileByUserId: async () => existingProfile,
-    updateInviteStatus: async () => [null],
+    updateInviteStatus: async () => [makeInvite({ status: "accepted" })],
     insertTutorProfile: async () => ({ id: "tp1" }) as any,
     updateUserRole: async () => {},
+    ...overrides,
   };
   const auditPort = { record: async () => {} };
   const db = {
@@ -54,7 +56,21 @@ function makeService(
 }
 
 describe("Invite Service", () => {
-  describe("validateClaim (via claim)", () => {
+  describe("verify", () => {
+    test("throws InviteNotFoundError for null invite", async () => {
+      const service = makeService(undefined, undefined);
+      await expect(service.verify("tok1")).rejects.toThrow(InviteNotFoundError);
+    });
+
+    test("returns invite details for valid token", async () => {
+      const service = makeService(makeInvite(), undefined);
+      const result = await service.verify("tok1");
+      expect(result.email).toBe("tutor@example.com");
+      expect(result.inviteId).toBe("inv1");
+    });
+  });
+
+  describe("claim", () => {
     test("throws InviteNotFoundError for null invite", async () => {
       const service = makeService(undefined, undefined);
       await expect(
@@ -81,6 +97,22 @@ describe("Invite Service", () => {
       await expect(
         service.claim("u1", "tutor@example.com", "tok1"),
       ).rejects.toThrow(ProfileAlreadyExistsError);
+    });
+
+    test("throws InviteNotFoundError when updateInviteStatus returns empty", async () => {
+      const service = makeService(makeInvite(), undefined, {
+        updateInviteStatus: async () => [],
+      } as any);
+      await expect(
+        service.claim("u1", "tutor@example.com", "tok1"),
+      ).rejects.toThrow(InviteNotFoundError);
+    });
+
+    test("successfully claims invite", async () => {
+      const service = makeService(makeInvite(), undefined);
+      const result = await service.claim("u1", "tutor@example.com", "tok1");
+      expect(result.invite.id).toBe("inv1");
+      expect(result.profile).toEqual({ id: "tp1" });
     });
   });
 });

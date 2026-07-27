@@ -5,6 +5,7 @@ import {
   getById,
   countAdmins,
   updateRole,
+  updateRoleWithExpected,
   createAdminRepo,
 } from "../../modules/admin/admin.repo";
 
@@ -143,5 +144,34 @@ describe("createAdminRepo", () => {
     expect(repo).toHaveProperty("countAdmins");
     expect(repo).toHaveProperty("updateRole");
     expect(repo).toHaveProperty("updateRoleWithExpected");
+  });
+});
+
+describe("updateRoleWithExpected", () => {
+  test("updates role with expected role condition", async () => {
+    const updated = [{ id: "u1", role: "admin" }];
+    const returning = mock(async () => updated);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const conn: any = { update };
+
+    const result = await updateRoleWithExpected(conn, "u1", "admin", "student");
+
+    expect(result).toEqual(updated);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith({ role: "admin" });
+  });
+
+  test("returns empty array when expected role does not match", async () => {
+    const returning = mock(async () => []);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const conn: any = { update };
+
+    const result = await updateRoleWithExpected(conn, "u1", "admin", "tutor");
+
+    expect(result).toEqual([]);
   });
 });

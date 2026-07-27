@@ -184,5 +184,76 @@ describe("RefundService", () => {
       const result = await service.listCorrections({ walletId: "w1" });
       expect(result.items.length).toBe(2);
     });
+
+    test("applies default limit and slices correctly", async () => {
+      const items = Array.from({ length: 25 }, (_, i) => ({
+        entryType: "compensate_credit",
+        id: String(i),
+      }));
+      const wallet = {
+        ...makeWalletPort(),
+        listLedger: mock(async () => ({
+          items,
+          nextCursor: "cursor1",
+        })),
+      };
+      const service = createRefundService({
+        db: makeDb(),
+        repo: makeRepo(),
+        wallet: wallet as any,
+        auditPort: makeAuditPort() as any,
+      });
+
+      const result = await service.listCorrections({ walletId: "w1" });
+      expect(result.items.length).toBeLessThanOrEqual(20);
+    });
+
+    test("passes cursor to listLedger", async () => {
+      const wallet = {
+        ...makeWalletPort(),
+        listLedger: mock(async () => ({
+          items: [],
+          nextCursor: null,
+        })),
+      };
+      const service = createRefundService({
+        db: makeDb(),
+        repo: makeRepo(),
+        wallet: wallet as any,
+        auditPort: makeAuditPort() as any,
+      });
+
+      await service.listCorrections({ walletId: "w1", cursor: "abc" });
+      expect(wallet.listLedger).toHaveBeenCalledWith(
+        "w1",
+        expect.objectContaining({ cursor: "abc" }),
+      );
+    });
+  });
+
+  describe("createRefundRecord", () => {
+    test("delegates to repo.insertRefundRecord", async () => {
+      const repo = makeRepo();
+      const service = createRefundService({
+        db: makeDb(),
+        repo,
+        wallet: makeWalletPort() as any,
+        auditPort: makeAuditPort() as any,
+      });
+
+      await service.createRefundRecord({} as any, {
+        paymentId: "pay1",
+        walletId: "w1",
+        amountIdr: 50000,
+        marks: 100,
+        reason: "refund",
+        actorId: "admin1",
+      });
+
+      expect(repo.insertRefundRecord).toHaveBeenCalledTimes(1);
+      const call = repo.insertRefundRecord.mock.calls[0];
+      expect(call[1].paymentId).toBe("pay1");
+      expect(call[1].walletId).toBe("w1");
+    });
   });
 });

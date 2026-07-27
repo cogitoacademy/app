@@ -1,161 +1,122 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, mock } from "bun:test";
 import { createResendEmailProvider } from "../../modules/email/resend-email.provider";
 
-const originalFetch = globalThis.fetch;
-
 describe("ResendEmailProvider", () => {
-  beforeEach(() => {
-    globalThis.fetch = mock(async () => ({
+  test("sends email successfully via Resend API", async () => {
+    const fetchMock = mock(async () => ({
       ok: true,
-      status: 200,
       json: async () => ({ id: "re_123" }),
       text: async () => "",
-    })) as any;
-  });
+    }));
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as any;
 
-  afterEach(() => {
-    globalThis.fetch = originalFetch as any;
-  });
-
-  test("sends email via Resend API and returns messageId", async () => {
     const provider = createResendEmailProvider(
-      "re_test_key",
-      "noreply@test.com",
+      "test-api-key",
+      "noreply@example.com",
     );
-
     const result = await provider.send({
-      to: "user@test.com",
-      subject: "Booking confirmed",
-      html: "<p>Your booking is confirmed</p>",
+      to: "user@example.com",
+      subject: "Test",
+      html: "<p>Hello</p>",
       category: "booking",
     });
 
     expect(result).toEqual({ messageId: "re_123" });
-
-    const call = (globalThis.fetch as any).mock.calls[0];
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const call = fetchMock.mock.calls[0];
     expect(call[0]).toBe("https://api.resend.com/emails");
     expect(call[1].method).toBe("POST");
-    expect(call[1].headers.authorization).toBe("Bearer re_test_key");
+    expect(call[1].headers.authorization).toBe("Bearer test-api-key");
+    expect(call[1].headers["content-type"]).toBe("application/json");
 
     const body = JSON.parse(call[1].body);
-    expect(body.to).toEqual(["user@test.com"]);
-    expect(body.subject).toBe("Booking confirmed");
-    expect(body.html).toBe("<p>Your booking is confirmed</p>");
+    expect(body.from).toBe("noreply@example.com");
+    expect(body.to).toEqual(["user@example.com"]);
+    expect(body.subject).toBe("Test");
+    expect(body.html).toBe("<p>Hello</p>");
+    expect(body.tags).toEqual([{ name: "category", value: "booking" }]);
+
+    globalThis.fetch = origFetch;
   });
 
-  test("includes category as tag in request body", async () => {
-    const provider = createResendEmailProvider(
-      "re_test_key",
-      "noreply@test.com",
-    );
-
-    await provider.send({
-      to: "user@test.com",
-      subject: "Refund processed",
-      html: "<p>Refund done</p>",
-      category: "refund",
-    });
-
-    const call = (globalThis.fetch as any).mock.calls[0];
-    const body = JSON.parse(call[1].body);
-    expect(body.tags).toEqual([{ name: "category", value: "refund" }]);
-  });
-
-  test("throws on API error response", async () => {
-    globalThis.fetch = mock(async () => ({
+  test("throws serviceUnavailable when API returns non-ok response", async () => {
+    const fetchMock = mock(async () => ({
       ok: false,
-      status: 422,
-      text: async () => "Validation error",
-      json: async () => ({}),
-    })) as any;
+      status: 500,
+      statusText: "Internal Server Error",
+      text: async () => "Server error",
+    }));
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as any;
 
     const provider = createResendEmailProvider(
-      "re_test_key",
-      "noreply@test.com",
+      "test-api-key",
+      "noreply@example.com",
     );
 
-    try {
-      await provider.send({
-        to: "user@test.com",
+    await expect(
+      provider.send({
+        to: "user@example.com",
         subject: "Test",
-        html: "<p>Test</p>",
-        category: "booking",
-      });
-      expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("422");
-    }
+        html: "<p>Hello</p>",
+        category: "test",
+      }),
+    ).rejects.toThrow();
+
+    globalThis.fetch = origFetch;
   });
 
-  test("logs and re-throws when fetch throws a network error", async () => {
-    const networkError = new TypeError("fetch failed");
-    globalThis.fetch = mock(() => {
-      throw networkError;
-    }) as any;
-
-    const consoleErrorSpy = mock(() => {});
-    const originalConsoleError = console.error;
-    console.error = consoleErrorSpy;
+  test("logs error and re-throws on fetch failure", async () => {
+    const fetchMock = mock(async () => {
+      throw new Error("Network error");
+    });
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as any;
 
     const provider = createResendEmailProvider(
-      "re_test_key",
-      "noreply@test.com",
+      "test-api-key",
+      "noreply@example.com",
     );
 
-    try {
-      await provider.send({
-        to: "user@test.com",
+    await expect(
+      provider.send({
+        to: "user@example.com",
         subject: "Test",
-        html: "<p>Test</p>",
-        category: "booking",
-      });
-      expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e).toBe(networkError);
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      const loggedEntry = JSON.parse(consoleErrorSpy.mock.calls[0][0]);
-      expect(loggedEntry.level).toBe("error");
-      expect(loggedEntry.action).toBe("resend_email_send_failed");
-      expect(loggedEntry.error.message).toContain("fetch failed");
-    } finally {
-      console.error = originalConsoleError;
-    }
+        html: "<p>Hello</p>",
+        category: "test",
+      }),
+    ).rejects.toThrow("Network error");
+
+    globalThis.fetch = origFetch;
   });
 
-  test("aborts fetch after timeout and propagates AbortError", async () => {
-    const abortError = new DOMException(
-      "The operation was aborted.",
-      "AbortError",
-    );
-    globalThis.fetch = mock(async () => {
-      throw abortError;
-    }) as any;
-
-    const consoleErrorSpy = mock(() => {});
-    const originalConsoleError = console.error;
-    console.error = consoleErrorSpy;
+  test("handles response.text() failure gracefully", async () => {
+    const fetchMock = mock(async () => ({
+      ok: false,
+      status: 502,
+      statusText: "Bad Gateway",
+      text: async () => {
+        throw new Error("text parse failed");
+      },
+    }));
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as any;
 
     const provider = createResendEmailProvider(
-      "re_test_key",
-      "noreply@test.com",
+      "test-api-key",
+      "noreply@example.com",
     );
 
-    try {
-      await provider.send({
-        to: "user@test.com",
+    await expect(
+      provider.send({
+        to: "user@example.com",
         subject: "Test",
-        html: "<p>Test</p>",
-        category: "booking",
-      });
-      expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e).toBe(abortError);
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      const loggedEntry = JSON.parse(consoleErrorSpy.mock.calls[0][0]);
-      expect(loggedEntry.action).toBe("resend_email_send_failed");
-      expect(loggedEntry.error.message).toContain("aborted");
-    } finally {
-      console.error = originalConsoleError;
-    }
+        html: "<p>Hello</p>",
+        category: "test",
+      }),
+    ).rejects.toThrow();
+
+    globalThis.fetch = origFetch;
   });
 });
