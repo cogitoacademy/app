@@ -123,8 +123,7 @@ describe("createSchedulerService", () => {
 
     const warnLogs = logCaptures.filter(
       (l) =>
-        l.level === "warn" &&
-        l.entry?.action === "expire_bookings_complete",
+        l.level === "warn" && l.entry?.action === "expire_bookings_complete",
     );
     expect(warnLogs.length).toBe(1);
     expect(warnLogs[0].entry).toMatchObject({ expired: 3, failed: 2 });
