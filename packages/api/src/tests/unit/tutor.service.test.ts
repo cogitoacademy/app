@@ -1,7 +1,8 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, mock } from "bun:test";
 import {
   validateUpdateInput,
   validateSubmitForReview,
+  createTutorService,
 } from "../../modules/tutor/tutor.service";
 import type { PricingPort } from "../../modules/pricing/pricing.service";
 import {
@@ -177,6 +178,77 @@ describe("Tutor Service", () => {
       expect(() =>
         validateSubmitForReview(makeProfile(), failPricingPort),
       ).toThrow(InvalidTutorPricingError);
+    });
+  });
+
+  describe("createTutorService", () => {
+    function makeDeps(overrides: Record<string, unknown> = {}) {
+      const mockProfile = makeProfile();
+      return {
+        tutorRepo: {
+          getByUserId: mock(async () => mockProfile),
+          updateProfileWithVersion: mock(async () => [mockProfile]),
+          updateStatus: mock(async () => mockProfile),
+          listAvailability: mock(async () => []),
+          upsertAvailability: mock(async () => ({ id: "slot1" })),
+          deleteAvailability: mock(async () => {}),
+        },
+        pricingPort: mockPricingPort,
+        auditPort: { record: mock(async () => {}) },
+        db: {
+          transaction: mock(async (fn: any) => {
+            const tx = {};
+            return fn(tx);
+          }),
+        },
+        ...overrides,
+      };
+    }
+
+    test("getMyProfile throws TutorProfileNotFoundError when not found", async () => {
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => null),
+        },
+      });
+      const service = createTutorService(deps as any);
+      await expect(service.getMyProfile("u1")).rejects.toThrow(
+        TutorProfileNotFoundError,
+      );
+    });
+
+    test("getMyProfile returns profile when found", async () => {
+      const deps = makeDeps();
+      const service = createTutorService(deps as any);
+      const result = await service.getMyProfile("u1");
+      expect(result.id).toBe("tp1");
+    });
+
+    test("updateMyProfile throws OptimisticLockError on version mismatch", async () => {
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          updateProfileWithVersion: mock(async () => []),
+        },
+      });
+      const service = createTutorService(deps as any);
+      await expect(
+        service.updateMyProfile("u1", { displayName: "New", version: 5 }),
+      ).rejects.toThrow();
+    });
+
+    test("deleteAvailability throws TutorProfileNotFoundError when slot not found", async () => {
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listAvailability: mock(async () => []),
+        },
+      });
+      const service = createTutorService(deps as any);
+      await expect(
+        service.deleteAvailability("u1", "nonexistent"),
+      ).rejects.toThrow(TutorProfileNotFoundError);
     });
   });
 });
