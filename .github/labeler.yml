@@ -1,0 +1,20 @@
+server:
+  - apps/server/**/*
+  - packages/api/**/*
+  - packages/auth/**/*
+  - packages/db/**/*
+  - packages/env/**/*
+
+web:
+  - apps/web/**/*
+  - packages/ui/**/*
+
+infrastructure:
+  - infra/**/*
+  - .github/workflows/**/*
+  - apps/server/Dockerfile
+  - apps/web/Dockerfile
+
+docs:
+  - docs/**/*
+  - "*.md"
