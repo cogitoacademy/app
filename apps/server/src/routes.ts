@@ -17,7 +17,7 @@ import { Elysia } from "elysia";
 import { paymentsWebhook } from "./webhooks/payments";
 import { evlog } from "evlog/elysia";
 
-import { identifyUser } from "./middleware";
+import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
 import { enrichOpenAPISpec, openApiTags, scalarHtml } from "./openapi";
 import { generateRequestId } from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
@@ -124,10 +124,7 @@ export function createServer() {
         set.headers[header] = value;
       }
     })
-    .derive(async ({ request, log }) => {
-      await identifyUser(log, request.headers, new URL(request.url).pathname);
-      return {};
-    })
+
     .use(
       cors({
         origin: env.CORS_ORIGIN,
@@ -194,9 +191,15 @@ export function createServer() {
     .all(
       "/rpc*",
       async (context) => {
+        const ctx = await createContext({ context });
+        if (ctx.session) {
+          identifyUserFromSession(context.log, ctx.session, {
+            maskEmail: true,
+          });
+        }
         const { response } = await rpcHandler.handle(context.request, {
           prefix: "/rpc",
-          context: await createContext({ context }),
+          context: ctx,
         });
         return response ?? new Response("Not Found", { status: 404 });
       },
@@ -217,9 +220,15 @@ export function createServer() {
     .all(
       "/api-reference*",
       async (context) => {
+        const ctx = await createContext({ context });
+        if (ctx.session) {
+          identifyUserFromSession(context.log, ctx.session, {
+            maskEmail: true,
+          });
+        }
         const { response } = await apiHandler.handle(context.request, {
           prefix: "/api-reference",
-          context: await createContext({ context }),
+          context: ctx,
         });
         return response ?? new Response("Not Found", { status: 404 });
       },
