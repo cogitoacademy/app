@@ -127,6 +127,17 @@ export async function updatePaymentStatus(
   return updated ?? null;
 }
 
+export async function updateBookingHoldAmount(
+  conn: DbOrTx,
+  bookingId: string,
+  holdAmount: number,
+) {
+  await conn
+    .update(booking)
+    .set({ holdAmount })
+    .where(eq(booking.id, bookingId));
+}
+
 export function createAdminBookingRepo() {
   return {
     findBookingById,
@@ -137,5 +148,6 @@ export function createAdminBookingRepo() {
     findParticipantsByBookingId,
     findPaymentById,
     updatePaymentStatus,
+    updateBookingHoldAmount,
   };
 }

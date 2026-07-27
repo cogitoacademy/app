@@ -266,21 +266,6 @@ export function createBookingService(deps: {
       throw new BookingNotEditableError(input.tutorId);
     }
 
-    const overlapping = await repo.findOverlappingBookings(
-      db,
-      input.tutorId,
-      input.scheduledStartAt,
-      input.scheduledEndAt,
-      { excludeStates: [...TERMINAL_STATES] },
-    );
-    if (overlapping.length > 0) {
-      throw new BookingConflictError(
-        input.tutorId,
-        input.scheduledStartAt.toISOString(),
-        input.scheduledEndAt.toISOString(),
-      );
-    }
-
     const priceSnapshot = pricing.computeSplit(
       (profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE) as number,
       1,
@@ -297,6 +282,21 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const overlapping = await repo.findOverlappingBookings(
+        tx,
+        input.tutorId,
+        input.scheduledStartAt,
+        input.scheduledEndAt,
+        { excludeStates: [...TERMINAL_STATES] },
+      );
+      if (overlapping.length > 0) {
+        throw new BookingConflictError(
+          input.tutorId,
+          input.scheduledStartAt.toISOString(),
+          input.scheduledEndAt.toISOString(),
+        );
+      }
+
       await wallet.hold(tx, {
         walletId: w.id,
         amount: totalMarks,
@@ -688,21 +688,6 @@ export function createBookingService(deps: {
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
-    const overlapping = await repo.findOverlappingBookings(
-      db,
-      input.tutorId,
-      input.scheduledStartAt,
-      input.scheduledEndAt,
-      { excludeStates: [...TERMINAL_STATES] },
-    );
-    if (overlapping.length > 0) {
-      throw new BookingConflictError(
-        input.tutorId,
-        input.scheduledStartAt.toISOString(),
-        input.scheduledEndAt.toISOString(),
-      );
-    }
-
     const size = input.targetGroupSize;
     const pricePerStudent = (profile.prices?.[String(size)] ??
       DEFAULT_SOLO_PRICE) as number;
@@ -722,6 +707,21 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const overlapping = await repo.findOverlappingBookings(
+        tx,
+        input.tutorId,
+        input.scheduledStartAt,
+        input.scheduledEndAt,
+        { excludeStates: [...TERMINAL_STATES] },
+      );
+      if (overlapping.length > 0) {
+        throw new BookingConflictError(
+          input.tutorId,
+          input.scheduledStartAt.toISOString(),
+          input.scheduledEndAt.toISOString(),
+        );
+      }
+
       await wallet.hold(tx, {
         walletId: w.id,
         amount: totalMarks,
@@ -1063,24 +1063,6 @@ export function createBookingService(deps: {
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
-    for (const session of input.sessions) {
-      // eslint-disable-next-line no-await-in-loop
-      const overlapping = await repo.findOverlappingBookings(
-        db,
-        input.tutorId,
-        session.scheduledStartAt,
-        session.scheduledEndAt,
-        { excludeStates: [...TERMINAL_STATES] },
-      );
-      if (overlapping.length > 0) {
-        throw new BookingConflictError(
-          input.tutorId,
-          session.scheduledStartAt.toISOString(),
-          session.scheduledEndAt.toISOString(),
-        );
-      }
-    }
-
     const pricePerStudent = (profile.prices?.["1"] ??
       DEFAULT_SOLO_PRICE) as number;
     const priceSnapshot = pricing.computeSplit(pricePerStudent, 1);
@@ -1097,6 +1079,24 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      for (const session of input.sessions) {
+        // eslint-disable-next-line no-await-in-loop
+        const overlapping = await repo.findOverlappingBookings(
+          tx,
+          input.tutorId,
+          session.scheduledStartAt,
+          session.scheduledEndAt,
+          { excludeStates: [...TERMINAL_STATES] },
+        );
+        if (overlapping.length > 0) {
+          throw new BookingConflictError(
+            input.tutorId,
+            session.scheduledStartAt.toISOString(),
+            session.scheduledEndAt.toISOString(),
+          );
+        }
+      }
+
       await wallet.hold(tx, {
         walletId: w.id,
         amount: totalMarks,
@@ -1207,6 +1207,10 @@ export function createBookingService(deps: {
             actorType: ACTOR_TYPE.SYSTEM,
             reason: "Deadline passed",
           });
+
+          if (b.type === BOOKING_TYPE.SERIES) {
+            await repo.cancelAllSessions(tx, b.id);
+          }
         });
         succeeded++;
       } catch (error) {

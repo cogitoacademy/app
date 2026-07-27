@@ -127,6 +127,8 @@ export function createAdminBookingService(deps: {
           input.affectedParticipants!.includes(p.userId),
         );
 
+        let totalReleased = 0;
+
         for (const participant of affectedParts) {
           // eslint-disable-next-line no-await-in-loop
           const participantWallet = await wallet.getByUserId(
@@ -148,6 +150,7 @@ export function createAdminBookingService(deps: {
               reason: `Admin override: ${input.reason}`,
               bookingId: input.bookingId,
             });
+            totalReleased += participant.heldAmount;
           } else if (input.marksAction === "compensate_credit") {
             // eslint-disable-next-line no-await-in-loop
             await wallet.compensate(tx, {
@@ -159,6 +162,7 @@ export function createAdminBookingService(deps: {
               type: "compensate_credit",
               bookingId: input.bookingId,
             });
+            totalReleased += participant.heldAmount;
           } else if (input.marksAction === "compensate_deduct") {
             // eslint-disable-next-line no-await-in-loop
             await wallet.compensate(tx, {
@@ -170,7 +174,12 @@ export function createAdminBookingService(deps: {
               type: "compensate_deduct",
               bookingId: input.bookingId,
             });
+            totalReleased += participant.heldAmount;
           }
+        }
+
+        if (totalReleased > 0) {
+          await repo.updateBookingHoldAmount(tx, input.bookingId, 0);
         }
       }
 
@@ -202,7 +211,9 @@ export function createAdminBookingService(deps: {
     }
     const limit = Math.min(opts?.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
     const rows = await repo.listBookingsByState(db, [], limit);
-    return { items: rows.slice(0, limit), nextCursor: null };
+    const items = rows.slice(0, limit);
+    const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+    return { items, nextCursor };
   }
 
   async function getBookingStateHistory(bookingId: string) {
