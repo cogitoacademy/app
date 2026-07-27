@@ -1,11 +1,13 @@
 # Cogito Backend — Production Readiness Plan
 
-**Status:** Active — second branch to execute (after consolidation)
-**Branch:** `improvement/production-readiness`
-**Created from:** `main` (after `improvement/consolidation` merges)
-**Date:** 2026-07-21
-**Depends on:** `improvement/consolidation` branch merged to main
-**Next:** `feature/prd-gaps` (after this merges)
+| Field      | Value                                           |
+| ---------- | ----------------------------------------------- |
+| Status     | Active                                          |
+| Branch     | `improvement/production-readiness`              |
+| Created    | 2026-07-21                                      |
+| Depends on | improvement/foundation-hardening merged to main |
+| Next       | feature/prd-gaps                                |
+| Scope      | Backend-only                                    |
 
 This branch runs after the consolidation branch, so all code uses the unified 4-layer architecture (Router → Handler → Service → Repo), consumer-driven port interfaces, and `postgres.js`.
 
@@ -532,7 +534,7 @@ After consolidation, router files contain the orchestration logic that was previ
 
 ## 6. Phase 5: Security Hardening
 
-> **Note:** Docker, Dockerfiles, CD pipeline, and Hetzner provisioning are handled in the `improvement/infrastructure` branch (see `docs/plans/INFRASTRUCTURE-PLAN.md`). This phase focuses on application-level security.
+> **Note:** Docker, Dockerfiles, CD pipeline, and Hetzner provisioning are handled in the `improvement/infrastructure` branch (see INFRASTRUCTURE-PLAN.md). This phase focuses on application-level security.
 
 ### 5.1 Webhook security (N13, N14)
 

@@ -231,14 +231,10 @@ describe("BookingService", () => {
         id: "b1",
         currentState: "confirmed",
         proposerId: "student1",
+        tutorId: "tutor1",
       };
       const { service } = createService({
         repo: {
-          findBookingById: mock(async () => ({
-            id: "b1",
-            proposerId: "student1",
-            tutorId: "tutor1",
-          })),
           findBookingWithParticipants: mock(async () => booking),
         },
       });
@@ -251,15 +247,11 @@ describe("BookingService", () => {
       const booking = {
         id: "b1",
         currentState: "confirmed",
-        proposerId: "student1",
+        proposerId: "other",
+        tutorId: "tutor1",
       };
       const { service } = createService({
         repo: {
-          findBookingById: mock(async () => ({
-            id: "b1",
-            proposerId: "other",
-            tutorId: "tutor1",
-          })),
           findBookingWithParticipants: mock(async () => booking),
         },
       });
@@ -271,7 +263,6 @@ describe("BookingService", () => {
     test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: {
-          findBookingById: mock(async () => null),
           findBookingWithParticipants: mock(async () => null),
         },
       });
@@ -284,7 +275,7 @@ describe("BookingService", () => {
     test("throws BookingNotOwnedError when user has no access", async () => {
       const { service } = createService({
         repo: {
-          findBookingById: mock(async () => ({
+          findBookingWithParticipants: mock(async () => ({
             id: "b1",
             proposerId: "other",
             tutorId: "other_tutor",
@@ -1648,7 +1639,7 @@ describe("BookingService", () => {
 
       const result = await service.expireBookings();
 
-      expect(result).toEqual({ expired: 1 });
+      expect(result).toEqual({ expired: 1, failed: 0 });
       expect(wallet.release).toHaveBeenCalledTimes(1);
       expect(wallet.release.mock.calls[0][1]).toMatchObject({
         amount: 42,
@@ -1692,7 +1683,7 @@ describe("BookingService", () => {
       });
 
       const result = await service.expireBookings();
-      expect(result).toEqual({ expired: 0 });
+      expect(result).toEqual({ expired: 0, failed: 0 });
     });
 
     test("continues processing when individual booking fails", async () => {
@@ -1729,7 +1720,7 @@ describe("BookingService", () => {
       });
 
       const result = await service.expireBookings();
-      expect(result).toEqual({ expired: 2 });
+      expect(result).toEqual({ expired: 1, failed: 1 });
     });
   });
 
@@ -2058,7 +2049,7 @@ describe("BookingService", () => {
 
         const result = await service.expireBookings();
 
-        expect(result).toEqual({ expired: 1 });
+        expect(result).toEqual({ expired: 1, failed: 0 });
         expect(wallet.release).toHaveBeenCalledTimes(1);
         expect(wallet.release.mock.calls[0][1]).toMatchObject({
           amount: 42,
@@ -2100,7 +2091,7 @@ describe("BookingService", () => {
 
         const result = await service.expireBookings();
 
-        expect(result).toEqual({ expired: 1 });
+        expect(result).toEqual({ expired: 1, failed: 0 });
         expect(wallet.release).toHaveBeenCalledTimes(1);
         expect(wallet.release.mock.calls[0][1]).toMatchObject({
           amount: 42,
@@ -2147,7 +2138,7 @@ describe("BookingService", () => {
 
         const result = await service.expireBookings();
 
-        expect(result).toEqual({ expired: 1 });
+        expect(result).toEqual({ expired: 1, failed: 0 });
         expect(wallet.release).toHaveBeenCalledTimes(1);
         expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
           expect.anything(),

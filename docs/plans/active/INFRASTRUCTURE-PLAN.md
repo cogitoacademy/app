@@ -1,12 +1,13 @@
 # Cogito Backend — Infrastructure Plan
 
-**Status:** Active — parallel with production-readiness, after foundation hardening
-**Branch:** `improvement/infrastructure`
-**Created from:** `main` (after `improvement/foundation-hardening` and `improvement/production-readiness` merge)
-**Date:** 2026-07-24 (v2 — rewritten for Coolify)
-**Depends on:** `improvement/foundation-hardening` and `improvement/production-readiness` merged to main
-**Runs in parallel with:** `improvement/production-readiness` (different files — infra touches Docker/CI/CD, prod readiness touches business logic)
-**Merges to:** `staging` (then `main` after testing)
+| Field      | Value                                                                              |
+| ---------- | ---------------------------------------------------------------------------------- |
+| Status     | Active                                                                             |
+| Branch     | `improvement/infrastructure`                                                       |
+| Created    | 2026-07-24                                                                         |
+| Depends on | improvement/foundation-hardening + improvement/production-readiness merged to main |
+| Next       | —                                                                                  |
+| Scope      | Backend + Infra                                                                    |
 
 This branch sets up the full deployment infrastructure using **Coolify** as the deployment platform on a Hetzner VPS. Coolify manages Docker containers, reverse proxy (Caddy), auto-HTTPS, and deployment — replacing the custom `deploy.sh` + Caddyfile approach from v1.
 

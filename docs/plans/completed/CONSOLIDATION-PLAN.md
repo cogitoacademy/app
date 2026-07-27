@@ -1,11 +1,13 @@
 # Cogito Backend — Consolidation Plan
 
-**Status:** Active — first branch to execute
-**Branch:** `improvement/consolidation`
-**Created from:** `main` (after current work merges)
-**Date:** 2026-07-21
-**Depends on:** Current branch merged to main
-**Blocks:** `improvement/production-readiness` must branch from this after merge
+| Field      | Value                            |
+| ---------- | -------------------------------- |
+| Status     | Complete                         |
+| Branch     | `improvement/consolidation`      |
+| Created    | 2026-07-21                       |
+| Depends on | —                                |
+| Next       | improvement/foundation-hardening |
+| Scope      | Backend-only                     |
 
 This branch restructures the architecture first, so that subsequent bug fixes and feature work land on the clean structure.
 
@@ -1061,76 +1063,76 @@ Run `EXPLAIN ANALYZE` on key queries to verify `postgres.js` hasn't regressed:
 
 ### Phase 0: Create Branch + Green Baseline
 
-- [ ] 0.1 Create `improvement/consolidation` branch from `main`
-- [ ] 0.2 Verify CI green (`bun run check && bun run check-types && bun run build && bun test`)
+- [x] 0.1 Create `improvement/consolidation` branch from `main`
+- [x] 0.2 Verify CI green (`bun run check && bun run check-types && bun run build && bun test`)
 
 ### Phase 1: Extract Co-Located Services
 
-- [ ] 1.1 Extract `createAuthService` from `auth.handler.ts` to `auth.service.ts`
-- [ ] 1.2 Extract `createAdminService` from `admin.handler.ts` to `admin.service.ts`
-- [ ] 1.3 Extract `createAdminTutorService` from `admin-tutor.handler.ts` to `admin-tutor.service.ts`
-- [ ] 1.4 Extract `createTutorService` from `tutor.handler.ts` to `tutor.service.ts`
-- [ ] 1.5 Extract `createInviteService` from `invite.handler.ts` to `invite.service.ts`
-- [ ] 1.6 Extract `createAchievementService` from `achievement.handler.ts` to `achievement.service.ts`
-- [ ] 1.7 Verify extraction (full test suite)
+- [x] 1.1 Extract `createAuthService` from `auth.handler.ts` to `auth.service.ts`
+- [x] 1.2 Extract `createAdminService` from `admin.handler.ts` to `admin.service.ts`
+- [x] 1.3 Extract `createAdminTutorService` from `admin-tutor.handler.ts` to `admin-tutor.service.ts`
+- [x] 1.4 Extract `createTutorService` from `tutor.handler.ts` to `tutor.service.ts`
+- [x] 1.5 Extract `createInviteService` from `invite.handler.ts` to `invite.service.ts`
+- [x] 1.6 Extract `createAchievementService` from `achievement.handler.ts` to `achievement.service.ts`
+- [x] 1.7 Verify extraction (full test suite)
 
 ### Phase 2: Unify Handlers
 
-- [ ] 2.1 Unify auth handler (merge `auth.handler.ts` + `auth.handlers.ts`)
-- [ ] 2.2 Unify admin handler
-- [ ] 2.3 Unify adminTutor handler
-- [ ] 2.4 Unify tutor handler
-- [ ] 2.5 Unify tutorDiscovery handler
-- [ ] 2.6 Unify invite handler
-- [ ] 2.7 Unify achievement handler
-- [ ] 2.8 Unify wallet handler (rename `wallet.handlers.ts` → `wallet.handler.ts`, add DI factory)
-- [ ] 2.9 Unify booking handler (two separate factories: `createBookingHandler` + `createTutorActionsHandler`)
-- [ ] 2.10 Unify payment handler (receives `PaymentWalletPort` via DI, not `context.services.wallet`)
-- [ ] 2.11 Unify notification handler
-- [ ] 2.12 Unify adminBooking handler
-- [ ] 2.13 Unify refund handler
-- [ ] 2.14 Unify room handler
-- [ ] 2.15 Update all router imports (from `.handlers.ts` → `.handler.ts`)
-- [ ] 2.16 Update services.ts — remove all `import { xxxHandlers }`, wire through unified `createXxxHandler` functions, remove `context.services` from handlers (pure DI)
-- [ ] 2.17 Move `wallet.competitionCalendarLink` to config module/route
-- [ ] Verify: all module tests pass, no `.handlers.ts` files remain, no handler accesses `context.services`
+- [x] 2.1 Unify auth handler (merge `auth.handler.ts` + `auth.handlers.ts`)
+- [x] 2.2 Unify admin handler
+- [x] 2.3 Unify adminTutor handler
+- [x] 2.4 Unify tutor handler
+- [x] 2.5 Unify tutorDiscovery handler
+- [x] 2.6 Unify invite handler
+- [x] 2.7 Unify achievement handler
+- [x] 2.8 Unify wallet handler (rename `wallet.handlers.ts` → `wallet.handler.ts`, add DI factory)
+- [x] 2.9 Unify booking handler (two separate factories: `createBookingHandler` + `createTutorActionsHandler`)
+- [x] 2.10 Unify payment handler (receives `PaymentWalletPort` via DI, not `context.services.wallet`)
+- [x] 2.11 Unify notification handler
+- [x] 2.12 Unify adminBooking handler
+- [x] 2.13 Unify refund handler
+- [x] 2.14 Unify room handler
+- [x] 2.15 Update all router imports (from `.handlers.ts` → `.handler.ts`)
+- [x] 2.16 Update services.ts — remove all `import { xxxHandlers }`, wire through unified `createXxxHandler` functions, remove `context.services` from handlers (pure DI)
+- [x] 2.17 Move `wallet.competitionCalendarLink` to config module/route
+- [x] Verify: all module tests pass, no `.handlers.ts` files remain, no handler accesses `context.services`
 
 ### Phase 3: Consumer-Driven Ports
 
-- [ ] 3.1 Move param/result types from `shared/ports/` to provider service files
-- [ ] 3.2 Add consumer-driven port interfaces inline in each consuming service (including `email.port.ts` and `payment.port.ts` consumers)
-- [ ] 3.3 Delete `shared/ports/` directory (7 files: audit, wallet, pricing, notification, meeting, email, payment)
-- [ ] 3.4 Verify port migration (full test suite + type check)
+- [x] 3.1 Move param/result types from `shared/ports/` to provider service files
+- [x] 3.2 Add consumer-driven port interfaces inline in each consuming service (including `email.port.ts` and `payment.port.ts` consumers)
+- [x] 3.3 Delete `shared/ports/` directory (7 files: audit, wallet, pricing, notification, meeting, email, payment)
+- [x] 3.4 Verify port migration (full test suite + type check)
 
 ### Phase 4: pg → postgres.js
 
-- [ ] 4.1 Install postgres.js, remove pg
-- [ ] 4.2 Replace connection pool in db/index.ts
-- [ ] 4.3 Update all repo files for postgres.js syntax
-- [ ] 4.4 Add query logging in development
-- [ ] 4.5 Update Docker and test configuration
-- [ ] 4.6 Verify migration (full test suite, typecheck, build)
+- [x] 4.1 Install postgres.js, remove pg
+- [x] 4.2 Replace connection pool in db/index.ts
+- [x] 4.3 Update all repo files for postgres.js syntax
+- [x] 4.4 Add query logging in development
+- [x] 4.5 Update Docker and test configuration
+- [x] 4.6 Verify migration (full test suite, typecheck, build)
 
 ### Phase 5: createModule Pattern
 
-- [ ] 5.1 Create index.ts with createModule for each module
-- [ ] 5.2 Simplify services.ts using createModule calls (~60 lines)
-- [ ] 5.3 Verify createModule pattern (full test suite)
+- [x] 5.1 Create index.ts with createModule for each module
+- [x] 5.2 Simplify services.ts using createModule calls (~60 lines)
+- [x] 5.3 Verify createModule pattern (full test suite)
 
 ### Phase 6: Dead Code + Error Helpers
 
-- [ ] 6.1 Remove duplicate createFallbackMeetingProvider
-- [ ] 6.2 Consolidate error helpers (no raw `new ORPCError`)
-- [ ] 6.3 Extract `competitionCalendarLink` from wallet to a config module (`modules/config/`)
-- [ ] 6.4 Remove dead code and unused dependencies
-- [ ] 6.5 Verify cleanup (full CI run)
+- [x] 6.1 Remove duplicate createFallbackMeetingProvider
+- [x] 6.2 Consolidate error helpers (no raw `new ORPCError`)
+- [x] 6.3 Extract `competitionCalendarLink` from wallet to a config module (`modules/config/`)
+- [x] 6.4 Remove dead code and unused dependencies
+- [x] 6.5 Verify cleanup (full CI run)
 
 ### Phase 7: Verify
 
-- [ ] 7.1 Full test suite (check, types, build, test, coverage)
-- [ ] 7.2 Manual smoke test (auth, wallet, booking, admin, discovery)
-- [ ] 7.3 Benchmark query performance (no regressions)
-- [ ] 7.4 Verify port migration (no `shared/ports/`, all types checked)
+- [x] 7.1 Full test suite (check, types, build, test, coverage)
+- [x] 7.2 Manual smoke test (auth, wallet, booking, admin, discovery)
+- [x] 7.3 Benchmark query performance (no regressions)
+- [x] 7.4 Verify port migration (no `shared/ports/`, all types checked)
 
 ---
 

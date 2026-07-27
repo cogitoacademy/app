@@ -99,20 +99,29 @@ export function createBookingService(deps: {
 }) {
   const { db, repo, wallet, pricing, audit, notification, meeting } = deps;
 
-  async function assertStudentBookingAccess(
+  async function assertBookingAccess(
+    b: { proposerId: string; tutorId: string },
+    userId: string,
+    conn: DbOrTx,
+    bookingId: string,
+  ): Promise<void> {
+    if (b.proposerId !== userId) {
+      if (b.tutorId === userId) return;
+      const participant = await repo.findParticipant(conn, bookingId, userId);
+      if (!participant) {
+        throw new BookingNotOwnedError(bookingId, userId);
+      }
+    }
+  }
+
+  async function loadBookingAndAssertAccess(
     conn: DbOrTx,
     userId: string,
     bookingId: string,
   ) {
     const b = await repo.findBookingById(conn, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    if (b.proposerId !== userId) {
-      if (b.tutorId === userId) return b;
-      const participant = await repo.findParticipant(conn, bookingId, userId);
-      if (!participant) {
-        throw new BookingNotOwnedError(bookingId, userId);
-      }
-    }
+    await assertBookingAccess(b, userId, conn, bookingId);
     return b;
   }
 
@@ -216,9 +225,9 @@ export function createBookingService(deps: {
   }
 
   async function getById(bookingId: string, userId: string) {
-    await assertStudentBookingAccess(db, userId, bookingId);
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
+    await assertBookingAccess(b, userId, db, bookingId);
     return b;
   }
 
@@ -367,7 +376,7 @@ export function createBookingService(deps: {
     cancellationReason?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await assertStudentBookingAccess(tx, userId, bookingId);
+      const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
           b.currentState,
@@ -615,7 +624,7 @@ export function createBookingService(deps: {
     reason?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await assertStudentBookingAccess(tx, userId, bookingId);
+      const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
           b.currentState,
@@ -937,7 +946,7 @@ export function createBookingService(deps: {
 
   async function withdraw(userId: string, bookingId: string, reason?: string) {
     return db.transaction(async (tx) => {
-      const b = await assertStudentBookingAccess(tx, userId, bookingId);
+      const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingCancelledError(bookingId);
       }
@@ -1149,9 +1158,9 @@ export function createBookingService(deps: {
   }
 
   async function listSessions(bookingId: string, userId: string) {
-    await assertStudentBookingAccess(db, userId, bookingId);
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
+    await assertBookingAccess(b, userId, db, bookingId);
     if (b.type !== BOOKING_TYPE.SERIES)
       throw new BookingNotEditableError(bookingId);
     return repo.listSessionsBySeriesId(db, bookingId);
@@ -1173,6 +1182,8 @@ export function createBookingService(deps: {
       [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
     };
 
+    let succeeded = 0;
+    let failed = 0;
     for (const b of candidates) {
       try {
         // eslint-disable-next-line no-await-in-loop
@@ -1195,7 +1206,9 @@ export function createBookingService(deps: {
             reason: "Deadline passed",
           });
         });
+        succeeded++;
       } catch (error) {
+        failed++;
         log({
           level: "error",
           action: "expire_booking_failed",
@@ -1204,7 +1217,7 @@ export function createBookingService(deps: {
         });
       }
     }
-    return { expired: candidates.length };
+    return { expired: succeeded, failed };
   }
 
   return {

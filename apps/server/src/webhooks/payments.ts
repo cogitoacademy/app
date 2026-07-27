@@ -47,12 +47,12 @@ export function paymentsWebhook(app: Elysia) {
       }
 
       try {
-        validateWebhookTimestamp(request);
-
         const payload = await services.payment.provider.verifyWebhook(
           rawBody,
           signature,
         );
+
+        validateWebhookTimestamp(request);
 
         await services.payment.confirmFromWebhook({
           provider: params.provider as string,

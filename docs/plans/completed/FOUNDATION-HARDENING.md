@@ -1,11 +1,13 @@
 # Cogito Backend — Foundation Hardening Plan
 
-**Status:** Active — first branch to execute (after consolidation merges to main)
-**Branch:** `improvement/foundation-hardening`
-**Created from:** `main` (after `improvement/consolidation` merges)
-**Date:** 2026-07-24
-**Depends on:** `improvement/consolidation` merged to main
-**Next:** `improvement/production-readiness` (after this merges)
+| Field      | Value                                          |
+| ---------- | ---------------------------------------------- |
+| Status     | Complete                                       |
+| Branch     | `improvement/foundation-hardening`             |
+| Created    | 2026-07-24                                     |
+| Depends on | improvement/consolidation merged to main (#16) |
+| Next       | improvement/production-readiness               |
+| Scope      | Backend-only                                   |
 
 This branch fixes 46 issues found in a comprehensive second-pass audit (data integrity, security, resilience, performance, and auth hardening). It establishes the solid foundation that all subsequent plans (production-readiness, infrastructure, PRD-gaps) build on.
 
@@ -394,14 +396,10 @@ Add `.max()` to every string field in all Zod schemas. Suggested limits:
   ```ts
   emailAndPassword: {
     enabled: true,
-    password: {
-      minLength: 8,
-      requireUppercase: true,
-      requireLowercase: true,
-      requireDigits: true,
-    },
+    minPasswordLength: 8,
   },
   ```
+- **Note:** Better Auth 1.6.11 only supports `minPasswordLength` — character-class requirements (`requireUppercase`/`requireLowercase`/`requireDigits`) are not available in this version. The implemented policy enforces minimum length only. Carry-forward to production-readiness: either upgrade Better Auth (if a newer version adds character-class options) or add a custom Zod pre-validation hook on the signup input to enforce upper/lower/digit before the auth handler runs.
 
 #### 4.5 Add session expiry
 
@@ -447,7 +445,7 @@ Add `.max()` to every string field in all Zod schemas. Suggested limits:
 - **Boundary test:** String input exceeding `.max()` → Zod validation error with "String must contain at most N character(s)".
 - **Boundary test:** Array input exceeding `.max()` → Zod validation error.
 - **Date test:** `scheduledStartAt` in the past → Zod validation error.
-- **Password test:** 7-char password → rejected. 8-char with upper+lower+digit → accepted.
+- **Password test:** 7-char password → rejected. 8-char password → accepted. (Character-class checks deferred — see §4.4 note.)
 - **Session test:** Session created → after 7 days → session expired, user must re-login.
 - **Email test:** Signup → email verification URL logged in dev. Login before verification → rejected.
 - **OAuth test:** With no `GOOGLE_CLIENT_ID` env var → Google OAuth not available (no empty config).
@@ -829,7 +827,7 @@ This plan establishes patterns that all subsequent plans build on. The codebase 
 
 ### How Production-Readiness Plan Adapts
 
-The existing PRODUCTION-READINESS-PLAN.md phases are updated to reference this plan:
+The existing ../active/PRODUCTION-READINESS-PLAN.md phases are updated to reference this plan:
 
 - **Phase 1 (bug fixes):** B2 (meeting orphan) is now enhanced by Story 6's compensation pattern. N8 (withdraw holds) is fully fixed by Story 1's `releaseAllParticipantHolds`. N15 (holdAmount) is fixed by Story 1's zeroing. These tasks can be marked as superseded where applicable.
 - **Phase 2 (Redis):** Story 7's in-memory idempotency is replaced by Redis-backed. No conflict — the interface stays the same.
@@ -876,101 +874,101 @@ The PRD-gaps branch (future) builds all 18 gap features on the established patte
 
 ### Story 1: Group Booking Hold Leaks
 
-- [ ] 1.1 Extract `releaseAllParticipantHolds` helper
-- [ ] 1.2 Call in `cancel()`, `tutorDecline()`, `expireBookings()`, `withdraw→cancel`
-- [ ] 1.3 Zero `holdAmount` on all terminal transitions
-- [ ] 1.4 Add `decrementBookingConfirmedHeadcount` to repo, call in `withdraw()`
-- [ ] 1.5 Add `cancelAllSessions` to repo, call in `cancel()` for series bookings
-- [ ] 1.6 Add `getByUserIdTx` to wallet port
-- [ ] 1.7 Integration tests for all terminal transitions with group bookings
-- [ ] 1.8 Wallet ledger reconciliation test
+- [x] 1.1 Extract `releaseAllParticipantHolds` helper
+- [x] 1.2 Call in `cancel()`, `tutorDecline()`, `expireBookings()`, `withdraw→cancel`
+- [x] 1.3 Zero `holdAmount` on all terminal transitions
+- [x] 1.4 Add `decrementBookingConfirmedHeadcount` to repo, call in `withdraw()`
+- [x] 1.5 Add `cancelAllSessions` to repo, call in `cancel()` for series bookings
+- [x] 1.6 Add `getByUserIdTx` to wallet port
+- [x] 1.7 Integration tests for all terminal transitions with group bookings
+- [x] 1.8 Wallet ledger reconciliation test
 
 ### Story 2: State Machine Completeness
 
-- [ ] 2.1 Add RESCHEDULE_PROPOSED to expiry with 24h deadline
-- [ ] 2.2 Add SCHEDULED timeout (auto NO_SHOW 24h after end)
-- [ ] 2.3 Add AWAITING_ADMIN_ROOM_APPROVAL timeout
-- [ ] 2.4 Remove dead states (DRAFT, AWAITING_MARKS_HOLD)
-- [ ] 2.5 Remove dead column (repricedMarks) — migration 0005
-- [ ] 2.6 State machine property test
+- [x] 2.1 Add RESCHEDULE_PROPOSED to expiry with 24h deadline
+- [x] 2.2 Add SCHEDULED timeout (auto NO_SHOW 24h after end)
+- [x] 2.3 Add AWAITING_ADMIN_ROOM_APPROVAL timeout
+- [x] 2.4 Remove dead states (DRAFT, AWAITING_MARKS_HOLD)
+- [x] 2.5 Remove dead column (repricedMarks) — migration 0005
+- [x] 2.6 State machine property test
 
 ### Story 3: IDOR & Authorization
 
-- [ ] 3.1 Fix `booking.get()` IDOR — add `assertBookingAccess`
-- [ ] 3.2 Fix `booking.listSessions()` IDOR
-- [ ] 3.3 Add `tutorProcedure` middleware
-- [ ] 3.4 Apply `tutorProcedure` to tutor action routes
-- [ ] 3.5 Invalidate old invite token on resend
-- [ ] 3.6 Protect OpenAPI endpoints (disable in prod or auth-gate)
-- [ ] 3.7 IDOR tests, role tests, token tests
+- [x] 3.1 Fix `booking.get()` IDOR — add `assertBookingAccess`
+- [x] 3.2 Fix `booking.listSessions()` IDOR
+- [x] 3.3 Add `tutorProcedure` middleware
+- [x] 3.4 Apply `tutorProcedure` to tutor action routes
+- [x] 3.5 Invalidate old invite token on resend
+- [x] 3.6 Protect OpenAPI endpoints (disable in prod or auth-gate)
+- [x] 3.7 IDOR tests, role tests, token tests
 
 ### Story 4: Input Validation + Auth Hardening
 
-- [ ] 4.1 Bound all string inputs with `.max()`
-- [ ] 4.2 Bound all array inputs with `.max()`
-- [ ] 4.3 Validate dates are in the future
-- [ ] 4.4 Add password policy (min 8, upper, lower, digit)
-- [ ] 4.5 Add session expiry (7 days)
+- [x] 4.1 Bound all string inputs with `.max()`
+- [x] 4.2 Bound all array inputs with `.max()`
+- [x] 4.3 Validate dates are in the future
+- [x] 4.4 Add password policy (min 8 length; character-class deferred — see §4.4 note)
+- [x] 4.5 Add session expiry (7 days)
 - [ ] ~~4.6 Add email verification flow~~ — **DEFERRED** to production-readiness / PRD-gaps branch (see §4.6 above)
-- [ ] 4.7 Conditional Google OAuth (exclude when no credentials)
+- [x] 4.7 Conditional Google OAuth (exclude when no credentials)
 - [ ] ~~4.8 Frontend: add verify-email route~~ — **DEFERRED** with 4.6
 - [ ] ~~4.9 Migration: set existing users `emailVerified = true`~~ — **DEFERRED** with 4.6
-- [ ] 4.10 Boundary tests, password tests, session tests
+- [x] 4.10 Boundary tests, password tests, session tests
 
 ### Story 5: Wallet & Transaction Integrity
 
-- [ ] 5.1 Wrap wallet ops in transaction with ledger INSERT
-- [ ] 5.2 Add optimistic locking (version columns) — migrations 0007, 0008
-- [ ] 5.3 Fix 8 read-then-write race conditions
-- [ ] 5.4 Add payment state transition guard
-- [ ] 5.5 Add wallet reconciliation query (not cron yet — manual run)
-- [ ] 5.6 Atomicity tests, concurrency tests, webhook order tests
+- [x] 5.1 Wrap wallet ops in transaction with ledger INSERT
+- [x] 5.2 Add optimistic locking (version columns) — migrations 0007, 0008
+- [x] 5.3 Fix 8 read-then-write race conditions
+- [x] 5.4 Add payment state transition guard
+- [x] 5.5 Add wallet reconciliation query (not cron yet — manual run)
+- [x] 5.6 Atomicity tests, concurrency tests, webhook order tests
 
 ### Story 6: Error Handling & Resilience
 
-- [ ] 6.1 Split notification `write()` into `write()` + `writeBestEffort()`
-- [ ] 6.2 Add timeout to Google Meet provider (30s)
-- [ ] 6.3 Add timeout to Resend provider (30s)
-- [ ] 6.4 Add `statement_timeout` to DB pool config
-- [ ] 6.5 Add `uncaughtException` handler
-- [ ] 6.6 Enable webhook timestamp validation in all environments
-- [ ] 6.7 Constant-time comparison for signatures and tokens
-- [ ] 6.8 Add body size limit to webhook endpoints
-- [ ] 6.9 Timeout tests, crash test, timing test
+- [x] 6.1 Split notification `write()` into `write()` + `writeBestEffort()`
+- [x] 6.2 Add timeout to Google Meet provider (30s)
+- [x] 6.3 Add timeout to Resend provider (30s)
+- [x] 6.4 Add `statement_timeout` to DB pool config
+- [x] 6.5 Add `uncaughtException` handler
+- [x] 6.6 Enable webhook timestamp validation in all environments
+- [x] 6.7 Constant-time comparison for signatures and tokens
+- [x] 6.8 Add body size limit to webhook endpoints
+- [x] 6.9 Timeout tests, crash test, timing test
 
 ### Story 7: Booking Idempotency
 
-- [ ] 7.1 Accept `Idempotency-Key` header in booking handlers
-- [ ] 7.2 Wire `bookingIdempotency` store with composite key
-- [ ] 7.3 Return same result on retry
-- [ ] 7.4 Idempotency tests
+- [x] 7.1 Accept `Idempotency-Key` header in booking handlers
+- [x] 7.2 Wire `bookingIdempotency` store with composite key
+- [x] 7.3 Return same result on retry
+- [x] 7.4 Idempotency tests
 
 ### Story 8: CSP + Performance Guard Rails
 
-- [ ] 8.1 Production-strict CSP (connect-src, script-src, style-src, img-src, font-src)
-- [ ] 8.2 Add LIMIT 500 to `findBookingsExpiringByDeadline`
-- [ ] 8.3 Add composite index migration (0006)
-- [ ] 8.4 Redact sensitive params in dev DB logging
-- [ ] 8.5 Add retry attempts to scheduler jobs
-- [ ] 8.6 CSP test, performance test, dev logging test
+- [x] 8.1 Production-strict CSP (connect-src, script-src, style-src, img-src, font-src)
+- [x] 8.2 Add LIMIT 500 to `findBookingsExpiringByDeadline`
+- [x] 8.3 Add composite index migration (0006)
+- [x] 8.4 Redact sensitive params in dev DB logging
+- [x] 8.5 Add retry attempts to scheduler jobs
+- [x] 8.6 CSP test, performance test, dev logging test
 
 ### Story 9: Frontend Hardening
 
-- [ ] 9.1 Add React error boundary
-- [ ] 9.2 Add auth session expiry handler (401 → redirect to login)
-- [ ] 9.3 Remove dead frontend components (or wire them up)
-- [ ] 9.4 Fix `any` type casts in route files
-- [ ] 9.5 Add TTL eviction to metrics
-- [ ] 9.6 Error boundary test, auth redirect test, type check
+- [x] 9.1 Add React error boundary
+- [x] 9.2 Add auth session expiry handler (401 → redirect to login)
+- [x] 9.3 Remove dead frontend components (or wire them up)
+- [x] 9.4 Fix `any` type casts in route files
+- [x] 9.5 Add TTL eviction to metrics
+- [x] 9.6 Error boundary test, auth redirect test, type check
 
 ### Verify (after all stories)
 
-- [ ] `bun run check && bun run check-types && bun run build` all pass
-- [ ] `bun run test:coverage` passes with ≥ 90% packages/api, ≥ 80% overall
-- [ ] Manual smoke test: signup → login → purchase marks → discover tutor → book solo → book group → tutor accept → complete → cancel → verify all holds released
+- [x] `bun run check && bun run check-types && bun run build` all pass
+- [x] `bun run test:coverage` passes with ≥ 90% packages/api, ≥ 80% overall
+- [x] Manual smoke test: signup → login → purchase marks → discover tutor → book solo → book group → tutor accept → complete → cancel → verify all holds released
   > (Email verification step removed — deferred with §4.6. Signup/login flows tested without the verification gate.)
-- [ ] No CSP violations in browser console
-- [ ] No `any` types in route files (`rg "as any" apps/web/src/routes/` returns 0)
+- [x] No CSP violations in browser console
+- [x] No `any` types in route files (`rg "as any" apps/web/src/routes/` returns 0)
 
 ---
 
@@ -978,3 +976,4 @@ The PRD-gaps branch (future) builds all 18 gap features on the established patte
 
 - v1.0 (2026-07-24): Created. Foundation hardening branch: 9 stories addressing 46 findings from comprehensive second-pass audit. Establishes solid baseline for production-readiness, infrastructure, and PRD-gaps plans. Runs after consolidation merges to main.
 - v1.1 (2026-07-24): Email verification (§4.6, finding G2) deferred to the `improvement/production-readiness` (or `feature/prd-gaps`) branch. It is additive and depends on email infrastructure + frontend work outside this hardening branch. Checklist items 4.6, 4.8, 4.9 struck through; §4.6 now records carry-forward tasks. Migration numbering fixed: 0005→Story 2, 0006→Story 8 composite index, 0007+0008→Story 5 version columns.
+- v1.2 (2026-07-27): Code fixes — expireBookings honest count, getById single-fetch, webhook signature-before-timestamp ordering. Password policy spec corrected (Better Auth 1.6.11 only supports minPasswordLength).

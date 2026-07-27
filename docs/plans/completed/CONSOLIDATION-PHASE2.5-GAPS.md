@@ -1,10 +1,13 @@
 # Cogito Backend — Consolidation Phase 2.5: Gaps & Corrections
 
-**Status:** Active — addendum to Phase 2 on `improvement/consolidation` branch
-**Branch:** `improvement/consolidation`
-**Date:** 2026-07-24
-**Depends on:** Phase 1 + Phase 2 (error architecture) completed
-**Blocks:** `improvement/production-readiness` must branch from this after merge
+| Field      | Value                            |
+| ---------- | -------------------------------- |
+| Status     | Complete                         |
+| Branch     | `improvement/consolidation`      |
+| Created    | 2026-07-24                       |
+| Depends on | Consolidation Phase 1 + Phase 2  |
+| Next       | improvement/foundation-hardening |
+| Scope      | Backend-only                     |
 
 This phase closes the gaps between the implemented Phase 1/2 work and the current codebase reality. It is an **addendum** to `CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` — it references that plan, corrects its obsolete tasks, and adds the missing work that the audit surfaced.
 
@@ -582,48 +585,48 @@ bun run check && bun run check-types && bun run build && bun test && bun run tes
 
 ### Phase 2 Corrections
 
-- [ ] Confirm AD-5, AD-6, §1.4, §1.5, §3.5, §3.11 are done (no action — verify only)
+- [x] Confirm AD-5, AD-6, §1.4, §1.5, §3.5, §3.11 are done (no action — verify only)
 
 ### Phase A: Missing Repo Extractions
 
-- [ ] A.1 Extract `notification.repo.ts` (6+ functions), update service + index, add tests
-- [ ] A.2 Extract `room.repo.ts` (4 functions), update service + index, add tests
-- [ ] A.3 Verify Phase A (CI green)
+- [x] A.1 Extract `notification.repo.ts` (6+ functions), update service + index, add tests
+- [x] A.2 Extract `room.repo.ts` (4 functions), update service + index, add tests
+- [x] A.3 Verify Phase A (CI green)
 
 ### Phase B: Layer Violations
 
-- [ ] B.1 Tutor: replace `badRequest` throws with domain errors (`TutorProfileIncompleteError`, `InvalidTutorPricingError`); keep completeness checks in service (they validate DB state)
-- [ ] B.2 Payment: remove `ORPCError` awareness, wrap as `PaymentProviderError`
-- [ ] B.3 Admin-booking: introduce `AdminBookingRefundPort`, stop importing refund repo
-- [ ] B.4 Wallet: move `getOrCreate` + pagination to service, repo exposes `upsert` primitive (race-safe via `ON CONFLICT`)
-- [ ] B.5 Move remaining hardcoded repo filters (tutor future-only, booking published-only, discovery defaults, achievement fallbacks) to service opts
-- [ ] B.6 Refund: remove dead `amount <= 0` check (Zod `.positive()` already validates)
-- [ ] B.7 Verify Phase B (CI green)
+- [x] B.1 Tutor: replace `badRequest` throws with domain errors (`TutorProfileIncompleteError`, `InvalidTutorPricingError`); keep completeness checks in service (they validate DB state)
+- [x] B.2 Payment: remove `ORPCError` awareness, wrap as `PaymentProviderError`
+- [x] B.3 Admin-booking: introduce `AdminBookingRefundPort`, stop importing refund repo
+- [x] B.4 Wallet: move `getOrCreate` + pagination to service, repo exposes `upsert` primitive (race-safe via `ON CONFLICT`)
+- [x] B.5 Move remaining hardcoded repo filters (tutor future-only, booking published-only, discovery defaults, achievement fallbacks) to service opts
+- [x] B.6 Refund: remove dead `amount <= 0` check (Zod `.positive()` already validates)
+- [x] B.7 Verify Phase B (CI green)
 
 ### Phase C: Missing Error File
 
-- [ ] C.1 Create `notification.errors.ts` with `NotificationNotFoundError` + `mapNotificationError`, update handler + service, add tests
-- [ ] Verify all 14 error files present
+- [x] C.1 Create `notification.errors.ts` with `NotificationNotFoundError` + `mapNotificationError`, update handler + service, add tests
+- [x] Verify all 14 error files present
 
 ### Phase D: Type Escape Hatch
 
-- [ ] D.1 Fix `fallback.provider.ts` double cast, add/update test
+- [x] D.1 Fix `fallback.provider.ts` double cast, add/update test
 
 ### Phase E: Test Coverage
 
-- [ ] E.1 Run `bun run test:coverage`, review touched modules
-- [ ] E.2 Add tests until best-effort 100% on new/changed files, ≥95% on touched modules
+- [x] E.1 Run `bun run test:coverage`, review touched modules
+- [x] E.2 Add tests until best-effort 100% on new/changed files, ≥95% on touched modules
 
 ### Final Verification
 
-- [ ] 8.1 No `lib/errors` in services (grep)
-- [ ] 8.2 No `lib/errors` in repos (grep)
-- [ ] 8.3 No cross-module repo imports outside index.ts (grep)
-- [ ] 8.4 No inline Drizzle in notification/room services (grep)
-- [ ] 8.5 No `as unknown as` double casts (grep)
-- [ ] 8.6 All 14 error files present
-- [ ] 8.7 No HTTP error throws in services (grep)
-- [ ] 8.8 Full CI + coverage green
+- [x] 8.1 No `lib/errors` in services (grep)
+- [x] 8.2 No `lib/errors` in repos (grep)
+- [x] 8.3 No cross-module repo imports outside index.ts (grep)
+- [x] 8.4 No inline Drizzle in notification/room services (grep)
+- [x] 8.5 No `as unknown as` double casts (grep)
+- [x] 8.6 All 14 error files present
+- [x] 8.7 No HTTP error throws in services (grep)
+- [x] 8.8 Full CI + coverage green
 
 ---
 

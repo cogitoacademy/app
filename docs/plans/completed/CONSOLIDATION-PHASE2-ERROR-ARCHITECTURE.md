@@ -1,10 +1,13 @@
 # Cogito Backend — Consolidation Phase 2: Error Architecture + Layer Cleanup + BOOKING_STATE
 
-**Status:** Active — second phase on `improvement/consolidation` branch
-**Branch:** `improvement/consolidation`
-**Date:** 2026-07-22
-**Depends on:** Phase 1 consolidation (handler unification, consumer ports, postgres.js, createModule) completed
-**Blocks:** `improvement/production-readiness` must branch from this after merge
+| Field      | Value                            |
+| ---------- | -------------------------------- |
+| Status     | Complete                         |
+| Branch     | `improvement/consolidation`      |
+| Created    | 2026-07-22                       |
+| Depends on | Consolidation Phase 1            |
+| Next       | improvement/foundation-hardening |
+| Scope      | Backend-only                     |
 
 This phase adds domain error architecture, cleans up layer violations, replaces booking state string literals, and DRYs up handler boilerplate. The goal is a codebase where:
 
@@ -834,87 +837,87 @@ git push origin improvement/consolidation
 
 ### Phase 0: Green Baseline
 
-- [ ] 0.1 Verify CI green (`bun run check && bun run check-types && bun run build && bun test`)
+- [x] 0.1 Verify CI green (`bun run check && bun run check-types && bun run build && bun test`)
 
 ### Phase 1: Foundation
 
-- [ ] 1.1 Create `lib/domain-errors.ts` with test
-- [ ] 1.2 Create `lib/handler-utils.ts` with test
-- [ ] 1.3 Create all 14 `{module}.errors.ts` files with tests
-- [ ] 1.4 Create `room/room.types.ts` with Zod schemas
-- [ ] 1.5 Create `payment/payment.repo.ts` (extract from service)
-- [ ] 1.6 Verify Phase 1 (all checks pass)
+- [x] 1.1 Create `lib/domain-errors.ts` with test
+- [x] 1.2 Create `lib/handler-utils.ts` with test
+- [x] 1.3 Create all 14 `{module}.errors.ts` files with tests
+- [x] 1.4 Create `room/room.types.ts` with Zod schemas
+- [x] 1.5 Create `payment/payment.repo.ts` (extract from service)
+- [x] 1.6 Verify Phase 1 (all checks pass)
 
 ### Phase 2: BOOKING_STATE
 
-- [ ] 2.1 Update `booking-state.types.ts` — TERMINAL_STATES uses BOOKING_STATE.XXX
-- [ ] 2.2 Update `booking.service.ts` — all state strings → BOOKING_STATE.XXX
-- [ ] 2.3 Update `booking-transitions.ts` — all state strings → BOOKING_STATE.XXX
-- [ ] 2.4 Update `booking.repo.ts` — accept excludeStates param, use BOOKING_STATE
-- [ ] 2.5 Update `admin-booking.service.ts` — CATEGORY_STATE_MAP uses BOOKING_STATE.XXX
-- [ ] 2.6 Update all call sites for findOverlappingBookings
-- [ ] 2.7 Verify Phase 2 (commit)
+- [x] 2.1 Update `booking-state.types.ts` — TERMINAL_STATES uses BOOKING_STATE.XXX
+- [x] 2.2 Update `booking.service.ts` — all state strings → BOOKING_STATE.XXX
+- [x] 2.3 Update `booking-transitions.ts` — all state strings → BOOKING_STATE.XXX
+- [x] 2.4 Update `booking.repo.ts` — accept excludeStates param, use BOOKING_STATE
+- [x] 2.5 Update `admin-booking.service.ts` — CATEGORY_STATE_MAP uses BOOKING_STATE.XXX
+- [x] 2.6 Update all call sites for findOverlappingBookings
+- [x] 2.7 Verify Phase 2 (commit)
 
 ### Phase 3: Layer Cleanup
 
-- [ ] 3.1 Wallet repo: return result objects instead of throwing HTTP errors
-- [ ] 3.2 Booking repo: accept excludeStates param, remove hardcoded filter
-- [ ] 3.3 Booking types: add z.coerce.date(), remove handler date transforms
-- [ ] 3.4 Tutor availability types: add z.coerce.date()
-- [ ] 3.5 Room: create types file, update handler and router
-- [ ] 3.6 Admin-booking types: add .enum() validation, remove handler validation functions
-- [ ] 3.7 Admin-tutor types: remove duplicated interfaces
-- [ ] 3.8 Auth types: add .refine() for blank strings
-- [ ] 3.9 Achievement repo: move default limit to service
-- [ ] 3.10 Refund repo: remove unused parameter
-- [ ] 3.11 Payment service: refactor to use repo
-- [ ] 3.12 Tutor-discovery: add service methods, move notFound to service
-- [ ] 3.13 Verify Phase 3 (all checks pass)
+- [x] 3.1 Wallet repo: return result objects instead of throwing HTTP errors
+- [x] 3.2 Booking repo: accept excludeStates param, remove hardcoded filter
+- [x] 3.3 Booking types: add z.coerce.date(), remove handler date transforms
+- [x] 3.4 Tutor availability types: add z.coerce.date()
+- [x] 3.5 Room: create types file, update handler and router
+- [x] 3.6 Admin-booking types: add .enum() validation, remove handler validation functions
+- [x] 3.7 Admin-tutor types: remove duplicated interfaces
+- [x] 3.8 Auth types: add .refine() for blank strings
+- [x] 3.9 Achievement repo: move default limit to service
+- [x] 3.10 Refund repo: remove unused parameter
+- [x] 3.11 Payment service: refactor to use repo
+- [x] 3.12 Tutor-discovery: add service methods, move notFound to service
+- [x] 3.13 Verify Phase 3 (all checks pass)
 
 ### Phase 4: Simple Module Migration
 
-- [ ] 4.1 Migrate achievement (2 errors)
-- [ ] 4.2 Migrate room (2 errors)
-- [ ] 4.3 Migrate invite (3 errors)
-- [ ] 4.4 Migrate admin (2 errors)
-- [ ] 4.5 Migrate auth (2 errors)
-- [ ] 4.6 Migrate refund (2 errors)
-- [ ] 4.7 Verify Phase 4 (all checks pass)
+- [x] 4.1 Migrate achievement (2 errors)
+- [x] 4.2 Migrate room (2 errors)
+- [x] 4.3 Migrate invite (3 errors)
+- [x] 4.4 Migrate admin (2 errors)
+- [x] 4.5 Migrate auth (2 errors)
+- [x] 4.6 Migrate refund (2 errors)
+- [x] 4.7 Verify Phase 4 (all checks pass)
 
 ### Phase 5: Medium Module Migration
 
-- [ ] 5.1 Migrate wallet (2 errors + repo result objects)
-- [ ] 5.2 Migrate admin-tutor (3 errors + type dedup)
-- [ ] 5.3 Migrate admin-booking (3 errors + BOOKING_STATE + Zod enums)
-- [ ] 5.4 Migrate payment (3 errors + repo extraction)
-- [ ] 5.5 Migrate tutor (4 errors)
-- [ ] 5.6 Migrate tutor-discovery (1 error + service layer)
-- [ ] 5.7 Migrate notification (0 errors, withDomainMap only)
-- [ ] 5.8 Verify Phase 5 (all checks pass)
+- [x] 5.1 Migrate wallet (2 errors + repo result objects)
+- [x] 5.2 Migrate admin-tutor (3 errors + type dedup)
+- [x] 5.3 Migrate admin-booking (3 errors + BOOKING_STATE + Zod enums)
+- [x] 5.4 Migrate payment (3 errors + repo extraction)
+- [x] 5.5 Migrate tutor (4 errors)
+- [x] 5.6 Migrate tutor-discovery (1 error + service layer)
+- [x] 5.7 Migrate notification (0 errors, withDomainMap only)
+- [x] 5.8 Verify Phase 5 (all checks pass)
 
 ### Phase 6: Complex Module Migration
 
-- [ ] (Reserved — currently empty)
+- [x] (Reserved — currently empty)
 
 ### Phase 7: Booking Module Migration
 
-- [ ] 7.1 Migrate booking.service.ts (24 domain errors)
-- [ ] 7.2 Migrate booking.handler.ts (withDomainMap)
-- [ ] 7.3 Verify booking.repo.ts (no HTTP errors)
-- [ ] 7.4 Verify booking migration (booking tests pass)
-- [ ] 7.5 Verify Phase 7 (all checks pass)
+- [x] 7.1 Migrate booking.service.ts (24 domain errors)
+- [x] 7.2 Migrate booking.handler.ts (withDomainMap)
+- [x] 7.3 Verify booking.repo.ts (no HTTP errors)
+- [x] 7.4 Verify booking migration (booking tests pass)
+- [x] 7.5 Verify Phase 7 (all checks pass)
 
 ### Phase 8: Cleanup
 
-- [ ] 8.1 Remove unused error factories (preconditionFailed, unprocessableContent, rateLimited, timeout)
-- [ ] 8.2 Add JSDoc to DomainError and withDomainMap
-- [ ] 8.3 Verify no `lib/errors` imports in services
-- [ ] 8.4 Verify no HTTP errors in repos
-- [ ] 8.5 Verify no raw booking state strings
-- [ ] 8.6 Verify no try/catch patterns in handlers
-- [ ] 8.7 Verify no `new Date()` in handlers
-- [ ] 8.8 Full CI verification
-- [ ] 8.9 Push to GitHub
+- [x] 8.1 Remove unused error factories (preconditionFailed, unprocessableContent, rateLimited, timeout)
+- [x] 8.2 Add JSDoc to DomainError and withDomainMap
+- [x] 8.3 Verify no `lib/errors` imports in services
+- [x] 8.4 Verify no HTTP errors in repos
+- [x] 8.5 Verify no raw booking state strings
+- [x] 8.6 Verify no try/catch patterns in handlers
+- [x] 8.7 Verify no `new Date()` in handlers
+- [x] 8.8 Full CI verification
+- [x] 8.9 Push to GitHub
 
 ---
 

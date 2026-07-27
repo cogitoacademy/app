@@ -1,8 +1,8 @@
 # Cogito Backend — Execution Plan v2
 
-**Status:** Superseded — see `docs/plans/CONSOLIDATION-PLAN.md` and `docs/plans/PRODUCTION-READINESS-PLAN.md` for current execution plans. This document remains as a historical design reference.
+**Status:** Superseded — see `docs/plans/completed/CONSOLIDATION-PLAN.md` and `docs/plans/active/PRODUCTION-READINESS-PLAN.md` for current execution plans. This document remains as a historical design reference.
 **Date:** 2026-06-27
-**Source of truth:** `docs/prd.tex` (v1.4), `docs/planning-phase-0-backend-mvp/PLAN.md` (design reference)
+**Source of truth:** `docs/prd.tex` (v1.4), `docs/archive/planning-phase-0-backend-mvp/PLAN.md` (design reference)
 **Scope:** Production-grade backend MVP satisfying PRD FR-01..FR-24
 
 This document is the **active execution plan**. The original PLAN.md remains as the design reference (schema, API design, edge cases, decision log D-01..D-30). This document defines the execution phases, architecture patterns, and step-by-step work items.

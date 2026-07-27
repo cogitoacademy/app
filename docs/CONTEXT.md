@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-07-24
+Last updated: 2026-07-27
 
 ## Architecture
 
@@ -246,23 +246,27 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 - **Health**: `GET /health` with DB ping + Redis ping (after production readiness)
 - **Deployment platform**: Coolify (self-hosted PaaS on Hetzner VPS)
 
-## Active Plans
+## Plans
 
-| Plan                                      | Branch                             | Status                                                                   |
-| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
-| `docs/plans/CONSOLIDATION-PLAN.md`        | `improvement/consolidation`        | Complete (merge to main pending)                                         |
-| `docs/plans/FOUNDATION-HARDENING.md`      | `improvement/foundation-hardening` | Next to execute (after consolidation merges to main)                     |
-| `docs/plans/PRODUCTION-READINESS-PLAN.md` | `improvement/production-readiness` | After foundation hardening, parallel with infrastructure                 |
-| `docs/plans/INFRASTRUCTURE-PLAN.md`       | `improvement/infrastructure`       | After foundation hardening, parallel with production readiness (Coolify) |
-| `docs/plans/PRD-GAPS-SPEC.md`             | `feature/prd-gaps` (future)        | Reference spec, after all three above merge to main                      |
-| `docs/plans/EXECUTION-PLAN-v2.md`         | —                                  | Superseded                                                               |
-| `docs/plans/REFACTORING-PLAN.md`          | —                                  | Historical reference                                                     |
+Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
+
+| Plan                                                              | Branch                             | Status                                       |
+| ----------------------------------------------------------------- | ---------------------------------- | -------------------------------------------- |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                         |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                         |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                         |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Ready to merge                               |
+| `docs/plans/active/PRODUCTION-READINESS-PLAN.md`                  | `improvement/production-readiness` | Next to execute (after foundation-hardening) |
+| `docs/plans/active/INFRASTRUCTURE-PLAN.md`                        | `improvement/infrastructure`       | Parallel with production-readiness (Coolify) |
+| `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, after above merge to main    |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                   |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                         |
 
 ### Execution Order
 
 ```
-1. Consolidation (complete) → merge to main
-2. Foundation Hardening (9 stories, ~12 days) → establishes solid baseline
+1. Consolidation (merged #16) → main
+2. Foundation Hardening (ready to merge) → main
 3. Production Readiness + Infrastructure (parallel, ~10 + ~4 days)
 4. PRD Gaps (G1-G18, ~15 days) → feature completeness
 ```
@@ -271,7 +275,7 @@ Foundation Hardening must complete before production-readiness and infrastructur
 
 ## Known Bugs
 
-### Existing bugs (planned in PRODUCTION-READINESS-PLAN.md)
+### Existing bugs (planned in `docs/plans/active/PRODUCTION-READINESS-PLAN.md`)
 
 | ID  | Bug                                                  | Priority |
 | --- | ---------------------------------------------------- | -------- |
@@ -290,7 +294,7 @@ Foundation Hardening must complete before production-readiness and infrastructur
 | N9  | adminBooking.listBookings returns null cursor        | P2       |
 | N15 | applyOverride doesn't update booking.holdAmount      | P1       |
 
-### New findings (planned in FOUNDATION-HARDENING.md)
+### New findings (planned in `docs/plans/completed/FOUNDATION-HARDENING.md`)
 
 | ID  | Bug                                                                    | Priority | Story |
 | --- | ---------------------------------------------------------------------- | -------- | ----- |

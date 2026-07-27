@@ -1,11 +1,15 @@
 # Cogito Backend — PRD Gaps Specification
 
-**Status:** Planning reference — not yet scheduled for implementation
-**Branch:** `feature/prd-gaps` (to be created after `improvement/production-readiness` merges to main)
-**Date:** 2026-07-21
-**Source:** `docs/prd.tex` (v1.4) — full FR-by-FR cross-reference analysis
+| Field      | Value                                                                        |
+| ---------- | ---------------------------------------------------------------------------- |
+| Status     | Planning reference                                                           |
+| Branch     | feature/prd-gaps (future)                                                    |
+| Created    | 2026-07-21                                                                   |
+| Depends on | improvement/production-readiness + improvement/infrastructure merged to main |
+| Next       | —                                                                            |
+| Scope      | Backend-only                                                                 |
 
-This document catalogs all PRD requirements that are not yet implemented. It serves as a reference for future feature development. No implementation work should begin until `improvement/consolidation` and `improvement/production-readiness` branches are merged to main.
+This document catalogs all PRD requirements that are not yet implemented. It serves as a reference for future feature development. No implementation work should begin until `improvement/foundation-hardening` and `improvement/production-readiness` branches are merged to main.
 
 ---
 
