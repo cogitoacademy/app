@@ -1,6 +1,22 @@
 import type { EmailPort, EmailMessage } from "./email.service";
+import { CircuitBreaker } from "../../lib/circuit-breaker";
 import { serviceUnavailable } from "../../lib/errors";
 import { log } from "../../lib/logger";
+
+const resendBreaker = new CircuitBreaker({
+  failureThreshold: 3,
+  resetTimeoutMs: 120_000,
+  halfOpenMaxAttempts: 1,
+  monitor: (state, error) => {
+    log({
+      level: state === "open" ? "error" : "info",
+      action: "circuit_breaker_state_change",
+      service: "resend",
+      state,
+      error: error ? { message: String(error) } : undefined,
+    });
+  },
+});
 
 export function createResendEmailProvider(
   apiKey: string,
@@ -10,21 +26,23 @@ export function createResendEmailProvider(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${apiKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          from: fromEmail,
-          to: [message.to],
-          subject: message.subject,
-          html: message.html,
-          tags: [{ name: "category", value: message.category }],
+      const response = await resendBreaker.execute(() =>
+        fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${apiKey}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            from: fromEmail,
+            to: [message.to],
+            subject: message.subject,
+            html: message.html,
+            tags: [{ name: "category", value: message.category }],
+          }),
+          signal: controller.signal,
         }),
-        signal: controller.signal,
-      });
+      );
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");

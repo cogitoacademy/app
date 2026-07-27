@@ -4,12 +4,28 @@ import type { DbOrTx } from "../../lib/tx";
 import type { MeetingEvent, MeetingPort } from "./meeting.types";
 import { log } from "../../lib/logger";
 import { createFallbackMeetingProvider } from "./fallback.provider";
+import { CircuitBreaker } from "../../lib/circuit-breaker";
 
 interface GoogleMeetingConfig {
   clientEmail: string;
   privateKey: string;
   calendarId: string;
 }
+
+const googleMeetBreaker = new CircuitBreaker({
+  failureThreshold: 5,
+  resetTimeoutMs: 60_000,
+  halfOpenMaxAttempts: 1,
+  monitor: (state, error) => {
+    log({
+      level: state === "open" ? "error" : "info",
+      action: "circuit_breaker_state_change",
+      service: "google_meet",
+      state,
+      error: error ? { message: String(error) } : undefined,
+    });
+  },
+});
 
 export function createGoogleMeetingProvider(
   config: GoogleMeetingConfig,
@@ -35,29 +51,31 @@ export function createGoogleMeetingProvider(
       const end = scheduledEndAt ?? new Date(start.getTime() + 90 * 60 * 1000);
 
       const TIMEOUT_MS = 30_000;
-      const response = await Promise.race([
-        calendar.events.insert({
-          calendarId: config.calendarId,
-          requestBody: {
-            summary: `Cogito Booking ${bookingId}`,
-            start: { dateTime: start.toISOString() },
-            end: { dateTime: end.toISOString() },
-            conferenceData: {
-              createRequest: {
-                requestId: bookingId,
-                conferenceSolutionKey: { type: "hangoutsMeet" },
+      const response = await googleMeetBreaker.execute(() =>
+        Promise.race([
+          calendar.events.insert({
+            calendarId: config.calendarId,
+            requestBody: {
+              summary: `Cogito Booking ${bookingId}`,
+              start: { dateTime: start.toISOString() },
+              end: { dateTime: end.toISOString() },
+              conferenceData: {
+                createRequest: {
+                  requestId: bookingId,
+                  conferenceSolutionKey: { type: "hangoutsMeet" },
+                },
               },
             },
-          },
-          conferenceDataVersion: 1,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Google Meet API timeout after 30s")),
-            TIMEOUT_MS,
+            conferenceDataVersion: 1,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Google Meet API timeout after 30s")),
+              TIMEOUT_MS,
+            ),
           ),
-        ),
-      ]);
+        ]),
+      );
 
       const event = response.data;
       const conferenceEntry = event.conferenceData?.entryPoints?.[0];
