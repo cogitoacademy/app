@@ -73,7 +73,7 @@ import { createSchedulerService } from "../../modules/scheduler/scheduler.servic
 describe("createSchedulerService", () => {
   test("returns null when redisUrl is empty", () => {
     const result = createSchedulerService("", {
-      onExpireBookings: mock(async () => ({ expired: 0 })),
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail: mock(async () => {}),
     });
@@ -82,7 +82,7 @@ describe("createSchedulerService", () => {
 
   test("returns queue and worker when redisUrl is provided", () => {
     const result = createSchedulerService("redis://localhost:6379", {
-      onExpireBookings: mock(async () => ({ expired: 0 })),
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail: mock(async () => {}),
     });
@@ -92,7 +92,7 @@ describe("createSchedulerService", () => {
   });
 
   test("handles expire-bookings job", async () => {
-    const onExpireBookings = mock(async () => ({ expired: 5 }));
+    const onExpireBookings = mock(async () => ({ expired: 5, failed: 0 }));
     createSchedulerService("redis://localhost:6379", {
       onExpireBookings,
       onReleaseHolds: mock(async () => ({ released: 0 })),
@@ -105,13 +105,35 @@ describe("createSchedulerService", () => {
     const result = await capturedJobHandler!(job);
 
     expect(onExpireBookings).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ expired: 5 });
+    expect(result).toEqual({ expired: 5, failed: 0 });
+  });
+
+  test("logs warn level when expire-bookings has failures", async () => {
+    const onExpireBookings = mock(async () => ({ expired: 3, failed: 2 }));
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings,
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onSendNotificationEmail: mock(async () => {}),
+    });
+
+    expect(capturedJobHandler).not.toBeNull();
+
+    const job = { id: "1", name: "expire-bookings", data: {} };
+    await capturedJobHandler!(job);
+
+    const warnLogs = logCaptures.filter(
+      (l) =>
+        l.level === "warn" &&
+        l.entry?.action === "expire_bookings_complete",
+    );
+    expect(warnLogs.length).toBe(1);
+    expect(warnLogs[0].entry).toMatchObject({ expired: 3, failed: 2 });
   });
 
   test("handles release-expired-holds job", async () => {
     const onReleaseHolds = mock(async () => ({ released: 3 }));
     createSchedulerService("redis://localhost:6379", {
-      onExpireBookings: mock(async () => ({ expired: 0 })),
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds,
       onSendNotificationEmail: mock(async () => {}),
     });
@@ -128,7 +150,7 @@ describe("createSchedulerService", () => {
   test("handles send-notification-email job", async () => {
     const onSendNotificationEmail = mock(async () => {});
     createSchedulerService("redis://localhost:6379", {
-      onExpireBookings: mock(async () => ({ expired: 0 })),
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail,
     });
@@ -150,7 +172,7 @@ describe("createSchedulerService", () => {
 
   test("logs warning for unknown job", async () => {
     createSchedulerService("redis://localhost:6379", {
-      onExpireBookings: mock(async () => ({ expired: 0 })),
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail: mock(async () => {}),
     });
@@ -169,7 +191,7 @@ describe("createSchedulerService", () => {
 
   test("worker failed handler logs error", () => {
     createSchedulerService("redis://localhost:6379", {
-      onExpireBookings: mock(async () => ({ expired: 0 })),
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail: mock(async () => {}),
     });
@@ -188,7 +210,7 @@ describe("createSchedulerService", () => {
 
   test("worker completed handler logs info", () => {
     createSchedulerService("redis://localhost:6379", {
-      onExpireBookings: mock(async () => ({ expired: 0 })),
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail: mock(async () => {}),
     });
