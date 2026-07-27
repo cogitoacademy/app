@@ -6,6 +6,7 @@ export async function scheduleBookingExpiryCheck(queue: Queue): Promise<void> {
     {},
     {
       repeat: { every: 5 * 60 * 1000 },
+      attempts: 3,
     },
   );
 }

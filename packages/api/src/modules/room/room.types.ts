@@ -3,14 +3,14 @@ import { z } from "zod";
 export const listRoomsInput = z.void();
 
 export const createRoomInput = z.object({
-  name: z.string().min(1),
-  location: z.string().min(1),
+  name: z.string().min(1).max(255),
+  location: z.string().min(1).max(255),
   capacity: z.number().int().min(1),
 });
 
 export const assignRoomInput = z.object({
-  bookingId: z.string().min(1),
-  roomId: z.string().min(1),
+  bookingId: z.string().min(1).max(100),
+  roomId: z.string().min(1).max(100),
   startAt: z.coerce.date(),
   endAt: z.coerce.date(),
 });

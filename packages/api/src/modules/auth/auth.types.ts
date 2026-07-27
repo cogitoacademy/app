@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const nonBlankString = z
   .string()
+  .max(255)
   .refine((val) => val.trim() !== "", "Cannot be blank");
 
 export const updateProfileInput = z.object({
@@ -13,6 +14,7 @@ export const updateProfileInput = z.object({
   parentEmail: z
     .string()
     .email()
+    .max(320)
     .refine((val) => val.trim() !== "", "Cannot be blank")
     .optional(),
 });

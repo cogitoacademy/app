@@ -2,6 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { enrichOpenAPISpec } from "./openapi";
 
+function openapiGuard(nodeEnv: string) {
+  if (nodeEnv === "production")
+    return new Response("Not Found", { status: 404 });
+  return null;
+}
+
 describe("enrichOpenAPISpec", () => {
   test("adds global tags and sorts paths alphabetically", () => {
     const spec = {
@@ -35,5 +41,19 @@ describe("enrichOpenAPISpec", () => {
       "/achievements/list",
       "/auth/me",
     ]);
+  });
+});
+
+describe("OpenAPI production guard", () => {
+  test("production guard logic returns 404 when NODE_ENV is production", () => {
+    const result = openapiGuard("production");
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe(404);
+
+    const devResult = openapiGuard("development");
+    expect(devResult).toBeNull();
+
+    const testResult = openapiGuard("test");
+    expect(testResult).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import {
   InviteNotFoundError,
   TutorProfileNotFoundError,
   InvalidInviteActionError,
+  DuplicateInviteError,
 } from "./admin-tutor.errors";
 import type { DbType } from "../../lib/db";
 import {
@@ -27,6 +28,13 @@ import {
 import type { AdminTutorAuditPort } from "./index";
 
 export type { ReviewAction };
+
+function isUniqueViolation(err: unknown): boolean {
+  if (err && typeof err === "object" && "code" in err) {
+    return (err as { code: string }).code === "23505";
+  }
+  return false;
+}
 
 type CreateInviteInput = z.infer<typeof createInviteInput>;
 type ListInvitesInput = z.infer<typeof listInvitesInput>;
@@ -103,22 +111,30 @@ export function createAdminTutorService(deps: {
         input.email,
       );
       if (existing) {
-        throw new InvalidInviteActionError(input.email, "create_duplicate");
+        throw new DuplicateInviteError(input.email);
       }
 
       const token = crypto.randomUUID();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
 
-      const invite = await adminTutorRepo.insertInvite(tx, {
-        email: input.email,
-        displayName: input.displayName,
-        token,
-        status: INVITE_STATUS.INVITED,
-        invitedBy: adminId,
-        internalNotes: input.internalNotes ?? null,
-        expiresAt,
-      });
+      let invite: TutorInviteRow;
+      try {
+        invite = await adminTutorRepo.insertInvite(tx, {
+          email: input.email,
+          displayName: input.displayName,
+          token,
+          status: INVITE_STATUS.INVITED,
+          invitedBy: adminId,
+          internalNotes: input.internalNotes ?? null,
+          expiresAt,
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          throw new DuplicateInviteError(input.email);
+        }
+        throw err;
+      }
 
       await auditPort.record({
         db: tx,

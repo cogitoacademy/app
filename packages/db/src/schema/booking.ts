@@ -15,21 +15,19 @@ import { uuidPrimaryKey, user } from "./auth";
 import { wallet } from "./wallet";
 
 export const BOOKING_STATES = [
-  "draft",
-  "awaiting_marks_hold",
   "awaiting_tutor_review",
-  "awaiting_participant_confirmation",
+  "declined",
+  "reschedule_proposed",
   "awaiting_reconfirmation",
   "awaiting_admin_room_approval",
+  "awaiting_participant_confirmation",
   "confirmed",
   "scheduled",
   "completed",
-  "declined",
   "cancelled",
   "late_cancelled",
   "no_show",
   "expired",
-  "reschedule_proposed",
 ] as const;
 
 export const BOOKING_TYPES = ["solo", "group", "series"] as const;
@@ -52,7 +50,9 @@ export const booking = pgTable(
       .notNull()
       .default(1),
     confirmedHeadcount: integer("confirmed_headcount").notNull().default(0),
-    currentState: text("current_state").notNull().default("draft"),
+    currentState: text("current_state")
+      .notNull()
+      .default("awaiting_tutor_review"),
     previousState: text("previous_state"),
     stateReason: text("state_reason"),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),
@@ -62,7 +62,7 @@ export const booking = pgTable(
     scheduledEndAt: timestamp("scheduled_end_at", {
       withTimezone: true,
     }).notNull(),
-    timezone: text("timezone").notNull().default("Asia/Jakarta"),
+    timezone: text("timezone").notNull().default("Asia/Jakarta"), // TODO(production-readiness): use timezone in deadline calculations instead of server time
     roomId: text("room_id"),
     priceSnapshot: jsonb("price_snapshot").$type<{
       perStudent: number;
@@ -71,7 +71,6 @@ export const booking = pgTable(
       cogitoTake: number;
     }>(),
     originalMarks: integer("original_marks").notNull(),
-    repricedMarks: integer("repriced_marks"),
     holdAmount: integer("hold_amount").notNull().default(0),
     refundedAmount: integer("refunded_amount").notNull().default(0),
     version: integer("version").default(1).notNull(),
@@ -98,7 +97,7 @@ export const booking = pgTable(
     ),
     check(
       "booking_state_check",
-      sql`${table.currentState} IN ('draft','awaiting_marks_hold','awaiting_tutor_review','awaiting_participant_confirmation','awaiting_reconfirmation','awaiting_admin_room_approval','confirmed','scheduled','completed','declined','cancelled','late_cancelled','no_show','expired','reschedule_proposed')`,
+      sql`${table.currentState} IN ('awaiting_tutor_review','declined','reschedule_proposed','awaiting_reconfirmation','awaiting_admin_room_approval','awaiting_participant_confirmation','confirmed','scheduled','completed','cancelled','late_cancelled','no_show','expired')`,
     ),
     check(
       "booking_group_size_check",

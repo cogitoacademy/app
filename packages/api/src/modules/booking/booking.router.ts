@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { protectedProcedure } from "../../procedures";
+import { protectedProcedure, tutorProcedure } from "../../procedures";
 import {
   createSoloInput,
   createGroupInput,
@@ -162,7 +162,7 @@ export function createBookingRouter(handler: BookingHandler) {
 
 export function createTutorActionsRouter(handler: TutorActionsHandler) {
   return {
-    acceptBooking: protectedProcedure
+    acceptBooking: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/booking/accept",
@@ -173,7 +173,7 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       .input(bookingActionInput)
       .handler(handler.acceptBooking),
 
-    declineBooking: protectedProcedure
+    declineBooking: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/booking/decline",
@@ -188,7 +188,7 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       )
       .handler(handler.declineBooking),
 
-    completeSession: protectedProcedure
+    completeSession: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/booking/complete",

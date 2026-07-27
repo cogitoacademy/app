@@ -1,4 +1,4 @@
-import { count, desc, eq } from "drizzle-orm";
+import { count, desc, eq, and } from "drizzle-orm";
 import { user } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { USER_ROLE } from "../../shared/constants";
@@ -57,8 +57,28 @@ export async function updateRole(
   return row!;
 }
 
+export async function updateRoleWithExpected(
+  conn: DbOrTx,
+  userId: string,
+  role: UserRole,
+  expectedRole: string,
+): Promise<UserRow[]> {
+  return conn
+    .update(user)
+    .set({ role })
+    .where(and(eq(user.id, userId), eq(user.role, expectedRole)))
+    .returning();
+}
+
 export function createAdminRepo() {
-  return { listUsers, countUsers, getById, countAdmins, updateRole };
+  return {
+    listUsers,
+    countUsers,
+    getById,
+    countAdmins,
+    updateRole,
+    updateRoleWithExpected,
+  };
 }
 
 export type AdminRepo = ReturnType<typeof createAdminRepo>;

@@ -72,6 +72,7 @@ export interface NotificationIdInput {
 
 export interface InAppNotificationPort {
   write(params: NotificationWriteParams): Promise<void>;
+  writeBestEffort(params: NotificationWriteParams): Promise<void>;
   list(
     userId: string,
     opts?: NotificationListInput,
@@ -176,6 +177,12 @@ export function createNotificationService(
   }
 
   async function write(params: NotificationWriteParams): Promise<void> {
+    await writeInternal(params);
+  }
+
+  async function writeBestEffort(
+    params: NotificationWriteParams,
+  ): Promise<void> {
     await writeInternal(params).catch((error) => {
       log({
         level: "error",
@@ -227,6 +234,7 @@ export function createNotificationService(
 
   return {
     write,
+    writeBestEffort,
     list,
     getUnreadCount,
     markAsRead,

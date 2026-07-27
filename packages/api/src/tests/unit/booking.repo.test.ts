@@ -510,6 +510,18 @@ describe("createBookingRepo", () => {
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
     });
+
+    test("applies limit of 500 to prevent OOM", async () => {
+      const rows = [{ id: "b1" }];
+      const conn: any = { ...makeSelectConn(rows) };
+      const repo = makeBookingRepo();
+
+      await repo.findBookingsExpiringByDeadline(conn, [
+        "awaiting_participant_confirmation",
+      ]);
+
+      expect(conn.limit).toHaveBeenCalledWith(500);
+    });
   });
 
   describe("updateBookingVersioned", () => {

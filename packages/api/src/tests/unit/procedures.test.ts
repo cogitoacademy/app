@@ -112,4 +112,78 @@ describe("procedures", () => {
 
     expect(nextCalled).toBe(true);
   });
+
+  test("requireTutor throws UNAUTHORIZED when session is null", async () => {
+    const { requireTutor } = await import("../../procedures");
+
+    try {
+      await (requireTutor as any)({
+        context: { session: null, services: {} },
+        next: async () => "should not reach",
+      });
+      expect.unreachable("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ORPCError);
+      expect((e as ORPCError).code).toBe("UNAUTHORIZED");
+    }
+  });
+
+  test("requireTutor throws UNAUTHORIZED when session has no user", async () => {
+    const { requireTutor } = await import("../../procedures");
+
+    try {
+      await (requireTutor as any)({
+        context: { session: {}, services: {} },
+        next: async () => "should not reach",
+      });
+      expect.unreachable("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ORPCError);
+      expect((e as ORPCError).code).toBe("UNAUTHORIZED");
+    }
+  });
+
+  test("requireTutor throws FORBIDDEN when user role is student", async () => {
+    const { requireTutor } = await import("../../procedures");
+
+    try {
+      await (requireTutor as any)({
+        context: {
+          session: { user: { id: "u1", role: "student" } },
+          services: {},
+        },
+        next: async () => "should not reach",
+      });
+      expect.unreachable("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ORPCError);
+      expect((e as ORPCError).code).toBe("FORBIDDEN");
+    }
+  });
+
+  test("requireTutor calls next when user is tutor", async () => {
+    const { requireTutor } = await import("../../procedures");
+    const { USER_ROLE } = await import("../../shared/constants");
+
+    let nextCalled = false;
+    const next = async () => {
+      nextCalled = true;
+      return "ok";
+    };
+
+    await (requireTutor as any)({
+      context: {
+        session: { user: { id: "t1", role: USER_ROLE.TUTOR } },
+        services: {},
+      },
+      next,
+    });
+
+    expect(nextCalled).toBe(true);
+  });
+
+  test("tutorProcedure is exported", async () => {
+    const mod = await import("../../procedures");
+    expect(mod.tutorProcedure).toBeDefined();
+  });
 });

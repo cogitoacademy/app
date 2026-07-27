@@ -99,19 +99,29 @@ export function createBookingService(deps: {
 }) {
   const { db, repo, wallet, pricing, audit, notification, meeting } = deps;
 
-  async function assertStudentBookingAccess(
+  async function assertBookingAccess(
+    b: { proposerId: string; tutorId: string },
+    userId: string,
+    conn: DbOrTx,
+    bookingId: string,
+  ): Promise<void> {
+    if (b.proposerId !== userId) {
+      if (b.tutorId === userId) return;
+      const participant = await repo.findParticipant(conn, bookingId, userId);
+      if (!participant) {
+        throw new BookingNotOwnedError(bookingId, userId);
+      }
+    }
+  }
+
+  async function loadBookingAndAssertAccess(
     conn: DbOrTx,
     userId: string,
     bookingId: string,
   ) {
     const b = await repo.findBookingById(conn, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    if (b.proposerId !== userId) {
-      const participant = await repo.findParticipant(conn, bookingId, userId);
-      if (!participant) {
-        throw new BookingNotOwnedError(bookingId, userId);
-      }
-    }
+    await assertBookingAccess(b, userId, conn, bookingId);
     return b;
   }
 
@@ -177,9 +187,47 @@ export function createBookingService(deps: {
     return versioned.updated;
   }
 
-  async function getById(bookingId: string) {
+  async function releaseAllParticipantHolds(
+    tx: DbOrTx,
+    bookingId: string,
+    reason: string,
+    actorType: "student" | "tutor" | "system",
+    excludeUserId?: string,
+  ): Promise<void> {
+    const participants = await repo.findConfirmedParticipants(
+      tx,
+      bookingId,
+      excludeUserId,
+    );
+    for (const p of participants) {
+      if (p.heldAmount > 0) {
+        const w = await wallet.getByUserId(tx, p.userId);
+        if (w) {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: w.id,
+            amount: p.heldAmount,
+            eventKey: `booking.${bookingId}.release.${p.userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType,
+            reason,
+          });
+        }
+      }
+      // eslint-disable-next-line no-await-in-loop
+      await repo.updateParticipantState(tx, p.id, {
+        confirmationState: CONFIRMATION_STATE.WITHDRAWN_PRE_H2,
+        withdrawnAt: new Date(),
+        withdrawnReason: reason,
+      });
+    }
+  }
+
+  async function getById(bookingId: string, userId: string) {
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
+    await assertBookingAccess(b, userId, db, bookingId);
     return b;
   }
 
@@ -307,7 +355,7 @@ export function createBookingService(deps: {
         details: { type: BOOKING_TYPE.SOLO, tutorId: input.tutorId, modality },
       });
 
-      await notification.write({
+      await notification.writeBestEffort({
         db: tx,
         userId: input.tutorId,
         bookingId,
@@ -328,7 +376,7 @@ export function createBookingService(deps: {
     cancellationReason?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await assertStudentBookingAccess(tx, userId, bookingId);
+      const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
           b.currentState,
@@ -346,19 +394,18 @@ export function createBookingService(deps: {
         ? BOOKING_STATE.LATE_CANCELLED
         : BOOKING_STATE.CANCELLED;
 
-      if (b.holdAmount > 0) {
-        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-        await wallet.release(tx, {
-          walletId: proposerWallet.id,
-          amount: b.holdAmount,
-          eventKey: `booking.${bookingId}.cancel_release`,
-          sourceReference: bookingId,
-          bookingId,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
-        });
+      if (b.type === BOOKING_TYPE.SERIES) {
+        await repo.cancelAllSessions(tx, bookingId);
       }
+
+      await releaseAllParticipantHolds(
+        tx,
+        bookingId,
+        `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
+        ACTOR_TYPE.STUDENT,
+      );
+
+      await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
       const updated = await transition(tx, bookingId, toState, {
         actorId: userId,
@@ -372,7 +419,7 @@ export function createBookingService(deps: {
         cancellationReason ?? null,
       );
 
-      await notification.write({
+      await notification.writeBestEffort({
         db: tx,
         userId: b.tutorId,
         bookingId,
@@ -398,11 +445,8 @@ export function createBookingService(deps: {
       }
 
       const isOffline = b.modality === MODALITY.OFFLINE;
-      const toState: BookingState = isOffline
-        ? BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
-        : BOOKING_STATE.CONFIRMED;
 
-      await transition(tx, bookingId, toState, {
+      await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
         actorId: tutorId,
         actorType: ACTOR_TYPE.TUTOR,
       });
@@ -414,7 +458,25 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Meeting created automatically",
         });
+
+        await repo.updateBookingDeadline(
+          tx,
+          bookingId,
+          new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+        );
       } else {
+        await transition(
+          tx,
+          bookingId,
+          BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+          {
+            actorId: tutorId,
+            actorType: ACTOR_TYPE.TUTOR,
+            reason: "Offline booking requires room assignment",
+          },
+        );
+
+        await repo.updateBookingDeadline(tx, bookingId, b.scheduledStartAt);
         updated = await repo.findBookingById(tx, bookingId);
       }
 
@@ -469,19 +531,14 @@ export function createBookingService(deps: {
         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
       }
 
-      if (b.holdAmount > 0) {
-        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-        await wallet.release(tx, {
-          walletId: proposerWallet.id,
-          amount: b.holdAmount,
-          eventKey: `booking.${bookingId}.decline_release`,
-          sourceReference: bookingId,
-          bookingId,
-          actorType: ACTOR_TYPE.TUTOR,
-          reason: reason ?? "Tutor declined",
-        });
-      }
+      await releaseAllParticipantHolds(
+        tx,
+        bookingId,
+        reason ?? "Tutor declined",
+        ACTOR_TYPE.TUTOR,
+      );
+
+      await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
       const updated = await transition(tx, bookingId, BOOKING_STATE.DECLINED, {
         actorId: tutorId,
@@ -489,7 +546,7 @@ export function createBookingService(deps: {
         reason,
       });
 
-      await notification.write({
+      await notification.writeBestEffort({
         db: tx,
         userId: b.proposerId,
         bookingId,
@@ -544,7 +601,7 @@ export function createBookingService(deps: {
 
       await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
-      await notification.write({
+      await notification.writeBestEffort({
         db: tx,
         userId: b.proposerId,
         bookingId,
@@ -567,7 +624,7 @@ export function createBookingService(deps: {
     reason?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await assertStudentBookingAccess(tx, userId, bookingId);
+      const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
           b.currentState,
@@ -595,6 +652,12 @@ export function createBookingService(deps: {
         proposedEndAt,
         status: CONFIRMATION_STATE.PENDING,
       });
+
+      await repo.updateBookingDeadline(
+        tx,
+        bookingId,
+        new Date(Date.now() + 24 * 60 * 60 * 1000),
+      );
 
       await notification.write({
         db: tx,
@@ -883,7 +946,7 @@ export function createBookingService(deps: {
 
   async function withdraw(userId: string, bookingId: string, reason?: string) {
     return db.transaction(async (tx) => {
-      const b = await assertStudentBookingAccess(tx, userId, bookingId);
+      const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingCancelledError(bookingId);
       }
@@ -920,6 +983,8 @@ export function createBookingService(deps: {
         withdrawnReason: reason,
       });
 
+      await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
+
       const remaining = await repo.findConfirmedParticipants(
         tx,
         bookingId,
@@ -930,6 +995,16 @@ export function createBookingService(deps: {
         b.type === BOOKING_TYPE.GROUP &&
         remaining.length < MIN_GROUP_HEADCOUNT
       ) {
+        await releaseAllParticipantHolds(
+          tx,
+          bookingId,
+          "Group cancelled: not enough participants",
+          ACTOR_TYPE.STUDENT,
+          userId,
+        );
+
+        await repo.updateBookingHoldAmount(tx, bookingId, 0);
+
         await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
           actorId: userId,
           actorType: ACTOR_TYPE.STUDENT,
@@ -939,8 +1014,7 @@ export function createBookingService(deps: {
         const currentState = b.currentState as BookingState;
         if (
           currentState === BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION ||
-          currentState === BOOKING_STATE.AWAITING_TUTOR_REVIEW ||
-          currentState === BOOKING_STATE.AWAITING_MARKS_HOLD
+          currentState === BOOKING_STATE.AWAITING_TUTOR_REVIEW
         ) {
           await transition(
             tx,
@@ -1083,9 +1157,10 @@ export function createBookingService(deps: {
     });
   }
 
-  async function listSessions(bookingId: string) {
+  async function listSessions(bookingId: string, userId: string) {
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
+    await assertBookingAccess(b, userId, db, bookingId);
     if (b.type !== BOOKING_TYPE.SERIES)
       throw new BookingNotEditableError(bookingId);
     return repo.listSessionsBySeriesId(db, bookingId);
@@ -1095,35 +1170,45 @@ export function createBookingService(deps: {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
       BOOKING_STATE.AWAITING_RECONFIRMATION,
-      BOOKING_STATE.AWAITING_MARKS_HOLD,
       BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+      BOOKING_STATE.RESCHEDULE_PROPOSED,
+      BOOKING_STATE.SCHEDULED,
+      BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
     ]);
 
+    const EXPIRY_TARGET: Record<string, BookingState> = {
+      [BOOKING_STATE.RESCHEDULE_PROPOSED]: BOOKING_STATE.EXPIRED,
+      [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
+      [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
+    };
+
+    let succeeded = 0;
+    let failed = 0;
     for (const b of candidates) {
       try {
         // eslint-disable-next-line no-await-in-loop
         await db.transaction(async (tx) => {
-          if (b.holdAmount > 0) {
-            const w = await wallet.getByUserId(tx, b.proposerId);
-            if (w) {
-              await wallet.release(tx, {
-                walletId: w.id,
-                amount: b.holdAmount,
-                eventKey: `booking.${b.id}.expire_release`,
-                sourceReference: b.id,
-                bookingId: b.id,
-                actorType: ACTOR_TYPE.SYSTEM,
-                reason: "Booking expired",
-              });
-            }
-          }
-          await transition(tx, b.id, BOOKING_STATE.EXPIRED, {
+          await releaseAllParticipantHolds(
+            tx,
+            b.id,
+            "Booking expired",
+            ACTOR_TYPE.SYSTEM,
+          );
+
+          await repo.updateBookingHoldAmount(tx, b.id, 0);
+
+          const targetState =
+            EXPIRY_TARGET[b.currentState as string] ?? BOOKING_STATE.EXPIRED;
+
+          await transition(tx, b.id, targetState, {
             actorId: "system",
             actorType: ACTOR_TYPE.SYSTEM,
             reason: "Deadline passed",
           });
         });
+        succeeded++;
       } catch (error) {
+        failed++;
         log({
           level: "error",
           action: "expire_booking_failed",
@@ -1132,7 +1217,7 @@ export function createBookingService(deps: {
         });
       }
     }
-    return { expired: candidates.length };
+    return { expired: succeeded, failed };
   }
 
   return {

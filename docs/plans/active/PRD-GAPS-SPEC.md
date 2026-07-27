@@ -1,11 +1,15 @@
 # Cogito Backend — PRD Gaps Specification
 
-**Status:** Planning reference — not yet scheduled for implementation
-**Branch:** `feature/prd-gaps` (to be created after `improvement/production-readiness` merges to main)
-**Date:** 2026-07-21
-**Source:** `docs/prd.tex` (v1.4) — full FR-by-FR cross-reference analysis
+| Field      | Value                                                                        |
+| ---------- | ---------------------------------------------------------------------------- |
+| Status     | Planning reference                                                           |
+| Branch     | feature/prd-gaps (future)                                                    |
+| Created    | 2026-07-21                                                                   |
+| Depends on | improvement/production-readiness + improvement/infrastructure merged to main |
+| Next       | —                                                                            |
+| Scope      | Backend-only                                                                 |
 
-This document catalogs all PRD requirements that are not yet implemented. It serves as a reference for future feature development. No implementation work should begin until `improvement/consolidation` and `improvement/production-readiness` branches are merged to main.
+This document catalogs all PRD requirements that are not yet implemented. It serves as a reference for future feature development. No implementation work should begin until `improvement/foundation-hardening` and `improvement/production-readiness` branches are merged to main.
 
 ---
 
@@ -559,6 +563,21 @@ For each gap:
 8. **Integration test** — via `createRouterClient`
 9. **Update CONTEXT.md and MODULE-REFERENCE.md**
 
+### Established Patterns (from foundation-hardening)
+
+All new endpoints must use these patterns established by the foundation-hardening branch:
+
+| Pattern                                                                | Where                                                    | Usage                                                                                  |
+| ---------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `assertBookingAccess(b, userId, conn, bookingId)`                      | `booking.service.ts`                                     | All booking endpoints check proposer/tutor/participant access                          |
+| `tutorProcedure`                                                       | `procedures.ts`                                          | Tutor-only endpoints (G6 reschedule, G18 series completion)                            |
+| Bounded Zod schemas (`.max()` on strings/arrays, `.refine()` on dates) | All `*.types.ts`                                         | All new input schemas inherit bounds                                                   |
+| `writeBestEffort()` / `write()` notification split                     | `notification.service.ts`                                | G17 notification matrix — use `writeBestEffort` for info, `write` for action/critical  |
+| `fetchWithTimeout` / `AbortController` on external calls               | `google-meeting.provider.ts`, `resend-email.provider.ts` | G11/G12 meeting endpoints — all external calls must have timeouts                      |
+| `Idempotency-Key` header support                                       | `booking.handler.ts`                                     | Any create endpoint that could be retried                                              |
+| `releaseAllParticipantHolds(tx, bookingId, reason, actorType)`         | `booking.service.ts`                                     | G5 series cancellation, G18 series completion — all terminal transitions release holds |
+| Optimistic locking (`version` column + `updateWithVersion`)            | `booking.repo.ts`, `achievement.repo.ts`                 | All update/delete operations on versioned tables                                       |
+
 ---
 
 ## 5. Estimated Timeline
@@ -578,3 +597,4 @@ For each gap:
 ### Version Notes
 
 - v1.0 (2026-07-21): Created. 18 PRD gaps catalogued with specifications, acceptance tests, and timeline. Reference document for future `feature/prd-gaps` branch.
+- v1.1 (2026-07-27): Added "Established Patterns" section documenting foundation-hardening patterns that all new endpoints must use. Updated dependency line (consolidation merged → foundation-hardening).

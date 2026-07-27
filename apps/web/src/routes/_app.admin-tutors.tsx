@@ -182,17 +182,22 @@ function RouteComponent() {
             <Text className="text-muted">No tutor profiles found.</Text>
           ) : (
             <Stack direction="row" spacing="md">
-              {profiles.map((profile: any) => (
-                <TutorReviewCard
-                  key={profile.id}
-                  profile={{
-                    ...profile,
-                    expertise: profile.expertise ?? [],
-                    proofUrls: profile.proofUrls ?? [],
-                  }}
-                  onAction={() => refetchProfiles()}
-                />
-              ))}
+              {profiles.map(
+                (
+                  profile: Awaited<
+                    ReturnType<typeof client.adminTutor.listTutorProfiles>
+                  >[number],
+                ) => (
+                  <TutorReviewCard
+                    key={profile.id}
+                    profile={{
+                      ...profile,
+                      expertise: profile.expertise ?? [],
+                    }}
+                    onAction={() => refetchProfiles()}
+                  />
+                ),
+              )}
             </Stack>
           )}
         </CardBody>

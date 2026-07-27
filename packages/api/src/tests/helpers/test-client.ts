@@ -13,7 +13,7 @@ export async function createTestContext(sessionCookie?: string) {
   const headers = new Headers();
   if (sessionCookie) headers.set("cookie", sessionCookie);
   const session = await auth.api.getSession({ headers });
-  return { session, services };
+  return { session, services, headers };
 }
 
 export function createTestClient(

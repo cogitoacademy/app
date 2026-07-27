@@ -5,6 +5,8 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 
+import type { CogitoUser } from "@cogito-app/auth";
+
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { Layout } from "@/components/dashboard/layout";
 import { authClient } from "@/lib/auth-client";
@@ -44,7 +46,7 @@ function RouteComponent() {
         <AppSidebar
           userEmail={session.data?.user.email}
           userName={session.data?.user.name}
-          role={(session.data?.user as any)?.role}
+          role={(session.data?.user as CogitoUser | undefined)?.role}
         />
       }
     >

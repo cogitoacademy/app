@@ -1,6 +1,5 @@
 import { eq, and, gte, lte, ne } from "drizzle-orm";
 import { room, roomBooking } from "@cogito-app/db/schema";
-import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { ROOM_BOOKING_STATUS } from "../../shared/constants";
 
@@ -47,6 +46,30 @@ export async function findRoomBookings(
     .limit(1);
 }
 
+export async function findRoomBookingsForUpdate(
+  conn: DbOrTx,
+  roomId: string,
+  startAt: Date,
+  endAt: Date,
+  excludeBookingId?: string,
+) {
+  const conditions = [
+    eq(roomBooking.roomId, roomId),
+    eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
+    lte(roomBooking.startAt, endAt),
+    gte(roomBooking.endAt, startAt),
+  ];
+  if (excludeBookingId) {
+    conditions.push(ne(roomBooking.bookingId, excludeBookingId));
+  }
+  return conn
+    .select()
+    .from(roomBooking)
+    .where(and(...conditions))
+    .for("update")
+    .limit(1);
+}
+
 export async function insertRoomBooking(
   conn: DbOrTx,
   values: {
@@ -61,27 +84,13 @@ export async function insertRoomBooking(
   return row!;
 }
 
-export function createRoomRepo(db: DbType) {
+export function createRoomRepo() {
   return {
-    findActiveRooms: () => findActiveRooms(db),
-    insertRoom: (values: {
-      name: string;
-      location: string;
-      capacity: number;
-    }) => insertRoom(db, values),
-    findRoomById: (roomId: string) => findRoomById(db, roomId),
-    findRoomBookings: (
-      roomId: string,
-      startAt: Date,
-      endAt: Date,
-      excludeBookingId?: string,
-    ) => findRoomBookings(db, roomId, startAt, endAt, excludeBookingId),
-    insertRoomBooking: (values: {
-      roomId: string;
-      bookingId: string;
-      startAt: Date;
-      endAt: Date;
-      status: string;
-    }) => insertRoomBooking(db, values),
+    findActiveRooms,
+    insertRoom,
+    findRoomById,
+    findRoomBookings,
+    findRoomBookingsForUpdate,
+    insertRoomBooking,
   };
 }

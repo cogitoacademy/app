@@ -560,6 +560,83 @@ describe("PaymentService", () => {
       expect(wallet.credit).toHaveBeenCalledTimes(0);
       expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
     });
+
+    test("PAID webhook when record is FAILED (out-of-order) returns FAILED, no credit", async () => {
+      const wallet = makeWallet();
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.FAILED,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
+        })),
+        updatePaymentStatus,
+      });
+
+      const db = {
+        transaction: mock(async (fn: any) => fn({})),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_paid_late",
+        status: PAYMENT_STATUS.PAID as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.FAILED);
+      expect(wallet.credit).toHaveBeenCalledTimes(0);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
+    });
+
+    test("PENDING then PAID credits wallet exactly once", async () => {
+      const wallet = makeWallet();
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus,
+      });
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_paid",
+        status: PAYMENT_STATUS.PAID as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.PAID);
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("getPurchase", () => {

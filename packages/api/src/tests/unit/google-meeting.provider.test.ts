@@ -247,3 +247,44 @@ describe("createGoogleMeetingProviderWithFallback", () => {
     expect(result.status).toBe("manual");
   });
 });
+
+describe("createGoogleMeetingProvider timeout", () => {
+  const config = {
+    clientEmail: "test@example.com",
+    privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+    calendarId: "primary",
+  };
+
+  test("createEvent handles timeout error from Promise.race", async () => {
+    mockCalendarEventsInsert.mockImplementationOnce(async () => {
+      throw new Error("Google Meet API timeout after 30s");
+    });
+
+    const failedRow = {
+      id: "me_timeout",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: null,
+      meetingUrl: null,
+      status: "failed",
+      errorReason: "Error: Google Meet API timeout after 30s",
+    };
+
+    const returning = mock(async () => [failedRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { insert } as any;
+
+    logCaptures = [];
+    const provider = createGoogleMeetingProvider(config, db);
+    const result = await provider.createEvent("b1");
+
+    expect(result.status).toBe("failed");
+    expect(result.errorReason).toContain("timeout");
+
+    const errorLog = logCaptures.find(
+      (e) => e.action === "google_meet_create_failed",
+    );
+    expect(errorLog).toBeDefined();
+  });
+});

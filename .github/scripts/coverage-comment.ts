@@ -64,6 +64,29 @@ function pct(hit: number, found: number): string {
   return `${((hit / found) * 100).toFixed(1)}%`;
 }
 
+function pctNum(hit: number, found: number): number {
+  if (found === 0) return 100;
+  return (hit / found) * 100;
+}
+
+function isApiFile(f: string): boolean {
+  const normalized = f.replace(process.cwd() + "/", "");
+  return (
+    normalized.startsWith("packages/api/src/") &&
+    !normalized.includes("/tests/")
+  );
+}
+
+function sumLines(recs: LcovRecord[]) {
+  return recs.reduce(
+    (acc, r) => ({
+      linesFound: acc.linesFound + r.linesFound,
+      linesHit: acc.linesHit + r.linesHit,
+    }),
+    { linesFound: 0, linesHit: 0 },
+  );
+}
+
 async function main() {
   const lcovPath = process.env.LCOV_FILE || "./coverage/lcov.info";
   const prNumber = process.env.PR_NUMBER;
@@ -85,6 +108,11 @@ async function main() {
     return;
   }
 
+  const apiRecords = records.filter((r) => isApiFile(r.file));
+
+  const apiLines = sumLines(apiRecords);
+  const overallLines = sumLines(records);
+
   const totals = records.reduce(
     (acc, r) => ({
       linesFound: acc.linesFound + r.linesFound,
@@ -104,15 +132,39 @@ async function main() {
     },
   );
 
-  const linesPct = pct(totals.linesHit, totals.linesFound);
   const functionsPct = pct(totals.functionsHit, totals.functionsFound);
   const branchesPct = pct(totals.branchesHit, totals.branchesFound);
 
+  // --- Coverage gate (enforced) ---
+  // Thresholds configurable via env; defaults match docs/plans/FOUNDATION-HARDENING.md.
+  const apiThreshold = Number(process.env.COVERAGE_API_THRESHOLD ?? 90);
+  const overallThreshold = Number(process.env.COVERAGE_OVERALL_THRESHOLD ?? 80);
+
+  const apiPct = pctNum(apiLines.linesHit, apiLines.linesFound);
+  const overallPct = pctNum(overallLines.linesHit, overallLines.linesFound);
+
+  const gateFailures: string[] = [];
+  if (apiPct < apiThreshold) {
+    gateFailures.push(
+      `packages/api lines ${apiPct.toFixed(1)}% < ${apiThreshold}% threshold`,
+    );
+  }
+  if (overallPct < overallThreshold) {
+    gateFailures.push(
+      `overall lines ${overallPct.toFixed(1)}% < ${overallThreshold}% threshold`,
+    );
+  }
+
   const header = `## 📊 Coverage Report`;
+  const gateLine =
+    gateFailures.length === 0
+      ? `> ✅ Coverage gate passed (api ≥ ${apiThreshold}%, overall ≥ ${overallThreshold}%)`
+      : `> ❌ Coverage gate FAILED: ${gateFailures.join("; ")}`;
   const summaryTable = [
     `| Metric | Coverage |`,
     `|--------|----------|`,
-    `| Lines | ${linesPct} (${totals.linesHit}/${totals.linesFound}) |`,
+    `| packages/api lines | ${pct(apiLines.linesHit, apiLines.linesFound)} (${apiLines.linesHit}/${apiLines.linesFound}) — gate ${apiThreshold}% |`,
+    `| Overall lines | ${pct(overallLines.linesHit, overallLines.linesFound)} (${overallLines.linesHit}/${overallLines.linesFound}) — gate ${overallThreshold}% |`,
     `| Functions | ${functionsPct} (${totals.functionsHit}/${totals.functionsFound}) |`,
     `| Branches | ${branchesPct} (${totals.branchesHit}/${totals.branchesFound}) |`,
   ].join("\n");
@@ -138,7 +190,7 @@ async function main() {
         ].join("\n")
       : "";
 
-  const comment = [header, summaryTable, perFileTable].join("\n");
+  const comment = [header, gateLine, summaryTable, perFileTable].join("\n");
 
   console.log(comment);
 
@@ -163,6 +215,13 @@ async function main() {
     }
   } else {
     console.log("\nℹ️  No PR_NUMBER set — printed to stdout only.");
+  }
+
+  if (gateFailures.length > 0) {
+    console.error(
+      `\n❌ Coverage gate failed — see above. Failing the job to block merge.`,
+    );
+    process.exit(1);
   }
 }
 

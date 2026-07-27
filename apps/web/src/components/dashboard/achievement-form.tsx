@@ -73,6 +73,7 @@ type AchievementFormProps = {
   mode: "create" | "edit";
   defaultValues?: Partial<AchievementFormValues>;
   editId?: string;
+  expectedVersion?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -94,6 +95,7 @@ export function AchievementForm({
   mode,
   defaultValues,
   editId,
+  expectedVersion,
   open,
   onOpenChange,
   onSuccess,
@@ -139,8 +141,11 @@ export function AchievementForm({
     defaultValues: { ...DEFAULT_VALUES, ...defaultValues },
     onSubmit: async ({ value }) => {
       if (mode === "edit" && editId) {
+        if (expectedVersion === undefined)
+          throw new Error("expectedVersion is required in edit mode");
         updateMutation.mutate({
           id: editId,
+          version: expectedVersion,
           data: {
             eventName: value.eventName,
             category: value.category,

@@ -4,7 +4,7 @@ import { log } from "../../lib/logger";
 const QUEUE_NAME = "cogito-jobs";
 
 export interface SchedulerHandlers {
-  onExpireBookings: () => Promise<{ expired: number }>;
+  onExpireBookings: () => Promise<{ expired: number; failed: number }>;
   onReleaseHolds: () => Promise<{ released: number }>;
   onSendNotificationEmail: (data: {
     notificationId: string;
@@ -41,9 +41,10 @@ export function createSchedulerService(
         case "expire-bookings":
           const expireResult = await handlers.onExpireBookings();
           log({
-            level: "info",
+            level: expireResult.failed > 0 ? "warn" : "info",
             action: "expire_bookings_complete",
-            message: `Expired ${expireResult.expired} bookings`,
+            message: `Expired ${expireResult.expired} bookings, ${expireResult.failed} failed`,
+            ...expireResult,
           });
           return expireResult;
         case "release-expired-holds":

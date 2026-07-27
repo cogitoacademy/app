@@ -1,6 +1,11 @@
 import { ORPCError } from "@orpc/server";
 import { DomainError } from "../../lib/domain-errors";
-import { notFound, badRequest, internalServerError } from "../../lib/errors";
+import {
+  notFound,
+  badRequest,
+  conflict,
+  internalServerError,
+} from "../../lib/errors";
 
 export class AchievementNotFoundError extends DomainError {
   readonly domain = "achievement";
@@ -16,6 +21,16 @@ export class AchievementNotEditableError extends DomainError {
   }
 }
 
+export class OptimisticLockError extends DomainError {
+  readonly domain = "achievement";
+  constructor(id: string, expectedVersion: number) {
+    super("OPTIMISTIC_LOCK", "Resource was modified by another transaction", {
+      id,
+      expectedVersion,
+    });
+  }
+}
+
 export function mapAchievementError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -23,5 +38,6 @@ export function mapAchievementError(
     return notFound(err.message, err);
   if (err instanceof AchievementNotEditableError)
     return badRequest(err.message, err);
+  if (err instanceof OptimisticLockError) return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

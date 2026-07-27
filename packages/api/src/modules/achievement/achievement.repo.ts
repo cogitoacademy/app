@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { achievement } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
@@ -83,6 +83,45 @@ async function update(
   return updated;
 }
 
+async function updateWithVersion(
+  conn: DbOrTx,
+  id: string,
+  userId: string,
+  expectedVersion: number,
+  data: UpdateAchievementData,
+) {
+  const rows = await conn
+    .update(achievement)
+    .set({ ...data, version: sql`${achievement.version} + 1` })
+    .where(
+      and(
+        eq(achievement.id, id),
+        eq(achievement.userId, userId),
+        eq(achievement.version, expectedVersion),
+      ),
+    )
+    .returning();
+  return rows;
+}
+
+async function deleteWithVersion(
+  conn: DbOrTx,
+  id: string,
+  userId: string,
+  expectedVersion: number,
+) {
+  return conn
+    .delete(achievement)
+    .where(
+      and(
+        eq(achievement.id, id),
+        eq(achievement.userId, userId),
+        eq(achievement.version, expectedVersion),
+      ),
+    )
+    .returning();
+}
+
 async function deleteRow(conn: DbOrTx, id: string, userId: string) {
   return conn
     .delete(achievement)
@@ -129,7 +168,9 @@ export function createAchievementRepo() {
     insert,
     findByIdForUser,
     update,
+    updateWithVersion,
     deleteRow,
+    deleteWithVersion,
     adminList,
     getById,
     updateStatus,

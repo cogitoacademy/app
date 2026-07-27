@@ -4,10 +4,10 @@ export const listInput = z
   .object({
     unreadOnly: z.boolean().optional(),
     limit: z.number().min(1).max(100).optional(),
-    cursor: z.string().optional(),
+    cursor: z.string().max(100).optional(),
   })
   .optional();
 
 export const idInput = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).max(100),
 });

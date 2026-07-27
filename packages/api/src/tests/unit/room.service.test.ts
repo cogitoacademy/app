@@ -15,13 +15,21 @@ function makeRoom(overrides: Record<string, unknown> = {}) {
 
 function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
   return {
-    findActiveRooms: mock(async () => []),
-    insertRoom: mock(async () => ({})),
-    findRoomById: mock(async () => null),
-    findRoomBookings: mock(async () => []),
-    insertRoomBooking: mock(async () => ({})),
+    findActiveRooms: mock(async (_conn: any) => []),
+    insertRoom: mock(async (_conn: any, _values: any) => ({})),
+    findRoomById: mock(async (_conn: any, _roomId: string) => null),
+    findRoomBookings: mock(async (_conn: any) => []),
+    findRoomBookingsForUpdate: mock(async (_conn: any) => []),
+    insertRoomBooking: mock(async (_conn: any, _values: any) => ({})),
     ...overrides,
   } as RoomRepo;
+}
+
+function makeDb() {
+  const tx = {};
+  return {
+    transaction: mock(async (fn: any) => fn(tx)),
+  } as any;
 }
 
 describe("createRoomService", () => {
@@ -30,7 +38,7 @@ describe("createRoomService", () => {
       const rooms = [makeRoom(), makeRoom({ id: "room2", name: "Room B" })];
       const repo = makeRepo({ findActiveRooms: mock(async () => rooms) });
 
-      const service = createRoomService(repo);
+      const service = createRoomService(repo, makeDb());
       const result = await service.listActive();
       expect(result).toEqual(rooms);
     });
@@ -41,7 +49,7 @@ describe("createRoomService", () => {
       const room = makeRoom();
       const repo = makeRepo({ insertRoom: mock(async () => room) });
 
-      const service = createRoomService(repo);
+      const service = createRoomService(repo, makeDb());
       const result = await service.createRoom({
         name: "Room A",
         location: "Building 1",
@@ -55,7 +63,7 @@ describe("createRoomService", () => {
     test("returns true when no conflicts", async () => {
       const repo = makeRepo({ findRoomBookings: mock(async () => []) });
 
-      const service = createRoomService(repo);
+      const service = createRoomService(repo, makeDb());
       const result = await service.checkAvailability(
         "room1",
         new Date("2024-01-01T10:00:00Z"),
@@ -69,7 +77,7 @@ describe("createRoomService", () => {
         findRoomBookings: mock(async () => [{ id: "rb1" }]),
       });
 
-      const service = createRoomService(repo);
+      const service = createRoomService(repo, makeDb());
       const result = await service.checkAvailability(
         "room1",
         new Date("2024-01-01T10:00:00Z"),
@@ -83,7 +91,7 @@ describe("createRoomService", () => {
     test("throws notFound when room not found", async () => {
       const repo = makeRepo({ findRoomById: mock(async () => null) });
 
-      const service = createRoomService(repo);
+      const service = createRoomService(repo, makeDb());
       await expect(
         service.assignRoom(
           "b1",
@@ -97,10 +105,10 @@ describe("createRoomService", () => {
     test("throws conflict when room not available", async () => {
       const repo = makeRepo({
         findRoomById: mock(async () => makeRoom()),
-        findRoomBookings: mock(async () => [{ id: "rb1" }]),
+        findRoomBookingsForUpdate: mock(async () => [{ id: "rb1" }]),
       });
 
-      const service = createRoomService(repo);
+      const service = createRoomService(repo, makeDb());
       await expect(
         service.assignRoom(
           "b1",
@@ -123,11 +131,11 @@ describe("createRoomService", () => {
 
       const repo = makeRepo({
         findRoomById: mock(async () => makeRoom()),
-        findRoomBookings: mock(async () => []),
+        findRoomBookingsForUpdate: mock(async () => []),
         insertRoomBooking: mock(async () => roomBookingRow),
       });
 
-      const service = createRoomService(repo);
+      const service = createRoomService(repo, makeDb());
       const result = await service.assignRoom(
         "b1",
         "room1",

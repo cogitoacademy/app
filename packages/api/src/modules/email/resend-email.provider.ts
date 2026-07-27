@@ -7,6 +7,8 @@ export function createResendEmailProvider(
   fromEmail: string,
 ): EmailPort {
   async function send(message: EmailMessage) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -21,6 +23,7 @@ export function createResendEmailProvider(
           html: message.html,
           tags: [{ name: "category", value: message.category }],
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -41,6 +44,8 @@ export function createResendEmailProvider(
         subject: message.subject,
       });
       throw error;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

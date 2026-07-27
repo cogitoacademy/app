@@ -28,6 +28,15 @@ async function expectRejects(promise: Promise<unknown>): Promise<void> {
 }
 
 describe("Tutor Invite & Onboarding", () => {
+  async function getTutorVersion(): Promise<number> {
+    const [profile] = await db
+      .select()
+      .from(tutorProfile)
+      .where(eq(tutorProfile.userId, tutorId))
+      .limit(1);
+    return profile?.version ?? 1;
+  }
+
   beforeAll(async () => {
     await resetDatabase();
   });
@@ -159,7 +168,9 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("tutor can update profile with all required fields", async () => {
+      const version = await getTutorVersion();
       const updated = await tutorClient.tutor.updateMyProfile({
+        version,
         displayName: "Prof Awesome",
         shortBio: "Passionate math educator",
         credentialsSummary: "PhD Mathematics, 10 years teaching",
@@ -173,8 +184,10 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("prices below floor are rejected", async () => {
+      const version = await getTutorVersion();
       await expectRejects(
         tutorClient.tutor.updateMyProfile({
+          version,
           modality: "online",
           prices: { "1": 10 },
         }),
@@ -182,8 +195,10 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("invalid proof URLs are rejected", async () => {
+      const version = await getTutorVersion();
       await expectRejects(
         tutorClient.tutor.updateMyProfile({
+          version,
           proofUrls: ["not-a-url"],
         }),
       );
@@ -214,7 +229,9 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("tutor can re-submit after changes requested", async () => {
+      const version = await getTutorVersion();
       await tutorClient.tutor.updateMyProfile({
+        version,
         credentialsSummary: "PhD Math, 10yr exp, Olympiad coach",
       });
 
@@ -241,8 +258,10 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("published profile cannot be edited by tutor", async () => {
+      const version = await getTutorVersion();
       await expectRejects(
         tutorClient.tutor.updateMyProfile({
+          version,
           displayName: "Should Not Work",
         }),
       );

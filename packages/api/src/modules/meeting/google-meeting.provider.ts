@@ -34,21 +34,30 @@ export function createGoogleMeetingProvider(
         scheduledStartAt ?? new Date(now.getTime() + 60 * 60 * 1000);
       const end = scheduledEndAt ?? new Date(start.getTime() + 90 * 60 * 1000);
 
-      const response = await calendar.events.insert({
-        calendarId: config.calendarId,
-        requestBody: {
-          summary: `Cogito Booking ${bookingId}`,
-          start: { dateTime: start.toISOString() },
-          end: { dateTime: end.toISOString() },
-          conferenceData: {
-            createRequest: {
-              requestId: bookingId,
-              conferenceSolutionKey: { type: "hangoutsMeet" },
+      const TIMEOUT_MS = 30_000;
+      const response = await Promise.race([
+        calendar.events.insert({
+          calendarId: config.calendarId,
+          requestBody: {
+            summary: `Cogito Booking ${bookingId}`,
+            start: { dateTime: start.toISOString() },
+            end: { dateTime: end.toISOString() },
+            conferenceData: {
+              createRequest: {
+                requestId: bookingId,
+                conferenceSolutionKey: { type: "hangoutsMeet" },
+              },
             },
           },
-        },
-        conferenceDataVersion: 1,
-      });
+          conferenceDataVersion: 1,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Google Meet API timeout after 30s")),
+            TIMEOUT_MS,
+          ),
+        ),
+      ]);
 
       const event = response.data;
       const conferenceEntry = event.conferenceData?.entryPoints?.[0];

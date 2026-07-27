@@ -1,8 +1,9 @@
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { tutorProfile, availabilitySlot } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
 export interface UpdateProfileInput {
+  version: number;
   displayName?: string;
   shortBio?: string;
   credentialsSummary?: string;
@@ -40,6 +41,25 @@ export async function updateProfile(
     .where(eq(tutorProfile.userId, userId))
     .returning();
   return updated;
+}
+
+export async function updateProfileWithVersion(
+  conn: DbOrTx,
+  userId: string,
+  expectedVersion: number,
+  input: Omit<UpdateProfileInput, "version">,
+) {
+  const rows = await conn
+    .update(tutorProfile)
+    .set({ ...input, version: sql`${tutorProfile.version} + 1` })
+    .where(
+      and(
+        eq(tutorProfile.userId, userId),
+        eq(tutorProfile.version, expectedVersion),
+      ),
+    )
+    .returning();
+  return rows;
 }
 
 export async function updateStatus(
@@ -119,6 +139,7 @@ export function createTutorRepo() {
   return {
     getByUserId,
     updateProfile,
+    updateProfileWithVersion,
     updateStatus,
     listAvailability,
     upsertAvailability,

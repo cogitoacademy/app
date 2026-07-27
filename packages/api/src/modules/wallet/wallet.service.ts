@@ -1,3 +1,5 @@
+import { eq, and, inArray, sum } from "drizzle-orm";
+import { wallet, ledgerEntry } from "@cogito-app/db/schema";
 import { KNOWLEDGE_BANK_THRESHOLD } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -108,11 +110,22 @@ export interface WalletPort {
       updatedAt: Date;
     }[]
   >;
+  reconcile(query?: {
+    walletId?: string;
+  }): Promise<{ expected: number; actual: number; drift: number }>;
 }
 
 export type WalletService = ReturnType<typeof createWalletService>;
 
 export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+  // db.transaction opens a new connection-level tx; calling it inside an
+  // existing tx would start a separate transaction, not a savepoint. When the
+  // caller already passes a tx client, run fn against it directly.
+  async function runInTx<T>(conn: DbOrTx, fn: (tx: DbOrTx) => Promise<T>) {
+    if (conn === db) return db.transaction(fn);
+    return fn(conn);
+  }
+
   async function getById(
     conn: DbOrTx,
     walletId: string,
@@ -146,153 +159,163 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     conn: DbOrTx,
     params: HoldParams,
   ): Promise<WalletSnapshot> {
-    const w = await repo.getById(conn, params.walletId);
-    if (!w) throw new WalletNotFoundError(params.walletId);
-    const result: AtomicResult = await repo.atomicHold(
-      conn,
-      params.walletId,
-      params.amount,
-    );
-    if (!result.success)
-      throw new InsufficientBalanceError(w.availableBalance, params.amount);
-    const updated = result.wallet;
-    await repo.insertLedger(conn, {
-      walletId: params.walletId,
-      entryType: "hold",
-      actorType: params.actorType,
-      amount: params.amount,
-      eventKey: params.eventKey,
-      sourceReference: params.sourceReference,
-      reason: params.reason,
-      beforeBalance: w.totalBalance,
-      afterBalance: updated.totalBalance,
-      balanceAfterTotal: updated.totalBalance,
-      balanceAfterHeld: updated.heldBalance,
-      bookingId: params.bookingId,
+    return runInTx(conn, async (tx) => {
+      const w = await repo.getById(tx, params.walletId);
+      if (!w) throw new WalletNotFoundError(params.walletId);
+      const result: AtomicResult = await repo.atomicHold(
+        tx,
+        params.walletId,
+        params.amount,
+      );
+      if (!result.success)
+        throw new InsufficientBalanceError(w.availableBalance, params.amount);
+      const updated = result.wallet;
+      await repo.insertLedger(tx, {
+        walletId: params.walletId,
+        entryType: "hold",
+        actorType: params.actorType,
+        amount: params.amount,
+        eventKey: params.eventKey,
+        sourceReference: params.sourceReference,
+        reason: params.reason,
+        beforeBalance: w.totalBalance,
+        afterBalance: updated.totalBalance,
+        balanceAfterTotal: updated.totalBalance,
+        balanceAfterHeld: updated.heldBalance,
+        bookingId: params.bookingId,
+      });
+      return updated;
     });
-    return updated;
   }
 
   async function release(
     conn: DbOrTx,
     params: ReleaseParams,
   ): Promise<WalletSnapshot> {
-    const w = await repo.getById(conn, params.walletId);
-    if (!w) throw new WalletNotFoundError(params.walletId);
-    const updated = await repo.atomicRelease(
-      conn,
-      params.walletId,
-      params.amount,
-    );
-    await repo.insertLedger(conn, {
-      walletId: params.walletId,
-      entryType: "release",
-      actorType: params.actorType,
-      amount: params.amount,
-      eventKey: params.eventKey,
-      sourceReference: params.sourceReference,
-      reason: params.reason,
-      beforeBalance: w.totalBalance,
-      afterBalance: updated.totalBalance,
-      balanceAfterTotal: updated.totalBalance,
-      balanceAfterHeld: updated.heldBalance,
-      bookingId: params.bookingId,
+    return runInTx(conn, async (tx) => {
+      const w = await repo.getById(tx, params.walletId);
+      if (!w) throw new WalletNotFoundError(params.walletId);
+      const updated = await repo.atomicRelease(
+        tx,
+        params.walletId,
+        params.amount,
+      );
+      await repo.insertLedger(tx, {
+        walletId: params.walletId,
+        entryType: "release",
+        actorType: params.actorType,
+        amount: params.amount,
+        eventKey: params.eventKey,
+        sourceReference: params.sourceReference,
+        reason: params.reason,
+        beforeBalance: w.totalBalance,
+        afterBalance: updated.totalBalance,
+        balanceAfterTotal: updated.totalBalance,
+        balanceAfterHeld: updated.heldBalance,
+        bookingId: params.bookingId,
+      });
+      return updated;
     });
-    return updated;
   }
 
   async function deduct(
     conn: DbOrTx,
     params: DeductParams,
   ): Promise<WalletSnapshot> {
-    const w = await repo.getById(conn, params.walletId);
-    if (!w) throw new WalletNotFoundError(params.walletId);
-    const result: AtomicResult = await repo.atomicDeduct(
-      conn,
-      params.walletId,
-      params.amount,
-    );
-    if (!result.success)
-      throw new InsufficientBalanceError(w.availableBalance, params.amount);
-    const updated = result.wallet;
-    await repo.insertLedger(conn, {
-      walletId: params.walletId,
-      entryType: "deduct",
-      actorType: params.actorType,
-      amount: params.amount,
-      eventKey: params.eventKey,
-      sourceReference: params.sourceReference,
-      reason: params.reason,
-      beforeBalance: w.totalBalance,
-      afterBalance: updated.totalBalance,
-      balanceAfterTotal: updated.totalBalance,
-      balanceAfterHeld: updated.heldBalance,
-      bookingId: params.bookingId,
+    return runInTx(conn, async (tx) => {
+      const w = await repo.getById(tx, params.walletId);
+      if (!w) throw new WalletNotFoundError(params.walletId);
+      const result: AtomicResult = await repo.atomicDeduct(
+        tx,
+        params.walletId,
+        params.amount,
+      );
+      if (!result.success)
+        throw new InsufficientBalanceError(w.availableBalance, params.amount);
+      const updated = result.wallet;
+      await repo.insertLedger(tx, {
+        walletId: params.walletId,
+        entryType: "deduct",
+        actorType: params.actorType,
+        amount: params.amount,
+        eventKey: params.eventKey,
+        sourceReference: params.sourceReference,
+        reason: params.reason,
+        beforeBalance: w.totalBalance,
+        afterBalance: updated.totalBalance,
+        balanceAfterTotal: updated.totalBalance,
+        balanceAfterHeld: updated.heldBalance,
+        bookingId: params.bookingId,
+      });
+      return updated;
     });
-    return updated;
   }
 
   async function credit(
     conn: DbOrTx,
     params: CreditParams,
   ): Promise<WalletSnapshot> {
-    const w = await repo.getById(conn, params.walletId);
-    if (!w) throw new WalletNotFoundError(params.walletId);
-    const updated = await repo.atomicCredit(
-      conn,
-      params.walletId,
-      params.amount,
-    );
-    await repo.insertLedger(conn, {
-      walletId: params.walletId,
-      entryType: "credit",
-      actorType: params.actorType,
-      amount: params.amount,
-      eventKey: params.eventKey,
-      sourceReference: params.sourceReference,
-      reason: params.reason,
-      beforeBalance: w.totalBalance,
-      afterBalance: updated.totalBalance,
-      balanceAfterTotal: updated.totalBalance,
-      balanceAfterHeld: updated.heldBalance,
-      bookingId: params.bookingId,
+    return runInTx(conn, async (tx) => {
+      const w = await repo.getById(tx, params.walletId);
+      if (!w) throw new WalletNotFoundError(params.walletId);
+      const updated = await repo.atomicCredit(
+        tx,
+        params.walletId,
+        params.amount,
+      );
+      await repo.insertLedger(tx, {
+        walletId: params.walletId,
+        entryType: "credit",
+        actorType: params.actorType,
+        amount: params.amount,
+        eventKey: params.eventKey,
+        sourceReference: params.sourceReference,
+        reason: params.reason,
+        beforeBalance: w.totalBalance,
+        afterBalance: updated.totalBalance,
+        balanceAfterTotal: updated.totalBalance,
+        balanceAfterHeld: updated.heldBalance,
+        bookingId: params.bookingId,
+      });
+      return updated;
     });
-    return updated;
   }
 
   async function compensate(
     conn: DbOrTx,
     params: CompensateParams,
   ): Promise<WalletSnapshot> {
-    const w = await repo.getById(conn, params.walletId);
-    if (!w) throw new WalletNotFoundError(params.walletId);
-    const updated =
-      params.type === "compensate_credit"
-        ? await repo.atomicCompensateCredit(
-            conn,
-            params.walletId,
-            params.amount,
-          )
-        : await repo.atomicCompensateDeduct(
-            conn,
-            params.walletId,
-            params.amount,
-          );
-    await repo.insertLedger(conn, {
-      walletId: params.walletId,
-      entryType: params.type,
-      actorType: params.actorType,
-      amount: params.amount,
-      eventKey: params.eventKey,
-      sourceReference: params.sourceReference,
-      reason: params.reason,
-      beforeBalance: w.totalBalance,
-      afterBalance: updated.totalBalance,
-      balanceAfterTotal: updated.totalBalance,
-      balanceAfterHeld: updated.heldBalance,
-      bookingId: params.bookingId,
+    return runInTx(conn, async (tx) => {
+      const w = await repo.getById(tx, params.walletId);
+      if (!w) throw new WalletNotFoundError(params.walletId);
+      const updated =
+        params.type === "compensate_credit"
+          ? await repo.atomicCompensateCredit(
+              tx,
+              params.walletId,
+              params.amount,
+            )
+          : await repo.atomicCompensateDeduct(
+              tx,
+              params.walletId,
+              params.amount,
+            );
+      await repo.insertLedger(tx, {
+        walletId: params.walletId,
+        entryType: params.type,
+        actorType: params.actorType,
+        amount: params.amount,
+        eventKey: params.eventKey,
+        sourceReference: params.sourceReference,
+        reason: params.reason,
+        beforeBalance: w.totalBalance,
+        afterBalance: updated.totalBalance,
+        balanceAfterTotal: updated.totalBalance,
+        balanceAfterHeld: updated.heldBalance,
+        bookingId: params.bookingId,
+      });
+      return updated;
     });
-    return updated;
   }
 
   async function listLedger(walletId: string, opts?: LedgerQueryOptions) {
@@ -328,6 +351,36 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return repo.listActivePackages(db);
   }
 
+  async function reconcile(query?: { walletId?: string }) {
+    const ADD_TYPES = ["credit", "compensate_credit"];
+    const SUB_TYPES = ["deduct", "compensate_deduct"];
+
+    const walletCondition = query?.walletId
+      ? eq(ledgerEntry.walletId, query.walletId)
+      : undefined;
+
+    const [addRow] = await db
+      .select({ total: sum(ledgerEntry.amount) })
+      .from(ledgerEntry)
+      .where(and(walletCondition, inArray(ledgerEntry.entryType, ADD_TYPES)));
+    const [subRow] = await db
+      .select({ total: sum(ledgerEntry.amount) })
+      .from(ledgerEntry)
+      .where(and(walletCondition, inArray(ledgerEntry.entryType, SUB_TYPES)));
+
+    const expected = Number(addRow?.total ?? 0) - Number(subRow?.total ?? 0);
+
+    const walletRows = query?.walletId
+      ? await db.select().from(wallet).where(eq(wallet.id, query.walletId))
+      : await db.select().from(wallet);
+    const actual = walletRows.reduce(
+      (acc, w) => acc + (w.totalBalance ?? 0),
+      0,
+    );
+
+    return { expected, actual, drift: actual - expected };
+  }
+
   return {
     hold,
     release,
@@ -340,5 +393,6 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     listLedger,
     knowledgeBankEligible,
     listActivePackages,
+    reconcile,
   };
 }

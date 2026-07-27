@@ -14,6 +14,7 @@ export async function createContext({ context }: CreateContextOptions) {
   return {
     session,
     services,
+    headers: context.request.headers,
   };
 }
 

@@ -10,17 +10,11 @@ function validateWebhookTimestamp(request: Request): void {
   const timestamp =
     request.headers.get("x-timestamp") ?? request.headers.get("date");
   if (!timestamp) {
-    if (env.NODE_ENV === "production") {
-      throw new Error("Webhook timestamp header is required");
-    }
-    return;
+    throw new Error("Webhook timestamp header is required");
   }
   const webhookTime = new Date(timestamp).getTime();
   if (Number.isNaN(webhookTime)) {
-    if (env.NODE_ENV === "production") {
-      throw new Error("Invalid webhook timestamp");
-    }
-    return;
+    throw new Error("Invalid webhook timestamp");
   }
   if (Math.abs(Date.now() - webhookTime) > MAX_WEBHOOK_AGE_MS) {
     throw new Error("Webhook timestamp too old or too far in the future");
@@ -53,12 +47,12 @@ export function paymentsWebhook(app: Elysia) {
       }
 
       try {
-        validateWebhookTimestamp(request);
-
         const payload = await services.payment.provider.verifyWebhook(
           rawBody,
           signature,
         );
+
+        validateWebhookTimestamp(request);
 
         await services.payment.confirmFromWebhook({
           provider: params.provider as string,

@@ -142,5 +142,6 @@ describe("createAdminRepo", () => {
     expect(repo).toHaveProperty("getById");
     expect(repo).toHaveProperty("countAdmins");
     expect(repo).toHaveProperty("updateRole");
+    expect(repo).toHaveProperty("updateRoleWithExpected");
   });
 });

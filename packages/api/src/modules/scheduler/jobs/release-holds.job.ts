@@ -6,6 +6,7 @@ export async function scheduleHoldReleaseCheck(queue: Queue): Promise<void> {
     {},
     {
       repeat: { every: 10 * 60 * 1000 },
+      attempts: 3,
     },
   );
 }

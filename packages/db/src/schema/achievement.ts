@@ -5,6 +5,7 @@ import {
   timestamp,
   date,
   jsonb,
+  integer,
   index,
   check,
 } from "drizzle-orm/pg-core";
@@ -31,6 +32,7 @@ export const achievement = pgTable(
     imageUrl: text("image_url"),
     status: text("status").notNull().default("pending"),
     adminNote: text("admin_note"),
+    version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

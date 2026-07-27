@@ -1,12 +1,13 @@
 # Cogito Backend — Infrastructure Plan
 
-**Status:** Active — parallel with production-readiness, after foundation hardening
-**Branch:** `improvement/infrastructure`
-**Created from:** `main` (after `improvement/foundation-hardening` and `improvement/production-readiness` merge)
-**Date:** 2026-07-24 (v2 — rewritten for Coolify)
-**Depends on:** `improvement/foundation-hardening` and `improvement/production-readiness` merged to main
-**Runs in parallel with:** `improvement/production-readiness` (different files — infra touches Docker/CI/CD, prod readiness touches business logic)
-**Merges to:** `staging` (then `main` after testing)
+| Field      | Value                                                                              |
+| ---------- | ---------------------------------------------------------------------------------- |
+| Status     | Active                                                                             |
+| Branch     | `improvement/infrastructure`                                                       |
+| Created    | 2026-07-24                                                                         |
+| Depends on | improvement/foundation-hardening + improvement/production-readiness merged to main |
+| Next       | —                                                                                  |
+| Scope      | Backend + Infra                                                                    |
 
 This branch sets up the full deployment infrastructure using **Coolify** as the deployment platform on a Hetzner VPS. Coolify manages Docker containers, reverse proxy (Caddy), auto-HTTPS, and deployment — replacing the custom `deploy.sh` + Caddyfile approach from v1.
 
@@ -248,6 +249,8 @@ server {
 ---
 
 ## 4. Phase 2: CI Pipeline
+
+> **Note:** A CI workflow already exists at `.github/workflows/ci.yml` with 4 jobs (lint, typecheck, build, test+coverage). It runs on all PRs and pushes to `main`. Coverage enforcement (90% api / 80% overall) is already active via `.github/scripts/coverage-comment.ts`. This phase adds: `staging` branch trigger, Redis service to the test job, and separates coverage into its own job.
 
 ### 2.1 Update CI workflow
 
@@ -782,6 +785,8 @@ Coolify provides built-in health checks and resource monitoring per service. Con
 
 ### 6.1 Dependabot configuration
 
+> **Note:** Dependabot is already configured at `.github/dependabot.yml` for npm + github-actions (weekly, Monday). This task adds docker ecosystems and dependency grouping.
+
 **File:** `.github/dependabot.yml`
 
 ```yaml
@@ -1080,3 +1085,4 @@ Secrets for CI/CD (GHCR tokens, Coolify webhook URLs) are set via GitHub Actions
 
 - v1.0 (2026-07-21): Created. Custom deploy.sh + Caddy approach.
 - v2.0 (2026-07-24): Rewritten for Coolify. Replaced custom deploy.sh + Caddyfile with Coolify-managed deployment. Removed docker-compose.yml and Caddyfile from repo (Coolify manages these). Added coolify-setup.md guide. Simplified provisioning script. ~4 days.
+- v2.1 (2026-07-27): Audited against current repo state. Added notes: CI workflow already exists (§2.1), Dependabot already configured (§6.1), coverage enforcement already active. Focused remaining work on staging branch trigger, Redis service, Dockerfiles, CD, and Coolify provisioning.

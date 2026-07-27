@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "tutor_invite_email_invited_uniq" ON "tutor_invite" USING btree ("email") WHERE "tutor_invite"."status" = 'invited';

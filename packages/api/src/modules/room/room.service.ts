@@ -1,16 +1,17 @@
+import type { DbType } from "../../lib/db";
 import { RoomNotFoundError, RoomBookingConflictError } from "./room.errors";
 import type { RoomRepo } from "./room.repo";
 import type { CreateRoomInput } from "./room.types";
 
 export type RoomService = ReturnType<typeof createRoomService>;
 
-export function createRoomService(repo: RoomRepo) {
+export function createRoomService(repo: RoomRepo, db: DbType) {
   async function listActive() {
-    return repo.findActiveRooms();
+    return repo.findActiveRooms(db);
   }
 
   async function createRoom(input: CreateRoomInput) {
-    return repo.insertRoom(input);
+    return repo.insertRoom(db, input);
   }
 
   async function checkAvailability(
@@ -20,6 +21,7 @@ export function createRoomService(repo: RoomRepo) {
     excludeBookingId?: string,
   ) {
     const existing = await repo.findRoomBookings(
+      db,
       roomId,
       startAt,
       endAt,
@@ -34,28 +36,31 @@ export function createRoomService(repo: RoomRepo) {
     startAt: Date,
     endAt: Date,
   ) {
-    const roomRow = await repo.findRoomById(roomId);
-    if (!roomRow) throw new RoomNotFoundError(roomId);
+    return db.transaction(async (tx) => {
+      const roomRow = await repo.findRoomById(tx, roomId);
+      if (!roomRow) throw new RoomNotFoundError(roomId);
 
-    const available = await checkAvailability(
-      roomId,
-      startAt,
-      endAt,
-      bookingId,
-    );
-    if (!available)
-      throw new RoomBookingConflictError(
+      const conflicting = await repo.findRoomBookingsForUpdate(
+        tx,
         roomId,
-        startAt.toISOString(),
-        endAt.toISOString(),
+        startAt,
+        endAt,
+        bookingId,
       );
+      if (conflicting.length > 0)
+        throw new RoomBookingConflictError(
+          roomId,
+          startAt.toISOString(),
+          endAt.toISOString(),
+        );
 
-    return repo.insertRoomBooking({
-      roomId,
-      bookingId,
-      startAt,
-      endAt,
-      status: "confirmed",
+      return repo.insertRoomBooking(tx, {
+        roomId,
+        bookingId,
+        startAt,
+        endAt,
+        status: "confirmed",
+      });
     });
   }
 

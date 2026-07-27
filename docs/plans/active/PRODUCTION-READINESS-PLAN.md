@@ -1,13 +1,15 @@
 # Cogito Backend — Production Readiness Plan
 
-**Status:** Active — second branch to execute (after consolidation)
-**Branch:** `improvement/production-readiness`
-**Created from:** `main` (after `improvement/consolidation` merges)
-**Date:** 2026-07-21
-**Depends on:** `improvement/consolidation` branch merged to main
-**Next:** `feature/prd-gaps` (after this merges)
+| Field      | Value                                           |
+| ---------- | ----------------------------------------------- |
+| Status     | Active                                          |
+| Branch     | `improvement/production-readiness`              |
+| Created    | 2026-07-21                                      |
+| Depends on | improvement/foundation-hardening merged to main |
+| Next       | feature/prd-gaps                                |
+| Scope      | Backend-only                                    |
 
-This branch runs after the consolidation branch, so all code uses the unified 4-layer architecture (Router → Handler → Service → Repo), consumer-driven port interfaces, and `postgres.js`.
+This branch runs after the foundation-hardening branch merges to main. The codebase uses the unified 4-layer architecture (Router → Handler → Service → Repo), consumer-driven port interfaces, and `postgres.js`. Foundation-hardening fixed 46 audit findings (A1–K7); this plan addresses the remaining bugs and adds production infrastructure (Redis, indexes, coverage, docs).
 
 It runs in parallel with the infrastructure branch — they touch different files (business logic vs Docker/CI).
 
@@ -32,18 +34,19 @@ It runs in parallel with the infrastructure branch — they touch different file
 
 ### P0 — Data Integrity
 
-| ID  | Bug                                                            | Impact                                           | Root Cause                                                 |
-| --- | -------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
-| B2  | Meeting creation failure leaves booking in `"scheduled"` state | Orphaned bookings, student can't rebook          | No rollback of booking status on meeting provider error    |
-| B4  | Series bookings never expire — no `deadlineAt` set             | Series slots held forever                        | `createSeries` doesn't set `deadlineAt`                    |
-| B3  | Refund correction stores `bookingId` as `paymentId`            | Ledger entries reference wrong entity            | `createCorrection` passes `bookingId` to `paymentId` param |
-| B5  | No CSRF protection on mutation endpoints                       | Any malicious site can invoke state-changing API | No CSRF token or SameSite enforcement                      |
+| ID  | Bug                                                            | Impact                                                                           | Root Cause                                                                               |
+| --- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| B2  | Meeting creation failure leaves booking in `"scheduled"` state | Orphaned bookings, student can't rebook                                          | No rollback of booking status on meeting provider error                                  |
+| B4  | Series bookings never expire — no `deadlineAt` set             | Series slots held forever                                                        | `createSeries` doesn't set `deadlineAt`                                                  |
+| B3  | Refund correction stores `bookingId` as `paymentId`            | Ledger entries reference wrong entity                                            | `createCorrection` passes `bookingId` to `paymentId` param                               |
+| B5  | No CSRF protection on mutation endpoints                       | Any malicious site can invoke state-changing API                                 | No CSRF token or SameSite enforcement                                                    |
+| B6  | Booking overlap check has TOCTOU race                          | Two concurrent bookings for the same tutor slot both pass the check, both insert | `findOverlappingBookings` runs outside the transaction, then `insertBooking` runs inside |
 
 ### P1 — Performance
 
-| ID  | Bug                                                 | Impact                                | Root Cause                                                                   |
-| --- | --------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------- |
-| B1  | Triple session validation per authenticated request | 3x DB queries on every protected call | `identifyUser` + `protectedProcedure` + `createContext` all validate session |
+| ID  | Bug                                                 | Impact                                | Root Cause                                                                          |
+| --- | --------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
+| B1  | Double session validation per authenticated request | 2x DB queries on every protected call | `identifyUser` (evlog middleware) + `createContext` both call `auth.api.getSession` |
 
 ### P1 — Correctness
 
@@ -56,12 +59,12 @@ It runs in parallel with the infrastructure branch — they touch different file
 
 ### P2 — Functional
 
-| ID  | Bug                                                  | Impact                                    | Root Cause                                |
-| --- | ---------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
-| N4  | `expireBookings` doesn't expire series sessions      | Orphaned series sessions                  | Scheduler only queries top-level bookings |
-| N5  | `listLedger` ignores `bookingId`/`eventKey` filters  | Pagination broken for filtered views      | Repo doesn't pass filter params           |
-| N8  | `withdraw` doesn't release other participants' holds | Group booking withdrawal leaks held funds | Only releases withdrawing user's hold     |
-| N9  | `adminBooking.listBookings` returns null cursor      | Admin pagination broken                   | Cursor never set in response              |
+| ID  | Bug                                                                                                                                                                                                                                 | Impact                               | Root Cause                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| N4  | `expireBookings` doesn't expire individual series sessions                                                                                                                                                                          | Orphaned series sessions             | Scheduler expires the parent series booking but doesn't update `bookingSession.currentState` for child sessions |
+| N5  | `listLedger` ignores `bookingId`/`eventKey` filters                                                                                                                                                                                 | Pagination broken for filtered views | Repo doesn't pass filter params                                                                                 |
+| N8  | ~~withdraw doesn't release other participants' holds~~ **Fixed in foundation-hardening** (Story 1, `releaseAllParticipantHolds`). Withdraw now releases all group participants' holds when the group falls below minimum headcount. |                                      |                                                                                                                 |
+| N9  | `adminBooking.listBookings` returns null cursor                                                                                                                                                                                     | Admin pagination broken              | Cursor never set in response                                                                                    |
 
 ---
 
@@ -69,12 +72,12 @@ It runs in parallel with the infrastructure branch — they touch different file
 
 **Goal:** Fix all P0/P1/P2 bugs. Repurpose dormant code.
 
-### 1.1 Fix triple session validation (B1)
+### 1.1 Fix double session validation (B1)
 
-**Files:** `apps/server/src/routes.ts`, `packages/api/src/procedures.ts`, `packages/api/src/context.ts`
+**Files:** `apps/server/src/routes.ts`, `apps/server/src/middleware.ts`, `packages/api/src/context.ts`
 
-- Remove session validation from `identifyUser` middleware (keep only user identification for logging)
-- Remove duplicate session fetch in `protectedProcedure` (rely on `createContext` which already validates)
+- Remove the `getSession` call from `identifyUser` middleware (or make it not validate — just identify for logging)
+- Rely on `createContext` as the single source of session validation
 - Result: single session validation per request in `createContext`
 
 **Acceptance:** Authenticated request hits DB exactly once for session lookup.
@@ -108,17 +111,16 @@ It runs in parallel with the infrastructure branch — they touch different file
 
 **Acceptance:** Ledger corrections reference the correct payment entity.
 
-### 1.5 Repurpose `bookingIdempotency` for payment race condition
+### 1.5 Verify webhook idempotency covers all payment paths
 
 **Files:** `packages/api/src/lib/idempotency.ts`, `packages/api/src/modules/payment/payment.router.ts`
 
-- Remove unused `bookingIdempotency` instance
-- Create `paymentIdempotency` instance keyed on `payment_provider + charge_id`
-- Wire into payment webhook handler: check idempotency before processing
-- Return cached result on duplicate webhook
-- Note: This will be replaced by Redis-backed idempotency in Phase 2, but the in-memory version is correct for single-instance
+- The existing `webhookIdempotency` store in `webhooks/payments.ts` handles duplicate webhook deduplication
+- `bookingIdempotency` is actively used by `booking.handler.ts` for booking creation dedup — keep it
+- Verify no payment creation path (outside webhooks) needs a separate `paymentIdempotency` instance
+- If a gap is found (e.g., payment creation without webhook), add a targeted idempotency instance
 
-**Acceptance:** Duplicate payment webhooks return 200 with cached result instead of double-processing.
+**Acceptance:** All payment paths have idempotency protection. No duplicate processing edge cases.
 
 ### 1.6 Extend CircuitBreaker to Google Meet + Resend
 
@@ -142,16 +144,16 @@ It runs in parallel with the infrastructure branch — they touch different file
 
 **Acceptance:** Hold release job releases holds. Notification job sends emails.
 
-### 1.8 Fix remaining correctness bugs (N4, N5, N7, N8, N9, N15)
+### 1.8 Fix remaining correctness bugs (N4, N5, N7, N9, N15, B6)
 
 **Files:** Multiple module files
 
-- **N4:** Add series session expiry to `expireBookings` — query `bookingSession` with past `deadlineAt`
+- **N4:** Update `expireBookings` to also update `bookingSession.currentState` for child sessions of expired series
 - **N5:** Pass `bookingId`/`eventKey` filter params through to SQL query in `wallet.repo.ts`
 - **N7:** Replace `Date.now()` in correction event key with deterministic key: `correction:${refundId}:${timestamp}`
-- **N8:** In `withdraw` handler, release holds for all group participants (not just withdrawing user)
 - **N9:** Set `nextCursor` in `adminBooking.listBookings` response mapper
 - **N15:** Update `booking.holdAmount` in `applyOverride` handler
+- **B6:** Move overlap check inside the booking transaction, or add a database exclusion constraint (preferred): `EXCLUDE USING gist (tutor_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`. Note: this requires the `btree_gist` extension.
 
 **Acceptance:** Each sub-fix verified with a unit or integration test.
 
@@ -169,10 +171,8 @@ It runs in parallel with the infrastructure branch — they touch different file
 
 **Files:** Multiple
 
-- Remove `@hookform/resolvers` from dependencies (zero imports)
 - Remove `midtrans` enum value from payment provider types
-- Remove unused `bookingIdempotency` instance (class stays, repurposed in 1.5)
-- Remove `withTx` from `lib/tx.ts` if still unused after consolidation
+- Keep `bookingIdempotency` (actively used by `booking.handler.ts` for create dedup)
 
 **Acceptance:** `bun run check-types && bun run build` pass with dead code removed.
 
@@ -517,22 +517,15 @@ After consolidation, router files contain the orchestration logic that was previ
 
 ### CI Configuration
 
-#### 4.14 Coverage enforcement
+### ~~4.14 Coverage enforcement~~ — **Done in foundation-hardening** (commit d1f26b8)
 
-**Files:** `bunfig.toml`, `.github/workflows/ci.yml`
-
-- Set coverage threshold to 80% overall (enforced)
-- Set per-package threshold: `packages/api` 90%, `packages/db` 80%
-- Fail CI if coverage drops below threshold
-- Add coverage report comment on PRs
-
-**Acceptance:** CI fails if coverage drops below 80%.
+CI enforces 90% packages/api, 80% overall. Coverage report comment on PRs is active.
 
 ---
 
 ## 6. Phase 5: Security Hardening
 
-> **Note:** Docker, Dockerfiles, CD pipeline, and Hetzner provisioning are handled in the `improvement/infrastructure` branch (see `docs/plans/INFRASTRUCTURE-PLAN.md`). This phase focuses on application-level security.
+> **Note:** Docker, Dockerfiles, CD pipeline, and Hetzner provisioning are handled in the `improvement/infrastructure` branch (see INFRASTRUCTURE-PLAN.md). This phase focuses on application-level security.
 
 ### 5.1 Webhook security (N13, N14)
 
@@ -544,15 +537,9 @@ After consolidation, router files contain the orchestration logic that was previ
 
 **Acceptance:** Webhooks from non-allowlisted IPs return 403. Error responses contain no internal details.
 
-### 5.6 CSP and security headers
+### ~~5.2 CSP and security headers~~ — **Done in foundation-hardening** (Story 8)
 
-**Files:** `apps/server/src/routes.ts`
-
-- Review and relax CSP for frontend compatibility
-- Add security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
-- Configure CORS properly for production origin
-
-**Acceptance:** Frontend loads without CSP errors. Security headers present on all responses.
+CSP is production-strict with `connect-src`, `script-src`, etc. Security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`) are all set in `packages/api/src/lib/security-headers.ts`.
 
 ### 5.7 Seed file production guard
 
@@ -563,22 +550,19 @@ After consolidation, router files contain the orchestration logic that was previ
 
 **Acceptance:** `NODE_ENV=production bun run db:seed` exits with error. No plaintext passwords in seed file.
 
-### 5.8 Structured error logging
+### ~~5.4 Structured error logging~~ — **Partially done in foundation-hardening** (Story 6)
 
-**Files:** `apps/server/src/index.ts`, `packages/api/src/lib/`
+`uncaughtException` handler added, `evlog` produces structured JSON, `requestId` is in routes.ts.
 
-- Add structured JSON logging on every unhandled error
-- Include: request ID, user ID, error code, stack trace (dev only)
-- Use existing `evlog` logger, configure production format
+Remaining: verify production log format, ensure no sensitive data in logs (dev DB logging already redacts emails).
 
-**Acceptance:** Errors logged as structured JSON. No sensitive data in logs.
+### 5.5 Production env review
 
-### 5.9 Production env review
-
-**Files:** `packages/env/src/index.ts`, `apps/server/.env.example`
+**Files:** `packages/env/src/index.ts`, `.env.example`, `apps/server/.env.example`
 
 - Verify all secrets come from env vars (not hardcoded)
-- Add `.env.example` with all required vars documented
+- `.env.example` files already exist (root and `apps/server/`) — review for completeness
+- Add `REDIS_URL` and `SESSION_COOKIE_CACHE_MAX_AGE` to `.env.example` if missing
 - Verify: `BETTER_AUTH_SECRET`, `DATABASE_URL`, `REDIS_URL`, `XENDIT_SECRET_KEY`, `GOOGLE_*`, `RESEND_API_KEY`
 - Ensure CORS origin is configurable
 - Ensure cookie `secure` flag is env-dependent
@@ -591,17 +575,11 @@ After consolidation, router files contain the orchestration logic that was previ
 
 **Goal:** Architecture guide, module reference, API reference, runbook, JSDoc on all public functions, onboarding guide.
 
-### 6.1 Architecture guide
+### ~~6.1 Architecture guide~~ — **Partially done**
 
-**Files:** `docs/CONTEXT.md` (rewrite)
+`docs/CONTEXT.md` is maintained and current. Remaining: add Redis key namespace map (after Phase 2), add "how to add a new module" section.
 
-- Updated architecture diagram (after consolidation — no handler layer)
-- Request flow with `postgres.js` and Redis
-- Module dependency graph
-- Redis key namespace map
-- How to add a new module (using createModule pattern)
-
-**Acceptance:** New developer can understand the architecture from CONTEXT.md alone.
+**Files:** `docs/CONTEXT.md` (update)
 
 ### 6.2 Module reference
 
@@ -758,16 +736,16 @@ Run load tests against production-readiness build:
 
 ### Phase 1: Bug Fixes
 
-- [ ] 1.1 Fix triple session validation (B1)
+- [ ] 1.1 Fix double session validation (B1)
 - [ ] 1.2 Fix meeting creation rollback (B2)
 - [ ] 1.3 Fix series booking deadline (B4)
 - [ ] 1.4 Fix refund correction paymentId (B3)
-- [ ] 1.5 Repurpose bookingIdempotency for payment race condition
+- [ ] 1.5 Verify webhook idempotency covers all payment paths
 - [ ] 1.6 Extend CircuitBreaker to Google Meet + Resend
 - [ ] 1.7 Fix scheduler correctness (N1: release holds, N2: send emails)
-- [ ] 1.8 Fix remaining bugs (N4, N5, N7, N8, N9, N15)
+- [ ] 1.8 Fix remaining bugs (N4, N5, N7, N9, N15, B6)
 - [ ] 1.9 Add CSRF protection (B5)
-- [ ] 1.10 Remove dead code
+- [ ] 1.10 Remove dead code (midtrans enum)
 - [ ] 1.11 Add graceful scheduler shutdown (N3)
 - [ ] Verify: `bun run check && bun run check-types && bun run build && bun test` all pass
 
@@ -805,21 +783,21 @@ Run load tests against production-readiness build:
 - [ ] 4.11 Scheduler jobs — integration tests
 - [ ] 4.12 Wallet concurrency test
 - [ ] 4.13 Payment idempotency test
-- [ ] 4.14 Coverage enforcement in CI (80% overall, 90% packages/api)
+- ~~4.14 Coverage enforcement in CI~~ — Done in foundation-hardening (90% packages/api, 80% overall)
 
 ### Phase 5: Security Hardening
 
 - [ ] 5.1 Webhook security (IP allowlisting, signature verification)
-- [ ] 5.2 CSP and security headers
+- ~~5.2 CSP and security headers~~ — Done in foundation-hardening
 - [ ] 5.3 Seed file production guard
-- [ ] 5.4 Structured error logging
-- [ ] 5.5 Production env review (include REDIS_URL)
+- ~~5.4 Structured error logging~~ — Partially done in foundation-hardening (remaining: verify production format, ensure no sensitive data)
+- [ ] 5.5 Production env review (include REDIS_URL, check .env.example completeness)
 
 > Docker, CD pipeline, and infrastructure are handled in the `improvement/infrastructure` branch.
 
 ### Phase 6: Documentation
 
-- [ ] 6.1 Rewrite CONTEXT.md (architecture after consolidation)
+- ~~6.1 Architecture guide~~ — Partially done (CONTEXT.md current; remaining: Redis key namespace map, "how to add a new module" section)
 - [ ] 6.2 Create MODULE-REFERENCE.md
 - [ ] 6.3 Create API-REFERENCE.md
 - [ ] 6.4 Create RUNBOOK.md
@@ -838,3 +816,4 @@ Run load tests against production-readiness build:
 
 - v1.0 (2026-07-21): Created. Production readiness branch: bug fixes, Redis integration, DB optimization, 100% test coverage, documentation. Runs after consolidation branch merges.
 - v1.1 (2026-07-21): Removed Docker/CD/E2E (moved to infrastructure branch). Added security hardening phase. No E2E tests — integration + unit tests only.
+- v1.2 (2026-07-27): Audited against foundation-hardening branch. N8 (withdraw holds) fixed in foundation-hardening — struck. B1 corrected: double validation, not triple. CSP (5.2) and coverage enforcement (4.14) done in foundation-hardening — struck. Structured logging (5.4) partially done — struck with remaining work noted. Added B6 (TOCTOU overlap race). Updated 1.5 (bookingIdempotency is actively used, not dead). Updated 1.10 (hookform/withTx already removed). Updated intro (consolidation is merged).

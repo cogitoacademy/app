@@ -121,4 +121,41 @@ describe("ResendEmailProvider", () => {
       console.error = originalConsoleError;
     }
   });
+
+  test("aborts fetch after timeout and propagates AbortError", async () => {
+    const abortError = new DOMException(
+      "The operation was aborted.",
+      "AbortError",
+    );
+    globalThis.fetch = mock(async () => {
+      throw abortError;
+    }) as any;
+
+    const consoleErrorSpy = mock(() => {});
+    const originalConsoleError = console.error;
+    console.error = consoleErrorSpy;
+
+    const provider = createResendEmailProvider(
+      "re_test_key",
+      "noreply@test.com",
+    );
+
+    try {
+      await provider.send({
+        to: "user@test.com",
+        subject: "Test",
+        html: "<p>Test</p>",
+        category: "booking",
+      });
+      expect(true).toBe(false);
+    } catch (e: any) {
+      expect(e).toBe(abortError);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      const loggedEntry = JSON.parse(consoleErrorSpy.mock.calls[0][0]);
+      expect(loggedEntry.action).toBe("resend_email_send_failed");
+      expect(loggedEntry.error.message).toContain("aborted");
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
 });

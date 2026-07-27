@@ -9,16 +9,45 @@ describe("Admin Types (Zod schemas)", () => {
 
   test("setRoleInput validates role enum", () => {
     expect(
-      setRoleInput.safeParse({ userId: "u1", role: "student" }).success,
+      setRoleInput.safeParse({
+        userId: "u1",
+        role: "student",
+        expectedRole: "tutor",
+      }).success,
     ).toBe(true);
     expect(
-      setRoleInput.safeParse({ userId: "u1", role: "tutor" }).success,
+      setRoleInput.safeParse({
+        userId: "u1",
+        role: "tutor",
+        expectedRole: "student",
+      }).success,
     ).toBe(true);
     expect(
-      setRoleInput.safeParse({ userId: "u1", role: "admin" }).success,
+      setRoleInput.safeParse({
+        userId: "u1",
+        role: "admin",
+        expectedRole: "student",
+      }).success,
     ).toBe(true);
     expect(
-      setRoleInput.safeParse({ userId: "u1", role: "superadmin" }).success,
+      setRoleInput.safeParse({
+        userId: "u1",
+        role: "superadmin",
+        expectedRole: "student",
+      }).success,
     ).toBe(false);
+  });
+
+  test("setRoleInput requires expectedRole", () => {
+    expect(
+      setRoleInput.safeParse({ userId: "u1", role: "student" }).success,
+    ).toBe(false);
+    expect(
+      setRoleInput.safeParse({
+        userId: "u1",
+        role: "student",
+        expectedRole: "tutor",
+      }).success,
+    ).toBe(true);
   });
 });

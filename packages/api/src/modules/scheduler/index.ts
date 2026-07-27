@@ -4,7 +4,7 @@ import type { SchedulerService } from "./scheduler.service";
 export type SchedulerModule = ReturnType<typeof createSchedulerModule>;
 
 export interface SchedulerHandlers {
-  onExpireBookings: () => Promise<{ expired: number }>;
+  onExpireBookings: () => Promise<{ expired: number; failed: number }>;
   onReleaseHolds: () => Promise<{ released: number }>;
   onSendNotificationEmail: (data: {
     notificationId: string;

@@ -16,8 +16,19 @@ export class LastAdminError extends DomainError {
   }
 }
 
+export class OptimisticLockError extends DomainError {
+  readonly domain = "admin";
+  constructor(id: string, expectedRole: string) {
+    super("OPTIMISTIC_LOCK", "Resource was modified by another transaction", {
+      id,
+      expectedRole,
+    });
+  }
+}
+
 export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof UserNotFoundError) return notFound(err.message, err);
   if (err instanceof LastAdminError) return conflict(err.message, err);
+  if (err instanceof OptimisticLockError) return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

@@ -26,6 +26,19 @@ export class InvalidInviteActionError extends DomainError {
   }
 }
 
+export class DuplicateInviteError extends DomainError {
+  readonly domain = "admin-tutor";
+  constructor(email: string) {
+    super(
+      "DUPLICATE_INVITE",
+      "An active invite already exists for this email",
+      {
+        email,
+      },
+    );
+  }
+}
+
 export function mapAdminTutorError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -34,5 +47,6 @@ export function mapAdminTutorError(
     return notFound(err.message, err);
   if (err instanceof InvalidInviteActionError)
     return conflict(err.message, err);
+  if (err instanceof DuplicateInviteError) return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

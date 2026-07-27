@@ -66,6 +66,16 @@ export class InvalidTutorPricingError extends DomainError {
   }
 }
 
+export class OptimisticLockError extends DomainError {
+  readonly domain = "tutor";
+  constructor(id: string, expectedVersion: number) {
+    super("OPTIMISTIC_LOCK", "Resource was modified by another transaction", {
+      id,
+      expectedVersion,
+    });
+  }
+}
+
 export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof TutorProfileNotFoundError)
     return notFound(err.message, err);
@@ -78,5 +88,6 @@ export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
     return badRequest(err.message, err);
   if (err instanceof InvalidTutorPricingError)
     return badRequest(err.message, err);
+  if (err instanceof OptimisticLockError) return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

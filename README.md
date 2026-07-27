@@ -1,105 +1,126 @@
 # cogito-app
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Router, Elysia, ORPC, and more.
+Monorepo for the Cogito tutoring platform. Backend (Elysia + oRPC + PostgreSQL) and frontend (React 19 + TanStack Router + Selia UI).
 
-## Features
+## Stack
 
-- **TypeScript** - For type safety and improved developer experience
-- **TanStack Router** - File-based routing with full type safety
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Elysia** - Type-safe, high-performance framework
-- **oRPC** - End-to-end type-safe APIs with OpenAPI integration
-- **Bun** - Runtime environment
-- **Drizzle** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Authentication** - Better-Auth
-- **Oxlint** - Oxlint + Oxfmt (linting & formatting)
-- **Turborepo** - Optimized monorepo build system
+- **Bun** — runtime, test runner, package manager
+- **TypeScript** — type safety across all workspaces
+- **Elysia** — HTTP server (port 3001)
+- **oRPC** — end-to-end type-safe API (POST convention, OpenAPI integration)
+- **Drizzle ORM** + **PostgreSQL 16** — database (Docker, port 6767)
+- **Better Auth 1.6.11** — email/password + optional Google OAuth
+- **React 19** + **TanStack Router/Query/Form** — frontend (Vite, port 5173)
+- **Selia UI** — component library on TailwindCSS v4 + @base-ui/react (see `AGENTS.md`)
+- **Turborepo** — monorepo build orchestration
+- **Oxlint + Oxfmt** — linting and formatting
+- **Lefthook** — pre-commit (oxlint + oxfmt), pre-push (typecheck)
 
 ## Getting Started
 
-First, install the dependencies:
+### Prerequisites
+
+- [Bun](https://bun.sh) (runtime)
+- [Docker Desktop](https://docker.com) (for PostgreSQL)
+
+### Setup
 
 ```bash
+# 1. Install dependencies
 bun install
+
+# 2. Start PostgreSQL (Docker, port 6767)
+bun run db:start
+
+# 3. Apply migrations
+bun run db:migrate
+
+# 4. Configure environment
+cp .env.example .env                       # root (used by tests)
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env
+# Edit BETTER_AUTH_SECRET to a 32+ character string
+
+# 5. (Optional) Seed package data
+bun run seed-packages
 ```
 
-## Database Setup
-
-This project uses PostgreSQL with Drizzle ORM.
-
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
-
-3. Apply the schema to your database:
+### Run
 
 ```bash
-bun run db:push
+bun run dev            # web (5173) + server (3001)
+bun run dev:web        # web only
+bun run dev:server     # server only
 ```
 
-Then, run the development server:
+Open [http://localhost:5173](http://localhost:5173) for the web app.
+The API is at [http://localhost:3001](http://localhost:3001).
+API docs (dev only) at [http://localhost:3001/api-reference](http://localhost:3001/api-reference).
+
+## Testing
 
 ```bash
-bun run dev
+bun run test:api       # unit + integration (requires DB running)
+bun test               # all tests
+bun run test:coverage  # with coverage gate (90% api / 80% overall)
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser to see the web application.
-The API is running at [http://localhost:3001](http://localhost:3001).
-
-## UI Customization
-
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
-
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
-
-### Add more shared components
-
-Run this from the project root to add more primitives to the shared UI package:
+## Quality Gates
 
 ```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
+bun run check          # oxlint + oxfmt
+bun run check-types    # TypeScript across all workspaces
+bun run build          # production build
 ```
 
-Import shared components like this:
+## Database
 
-```tsx
-import { Button } from "@cogito-app/ui/components/button";
+```bash
+bun run db:start       # start postgres container
+bun run db:stop        # stop container
+bun run db:migrate     # apply migrations
+bun run db:generate    # generate migration from schema changes
+bun run db:studio      # Drizzle Studio UI
 ```
-
-### Add app-specific blocks
-
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
-
-## Git Hooks and Formatting
-
-- Format and lint fix: `bun run check`
 
 ## Project Structure
 
 ```
 cogito-app/
 ├── apps/
-│   ├── web/         # Frontend application (React + TanStack Router)
-│   └── server/      # Backend API (Elysia, ORPC)
+│   ├── server/        # Elysia HTTP server (port 3001)
+│   └── web/           # Vite + React 19 + TanStack Router (port 5173)
 ├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
-│   ├── api/         # API layer / business logic
-│   ├── auth/        # Authentication configuration & logic
-│   └── db/          # Database schema & queries
+│   ├── api/           # Business logic (4-layer: Router → Handler → Service → Repo)
+│   ├── auth/          # Better Auth config
+│   ├── config/        # Shared TS config
+│   ├── db/            # Drizzle schema + migrations (postgres.js driver)
+│   ├── env/           # Zod-validated env vars
+│   └── ui/            # Selia component library (22 components)
+├── docs/              # Architecture context + plans
+│   ├── CONTEXT.md     # Single source of truth for architecture
+│   └── plans/         # Active + completed plans (see plans/README.md)
+└── designs/           # .pen design files
 ```
+
+See [`docs/CONTEXT.md`](docs/CONTEXT.md) for full architecture details and [`AGENTS.md`](AGENTS.md) for UI component conventions.
 
 ## Available Scripts
 
-- `bun run dev`: Start all applications in development mode
-- `bun run build`: Build all applications
-- `bun run dev:web`: Start only the web application
-- `bun run dev:server`: Start only the server
-- `bun run check-types`: Check TypeScript types across all apps
-- `bun run db:push`: Push schema changes to database
-- `bun run db:generate`: Generate database client/types
-- `bun run db:migrate`: Run database migrations
-- `bun run db:studio`: Open database studio UI
-- `bun run check`: Run Oxlint and Oxfmt
+| Script                  | Description                              |
+| ----------------------- | ---------------------------------------- |
+| `bun run dev`           | Start web + server in dev mode           |
+| `bun run build`         | Build all apps                           |
+| `bun run dev:web`       | Web only                                 |
+| `bun run dev:server`    | Server only                              |
+| `bun run check`         | Oxlint + Oxfmt                           |
+| `bun run check-types`   | TypeScript check (all workspaces)        |
+| `bun run test`          | Run tests                                |
+| `bun run test:api`      | API tests (unit + integration, needs DB) |
+| `bun run test:coverage` | Tests with coverage gate                 |
+| `bun run db:start`      | Start PostgreSQL Docker container        |
+| `bun run db:stop`       | Stop PostgreSQL container                |
+| `bun run db:migrate`    | Apply migrations                         |
+| `bun run db:generate`   | Generate migration from schema changes   |
+| `bun run db:studio`     | Drizzle Studio UI                        |
+| `bun run seed-packages` | Seed mark package data                   |

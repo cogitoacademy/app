@@ -1,6 +1,6 @@
 import type { AppRouterClient } from "@cogito-app/api/routers";
 import { env } from "@cogito-app/env/web";
-import { createORPCClient } from "@orpc/client";
+import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
@@ -15,6 +15,14 @@ export const queryClient = new QueryClient({
   },
   queryCache: new QueryCache({
     onError: (error, query) => {
+      if (
+        error instanceof ORPCError &&
+        (error.code === "UNAUTHORIZED" || error.code === "FORBIDDEN")
+      ) {
+        window.location.href =
+          "/login?redirect=" + encodeURIComponent(window.location.pathname);
+        return;
+      }
       toast.error(`Error: ${error.message}`, {
         action: {
           label: "retry",

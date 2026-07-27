@@ -53,6 +53,15 @@ export interface ConfirmInput {
 
 export type PaymentService = ReturnType<typeof createPaymentService>;
 
+const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
+  PENDING: ["PAID", "FAILED", "EXPIRED", "SETTLED"],
+  PAID: ["SETTLED", "REFUNDED"],
+  SETTLED: ["REFUNDED"],
+  FAILED: [],
+  EXPIRED: [],
+  REFUNDED: [],
+};
+
 export function createPaymentService(deps: {
   db: DbType;
   wallet: PaymentWalletPort;
@@ -139,6 +148,11 @@ export function createPaymentService(deps: {
       if (record.status === PAYMENT_STATUS.REFUNDED)
         return { status: PAYMENT_STATUS.REFUNDED };
 
+      const allowed = ALLOWED_TRANSITIONS[record.status] ?? [];
+      if (!allowed.includes(input.status)) {
+        return { status: record.status };
+      }
+
       if (input.providerEventId) {
         const existing = await repo.findPaymentByProviderEventId(
           input.providerEventId,
@@ -149,11 +163,15 @@ export function createPaymentService(deps: {
         }
       }
 
+      const shouldCredit =
+        record.status === PAYMENT_STATUS.PENDING &&
+        (input.status === PAYMENT_STATUS.PAID ||
+          input.status === PAYMENT_STATUS.SETTLED);
+
       if (
         input.status === PAYMENT_STATUS.PAID ||
         input.status === PAYMENT_STATUS.SETTLED
       ) {
-        const shouldCredit = record.status === PAYMENT_STATUS.PENDING;
         await repo.updatePaymentStatus(
           record.id,
           {

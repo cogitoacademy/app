@@ -2,7 +2,11 @@ import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
 import type { AdminAuditPort } from "./index";
-import { UserNotFoundError, LastAdminError } from "./admin.errors";
+import {
+  UserNotFoundError,
+  LastAdminError,
+  OptimisticLockError,
+} from "./admin.errors";
 
 export interface ListUsersInput {
   limit?: number;
@@ -19,6 +23,7 @@ export interface ListUsersResult {
 export interface SetRoleInput {
   userId: string;
   role: UserRole;
+  expectedRole: string;
 }
 
 export interface TargetUser {
@@ -90,7 +95,15 @@ export function createAdminService(deps: {
     );
 
     return db.transaction(async (tx) => {
-      const row = await adminRepo.updateRole(tx, input.userId, input.role);
+      const rows = await adminRepo.updateRoleWithExpected(
+        tx,
+        input.userId,
+        input.role,
+        input.expectedRole,
+      );
+      if (rows.length === 0)
+        throw new OptimisticLockError(input.userId, input.expectedRole);
+      const row = rows[0]!;
 
       await auditPort.record({
         db: tx,

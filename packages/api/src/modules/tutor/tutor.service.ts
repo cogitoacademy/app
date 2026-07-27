@@ -14,6 +14,7 @@ import {
   AvailabilitySlotOverlapError,
   TutorProfileIncompleteError,
   InvalidTutorPricingError,
+  OptimisticLockError,
 } from "./tutor.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
@@ -111,7 +112,15 @@ export function createTutorService(deps: {
   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateUpdateInput(profile, input, pricingPort);
-    return tutorRepo.updateProfile(db, userId, input);
+    const { version, ...data } = input;
+    const rows = await tutorRepo.updateProfileWithVersion(
+      db,
+      userId,
+      version,
+      data,
+    );
+    if (rows.length === 0) throw new OptimisticLockError(profile!.id, version);
+    return rows[0];
   }
 
   async function submitForReview(userId: string) {

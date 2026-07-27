@@ -36,6 +36,34 @@
       "when": 1783839200000,
       "tag": "0004_refund_payment_id_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783925600000,
+      "tag": "0005_drop_repriced_marks",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784012000000,
+      "tag": "0006_booking_tutor_overlap_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784012000000,
+      "tag": "0007_achievement_tutor_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784012000000,
+      "tag": "0008_tutor_invite_email_invited_uniq",
+      "breakpoints": true
     }
   ]
 }
