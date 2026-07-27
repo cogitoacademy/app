@@ -255,9 +255,9 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                         |
 | `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                         |
 | `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                         |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Ready to merge                               |
-| `docs/plans/active/PRODUCTION-READINESS-PLAN.md`                  | `improvement/production-readiness` | Next to execute (after foundation-hardening) |
-| `docs/plans/active/INFRASTRUCTURE-PLAN.md`                        | `improvement/infrastructure`       | Parallel with production-readiness (Coolify) |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                         |
+| `docs/plans/active/PRODUCTION-READINESS-PLAN.md`                  | `improvement/production-readiness` | PR #18 open                                  |
+| `docs/plans/active/INFRASTRUCTURE-PLAN.md`                        | `improvement/infrastructure`       | PR #19 open (parallel with #18)              |
 | `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, after above merge to main    |
 | `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                   |
 | `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                         |
@@ -266,12 +266,12 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 
 ```
 1. Consolidation (merged #16) → main
-2. Foundation Hardening (ready to merge) → main
-3. Production Readiness + Infrastructure (parallel, ~10 + ~4 days)
+2. Foundation Hardening (merged #17) → main
+3. Production Readiness + Infrastructure (parallel, PRs #18 + #19)
 4. PRD Gaps (G1-G18, ~15 days) → feature completeness
 ```
 
-Foundation Hardening must complete before production-readiness and infrastructure because it fixes data integrity, security, and auth issues that those plans depend on.
+Foundation Hardening merged to main (#17). Production-readiness (#18) and infrastructure (#19) run in parallel — they touch disjoint files (business logic vs Docker/CI).
 
 ## Known Bugs
 
