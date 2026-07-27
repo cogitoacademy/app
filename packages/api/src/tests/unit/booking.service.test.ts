@@ -13,7 +13,6 @@ import {
   BookingSeriesSizeError,
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
-  BookingHoldExpiredError,
   BookingCancelledError,
 } from "../../modules/booking/booking.errors";
 
@@ -920,10 +919,10 @@ describe("BookingService", () => {
       expect(meeting.createEvent).not.toHaveBeenCalled();
     });
 
-    test("throws BookingHoldExpiredError when meeting creation fails for online booking", async () => {
+    test("leaves booking in CONFIRMED when meeting creation fails for online booking", async () => {
       const booking = makeBooking({ modality: "online" });
       let findCallCount = 0;
-      const { service } = createService({
+      const { service, meeting } = createService({
         repo: {
           findBookingById: mock(async () => {
             findCallCount++;
@@ -951,9 +950,10 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
-        BookingHoldExpiredError,
-      );
+      await service.tutorAccept("b1", "tutor1");
+
+      expect(meeting.createEvent).toHaveBeenCalled();
+      expect(findCallCount).toBeGreaterThanOrEqual(2);
     });
   });
 

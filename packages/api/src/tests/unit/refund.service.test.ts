@@ -138,7 +138,7 @@ describe("RefundService", () => {
       expect(call[1].paymentId).toBeNull();
     });
 
-    test("passes bookingId as paymentId when provided", async () => {
+    test("passes null paymentId regardless of bookingId", async () => {
       const repo = makeRepo();
       const wallet = makeWalletPort();
       const service = createRefundService({
@@ -157,7 +157,7 @@ describe("RefundService", () => {
       });
 
       const call = repo.insertRefundRecord.mock.calls[0];
-      expect(call[1].paymentId).toBe("b123");
+      expect(call[1].paymentId).toBeNull();
     });
   });
 

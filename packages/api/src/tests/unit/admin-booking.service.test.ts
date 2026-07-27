@@ -43,6 +43,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     })),
     listBookingsByState: mock(async () => []),
     getStateHistory: mock(async () => []),
+    updateBookingHoldAmount: mock(async () => {}),
     ...overrides,
   };
 }
