@@ -1,0 +1,130 @@
+# Coolify Service Setup Guide
+
+## Prerequisites
+
+- Coolify installed and running on VPS (http://\<ip\>:8000)
+- GitHub Container Registry (GHCR) accessible
+- DNS configured: cogitoacademy.id, app.cogitoacademy.id → VPS IP
+
+## Step 1: Add Docker Registry
+
+1. Coolify → Settings → Docker Registries
+2. Add registry: `ghcr.io`
+3. Username: your GitHub username
+4. Password: GitHub Personal Access Token (with `read:packages` scope)
+
+## Step 2: Create PostgreSQL Service
+
+1. Coolify → Projects → New Project "cogito-prod"
+2. Add Service → Database → PostgreSQL 16
+3. Name: `postgres-prod`
+4. Set password (from .env.prod)
+5. Volume: `postgres_prod_data:/var/lib/postgresql/data`
+6. Network: `cogito-prod`
+7. Deploy
+
+## Step 3: Create Redis Service
+
+1. Add Service → Database → Redis 7
+2. Name: `redis-prod`
+3. Volume: `redis_prod_data:/data`
+4. Network: `cogito-prod`
+5. Deploy
+
+## Step 4: Create Server Service
+
+1. Add Service → Docker Image
+2. Image: `ghcr.io/<org>/cogito-app/server:latest`
+3. Name: `cogito-server`
+4. Port: 3001
+5. Network: `cogito-prod` (same as postgres + redis)
+6. Environment variables (from .env.prod):
+   - DATABASE_URL=postgresql://cogito:password@postgres-prod:5432/cogito
+   - REDIS_URL=redis://redis-prod:6379
+   - BETTER_AUTH_SECRET=...
+   - BETTER_AUTH_URL=https://cogitoacademy.id
+   - CORS_ORIGIN=https://app.cogitoacademy.id
+   - ... (all vars from .env.prod)
+7. Health check: GET /health
+8. Domain: cogitoacademy.id (Coolify auto-configures Caddy + HTTPS)
+   - Path: /rpc → this service (Coolify handles routing)
+   - Path: /api → this service
+   - Path: /health → this service
+9. Auto-deploy: ON (deploy when new image pushed)
+10. Deploy
+
+## Step 5: Create Web Service
+
+1. Add Service → Docker Image
+2. Image: `ghcr.io/<org>/cogito-app/web:latest`
+3. Name: `cogito-web`
+4. Port: 80
+5. Network: `cogito-prod`
+6. Domain: app.cogitoacademy.id
+7. Auto-deploy: ON
+8. Deploy
+
+## Step 6: Configure Caddy Routing
+
+Coolify automatically configures Caddy reverse proxy:
+
+- cogitoacademy.id/rpc/\* → cogito-server:3001
+- cogitoacademy.id/api/\* → cogito-server:3001
+- cogitoacademy.id/health → cogito-server:3001
+- cogitoacademy.id/\* → cogito-web:80
+
+Or use separate domains:
+
+- app.cogitoacademy.id → cogito-web:80
+- cogitoacademy.id/rpc, /api, /health → cogito-server:3001
+
+## Step 7: Repeat for Staging
+
+Same as above but:
+
+- Project: "cogito-staging"
+- Images tagged :staging
+- Domains: staging.cogitoacademy.id, staging-app.cogitoacademy.id
+- PAYMENT_PROVIDER=stub
+- SCHEDULER_ENABLED=true
+
+## Step 8: Configure Docker Log Rotation
+
+For each service in Coolify, add Docker labels or configure in service settings:
+
+```yaml
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+```
+
+This prevents disk overflow from logs.
+
+## Step 9: Deploy Uptime Kuma
+
+1. Coolify → Add Service → Docker Image → `louislam/uptime-kuma:1`
+2. Port: 3001 (container), 3002 (host)
+3. Volume: `uptime_kuma_data:/app/data`
+4. Domain: `status.cogitoacademy.id`
+
+Configure via Uptime Kuma UI:
+
+- Monitor `https://cogitoacademy.id/health` every 60s
+- Monitor `https://staging.cogitoacademy.id/health` every 60s
+- Monitor `https://app.cogitoacademy.id` (frontend) every 60s
+- Alert on downtime (configure webhook/email notifications)
+- Create public status page at `status.cogitoacademy.id`
+
+## Step 10: Configure Coolify Built-in Monitoring
+
+- CPU/memory alerts for each service
+- Health check endpoint per service
+- Automatic restart on health check failure
+
+## Step 11: Verify
+
+- `curl https://cogitoacademy.id/health` → 200
+- `curl https://app.cogitoacademy.id` → frontend HTML
+- Coolify dashboard shows all services as "running"
