@@ -48,7 +48,7 @@ export function createBookingHandler(booking: BookingService) {
     }) => {
       const headerKey = context.headers.get("idempotency-key");
       const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${input.scheduledStartAt.toISOString()}:${headerKey ?? ""}`;
-      if (bookingIdempotency.isProcessed(idempotencyKey)) {
+      if (await bookingIdempotency.isProcessed(idempotencyKey)) {
         return bookingIdempotency.getResult(idempotencyKey);
       }
       const result = await withDomainMap(
@@ -63,7 +63,7 @@ export function createBookingHandler(booking: BookingService) {
           }),
         mapBookingError,
       );
-      bookingIdempotency.markProcessed(idempotencyKey, result);
+      await bookingIdempotency.markProcessed(idempotencyKey, result);
       return result;
     },
 
@@ -140,7 +140,7 @@ export function createBookingHandler(booking: BookingService) {
     }) => {
       const headerKey = context.headers.get("idempotency-key");
       const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${input.scheduledStartAt.toISOString()}:${input.inviteeUserIds.join(",")}:${headerKey ?? ""}`;
-      if (bookingIdempotency.isProcessed(idempotencyKey)) {
+      if (await bookingIdempotency.isProcessed(idempotencyKey)) {
         return bookingIdempotency.getResult(idempotencyKey);
       }
       const result = await withDomainMap(
@@ -157,7 +157,7 @@ export function createBookingHandler(booking: BookingService) {
           }),
         mapBookingError,
       );
-      bookingIdempotency.markProcessed(idempotencyKey, result);
+      await bookingIdempotency.markProcessed(idempotencyKey, result);
       return result;
     },
 
@@ -173,7 +173,7 @@ export function createBookingHandler(booking: BookingService) {
         .map((s) => s.scheduledStartAt.toISOString())
         .join(",");
       const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${sessionsKey}:${headerKey ?? ""}`;
-      if (bookingIdempotency.isProcessed(idempotencyKey)) {
+      if (await bookingIdempotency.isProcessed(idempotencyKey)) {
         return bookingIdempotency.getResult(idempotencyKey);
       }
       const result = await withDomainMap(
@@ -187,7 +187,7 @@ export function createBookingHandler(booking: BookingService) {
           }),
         mapBookingError,
       );
-      bookingIdempotency.markProcessed(idempotencyKey, result);
+      await bookingIdempotency.markProcessed(idempotencyKey, result);
       return result;
     },
 

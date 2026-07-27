@@ -3,12 +3,15 @@ import { initLogger } from "evlog";
 import { createServer } from "./routes";
 import { env } from "@cogito-app/env/server";
 import { log } from "@cogito-app/api/lib/logger";
+import { initRedis } from "@cogito-app/api/lib/redis";
 import { sql } from "drizzle-orm";
 import { shutdownScheduler } from "./scheduler";
 
 initLogger({
   env: { service: "cogito-app-server" },
 });
+
+initRedis(env.REDIS_URL ?? undefined);
 
 process.on("unhandledRejection", (reason) => {
   log({

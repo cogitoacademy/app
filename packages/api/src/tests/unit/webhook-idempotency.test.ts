@@ -15,72 +15,72 @@ describe("webhook-idempotency", () => {
   });
 
   describe("isProcessed", () => {
-    test("returns false for unprocessed webhooks", () => {
-      expect(store.isProcessed("evt_123")).toBe(false);
+    test("returns false for unprocessed webhooks", async () => {
+      expect(await store.isProcessed("evt_123")).toBe(false);
     });
 
-    test("returns true after marking a webhook as processed", () => {
-      store.markProcessed("evt_123", { status: "processed" });
-      expect(store.isProcessed("evt_123")).toBe(true);
+    test("returns true after marking a webhook as processed", async () => {
+      await store.markProcessed("evt_123", { status: "processed" });
+      expect(await store.isProcessed("evt_123")).toBe(true);
     });
 
-    test("returns false for different keys", () => {
-      store.markProcessed("evt_123", { status: "processed" });
-      expect(store.isProcessed("evt_456")).toBe(false);
+    test("returns false for different keys", async () => {
+      await store.markProcessed("evt_123", { status: "processed" });
+      expect(await store.isProcessed("evt_456")).toBe(false);
     });
   });
 
   describe("markProcessed / getResult", () => {
-    test("stores and retrieves a result", () => {
+    test("stores and retrieves a result", async () => {
       const result = { status: "processed", providerReference: "ref_1" };
-      store.markProcessed("evt_123", result);
-      expect(store.getResult("evt_123")).toEqual(result);
+      await store.markProcessed("evt_123", result);
+      expect(await store.getResult("evt_123")).toEqual(result);
     });
 
-    test("returns undefined for unknown keys", () => {
-      expect(store.getResult("evt_unknown")).toBeUndefined();
+    test("returns undefined for unknown keys", async () => {
+      expect(await store.getResult("evt_unknown")).toBeUndefined();
     });
 
-    test("overwrites previous results for the same key", () => {
-      store.markProcessed("evt_123", { status: "processed" });
-      store.markProcessed("evt_123", { status: "failed" });
-      expect(store.getResult("evt_123")).toEqual({ status: "failed" });
+    test("overwrites previous results for the same key", async () => {
+      await store.markProcessed("evt_123", { status: "processed" });
+      await store.markProcessed("evt_123", { status: "failed" });
+      expect(await store.getResult("evt_123")).toEqual({ status: "failed" });
     });
   });
 
   describe("cleanup", () => {
-    test("removes entries older than maxAge", () => {
+    test("removes entries older than maxAge", async () => {
       const shortLived = new IdempotencyStore({
         maxAgeMs: 100,
         cleanupIntervalMs: 0,
       });
-      shortLived.markProcessed("evt_old", { status: "processed" });
+      await shortLived.markProcessed("evt_old", { status: "processed" });
 
       const after = Date.now() + 200;
       const originalNow = Date.now;
       Date.now = () => after;
       try {
-        expect(shortLived.isProcessed("evt_old")).toBe(false);
+        expect(await shortLived.isProcessed("evt_old")).toBe(false);
       } finally {
         Date.now = originalNow;
       }
     });
 
-    test("keeps entries within maxAge", () => {
-      store.markProcessed("evt_recent", { status: "processed" });
-      expect(store.isProcessed("evt_recent")).toBe(true);
+    test("keeps entries within maxAge", async () => {
+      await store.markProcessed("evt_recent", { status: "processed" });
+      expect(await store.isProcessed("evt_recent")).toBe(true);
     });
   });
 
   describe("eviction", () => {
-    test("evicts oldest entry when maxEntries is exceeded", () => {
+    test("evicts oldest entry when maxEntries is exceeded", async () => {
       const smallStore = new IdempotencyStore({ maxEntries: 2 });
-      smallStore.markProcessed("key_1", { status: "processed" });
-      smallStore.markProcessed("key_2", { status: "processed" });
-      smallStore.markProcessed("key_3", { status: "processed" });
-      expect(smallStore.isProcessed("key_1")).toBe(false);
-      expect(smallStore.isProcessed("key_2")).toBe(true);
-      expect(smallStore.isProcessed("key_3")).toBe(true);
+      await smallStore.markProcessed("key_1", { status: "processed" });
+      await smallStore.markProcessed("key_2", { status: "processed" });
+      await smallStore.markProcessed("key_3", { status: "processed" });
+      expect(await smallStore.isProcessed("key_1")).toBe(false);
+      expect(await smallStore.isProcessed("key_2")).toBe(true);
+      expect(await smallStore.isProcessed("key_3")).toBe(true);
     });
   });
 

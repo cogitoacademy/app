@@ -166,7 +166,7 @@ describe("booking idempotency", () => {
       ).rejects.toThrow("db error");
 
       expect(
-        bookingIdempotency.isProcessed(
+        await bookingIdempotency.isProcessed(
           `booking:u1:t1:${soloInput.scheduledStartAt.toISOString()}:retry-key`,
         ),
       ).toBe(false);

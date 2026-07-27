@@ -1,24 +1,41 @@
+import { COGITO_NS } from "./redis";
+import type { RedisClient } from "./redis";
+
+export interface IdempotencyStoreOptions {
+  prefix?: string;
+  maxAgeMs?: number;
+  cleanupIntervalMs?: number;
+  maxEntries?: number;
+  redis?: RedisClient;
+}
+
 export class IdempotencyStore {
   private store = new Map<string, { result: unknown; timestamp: number }>();
   private maxAge: number;
-  private maxEntries: number;
   private cleanupInterval: number;
+  private maxEntries: number;
   private lastCleanup = Date.now();
+  private prefix: string;
+  private redis: RedisClient | null;
 
-  constructor(
-    options: {
-      prefix?: string;
-      maxAgeMs?: number;
-      cleanupIntervalMs?: number;
-      maxEntries?: number;
-    } = {},
-  ) {
+  constructor(options: IdempotencyStoreOptions = {}) {
     this.maxAge = options.maxAgeMs ?? 24 * 60 * 60 * 1000;
     this.cleanupInterval = options.cleanupIntervalMs ?? 60 * 60 * 1000;
     this.maxEntries = options.maxEntries ?? 10_000;
+    this.prefix = options.prefix ?? COGITO_NS.IDEMPOTENCY;
+    this.redis = options.redis ?? null;
   }
 
-  isProcessed(key: string): boolean {
+  async isProcessed(key: string): Promise<boolean> {
+    const redisKey = `${this.prefix}:${key}`;
+    if (this.redis) {
+      try {
+        const exists = await this.redis.exists(redisKey);
+        if (exists) return true;
+      } catch {
+        // fall through to in-memory
+      }
+    }
     this.maybeCleanup();
     const entry = this.store.get(key);
     if (!entry) return false;
@@ -29,12 +46,41 @@ export class IdempotencyStore {
     return true;
   }
 
-  markProcessed(key: string, result: unknown): void {
+  async markProcessed(key: string, result: unknown): Promise<void> {
+    const redisKey = `${this.prefix}:${key}`;
+    if (this.redis) {
+      try {
+        const ttlSeconds = Math.ceil(this.maxAge / 1000);
+        const resultStr = JSON.stringify(result);
+        await this.redis.set(redisKey, resultStr, {
+          type: "EX",
+          value: ttlSeconds,
+        });
+        return;
+      } catch {
+        // fall through to in-memory
+      }
+    }
     this.evictOldest();
     this.store.set(key, { result, timestamp: Date.now() });
   }
 
-  getResult(key: string): unknown | undefined {
+  async getResult(key: string): Promise<unknown> {
+    const redisKey = `${this.prefix}:${key}`;
+    if (this.redis) {
+      try {
+        const value = await this.redis.get(redisKey);
+        if (value !== null) {
+          try {
+            return JSON.parse(value);
+          } catch {
+            return value;
+          }
+        }
+      } catch {
+        // fall through to in-memory
+      }
+    }
     this.maybeCleanup();
     return this.store.get(key)?.result;
   }
@@ -64,7 +110,11 @@ export class IdempotencyStore {
   }
 }
 
-export const bookingIdempotency = new IdempotencyStore();
+export const bookingIdempotency = new IdempotencyStore({
+  maxAgeMs: 24 * 60 * 60 * 1000,
+  cleanupIntervalMs: 60 * 60 * 1000,
+});
+
 export const webhookIdempotency = new IdempotencyStore({
   maxAgeMs: 24 * 60 * 60 * 1000,
   cleanupIntervalMs: 60 * 60 * 1000,
