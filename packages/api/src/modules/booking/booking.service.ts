@@ -29,7 +29,6 @@ import {
   BookingSeriesSizeError,
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
-  BookingHoldExpiredError,
   BookingCancelledError,
 } from "./booking.errors";
 import { log } from "../../lib/logger";
@@ -446,25 +445,44 @@ export function createBookingService(deps: {
 
       const isOffline = b.modality === MODALITY.OFFLINE;
 
-      await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
-        actorId: tutorId,
-        actorType: ACTOR_TYPE.TUTOR,
-      });
-
       let updated;
       if (!isOffline) {
-        updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+        await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
           actorId: tutorId,
           actorType: ACTOR_TYPE.TUTOR,
-          reason: "Meeting created automatically",
         });
 
-        await repo.updateBookingDeadline(
-          tx,
-          bookingId,
-          new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
-        );
+        try {
+          const meetingResult = await meeting.createEvent(
+            bookingId,
+            b.scheduledStartAt,
+            b.scheduledEndAt,
+          );
+
+          if (meetingResult.status === "failed") {
+            updated = await repo.findBookingById(tx, bookingId);
+          } else {
+            updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+              actorId: tutorId,
+              actorType: ACTOR_TYPE.TUTOR,
+              reason: "Meeting created automatically",
+            });
+
+            await repo.updateBookingDeadline(
+              tx,
+              bookingId,
+              new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+            );
+          }
+        } catch {
+          updated = await repo.findBookingById(tx, bookingId);
+        }
       } else {
+        await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
+          actorId: tutorId,
+          actorType: ACTOR_TYPE.TUTOR,
+        });
+
         await transition(
           tx,
           bookingId,
@@ -495,24 +513,6 @@ export function createBookingService(deps: {
 
       return { updated, isOffline, b };
     });
-
-    if (!result.isOffline) {
-      try {
-        await meeting.createEvent(
-          bookingId,
-          result.b.scheduledStartAt,
-          result.b.scheduledEndAt,
-        );
-      } catch (error) {
-        log({
-          level: "error",
-          action: "meeting_creation_failed",
-          bookingId,
-          error: { message: String(error) },
-        });
-        throw new BookingHoldExpiredError(bookingId);
-      }
-    }
 
     return result.updated!;
   }
