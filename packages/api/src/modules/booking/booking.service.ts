@@ -1094,6 +1094,7 @@ export function createBookingService(deps: {
     }
 
     const bookingId = crypto.randomUUID();
+    const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
       await wallet.hold(tx, {
@@ -1123,6 +1124,7 @@ export function createBookingService(deps: {
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
+        deadlineAt,
       });
 
       await repo.insertParticipant(tx, {
