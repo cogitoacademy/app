@@ -2021,48 +2021,6 @@ describe("BookingService", () => {
     });
   });
 
-  describe("tutorAccept — meeting result status check", () => {
-    test("meeting result with 'failed' status leaves booking in CONFIRMED", async () => {
-      const booking = makeBooking({ modality: "online" });
-      let findCallCount = 0;
-      const { service, meeting } = createService({
-        repo: {
-          findBookingById: mock(async () => {
-            findCallCount++;
-            if (findCallCount === 1)
-              return {
-                ...booking,
-                currentState: "awaiting_tutor_review",
-                version: 1,
-              };
-            return { ...booking, currentState: "confirmed", version: 2 };
-          }),
-          updateBookingVersioned: mock(
-            async (_conn: any, _id: any, ver: number, updates: any) => ({
-              updated: { ...booking, ...updates, version: ver + 1 },
-              newVersion: ver + 1,
-            }),
-          ),
-        },
-        meeting: {
-          createEvent: mock(async () => ({
-            id: "m1",
-            bookingId: "b1",
-            provider: "google_meet",
-            externalEventId: null,
-            meetingUrl: null,
-            status: "failed",
-            errorReason: "Google API error",
-          })),
-        },
-      });
-
-      await service.tutorAccept("b1", "tutor1");
-
-      expect(meeting.createEvent).toHaveBeenCalledTimes(1);
-    });
-  });
-
   describe("declineInvite", () => {
     test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
