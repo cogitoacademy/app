@@ -44,7 +44,7 @@ export const paymentRecord = pgTable(
   (table) => [
     check(
       "payment_provider_check",
-      sql`${table.provider} IN ('stub','midtrans','xendit')`,
+      sql`${table.provider} IN ('stub','xendit')`,
     ),
     check(
       "payment_status_check",
