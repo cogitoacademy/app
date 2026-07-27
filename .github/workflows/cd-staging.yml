@@ -1,0 +1,35 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push server
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/server:staging -f apps/server/Dockerfile .
+          docker push ghcr.io/${{ github.repository }}/server:staging
+
+      - name: Build and push web
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/web:staging -f apps/web/Dockerfile .
+          docker push ghcr.io/${{ github.repository }}/web:staging
+
+      - name: Trigger Coolify deploy
+        run: |
+          curl -X POST ${{ secrets.COOLIFY_STAGING_WEBHOOK }} || true

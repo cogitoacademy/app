@@ -1,0 +1,44 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push server
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/server:latest -f apps/server/Dockerfile .
+          docker tag ghcr.io/${{ github.repository }}/server:latest ghcr.io/${{ github.repository }}/server:v${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}/server:latest
+          docker push ghcr.io/${{ github.repository }}/server:v${{ github.sha }}
+
+      - name: Build and push web
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/web:latest -f apps/web/Dockerfile .
+          docker tag ghcr.io/${{ github.repository }}/web:latest ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}/web:latest
+          docker push ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
+
+      - name: Trigger Coolify deploy
+        run: |
+          curl -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }} || true
+
+      - name: Health check
+        run: |
+          sleep 15
+          curl -f https://cogitoacademy.id/health || exit 1
