@@ -92,13 +92,41 @@ export async function initScheduler(): Promise<void> {
   });
 }
 
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
 export async function shutdownScheduler(): Promise<void> {
   if (!scheduler) return;
-  await scheduler.worker.close();
-  await scheduler.queue.close();
+
   log({
     level: "info",
-    action: "scheduler_shutdown",
-    message: "Scheduler shut down",
+    action: "scheduler_shutdown_start",
+    message: "Shutting down scheduler...",
   });
+
+  const forceExit = setTimeout(() => {
+    log({
+      level: "warn",
+      action: "scheduler_shutdown_forced",
+      message: `Scheduler shutdown timed out after ${SHUTDOWN_TIMEOUT_MS}ms, forcing close`,
+    });
+    scheduler!.worker.close(true).catch(() => {});
+    scheduler!.queue.close().catch(() => {});
+  }, SHUTDOWN_TIMEOUT_MS);
+
+  try {
+    await Promise.all([scheduler.worker.close(), scheduler.queue.close()]);
+    clearTimeout(forceExit);
+    log({
+      level: "info",
+      action: "scheduler_shutdown",
+      message: "Scheduler shut down gracefully",
+    });
+  } catch (error) {
+    clearTimeout(forceExit);
+    log({
+      level: "error",
+      action: "scheduler_shutdown_error",
+      error: { message: String(error) },
+    });
+  }
 }
