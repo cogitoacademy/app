@@ -1,13 +1,16 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, mock } from "bun:test";
 import {
   validateReviewAction,
   buildReviewUpdates,
+  createAdminTutorService,
   type ReviewAction,
   type TutorProfileSnapshot,
 } from "../../modules/admin-tutor/admin-tutor.service";
 import {
   TutorProfileNotFoundError,
   InvalidInviteActionError,
+  DuplicateInviteError,
+  InviteNotFoundError,
 } from "../../modules/admin-tutor/admin-tutor.errors";
 
 function makeProfile(
@@ -17,6 +20,45 @@ function makeProfile(
     id: "p1",
     onboardingStatus: "pending_review",
     publishedAt: null,
+    ...overrides,
+  };
+}
+
+function makeInvite(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "inv1",
+    email: "tutor@example.com",
+    displayName: "Tutor",
+    token: "tok1",
+    status: "invited",
+    invitedBy: "admin1",
+    internalNotes: null,
+    expiresAt: new Date(),
+    ...overrides,
+  };
+}
+
+function makeDeps(overrides: Record<string, unknown> = {}) {
+  const invite = makeInvite();
+  const profile = makeProfile();
+  return {
+    adminTutorRepo: {
+      findActiveInviteByEmail: mock(async () => null),
+      insertInvite: mock(async () => invite),
+      getInviteById: mock(async () => invite),
+      updateInvite: mock(async () => invite),
+      listInvites: mock(async () => [invite]),
+      getTutorProfileById: mock(async () => profile),
+      updateTutorProfile: mock(async () => profile),
+      listTutorProfiles: mock(async () => [profile]),
+    },
+    auditPort: { record: mock(async () => {}) },
+    db: {
+      transaction: mock(async (fn: any) => {
+        const tx = {};
+        return fn(tx);
+      }),
+    },
     ...overrides,
   };
 }
@@ -96,6 +138,215 @@ describe("AdminTutor Service", () => {
       expect(() =>
         buildReviewUpdates("invalid_action" as ReviewAction),
       ).toThrow(InvalidInviteActionError);
+    });
+  });
+
+  describe("createAdminTutorService", () => {
+    test("createInvite throws DuplicateInviteError when active invite exists", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          findActiveInviteByEmail: mock(async () => makeInvite()),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(
+        service.createInvite("admin1", {
+          email: "tutor@example.com",
+          displayName: "Tutor",
+        }),
+      ).rejects.toThrow(DuplicateInviteError);
+    });
+
+    test("createInvite succeeds when no active invite exists", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.createInvite("admin1", {
+        email: "new@example.com",
+        displayName: "New Tutor",
+      });
+      expect(result.id).toBe("inv1");
+    });
+
+    test("createInvite throws DuplicateInviteError on unique violation", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          insertInvite: mock(async () => {
+            const err = new Error("unique violation");
+            (err as any).code = "23505";
+            throw err;
+          }),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(
+        service.createInvite("admin1", {
+          email: "tutor@example.com",
+          displayName: "Tutor",
+        }),
+      ).rejects.toThrow(DuplicateInviteError);
+    });
+
+    test("createInvite re-throws non-unique errors", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          insertInvite: mock(async () => {
+            throw new Error("other db error");
+          }),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(
+        service.createInvite("admin1", {
+          email: "tutor@example.com",
+          displayName: "Tutor",
+        }),
+      ).rejects.toThrow("other db error");
+    });
+
+    test("createInvite with internalNotes passes them through", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.createInvite("admin1", {
+        email: "new@example.com",
+        displayName: "New Tutor",
+        internalNotes: "some notes",
+      });
+      expect(result.id).toBe("inv1");
+      expect(deps.adminTutorRepo.insertInvite).toHaveBeenCalled();
+    });
+
+    test("listInvites defaults limit and offset", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.listInvites();
+      expect(result).toEqual([makeInvite()]);
+    });
+
+    test("listInvites passes status filter", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.listInvites({ status: "invited" });
+      expect(result).toEqual([makeInvite()]);
+    });
+
+    test("resendInvite throws InviteNotFoundError for missing invite", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getInviteById: mock(async () => null),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(
+        service.resendInvite("admin1", "nonexistent"),
+      ).rejects.toThrow(InviteNotFoundError);
+    });
+
+    test("resendInvite throws InvalidInviteActionError for non-invited status", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getInviteById: mock(async () => makeInvite({ status: "accepted" })),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(service.resendInvite("admin1", "inv1")).rejects.toThrow(
+        InvalidInviteActionError,
+      );
+    });
+
+    test("resendInvite succeeds for invited status", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.resendInvite("admin1", "inv1");
+      expect(result.id).toBe("inv1");
+    });
+
+    test("revokeInvite throws InviteNotFoundError for missing invite", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getInviteById: mock(async () => null),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(
+        service.revokeInvite("admin1", "nonexistent"),
+      ).rejects.toThrow(InviteNotFoundError);
+    });
+
+    test("revokeInvite throws InvalidInviteActionError for non-invited status", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getInviteById: mock(async () => makeInvite({ status: "accepted" })),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(service.revokeInvite("admin1", "inv1")).rejects.toThrow(
+        InvalidInviteActionError,
+      );
+    });
+
+    test("revokeInvite succeeds for invited status", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.revokeInvite("admin1", "inv1");
+      expect(result.id).toBe("inv1");
+    });
+
+    test("listTutorProfiles defaults limit and offset", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.listTutorProfiles();
+      expect(result).toEqual([makeProfile()]);
+    });
+
+    test("listTutorProfiles passes status filter", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.listTutorProfiles({ status: "published" });
+      expect(result).toEqual([makeProfile()]);
+    });
+
+    test("reviewTutorProfile throws TutorProfileNotFoundError for null profile", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => null),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      await expect(
+        service.reviewTutorProfile("admin1", {
+          tutorProfileId: "p1",
+          action: "publish",
+        }),
+      ).rejects.toThrow(TutorProfileNotFoundError);
+    });
+
+    test("reviewTutorProfile publishes profile", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.reviewTutorProfile("admin1", {
+        tutorProfileId: "p1",
+        action: "publish",
+      });
+      expect(result.id).toBe("p1");
+    });
+
+    test("reviewTutorProfile with adminNote", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.reviewTutorProfile("admin1", {
+        tutorProfileId: "p1",
+        action: "request_changes",
+        adminNote: "Please update bio",
+      });
+      expect(result.id).toBe("p1");
     });
   });
 });

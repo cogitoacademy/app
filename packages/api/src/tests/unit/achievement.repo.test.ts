@@ -329,6 +329,60 @@ describe("updateStatus", () => {
   });
 });
 
+describe("updateWithVersion", () => {
+  test("updates with optimistic lock check and returns rows", async () => {
+    const returned = [{ id: "a1", version: 2, eventName: "Updated" }];
+    const conn = { ...makeUpdateConn(returned) } as any;
+
+    const result = await repo.updateWithVersion(conn, "a1", "u1", 1, {
+      eventName: "Updated",
+    });
+
+    expect(result).toEqual(returned);
+    expect(conn.update).toHaveBeenCalledTimes(1);
+    expect(conn.set).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns empty array when version mismatch", async () => {
+    const conn = { ...makeUpdateConn([]) } as any;
+
+    const result = await repo.updateWithVersion(conn, "a1", "u1", 99, {
+      eventName: "Stale",
+    });
+
+    expect(result).toEqual([]);
+  });
+});
+
+function makeDeleteWithReturningConn(returned: any[] = []) {
+  const returning = mock(async () => returned);
+  const where = mock(() => ({ returning }));
+  const del = mock(() => ({ where }));
+  return { delete: del, where, returning };
+}
+
+describe("deleteWithVersion", () => {
+  test("deletes with optimistic lock and returns rows", async () => {
+    const returned = [{ id: "a1" }];
+    const conn = makeDeleteWithReturningConn(returned) as any;
+
+    const result = await repo.deleteWithVersion(conn, "a1", "u1", 1);
+
+    expect(result).toEqual(returned);
+    expect(conn.delete).toHaveBeenCalledTimes(1);
+    expect(conn.where).toHaveBeenCalledTimes(1);
+    expect(conn.returning).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns empty array when version mismatch", async () => {
+    const conn = makeDeleteWithReturningConn([]) as any;
+
+    const result = await repo.deleteWithVersion(conn, "a1", "u1", 99);
+
+    expect(result).toEqual([]);
+  });
+});
+
 describe("createAchievementRepo", () => {
   test("returns object with all repo methods", () => {
     const r = createAchievementRepo();

@@ -19,17 +19,57 @@ export async function initScheduler(): Promise<void> {
 
   scheduler = createSchedulerService(env.REDIS_URL!, {
     onExpireBookings: () => services.booking.expireBookings(),
-    onReleaseHolds: async () => {
-      const result = await services.booking.expireBookings();
-      return { released: result.expired };
-    },
+    onReleaseHolds: () => services.booking.releaseExpiredHolds(),
     onSendNotificationEmail: async (data) => {
-      log({
-        level: "info",
-        action: "scheduler_email_dispatch",
-        message: "Notification email dispatch",
-        data,
-      });
+      try {
+        const db = (await import("@cogito-app/db")).db;
+        const { notification: notificationTable, user: userTable } =
+          await import("@cogito-app/db/schema");
+        const { eq } = await import("drizzle-orm");
+        const [notifRow] = await db
+          .select()
+          .from(notificationTable)
+          .where(eq(notificationTable.id, data.notificationId))
+          .limit(1);
+        if (!notifRow) return;
+
+        const [userRow] = await db
+          .select({ email: userTable.email })
+          .from(userTable)
+          .where(eq(userTable.id, data.userId))
+          .limit(1);
+        if (!userRow?.email) return;
+
+        const emailCategory =
+          (notifRow.category as string) === "booking"
+            ? "booking"
+            : (notifRow.category as string) === "payment"
+              ? "payment"
+              : (notifRow.category as string) === "refund"
+                ? "refund"
+                : (notifRow.category as string) === "schedule"
+                  ? "schedule"
+                  : "override";
+
+        await services.email.send({
+          to: userRow.email,
+          subject: notifRow.title,
+          html: notifRow.body,
+          category: emailCategory as
+            | "booking"
+            | "payment"
+            | "refund"
+            | "schedule"
+            | "override",
+        });
+      } catch (error) {
+        log({
+          level: "error",
+          action: "scheduler_email_dispatch_failed",
+          error: { message: String(error) },
+          data,
+        });
+      }
     },
   });
 
@@ -52,13 +92,41 @@ export async function initScheduler(): Promise<void> {
   });
 }
 
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
 export async function shutdownScheduler(): Promise<void> {
   if (!scheduler) return;
-  await scheduler.worker.close();
-  await scheduler.queue.close();
+
   log({
     level: "info",
-    action: "scheduler_shutdown",
-    message: "Scheduler shut down",
+    action: "scheduler_shutdown_start",
+    message: "Shutting down scheduler...",
   });
+
+  const forceExit = setTimeout(() => {
+    log({
+      level: "warn",
+      action: "scheduler_shutdown_forced",
+      message: `Scheduler shutdown timed out after ${SHUTDOWN_TIMEOUT_MS}ms, forcing close`,
+    });
+    scheduler!.worker.close(true).catch(() => {});
+    scheduler!.queue.close().catch(() => {});
+  }, SHUTDOWN_TIMEOUT_MS);
+
+  try {
+    await Promise.all([scheduler.worker.close(), scheduler.queue.close()]);
+    clearTimeout(forceExit);
+    log({
+      level: "info",
+      action: "scheduler_shutdown",
+      message: "Scheduler shut down gracefully",
+    });
+  } catch (error) {
+    clearTimeout(forceExit);
+    log({
+      level: "error",
+      action: "scheduler_shutdown_error",
+      error: { message: String(error) },
+    });
+  }
 }

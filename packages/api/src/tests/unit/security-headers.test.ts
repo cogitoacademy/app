@@ -34,8 +34,14 @@ describe("SECURITY_HEADERS", () => {
     );
   });
 
-  test("has exactly 6 headers", () => {
-    expect(Object.keys(SECURITY_HEADERS)).toHaveLength(6);
+  test("contains Strict-Transport-Security", () => {
+    expect(SECURITY_HEADERS["Strict-Transport-Security"]).toBe(
+      "max-age=63072000; includeSubDomains; preload",
+    );
+  });
+
+  test("has exactly 7 headers", () => {
+    expect(Object.keys(SECURITY_HEADERS)).toHaveLength(7);
   });
 });
 

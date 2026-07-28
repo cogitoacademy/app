@@ -44,7 +44,7 @@ export const paymentRecord = pgTable(
   (table) => [
     check(
       "payment_provider_check",
-      sql`${table.provider} IN ('stub','midtrans','xendit')`,
+      sql`${table.provider} IN ('stub','xendit')`,
     ),
     check(
       "payment_status_check",
@@ -54,6 +54,7 @@ export const paymentRecord = pgTable(
     index("payment_userId_idx").on(table.userId),
     index("payment_providerReference_idx").on(table.providerReference),
     index("payment_status_idx").on(table.status),
+    index("payment_userId_status_idx").on(table.userId, table.status),
   ],
 );
 

@@ -41,7 +41,7 @@ export function paymentsWebhook(app: Elysia) {
         hasSignature: !!signature,
       });
 
-      if (webhookIdempotency.isProcessed(idempotencyKey)) {
+      if (await webhookIdempotency.isProcessed(idempotencyKey)) {
         set.status = 200;
         return { ok: true, idempotent: true };
       }
@@ -63,7 +63,7 @@ export function paymentsWebhook(app: Elysia) {
           failureReason: payload.failureReason,
         });
 
-        webhookIdempotency.markProcessed(idempotencyKey, { ok: true });
+        await webhookIdempotency.markProcessed(idempotencyKey, { ok: true });
 
         set.status = 200;
         return { ok: true };

@@ -12,7 +12,7 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
-    PAYMENT_PROVIDER: z.enum(["stub", "midtrans", "xendit"]).default("stub"),
+    PAYMENT_PROVIDER: z.enum(["stub", "xendit"]).default("stub"),
     PAYMENT_WEBHOOK_SECRET: z.string().min(32),
     COMPETITION_CALENDAR_URL: z
       .string()

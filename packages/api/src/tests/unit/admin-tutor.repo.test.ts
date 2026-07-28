@@ -226,4 +226,61 @@ describe("AdminTutorRepo", () => {
       expect(callArg.where).toBeUndefined();
     });
   });
+
+  describe("getTutorProfileById", () => {
+    test("returns profile when found", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const repo = createAdminTutorRepo();
+      const profile = { id: "tp1", onboardingStatus: "pending_review" };
+      const findFirst = mock(async () => profile);
+      const conn = {
+        query: {
+          tutorProfile: { findFirst },
+        },
+      } as any;
+
+      const result = await repo.getTutorProfileById(conn, "tp1");
+      expect(result).toEqual(profile);
+    });
+
+    test("returns null when not found", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const repo = createAdminTutorRepo();
+      const findFirst = mock(async () => undefined);
+      const conn = {
+        query: {
+          tutorProfile: { findFirst },
+        },
+      } as any;
+
+      const result = await repo.getTutorProfileById(conn, "missing");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("updateTutorProfile", () => {
+    test("updates and returns profile", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const repo = createAdminTutorRepo();
+      const updated = { id: "tp1", onboardingStatus: "published" };
+      const returning = mock(async () => [updated]);
+      const where = mock(() => ({ returning }));
+      const set = mock(() => ({ where }));
+      const update = mock(() => ({ set }));
+      const conn = { update } as any;
+
+      const result = await repo.updateTutorProfile(conn, "tp1", {
+        onboardingStatus: "published",
+      });
+
+      expect(result).toEqual(updated);
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(set).toHaveBeenCalledWith({
+        onboardingStatus: "published",
+      });
+    });
+  });
 });

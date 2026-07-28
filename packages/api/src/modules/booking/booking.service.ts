@@ -29,7 +29,6 @@ import {
   BookingSeriesSizeError,
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
-  BookingHoldExpiredError,
   BookingCancelledError,
 } from "./booking.errors";
 import { log } from "../../lib/logger";
@@ -267,21 +266,6 @@ export function createBookingService(deps: {
       throw new BookingNotEditableError(input.tutorId);
     }
 
-    const overlapping = await repo.findOverlappingBookings(
-      db,
-      input.tutorId,
-      input.scheduledStartAt,
-      input.scheduledEndAt,
-      { excludeStates: [...TERMINAL_STATES] },
-    );
-    if (overlapping.length > 0) {
-      throw new BookingConflictError(
-        input.tutorId,
-        input.scheduledStartAt.toISOString(),
-        input.scheduledEndAt.toISOString(),
-      );
-    }
-
     const priceSnapshot = pricing.computeSplit(
       (profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE) as number,
       1,
@@ -298,6 +282,21 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const overlapping = await repo.findOverlappingBookings(
+        tx,
+        input.tutorId,
+        input.scheduledStartAt,
+        input.scheduledEndAt,
+        { excludeStates: [...TERMINAL_STATES] },
+      );
+      if (overlapping.length > 0) {
+        throw new BookingConflictError(
+          input.tutorId,
+          input.scheduledStartAt.toISOString(),
+          input.scheduledEndAt.toISOString(),
+        );
+      }
+
       await wallet.hold(tx, {
         walletId: w.id,
         amount: totalMarks,
@@ -446,25 +445,44 @@ export function createBookingService(deps: {
 
       const isOffline = b.modality === MODALITY.OFFLINE;
 
-      await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
-        actorId: tutorId,
-        actorType: ACTOR_TYPE.TUTOR,
-      });
-
       let updated;
       if (!isOffline) {
-        updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+        await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
           actorId: tutorId,
           actorType: ACTOR_TYPE.TUTOR,
-          reason: "Meeting created automatically",
         });
 
-        await repo.updateBookingDeadline(
-          tx,
-          bookingId,
-          new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
-        );
+        try {
+          const meetingResult = await meeting.createEvent(
+            bookingId,
+            b.scheduledStartAt,
+            b.scheduledEndAt,
+          );
+
+          if (meetingResult.status === "failed") {
+            updated = await repo.findBookingById(tx, bookingId);
+          } else {
+            updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+              actorId: tutorId,
+              actorType: ACTOR_TYPE.TUTOR,
+              reason: "Meeting created automatically",
+            });
+
+            await repo.updateBookingDeadline(
+              tx,
+              bookingId,
+              new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+            );
+          }
+        } catch {
+          updated = await repo.findBookingById(tx, bookingId);
+        }
       } else {
+        await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
+          actorId: tutorId,
+          actorType: ACTOR_TYPE.TUTOR,
+        });
+
         await transition(
           tx,
           bookingId,
@@ -495,24 +513,6 @@ export function createBookingService(deps: {
 
       return { updated, isOffline, b };
     });
-
-    if (!result.isOffline) {
-      try {
-        await meeting.createEvent(
-          bookingId,
-          result.b.scheduledStartAt,
-          result.b.scheduledEndAt,
-        );
-      } catch (error) {
-        log({
-          level: "error",
-          action: "meeting_creation_failed",
-          bookingId,
-          error: { message: String(error) },
-        });
-        throw new BookingHoldExpiredError(bookingId);
-      }
-    }
 
     return result.updated!;
   }
@@ -688,21 +688,6 @@ export function createBookingService(deps: {
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
-    const overlapping = await repo.findOverlappingBookings(
-      db,
-      input.tutorId,
-      input.scheduledStartAt,
-      input.scheduledEndAt,
-      { excludeStates: [...TERMINAL_STATES] },
-    );
-    if (overlapping.length > 0) {
-      throw new BookingConflictError(
-        input.tutorId,
-        input.scheduledStartAt.toISOString(),
-        input.scheduledEndAt.toISOString(),
-      );
-    }
-
     const size = input.targetGroupSize;
     const pricePerStudent = (profile.prices?.[String(size)] ??
       DEFAULT_SOLO_PRICE) as number;
@@ -722,6 +707,21 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const overlapping = await repo.findOverlappingBookings(
+        tx,
+        input.tutorId,
+        input.scheduledStartAt,
+        input.scheduledEndAt,
+        { excludeStates: [...TERMINAL_STATES] },
+      );
+      if (overlapping.length > 0) {
+        throw new BookingConflictError(
+          input.tutorId,
+          input.scheduledStartAt.toISOString(),
+          input.scheduledEndAt.toISOString(),
+        );
+      }
+
       await wallet.hold(tx, {
         walletId: w.id,
         amount: totalMarks,
@@ -1063,24 +1063,6 @@ export function createBookingService(deps: {
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
-    for (const session of input.sessions) {
-      // eslint-disable-next-line no-await-in-loop
-      const overlapping = await repo.findOverlappingBookings(
-        db,
-        input.tutorId,
-        session.scheduledStartAt,
-        session.scheduledEndAt,
-        { excludeStates: [...TERMINAL_STATES] },
-      );
-      if (overlapping.length > 0) {
-        throw new BookingConflictError(
-          input.tutorId,
-          session.scheduledStartAt.toISOString(),
-          session.scheduledEndAt.toISOString(),
-        );
-      }
-    }
-
     const pricePerStudent = (profile.prices?.["1"] ??
       DEFAULT_SOLO_PRICE) as number;
     const priceSnapshot = pricing.computeSplit(pricePerStudent, 1);
@@ -1094,8 +1076,27 @@ export function createBookingService(deps: {
     }
 
     const bookingId = crypto.randomUUID();
+    const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      for (const session of input.sessions) {
+        // eslint-disable-next-line no-await-in-loop
+        const overlapping = await repo.findOverlappingBookings(
+          tx,
+          input.tutorId,
+          session.scheduledStartAt,
+          session.scheduledEndAt,
+          { excludeStates: [...TERMINAL_STATES] },
+        );
+        if (overlapping.length > 0) {
+          throw new BookingConflictError(
+            input.tutorId,
+            session.scheduledStartAt.toISOString(),
+            session.scheduledEndAt.toISOString(),
+          );
+        }
+      }
+
       await wallet.hold(tx, {
         walletId: w.id,
         amount: totalMarks,
@@ -1123,6 +1124,7 @@ export function createBookingService(deps: {
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
+        deadlineAt,
       });
 
       await repo.insertParticipant(tx, {
@@ -1205,6 +1207,10 @@ export function createBookingService(deps: {
             actorType: ACTOR_TYPE.SYSTEM,
             reason: "Deadline passed",
           });
+
+          if (b.type === BOOKING_TYPE.SERIES) {
+            await repo.cancelAllSessions(tx, b.id);
+          }
         });
         succeeded++;
       } catch (error) {
@@ -1218,6 +1224,43 @@ export function createBookingService(deps: {
       }
     }
     return { expired: succeeded, failed };
+  }
+
+  async function releaseExpiredHolds(): Promise<{ released: number }> {
+    const candidates = await repo.findBookingsExpiringByDeadline(db, [
+      BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+      BOOKING_STATE.AWAITING_RECONFIRMATION,
+      BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+      BOOKING_STATE.RESCHEDULE_PROPOSED,
+      BOOKING_STATE.SCHEDULED,
+      BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+    ]);
+
+    let released = 0;
+    for (const b of candidates) {
+      if (b.holdAmount <= 0) continue;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await db.transaction(async (tx) => {
+          await releaseAllParticipantHolds(
+            tx,
+            b.id,
+            "Hold released: deadline passed",
+            ACTOR_TYPE.SYSTEM,
+          );
+          await repo.updateBookingHoldAmount(tx, b.id, 0);
+        });
+        released++;
+      } catch (error) {
+        log({
+          level: "error",
+          action: "release_hold_failed",
+          bookingId: b.id,
+          error: { message: String(error) },
+        });
+      }
+    }
+    return { released };
   }
 
   return {
@@ -1237,6 +1280,7 @@ export function createBookingService(deps: {
     proposeReschedule,
     listSessions,
     expireBookings,
+    releaseExpiredHolds,
     transition,
     canTransition,
   };

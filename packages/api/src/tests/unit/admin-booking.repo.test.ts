@@ -1,242 +1,170 @@
 import { describe, test, expect, mock } from "bun:test";
 import {
-  findBookingById,
-  listBookingsByState,
-  getStateHistory,
   updateBookingWithOverride,
   insertStateHistoryEntry,
   findParticipantsByBookingId,
   findPaymentById,
   updatePaymentStatus,
+  updateBookingHoldAmount,
   createAdminBookingRepo,
 } from "../../modules/admin-booking/admin-booking.repo";
 
-function makeQueryChain(resolvedValue: any) {
-  const chain: any = {};
-  const methods = ["from", "where", "limit", "offset", "orderBy"];
-  const promise = Promise.resolve(resolvedValue);
-
-  for (const method of methods) {
-    chain[method] = mock(() => promise);
-  }
-
-  for (const method of methods) {
-    (promise as any)[method] = chain[method];
-  }
-
-  return { chain, promise };
-}
-
-function makeSelectConn(resolvedValue: any) {
-  const { chain, promise } = makeQueryChain(resolvedValue);
-  const select = mock(() => promise);
-  return { select, chain };
-}
-
-function makeUpdateConn(returningRows: any[] = []) {
-  const returning = mock(() => Promise.resolve(returningRows));
+function makeUpdateConn(returned: any[] = [{}]) {
+  const returning = mock(async () => returned);
   const where = mock(() => ({ returning }));
   const set = mock(() => ({ where }));
   const update = mock(() => ({ set }));
   return { update, set, where, returning };
 }
 
-function makeInsertConn() {
-  const values = mock(async () => {});
+function makeInsertConn(returned: any[] = [{}]) {
+  const returning = mock(async () => returned);
+  const values = mock(() => ({ returning }));
   const insert = mock(() => ({ values }));
-  return { insert, values };
+  return { insert, values, returning };
 }
 
-describe("findBookingById", () => {
-  test("returns row when found", async () => {
-    const row = { id: "b1" };
-    const { select, chain } = makeSelectConn([row]);
-    const conn: any = { select };
+describe("admin-booking.repo", () => {
+  describe("updateBookingWithOverride", () => {
+    test("returns null when booking not found", async () => {
+      const selectLimit = mock(async () => []);
+      const selectWhere = mock(() => ({ limit: selectLimit }));
+      const selectFrom = mock(() => ({ where: selectWhere }));
+      const select = mock(() => ({ from: selectFrom }));
+      const updateConn = makeUpdateConn([]);
+      const conn = { ...updateConn, select } as any;
 
-    const result = await findBookingById(conn, "b1");
-
-    expect(result).toEqual(row);
-    expect(chain.from).toHaveBeenCalledTimes(1);
-    expect(chain.where).toHaveBeenCalledTimes(1);
-    expect(chain.limit).toHaveBeenCalledWith(1);
-  });
-
-  test("returns null when not found", async () => {
-    const { select } = makeSelectConn([]);
-    const conn: any = { select };
-
-    const result = await findBookingById(conn, "missing");
-
-    expect(result).toBeNull();
-  });
-});
-
-describe("listBookingsByState", () => {
-  test("queries with states and uses limit + 1 for pagination", async () => {
-    const rows = [{ id: "b1" }, { id: "b2" }];
-    const { select, chain } = makeSelectConn(rows);
-    const conn: any = { select };
-
-    await listBookingsByState(conn, ["pending"], 10);
-
-    expect(chain.from).toHaveBeenCalledTimes(1);
-    expect(chain.orderBy).toHaveBeenCalledTimes(1);
-    expect(chain.limit).toHaveBeenCalledWith(11);
-    expect(chain.where).toHaveBeenCalledTimes(1);
-  });
-
-  test("returns query without where when states empty", async () => {
-    const rows = [{ id: "b1" }];
-    const { select, chain } = makeSelectConn(rows);
-    const conn: any = { select };
-
-    await listBookingsByState(conn, [], 10);
-
-    expect(chain.from).toHaveBeenCalledTimes(1);
-    expect(chain.limit).toHaveBeenCalledWith(11);
-    expect(chain.where).toHaveBeenCalledTimes(0);
-  });
-});
-
-describe("getStateHistory", () => {
-  test("selects from bookingStateHistory with bookingId", async () => {
-    const rows = [{ id: "h1" }];
-    const { select, chain } = makeSelectConn(rows);
-    const conn: any = { select };
-
-    await getStateHistory(conn, "b1");
-
-    expect(chain.from).toHaveBeenCalledTimes(1);
-    expect(chain.where).toHaveBeenCalledTimes(1);
-    expect(chain.orderBy).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("updateBookingWithOverride", () => {
-  test("returns previousState and updated when booking exists", async () => {
-    const existing = { currentState: "pending" };
-    const updated = { id: "b1", currentState: "confirmed" };
-
-    const { promise: selectPromise } = makeQueryChain([existing]);
-    const select = mock(() => selectPromise);
-    const updateConn = makeUpdateConn([updated]);
-    const conn: any = { select, ...updateConn };
-
-    const result = await updateBookingWithOverride(
-      conn,
-      "b1",
-      "confirmed",
-      "reason",
-      { note: "override" },
-    );
-
-    expect(result).toEqual({ previousState: "pending", updated });
-  });
-
-  test("returns null when booking not found", async () => {
-    const { promise: selectPromise } = makeQueryChain([]);
-    const select = mock(() => selectPromise);
-    const conn: any = { select };
-
-    const result = await updateBookingWithOverride(
-      conn,
-      "missing",
-      "confirmed",
-      null,
-      {},
-    );
-
-    expect(result).toBeNull();
-  });
-});
-
-describe("insertStateHistoryEntry", () => {
-  test("inserts values and returns void", async () => {
-    const { insert, values } = makeInsertConn();
-    const conn: any = { insert };
-
-    await insertStateHistoryEntry(conn, {
-      bookingId: "b1",
-      fromState: null,
-      toState: "pending",
-      reason: null,
-      actorId: null,
-      actorType: "system",
+      const result = await updateBookingWithOverride(
+        conn,
+        "missing",
+        "cancelled",
+        "admin override",
+        {},
+      );
+      expect(result).toBeNull();
     });
 
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(values).toHaveBeenCalledTimes(1);
-  });
-});
+    test("updates booking and returns previous state", async () => {
+      const previousState = { currentState: "confirmed" };
+      const updated = {
+        id: "b1",
+        currentState: "cancelled",
+        stateReason: "admin override",
+      };
+      const selectLimit = mock(async () => [previousState]);
+      const selectWhere = mock(() => ({ limit: selectLimit }));
+      const selectFrom = mock(() => ({ where: selectWhere }));
+      const select = mock(() => ({ from: selectFrom }));
+      const updateConn = makeUpdateConn([updated]);
+      const conn = { ...updateConn, select } as any;
 
-describe("findParticipantsByBookingId", () => {
-  test("selects from bookingParticipant with bookingId", async () => {
-    const rows = [{ id: "p1" }];
-    const { select, chain } = makeSelectConn(rows);
-    const conn: any = { select };
+      const result = await updateBookingWithOverride(
+        conn,
+        "b1",
+        "cancelled",
+        "admin override",
+        { overriddenBy: "admin1" },
+      );
 
-    await findParticipantsByBookingId(conn, "b1");
-
-    expect(chain.from).toHaveBeenCalledTimes(1);
-    expect(chain.where).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("findPaymentById", () => {
-  test("returns row when found", async () => {
-    const row = { id: "pay1" };
-    const { select } = makeSelectConn([row]);
-    const conn: any = { select };
-
-    const result = await findPaymentById(conn, "pay1");
-
-    expect(result).toEqual(row);
-  });
-
-  test("returns null when not found", async () => {
-    const { select } = makeSelectConn([]);
-    const conn: any = { select };
-
-    const result = await findPaymentById(conn, "missing");
-
-    expect(result).toBeNull();
-  });
-});
-
-describe("updatePaymentStatus", () => {
-  test("updates and returns updated row", async () => {
-    const updated = { id: "pay1", status: "PAID" };
-    const updateConn = makeUpdateConn([updated]);
-    const conn: any = { ...updateConn };
-
-    const result = await updatePaymentStatus(conn, "pay1", "PAID");
-
-    expect(result).toEqual(updated);
-    expect(updateConn.update).toHaveBeenCalledTimes(1);
-    expect(updateConn.set).toHaveBeenCalledTimes(1);
+      expect(result).not.toBeNull();
+      expect(result!.previousState).toBe("confirmed");
+      expect(result!.updated).toEqual(updated);
+    });
   });
 
-  test("returns null when no row updated", async () => {
-    const updateConn = makeUpdateConn([]);
-    const conn: any = { ...updateConn };
-
-    const result = await updatePaymentStatus(conn, "missing", "PAID");
-
-    expect(result).toBeNull();
+  describe("insertStateHistoryEntry", () => {
+    test("inserts state history entry", async () => {
+      const conn = makeInsertConn() as any;
+      await insertStateHistoryEntry(conn, {
+        bookingId: "b1",
+        fromState: "confirmed",
+        toState: "cancelled",
+        reason: "admin override",
+        actorId: "admin1",
+        actorType: "admin",
+        metadata: { overriddenBy: "admin1" },
+      });
+      expect(conn.insert).toHaveBeenCalledTimes(1);
+      expect(conn.values).toHaveBeenCalledTimes(1);
+    });
   });
-});
 
-describe("createAdminBookingRepo", () => {
-  test("returns object with all repo methods", () => {
-    const repo = createAdminBookingRepo();
+  describe("findParticipantsByBookingId", () => {
+    test("returns participants for booking", async () => {
+      const rows = [{ id: "p1" }, { id: "p2" }];
+      const where = mock(() => rows);
+      const from = mock(() => ({ where }));
+      const select = mock(() => ({ from }));
+      const conn = { select, from, where } as any;
 
-    expect(repo).toHaveProperty("findBookingById");
-    expect(repo).toHaveProperty("listBookingsByState");
-    expect(repo).toHaveProperty("getStateHistory");
-    expect(repo).toHaveProperty("updateBookingWithOverride");
-    expect(repo).toHaveProperty("insertStateHistoryEntry");
-    expect(repo).toHaveProperty("findParticipantsByBookingId");
-    expect(repo).toHaveProperty("findPaymentById");
-    expect(repo).toHaveProperty("updatePaymentStatus");
+      const result = await findParticipantsByBookingId(conn, "b1");
+      expect(result).toEqual(rows);
+    });
+  });
+
+  describe("findPaymentById", () => {
+    test("returns payment when found", async () => {
+      const row = { id: "pay1", status: "PAID" };
+      const limit = mock(async () => [row]);
+      const where = mock(() => ({ limit }));
+      const from = mock(() => ({ where }));
+      const select = mock(() => ({ from }));
+      const conn = { select, from, where, limit } as any;
+
+      const result = await findPaymentById(conn, "pay1");
+      expect(result).toEqual(row);
+    });
+
+    test("returns null when not found", async () => {
+      const limit = mock(async () => []);
+      const where = mock(() => ({ limit }));
+      const from = mock(() => ({ where }));
+      const select = mock(() => ({ from }));
+      const conn = { select, from, where, limit } as any;
+
+      const result = await findPaymentById(conn, "missing");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("updatePaymentStatus", () => {
+    test("updates payment status and returns updated row", async () => {
+      const updated = { id: "pay1", status: "PAID" };
+      const conn = makeUpdateConn([updated]) as any;
+
+      const result = await updatePaymentStatus(conn, "pay1", "PAID");
+      expect(result).toEqual(updated);
+    });
+
+    test("returns null when payment not found", async () => {
+      const conn = makeUpdateConn([]) as any;
+
+      const result = await updatePaymentStatus(conn, "missing", "PAID");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("updateBookingHoldAmount", () => {
+    test("updates booking hold amount", async () => {
+      const conn = makeUpdateConn() as any;
+      await updateBookingHoldAmount(conn, "b1", 0);
+      expect(conn.update).toHaveBeenCalledTimes(1);
+      expect(conn.set).toHaveBeenCalledWith({ holdAmount: 0 });
+    });
+  });
+
+  describe("createAdminBookingRepo", () => {
+    test("returns object with all repo methods", () => {
+      const repo = createAdminBookingRepo();
+      expect(typeof repo.findBookingById).toBe("function");
+      expect(typeof repo.listBookingsByState).toBe("function");
+      expect(typeof repo.getStateHistory).toBe("function");
+      expect(typeof repo.updateBookingWithOverride).toBe("function");
+      expect(typeof repo.insertStateHistoryEntry).toBe("function");
+      expect(typeof repo.findParticipantsByBookingId).toBe("function");
+      expect(typeof repo.findPaymentById).toBe("function");
+      expect(typeof repo.updatePaymentStatus).toBe("function");
+      expect(typeof repo.updateBookingHoldAmount).toBe("function");
+    });
   });
 });

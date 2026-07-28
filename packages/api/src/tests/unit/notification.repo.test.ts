@@ -1,6 +1,7 @@
 import { describe, test, expect, mock } from "bun:test";
 import {
   findNotificationByEventKey,
+  findNotificationByIdForUser,
   insertNotification,
   findUserEmail,
   insertDispatch,
@@ -37,6 +38,30 @@ describe("findNotificationByEventKey", () => {
     const conn = { select } as any;
 
     const result = await findNotificationByEventKey(conn, "nonexistent");
+    expect(result).toBeNull();
+  });
+});
+
+describe("findNotificationByIdForUser", () => {
+  test("returns notification when found for user", async () => {
+    const limit = mock(async () => [{ id: "n1" }]);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select } as any;
+
+    const result = await findNotificationByIdForUser(conn, "n1", "u1");
+    expect(result).toEqual({ id: "n1" });
+  });
+
+  test("returns null when not found for user", async () => {
+    const limit = mock(async () => []);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select } as any;
+
+    const result = await findNotificationByIdForUser(conn, "n1", "u1");
     expect(result).toBeNull();
   });
 });
@@ -239,5 +264,78 @@ describe("createNotificationRepo", () => {
     expect(typeof repo.updateReadStatus).toBe("function");
     expect(typeof repo.markAllRead).toBe("function");
     expect(typeof repo.findDispatch).toBe("function");
+    expect(typeof repo.findNotificationByIdForUser).toBe("function");
+  });
+
+  test("findNotificationByIdForUser delegates to standalone function", async () => {
+    const limit = mock(async () => [{ id: "n1" }]);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const db = { select } as any;
+
+    const repo = createNotificationRepo(db);
+    const result = await repo.findNotificationByIdForUser("n1", "u1");
+    expect(result).toEqual({ id: "n1" });
+  });
+
+  test("listNotifications delegates with correct defaults", async () => {
+    const rows = [{ id: "n1" }];
+    const limit = mock(async () => rows);
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const db = { select } as any;
+
+    const repo = createNotificationRepo(db);
+    const result = await repo.listNotifications("u1", { limit: 5 });
+    expect(result).toEqual(rows);
+  });
+
+  test("countUnread delegates to standalone function", async () => {
+    const where = mock(async () => [{ value: 3 }]);
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const db = { select } as any;
+
+    const repo = createNotificationRepo(db);
+    const result = await repo.countUnread("u1");
+    expect(result).toBe(3);
+  });
+
+  test("updateReadStatus delegates to standalone function", async () => {
+    const where = mock(async () => {});
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const db = { update } as any;
+
+    const repo = createNotificationRepo(db);
+    await repo.updateReadStatus("n1", "u1", true);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  test("markAllRead delegates to standalone function", async () => {
+    const where = mock(async () => {});
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const db = { update } as any;
+
+    const repo = createNotificationRepo(db);
+    await repo.markAllRead("u1");
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  test("findDispatch delegates to standalone function", async () => {
+    const dispatch = { id: "d1", notificationId: "n1", status: "sent" };
+    const limit = mock(async () => [dispatch]);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const db = { select } as any;
+
+    const repo = createNotificationRepo(db);
+    const result = await repo.findDispatch("n1");
+    expect(result).toEqual(dispatch);
   });
 });

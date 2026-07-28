@@ -219,10 +219,17 @@ export async function findLedgerEntries(
     eventKey?: string;
   },
 ) {
+  const conditions = [eq(ledgerEntry.walletId, walletId)];
+  if (opts.bookingId) {
+    conditions.push(eq(ledgerEntry.bookingId, opts.bookingId));
+  }
+  if (opts.eventKey) {
+    conditions.push(eq(ledgerEntry.eventKey, opts.eventKey));
+  }
   return conn
     .select()
     .from(ledgerEntry)
-    .where(eq(ledgerEntry.walletId, walletId))
+    .where(and(...conditions))
     .orderBy(desc(ledgerEntry.createdAt))
     .limit(opts.limit + 1);
 }

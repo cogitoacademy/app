@@ -232,7 +232,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 - Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening).
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
-- Cookies: sameSite=lax (dev) / none (production, requires CSRF — after foundation hardening), secure=true (production), httpOnly=true.
+- Cookies: sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. Same-origin subdomain sharing works because `app.cogitoacademy.id` and `cogitoacademy.id` share the same site.
 - `CogitoUser` type exported with role field.
 - **Pending (foundation hardening):** password policy (min 8, upper/lower/digit), session expiry (7 days), conditional OAuth. **Email verification (G2) deferred** to production-readiness / PRD-gaps branch (additive; depends on Resend wiring + frontend route).
 
@@ -250,17 +250,17 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-| Plan                                                              | Branch                             | Status                                       |
-| ----------------------------------------------------------------- | ---------------------------------- | -------------------------------------------- |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                         |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                         |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                         |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                         |
-| `docs/plans/active/PRODUCTION-READINESS-PLAN.md`                  | `improvement/production-readiness` | PR #18 open                                  |
-| `docs/plans/active/INFRASTRUCTURE-PLAN.md`                        | `improvement/infrastructure`       | PR #19 open (parallel with #18)              |
-| `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, after above merge to main    |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                   |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                         |
+| Plan                                                              | Branch                             | Status                                    |
+| ----------------------------------------------------------------- | ---------------------------------- | ----------------------------------------- |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                      |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                      |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                      |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                      |
+| `docs/plans/active/PRODUCTION-READINESS-PLAN.md`                  | `improvement/production-readiness` | PR #18 open                               |
+| `docs/plans/active/INFRASTRUCTURE-PLAN.md`                        | `improvement/infrastructure`       | PR #19 open (parallel with #18)           |
+| `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, after above merge to main |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                      |
 
 ### Execution Order
 
@@ -344,6 +344,150 @@ Foundation Hardening merged to main (#17). Production-readiness (#18) and infras
 | K5  | repricedMarks column is dead — never set or read                       | P3       | 2     |
 | K6  | timezone field stored but never used                                   | P3       | 2     |
 | K7  | metrics.ts has no TTL eviction for stale path entries                  | P3       | 9     |
+
+## Redis Key Namespace Map
+
+Redis keys follow the pattern `cogito:{namespace}:{key}`. When `REDIS_URL` is set, all stateful services use Redis for persistence. Without Redis, they fall back to in-memory stores (for development and CI).
+
+| Namespace     | Key Pattern                | Used By          | TTL / Eviction               |
+| ------------- | -------------------------- | ---------------- | ---------------------------- |
+| `cogito:idem` | `{prefix}:{parts}`         | IdempotencyStore | 24h TTL (Redis EX)           |
+| `cogito:rl`   | `{keyPrefix}:{identifier}` | rateLimit        | Window TTL (Redis EXPIRE)    |
+| `cogito:cb`   | `{name}`                   | CircuitBreaker   | 2× resetTimeout (Redis HSET) |
+| `cogito:sess` | Better Auth managed        | Session store    | 7 days (Better Auth config)  |
+| `cogito-jobs` | BullMQ managed             | Scheduler        | Per-job repeat interval      |
+
+### In-Memory Fallback
+
+Each stateful service (`IdempotencyStore`, `rateLimit`, `CircuitBreaker`) checks for Redis availability at runtime. If `REDIS_URL` is unset or the Redis connection fails, the service transparently falls back to an in-memory implementation:
+
+- **IdempotencyStore**: `Map<string, { result, timestamp }>` with periodic cleanup and max-entries eviction.
+- **rateLimit**: `Map<string, { count, resetAt }>` with periodic cleanup and max-entries eviction.
+- **CircuitBreaker**: In-memory `state`, `failureCount`, `lastFailureTime`, `halfOpenAttempts` fields.
+
+The in-memory fallback ensures all tests pass without a Redis service in CI.
+
+### Adding Redis to a New Feature
+
+1. Define your key pattern in `COGITO_NS` (in `packages/api/src/lib/redis.ts`).
+2. Accept an optional `redis?: RedisClient` parameter in your service constructor.
+3. Try Redis operations in a `try/catch`, falling back to in-memory on failure.
+4. Test both paths: unit tests use `InMemoryRedis`, integration tests (if any) use real Redis.
+
+## How to Add a New Module
+
+Follow the 4-layer architecture: **Router → Handler → Service → Repository**.
+
+### 1. Create the module directory
+
+```
+packages/api/src/modules/{module}/
+├── {module}.types.ts    # Zod input/output schemas
+├── {module}.errors.ts   # DomainError subclasses
+├── {module}.repo.ts     # Data access (SQL queries only)
+├── {module}.service.ts  # Business logic + consumer port interfaces
+├── {module}.handler.ts  # DI factory: { context, input } → service calls
+├── {module}.router.ts   # oRPC route definitions
+└── index.ts             # createModule() factory function
+```
+
+### 2. Define types and errors
+
+```ts
+// {module}.types.ts
+import { z } from "zod";
+export const createSomethingInput = z.object({ name: z.string().min(1) });
+export type CreateSomethingInput = z.infer<typeof createSomethingInput>;
+
+// {module}.errors.ts
+import { DomainError } from "../../lib/domain-errors";
+export class SomethingNotFoundError extends DomainError {
+  constructor(id: string) {
+    super("SOMETHING_NOT_FOUND", `Something ${id} not found`);
+  }
+}
+```
+
+### 3. Create the repository
+
+```ts
+// {module}.repo.ts
+import type { DbOrTx } from "../../lib/tx";
+export interface SomethingRepo {
+  findById(db: DbOrTx, id: string): Promise<Row | null>;
+  create(db: DbOrTx, data: CreateData): Promise<Row>;
+}
+```
+
+### 4. Create the service with consumer-driven ports
+
+```ts
+// {module}.service.ts
+export function createSomethingService(deps: {
+  repo: SomethingRepo;
+  auditPort: AuditPort;     // Only the methods this module needs
+  walletPort: WalletPort;   // Only the methods this module needs
+}) { ... }
+```
+
+### 5. Create the handler
+
+```ts
+// {module}.handler.ts
+export function createSomethingHandler(service: SomethingService) {
+  return {
+    create: async ({ context, input }) => { ... },
+  };
+}
+```
+
+### 6. Create the router
+
+```ts
+// {module}.router.ts
+import { publicProcedure, protectedProcedure } from "../../procedures";
+export const somethingRouter = {
+  create: protectedProcedure.input(createSomethingInput).handler(...),
+};
+```
+
+### 7. Wire into the composition root
+
+Add to `packages/api/src/services.ts`:
+
+- Import and call `createSomethingService({ repo, auditPort, walletPort })`
+- Import and call `createSomethingHandler(service)`
+- Add to `ServiceRegistry` type
+
+Add to `packages/api/src/routers.ts`:
+
+- Add `something: somethingRouter` to `appRouter`
+
+### 8. Add DB schema and migration
+
+In `packages/db/src/schema/`:
+
+- Define the table with `pgTable`, checks, and indexes
+- Export from `packages/db/src/schema/index.ts`
+- Run `bun run db:generate` to create a migration
+
+### 9. Add tests
+
+Create `packages/api/src/tests/unit/{module}.service.test.ts` and `packages/api/src/tests/unit/{module}.handler.test.ts` with:
+
+- Mock `DbOrTx` as `{ transaction: mock(async (fn) => fn(tx)) }` plus repo mocks
+- Test each service method for happy path and error cases
+- Test handler input validation and authorization
+
+### Key Conventions
+
+- **No `shared/ports/` directory** — ports are consumer-driven interfaces defined inline in the consuming service file.
+- **`DbOrTx`** type from `packages/api/src/lib/tx.ts` — pass `db` for reads, `tx` inside transactions.
+- **`ORPCError`** from `@orpc/server` for HTTP error responses.
+- **`DomainError`** subclass for business logic errors — mapped in handlers via `withDomainMap()`.
+- **Consumer-driven port interfaces** — each module declares only the methods it needs from other modules.
+- **Redis integration** — optional `redis?: RedisClient` parameter with in-memory fallback.
+- **Circuit breaker** — wrap external service calls (email, meeting) with `CircuitBreaker` from `../../lib/circuit-breaker`.
 
 ## Common Commands
 

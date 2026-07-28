@@ -42,7 +42,7 @@ export function createRefundService(deps: {
       const walletResult = await wallet.compensate(tx, {
         walletId: input.walletId,
         amount: input.amount,
-        eventKey: `correction.${input.type}.${input.walletId}.${Date.now()}`,
+        eventKey: `correction.${input.type}.${input.walletId}.${crypto.randomUUID()}`,
         actorType: ACTOR_TYPE.ADMIN,
         reason: input.reason,
         type: input.type,
@@ -56,7 +56,7 @@ export function createRefundService(deps: {
       };
 
       await repo.insertRefundRecord(tx, {
-        paymentId: input.bookingId ?? null,
+        paymentId: null,
         walletId: input.walletId,
         amountIdr: 0,
         marks: input.amount,

@@ -72,6 +72,7 @@ export const ledgerEntry = pgTable(
     index("ledger_eventKey_idx").on(table.eventKey),
     index("ledger_bookingId_idx").on(table.bookingId),
     index("ledger_createdAt_idx").on(table.createdAt),
+    index("ledger_walletId_createdAt_idx").on(table.walletId, table.createdAt),
     uniqueIndex("ledger_idempotency_idx").on(
       table.walletId,
       table.eventKey,
