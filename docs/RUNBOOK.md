@@ -77,6 +77,7 @@ curl http://localhost:3001/health
 ```
 
 If Redis is unavailable, the app degrades gracefully:
+
 - Sessions fall back to database lookup
 - Rate limiting uses in-memory store
 - Circuit breaker state resets on restart
@@ -111,30 +112,38 @@ redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 ## Common Errors
 
 ### `BOOKING_CONFLICT` (409)
+
 Two bookings overlap the same tutor time slot. The overlap check uses an exclusion constraint on `tutor_id` + time range. Wait for the other booking to expire or cancel.
 
 ### `INSUFFICIENT_BALANCE` / `INSUFFICIENT_MARKS` (400)
+
 Student's `availableBalance` is less than the required hold amount. Check wallet balance via `wallet.getOrCreate`.
 
 ### `BOOKING_STATE_TRANSITION` (409)
+
 Invalid state machine transition. Check `booking-transitions.ts` for valid transitions.
 
 ### `LAST_ADMIN` (409)
+
 Attempted to remove the last admin role. Promote another user to admin first.
 
 ### `OPTIMISTIC_LOCK` (409)
+
 Concurrent modification conflict. The `version` field didn't match. Retry the operation.
 
 ### Circuit Breaker Open Errors
+
 - `Email service unavailable: 503` — Resend circuit breaker is open. Wait 2 minutes or reset manually.
 - `Google Meet API timeout after 30s` — Google Meet circuit breaker is open. Wait 1 minute or reset manually.
 - `Payment provider error` — Xendit circuit breaker is open. Wait 30 seconds or reset manually.
 
 ### Database Connection Errors
+
 - `ECONNREFUSED` — PostgreSQL not running. Run `bun run db:start`.
 - `connection timeout` — Check `DATABASE_URL` in `.env`.
 
 ### Redis Connection Errors
+
 - `ECONNREFUSED` — Redis not running. Start Redis or set `REDIS_URL` to empty for in-memory fallback.
 - App starts without Redis but with degraded features (see above).
 
@@ -159,18 +168,18 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 Key environment variables (see `.env.example` for full list):
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `BETTER_AUTH_SECRET` | Yes | Auth secret key |
-| `BETTER_AUTH_URL` | Yes | Base URL for auth cookies |
-| `CORS_ORIGIN` | Yes | Allowed CORS origin |
-| `PAYMENT_WEBHOOK_SECRET` | Yes | Xendit webhook verification token |
-| `REDIS_URL` | No | Redis URL (falls back to in-memory) |
-| `GOOGLE_CLIENT_EMAIL` | No | Google service account email |
-| `GOOGLE_PRIVATE_KEY` | No | Google service account private key |
-| `GOOGLE_CALENDAR_ID` | No | Google Calendar ID for meeting creation |
-| `RESEND_API_KEY` | No | Resend API key for email delivery |
-| `RESEND_FROM_EMAIL` | No | Sender email address |
-| `XENDIT_SECRET_KEY` | No | Xendit API secret key |
-| `XENDIT_WEBHOOK_TOKEN` | No | Xendit webhook verification token |
+| Variable                 | Required | Description                             |
+| ------------------------ | -------- | --------------------------------------- |
+| `DATABASE_URL`           | Yes      | PostgreSQL connection string            |
+| `BETTER_AUTH_SECRET`     | Yes      | Auth secret key                         |
+| `BETTER_AUTH_URL`        | Yes      | Base URL for auth cookies               |
+| `CORS_ORIGIN`            | Yes      | Allowed CORS origin                     |
+| `PAYMENT_WEBHOOK_SECRET` | Yes      | Xendit webhook verification token       |
+| `REDIS_URL`              | No       | Redis URL (falls back to in-memory)     |
+| `GOOGLE_CLIENT_EMAIL`    | No       | Google service account email            |
+| `GOOGLE_PRIVATE_KEY`     | No       | Google service account private key      |
+| `GOOGLE_CALENDAR_ID`     | No       | Google Calendar ID for meeting creation |
+| `RESEND_API_KEY`         | No       | Resend API key for email delivery       |
+| `RESEND_FROM_EMAIL`      | No       | Sender email address                    |
+| `XENDIT_SECRET_KEY`      | No       | Xendit API secret key                   |
+| `XENDIT_WEBHOOK_TOKEN`   | No       | Xendit webhook verification token       |

@@ -10,12 +10,12 @@
 
 ## Completed (merged to main)
 
-| Plan                                                                                               | Branch                             | Merged         |
-| -------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------- |
-| [CONSOLIDATION-PLAN.md](completed/CONSOLIDATION-PLAN.md)                                           | `improvement/consolidation`        | #16            |
-| [CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md](completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md) | `improvement/consolidation`        | #16            |
-| [CONSOLIDATION-PHASE2.5-GAPS.md](completed/CONSOLIDATION-PHASE2.5-GAPS.md)                         | `improvement/consolidation`        | #16            |
-| [FOUNDATION-HARDENING.md](completed/FOUNDATION-HARDENING.md)                                       | `improvement/foundation-hardening` | #17            |
+| Plan                                                                                               | Branch                             | Merged |
+| -------------------------------------------------------------------------------------------------- | ---------------------------------- | ------ |
+| [CONSOLIDATION-PLAN.md](completed/CONSOLIDATION-PLAN.md)                                           | `improvement/consolidation`        | #16    |
+| [CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md](completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md) | `improvement/consolidation`        | #16    |
+| [CONSOLIDATION-PHASE2.5-GAPS.md](completed/CONSOLIDATION-PHASE2.5-GAPS.md)                         | `improvement/consolidation`        | #16    |
+| [FOUNDATION-HARDENING.md](completed/FOUNDATION-HARDENING.md)                                       | `improvement/foundation-hardening` | #17    |
 
 ## Archive (superseded / historical)
 

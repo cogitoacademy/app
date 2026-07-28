@@ -115,16 +115,17 @@ cogito-app/
 
 Every module follows: **Router → Handler → Service → Repository**
 
-| Layer      | Responsibility                                    | DB?  | File                  |
-|------------|---------------------------------------------------|------|-----------------------|
-| Router     | oRPC route definition, Zod validation, auth       | No   | `{module}.router.ts`  |
-| Handler    | DI factory, adapts `{ context, input }`           | No   | `{module}.handler.ts`  |
-| Service    | Pure business logic + consumer port interfaces    | No   | `{module}.service.ts` |
-| Repository | Data access (SQL queries only)                    | Yes  | `{module}.repo.ts`    |
+| Layer      | Responsibility                                 | DB? | File                  |
+| ---------- | ---------------------------------------------- | --- | --------------------- |
+| Router     | oRPC route definition, Zod validation, auth    | No  | `{module}.router.ts`  |
+| Handler    | DI factory, adapts `{ context, input }`        | No  | `{module}.handler.ts` |
+| Service    | Pure business logic + consumer port interfaces | No  | `{module}.service.ts` |
+| Repository | Data access (SQL queries only)                 | Yes | `{module}.repo.ts`    |
 
 ### Adding a New API Endpoint
 
 1. **Define types** in `{module}.types.ts`:
+
    ```ts
    import { z } from "zod";
    export const createThingInput = z.object({ name: z.string().min(1) });
@@ -132,14 +133,20 @@ Every module follows: **Router → Handler → Service → Repository**
    ```
 
 2. **Add repo method** in `{module}.repo.ts`:
+
    ```ts
    async function findThingById(conn: DbOrTx, id: string) {
-     const [row] = await conn.select().from(thing).where(eq(thing.id, id)).limit(1);
+     const [row] = await conn
+       .select()
+       .from(thing)
+       .where(eq(thing.id, id))
+       .limit(1);
      return row ?? null;
    }
    ```
 
 3. **Add service method** in `{module}.service.ts`:
+
    ```ts
    async function getThing(thingId: string) {
      const thing = await repo.findThingById(db, thingId);
@@ -149,6 +156,7 @@ Every module follows: **Router → Handler → Service → Repository**
    ```
 
 4. **Add handler method** in `{module}.handler.ts`:
+
    ```ts
    get: async ({ context }: { context: Context }) => {
      const thing = await service.getThing(context.session.user.id);
@@ -157,6 +165,7 @@ Every module follows: **Router → Handler → Service → Repository**
    ```
 
 5. **Add router route** in `{module}.router.ts`:
+
    ```ts
    export function createThingRouter(handler: ThingHandler) {
      return {
@@ -202,6 +211,7 @@ Every module follows: **Router → Handler → Service → Repository**
 ### Commit Messages
 
 Use conventional commits:
+
 - `feat(scope): description` — New feature
 - `fix(scope): description` — Bug fix
 - `test(scope): description` — Test changes
@@ -211,12 +221,14 @@ Use conventional commits:
 ### Pre-commit Hooks
 
 Lefthook runs on commit:
+
 - **oxlint** + **oxfmt** for linting and formatting
 - Pre-push: typecheck
 
 ### CI
 
 GitHub Actions runs on PRs:
+
 - Lint
 - TypeCheck
 - Build
@@ -227,6 +239,7 @@ GitHub Actions runs on PRs:
 ### VS Code
 
 Add to `.vscode/launch.json`:
+
 ```json
 {
   "type": "node",
