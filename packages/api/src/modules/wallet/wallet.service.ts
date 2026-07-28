@@ -117,10 +117,8 @@ export interface WalletPort {
 
 export type WalletService = ReturnType<typeof createWalletService>;
 
+/** Wallet service providing atomic balance operations with ledger tracking. */
 export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
-  // db.transaction opens a new connection-level tx; calling it inside an
-  // existing tx would start a separate transaction, not a savepoint. When the
-  // caller already passes a tx client, run fn against it directly.
   async function runInTx<T>(conn: DbOrTx, fn: (tx: DbOrTx) => Promise<T>) {
     if (conn === db) return db.transaction(fn);
     return fn(conn);
