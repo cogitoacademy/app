@@ -250,28 +250,28 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-| Plan                                                              | Branch                             | Status                                    |
-| ----------------------------------------------------------------- | ---------------------------------- | ----------------------------------------- |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                      |
-| `docs/plans/active/PRODUCTION-READINESS-PLAN.md`                  | `improvement/production-readiness` | PR #18 open                               |
-| `docs/plans/active/INFRASTRUCTURE-PLAN.md`                        | `improvement/infrastructure`       | PR #19 open (parallel with #18)           |
-| `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, after above merge to main |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                      |
+| Plan                                                              | Branch                             | Status                          |
+| ----------------------------------------------------------------- | ---------------------------------- | ------------------------------- |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)            |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)            |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)            |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)            |
+| `docs/plans/active/PRODUCTION-READINESS-PLAN.md`                  | `improvement/production-readiness` | Merged to main (#18)            |
+| `docs/plans/active/INFRASTRUCTURE-PLAN.md`                        | `improvement/infrastructure`       | Merged to main (#19)            |
+| `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, next to execute |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                      |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference            |
 
 ### Execution Order
 
 ```
 1. Consolidation (merged #16) → main
 2. Foundation Hardening (merged #17) → main
-3. Production Readiness + Infrastructure (parallel, PRs #18 + #19)
+3. Production Readiness + Infrastructure (merged #18 + #19) → main
 4. PRD Gaps (G1-G18, ~15 days) → feature completeness
 ```
 
-Foundation Hardening merged to main (#17). Production-readiness (#18) and infrastructure (#19) run in parallel — they touch disjoint files (business logic vs Docker/CI).
+Foundation Hardening (#17), Production Readiness (#18), and Infrastructure (#19) all merged to main. Next: PRD Gaps (feature completeness).
 
 ## Known Bugs
 
