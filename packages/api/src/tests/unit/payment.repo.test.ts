@@ -34,7 +34,7 @@ function makeSelectConn(resolvedValue: any) {
 describe("findPackageByCode", () => {
   test("returns package when found", async () => {
     const row = { id: "pkg1", code: "starter", isActive: true };
-    const { select } = makeSelectConn([row]);
+    const { select, chain } = makeSelectConn([row]);
     const conn: any = { select };
 
     const result = await findPackageByCode(conn, "starter");
@@ -58,7 +58,7 @@ describe("findPackageByCode", () => {
 describe("findPaymentByProviderReference", () => {
   test("returns record when found", async () => {
     const row = { id: "p1", providerReference: "xendit:u1:starter" };
-    const { select } = makeSelectConn([row]);
+    const { select, chain } = makeSelectConn([row]);
     const conn: any = { select };
 
     const result = await findPaymentByProviderReference(
@@ -84,7 +84,7 @@ describe("findPaymentByProviderReference", () => {
 describe("findPaymentById", () => {
   test("returns record when found", async () => {
     const row = { id: "p1", status: "PENDING" };
-    const { select } = makeSelectConn([row]);
+    const { select, chain } = makeSelectConn([row]);
     const conn: any = { select };
 
     const result = await findPaymentById(conn, "p1");
@@ -107,7 +107,7 @@ describe("findPaymentById", () => {
 describe("findPaymentByProviderEventId", () => {
   test("returns record when found", async () => {
     const row = { id: "p1", providerEventId: "evt123" };
-    const { select } = makeSelectConn([row]);
+    const { select, chain } = makeSelectConn([row]);
     const conn: any = { select };
 
     const result = await findPaymentByProviderEventId(conn, "evt123");
