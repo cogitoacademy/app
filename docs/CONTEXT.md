@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-07-27
+Last updated: 2026-07-29
 
 ## Architecture
 
@@ -256,8 +256,9 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)            |
 | `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)            |
 | `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)            |
-| `docs/plans/active/PRODUCTION-READINESS-PLAN.md`                  | `improvement/production-readiness` | Merged to main (#18)            |
-| `docs/plans/active/INFRASTRUCTURE-PLAN.md`                        | `improvement/infrastructure`       | Merged to main (#19)            |
+| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)            |
+| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)            |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps + ops tasks  |
 | `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, next to execute |
 | `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                      |
 | `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference            |
@@ -268,31 +269,31 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 1. Consolidation (merged #16) → main
 2. Foundation Hardening (merged #17) → main
 3. Production Readiness + Infrastructure (merged #18 + #19) → main
-4. PRD Gaps (G1-G18, ~15 days) → feature completeness
+4. Deferred Ops Tasks (code gaps, manual verification, production ops) → next PR(s)
+5. PRD Gaps (G1-G18, ~15 days) → feature completeness
 ```
 
-Foundation Hardening (#17), Production Readiness (#18), and Infrastructure (#19) all merged to main. Next: PRD Gaps (feature completeness).
+Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops tasks are active code gaps. Next: PRD Gaps (feature completeness).
 
 ## Known Bugs
 
-### Existing bugs (planned in `docs/plans/active/PRODUCTION-READINESS-PLAN.md`)
+### Existing bugs (planned in `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`)
 
-| ID  | Bug                                                  | Priority |
-| --- | ---------------------------------------------------- | -------- |
-| B1  | Triple session validation per request                | P1       |
-| B2  | Meeting creation failure leaves booking in scheduled | P0       |
-| B3  | Refund correction stores bookingId as paymentId      | P0       |
-| B4  | Series bookings never expire (no deadlineAt)         | P0       |
-| B5  | No CSRF protection on mutations                      | P0       |
-| N1  | Scheduler onReleaseHolds calls expireBookings        | P1       |
-| N2  | Scheduler onSendNotificationEmail is a no-op         | P1       |
-| N3  | Scheduler not shut down gracefully                   | P1       |
-| N4  | expireBookings doesn't expire series sessions        | P2       |
-| N5  | listLedger ignores bookingId/eventKey filters        | P2       |
-| N7  | Refund createCorrection uses Date.now() in event key | P1       |
-| N8  | withdraw doesn't release other participants' holds   | P2       |
-| N9  | adminBooking.listBookings returns null cursor        | P2       |
-| N15 | applyOverride doesn't update booking.holdAmount      | P1       |
+| ID  | Bug                                                | Priority | Status    |
+| --- | -------------------------------------------------- | -------- | --------- |
+| B5  | No CSRF protection on mutations                    | P0       | **Fixed** |
+| N3  | Scheduler not shut down gracefully                 | P1       | **Fixed** |
+| N8  | withdraw doesn't release other participants' holds | P2       | **Fixed** |
+
+The following bugs from the production-readiness plan are **fixed** (see completed plan for details): B1 (double session validation), B2 (meeting rollback), B3 (refund correction), B4 (series deadline), N1 (release holds), N2 (send emails), N4 (series sessions), N5 (listLedger filters), N7 (randomUUID), N9 (nextCursor), N15 (holdAmount update), B6 (overlap check in tx).
+
+**Remaining deferred items** are tracked in `docs/plans/active/DEFERRED-OPS-TASKS.md`:
+
+- Redis session caching (2.2) — not yet implemented
+- 5 missing composite indexes (3.1) — need new migration
+- Wallet/booking repo SELECT \* (3.2, 3.3) — need explicit column lists
+- JSDoc on public functions (6.5) — not yet added
+- Webhook IP allowlisting (5.1) — not yet implemented
 
 ### New findings (planned in `docs/plans/completed/FOUNDATION-HARDENING.md`)
 
