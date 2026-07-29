@@ -1060,6 +1060,7 @@ export function createBookingService(deps: {
       db,
       input.availabilitySlotId,
       input.tutorId,
+      { futureOnly: true },
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
