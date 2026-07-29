@@ -568,7 +568,6 @@ export function createBookingService(deps: {
   async function completeSession(
     bookingId: string,
     tutorId: string,
-    _sessionNote?: string,
   ) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);

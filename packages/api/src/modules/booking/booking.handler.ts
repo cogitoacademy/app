@@ -309,7 +309,6 @@ export function createTutorActionsHandler(booking: BookingService) {
           booking.completeSession(
             input.bookingId,
             context.session!.user.id,
-            input.sessionNote,
           ),
         mapBookingError,
       );
