@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ## Architecture
 
@@ -290,10 +290,35 @@ The following bugs from the production-readiness plan are **fixed** (see complet
 **Remaining deferred items** are tracked in `docs/plans/active/DEFERRED-OPS-TASKS.md`:
 
 - Redis session caching (2.2) — not yet implemented
-- 5 missing composite indexes (3.1) — need new migration
-- Wallet/booking repo SELECT \* (3.2, 3.3) — need explicit column lists
-- JSDoc on public functions (6.5) — not yet added
-- Webhook IP allowlisting (5.1) — not yet implemented
+- Booking repo SELECT \* (1.4) — need explicit column lists
+- JSDoc on public functions (1.7) — not yet added
+- Webhook IP allowlisting (1.5) — not yet implemented
+- Docker test database (1.8) — not yet created
+
+**Fixed in `improvement/foundation-critical-fixes` branch:**
+
+- Redis rate limiting non-functional (C1 — async fix)
+- No Redis wired in composition root (C2)
+- Idempotency TOCTOU race (C3)
+- Migration 0009 missing from journal (C4)
+- send-notification-email job never scheduled (C5)
+- applyOverride over-credit — per-participant amount fix (C6)
+- Admin-booking pagination broken — cursor not consumed (N9/G8)
+- listMine cursor not consumed (H1)
+- createSeries missing futureOnly (H2)
+- Wallet atomicRelease/atomicCompensateDeduct missing guards (H3/H4)
+- updateBookingWithOverride no optimistic lock (H5)
+- payment createIntent re-calls provider on pending (H6)
+- wallet reconcile unbounded SELECT (H7)
+- bookingParticipant missing unique constraint (H11)
+- tutor-bookings missing route guard (H12)
+- nginx missing security headers (H13)
+- refund amount unbounded (H14)
+- 3 missing composite indexes (DEFERRED-OPS 1.1)
+- BullMQ backoff config (DEFERRED-OPS 1.2)
+- Wallet repo SELECT \* (DEFERRED-OPS 1.3)
+- Redis health check (DEFERRED-OPS 1.6)
+- Discovery LIKE metacharacter injection
 
 ### New findings (planned in `docs/plans/completed/FOUNDATION-HARDENING.md`)
 
@@ -330,9 +355,9 @@ The following bugs from the production-readiness plan are **fixed** (see complet
 | G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1       | 4     |
 | G3  | Google OAuth credentials fall back to empty string                     | P2       | 4     |
 | G4  | No CSRF token (sameSite=none in production)                            | P0       | 4     |
-| H1  | CSP incomplete — production-breaking (no connect-src)                  | P0       | 8     |
-| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk                 | P1       | 8     |
-| I2  | Missing composite index for overlap check query                        | P2       | 8     |
+| H1  | CSP incomplete — production-breaking (no connect-src)                  | P0       | 8     | **Fixed** |
+| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk                 | P1       | 8     | **Fixed** |
+| I2  | Missing composite index for overlap check query                        | P2       | 8     | **Fixed** |
 | I3  | Dev DB logging may expose sensitive params                             | P2       | 8     |
 | J1  | No React error boundary — blank page on crash                          | P1       | 9     |
 | J2  | No auth session expiry handling on frontend                            | P1       | 9     |
