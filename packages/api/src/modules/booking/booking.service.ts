@@ -238,9 +238,13 @@ export function createBookingService(deps: {
     const rows = await repo.listBookingsByProposer(userId, {
       states: opts.states,
       limit,
+      cursor: opts.cursor,
     });
     const items = rows.slice(0, limit);
-    const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+    const nextCursor =
+      rows.length > limit
+        ? items[items.length - 1]!.scheduledStartAt.toISOString()
+        : null;
     return { items, nextCursor };
   }
 
