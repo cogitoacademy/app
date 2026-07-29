@@ -1,1 +1,2 @@
-CREATE UNIQUE INDEX "booking_participant_booking_user_uniq" ON "booking_participant" USING btree ("booking_id","user_id");
+-- Unique index already created in 0010_deferred_indexes.sql with IF NOT EXISTS
+-- This migration is a no-op placeholder (drizzle-generated, superseded by 0010)

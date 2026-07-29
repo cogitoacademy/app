@@ -30,11 +30,11 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
         availableBalance: wallet.availableBalance - 10,
       },
     })),
-    atomicRelease: mock(async () => ({
+    atomicRelease: mock(async () => ({ success: true, wallet: {
       ...wallet,
       heldBalance: wallet.heldBalance - 10,
       availableBalance: wallet.availableBalance + 10,
-    })),
+    } })),
     atomicDeduct: mock(async () => ({
       success: true as const,
       wallet: { ...wallet, totalBalance: wallet.totalBalance - 10 },
@@ -47,10 +47,10 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
       ...wallet,
       totalBalance: wallet.totalBalance + 10,
     })),
-    atomicCompensateDeduct: mock(async () => ({
+    atomicCompensateDeduct: mock(async () => ({ success: true, wallet: {
       ...wallet,
       totalBalance: wallet.totalBalance - 10,
-    })),
+    } })),
     insertLedger: mock(async () => {}),
     findLedgerEntries: mock(async () => []),
     listActivePackages: mock(async () => []),
@@ -134,7 +134,7 @@ describe("WalletService", () => {
 
     test("releases funds and inserts ledger entry", async () => {
       const updated = makeWallet({ heldBalance: 10, availableBalance: 90 });
-      const repo = makeRepo({ atomicRelease: mock(async () => updated) });
+      const repo = makeRepo({ atomicRelease: mock(async () => ({ success: true, wallet: updated })) });
       const service = createWalletService(repo as any, makeDb());
 
       const result = await service.release(makeDb(), {
@@ -272,7 +272,7 @@ describe("WalletService", () => {
     test("compensate_deduct calls atomicCompensateDeduct", async () => {
       const updated = makeWallet({ totalBalance: 90 });
       const repo = makeRepo({
-        atomicCompensateDeduct: mock(async () => updated),
+        atomicCompensateDeduct: mock(async () => ({ success: true, wallet: updated })),
       });
       const service = createWalletService(repo as any, makeDb());
 

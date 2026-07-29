@@ -163,15 +163,25 @@ describe("atomicHold", () => {
 });
 
 describe("atomicRelease", () => {
-  test("releases held balance and returns updated wallet", async () => {
+  test("releases held balance and returns success result", async () => {
     const updated = { id: "w1", heldBalance: 0, availableBalance: 100 };
     const updateConn = makeUpdateConn([updated]);
     const conn: any = { ...updateConn };
 
     const result = await atomicRelease(conn, "w1", 50);
 
-    expect(result).toEqual(updated);
+    expect(result.success).toBe(true);
+    expect(result.wallet).toEqual(updated);
     expect(updateConn.set).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns failure when heldBalance < amount", async () => {
+    const updateConn = makeUpdateConn([]);
+    const conn: any = { ...updateConn };
+
+    const result = await atomicRelease(conn, "w1", 50);
+
+    expect(result.success).toBe(false);
   });
 });
 
@@ -222,14 +232,24 @@ describe("atomicCompensateCredit", () => {
 });
 
 describe("atomicCompensateDeduct", () => {
-  test("deducts balance and returns updated wallet", async () => {
+  test("deducts balance and returns success result", async () => {
     const updated = { id: "w1", totalBalance: 50, availableBalance: 50 };
     const updateConn = makeUpdateConn([updated]);
     const conn: any = { ...updateConn };
 
     const result = await atomicCompensateDeduct(conn, "w1", 50);
 
-    expect(result).toEqual(updated);
+    expect(result.success).toBe(true);
+    expect(result.wallet).toEqual(updated);
+  });
+
+  test("returns failure when availableBalance < amount", async () => {
+    const updateConn = makeUpdateConn([]);
+    const conn: any = { ...updateConn };
+
+    const result = await atomicCompensateDeduct(conn, "w1", 50);
+
+    expect(result.success).toBe(false);
   });
 });
 

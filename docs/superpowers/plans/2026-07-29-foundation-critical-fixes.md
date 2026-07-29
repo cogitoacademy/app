@@ -24,49 +24,51 @@
 
 ## File Structure
 
-| File | Action | Responsibility |
-|------|--------|----------------|
-| `packages/api/src/lib/rate-limit.ts` | Modify | Fix async Redis rate limiting (C1) |
-| `packages/api/src/lib/idempotency.ts` | Modify | Fix TOCTOU race with atomic getOrSet (C3) |
-| `packages/api/src/services.ts` | Modify | Wire Redis client to all services (C2) |
-| `apps/server/src/index.ts` | Modify | Initialize Redis on server startup (C2) |
-| `apps/server/src/routes.ts` | Modify | Pass Redis to rate limiters + healthCheck (C2, C1) |
-| `packages/db/src/migrations/meta/_journal.json` | Modify | Add migration 0009 + 0010 entries (C4) |
-| `packages/db/src/migrations/meta/0009_snapshot.json` | Create | Drizzle snapshot for migration 0009 (C4) |
-| `apps/server/src/scheduler.ts` | Modify | Register send-notification-email job (C5) |
-| `packages/api/src/modules/scheduler/jobs/send-notification-email.job.ts` | Create | Repeatable job registration (C5) |
-| `packages/api/src/modules/admin-booking/admin-booking.service.ts` | Modify | Fix over-credit + cursor (C6, N9) |
-| `packages/api/src/modules/admin-booking/admin-booking.repo.ts` | Modify | Consume cursor + optimistic lock (N9, H5) |
-| `packages/api/src/lib/db-health.ts` | Modify | Add Redis ping (DEFERRED-OPS 1.6) |
-| `packages/api/src/modules/wallet/wallet.repo.ts` | Modify | Explicit columns + guards (1.3, H3, H4) |
-| `packages/api/src/modules/wallet/wallet.service.ts` | Modify | Add LIMIT to reconcile (H7) |
-| `packages/api/src/modules/booking/booking.repo.ts` | Modify | Cursor in listBookingsByProposer (H1) |
-| `packages/api/src/modules/booking/booking.service.ts` | Modify | futureOnly + remove dead param (H2, cleanup) |
-| `packages/api/src/modules/booking/booking-state.types.ts` | Modify | Remove dead BOOKING_EVENTS (cleanup) |
-| `packages/api/src/modules/booking/booking.handler.ts` | Modify | Update completeSession call (cleanup) |
-| `packages/db/src/migrations/0010_deferred_indexes.sql` | Create | 3 indexes + unique constraint (1.1, H11) |
-| `packages/db/src/schema/booking.ts` | Modify | Add index + unique definitions (1.1, H11) |
-| `packages/db/src/schema/tutor-profile.ts` | Modify | Add index definition (1.1) |
-| `packages/api/src/modules/scheduler/jobs/expire-bookings.job.ts` | Modify | Add backoff config (1.2) |
-| `packages/api/src/modules/scheduler/jobs/release-holds.job.ts` | Modify | Add backoff config (1.2) |
-| `packages/api/src/modules/tutor-discovery/discovery.repo.ts` | Modify | Escape LIKE metacharacters |
-| `packages/api/src/modules/refund/refund.types.ts` | Modify | Add .max() to amount (H14) |
-| `packages/api/src/modules/payment/payment.service.ts` | Modify | Return existing checkout URL (H6) |
-| `packages/api/src/modules/tutor/tutor.repo.ts` | Modify | Remove dead updateProfile (cleanup) |
-| `apps/web/nginx.conf` | Modify | Add security headers (H13) |
-| `apps/web/src/routes/_app.tutor-bookings.tsx` | Modify | Add tutor role guard (H12) |
-| `docs/CONTEXT.md` | Modify | Update known bugs status |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md` | Modify | Mark completed items |
+| File                                                                     | Action | Responsibility                                     |
+| ------------------------------------------------------------------------ | ------ | -------------------------------------------------- |
+| `packages/api/src/lib/rate-limit.ts`                                     | Modify | Fix async Redis rate limiting (C1)                 |
+| `packages/api/src/lib/idempotency.ts`                                    | Modify | Fix TOCTOU race with atomic getOrSet (C3)          |
+| `packages/api/src/services.ts`                                           | Modify | Wire Redis client to all services (C2)             |
+| `apps/server/src/index.ts`                                               | Modify | Initialize Redis on server startup (C2)            |
+| `apps/server/src/routes.ts`                                              | Modify | Pass Redis to rate limiters + healthCheck (C2, C1) |
+| `packages/db/src/migrations/meta/_journal.json`                          | Modify | Add migration 0009 + 0010 entries (C4)             |
+| `packages/db/src/migrations/meta/0009_snapshot.json`                     | Create | Drizzle snapshot for migration 0009 (C4)           |
+| `apps/server/src/scheduler.ts`                                           | Modify | Register send-notification-email job (C5)          |
+| `packages/api/src/modules/scheduler/jobs/send-notification-email.job.ts` | Create | Repeatable job registration (C5)                   |
+| `packages/api/src/modules/admin-booking/admin-booking.service.ts`        | Modify | Fix over-credit + cursor (C6, N9)                  |
+| `packages/api/src/modules/admin-booking/admin-booking.repo.ts`           | Modify | Consume cursor + optimistic lock (N9, H5)          |
+| `packages/api/src/lib/db-health.ts`                                      | Modify | Add Redis ping (DEFERRED-OPS 1.6)                  |
+| `packages/api/src/modules/wallet/wallet.repo.ts`                         | Modify | Explicit columns + guards (1.3, H3, H4)            |
+| `packages/api/src/modules/wallet/wallet.service.ts`                      | Modify | Add LIMIT to reconcile (H7)                        |
+| `packages/api/src/modules/booking/booking.repo.ts`                       | Modify | Cursor in listBookingsByProposer (H1)              |
+| `packages/api/src/modules/booking/booking.service.ts`                    | Modify | futureOnly + remove dead param (H2, cleanup)       |
+| `packages/api/src/modules/booking/booking-state.types.ts`                | Modify | Remove dead BOOKING_EVENTS (cleanup)               |
+| `packages/api/src/modules/booking/booking.handler.ts`                    | Modify | Update completeSession call (cleanup)              |
+| `packages/db/src/migrations/0010_deferred_indexes.sql`                   | Create | 3 indexes + unique constraint (1.1, H11)           |
+| `packages/db/src/schema/booking.ts`                                      | Modify | Add index + unique definitions (1.1, H11)          |
+| `packages/db/src/schema/tutor-profile.ts`                                | Modify | Add index definition (1.1)                         |
+| `packages/api/src/modules/scheduler/jobs/expire-bookings.job.ts`         | Modify | Add backoff config (1.2)                           |
+| `packages/api/src/modules/scheduler/jobs/release-holds.job.ts`           | Modify | Add backoff config (1.2)                           |
+| `packages/api/src/modules/tutor-discovery/discovery.repo.ts`             | Modify | Escape LIKE metacharacters                         |
+| `packages/api/src/modules/refund/refund.types.ts`                        | Modify | Add .max() to amount (H14)                         |
+| `packages/api/src/modules/payment/payment.service.ts`                    | Modify | Return existing checkout URL (H6)                  |
+| `packages/api/src/modules/tutor/tutor.repo.ts`                           | Modify | Remove dead updateProfile (cleanup)                |
+| `apps/web/nginx.conf`                                                    | Modify | Add security headers (H13)                         |
+| `apps/web/src/routes/_app.tutor-bookings.tsx`                            | Modify | Add tutor role guard (H12)                         |
+| `docs/CONTEXT.md`                                                        | Modify | Update known bugs status                           |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                                | Modify | Mark completed items                               |
 
 ---
 
 ## Task 1: Fix Redis rate limiting (C1)
 
 **Files:**
+
 - Modify: `packages/api/src/lib/rate-limit.ts:66-103`
 - Test: `packages/api/src/tests/unit/rate-limit.test.ts`
 
 **Interfaces:**
+
 - Consumes: `RedisClient` from `lib/redis.ts`
 - Produces: `RateLimiter` (now async: `(identifier: string) => Promise<RateLimitResult>`)
 
@@ -247,6 +249,7 @@ export function rateLimit(options: {
 ```
 
 Key changes:
+
 1. `RateLimiter` interface is now `(identifier: string) => Promise<RateLimitResult>`
 2. `redisRateLimit` is now `async` and `await`s `redis.eval()`
 3. On Redis error, falls back to in-memory (fail-closed would break dev; in-memory is the established pattern)
@@ -295,10 +298,12 @@ on Redis error."
 ## Task 2: Fix idempotency TOCTOU race (C3)
 
 **Files:**
+
 - Modify: `packages/api/src/lib/idempotency.ts:29-66`
 - Test: `packages/api/src/tests/unit/idempotency.test.ts`
 
 **Interfaces:**
+
 - Consumes: `RedisClient` from `lib/redis.ts`
 - Produces: `IdempotencyStore.getOrSet(key, fn)` — atomic check-and-execute
 
@@ -448,12 +453,14 @@ available for distributed atomicity."
 ## Task 3: Wire Redis client in composition root (C2)
 
 **Files:**
+
 - Modify: `packages/api/src/services.ts`
 - Modify: `apps/server/src/index.ts`
 - Modify: `apps/server/src/routes.ts`
 - Test: `packages/api/src/tests/unit/services.test.ts` (if exists, else verify via typecheck)
 
 **Interfaces:**
+
 - Consumes: `initRedis` from `lib/redis.ts`, `env.REDIS_URL` from `@cogito-app/env/server`
 - Produces: `services` and `handlers` with Redis-backed idempotency, rate limiting, circuit breaker
 
@@ -486,7 +493,7 @@ function createServices() {
   // Reconstruct idempotency stores with Redis
   // (the singletons at module level are created without Redis,
   //  so we need to re-initialize them here)
-  
+
   return { services, handlers, redis };
 }
 
@@ -603,6 +610,7 @@ idempotency stores, rate limiters, and circuit breakers."
 ## Task 4: Fix migration journal (C4)
 
 **Files:**
+
 - Modify: `packages/db/src/migrations/meta/_journal.json`
 - Create: `packages/db/src/migrations/meta/0009_snapshot.json`
 - Test: Run `bun run db:generate` to verify no new migration is generated
@@ -624,7 +632,7 @@ In `packages/db/src/migrations/meta/_journal.json`, add entry idx 9:
 - [ ] **Step 2: Create 0009_snapshot.json**
 
 Run: `bun run db:generate`
-If Drizzle generates a *new* migration (0010), it means the snapshot is wrong. Instead, copy the latest snapshot (0008) and modify it to include the indexes from `0009_composite_indexes.sql`.
+If Drizzle generates a _new_ migration (0010), it means the snapshot is wrong. Instead, copy the latest snapshot (0008) and modify it to include the indexes from `0009_composite_indexes.sql`.
 
 Read `0009_composite_indexes.sql` to see what indexes it creates, then create `0009_snapshot.json` based on `0008_snapshot.json` with those indexes added.
 
@@ -652,11 +660,13 @@ on migrated databases."
 ## Task 5: Register send-notification-email scheduler job (C5)
 
 **Files:**
+
 - Create: `packages/api/src/modules/scheduler/jobs/send-notification-email.job.ts`
 - Modify: `apps/server/src/scheduler.ts:85-86`
 - Test: `packages/api/src/tests/unit/scheduler-jobs.test.ts` (if exists)
 
 **Interfaces:**
+
 - Consumes: `Queue` from `bullmq`
 - Produces: `scheduleSendNotificationEmail(queue)` — registers repeatable job
 
@@ -727,10 +737,12 @@ retry config (DEFERRED-OPS 1.2)."
 ## Task 6: Fix applyOverride over-credit bug (C6)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin-booking/admin-booking.service.ts:130-179`
 - Test: `packages/api/src/tests/unit/admin-booking.service.test.ts`
 
 **Interfaces:**
+
 - Consumes: `WalletPort`, booking participant data
 - Produces: Correct per-participant compensation amounts
 
@@ -786,15 +798,19 @@ Expected: FAIL — the current code uses `participant.heldAmount || bookingRow.h
 In `packages/api/src/modules/admin-booking/admin-booking.service.ts`, find the `applyOverride` function's marks-action loop (around lines 130-179). Replace the amount calculation:
 
 For `compensate_credit`:
+
 ```typescript
 const amount = participant.heldAmount;
 ```
+
 Remove the `|| bookingRow.holdAmount` fallback. If `heldAmount` is 0, no credit is needed.
 
 For `compensate_deduct`:
+
 ```typescript
 const amount = participant.heldAmount;
 ```
+
 Same fix.
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -823,6 +839,7 @@ group bookings. Remove the fallback — use individual heldAmount only."
 ## Task 7: Fix admin-booking pagination (N9/G8)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin-booking/admin-booking.repo.ts:21-36`
 - Modify: `packages/api/src/modules/admin-booking/admin-booking.service.ts:203-217`
 - Test: `packages/api/src/tests/unit/admin-booking.repo.test.ts`
@@ -933,6 +950,7 @@ pass cursor from service to repo."
 ## Task 8: Add Redis health check (DEFERRED-OPS 1.6)
 
 **Files:**
+
 - Modify: `packages/api/src/lib/db-health.ts`
 - Test: `packages/api/src/tests/unit/db-health.test.ts`
 
@@ -957,7 +975,9 @@ describe("healthCheck", () => {
   it("reports degraded when redis ping fails", async () => {
     const failingRedis = {
       ...new InMemoryRedis(),
-      ping: async () => { throw new Error("connection refused"); },
+      ping: async () => {
+        throw new Error("connection refused");
+      },
     };
     const result = await healthCheck(failingRedis);
     expect(result.checks.redis).toBe("error");
@@ -1043,6 +1063,7 @@ ping so production health checks detect Redis outages."
 ## Task 9: Add missing composite indexes (DEFERRED-OPS 1.1)
 
 **Files:**
+
 - Create: `packages/db/src/migrations/0010_deferred_indexes.sql`
 - Modify: `packages/db/src/migrations/meta/_journal.json`
 - Modify: relevant schema files to add index definitions
@@ -1124,9 +1145,10 @@ The other 2 indexes from DEFERRED-OPS already exist in the schema."
 ## Task 10: Add wallet repo explicit column lists (DEFERRED-OPS 1.3)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/wallet/wallet.repo.ts:13-35`
 
-- [ ] **Step 1: Replace SELECT * with explicit columns**
+- [ ] **Step 1: Replace SELECT \* with explicit columns**
 
 In `packages/api/src/modules/wallet/wallet.repo.ts`, replace `getById` and `getByUserId`:
 
@@ -1191,6 +1213,7 @@ column list for performance and maintainability."
 ## Task 11: Add wallet repo guards (H3, H4)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/wallet/wallet.repo.ts:96-110, 163-177`
 - Test: `packages/api/src/tests/unit/wallet.repo.test.ts`
 
@@ -1211,12 +1234,7 @@ export async function atomicRelease(
       availableBalance: sql`${wallet.availableBalance} + ${amount}`,
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(wallet.id, walletId),
-        gte(wallet.heldBalance, amount),
-      ),
-    )
+    .where(and(eq(wallet.id, walletId), gte(wallet.heldBalance, amount)))
     .returning();
   // ... existing result handling
 }
@@ -1256,6 +1274,7 @@ didn't check availableBalance >= amount. Add WHERE guards."
 ## Task 12: Add BullMQ backoff config (DEFERRED-OPS 1.2)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/scheduler/jobs/expire-bookings.job.ts`
 - Modify: `packages/api/src/modules/scheduler/jobs/release-holds.job.ts`
 
@@ -1313,6 +1332,7 @@ exponential backoff (1s base) and explicit jobId for deduplication."
 ## Task 14: Fix createSeries missing futureOnly (H2)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.service.ts:1059`
 
 - [ ] **Step 1: Add futureOnly to createSeries availability check**
@@ -1365,6 +1385,7 @@ createGroup, allowing bookings on past availability slots."
 ## Task 15: Fix listMine cursor pagination (H1)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.repo.ts:375-389`
 - Modify: `packages/api/src/modules/booking/booking.service.ts:233-245`
 
@@ -1445,6 +1466,7 @@ cursor to repo and use it in WHERE clause."
 ## Task 16: Fix discovery LIKE metacharacter injection
 
 **Files:**
+
 - Modify: `packages/api/src/modules/tutor-discovery/discovery.repo.ts:23-28`
 
 - [ ] **Step 1: Escape LIKE metacharacters in search input**
@@ -1490,6 +1512,7 @@ Escape metacharacters with backslash and add ESCAPE clause."
 ## Task 17: Fix updateBookingWithOverride optimistic lock (H5)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin-booking/admin-booking.repo.ts:46-73`
 
 - [ ] **Step 1: Add version check to updateBookingWithOverride**
@@ -1522,10 +1545,7 @@ export async function updateBookingWithOverride(
       version: sql`${booking.version} + 1`,
     })
     .where(
-      and(
-        eq(booking.id, bookingId),
-        eq(booking.version, existing.version),
-      ),
+      and(eq(booking.id, bookingId), eq(booking.version, existing.version)),
     )
     .returning();
 
@@ -1562,6 +1582,7 @@ overrides to race. Add version column check and increment."
 ## Task 18: Fix refund amount unbounded + payment re-create intent (H6, H14)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/refund/refund.types.ts:5`
 - Modify: `packages/api/src/modules/payment/payment.service.ts:82-98`
 
@@ -1621,6 +1642,7 @@ risking duplicate charges. Return existing checkout URL instead."
 ## Task 19: Add bookingParticipant unique constraint + nginx security headers (H11, H13)
 
 **Files:**
+
 - Modify: `packages/db/src/migrations/0010_deferred_indexes.sql` (add to existing)
 - Modify: `packages/db/src/schema/booking.ts` (add unique constraint)
 - Modify: `apps/web/nginx.conf`
@@ -1702,6 +1724,7 @@ X-Frame-Options, Referrer-Policy, Permissions-Policy."
 ## Task 20: Add wallet reconcile LIMIT + remove dead code (H7, cleanup)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/wallet/wallet.service.ts:352-380`
 - Modify: `packages/api/src/modules/tutor/tutor.repo.ts:33-44` (remove dead `updateProfile`)
 - Modify: `packages/api/src/modules/booking/booking.service.ts:567` (remove dead `_sessionNote` param)
@@ -1764,6 +1787,7 @@ dead BOOKING_EVENTS type."
 ## Task 21: Add tutor-bookings route guard (H12)
 
 **Files:**
+
 - Modify: `apps/web/src/routes/_app.tutor-bookings.tsx`
 
 - [ ] **Step 1: Add beforeLoad role guard**
@@ -1860,6 +1884,7 @@ git commit -m "chore: final verification pass"
 ### Self-Review
 
 **Spec coverage:**
+
 - C1 (rate limiting) → Task 1 ✓
 - C2 (Redis wiring) → Task 3 ✓
 - C3 (idempotency race) → Task 2 ✓
@@ -1868,8 +1893,8 @@ git commit -m "chore: final verification pass"
 - C6 (override over-credit) → Task 6 ✓
 - DEFERRED-OPS 1.1 (indexes) → Task 9 + Task 19 ✓
 - DEFERRED-OPS 1.2 (retry config) → Task 5 + Task 12 ✓
-- DEFERRED-OPS 1.3 (wallet SELECT *) → Task 10 ✓
-- DEFERRED-OPS 1.4 (booking SELECT *) → deferred to PRD-gaps (larger refactor)
+- DEFERRED-OPS 1.3 (wallet SELECT \*) → Task 10 ✓
+- DEFERRED-OPS 1.4 (booking SELECT \*) → deferred to PRD-gaps (larger refactor)
 - DEFERRED-OPS 1.5 (webhook IP allowlist) → deferred to PRD-gaps (security feature)
 - DEFERRED-OPS 1.6 (Redis health) → Task 8 ✓
 - DEFERRED-OPS 1.7 (JSDoc) → deferred (low priority, large scope)
@@ -1891,7 +1916,8 @@ git commit -m "chore: final verification pass"
 - Final verification → Task 23 ✓
 
 **Deferred to PRD-gaps branch (intentionally):**
-- DEFERRED-OPS 1.4 (booking repo SELECT *) — larger refactor, touch many queries
+
+- DEFERRED-OPS 1.4 (booking repo SELECT \*) — larger refactor, touch many queries
 - DEFERRED-OPS 1.5 (webhook IP allowlist) — security feature, needs env config
 - DEFERRED-OPS 1.7 (JSDoc) — large scope, low priority
 - DEFERRED-OPS 1.8 (Docker test DB) — CI infrastructure
@@ -1906,9 +1932,10 @@ git commit -m "chore: final verification pass"
 **Placeholder scan:** No placeholders found. All code blocks contain actual implementation.
 
 **Type consistency:**
+
 - `RateLimiter` interface changed from sync to async — all callers updated in Task 1 Step 4
 - `healthCheck` signature changed — caller updated in Task 8 Step 4
 - `listBookingsByState` signature changed — caller updated in Task 7 Step 4
 - `listBookingsByProposer` signature changed — caller updated in Task 15 Step 2
 - `updateBookingWithOverride` signature unchanged but behavior changed (version check) — callers in admin-booking.service.ts verified
-- `completeSession` signature changed (removed _sessionNote) — caller updated in Task 20 Step 3
+- `completeSession` signature changed (removed \_sessionNote) — caller updated in Task 20 Step 3

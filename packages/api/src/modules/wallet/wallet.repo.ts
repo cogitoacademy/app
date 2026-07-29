@@ -107,8 +107,8 @@ export async function atomicRelease(
   conn: DbOrTx,
   walletId: string,
   amount: number,
-): Promise<WalletSnapshot> {
-  const [updated] = await conn
+): Promise<AtomicResult> {
+  const rows = await conn
     .update(wallet)
     .set({
       heldBalance: sql`GREATEST(${wallet.heldBalance} - ${amount}, 0)`,
@@ -116,7 +116,8 @@ export async function atomicRelease(
     })
     .where(and(eq(wallet.id, walletId), gte(wallet.heldBalance, amount)))
     .returning();
-  return updated as WalletSnapshot;
+  if (!rows.length) return { success: false, reason: "insufficient_held" };
+  return { success: true, wallet: rows[0] as WalletSnapshot };
 }
 
 export async function atomicDeduct(
@@ -174,8 +175,8 @@ export async function atomicCompensateDeduct(
   conn: DbOrTx,
   walletId: string,
   amount: number,
-): Promise<WalletSnapshot> {
-  const [updated] = await conn
+): Promise<AtomicResult> {
+  const rows = await conn
     .update(wallet)
     .set({
       totalBalance: sql`${wallet.totalBalance} - ${amount}`,
@@ -183,7 +184,8 @@ export async function atomicCompensateDeduct(
     })
     .where(and(eq(wallet.id, walletId), gte(wallet.availableBalance, amount)))
     .returning();
-  return updated as WalletSnapshot;
+  if (!rows.length) return { success: false, reason: "insufficient_balance" };
+  return { success: true, wallet: rows[0] as WalletSnapshot };
 }
 
 export async function insertLedger(

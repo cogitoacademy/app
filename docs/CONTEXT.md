@@ -323,7 +323,7 @@ The following bugs from the production-readiness plan are **fixed** (see complet
 ### New findings (planned in `docs/plans/completed/FOUNDATION-HARDENING.md`)
 
 | ID  | Bug                                                                    | Priority | Story |
-| --- | ---------------------------------------------------------------------- | -------- | ----- |
+| --- | ---------------------------------------------------------------------- | -------- | ----- | --------- |
 | A1  | Group booking cancel doesn't release invitee holds                     | P0       | 1     |
 | A2  | Group booking tutorDecline doesn't release invitee holds               | P0       | 1     |
 | A3  | expireBookings doesn't release invitee holds                           | P0       | 1     |

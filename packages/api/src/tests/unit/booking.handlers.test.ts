@@ -395,10 +395,7 @@ describe("tutorActionsHandler", () => {
         input: input as any,
       });
 
-      expect(booking.completeSession).toHaveBeenCalledWith(
-        "b1",
-        "t1",
-      );
+      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1");
       expect(result).toEqual({ id: "b1", currentState: "completed" });
     });
   });
