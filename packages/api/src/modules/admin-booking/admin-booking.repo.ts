@@ -1,4 +1,4 @@
-import { eq, asc, inArray } from "drizzle-orm";
+import { eq, asc, inArray, gt, and } from "drizzle-orm";
 import {
   booking,
   bookingStateHistory,
@@ -22,17 +22,22 @@ export async function listBookingsByState(
   conn: DbOrTx,
   states: string[],
   limit: number,
+  cursor?: string,
 ) {
-  const query = conn
+  const conditions = [];
+  if (states.length > 0) {
+    conditions.push(inArray(booking.currentState, states));
+  }
+  if (cursor) {
+    conditions.push(gt(booking.id, cursor));
+  }
+
+  return conn
     .select()
     .from(booking)
-    .orderBy(asc(booking.scheduledStartAt))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(asc(booking.id))
     .limit(limit + 1);
-
-  if (states.length > 0) {
-    return query.where(inArray(booking.currentState, states));
-  }
-  return query;
 }
 
 export async function getStateHistory(conn: DbOrTx, bookingId: string) {

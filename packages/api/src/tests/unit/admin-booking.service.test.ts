@@ -515,7 +515,38 @@ describe("AdminBookingService", () => {
         expect.anything(),
         [],
         2,
+        undefined,
       );
+    });
+
+    test("passes cursor to repo for pagination", async () => {
+      const bookings = [
+        { id: "b10", currentState: "confirmed" },
+        { id: "b11", currentState: "confirmed" },
+        { id: "b12", currentState: "confirmed" },
+      ];
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => bookings),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.listBookings({ limit: 2, cursor: "b9" });
+      expect(repo.listBookingsByState).toHaveBeenCalledWith(
+        expect.anything(),
+        [],
+        2,
+        "b9",
+      );
+      expect(result.items).toEqual([
+        { id: "b10", currentState: "confirmed" },
+        { id: "b11", currentState: "confirmed" },
+      ]);
     });
   });
 
