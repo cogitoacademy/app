@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "booking_participant_booking_user_uniq" ON "booking_participant" USING btree ("booking_id","user_id");
