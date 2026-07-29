@@ -120,8 +120,8 @@ export class IdempotencyStore {
     }
 
     const promise = fn()
-      .then((result) => {
-        void this.markProcessed(key, result);
+      .then(async (result) => {
+        await this.markProcessed(key, result);
         return result;
       })
       .finally(() => {
@@ -134,6 +134,16 @@ export class IdempotencyStore {
 
   setRedis(redis: RedisClient): void {
     this.redis = redis;
+  }
+
+  clear(): void {
+    this.store.clear();
+    this.inFlight.clear();
+    this.lastCleanup = Date.now();
+  }
+
+  disconnectRedis(): void {
+    this.redis = null;
   }
 
   private maybeCleanup(): void {
