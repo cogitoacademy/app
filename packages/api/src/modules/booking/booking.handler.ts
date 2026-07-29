@@ -306,10 +306,7 @@ export function createTutorActionsHandler(booking: BookingService) {
     }) => {
       return withDomainMap(
         () =>
-          booking.completeSession(
-            input.bookingId,
-            context.session!.user.id,
-          ),
+          booking.completeSession(input.bookingId, context.session!.user.id),
         mapBookingError,
       );
     },

@@ -369,7 +369,11 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     const expected = Number(addRow?.total ?? 0) - Number(subRow?.total ?? 0);
 
     const walletRows = query?.walletId
-      ? await db.select().from(wallet).where(eq(wallet.id, query.walletId)).limit(1000)
+      ? await db
+          .select()
+          .from(wallet)
+          .where(eq(wallet.id, query.walletId))
+          .limit(1000)
       : await db.select().from(wallet).limit(1000);
     const actual = walletRows.reduce(
       (acc, w) => acc + (w.totalBalance ?? 0),
