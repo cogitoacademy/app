@@ -64,6 +64,13 @@
       "when": 1784012000000,
       "tag": "0008_tutor_invite_email_invited_uniq",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784098400000,
+      "tag": "0009_composite_indexes",
+      "breakpoints": true
     }
   ]
 }
