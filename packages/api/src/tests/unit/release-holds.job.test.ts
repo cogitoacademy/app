@@ -14,7 +14,9 @@ describe("scheduleHoldReleaseCheck", () => {
       {},
       {
         repeat: { every: 10 * 60 * 1000 },
+        jobId: "release-expired-holds",
         attempts: 3,
+        backoff: { type: "exponential", delay: 1000 },
       },
     );
   });

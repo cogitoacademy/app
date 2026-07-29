@@ -636,7 +636,9 @@ describe("WalletService", () => {
             };
           }
           return {
-            from: mock(async () => [{ totalBalance: 80 }]),
+            from: mock(() => ({
+              limit: mock(async () => [{ totalBalance: 80 }]),
+            })),
           };
         }),
       } as any;

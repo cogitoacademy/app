@@ -14,7 +14,9 @@ describe("scheduleBookingExpiryCheck", () => {
       {},
       {
         repeat: { every: 5 * 60 * 1000 },
+        jobId: "expire-bookings",
         attempts: 3,
+        backoff: { type: "exponential", delay: 1000 },
       },
     );
   });
