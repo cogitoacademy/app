@@ -2,6 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { createContext } from "@cogito-app/api/context";
 import { appRouter } from "@cogito-app/api/routers";
 import { rateLimit } from "@cogito-app/api/lib/rate-limit";
+import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
 import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth } from "@cogito-app/auth";
@@ -23,15 +24,19 @@ import { generateRequestId } from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { healthCheck } from "@cogito-app/api/lib/db-health";
 
+const redis = getRedisClient();
+
 const authRateLimit = rateLimit({
   windowMs: 60_000,
   maxRequests: 10,
   keyPrefix: "auth",
+  redis,
 });
 const paymentRateLimit = rateLimit({
   windowMs: 60_000,
   maxRequests: 5,
   keyPrefix: "payment",
+  redis,
 });
 
 const MAX_BODY_BYTES = 1024 * 1024;

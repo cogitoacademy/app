@@ -6,4 +6,4 @@ export {
 export type { AppRouter, AppRouterClient } from "./routers";
 export { appRouter } from "./routers";
 export type { ServiceRegistry, HandlerRegistry } from "./services";
-export { services, handlers } from "./services";
+export { services, handlers, redis } from "./services";
