@@ -23,7 +23,7 @@ export interface RateLimitResult {
 }
 
 export interface RateLimiter {
-  (identifier: string): RateLimitResult;
+  (identifier: string): Promise<RateLimitResult>;
 }
 
 function inMemoryRateLimit(
@@ -31,7 +31,7 @@ function inMemoryRateLimit(
   maxRequests: number,
   keyPrefix: string,
 ): RateLimiter {
-  return (identifier: string): RateLimitResult => {
+  return (identifier: string): Promise<RateLimitResult> => {
     const key = `${keyPrefix}:${identifier}`;
     const now = Date.now();
 
@@ -51,15 +51,18 @@ function inMemoryRateLimit(
         }
       }
       store.set(key, { count: 1, resetAt: now + windowMs });
-      return { allowed: true, retryAfterMs: 0 };
+      return Promise.resolve({ allowed: true, retryAfterMs: 0 });
     }
 
     if (entry.count >= maxRequests) {
-      return { allowed: false, retryAfterMs: entry.resetAt - now };
+      return Promise.resolve({
+        allowed: false,
+        retryAfterMs: entry.resetAt - now,
+      });
     }
 
     entry.count += 1;
-    return { allowed: true, retryAfterMs: 0 };
+    return Promise.resolve({ allowed: true, retryAfterMs: 0 });
   };
 }
 
@@ -71,11 +74,11 @@ function redisRateLimit(
 ): RateLimiter {
   const windowSeconds = Math.ceil(windowMs / 1000);
 
-  return (identifier: string): RateLimitResult => {
+  return async (identifier: string): Promise<RateLimitResult> => {
     const key = `${COGITO_NS.RATE_LIMIT}:${keyPrefix}:${identifier}`;
 
     try {
-      const result = redis.eval(
+      const result = (await redis.eval(
         `
         local current = redis.call('INCR', KEYS[1])
         if current == 1 then
@@ -89,15 +92,12 @@ function redisRateLimit(
         `,
         [key],
         [String(windowSeconds), String(maxRequests)],
-      );
+      )) as [number, number];
 
-      if (result && typeof result === "object" && "then" in result) {
-        return { allowed: true, retryAfterMs: 0 };
-      }
-      const [allowed, retryAfter] = result as [number, number];
+      const [allowed, retryAfter] = result;
       return { allowed: allowed === 1, retryAfterMs: retryAfter };
     } catch {
-      return { allowed: true, retryAfterMs: 0 };
+      return inMemoryRateLimit(windowMs, maxRequests, keyPrefix)(identifier);
     }
   };
 }

@@ -147,7 +147,7 @@ export function createServer() {
         );
       }
     })
-    .onRequest(({ request }) => {
+    .onRequest(async ({ request }) => {
       const url = new URL(request.url);
       const path = url.pathname;
       const ip =
@@ -156,7 +156,7 @@ export function createServer() {
         "unknown";
 
       if (path.startsWith("/rpc/auth.")) {
-        const { allowed, retryAfterMs } = authRateLimit(ip);
+        const { allowed, retryAfterMs } = await authRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
             status: 429,
@@ -169,7 +169,7 @@ export function createServer() {
       }
 
       if (path === "/rpc/payment.createIntent") {
-        const { allowed, retryAfterMs } = paymentRateLimit(ip);
+        const { allowed, retryAfterMs } = await paymentRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
             status: 429,
