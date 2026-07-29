@@ -1,4 +1,4 @@
-import { eq, asc, inArray, gt, and } from "drizzle-orm";
+import { eq, asc, inArray, gt, and, sql } from "drizzle-orm";
 import {
   booking,
   bookingStateHistory,
@@ -56,25 +56,33 @@ export async function updateBookingWithOverride(
   overrideMeta: Record<string, unknown>,
 ) {
   const [existing] = await conn
-    .select({ currentState: booking.currentState })
+    .select({
+      currentState: booking.currentState,
+      version: booking.version,
+    })
     .from(booking)
     .where(eq(booking.id, bookingId))
     .limit(1);
 
   if (!existing) return null;
 
-  const [updated] = await conn
+  const result = await conn
     .update(booking)
     .set({
       previousState: existing.currentState,
       currentState: newState,
       stateReason: reason,
       overrideMeta,
+      version: sql`${booking.version} + 1`,
     })
-    .where(eq(booking.id, bookingId))
+    .where(
+      and(eq(booking.id, bookingId), eq(booking.version, existing.version)),
+    )
     .returning();
 
-  return { previousState: existing.currentState, updated };
+  if (!result.length) return null;
+
+  return { previousState: existing.currentState, updated: result[0] };
 }
 
 export async function insertStateHistoryEntry(
