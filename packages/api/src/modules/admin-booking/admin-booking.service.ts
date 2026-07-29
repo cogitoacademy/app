@@ -151,11 +151,11 @@ export function createAdminBookingService(deps: {
               bookingId: input.bookingId,
             });
             totalReleased += participant.heldAmount;
-          } else if (input.marksAction === "compensate_credit") {
+          } else if (input.marksAction === "compensate_credit" && participant.heldAmount > 0) {
             // eslint-disable-next-line no-await-in-loop
             await wallet.compensate(tx, {
               walletId: participantWallet.id,
-              amount: participant.heldAmount || bookingRow.holdAmount,
+              amount: participant.heldAmount,
               eventKey: `override.compensate_credit.${input.bookingId}.${participant.id}`,
               actorType: ACTOR_TYPE.ADMIN,
               reason: `Admin override credit: ${input.reason}`,
@@ -163,11 +163,11 @@ export function createAdminBookingService(deps: {
               bookingId: input.bookingId,
             });
             totalReleased += participant.heldAmount;
-          } else if (input.marksAction === "compensate_deduct") {
+          } else if (input.marksAction === "compensate_deduct" && participant.heldAmount > 0) {
             // eslint-disable-next-line no-await-in-loop
             await wallet.compensate(tx, {
               walletId: participantWallet.id,
-              amount: participant.heldAmount || bookingRow.holdAmount,
+              amount: participant.heldAmount,
               eventKey: `override.compensate_deduct.${input.bookingId}.${participant.id}`,
               actorType: ACTOR_TYPE.ADMIN,
               reason: `Admin override deduct: ${input.reason}`,

@@ -245,6 +245,45 @@ describe("AdminBookingService", () => {
       });
     });
 
+    test("compensate_credit uses per-participant heldAmount, not booking total", async () => {
+      const wallet = makeWalletPort();
+      const repo = mockRepo({
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 30 },
+          { id: "p2", userId: "u2", heldAmount: 70 },
+        ]),
+      });
+      wallet.getByUserId = mock(async (_tx: any, userId: string) => ({
+        id: `w-${userId}`,
+        totalBalance: 100,
+        heldBalance: userId === "u1" ? 30 : 70,
+        availableBalance: 70,
+      }));
+      const auditPort = makeAuditPort();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort,
+        wallet: wallet as any,
+        refund: makeRefundPort(),
+      });
+
+      await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "medical_emergency",
+        reason: "test",
+        marksAction: "compensate_credit",
+        affectedParticipants: ["u1", "u2"],
+      });
+
+      const calls = wallet.compensate.mock.calls;
+      const u1Call = calls.find((c: any) => c[1]?.walletId === "w-u1");
+      const u2Call = calls.find((c: any) => c[1]?.walletId === "w-u2");
+
+      expect(u1Call[1].amount).toBe(30);
+      expect(u2Call[1].amount).toBe(70);
+    });
+
     test("compensate_deduct calls wallet.compensate with type compensate_deduct", async () => {
       const wallet = makeWalletPort();
       const repo = mockRepo({
@@ -340,7 +379,7 @@ describe("AdminBookingService", () => {
       expect(wallet.compensate).not.toHaveBeenCalled();
     });
 
-    test("uses booking.holdAmount as fallback for compensate when participant.heldAmount=0", async () => {
+    test("skips compensate_credit for participant with heldAmount=0", async () => {
       const wallet = makeWalletPort();
       const repo = mockRepo({
         findParticipantsByBookingId: mock(async () => [
@@ -359,21 +398,13 @@ describe("AdminBookingService", () => {
       await service.applyOverride("admin1", {
         bookingId: "b1",
         category: "medical_emergency",
-        reason: "Fallback amount",
+        reason: "No held amount",
         marksAction: "compensate_credit",
         affectedParticipants: ["u1"],
       });
 
-      expect(wallet.compensate).toHaveBeenCalledTimes(1);
-      expect(wallet.compensate).toHaveBeenCalledWith(expect.anything(), {
-        walletId: "w1",
-        amount: 100,
-        eventKey: "override.compensate_credit.b1.p1",
-        actorType: "admin",
-        reason: "Admin override credit: Fallback amount",
-        type: "compensate_credit",
-        bookingId: "b1",
-      });
+      expect(wallet.compensate).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
     });
 
     test("does not process marks when holdAmount is 0 on booking", async () => {
