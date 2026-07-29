@@ -5,7 +5,8 @@
 | Plan                                                  | Branch                      | PR  | Status                          |
 | ----------------------------------------------------- | --------------------------- | --- | ------------------------------- |
 | [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge)           | —   | Code gaps + ops tasks           |
-| [PRD-GAPS-SPEC.md](active/PRD-GAPS-SPEC.md)           | `feature/prd-gaps` (future) | —   | Reference spec, next to execute |
+| [PRD-GAPS-SPEC.md](active/PRD-GAPS-SPEC.md)           | `feature/prd-gaps` (future) | —   | Backend gaps (G1-G19), next to execute |
+| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | `feature/frontend-gaps` (future) | — | Frontend gaps (F1-F17), parallel with PRD Gaps |
 
 ## Completed (merged to main)
 

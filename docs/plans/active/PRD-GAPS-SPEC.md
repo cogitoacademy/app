@@ -45,8 +45,11 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 | G16 | Tutor payout calculation                  | DL-11        | Medium   | 1d     | wallet        |
 | G17 | Full notification matrix                  | FR-17        | Medium   | 2d     | notification  |
 | G18 | Series session completion                 | FR-20        | Medium   | 1d     | booking       |
+| G19 | Pricing extra-take rule (above-baseline)  | FR-05, FR-19, DL-22, TC-06 | High | 1d | pricing |
 
-**Total estimated effort: ~24 days**
+**Total estimated effort: ~25 days (backend)**
+
+> **Note:** Frontend gaps are tracked separately in `docs/plans/active/FRONTEND-GAPS-SPEC.md`. This document is backend-only.
 
 ---
 
@@ -202,39 +205,40 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-15 (Rescheduling)
 
-**Current state:** `bookingRescheduleProposal` table exists but no endpoints to create/accept/reject proposals.
+**Current state:** `proposeReschedule` endpoint **already exists** (`booking.router.ts:71`, `booking.service.ts:619`) but is wired as a **student** action (`protectedProcedure`, `ACTOR_TYPE.STUDENT`). This **contradicts PRD FR-15**, which requires the **tutor** to propose and the **student** to approve. No `acceptReschedule` or `rejectReschedule` endpoints exist. The `bookingRescheduleProposal` table exists and is written to by the existing endpoint.
 
 **Required:**
 
-1. `POST /rpc/booking.proposeReschedule` — tutor proposes new time
-   - Validates: booking exists, tutor is participant, booking is confirmed, new time is in the future
-   - Creates `bookingRescheduleProposal` record with status `pending`
-   - Notifies student
+1. **Fix `proposeReschedule` role:** Change from `protectedProcedure` (student) to `tutorProcedure` (tutor). Change `ACTOR_TYPE.STUDENT` to `ACTOR_TYPE.TUTOR` in the service. This is a **breaking fix**, not a new endpoint.
 
-2. `POST /rpc/booking.acceptReschedule` — student accepts
-   - Updates booking start time
-   - Updates meeting link if needed
-   - Sends notification to both parties
+2. `POST /rpc/booking.acceptReschedule` — student accepts the tutor's proposal
+   - Validates: booking is in `reschedule_proposed` state, student is the proposer
+   - Updates booking start/end time to the proposed values
+   - Updates meeting link if needed (recreate Google Meet event or update manual link)
+   - Transitions `reschedule_proposed` → `awaiting_reconfirmation` (per state machine) or directly to `confirmed`/`scheduled` if no other participants affected
+   - Sends notification to tutor
 
 3. `POST /rpc/booking.rejectReschedule` — student rejects
    - Marks proposal as `rejected`
+   - Transitions back to the previous state (before `reschedule_proposed`)
    - Sends notification to tutor
    - Booking remains at original time
 
 **Acceptance tests:**
 
-- Tutor proposes reschedule → proposal created, student notified
+- Tutor proposes reschedule → proposal created, student notified (existing endpoint, after role fix)
 - Student accepts → booking time updated, both notified
-- Student rejects → proposal rejected, booking unchanged
-- Only tutor can propose, only student can accept/reject
+- Student rejects → proposal rejected, booking unchanged, tutor notified
+- Only tutor can propose (student attempt → 403), only student can accept/reject (tutor attempt → 403)
+- **Regression:** existing student-initiated reschedule (if any UI depends on it) must be removed or redirected to cancel+rebook flow
 
 ---
 
 ### G7: Rich-Text Session Notes
 
-**PRD:** FR-09 (Session Notes), DL-18 (Post-Session Documentation)
+**PRD:** FR-09 (Session Notes), DL-18 (Post-Session Documentation), PRD §Session Notes (prd.tex:1033-1043)
 
-**Current state:** `_sessionNote` field exists in schema but is unused and undocumented.
+**Current state:** `_sessionNote` field exists in schema but is unused and undocumented. No sanitization.
 
 **Required:**
 
@@ -250,11 +254,15 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
    - `POST /rpc/booking.getSessionNotes` — both parties can view notes
    - Only visible after session is completed
 
+3. **Sanitization (PRD requirement):** Rich-text content must be sanitized before storage or rendering. Allowed tags: paragraphs, headings, bullet lists, numbered lists, links, bold, italic. Use DOMPurify or similar. File upload, image embed, scoring fields, and rubric fields are out of Phase 0.
+
 **Acceptance tests:**
 
 - Tutor adds note after session → stored, visible to student
 - Student views notes → sees tutor's notes
 - Attempt to add note before session completed → rejected
+- Attempt to inject `<script>` or disallowed tags → sanitized, no XSS
+- Attempt to add image/file embed → rejected (out of scope)
 
 ---
 
@@ -456,42 +464,45 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 ### G17: Full Notification Matrix
 
-**PRD:** FR-17 (Notification System)
+**PRD:** FR-17 (Notification System), PRD §Notification Matrix (prd.tex:912-955)
 
-**Current state:** Notification records are created in DB but no email dispatch logic. `onSendNotificationEmail` is a no-op (N2 bug).
+**Current state:** Notification records are created in DB. `onSendNotificationEmail` is implemented (N2 fixed). The notification service has `EMAIL_SUPPORTED_CATEGORIES` (booking/payment/refund/schedule/override) but the routing is category-level, not event-level. The existing matrix below was invented and does **not match the PRD**. This spec must be aligned to the PRD's source-of-truth matrix.
 
 **Required:**
 
-Implement the full notification matrix:
+Implement the full notification matrix **as defined in the PRD** (prd.tex:912-955). The PRD matrix is the source of truth — any discrepancy between this spec and the PRD, the PRD wins:
 
-| Event                        | In-App | Email |
-| ---------------------------- | ------ | ----- |
-| Booking confirmed            | ✅     | ✅    |
-| Booking cancelled by student | ✅     | ✅    |
-| Booking cancelled by tutor   | ✅     | ✅    |
-| Booking reminder (H-2)       | ✅     | ✅    |
-| Booking starting in 15 min   | ✅     | ✅    |
-| Payment received             | ✅     | ✅    |
-| Payment failed               | ✅     | ✅    |
-| Refund processed             | ✅     | ✅    |
-| Tutor lateness detected      | ✅     | ✅    |
-| Tutor no-show detected       | ✅     | ✅    |
-| Admin override applied       | ✅     | ✅    |
-| Reschedule proposed          | ✅     | ✅    |
-| Reschedule accepted          | ✅     | ✅    |
-| Reschedule rejected          | ✅     | ✅    |
-| Achievement unlocked         | ✅     | ❌    |
-| Support ticket created       | ✅     | ✅    |
-| Support ticket resolved      | ✅     | ✅    |
-| Session notes available      | ✅     | ✅    |
-| Series session cancelled     | ✅     | ✅    |
-| Wallet low balance           | ✅     | ✅    |
+| Event                                      | In-App | Email | Email Recipient | Notes (from PRD) |
+| ------------------------------------------ | ------ | ----- | ---------------- | ---------------- |
+| Booking request created                    | ✅     | ✅    | Tutor only       | Action required by tutor |
+| Account created                             | ✅     | ✅    | New student      | Signup confirmation, onboarding entry, login link, brief intro |
+| Group session or series invitation received | ✅    | ✅    | Registered invitees | Email must include full schedule, per-student price, total Marks hold, direct CTA. Phase 0 invitations only to registered users |
+| Student or group has confirmed a booking   | ✅     | ✅    | Assigned tutor   | Tutor prep notice. Include student/group name, session type, date, time. For series, list all session dates/times |
+| Booking accepted / declined                 | ✅     | ✅    | Student only     | Critical booking outcome |
+| Online meeting link created                 | ✅     | ✅    | Tutor + confirmed students | Sent only after all required participant, tutor, and admin conditions complete |
+| Offline room confirmed / relocated / cancelled | ✅  | ✅    | Tutor + confirmed students | Critical operational notices |
+| Student cancel before H-2                   | ✅     | ✅    | Affected participants | Schedule-affecting change |
+| Late cancel / no-show / emergency override  | ✅     | ✅    | Affected participants | Penalty or correction event |
+| Tutor reschedule proposed / approved        | ✅     | ✅    | Affected participants | Requires student approval |
+| Group repricing / reconfirmation request     | ✅     | ✅    | All current participants | Cost changes must be explicit |
+| Payment / refund / emergency refund         | ✅     | ✅    | Payer             | Wallet event |
+| Achievement submitted / reviewed             | ✅    | ❌    | —                | Keep review traffic in-app |
+| Reminder / non-critical update               | ✅    | ❌    | —                | Never consumes email quota |
+
+**Implementation notes:**
+
+- The current `EMAIL_SUPPORTED_CATEGORIES` set (booking/payment/refund/schedule/override) is too coarse. The routing needs to distinguish within a category (e.g., "achievement" events in the "booking" category should NOT email, but "booking accepted" should).
+- Add an `emailRequired: boolean` flag or per-event routing function rather than category-level gating.
+- Email dispatch is best-effort, rate-limited, and deduplicated by event key (PRD §Notification Matrix closing note).
+- In-app notifications are the source of record for all events.
 
 **Acceptance tests:**
 
 - Each event type creates the correct notification records
-- Email dispatch happens for events marked ✅ in Email column
-- In-app notification visible in notification list
+- Email dispatch happens for events marked ✅ in Email column, to the correct recipient
+- Email is NOT sent for achievement events or non-critical reminders
+- In-app notification visible in notification list for all events
+- Email includes required content per PRD (e.g., group invite email includes full schedule + price + total hold + CTA)
 - N2 bug fix ensures `onSendNotificationEmail` actually dispatches
 
 ---
@@ -523,6 +534,71 @@ Implement the full notification matrix:
 
 ---
 
+### G19: Pricing Extra-Take Rule (Above-Baseline Tutor Pricing)
+
+**PRD:** FR-05 (tutor prices respect Cogito floors), FR-19 (tutor self-pricing), DL-22 (extra-take rule), TC-06 (verify above-floor tutor pricing split)
+
+**Current state — BUG:** `pricing.service.ts:69-79` (`computeSplit`) uses a flat `COGITO_TAKE_RATE = 0.2` (20% of total Marks). This is **wrong**. The PRD requires the **extra-take rule**:
+
+- Baseline total = floor price per student × final confirmed headcount
+- Tutor total = tutor-set per-student price × final confirmed headcount
+- Extra total = tutor total − baseline total
+- Cogito extra take = ⌊ extra total / 5 ⌋ Marks
+- Tutor extra share = extra total − Cogito extra take
+- Final Cogito take = baseline Cogito take + Cogito extra take
+- Final tutor share = baseline tutor share + tutor extra share
+
+The constant `EXTRA_TAKE_DIVISOR = 5` is defined in `packages/api/src/shared/constants.ts:19` but **never used**. Every tutor payout above the floor is miscalculated.
+
+**Examples from PRD (TC-06):**
+
+- Online class for 1 at floor (42 Marks): tutor 30, Cogito 12 — flat 20% gives 33.6/8.4, **wrong**
+- Online class for 1 at 50 Marks: extra = 8, Cogito extra = ⌊8/5⌋ = 1, final tutor = 37, final Cogito = 13 — flat 20% gives 40/10, **wrong**
+- Online class for 3 at 32 Marks/student (96 total): extra = 12, Cogito extra = ⌊12/5⌋ = 2, final tutor = 74, final Cogito = 22 — flat 20% gives 76.8/19.2, **wrong**
+
+**Required:**
+
+1. Rewrite `computeSplit` in `pricing.service.ts` to implement the extra-take rule:
+   - Accept `modality` (online/offline) and `groupSize` to look up baseline floor + baseline split
+   - Accept `tutorPricePerStudent` (the tutor-set price) and `confirmedHeadcount`
+   - Calculate baseline total, tutor total, extra total, Cogito extra take, final splits
+   - Return `{ perStudent, baseline, tutorShare, cogitoTake, baselineCogitoTake, baselineTutorShare, extraTotal, cogitoExtraTake, tutorExtraShare }`
+
+2. Update the `PricingPort` interface to include the new parameters
+
+3. Update all callers of `computeSplit` (booking creation, series creation, group repricing, admin payout G16) to pass the tutor-set price and modality
+
+4. Add baseline split lookup table (baseline Cogito take + baseline tutor share per group size per modality) — derived from the PRD floor pricing tables (prd.tex:768-804)
+
+**Acceptance tests:**
+
+- Online class for 1 at floor (42) → tutor 30, Cogito 12
+- Online class for 1 at 50 → tutor 37, Cogito 13 (extra 8, Cogito extra 1)
+- Online class for 3 at floor (28/student, 84 total) → tutor 64, Cogito 20
+- Online class for 3 at 32/student (96 total) → tutor 74, Cogito 22 (extra 12, Cogito extra 2)
+- Offline class for 2 at floor (45/student, 90 total) → tutor 70, Cogito 20
+- Extra total = 4 → Cogito extra 0, all 4 to tutor
+- Extra total = 5 → Cogito extra 1, 4 to tutor
+- Extra total = 12 → Cogito extra 2, 10 to tutor
+- Below-floor price → rejected (existing `validatePrices` handles this)
+
+**Depends on:** G16 (tutor payout) must use the corrected `computeSplit` output.
+
+---
+
+### Other PRD Requirements Not Yet Tracked
+
+These PRD requirements have no gap entry above but are not verified as implemented:
+
+| Ref | Requirement | Status | Action |
+| --- | ----------- | ------ | ------ |
+| FR-02 | Optional parent contact information on student profile | Not verified — check `studentProfile` schema + `auth.updateProfile` | Verify schema has parent contact fields; add to profile form if missing |
+| OQ-04 | Admin SLA escalation via WhatsApp (+62 881-0119-90195) — 30 min business hours, 4 hours outside | Not implemented — G1 support ticket creates the queue but no WhatsApp escalation | Add SLA timer + WhatsApp escalation to G1 support ticket flow |
+| PRD §Emergency Override UI/UX (prd.tex:717-728) | Full override form: category, reason, affected participants, Marks action (no change/release/compensate/reverse/partial/finance-followup), payment/ledger display, before/after preview, audit history, user-visible notification | G10 covers preview only; the full form UX is not specified | Track in FRONTEND-GAPS-SPEC (admin override form) |
+| G7 (rich-text sanitization) | PRD §Session Notes requires sanitized rich text (paragraphs, headings, lists, links, bold, italic) | G7 mentions storage but not sanitization | Add sanitization requirement to G7: use DOMPurify or similar before render; store editor JSON or sanitized HTML |
+
+---
+
 ## 3. Test Coverage Gaps
 
 These tests should be written during PRD gap implementation, not deferred:
@@ -538,7 +614,7 @@ These tests should be written during PRD gap implementation, not deferred:
 | Scheduler jobs (release holds, send email)   | Integration test with BullMQ                         | Medium   |
 | Tutor reschedule approval flow               | Integration test                                     | Medium   |
 | Offline room approval flow                   | Integration test                                     | Medium   |
-| Pricing extra-take calculation               | Unit test for 1-per-5-Marks rule                     | Medium   |
+| Pricing extra-take calculation (G19)          | Unit test for 1-per-5-Marks rule + above-floor split vs PRD examples | **High**   |
 | Notification matrix routing                  | Unit test for email vs in-app                        | Medium   |
 | Admin override with hold amount update       | Integration test                                     | Medium   |
 | Support ticket SLA tracking                  | Integration test                                     | Medium   |
@@ -589,8 +665,11 @@ All new endpoints must use these patterns established by the foundation-hardenin
 | Admin improvements (G8, G9, G10)                      | G8, G9, G10        | 4            |
 | Meeting + Room (G11, G12, G13, G14)                   | G11, G12, G13, G14 | 5            |
 | Payouts + Notifications + Series (G15, G16, G17, G18) | G15, G16, G17, G18 | 4.5          |
+| Pricing fix (G19)                                     | G19                | 1            |
 | Test coverage                                         | High-priority gaps | 3-4          |
-| **Total**                                             |                    | **~30 days** |
+| **Total (backend)**                                   |                    | **~31 days** |
+
+> Frontend gaps are tracked in `docs/plans/active/FRONTEND-GAPS-SPEC.md` and run in parallel.
 
 ---
 
@@ -598,3 +677,4 @@ All new endpoints must use these patterns established by the foundation-hardenin
 
 - v1.0 (2026-07-21): Created. 18 PRD gaps catalogued with specifications, acceptance tests, and timeline. Reference document for future `feature/prd-gaps` branch.
 - v1.1 (2026-07-27): Added "Established Patterns" section documenting foundation-hardening patterns that all new endpoints must use. Updated dependency line (consolidation merged → foundation-hardening).
+- v1.2 (2026-07-29): Codebase audit. Added G19 (pricing extra-take rule bug — `computeSplit` uses flat 20% instead of PRD's 1-per-5-Marks-above-baseline). Fixed G6 (proposeReschedule already exists but as student action, not tutor — reframed as role fix + add accept/reject). Fixed G7 (added sanitization requirement). Replaced G17 matrix with PRD source-of-truth matrix (prd.tex:912-955). Added "Other PRD Requirements Not Yet Tracked" section (FR-02 parent contact, OQ-04 WhatsApp SLA, full override form UX). Updated timeline to ~31 days. Marked scope as backend-only with reference to FRONTEND-GAPS-SPEC.md.
