@@ -114,7 +114,7 @@ export async function atomicRelease(
       heldBalance: sql`GREATEST(${wallet.heldBalance} - ${amount}, 0)`,
       availableBalance: sql`${wallet.availableBalance} + ${amount}`,
     })
-    .where(eq(wallet.id, walletId))
+    .where(and(eq(wallet.id, walletId), gte(wallet.heldBalance, amount)))
     .returning();
   return updated as WalletSnapshot;
 }
@@ -181,7 +181,7 @@ export async function atomicCompensateDeduct(
       totalBalance: sql`${wallet.totalBalance} - ${amount}`,
       availableBalance: sql`${wallet.availableBalance} - ${amount}`,
     })
-    .where(eq(wallet.id, walletId))
+    .where(and(eq(wallet.id, walletId), gte(wallet.availableBalance, amount)))
     .returning();
   return updated as WalletSnapshot;
 }
