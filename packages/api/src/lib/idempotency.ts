@@ -119,12 +119,14 @@ export class IdempotencyStore {
       return existing as Promise<T>;
     }
 
-    const promise = fn().then((result) => {
-      void this.markProcessed(key, result);
-      return result;
-    }).finally(() => {
-      this.inFlight.delete(key);
-    });
+    const promise = fn()
+      .then((result) => {
+        void this.markProcessed(key, result);
+        return result;
+      })
+      .finally(() => {
+        this.inFlight.delete(key);
+      });
 
     this.inFlight.set(key, promise);
     return promise as Promise<T>;

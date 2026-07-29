@@ -1,6 +1,6 @@
 {
-  "id": "20714db7-e60e-4ed3-bf55-24c504799a4d",
-  "prevId": "5fad5241-757b-42de-a60b-7085fc70a672",
+  "id": "12b064ba-4b30-432a-9586-e02ad6945bcd",
+  "prevId": "20714db7-e60e-4ed3-bf55-24c504799a4d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1063,6 +1063,27 @@
           "method": "btree",
           "with": {}
         },
+        "idx_booking_status_deadline": {
+          "name": "idx_booking_status_deadline",
+          "columns": [
+            {
+              "expression": "current_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "deadline_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "booking_seriesParentId_idx": {
           "name": "booking_seriesParentId_idx",
           "columns": [
@@ -1272,6 +1293,21 @@
             },
             {
               "expression": "confirmation_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_booking_participant_user": {
+          "name": "idx_booking_participant_user",
+          "columns": [
+            {
+              "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2808,6 +2844,27 @@
           "columns": [
             {
               "expression": "invite_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_tutor_profile_status_published": {
+          "name": "idx_tutor_profile_status_published",
+          "columns": [
+            {
+              "expression": "onboarding_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "published_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

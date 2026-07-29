@@ -61,7 +61,9 @@ describe("healthCheck", () => {
     mockExecute.mockResolvedValue([{ result: 1 }]);
     const failingRedis = {
       ...new InMemoryRedis(),
-      ping: async () => { throw new Error("connection refused"); },
+      ping: async () => {
+        throw new Error("connection refused");
+      },
     };
     const { healthCheck } = await import("../../lib/db-health");
     const result = await healthCheck(failingRedis);

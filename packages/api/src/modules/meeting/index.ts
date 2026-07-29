@@ -19,7 +19,11 @@ export function createMeetingModule(deps: {
   redis?: RedisClient;
 }): MeetingPort {
   if (deps.googleMeetEnabled && deps.googleConfig) {
-    return createGoogleMeetingProviderWithFallback(deps.googleConfig, deps.db, deps.redis);
+    return createGoogleMeetingProviderWithFallback(
+      deps.googleConfig,
+      deps.db,
+      deps.redis,
+    );
   }
   return createFallbackMeetingProvider(deps.db);
 }
