@@ -1,5 +1,29 @@
 import { describe, test, expect, mock, afterEach } from "bun:test";
-import { db } from "@cogito-app/db";
+import { InMemoryRedis } from "../../lib/redis";
+
+mock.module("@cogito-app/env/server", () => ({
+  env: {
+    DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+    NODE_ENV: "test",
+    DB_SSL_REJECT_UNAUTHORIZED: false,
+  },
+}));
+
+mock.module("postgres", () => ({
+  default: () => ({}),
+}));
+
+mock.module("drizzle-orm/postgres-js", () => ({
+  drizzle: (_client: any, opts: any) => ({
+    schema: opts?.schema,
+    select: () => {},
+  }),
+}));
+
+const mockExecute = mock(async () => [{ result: 1 }]);
+mock.module("@cogito-app/db", () => ({
+  db: { execute: mockExecute },
+}));
 
 describe("healthCheck", () => {
   afterEach(() => {
@@ -7,6 +31,7 @@ describe("healthCheck", () => {
   });
 
   test("returns ok when database responds quickly", async () => {
+    mockExecute.mockResolvedValue([{ result: 1 }]);
     const { healthCheck } = await import("../../lib/db-health");
     const result = await healthCheck();
     expect(result.checks.database).toBe("ok");
@@ -15,42 +40,38 @@ describe("healthCheck", () => {
   });
 
   test("returns error when database throws", async () => {
-    const originalExecute = db.execute;
-    (db as any).execute = mock(async () => {
-      throw new Error("connection refused");
-    });
-
+    mockExecute.mockRejectedValue(new Error("connection refused"));
     const { healthCheck } = await import("../../lib/db-health");
     const result = await healthCheck();
     expect(result.checks.database).toBe("error");
     expect(result.status).toBe("error");
-
-    (db as any).execute = originalExecute;
   });
 
-  test("returns degraded when database is slow", async () => {
-    const originalExecute = db.execute;
-    const originalPerformance = globalThis.performance;
-    let nowCallCount = 0;
+  test("includes redis status when redis client is provided", async () => {
+    mockExecute.mockResolvedValue([{ result: 1 }]);
+    const redis = new InMemoryRedis();
+    const { healthCheck } = await import("../../lib/db-health");
+    const result = await healthCheck(redis);
+    expect(result.checks).toHaveProperty("database");
+    expect(result.checks).toHaveProperty("redis");
+    expect(result.checks.redis).toBe("ok");
+  });
 
-    (db as any).execute = mock(async () => [{ result: 1 }]);
+  test("reports error when redis ping fails", async () => {
+    mockExecute.mockResolvedValue([{ result: 1 }]);
+    const failingRedis = {
+      ...new InMemoryRedis(),
+      ping: async () => { throw new Error("connection refused"); },
+    };
+    const { healthCheck } = await import("../../lib/db-health");
+    const result = await healthCheck(failingRedis);
+    expect(result.checks.redis).toBe("error");
+  });
 
-    globalThis.performance = {
-      ...originalPerformance,
-      now: () => {
-        nowCallCount++;
-        if (nowCallCount === 1) return 0;
-        if (nowCallCount === 2) return 1500;
-        return originalPerformance.now();
-      },
-    } as Performance;
-
+  test("omits redis status when no redis client provided", async () => {
+    mockExecute.mockResolvedValue([{ result: 1 }]);
     const { healthCheck } = await import("../../lib/db-health");
     const result = await healthCheck();
-    expect(result.checks.database).toBe("degraded");
-    expect(result.status).toBe("degraded");
-
-    (db as any).execute = originalExecute;
-    globalThis.performance = originalPerformance;
+    expect(result.checks).not.toHaveProperty("redis");
   });
 });

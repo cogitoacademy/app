@@ -240,7 +240,7 @@ export function createServer() {
       { parse: "none" },
     )
     .get("/health", async () => {
-      const result = await healthCheck();
+      const result = await healthCheck(redis);
       const status =
         result.status === "ok" ? 200 : result.status === "degraded" ? 200 : 503;
       return Response.json(result, { status });
