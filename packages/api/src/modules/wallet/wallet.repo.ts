@@ -4,6 +4,16 @@ import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { WalletSnapshot } from "./wallet.service";
 
+export const WALLET_COLUMNS = {
+  id: wallet.id,
+  userId: wallet.userId,
+  totalBalance: wallet.totalBalance,
+  heldBalance: wallet.heldBalance,
+  availableBalance: wallet.availableBalance,
+  createdAt: wallet.createdAt,
+  updatedAt: wallet.updatedAt,
+};
+
 export type AtomicResult =
   | { success: true; wallet: WalletSnapshot }
   | { success: false; reason: "insufficient_balance" | "insufficient_held" };
@@ -15,7 +25,7 @@ export async function getById(
   walletId: string,
 ): Promise<WalletSnapshot | null> {
   const [w] = await conn
-    .select()
+    .select(WALLET_COLUMNS)
     .from(wallet)
     .where(eq(wallet.id, walletId))
     .limit(1);
@@ -27,7 +37,7 @@ export async function getByUserId(
   userId: string,
 ): Promise<WalletSnapshot | null> {
   const [w] = await conn
-    .select()
+    .select(WALLET_COLUMNS)
     .from(wallet)
     .where(eq(wallet.userId, userId))
     .limit(1);
