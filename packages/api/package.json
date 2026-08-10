@@ -22,7 +22,7 @@
     "@orpc/server": "catalog:",
     "bullmq": "^6",
     "drizzle-orm": "catalog:",
-    "googleapis": "^173.0.0",
+    "googleapis": "^174.0.1",
     "zod": "catalog:"
   },
   "devDependencies": {
