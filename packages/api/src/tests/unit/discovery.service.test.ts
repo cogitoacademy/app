@@ -37,6 +37,7 @@ function makeRepo(overrides: Partial<DiscoveryRepo> = {}): DiscoveryRepo {
   return {
     listPublished: mock(async () => []),
     getProfileById: mock(async () => null),
+    listFutureAvailability: mock(async () => []),
     ...overrides,
   } as DiscoveryRepo;
 }
@@ -127,13 +128,30 @@ describe("Discovery Service", () => {
     test("returns projected profile when found", async () => {
       const profile = makeProfile();
       const getProfileById = mock(async () => profile);
-      const repo = makeRepo({ getProfileById });
+      const availabilitySlots = [
+        {
+          id: "slot1",
+          tutorId: "u1",
+          startDate: new Date("2026-09-01T09:00:00Z"),
+          endDate: new Date("2026-09-01T10:00:00Z"),
+          modality: "both",
+          isRecurring: false,
+          recurrenceRule: null,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+      const listFutureAvailability = mock(async () => availabilitySlots);
+      const repo = makeRepo({ getProfileById, listFutureAvailability });
 
       const service = createDiscoveryService({ repo });
       const result = await service.getProfile("tp1");
 
       expect(getProfileById).toHaveBeenCalledWith("tp1");
+      expect(listFutureAvailability).toHaveBeenCalledWith("u1");
       expect(result.id).toBe("tp1");
+      expect(result.availabilitySlots).toEqual(availabilitySlots);
     });
 
     test("throws TutorProfileNotFoundError when not found", async () => {

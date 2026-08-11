@@ -68,7 +68,8 @@ export function createDiscoveryService(deps: { repo: DiscoveryRepo }) {
   async function getProfile(tutorId: string) {
     const profile = await repo.getProfileById(tutorId);
     if (!profile) throw new TutorProfileNotFoundError(tutorId);
-    return buildProjection(profile);
+    const availabilitySlots = await repo.listFutureAvailability(profile.userId);
+    return { ...buildProjection(profile), availabilitySlots };
   }
 
   return { listPublished, getProfile };

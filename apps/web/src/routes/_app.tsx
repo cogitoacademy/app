@@ -42,7 +42,9 @@ function RouteComponent() {
 
   const title = pathname.startsWith("/bookings/")
     ? "Booking Details"
-    : (routeTitles[pathname] ?? "Dashboard");
+    : pathname.startsWith("/tutors/")
+      ? "Book a Session"
+      : (routeTitles[pathname] ?? "Dashboard");
 
   return (
     <Layout

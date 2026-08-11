@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
@@ -16,15 +16,8 @@ import {
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Select,
-  SelectItem,
-  SelectList,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@cogito-app/ui/components/selia/select";
 import { IconX } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -58,19 +51,12 @@ type TutorDrawerProps = {
 };
 
 export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
-  const [selectedModality, setSelectedModality] = useState("online");
-
   const lastTutorRef = useRef(tutor);
   if (tutor) lastTutorRef.current = tutor;
   const t = lastTutorRef.current;
   if (!t) return null;
 
   const selectedTutor = t;
-
-  const modalityOptions =
-    selectedTutor.modality === "both"
-      ? ["online", "offline"]
-      : [selectedTutor.modality ?? "online"];
 
   const prices = selectedTutor.prices ?? {};
   const priceEntries = Object.entries(prices).toSorted(
@@ -201,25 +187,9 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                 Book a session
               </Heading>
               <Text className="text-muted">
-                Select a modality and proceed to book.
+                Review current availability, choose a modality, and send a solo
+                booking request.
               </Text>
-              <Select
-                value={selectedModality}
-                onValueChange={(v) => setSelectedModality(v as string)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose modality" />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    {modalityOptions.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {MODALITY_LABELS[m] ?? m}
-                      </SelectItem>
-                    ))}
-                  </SelectList>
-                </SelectPopup>
-              </Select>
             </div>
           </>
 
@@ -228,6 +198,19 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           </DrawerDescription>
         </DrawerBody>
         <DrawerFooter>
+          <Button
+            block
+            nativeButton={false}
+            render={
+              <Link
+                to="/tutors/$tutorId/book"
+                params={{ tutorId: selectedTutor.id }}
+                aria-label={`Book ${t.displayName ?? t.user?.name ?? "tutor"}`}
+              />
+            }
+          >
+            Book a solo session
+          </Button>
           <DrawerClose
             render={<Button variant="secondary" aria-label="Close drawer" />}
           >
