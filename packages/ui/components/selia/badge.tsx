@@ -22,6 +22,7 @@ export const badgeVariants = cva(
         "warning-outline": "border-warning text-warning",
         danger: "bg-danger/15 text-danger",
         "danger-outline": "border-danger text-danger",
+        "danger-solid": "bg-danger text-white",
       },
       size: {
         sm: "px-1 h-5 rounded-sm text-xs [&_svg:not([class*=size-])]:size-3",
