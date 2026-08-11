@@ -276,7 +276,10 @@ function BookingStat({
 }
 
 function BookingListSkeleton() {
-  const placeholders = ["booking-skeleton-primary", "booking-skeleton-secondary"];
+  const placeholders = [
+    "booking-skeleton-primary",
+    "booking-skeleton-secondary",
+  ];
 
   return (
     <div className="grid gap-4" aria-label="Loading bookings">
