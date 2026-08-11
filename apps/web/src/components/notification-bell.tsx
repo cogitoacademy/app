@@ -88,25 +88,25 @@ export function NotificationBell() {
       <MenuTrigger
         render={
           <Button
-            variant="plain"
-            size="sm-icon"
+            variant="outline"
+            size="icon"
             aria-label="Notifications"
             data-slot="notification-trigger"
+            className="relative"
           />
         }
       >
-        <span className="relative">
-          <IconBell />
-          {unread > 0 && (
-            <Badge
-              variant="danger"
-              size="sm"
-              className="absolute -right-1.5 -top-1.5 min-w-[1.25rem] px-1 text-center text-[10px]"
-            >
-              {unread > 99 ? "99+" : unread}
-            </Badge>
-          )}
-        </span>
+        <IconBell className="h-[1.2rem] w-[1.2rem]" />
+        {unread > 0 ? (
+          <Badge
+            variant="danger"
+            size="sm"
+            className="absolute -right-1 -top-1 min-w-[1.25rem] px-1 text-center text-[10px]"
+          >
+            {unread > 99 ? "99+" : unread}
+          </Badge>
+        ) : null}
+        <span className="sr-only">Notifications</span>
       </MenuTrigger>
       <MenuPopup className="w-80 max-w-[calc(100vw-2rem)]">
         <div className="flex items-center justify-between px-3 py-2">
