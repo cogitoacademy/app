@@ -30,7 +30,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "recharts": "^3.4.1",
-    "sonner": "^1.5.0",
+    "sonner": "^2.0.7",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -38,7 +38,7 @@
     "@tanstack/react-query-devtools": "^5.91.1",
     "@tanstack/react-router-devtools": "^1.166.13",
     "@tanstack/router-plugin": "^1.167.22",
-    "@types/node": "^22.13.14",
+    "@types/node": "^26.1.2",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "^6.0.1",
