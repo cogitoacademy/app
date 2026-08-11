@@ -14,6 +14,7 @@ import { authClient } from "@/lib/auth-client";
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/balance": "Balance",
+  "/bookings": "My Bookings",
   "/achievements": "Achievements",
   "/tutors": "Tutors",
   "/profile": "Profile",
@@ -39,9 +40,13 @@ function RouteComponent() {
   const { session } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  const title = pathname.startsWith("/bookings/")
+    ? "Booking Details"
+    : (routeTitles[pathname] ?? "Dashboard");
+
   return (
     <Layout
-      title={routeTitles[pathname] ?? "Dashboard"}
+      title={title}
       sidebar={
         <AppSidebar
           userEmail={session.data?.user.email}

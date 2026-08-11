@@ -45,11 +45,11 @@ function RootComponent() {
       <HeadContent />
       <ThemeProvider
         attribute="class"
-        defaultTheme="dark"
+        defaultTheme="light"
         disableTransitionOnChange
         storageKey="vite-ui-theme"
       >
-        <div className="root grid grid-rows-[auto_1fr] h-svh">
+        <div className="root grid min-h-svh grid-rows-[auto_1fr]">
           <Outlet />
         </div>
         <Toast />

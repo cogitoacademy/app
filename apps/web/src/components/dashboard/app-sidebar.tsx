@@ -31,6 +31,7 @@ import {
 } from "@cogito-app/ui/components/selia/sidebar";
 import {
   IconCalendarEvent,
+  IconBrandWhatsapp,
   IconCertificate,
   IconCoins,
   IconHome,
@@ -65,6 +66,19 @@ const adminNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
+] as const;
+
+const resourceItems = [
+  {
+    href: "https://cogitoacademy.id/en/calendar",
+    label: "Competition Calendar",
+    icon: IconCalendarEvent,
+  },
+  {
+    href: "https://wa.me/6288101190195",
+    label: "WhatsApp Support",
+    icon: IconBrandWhatsapp,
+  },
 ] as const;
 
 export function AppSidebar({
@@ -105,14 +119,14 @@ export function AppSidebar({
     >
       <SidebarHeader>
         <SidebarLogo>
-          <IconBox variant="tertiary">
+          <IconBox variant="secondary">
             <img
               src="/c of cogito.png"
               alt="logo"
-              className="relative z-1 size-6 invert"
+              className="relative z-1 size-6"
             />
           </IconBox>
-          <span className="font-semibold">Cogito</span>
+          <span className="font-semibold">Cogito Academy</span>
         </SidebarLogo>
         <InputGroup className="mt-4">
           <InputGroupAddon>
@@ -152,6 +166,32 @@ export function AppSidebar({
               })}
             </SidebarList>
           </SidebarGroup>
+          <SidebarGroup>
+            <SidebarGroupTitle>Resources</SidebarGroupTitle>
+            <SidebarList>
+              {resourceItems.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <SidebarItem key={item.href}>
+                    <SidebarItemButton
+                      render={
+                        <a
+                          href={item.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={item.label}
+                        />
+                      }
+                    >
+                      <Icon />
+                      {item.label}
+                    </SidebarItemButton>
+                  </SidebarItem>
+                );
+              })}
+            </SidebarList>
+          </SidebarGroup>
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
@@ -161,7 +201,6 @@ export function AppSidebar({
               <Menu>
                 <MenuTrigger
                   data-slot="sidebar-item-button"
-                  nativeButton={false}
                   render={
                     <SidebarItemButton>
                       <Avatar>

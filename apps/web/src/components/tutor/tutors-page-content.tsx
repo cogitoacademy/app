@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { IconSearch } from "@tabler/icons-react";
 import {
   Card,
@@ -61,8 +61,8 @@ export function TutorsPageContent() {
   const [modality, setModality] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { data: tutors = [], isLoading } = useQuery(
-    orpc.tutors.listPublished.queryOptions({
+  const { data: tutors = [], isPending } = useQuery({
+    ...orpc.tutors.listPublished.queryOptions({
       search: search || undefined,
       expertise: expertise || undefined,
       modality: (modality || undefined) as
@@ -71,7 +71,8 @@ export function TutorsPageContent() {
         | "both"
         | undefined,
     }),
-  );
+    placeholderData: keepPreviousData,
+  });
 
   const selected = selectedId
     ? (tutors.find((t: PublishedTutor) => t.id === selectedId) ?? null)
@@ -133,10 +134,17 @@ export function TutorsPageContent() {
         </Select>
       </div>
 
-      {isLoading ? (
+      {isPending ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <TutorCardSkeleton key={i} />
+          {[
+            "tutor-skeleton-1",
+            "tutor-skeleton-2",
+            "tutor-skeleton-3",
+            "tutor-skeleton-4",
+            "tutor-skeleton-5",
+            "tutor-skeleton-6",
+          ].map((placeholder) => (
+            <TutorCardSkeleton key={placeholder} />
           ))}
         </div>
       ) : tutors.length === 0 ? (

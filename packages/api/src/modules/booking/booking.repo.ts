@@ -364,8 +364,18 @@ export function createBookingRepo(db: DbType) {
     return db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
       with: {
-        participants: { with: { user: true } },
-        stateHistory: true,
+        tutor: { columns: { id: true, name: true, image: true } },
+        proposer: { columns: { id: true, name: true, image: true } },
+        participants: {
+          with: {
+            user: { columns: { id: true, name: true, image: true } },
+          },
+        },
+        stateHistory: {
+          with: {
+            actor: { columns: { id: true, name: true, image: true } },
+          },
+        },
         meeting: true,
         roomBookings: { with: { room: true } },
       },
@@ -384,7 +394,14 @@ export function createBookingRepo(db: DbType) {
       where: and(...conditions),
       orderBy: [desc(booking.scheduledStartAt)],
       limit: opts.limit + 1,
-      with: { participants: { with: { user: true } } },
+      with: {
+        tutor: { columns: { id: true, name: true, image: true } },
+        participants: {
+          with: {
+            user: { columns: { id: true, name: true, image: true } },
+          },
+        },
+      },
     });
   }
 
