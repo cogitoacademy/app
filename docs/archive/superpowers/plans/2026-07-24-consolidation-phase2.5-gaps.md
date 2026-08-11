@@ -815,9 +815,7 @@ Replace `validateSubmitForReview:88`:
 ```ts
 if (profile.prices) {
   const modality = (profile.modality ?? MODALITY.ONLINE) as
-    | "online"
-    | "offline"
-    | "both";
+    "online" | "offline" | "both";
   const error = pricingPort.validatePrices(
     profile.prices as Record<string, number>,
     modality,

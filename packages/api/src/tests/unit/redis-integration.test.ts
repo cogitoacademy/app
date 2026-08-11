@@ -178,12 +178,12 @@ describe("IdempotencyStore with Redis", () => {
 });
 
 describe("rateLimit with Redis", () => {
-  test("rateLimit without redis uses in-memory path", () => {
+  test("rateLimit without redis uses in-memory path", async () => {
     const { rateLimit, resetRateLimitStore } = require("../../lib/rate-limit");
     resetRateLimitStore();
     const limiter = rateLimit({ windowMs: 60000, maxRequests: 2 });
-    expect(limiter("user1").allowed).toBe(true);
-    expect(limiter("user1").allowed).toBe(true);
-    expect(limiter("user1").allowed).toBe(false);
+    expect((await limiter("user1")).allowed).toBe(true);
+    expect((await limiter("user1")).allowed).toBe(true);
+    expect((await limiter("user1")).allowed).toBe(false);
   });
 });

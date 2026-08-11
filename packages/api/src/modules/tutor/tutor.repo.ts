@@ -30,19 +30,6 @@ export async function getByUserId(conn: DbOrTx, userId: string) {
   });
 }
 
-export async function updateProfile(
-  conn: DbOrTx,
-  userId: string,
-  input: UpdateProfileInput,
-) {
-  const [updated] = await conn
-    .update(tutorProfile)
-    .set(input)
-    .where(eq(tutorProfile.userId, userId))
-    .returning();
-  return updated;
-}
-
 export async function updateProfileWithVersion(
   conn: DbOrTx,
   userId: string,
@@ -138,7 +125,6 @@ export async function deleteAvailability(conn: DbOrTx, slotId: string) {
 export function createTutorRepo() {
   return {
     getByUserId,
-    updateProfile,
     updateProfileWithVersion,
     updateStatus,
     listAvailability,

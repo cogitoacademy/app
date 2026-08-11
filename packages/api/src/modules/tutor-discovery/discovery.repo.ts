@@ -21,9 +21,13 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
   }
 
   if (input.search) {
-    const q = `%${input.search}%`;
+    const escaped = input.search
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_");
+    const q = `%${escaped}%`;
     conditions.push(
-      sql`(lower(${tutorProfile.displayName}) like lower(${q}) or lower(${tutorProfile.shortBio}) like lower(${q}) or lower(${tutorProfile.credentialsSummary}) like lower(${q}))`,
+      sql`(lower(${tutorProfile.displayName}) like lower(${q}) escape '\\' or lower(${tutorProfile.shortBio}) like lower(${q}) escape '\\' or lower(${tutorProfile.credentialsSummary}) like lower(${q}) escape '\\')`,
     );
   }
 

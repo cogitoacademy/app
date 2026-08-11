@@ -1,5 +1,7 @@
 import { db } from "./lib/db";
 import { env } from "@cogito-app/env/server";
+import { initRedis } from "./lib/redis";
+import { initIdempotencyStores } from "./lib/idempotency";
 import { createAuditModule } from "./modules/audit";
 import { createPricingModule } from "./modules/pricing";
 import { createWalletModule } from "./modules/wallet";
@@ -91,12 +93,16 @@ export interface HandlerRegistry {
 }
 
 function createServices() {
+  const redis = initRedis(env.REDIS_URL);
+  initIdempotencyStores(redis);
+
   // Infrastructure modules
   const audit = createAuditModule();
   const pricing = createPricingModule();
   const email = createEmailModule({
     resendApiKey: env.RESEND_API_KEY,
     emailFrom: env.EMAIL_FROM,
+    redis,
   });
   const meeting = createMeetingModule({
     db,
@@ -113,6 +119,7 @@ function createServices() {
             calendarId: env.GOOGLE_CALENDAR_ID ?? "primary",
           }
         : undefined,
+    redis,
   });
 
   // Core modules
@@ -206,8 +213,8 @@ function createServices() {
     room: room.handler,
   };
 
-  return { services, handlers };
+  return { services, handlers, redis };
 }
 
-const { services, handlers } = createServices();
-export { services, handlers };
+const { services, handlers, redis } = createServices();
+export { services, handlers, redis };

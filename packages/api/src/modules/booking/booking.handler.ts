@@ -48,23 +48,20 @@ export function createBookingHandler(booking: BookingService) {
     }) => {
       const headerKey = context.headers.get("idempotency-key");
       const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${input.scheduledStartAt.toISOString()}:${headerKey ?? ""}`;
-      if (await bookingIdempotency.isProcessed(idempotencyKey)) {
-        return bookingIdempotency.getResult(idempotencyKey);
-      }
-      const result = await withDomainMap(
-        () =>
-          booking.createSolo(context.session!.user.id, {
-            tutorId: input.tutorId,
-            availabilitySlotId: input.availabilitySlotId,
-            modality: input.modality,
-            scheduledStartAt: input.scheduledStartAt,
-            scheduledEndAt: input.scheduledEndAt,
-            timezone: input.timezone,
-          }),
-        mapBookingError,
+      return bookingIdempotency.getOrSet(idempotencyKey, () =>
+        withDomainMap(
+          () =>
+            booking.createSolo(context.session!.user.id, {
+              tutorId: input.tutorId,
+              availabilitySlotId: input.availabilitySlotId,
+              modality: input.modality,
+              scheduledStartAt: input.scheduledStartAt,
+              scheduledEndAt: input.scheduledEndAt,
+              timezone: input.timezone,
+            }),
+          mapBookingError,
+        ),
       );
-      await bookingIdempotency.markProcessed(idempotencyKey, result);
-      return result;
     },
 
     get: async ({
@@ -140,25 +137,22 @@ export function createBookingHandler(booking: BookingService) {
     }) => {
       const headerKey = context.headers.get("idempotency-key");
       const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${input.scheduledStartAt.toISOString()}:${input.inviteeUserIds.join(",")}:${headerKey ?? ""}`;
-      if (await bookingIdempotency.isProcessed(idempotencyKey)) {
-        return bookingIdempotency.getResult(idempotencyKey);
-      }
-      const result = await withDomainMap(
-        () =>
-          booking.createGroup(context.session!.user.id, {
-            tutorId: input.tutorId,
-            availabilitySlotId: input.availabilitySlotId,
-            modality: input.modality,
-            targetGroupSize: input.targetGroupSize,
-            inviteeUserIds: input.inviteeUserIds,
-            scheduledStartAt: input.scheduledStartAt,
-            scheduledEndAt: input.scheduledEndAt,
-            timezone: input.timezone,
-          }),
-        mapBookingError,
+      return bookingIdempotency.getOrSet(idempotencyKey, () =>
+        withDomainMap(
+          () =>
+            booking.createGroup(context.session!.user.id, {
+              tutorId: input.tutorId,
+              availabilitySlotId: input.availabilitySlotId,
+              modality: input.modality,
+              targetGroupSize: input.targetGroupSize,
+              inviteeUserIds: input.inviteeUserIds,
+              scheduledStartAt: input.scheduledStartAt,
+              scheduledEndAt: input.scheduledEndAt,
+              timezone: input.timezone,
+            }),
+          mapBookingError,
+        ),
       );
-      await bookingIdempotency.markProcessed(idempotencyKey, result);
-      return result;
     },
 
     createSeries: async ({
@@ -173,22 +167,19 @@ export function createBookingHandler(booking: BookingService) {
         .map((s) => s.scheduledStartAt.toISOString())
         .join(",");
       const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${sessionsKey}:${headerKey ?? ""}`;
-      if (await bookingIdempotency.isProcessed(idempotencyKey)) {
-        return bookingIdempotency.getResult(idempotencyKey);
-      }
-      const result = await withDomainMap(
-        () =>
-          booking.createSeries(context.session!.user.id, {
-            tutorId: input.tutorId,
-            availabilitySlotId: input.availabilitySlotId,
-            modality: input.modality,
-            sessions: input.sessions,
-            timezone: input.timezone,
-          }),
-        mapBookingError,
+      return bookingIdempotency.getOrSet(idempotencyKey, () =>
+        withDomainMap(
+          () =>
+            booking.createSeries(context.session!.user.id, {
+              tutorId: input.tutorId,
+              availabilitySlotId: input.availabilitySlotId,
+              modality: input.modality,
+              sessions: input.sessions,
+              timezone: input.timezone,
+            }),
+          mapBookingError,
+        ),
       );
-      await bookingIdempotency.markProcessed(idempotencyKey, result);
-      return result;
     },
 
     confirmInvite: async ({
@@ -328,11 +319,7 @@ export function createTutorActionsHandler(booking: BookingService) {
     }) => {
       return withDomainMap(
         () =>
-          booking.completeSession(
-            input.bookingId,
-            context.session!.user.id,
-            input.sessionNote,
-          ),
+          booking.completeSession(input.bookingId, context.session!.user.id),
         mapBookingError,
       );
     },

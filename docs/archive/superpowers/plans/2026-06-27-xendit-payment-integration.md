@@ -40,12 +40,7 @@
 
 ```ts
 export type PaymentStatus =
-  | "PENDING"
-  | "PAID"
-  | "SETTLED"
-  | "FAILED"
-  | "EXPIRED"
-  | "REFUNDED";
+  "PENDING" | "PAID" | "SETTLED" | "FAILED" | "EXPIRED" | "REFUNDED";
 
 export interface WebhookPayload {
   providerReference: string;

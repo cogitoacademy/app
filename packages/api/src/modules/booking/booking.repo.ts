@@ -385,11 +385,14 @@ export function createBookingRepo(db: DbType) {
 
   async function listBookingsByProposer(
     proposerId: string,
-    opts: { states?: string[]; limit: number },
+    opts: { states?: string[]; limit: number; cursor?: string },
   ) {
     const conditions = [eq(booking.proposerId, proposerId)];
     if (opts.states?.length) {
       conditions.push(inArray(booking.currentState, opts.states));
+    }
+    if (opts.cursor) {
+      conditions.push(lt(booking.scheduledStartAt, new Date(opts.cursor)));
     }
     return db.query.booking.findMany({
       where: and(...conditions),

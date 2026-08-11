@@ -7,6 +7,7 @@ import {
   updatePaymentStatus,
   updateBookingHoldAmount,
   createAdminBookingRepo,
+  listBookingsByState,
 } from "../../modules/admin-booking/admin-booking.repo";
 
 function makeUpdateConn(returned: any[] = [{}]) {
@@ -165,6 +166,60 @@ describe("admin-booking.repo", () => {
       expect(typeof repo.findPaymentById).toBe("function");
       expect(typeof repo.updatePaymentStatus).toBe("function");
       expect(typeof repo.updateBookingHoldAmount).toBe("function");
+    });
+  });
+
+  describe("listBookingsByState", () => {
+    function makeSelectConn(rows: any[] = []) {
+      const limit = mock(async () => rows);
+      const orderBy = mock(() => ({ limit }));
+      const where = mock(() => ({ orderBy }));
+      const from = mock(() => ({ where }));
+      const select = mock(() => ({ from }));
+      return { select, from, where, orderBy, limit };
+    }
+
+    test("queries without cursor when cursor is undefined", async () => {
+      const rows = [{ id: "b1" }, { id: "b2" }];
+      const conn = makeSelectConn(rows) as any;
+
+      const result = await listBookingsByState(conn, [], 2);
+      expect(result).toEqual(rows);
+    });
+
+    test("queries without states when states is empty", async () => {
+      const rows = [{ id: "b1" }];
+      const conn = makeSelectConn(rows) as any;
+
+      const result = await listBookingsByState(conn, [], 1);
+      expect(result).toEqual(rows);
+    });
+
+    test("queries with states filter", async () => {
+      const rows = [{ id: "b1", currentState: "confirmed" }];
+      const conn = makeSelectConn(rows) as any;
+
+      const result = await listBookingsByState(conn, ["confirmed"], 1);
+      expect(result).toEqual(rows);
+      expect(conn.where).toHaveBeenCalled();
+    });
+
+    test("queries with cursor filter", async () => {
+      const rows = [{ id: "b5" }, { id: "b6" }];
+      const conn = makeSelectConn(rows) as any;
+
+      const result = await listBookingsByState(conn, [], 2, "b4");
+      expect(result).toEqual(rows);
+      expect(conn.where).toHaveBeenCalled();
+    });
+
+    test("queries with both states and cursor filter", async () => {
+      const rows = [{ id: "b5", currentState: "confirmed" }];
+      const conn = makeSelectConn(rows) as any;
+
+      const result = await listBookingsByState(conn, ["confirmed"], 1, "b4");
+      expect(result).toEqual(rows);
+      expect(conn.where).toHaveBeenCalled();
     });
   });
 });

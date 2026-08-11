@@ -5,6 +5,7 @@ import type { MeetingEvent, MeetingPort } from "./meeting.types";
 import { log } from "../../lib/logger";
 import { createFallbackMeetingProvider } from "./fallback.provider";
 import { CircuitBreaker } from "../../lib/circuit-breaker";
+import type { RedisClient } from "../../lib/redis";
 
 interface GoogleMeetingConfig {
   clientEmail: string;
@@ -12,25 +13,26 @@ interface GoogleMeetingConfig {
   calendarId: string;
 }
 
-const googleMeetBreaker = new CircuitBreaker({
-  failureThreshold: 5,
-  resetTimeoutMs: 60_000,
-  halfOpenMaxAttempts: 1,
-  monitor: (state, error) => {
-    log({
-      level: state === "open" ? "error" : "info",
-      action: "circuit_breaker_state_change",
-      service: "google_meet",
-      state,
-      error: error ? { message: String(error) } : undefined,
-    });
-  },
-});
-
 export function createGoogleMeetingProvider(
   config: GoogleMeetingConfig,
   db: DbOrTx,
+  redis?: RedisClient,
 ): MeetingPort {
+  const googleMeetBreaker = new CircuitBreaker({
+    failureThreshold: 5,
+    resetTimeoutMs: 60_000,
+    halfOpenMaxAttempts: 1,
+    redis: redis ?? undefined,
+    monitor: (state, error) => {
+      log({
+        level: state === "open" ? "error" : "info",
+        action: "circuit_breaker_state_change",
+        service: "google_meet",
+        state,
+        error: error ? { message: String(error) } : undefined,
+      });
+    },
+  });
   const auth = new google.auth.JWT({
     email: config.clientEmail,
     key: config.privateKey.replace(/\\n/g, "\n"),
@@ -140,8 +142,9 @@ export function createGoogleMeetingProvider(
 export function createGoogleMeetingProviderWithFallback(
   config: GoogleMeetingConfig,
   db: DbOrTx,
+  redis?: RedisClient,
 ): MeetingPort {
-  const googleProvider = createGoogleMeetingProvider(config, db);
+  const googleProvider = createGoogleMeetingProvider(config, db, redis);
   const fallbackProvider = createFallbackMeetingProvider(db);
 
   async function createEvent(

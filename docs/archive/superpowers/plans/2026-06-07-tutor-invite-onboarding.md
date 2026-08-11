@@ -1983,12 +1983,7 @@ const STATUS_BADGE: Record<
   {
     label: string;
     variant:
-      | "primary"
-      | "secondary"
-      | "danger"
-      | "warning"
-      | "success"
-      | "info";
+      "primary" | "secondary" | "danger" | "warning" | "success" | "info";
   }
 > = {
   draft: { label: "Draft", variant: "secondary" },

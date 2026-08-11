@@ -1,12 +1,12 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                          |
-| ---------- | ---------------------------------------------- |
-| Status     | Planning reference                             |
+| Field      | Value                                         |
+| ---------- | --------------------------------------------- |
+| Status     | Planning reference                            |
 | Branch     | `feature/frontend-gaps` (future)              |
-| Created    | 2026-07-29                                     |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed  |
-| Scope      | Frontend only (`apps/web/`)                    |
+| Created    | 2026-07-29                                    |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed |
+| Scope      | Frontend only (`apps/web/`)                   |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
@@ -18,22 +18,22 @@ The backend spec is `docs/plans/active/PRD-GAPS-SPEC.md` (backend-only). This is
 
 ### Existing routes (`apps/web/src/routes/`)
 
-| Route                  | Component                        | Status |
-| ---------------------- | -------------------------------- | ------ |
-| `/` (index)            | Landing redirect                 | Exists |
-| `/login`               | sign-in-form.tsx                 | Exists |
-| `/auth/callback`       | auth callback                    | Exists |
-| `/invite`              | invite-claim-page.tsx            | Exists |
-| `/_app`                | App layout + sidebar             | Exists |
-| `/_app/dashboard`      | dashboard/page.tsx               | Exists (stats only) |
-| `/_app/balance`        | balance-page.tsx                 | Exists (wallet + Knowledge Bank card) |
-| `/_app/bookings`       | bookings-page.tsx               | Exists (list + cancel only) |
-| `/_app/tutors`         | tutors-page-content.tsx          | Exists (discovery list) |
-| `/_app/achievements`    | achivements-page.tsx             | Exists (submission + list) |
-| `/_app/profile`        | profile-page.tsx                 | Exists (incl. parent contact fields) |
-| `/_app/onboarding`     | onboarding-form.tsx              | Exists (tutor onboarding) |
-| `/_app/tutor-bookings` | tutor-bookings-page.tsx          | Exists (accept/decline only) |
-| `/_app/admin-tutors`   | admin tutor invite + review      | Exists |
+| Route                  | Component                   | Status                                |
+| ---------------------- | --------------------------- | ------------------------------------- |
+| `/` (index)            | Landing redirect            | Exists                                |
+| `/login`               | sign-in-form.tsx            | Exists                                |
+| `/auth/callback`       | auth callback               | Exists                                |
+| `/invite`              | invite-claim-page.tsx       | Exists                                |
+| `/_app`                | App layout + sidebar        | Exists                                |
+| `/_app/dashboard`      | dashboard/page.tsx          | Exists (stats only)                   |
+| `/_app/balance`        | balance-page.tsx            | Exists (wallet + Knowledge Bank card) |
+| `/_app/bookings`       | bookings-page.tsx           | Exists (list + cancel only)           |
+| `/_app/tutors`         | tutors-page-content.tsx     | Exists (discovery list)               |
+| `/_app/achievements`   | achivements-page.tsx        | Exists (submission + list)            |
+| `/_app/profile`        | profile-page.tsx            | Exists (incl. parent contact fields)  |
+| `/_app/onboarding`     | onboarding-form.tsx         | Exists (tutor onboarding)             |
+| `/_app/tutor-bookings` | tutor-bookings-page.tsx     | Exists (accept/decline only)          |
+| `/_app/admin-tutors`   | admin tutor invite + review | Exists                                |
 
 ### What's missing (no route, no component)
 
@@ -43,25 +43,25 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 ## Frontend Gap Summary
 
-| #   | Gap                                          | PRD Ref         | Depends on (backend) | Effort | Priority |
-| --- | -------------------------------------------- | -------------- | -------------------- | ------ | -------- |
-| F1  | Admin dashboard + override queue              | FR-10, OQ-04   | G8, G9, G10          | 3d     | High     |
-| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10         | 2d     | High     |
-| F3  | Report tutor lateness/no-show button         | FR-14, DL-26   | G1                   | 1d     | High     |
-| F4  | Competition Calendar link                    | FR-11          | None (external link) | 0.5d   | Medium   |
-| F5  | WhatsApp support button                      | FR-14, OQ-04   | None (external link) | 0.5d   | Medium   |
-| F6  | Tutor reschedule proposal UI                 | FR-15          | G6                   | 1d     | Medium   |
-| F7  | Student reschedule approval UI               | FR-15          | G6                   | 1d     | Medium   |
-| F8  | Series session completion UI                 | FR-20          | G18                  | 1d     | Medium   |
-| F9  | Session notes (rich-text) view + add         | FR-09, DL-18   | G7                   | 1.5d   | Low      |
-| F10 | Notifications page                           | FR-17          | G17                  | 1.5d   | Medium   |
-| F11 | Admin wallet/ledger view                     | FR-10          | G9                   | 1d     | Medium   |
-| F12 | Admin room approval UI                       | FR-22          | G14                  | 1d     | Low      |
-| F13 | Tutor payout view                             | DL-11          | G16                  | 0.5d   | Medium   |
-| F14 | Group series no opt-out disclaimer display   | FR-20          | G15                  | 0.5d   | Low      |
-| F15 | Knowledge Bank gating flow (full)            | FR-12          | Partial (wallet.knowledgeBankEligible exists) | 0.5d | Medium |
-| F16 | Achievements public landing surfacing         | FR-18          | None (public site)   | 1d     | Low      |
-| F17 | Booking detail page (full)                   | FR-07, FR-08   | G6, G11              | 2d     | High     |
+| #   | Gap                                           | PRD Ref                | Depends on (backend)                          | Effort | Priority |
+| --- | --------------------------------------------- | ---------------------- | --------------------------------------------- | ------ | -------- |
+| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                   | 3d     | High     |
+| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                           | 2d     | High     |
+| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                            | 1d     | High     |
+| F4  | Competition Calendar link                     | FR-11                  | None (external link)                          | 0.5d   | Medium   |
+| F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                          | 0.5d   | Medium   |
+| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                            | 1d     | Medium   |
+| F7  | Student reschedule approval UI                | FR-15                  | G6                                            | 1d     | Medium   |
+| F8  | Series session completion UI                  | FR-20                  | G18                                           | 1d     | Medium   |
+| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                            | 1.5d   | Low      |
+| F10 | Notifications page                            | FR-17                  | G17                                           | 1.5d   | Medium   |
+| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                            | 1d     | Medium   |
+| F12 | Admin room approval UI                        | FR-22                  | G14                                           | 1d     | Low      |
+| F13 | Tutor payout view                             | DL-11                  | G16                                           | 0.5d   | Medium   |
+| F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                           | 0.5d   | Low      |
+| F15 | Knowledge Bank gating flow (full)             | FR-12                  | Partial (wallet.knowledgeBankEligible exists) | 0.5d   | Medium   |
+| F16 | Achievements public landing surfacing         | FR-18                  | None (public site)                            | 1d     | Low      |
+| F17 | Booking detail page (full)                    | FR-07, FR-08           | G6, G11                                       | 2d     | High     |
 
 **Total estimated effort: ~20 days (frontend)**
 

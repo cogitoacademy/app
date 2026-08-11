@@ -1,9 +1,11 @@
 import type { Queue } from "bullmq";
 
-const JOB_NAME = "release-expired-holds";
-const REPEAT_INTERVAL_MS = 10 * 60 * 1000;
+const JOB_NAME = "send-notification-email";
+const REPEAT_INTERVAL_MS = 60_000;
 
-export async function scheduleHoldReleaseCheck(queue: Queue): Promise<void> {
+export async function scheduleSendNotificationEmail(
+  queue: Queue,
+): Promise<void> {
   await queue.upsertJobScheduler(
     JOB_NAME,
     { every: REPEAT_INTERVAL_MS },

@@ -2,6 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { createContext } from "@cogito-app/api/context";
 import { appRouter } from "@cogito-app/api/routers";
 import { rateLimit } from "@cogito-app/api/lib/rate-limit";
+import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
 import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth } from "@cogito-app/auth";
@@ -24,15 +25,19 @@ import { generateRequestId } from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { healthCheck } from "@cogito-app/api/lib/db-health";
 
+const redis = getRedisClient();
+
 const authRateLimit = rateLimit({
   windowMs: 60_000,
   maxRequests: 10,
   keyPrefix: "auth",
+  redis,
 });
 const paymentRateLimit = rateLimit({
   windowMs: 60_000,
   maxRequests: 5,
   keyPrefix: "payment",
+  redis,
 });
 
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -153,7 +158,7 @@ export function createServer() {
         );
       }
     })
-    .onRequest(({ request }) => {
+    .onRequest(async ({ request }) => {
       const url = new URL(request.url);
       const path = url.pathname;
       const ip =
@@ -162,7 +167,7 @@ export function createServer() {
         "unknown";
 
       if (path.startsWith("/rpc/auth.")) {
-        const { allowed, retryAfterMs } = authRateLimit(ip);
+        const { allowed, retryAfterMs } = await authRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
             status: 429,
@@ -175,7 +180,7 @@ export function createServer() {
       }
 
       if (path === "/rpc/payment.createIntent") {
-        const { allowed, retryAfterMs } = paymentRateLimit(ip);
+        const { allowed, retryAfterMs } = await paymentRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
             status: 429,
@@ -241,7 +246,7 @@ export function createServer() {
       { parse: "none" },
     )
     .get("/health", async () => {
-      const result = await healthCheck();
+      const result = await healthCheck(redis);
       const status =
         result.status === "ok" ? 200 : result.status === "degraded" ? 200 : 503;
       return Response.json(result, { status });

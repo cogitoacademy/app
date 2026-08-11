@@ -83,6 +83,7 @@ export function createPaymentService(deps: {
     const existing = await repo.findPaymentByProviderReference(idempotencyKey);
     if (existing) {
       if (existing.status === PAYMENT_STATUS.PENDING) {
+        // TODO(H14): Store checkoutUrl in paymentRecord to avoid re-calling provider
         const existingIntent = await provider.createIntent({
           paymentId: existing.id,
           amountIdr: pkg.priceIdr,

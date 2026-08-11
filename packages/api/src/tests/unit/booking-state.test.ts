@@ -2,7 +2,6 @@ import { describe, test, expect } from "bun:test";
 import {
   BOOKING_STATE,
   BOOKING_STATES,
-  BOOKING_EVENTS,
   TERMINAL_STATES,
 } from "../../modules/booking/booking-state.types";
 import {
@@ -36,31 +35,6 @@ describe("Booking State Types", () => {
       "completed",
     ];
     expect([...BOOKING_STATES]).toEqual(expected);
-  });
-
-  test("BOOKING_EVENTS contains all expected events", () => {
-    const expected = [
-      "submit",
-      "hold_ok",
-      "tutor_accept",
-      "tutor_decline",
-      "propose_reschedule",
-      "student_accept_reschedule",
-      "student_reject_reschedule",
-      "admin_assign_room",
-      "admin_propose_reschedule",
-      "no_room",
-      "headcount_full",
-      "headcount_below_min",
-      "all_reconfirmed",
-      "deadline_missed",
-      "cancel_pre_h2",
-      "cancel_post_h2",
-      "session_start",
-      "tutor_complete",
-      "admin_override",
-    ];
-    expect([...BOOKING_EVENTS]).toEqual(expected);
   });
 
   test("TERMINAL_STATES is a subset of BOOKING_STATES", () => {

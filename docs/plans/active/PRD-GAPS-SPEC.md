@@ -25,27 +25,27 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 ## 1. Gap Summary
 
-| #   | Gap                                       | PRD Ref      | Priority | Effort | Module        |
-| --- | ----------------------------------------- | ------------ | -------- | ------ | ------------- |
-| G1  | Report tutor lateness/no-show             | FR-14, DL-26 | High     | 3d     | support       |
-| G2  | 12-hour deadline enforcement by scheduler | DL-25        | High     | 2d     | scheduler     |
-| G3  | 15-minute lateness auto-cancel            | DL-26, OQ-07 | High     | 2d     | scheduler     |
-| G4  | Group repricing recalculation             | FR-16        | High     | 2d     | booking       |
-| G5  | Series cancellation rules                 | FR-20        | Medium   | 2d     | booking       |
-| G6  | Tutor reschedule with student approval    | FR-15        | Medium   | 1d     | booking       |
-| G7  | Rich-text session notes                   | FR-09, DL-18 | Low      | 1d     | booking       |
-| G8  | Admin override queue with urgency         | FR-10        | Medium   | 2d     | admin-booking |
-| G9  | Admin wallet/ledger view                  | FR-10        | Medium   | 1d     | admin-booking |
-| G10 | Before/after override preview             | FR-10        | Medium   | 1d     | admin-booking |
-| G11 | Meeting link visibility gating            | FR-21        | High     | 1d     | meeting       |
-| G12 | Google Meet attendee automation           | FR-21, OQ-05 | Medium   | 2d     | meeting       |
-| G13 | Offline room availability                 | FR-22        | Low      | 1d     | room          |
-| G14 | Admin room approval                       | FR-22        | Low      | 1d     | room          |
-| G15 | Group series no opt-out disclaimer        | FR-20        | Low      | 0.5d   | booking       |
-| G16 | Tutor payout calculation                  | DL-11        | Medium   | 1d     | wallet        |
-| G17 | Full notification matrix                  | FR-17        | Medium   | 2d     | notification  |
-| G18 | Series session completion                 | FR-20        | Medium   | 1d     | booking       |
-| G19 | Pricing extra-take rule (above-baseline)  | FR-05, FR-19, DL-22, TC-06 | High | 1d | pricing |
+| #   | Gap                                       | PRD Ref                    | Priority | Effort | Module        |
+| --- | ----------------------------------------- | -------------------------- | -------- | ------ | ------------- |
+| G1  | Report tutor lateness/no-show             | FR-14, DL-26               | High     | 3d     | support       |
+| G2  | 12-hour deadline enforcement by scheduler | DL-25                      | High     | 2d     | scheduler     |
+| G3  | 15-minute lateness auto-cancel            | DL-26, OQ-07               | High     | 2d     | scheduler     |
+| G4  | Group repricing recalculation             | FR-16                      | High     | 2d     | booking       |
+| G5  | Series cancellation rules                 | FR-20                      | Medium   | 2d     | booking       |
+| G6  | Tutor reschedule with student approval    | FR-15                      | Medium   | 1d     | booking       |
+| G7  | Rich-text session notes                   | FR-09, DL-18               | Low      | 1d     | booking       |
+| G8  | Admin override queue with urgency         | FR-10                      | Medium   | 2d     | admin-booking |
+| G9  | Admin wallet/ledger view                  | FR-10                      | Medium   | 1d     | admin-booking |
+| G10 | Before/after override preview             | FR-10                      | Medium   | 1d     | admin-booking |
+| G11 | Meeting link visibility gating            | FR-21                      | High     | 1d     | meeting       |
+| G12 | Google Meet attendee automation           | FR-21, OQ-05               | Medium   | 2d     | meeting       |
+| G13 | Offline room availability                 | FR-22                      | Low      | 1d     | room          |
+| G14 | Admin room approval                       | FR-22                      | Low      | 1d     | room          |
+| G15 | Group series no opt-out disclaimer        | FR-20                      | Low      | 0.5d   | booking       |
+| G16 | Tutor payout calculation                  | DL-11                      | Medium   | 1d     | wallet        |
+| G17 | Full notification matrix                  | FR-17                      | Medium   | 2d     | notification  |
+| G18 | Series session completion                 | FR-20                      | Medium   | 1d     | booking       |
+| G19 | Pricing extra-take rule (above-baseline)  | FR-05, FR-19, DL-22, TC-06 | High     | 1d     | pricing       |
 
 **Total estimated effort: ~25 days (backend)**
 
@@ -472,22 +472,22 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 Implement the full notification matrix **as defined in the PRD** (prd.tex:912-955). The PRD matrix is the source of truth — any discrepancy between this spec and the PRD, the PRD wins:
 
-| Event                                      | In-App | Email | Email Recipient | Notes (from PRD) |
-| ------------------------------------------ | ------ | ----- | ---------------- | ---------------- |
-| Booking request created                    | ✅     | ✅    | Tutor only       | Action required by tutor |
-| Account created                             | ✅     | ✅    | New student      | Signup confirmation, onboarding entry, login link, brief intro |
-| Group session or series invitation received | ✅    | ✅    | Registered invitees | Email must include full schedule, per-student price, total Marks hold, direct CTA. Phase 0 invitations only to registered users |
-| Student or group has confirmed a booking   | ✅     | ✅    | Assigned tutor   | Tutor prep notice. Include student/group name, session type, date, time. For series, list all session dates/times |
-| Booking accepted / declined                 | ✅     | ✅    | Student only     | Critical booking outcome |
-| Online meeting link created                 | ✅     | ✅    | Tutor + confirmed students | Sent only after all required participant, tutor, and admin conditions complete |
-| Offline room confirmed / relocated / cancelled | ✅  | ✅    | Tutor + confirmed students | Critical operational notices |
-| Student cancel before H-2                   | ✅     | ✅    | Affected participants | Schedule-affecting change |
-| Late cancel / no-show / emergency override  | ✅     | ✅    | Affected participants | Penalty or correction event |
-| Tutor reschedule proposed / approved        | ✅     | ✅    | Affected participants | Requires student approval |
-| Group repricing / reconfirmation request     | ✅     | ✅    | All current participants | Cost changes must be explicit |
-| Payment / refund / emergency refund         | ✅     | ✅    | Payer             | Wallet event |
-| Achievement submitted / reviewed             | ✅    | ❌    | —                | Keep review traffic in-app |
-| Reminder / non-critical update               | ✅    | ❌    | —                | Never consumes email quota |
+| Event                                          | In-App | Email | Email Recipient            | Notes (from PRD)                                                                                                                |
+| ---------------------------------------------- | ------ | ----- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Booking request created                        | ✅     | ✅    | Tutor only                 | Action required by tutor                                                                                                        |
+| Account created                                | ✅     | ✅    | New student                | Signup confirmation, onboarding entry, login link, brief intro                                                                  |
+| Group session or series invitation received    | ✅     | ✅    | Registered invitees        | Email must include full schedule, per-student price, total Marks hold, direct CTA. Phase 0 invitations only to registered users |
+| Student or group has confirmed a booking       | ✅     | ✅    | Assigned tutor             | Tutor prep notice. Include student/group name, session type, date, time. For series, list all session dates/times               |
+| Booking accepted / declined                    | ✅     | ✅    | Student only               | Critical booking outcome                                                                                                        |
+| Online meeting link created                    | ✅     | ✅    | Tutor + confirmed students | Sent only after all required participant, tutor, and admin conditions complete                                                  |
+| Offline room confirmed / relocated / cancelled | ✅     | ✅    | Tutor + confirmed students | Critical operational notices                                                                                                    |
+| Student cancel before H-2                      | ✅     | ✅    | Affected participants      | Schedule-affecting change                                                                                                       |
+| Late cancel / no-show / emergency override     | ✅     | ✅    | Affected participants      | Penalty or correction event                                                                                                     |
+| Tutor reschedule proposed / approved           | ✅     | ✅    | Affected participants      | Requires student approval                                                                                                       |
+| Group repricing / reconfirmation request       | ✅     | ✅    | All current participants   | Cost changes must be explicit                                                                                                   |
+| Payment / refund / emergency refund            | ✅     | ✅    | Payer                      | Wallet event                                                                                                                    |
+| Achievement submitted / reviewed               | ✅     | ❌    | —                          | Keep review traffic in-app                                                                                                      |
+| Reminder / non-critical update                 | ✅     | ❌    | —                          | Never consumes email quota                                                                                                      |
 
 **Implementation notes:**
 
@@ -590,12 +590,12 @@ The constant `EXTRA_TAKE_DIVISOR = 5` is defined in `packages/api/src/shared/con
 
 These PRD requirements have no gap entry above but are not verified as implemented:
 
-| Ref | Requirement | Status | Action |
-| --- | ----------- | ------ | ------ |
-| FR-02 | Optional parent contact information on student profile | Not verified — check `studentProfile` schema + `auth.updateProfile` | Verify schema has parent contact fields; add to profile form if missing |
-| OQ-04 | Admin SLA escalation via WhatsApp (+62 881-0119-90195) — 30 min business hours, 4 hours outside | Not implemented — G1 support ticket creates the queue but no WhatsApp escalation | Add SLA timer + WhatsApp escalation to G1 support ticket flow |
-| PRD §Emergency Override UI/UX (prd.tex:717-728) | Full override form: category, reason, affected participants, Marks action (no change/release/compensate/reverse/partial/finance-followup), payment/ledger display, before/after preview, audit history, user-visible notification | G10 covers preview only; the full form UX is not specified | Track in FRONTEND-GAPS-SPEC (admin override form) |
-| G7 (rich-text sanitization) | PRD §Session Notes requires sanitized rich text (paragraphs, headings, lists, links, bold, italic) | G7 mentions storage but not sanitization | Add sanitization requirement to G7: use DOMPurify or similar before render; store editor JSON or sanitized HTML |
+| Ref                                             | Requirement                                                                                                                                                                                                                       | Status                                                                           | Action                                                                                                          |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| FR-02                                           | Optional parent contact information on student profile                                                                                                                                                                            | Not verified — check `studentProfile` schema + `auth.updateProfile`              | Verify schema has parent contact fields; add to profile form if missing                                         |
+| OQ-04                                           | Admin SLA escalation via WhatsApp (+62 881-0119-90195) — 30 min business hours, 4 hours outside                                                                                                                                   | Not implemented — G1 support ticket creates the queue but no WhatsApp escalation | Add SLA timer + WhatsApp escalation to G1 support ticket flow                                                   |
+| PRD §Emergency Override UI/UX (prd.tex:717-728) | Full override form: category, reason, affected participants, Marks action (no change/release/compensate/reverse/partial/finance-followup), payment/ledger display, before/after preview, audit history, user-visible notification | G10 covers preview only; the full form UX is not specified                       | Track in FRONTEND-GAPS-SPEC (admin override form)                                                               |
+| G7 (rich-text sanitization)                     | PRD §Session Notes requires sanitized rich text (paragraphs, headings, lists, links, bold, italic)                                                                                                                                | G7 mentions storage but not sanitization                                         | Add sanitization requirement to G7: use DOMPurify or similar before render; store editor JSON or sanitized HTML |
 
 ---
 
@@ -603,25 +603,25 @@ These PRD requirements have no gap entry above but are not verified as implement
 
 These tests should be written during PRD gap implementation, not deferred:
 
-| Area                                         | Tests Needed                                         | Priority |
-| -------------------------------------------- | ---------------------------------------------------- | -------- |
-| Booking state machine (all transitions)      | Integration test covering every `canTransition` path | High     |
-| Wallet concurrency (parallel holds/releases) | Concurrent operation test with 5+ parallel holds     | High     |
-| Group repricing recalculation                | Integration test for headcount change → price update | High     |
-| Series no opt-out enforcement                | Unit + integration test                              | High     |
-| Payment idempotency race condition           | Concurrent webhook test (2 identical webhooks)       | High     |
-| 12-hour deadline enforcement                 | Scheduler integration test                           | Medium   |
-| Scheduler jobs (release holds, send email)   | Integration test with BullMQ                         | Medium   |
-| Tutor reschedule approval flow               | Integration test                                     | Medium   |
-| Offline room approval flow                   | Integration test                                     | Medium   |
-| Pricing extra-take calculation (G19)          | Unit test for 1-per-5-Marks rule + above-floor split vs PRD examples | **High**   |
-| Notification matrix routing                  | Unit test for email vs in-app                        | Medium   |
-| Admin override with hold amount update       | Integration test                                     | Medium   |
-| Support ticket SLA tracking                  | Integration test                                     | Medium   |
-| Series session completion                    | Integration test                                     | Medium   |
-| Circuit breaker open/close cycles            | Unit test                                            | Low      |
-| Rate limiting effectiveness                  | Integration test                                     | Low      |
-| Auth session caching                         | Integration test                                     | Low      |
+| Area                                         | Tests Needed                                                         | Priority |
+| -------------------------------------------- | -------------------------------------------------------------------- | -------- |
+| Booking state machine (all transitions)      | Integration test covering every `canTransition` path                 | High     |
+| Wallet concurrency (parallel holds/releases) | Concurrent operation test with 5+ parallel holds                     | High     |
+| Group repricing recalculation                | Integration test for headcount change → price update                 | High     |
+| Series no opt-out enforcement                | Unit + integration test                                              | High     |
+| Payment idempotency race condition           | Concurrent webhook test (2 identical webhooks)                       | High     |
+| 12-hour deadline enforcement                 | Scheduler integration test                                           | Medium   |
+| Scheduler jobs (release holds, send email)   | Integration test with BullMQ                                         | Medium   |
+| Tutor reschedule approval flow               | Integration test                                                     | Medium   |
+| Offline room approval flow                   | Integration test                                                     | Medium   |
+| Pricing extra-take calculation (G19)         | Unit test for 1-per-5-Marks rule + above-floor split vs PRD examples | **High** |
+| Notification matrix routing                  | Unit test for email vs in-app                                        | Medium   |
+| Admin override with hold amount update       | Integration test                                                     | Medium   |
+| Support ticket SLA tracking                  | Integration test                                                     | Medium   |
+| Series session completion                    | Integration test                                                     | Medium   |
+| Circuit breaker open/close cycles            | Unit test                                                            | Low      |
+| Rate limiting effectiveness                  | Integration test                                                     | Low      |
+| Auth session caching                         | Integration test                                                     | Low      |
 
 ---
 

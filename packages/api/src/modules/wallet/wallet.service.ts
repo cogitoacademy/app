@@ -193,11 +193,15 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return runInTx(conn, async (tx) => {
       const w = await repo.getById(tx, params.walletId);
       if (!w) throw new WalletNotFoundError(params.walletId);
-      const updated = await repo.atomicRelease(
+      const result: AtomicResult = await repo.atomicRelease(
         tx,
         params.walletId,
         params.amount,
       );
+      if (!result.success) {
+        throw new InsufficientBalanceError(w.heldBalance, params.amount);
+      }
+      const updated = result.wallet;
       await repo.insertLedger(tx, {
         walletId: params.walletId,
         entryType: "release",
@@ -286,7 +290,7 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return runInTx(conn, async (tx) => {
       const w = await repo.getById(tx, params.walletId);
       if (!w) throw new WalletNotFoundError(params.walletId);
-      const updated =
+      const result =
         params.type === "compensate_credit"
           ? await repo.atomicCompensateCredit(
               tx,
@@ -298,6 +302,17 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
               params.walletId,
               params.amount,
             );
+      const updated =
+        "success" in result
+          ? result.success
+            ? result.wallet
+            : (() => {
+                throw new InsufficientBalanceError(
+                  w.availableBalance,
+                  params.amount,
+                );
+              })()
+          : result;
       await repo.insertLedger(tx, {
         walletId: params.walletId,
         entryType: params.type,
@@ -369,8 +384,12 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     const expected = Number(addRow?.total ?? 0) - Number(subRow?.total ?? 0);
 
     const walletRows = query?.walletId
-      ? await db.select().from(wallet).where(eq(wallet.id, query.walletId))
-      : await db.select().from(wallet);
+      ? await db
+          .select()
+          .from(wallet)
+          .where(eq(wallet.id, query.walletId))
+          .limit(1000)
+      : await db.select().from(wallet).limit(1000);
     const actual = walletRows.reduce(
       (acc, w) => acc + (w.totalBalance ?? 0),
       0,

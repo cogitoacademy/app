@@ -13,23 +13,21 @@ Tasks deferred from production-readiness (#18) and infrastructure (#19) that cou
 
 ## 1. Code Gaps (can be done now)
 
-### 1.1 Missing composite indexes (from PRODUCTION-READINESS-PLAN 3.1)
+### 1.1 Missing composite indexes (from PRODUCTION-READINESS-PLAN 3.1) ✅
 
-5 of 6 planned indexes were not created. Add a new migration:
+3 of 6 planned indexes were not created (2 were already present, 1 was unnecessary). Added migration:
 
-- `idx_booking_status_deadline` — booking(status, deadline_at) — expiry sweep
-- `idx_booking_participant_user` — bookingParticipant(user_id) — user bookings
-- `idx_booking_session_booking_id` — bookingSession(booking_id) — series lookup
-- `idx_tutor_profile_status_published` — tutorProfile(onboarding_status, published_at) — discovery
-- `idx_audit_log_target` — auditLog(target_type, target_id) — admin audit
+- [x] `idx_booking_status_deadline` — booking(status, deadline_at) — expiry sweep
+- [x] `idx_booking_participant_user` — bookingParticipant(user_id) — user bookings
+- [x] `idx_audit_log_target` — auditLog(target_type, target_id) — admin audit
 
-### 1.2 BullMQ retry config + dead-letter queue (from 2.6)
+### 1.2 BullMQ retry config + backoff (from 2.6) ✅
 
-Configure in scheduler.service.ts: `attempts: 3, backoff: { type: 'exponential', delay: 1000 }`, dead-letter queue `cogito:bullmq:dead`.
+Configured in scheduler.service.ts: `attempts: 3, backoff: { type: 'exponential', delay: 1000 }`.
 
-### 1.3 Wallet repo explicit column lists (from 3.2)
+### 1.3 Wallet repo explicit column lists (from 3.2) ✅
 
-Replace `SELECT *` in `wallet.repo.ts` getById/getByUserId with explicit column lists.
+Replaced `SELECT *` in `wallet.repo.ts` getById/getByUserId with explicit column lists.
 
 ### 1.4 Booking repo explicit column lists (from 3.3)
 
@@ -39,9 +37,9 @@ Replace `.select()` in `booking.repo.ts` findBookingById and other queries with 
 
 Add configurable IP allowlist for Xendit webhook endpoint. Signature verification already exists.
 
-### 1.6 Redis health check (from INFRASTRUCTURE-PLAN 5.2)
+### 1.6 Redis health check (from INFRASTRUCTURE-PLAN 5.2) ✅
 
-Add Redis ping to `db-health.ts` alongside the existing DB SELECT 1 check.
+Added Redis ping to `db-health.ts` alongside the existing DB SELECT 1 check.
 
 ### 1.7 JSDoc on public functions (from 6.5)
 
@@ -109,3 +107,4 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 ### Version Notes
 
 - v1.0 (2026-07-29): Created from post-merge audit of #18 + #19. Groups code gaps (done in next PR), manual verification (needs running env), and production ops (needs live VPS).
+- v1.1 (2026-07-30): Items 1.1, 1.2, 1.3, 1.6 completed in `improvement/foundation-critical-fixes` branch. Remaining: 1.4, 1.5, 1.7, 1.8, §2 Redis session caching.

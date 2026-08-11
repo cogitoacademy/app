@@ -83,7 +83,8 @@ const seriesInput = {
 
 describe("booking idempotency", () => {
   beforeEach(() => {
-    bookingIdempotency["store"].clear();
+    bookingIdempotency.disconnectRedis();
+    bookingIdempotency.clear();
   });
 
   describe("createSolo", () => {

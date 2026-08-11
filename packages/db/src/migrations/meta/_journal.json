@@ -64,6 +64,34 @@
       "when": 1784012000000,
       "tag": "0008_tutor_invite_email_invited_uniq",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784098400000,
+      "tag": "0009_composite_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784184800000,
+      "tag": "0010_deferred_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785341521240,
+      "tag": "0011_bitter_blur",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785341753939,
+      "tag": "0012_friendly_puff_adder",
+      "breakpoints": true
     }
   ]
 }
