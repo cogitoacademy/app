@@ -32,6 +32,7 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import {
+  getSelectItemValue,
   Select,
   SelectItem,
   SelectList,
@@ -49,6 +50,14 @@ const BOOKING_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_SOLO_PRICE = 42;
 
 type Modality = "online" | "offline";
+
+function getBookingErrorMessage(error: Error) {
+  if (error.message.toLowerCase().includes("input validation failed")) {
+    return "Some booking details are no longer valid. Choose the session format and time again, then retry.";
+  }
+
+  return error.message;
+}
 
 function formatSlotDate(value: Date | string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -118,7 +127,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         });
       },
       onError: (error: Error) => {
-        toastManager.add({ title: error.message, type: "error" });
+        toastManager.add({
+          title: "Booking request could not be sent",
+          description: getBookingErrorMessage(error),
+          type: "error",
+        });
       },
     }),
   );
@@ -238,7 +251,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <Select
                   value={effectiveModality}
                   onValueChange={(value) => {
-                    setSelectedModality(value as Modality);
+                    const modality = getSelectItemValue(value);
+                    if (modality !== "online" && modality !== "offline") return;
+
+                    setSelectedModality(modality);
                     setSelectedSlotId(null);
                     createBooking.reset();
                   }}
@@ -410,7 +426,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             {createBooking.isError ? (
               <div className="w-full rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="text-center text-sm text-danger">
-                  {createBooking.error.message}
+                  {getBookingErrorMessage(createBooking.error)}
                 </Text>
               </div>
             ) : null}

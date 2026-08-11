@@ -323,6 +323,10 @@ The following bugs from the production-readiness plan are **fixed** (see complet
 
 > **N9 (nextCursor) — NOT fully fixed.** Commit `86e29ed` set a `nextCursor` value in the `adminBooking.listBookings` response mapper, but `listBookingsByState` in `admin-booking.repo.ts:21-36` never consumes the cursor — it fetches the same first page every time (`listBookingsByState(db, [], limit)` with no `WHERE id > cursor` clause). Pagination is still broken. Tracked as part of G8 in `docs/plans/active/PRD-GAPS-SPEC.md`.
 
+### Frontend error UX TODO
+
+- Map oRPC/Zod input-validation issues to field-specific, non-technical messages across every form. Raw transport errors such as `Input validation failed` must never be shown directly to users. The solo-booking form currently provides a readable fallback, but a shared mapper remains to be implemented.
+
 **Remaining deferred items** are tracked in `docs/plans/active/DEFERRED-OPS-TASKS.md`:
 
 - Redis session caching (2.2) — not yet implemented

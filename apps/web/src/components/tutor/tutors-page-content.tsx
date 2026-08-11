@@ -15,6 +15,7 @@ import {
   InputGroupAddon,
 } from "@cogito-app/ui/components/selia/input-group";
 import {
+  getSelectItemValue,
   Select,
   SelectItem,
   SelectList,
@@ -107,7 +108,9 @@ export function TutorsPageContent() {
         </InputGroup>
         <Select
           value={expertise}
-          onValueChange={(v) => setExpertise(v as string)}
+          onValueChange={(value) =>
+            setExpertise(getSelectItemValue(value) ?? "")
+          }
         >
           <SelectTrigger className="w-full sm:w-44">
             <SelectValue placeholder="Expertise" />
@@ -125,7 +128,9 @@ export function TutorsPageContent() {
         </Select>
         <Select
           value={modality}
-          onValueChange={(v) => setModality(v as string)}
+          onValueChange={(value) =>
+            setModality(getSelectItemValue(value) ?? "")
+          }
         >
           <SelectTrigger className="w-full sm:w-44">
             <SelectValue placeholder="Modality" />
