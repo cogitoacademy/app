@@ -293,7 +293,7 @@ describe("BookingService", () => {
     test("returns paginated results with nextCursor", async () => {
       const bookings = Array.from({ length: 22 }, (_, i) => ({
         id: `b${i}`,
-        scheduledStartAt: new Date(),
+        scheduledStartAt: new Date("2025-01-01T00:00:00Z"),
       }));
       const { service } = createService({
         repo: { listBookingsByProposer: mock(async () => bookings) },
@@ -301,7 +301,9 @@ describe("BookingService", () => {
 
       const result = await service.listMine("student1");
       expect(result.items.length).toBe(20);
-      expect(result.nextCursor).toBe("b19");
+      expect(result.nextCursor).toBe(
+        new Date("2025-01-01T00:00:00Z").toISOString(),
+      );
     });
 
     test("returns null nextCursor when fewer items than limit", async () => {
@@ -316,17 +318,23 @@ describe("BookingService", () => {
     });
 
     test("respects custom limit", async () => {
-      const bookings = Array.from({ length: 6 }, (_, i) => ({ id: `b${i}` }));
+      const bookings = Array.from({ length: 6 }, (_, i) => ({
+        id: `b${i}`,
+        scheduledStartAt: new Date("2025-01-01T00:00:00Z"),
+      }));
       const { service, repo } = createService({
         repo: { listBookingsByProposer: mock(async () => bookings) },
       });
 
       const result = await service.listMine("student1", { limit: 5 });
       expect(result.items.length).toBe(5);
-      expect(result.nextCursor).toBe("b4");
+      expect(result.nextCursor).toBe(
+        new Date("2025-01-01T00:00:00Z").toISOString(),
+      );
       expect(repo.listBookingsByProposer).toHaveBeenCalledWith("student1", {
         states: undefined,
         limit: 5,
+        cursor: undefined,
       });
     });
 
@@ -339,6 +347,7 @@ describe("BookingService", () => {
       expect(repo.listBookingsByProposer).toHaveBeenCalledWith("student1", {
         states: undefined,
         limit: 100,
+        cursor: undefined,
       });
     });
   });

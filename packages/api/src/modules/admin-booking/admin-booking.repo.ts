@@ -1,4 +1,4 @@
-import { eq, asc, inArray } from "drizzle-orm";
+import { eq, asc, inArray, gt, and, sql } from "drizzle-orm";
 import {
   booking,
   bookingStateHistory,
@@ -22,17 +22,22 @@ export async function listBookingsByState(
   conn: DbOrTx,
   states: string[],
   limit: number,
+  cursor?: string,
 ) {
-  const query = conn
+  const conditions = [];
+  if (states.length > 0) {
+    conditions.push(inArray(booking.currentState, states));
+  }
+  if (cursor) {
+    conditions.push(gt(booking.id, cursor));
+  }
+
+  return conn
     .select()
     .from(booking)
-    .orderBy(asc(booking.scheduledStartAt))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(asc(booking.id))
     .limit(limit + 1);
-
-  if (states.length > 0) {
-    return query.where(inArray(booking.currentState, states));
-  }
-  return query;
 }
 
 export async function getStateHistory(conn: DbOrTx, bookingId: string) {
@@ -51,25 +56,33 @@ export async function updateBookingWithOverride(
   overrideMeta: Record<string, unknown>,
 ) {
   const [existing] = await conn
-    .select({ currentState: booking.currentState })
+    .select({
+      currentState: booking.currentState,
+      version: booking.version,
+    })
     .from(booking)
     .where(eq(booking.id, bookingId))
     .limit(1);
 
   if (!existing) return null;
 
-  const [updated] = await conn
+  const result = await conn
     .update(booking)
     .set({
       previousState: existing.currentState,
       currentState: newState,
       stateReason: reason,
       overrideMeta,
+      version: sql`${booking.version} + 1`,
     })
-    .where(eq(booking.id, bookingId))
+    .where(
+      and(eq(booking.id, bookingId), eq(booking.version, existing.version)),
+    )
     .returning();
 
-  return { previousState: existing.currentState, updated };
+  if (!result.length) return null;
+
+  return { previousState: existing.currentState, updated: result[0] };
 }
 
 export async function insertStateHistoryEntry(

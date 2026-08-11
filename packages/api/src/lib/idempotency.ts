@@ -85,6 +85,67 @@ export class IdempotencyStore {
     return this.store.get(key)?.result;
   }
 
+  private inFlight = new Map<string, Promise<unknown>>();
+
+  async getOrSet<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const redisKey = `${this.prefix}:${key}`;
+
+    if (this.redis) {
+      try {
+        const exists = await this.redis.exists(redisKey);
+        if (exists) {
+          const value = await this.redis.get(redisKey);
+          if (value !== null) {
+            try {
+              return JSON.parse(value) as T;
+            } catch {
+              return value as unknown as T;
+            }
+          }
+        }
+      } catch {
+        // fall through to in-memory
+      }
+    }
+
+    this.maybeCleanup();
+    const cached = this.store.get(key);
+    if (cached && Date.now() - cached.timestamp <= this.maxAge) {
+      return cached.result as T;
+    }
+
+    const existing = this.inFlight.get(key);
+    if (existing) {
+      return existing as Promise<T>;
+    }
+
+    const promise = fn()
+      .then(async (result) => {
+        await this.markProcessed(key, result);
+        return result;
+      })
+      .finally(() => {
+        this.inFlight.delete(key);
+      });
+
+    this.inFlight.set(key, promise);
+    return promise as Promise<T>;
+  }
+
+  setRedis(redis: RedisClient): void {
+    this.redis = redis;
+  }
+
+  clear(): void {
+    this.store.clear();
+    this.inFlight.clear();
+    this.lastCleanup = Date.now();
+  }
+
+  disconnectRedis(): void {
+    this.redis = null;
+  }
+
   private maybeCleanup(): void {
     const now = Date.now();
     if (now - this.lastCleanup < this.cleanupInterval) return;
@@ -119,6 +180,11 @@ export const webhookIdempotency = new IdempotencyStore({
   maxAgeMs: 24 * 60 * 60 * 1000,
   cleanupIntervalMs: 60 * 60 * 1000,
 });
+
+export function initIdempotencyStores(redis: RedisClient): void {
+  bookingIdempotency.setRedis(redis);
+  webhookIdempotency.setRedis(redis);
+}
 
 export function generateIdempotencyKey(
   prefix: string,

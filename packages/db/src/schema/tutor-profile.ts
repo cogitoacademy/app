@@ -54,6 +54,10 @@ export const tutorProfile = pgTable(
     index("tutor_profile_userId_idx").on(table.userId),
     index("tutor_profile_onboardingStatus_idx").on(table.onboardingStatus),
     index("tutor_profile_inviteId_idx").on(table.inviteId),
+    index("idx_tutor_profile_status_published").on(
+      table.onboardingStatus,
+      table.publishedAt,
+    ),
   ],
 );
 

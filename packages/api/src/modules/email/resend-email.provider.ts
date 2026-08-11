@@ -2,26 +2,28 @@ import type { EmailPort, EmailMessage } from "./email.service";
 import { CircuitBreaker } from "../../lib/circuit-breaker";
 import { serviceUnavailable } from "../../lib/errors";
 import { log } from "../../lib/logger";
-
-const resendBreaker = new CircuitBreaker({
-  failureThreshold: 3,
-  resetTimeoutMs: 120_000,
-  halfOpenMaxAttempts: 1,
-  monitor: (state, error) => {
-    log({
-      level: state === "open" ? "error" : "info",
-      action: "circuit_breaker_state_change",
-      service: "resend",
-      state,
-      error: error ? { message: String(error) } : undefined,
-    });
-  },
-});
+import type { RedisClient } from "../../lib/redis";
 
 export function createResendEmailProvider(
   apiKey: string,
   fromEmail: string,
+  redis?: RedisClient,
 ): EmailPort {
+  const resendBreaker = new CircuitBreaker({
+    failureThreshold: 3,
+    resetTimeoutMs: 120_000,
+    halfOpenMaxAttempts: 1,
+    redis: redis ?? undefined,
+    monitor: (state, error) => {
+      log({
+        level: state === "open" ? "error" : "info",
+        action: "circuit_breaker_state_change",
+        service: "resend",
+        state,
+        error: error ? { message: String(error) } : undefined,
+      });
+    },
+  });
   async function send(message: EmailMessage) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);

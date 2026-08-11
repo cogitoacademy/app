@@ -238,9 +238,13 @@ export function createBookingService(deps: {
     const rows = await repo.listBookingsByProposer(userId, {
       states: opts.states,
       limit,
+      cursor: opts.cursor,
     });
     const items = rows.slice(0, limit);
-    const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+    const nextCursor =
+      rows.length > limit
+        ? items[items.length - 1]!.scheduledStartAt.toISOString()
+        : null;
     return { items, nextCursor };
   }
 
@@ -561,11 +565,7 @@ export function createBookingService(deps: {
     });
   }
 
-  async function completeSession(
-    bookingId: string,
-    tutorId: string,
-    _sessionNote?: string,
-  ) {
+  async function completeSession(bookingId: string, tutorId: string) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
@@ -1060,6 +1060,7 @@ export function createBookingService(deps: {
       db,
       input.availabilitySlotId,
       input.tutorId,
+      { futureOnly: true },
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 

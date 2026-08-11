@@ -7,6 +7,7 @@ import {
   boolean,
   jsonb,
   index,
+  uniqueIndex,
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -120,6 +121,10 @@ export const booking = pgTable(
       table.currentState,
       table.deadlineAt,
     ),
+    index("idx_booking_status_deadline").on(
+      table.currentState,
+      table.deadlineAt,
+    ),
     index("booking_seriesParentId_idx").on(table.seriesParentId),
     index("booking_scheduledStartAt_idx").on(table.scheduledStartAt),
   ],
@@ -170,6 +175,11 @@ export const bookingParticipant = pgTable(
     index("booking_participant_userId_state_idx").on(
       table.userId,
       table.confirmationState,
+    ),
+    index("idx_booking_participant_user").on(table.userId),
+    uniqueIndex("booking_participant_booking_user_uniq").on(
+      table.bookingId,
+      table.userId,
     ),
   ],
 );

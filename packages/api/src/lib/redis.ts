@@ -200,6 +200,8 @@ export function getRedisClient(): RedisClient {
 }
 
 export function initRedis(url?: string): RedisClient {
+  if (redisClient) return redisClient;
+
   if (!url) {
     log({
       level: "info",

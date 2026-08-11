@@ -1,0 +1,2 @@
+-- Indexes already created in 0010_deferred_indexes.sql with IF NOT EXISTS
+-- This migration is a no-op placeholder (drizzle-generated, superseded by 0010)

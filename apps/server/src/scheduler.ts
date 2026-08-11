@@ -3,6 +3,7 @@ import { log } from "@cogito-app/api/lib/logger";
 import { createSchedulerService } from "@cogito-app/api/modules/scheduler/scheduler.service";
 import { scheduleBookingExpiryCheck } from "@cogito-app/api/modules/scheduler/jobs/expire-bookings.job";
 import { scheduleHoldReleaseCheck } from "@cogito-app/api/modules/scheduler/jobs/release-holds.job";
+import { scheduleSendNotificationEmail } from "@cogito-app/api/modules/scheduler/jobs/send-notification-email.job";
 import { services } from "@cogito-app/api";
 
 let scheduler: ReturnType<typeof createSchedulerService> = null;
@@ -84,6 +85,7 @@ export async function initScheduler(): Promise<void> {
 
   await scheduleBookingExpiryCheck(scheduler.queue);
   await scheduleHoldReleaseCheck(scheduler.queue);
+  await scheduleSendNotificationEmail(scheduler.queue);
 
   log({
     level: "info",

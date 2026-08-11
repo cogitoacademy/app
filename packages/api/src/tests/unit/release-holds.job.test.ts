@@ -2,30 +2,34 @@ import { describe, test, expect, mock } from "bun:test";
 import { scheduleHoldReleaseCheck } from "../../modules/scheduler/jobs/release-holds.job";
 
 describe("scheduleHoldReleaseCheck", () => {
-  test("adds repeat job with correct name and interval", async () => {
-    const mockAdd = mock(async () => ({}));
-    const queue = { add: mockAdd } as any;
+  test("upserts a scheduler with the correct name and interval", async () => {
+    const upsertJobScheduler = mock(async () => ({}));
+    const queue = { upsertJobScheduler } as any;
 
     await scheduleHoldReleaseCheck(queue);
 
-    expect(mockAdd).toHaveBeenCalledTimes(1);
-    expect(mockAdd).toHaveBeenCalledWith(
+    expect(upsertJobScheduler).toHaveBeenCalledTimes(1);
+    expect(upsertJobScheduler).toHaveBeenCalledWith(
       "release-expired-holds",
-      {},
+      { every: 10 * 60 * 1000 },
       {
-        repeat: { every: 10 * 60 * 1000 },
-        attempts: 3,
+        name: "release-expired-holds",
+        data: {},
+        opts: {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 1000 },
+        },
       },
     );
   });
 
   test("includes retry attempts option", async () => {
-    const mockAdd = mock(async () => ({}));
-    const queue = { add: mockAdd } as any;
+    const upsertJobScheduler = mock(async () => ({}));
+    const queue = { upsertJobScheduler } as any;
 
     await scheduleHoldReleaseCheck(queue);
 
-    const opts = mockAdd.mock.calls[0][2];
+    const opts = upsertJobScheduler.mock.calls[0][2].opts;
     expect(opts.attempts).toBe(3);
   });
 });
