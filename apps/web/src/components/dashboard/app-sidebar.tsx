@@ -65,6 +65,11 @@ const tutorNavItems = [
 const adminNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
+  {
+    to: "/admin-achievements",
+    label: "Review Achievements",
+    icon: IconCertificate,
+  },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
 

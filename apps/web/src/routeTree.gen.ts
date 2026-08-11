@@ -22,6 +22,7 @@ import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
 import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
+import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 import { Route as AppBookingsBookingIdRouteImport } from './routes/_app.bookings_.$bookingId'
 import { Route as AppTutorsTutorIdBookRouteImport } from './routes/_app.tutors_.$tutorId.book'
@@ -90,6 +91,11 @@ const AppAdminTutorsRoute = AppAdminTutorsRouteImport.update({
   path: '/admin-tutors',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
+  id: '/admin-achievements',
+  path: '/admin-achievements',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAchievementsRoute = AppAchievementsRouteImport.update({
   id: '/achievements',
   path: '/achievements',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/_app/achievements': typeof AppAchievementsRoute
+  '/_app/admin-achievements': typeof AppAdminAchievementsRoute
   '/_app/admin-tutors': typeof AppAdminTutorsRoute
   '/_app/balance': typeof AppBalanceRoute
   '/_app/bookings': typeof AppBookingsRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/achievements'
+    | '/admin-achievements'
     | '/admin-tutors'
     | '/balance'
     | '/bookings'
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/achievements'
+    | '/admin-achievements'
     | '/admin-tutors'
     | '/balance'
     | '/bookings'
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/_app/achievements'
+    | '/_app/admin-achievements'
     | '/_app/admin-tutors'
     | '/_app/balance'
     | '/_app/bookings'
@@ -315,6 +327,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminTutorsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin-achievements': {
+      id: '/_app/admin-achievements'
+      path: '/admin-achievements'
+      fullPath: '/admin-achievements'
+      preLoaderRoute: typeof AppAdminAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/achievements': {
       id: '/_app/achievements'
       path: '/achievements'
@@ -341,6 +360,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
+  AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
   AppAdminTutorsRoute: typeof AppAdminTutorsRoute
   AppBalanceRoute: typeof AppBalanceRoute
   AppBookingsRoute: typeof AppBookingsRoute
@@ -355,6 +375,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
+  AppAdminAchievementsRoute: AppAdminAchievementsRoute,
   AppAdminTutorsRoute: AppAdminTutorsRoute,
   AppBalanceRoute: AppBalanceRoute,
   AppBookingsRoute: AppBookingsRoute,
