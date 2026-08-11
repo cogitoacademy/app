@@ -99,9 +99,10 @@ export function NotificationBell() {
         <IconBell className="h-[1.2rem] w-[1.2rem]" />
         {unread > 0 ? (
           <Badge
-            variant="danger"
+            variant="danger-solid"
             size="sm"
-            className="absolute -right-1 -top-1 min-w-[1.25rem] px-1 text-center text-[10px]"
+            pill
+            className="absolute -right-1 -top-1 min-w-5 px-1 text-center text-[10px] justify-center"
           >
             {unread > 99 ? "99+" : unread}
           </Badge>

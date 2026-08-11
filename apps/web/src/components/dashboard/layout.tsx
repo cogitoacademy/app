@@ -75,7 +75,7 @@ export function Layout({
           <Heading size="sm">{title}</Heading>
           <div className="ml-auto mr-0 flex items-center gap-2">
             <BalanceBadge />
-            <Separator orientation="vertical" />
+            <Separator orientation="vertical" className="mr-2" />
             <NotificationBell />
             <ModeToggle />
           </div>
