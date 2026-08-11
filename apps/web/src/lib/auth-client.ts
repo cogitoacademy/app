@@ -1,6 +1,7 @@
-import { env } from "@cogito-app/env/web";
 import { createAuthClient } from "better-auth/react";
 
+import { serverUrl } from "./server-url";
+
 export const authClient = createAuthClient({
-  baseURL: env.VITE_SERVER_URL,
+  baseURL: serverUrl,
 });

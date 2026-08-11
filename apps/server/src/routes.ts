@@ -5,6 +5,7 @@ import { rateLimit } from "@cogito-app/api/lib/rate-limit";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
 import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth } from "@cogito-app/auth";
+import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -127,7 +128,12 @@ export function createServer() {
 
     .use(
       cors({
-        origin: env.CORS_ORIGIN,
+        origin: (request) =>
+          isAllowedFrontendOrigin(
+            request.headers.get("origin"),
+            env.CORS_ORIGIN,
+            env.NODE_ENV,
+          ),
         methods: ["GET", "POST", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true,
