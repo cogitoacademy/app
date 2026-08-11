@@ -34,7 +34,7 @@ import {
 } from "@cogito-app/ui/components/selia/item";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { toast } from "sonner";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import {
   canCancelBooking,
@@ -80,37 +80,41 @@ export function BookingDetailPage({
   const cancel = useMutation(
     orpc.booking.cancel.mutationOptions({
       onSuccess: () => {
-        toast.success("Booking cancelled");
+        toastManager.add({ title: "Booking cancelled", type: "success" });
         refreshBookingQueries();
       },
-      onError: (error: Error) => toast.error(error.message),
+      onError: (error: Error) =>
+        toastManager.add({ title: error.message, type: "error" }),
     }),
   );
   const accept = useMutation(
     orpc.tutorActions.acceptBooking.mutationOptions({
       onSuccess: () => {
-        toast.success("Booking accepted");
+        toastManager.add({ title: "Booking accepted", type: "success" });
         refreshBookingQueries();
       },
-      onError: (error: Error) => toast.error(error.message),
+      onError: (error: Error) =>
+        toastManager.add({ title: error.message, type: "error" }),
     }),
   );
   const decline = useMutation(
     orpc.tutorActions.declineBooking.mutationOptions({
       onSuccess: () => {
-        toast.success("Booking declined");
+        toastManager.add({ title: "Booking declined", type: "success" });
         refreshBookingQueries();
       },
-      onError: (error: Error) => toast.error(error.message),
+      onError: (error: Error) =>
+        toastManager.add({ title: error.message, type: "error" }),
     }),
   );
   const complete = useMutation(
     orpc.tutorActions.completeSession.mutationOptions({
       onSuccess: () => {
-        toast.success("Session completed");
+        toastManager.add({ title: "Session completed", type: "success" });
         refreshBookingQueries();
       },
-      onError: (error: Error) => toast.error(error.message),
+      onError: (error: Error) =>
+        toastManager.add({ title: error.message, type: "error" }),
     }),
   );
 

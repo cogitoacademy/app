@@ -22,7 +22,7 @@ import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { toast } from "sonner";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import {
   canCancelBooking,
@@ -51,12 +51,13 @@ export function BookingsPage() {
   const cancel = useMutation(
     orpc.booking.cancel.mutationOptions({
       onSuccess: () => {
-        toast.success("Booking cancelled");
+        toastManager.add({ title: "Booking cancelled", type: "success" });
         void queryClient.invalidateQueries({
           queryKey: orpc.booking.listMine.queryKey({ input: {} }),
         });
       },
-      onError: (err: Error) => toast.error(err.message),
+      onError: (err: Error) =>
+        toastManager.add({ title: err.message, type: "error" }),
     }),
   );
 

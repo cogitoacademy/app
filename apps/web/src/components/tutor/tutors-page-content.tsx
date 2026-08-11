@@ -60,6 +60,7 @@ export function TutorsPageContent() {
   const [expertise, setExpertise] = useState("");
   const [modality, setModality] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data: tutors = [], isPending } = useQuery({
     ...orpc.tutors.listPublished.queryOptions({
@@ -77,6 +78,12 @@ export function TutorsPageContent() {
   const selected = selectedId
     ? (tutors.find((t: PublishedTutor) => t.id === selectedId) ?? null)
     : null;
+
+  function openTutor(tutorId: string) {
+    setDrawerOpen(false);
+    setSelectedId(tutorId);
+    requestAnimationFrame(() => setDrawerOpen(true));
+  }
 
   return (
     <Stack direction="column" spacing="lg">
@@ -157,7 +164,7 @@ export function TutorsPageContent() {
             <TutorCard
               key={tutor.id}
               tutor={tutor}
-              onClick={() => setSelectedId(tutor.id)}
+              onClick={() => openTutor(tutor.id)}
             />
           ))}
         </div>
@@ -165,10 +172,8 @@ export function TutorsPageContent() {
 
       <TutorDrawer
         tutor={selected}
-        open={!!selectedId}
-        onOpenChange={(open) => {
-          if (!open) setSelectedId(null);
-        }}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
       />
     </Stack>
   );

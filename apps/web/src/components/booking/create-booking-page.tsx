@@ -41,7 +41,7 @@ import {
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { toast } from "sonner";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { orpc } from "@/utils/orpc";
 
@@ -90,9 +90,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           !("id" in booking) ||
           typeof booking.id !== "string"
         ) {
-          toast.error(
-            "Booking was created, but its details could not be opened",
-          );
+          toastManager.add({
+            title: "Booking created",
+            description: "Its details could not be opened automatically.",
+            type: "warning",
+          });
           void navigate({ to: "/bookings" });
           return;
         }
@@ -105,13 +107,19 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             queryKey: orpc.wallet.get.queryKey(),
           }),
         ]);
-        toast.success("Booking request sent to your tutor");
+        toastManager.add({
+          title: "Booking request sent",
+          description: "Your tutor can now review the request.",
+          type: "success",
+        });
         void navigate({
           to: "/bookings/$bookingId",
           params: { bookingId: booking.id },
         });
       },
-      onError: (error: Error) => toast.error(error.message),
+      onError: (error: Error) => {
+        toastManager.add({ title: error.message, type: "error" });
+      },
     }),
   );
 
@@ -232,6 +240,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   onValueChange={(value) => {
                     setSelectedModality(value as Modality);
                     setSelectedSlotId(null);
+                    createBooking.reset();
                   }}
                   disabled={modalityOptions.length === 1}
                 >
@@ -287,7 +296,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                         variant={selected ? "primary" : "outline"}
                         aria-pressed={selected}
                         className="h-auto min-h-20 justify-start px-4 py-3 text-left"
-                        onClick={() => setSelectedSlotId(slot.id)}
+                        onClick={() => {
+                          setSelectedSlotId(slot.id);
+                          createBooking.reset();
+                        }}
                       >
                         <span className="flex min-w-0 flex-col items-start gap-1">
                           <span className="font-medium">
@@ -395,6 +407,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 Top up Marks
               </Button>
             )}
+            {createBooking.isError ? (
+              <div className="w-full rounded-lg border border-danger-border bg-danger/10 p-3">
+                <Text className="text-center text-sm text-danger">
+                  {createBooking.error.message}
+                </Text>
+              </div>
+            ) : null}
             <Text className="text-center text-xs text-muted">
               The tutor will review your request before the session is
               confirmed.
