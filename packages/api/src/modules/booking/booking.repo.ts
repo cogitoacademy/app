@@ -7,6 +7,7 @@ import {
   notInArray,
   ne,
   lte,
+  lt,
   sql,
 } from "drizzle-orm";
 import {
@@ -405,10 +406,37 @@ export function createBookingRepo(db: DbType) {
     });
   }
 
+  async function listBookingsByTutor(
+    tutorId: string,
+    opts: { states?: string[]; limit: number; cursor?: string },
+  ) {
+    const conditions = [eq(booking.tutorId, tutorId)];
+    if (opts.states?.length) {
+      conditions.push(inArray(booking.currentState, opts.states));
+    }
+    if (opts.cursor) {
+      conditions.push(lt(booking.scheduledStartAt, new Date(opts.cursor)));
+    }
+    return db.query.booking.findMany({
+      where: and(...conditions),
+      orderBy: [desc(booking.scheduledStartAt)],
+      limit: opts.limit + 1,
+      with: {
+        proposer: { columns: { id: true, name: true, image: true } },
+        participants: {
+          with: {
+            user: { columns: { id: true, name: true, image: true } },
+          },
+        },
+      },
+    });
+  }
+
   return {
     findBookingById,
     findBookingWithParticipants,
     listBookingsByProposer,
+    listBookingsByTutor,
     findTutorProfile,
     findAvailabilitySlot,
     findParticipant,

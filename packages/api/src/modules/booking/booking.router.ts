@@ -162,6 +162,17 @@ export function createBookingRouter(handler: BookingHandler) {
 
 export function createTutorActionsRouter(handler: TutorActionsHandler) {
   return {
+    listBookings: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/list",
+        tags: ["Tutor", "Bookings"],
+        summary: "List assigned bookings",
+        description: "Returns bookings assigned to the signed-in tutor",
+      })
+      .input(listMineInput)
+      .handler(handler.listBookings),
+
     acceptBooking: tutorProcedure
       .route({
         method: "POST",

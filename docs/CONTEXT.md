@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-07-29
+Last updated: 2026-08-11
 
 ## Architecture
 
@@ -276,6 +276,38 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 ```
 
 Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops tasks are active code gaps. Next: PRD Gaps (feature completeness).
+
+## Role E2E Readiness Snapshot (2026-08-11)
+
+Use this section as the current role-readiness baseline. Re-audit only after the related backend or frontend plans materially change.
+
+### Student
+
+**Primary promotion flow is ready:** email/password auth -> tutor discovery -> solo booking -> Marks hold -> booking list/detail -> cancellation. Profile, balance/top-up, basic achievements, notification bell, calendar export, and WhatsApp contact surfaces are also present.
+
+**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject, lateness/no-show reporting, notification center, full Knowledge Bank gating polish, public achievements, email verification, and session-expiry UX remain open.
+
+### Tutor
+
+Backend already supports profile/onboarding, availability CRUD, booking detail access, accept, decline, and complete actions. The blocking gap for a usable Tutor E2E flow is an assigned/incoming booking list; `booking.listMine` is proposer-only and must not be reused for tutors. Implement this flow before broader tutor features.
+
+### Admin
+
+Backend is ready for user role management, tutor invite/review, achievement moderation, basic booking list/history/override/refund, room list/create/assign, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
+
+Do not prioritize the full booking operations console or offline room workflow until the backend gaps for queue urgency/pagination (G8), wallet lookup (G9), override preview (G10), and room availability/approval (G13-G14) are resolved.
+
+### Backend Gap Groups
+
+- Ready now: student solo/group/series booking primitives, wallet/ledger/packages/Knowledge Bank, achievements, notifications, tutor onboarding/availability/actions, and the admin capabilities listed above.
+- Still blocking later flows: support/lateness tickets (G1), group repricing (G4), series cancellation rules (G5), reschedule ownership and accept/reject (G6), rich notes (G7), admin queue/wallet/preview (G8-G10), meeting attendance/gating (G11-G12), offline rooms (G13-G14), disclaimer (G15), payout (G16), full notification matrix (G17), series completion (G18), and pricing extra-take correctness (G19).
+
+### Current Execution Order
+
+1. Complete Tutor incoming bookings -> detail -> accept/decline/complete E2E.
+2. Build Admin achievement moderation as the next low-risk complete flow.
+3. Return to Student secondary flows only where the backend contract is already stable.
+4. Defer admin booking override and offline-room UI until their backend blockers are closed.
 
 ## Known Bugs
 

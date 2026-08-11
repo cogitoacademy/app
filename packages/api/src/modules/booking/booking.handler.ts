@@ -275,6 +275,19 @@ export function createBookingHandler(booking: BookingService) {
 
 export function createTutorActionsHandler(booking: BookingService) {
   return {
+    listBookings: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: ListMineInput;
+    }) => {
+      return withDomainMap(
+        () => booking.listForTutor(context.session!.user.id, input),
+        mapBookingError,
+      );
+    },
+
     acceptBooking: async ({
       context,
       input,
