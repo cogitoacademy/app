@@ -86,12 +86,10 @@ describe("WalletService", () => {
     test("throws InsufficientBalanceError when atomicHold fails", async () => {
       const repo = makeRepo({
         getById: mock(async () => makeWallet({ availableBalance: 5 })),
-        atomicHold: mock(
-          async (): Promise<AtomicResult> => ({
-            success: false,
-            reason: "insufficient_balance",
-          }),
-        ),
+        atomicHold: mock(async (): Promise<AtomicResult> => ({
+          success: false,
+          reason: "insufficient_balance",
+        })),
       });
       const service = createWalletService(repo as any, makeDb());
       await expect(
@@ -174,12 +172,10 @@ describe("WalletService", () => {
 
     test("throws InsufficientBalanceError when atomicDeduct fails", async () => {
       const repo = makeRepo({
-        atomicDeduct: mock(
-          async (): Promise<AtomicResult> => ({
-            success: false,
-            reason: "insufficient_held",
-          }),
-        ),
+        atomicDeduct: mock(async (): Promise<AtomicResult> => ({
+          success: false,
+          reason: "insufficient_held",
+        })),
       });
       const service = createWalletService(repo as any, makeDb());
       await expect(
