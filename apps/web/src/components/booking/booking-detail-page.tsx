@@ -47,22 +47,68 @@ import {
 } from "./booking-ui";
 import { orpc } from "@/utils/orpc";
 
-export function BookingDetailPage({ bookingId }: { bookingId: string }) {
+export function BookingDetailPage({
+  bookingId,
+  viewerRole,
+}: {
+  bookingId: string;
+  viewerRole: string;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isTutor = viewerRole === "tutor";
+  const bookingsPath = isTutor ? "/tutor-bookings" : "/bookings";
+  const bookingsLabel = isTutor ? "Tutor bookings" : "My bookings";
   const bookingQuery = useQuery(
     orpc.booking.get.queryOptions({ input: { bookingId } }),
   );
+
+  function refreshBookingQueries() {
+    void Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: orpc.booking.get.queryKey({ input: { bookingId } }),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: orpc.booking.listMine.queryKey({ input: {} }),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: orpc.tutorActions.listBookings.queryKey({ input: {} }),
+      }),
+    ]);
+  }
+
   const cancel = useMutation(
     orpc.booking.cancel.mutationOptions({
       onSuccess: () => {
         toast.success("Booking cancelled");
-        void queryClient.invalidateQueries({
-          queryKey: orpc.booking.listMine.queryKey({ input: {} }),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: orpc.booking.get.queryKey({ input: { bookingId } }),
-        });
+        refreshBookingQueries();
+      },
+      onError: (error: Error) => toast.error(error.message),
+    }),
+  );
+  const accept = useMutation(
+    orpc.tutorActions.acceptBooking.mutationOptions({
+      onSuccess: () => {
+        toast.success("Booking accepted");
+        refreshBookingQueries();
+      },
+      onError: (error: Error) => toast.error(error.message),
+    }),
+  );
+  const decline = useMutation(
+    orpc.tutorActions.declineBooking.mutationOptions({
+      onSuccess: () => {
+        toast.success("Booking declined");
+        refreshBookingQueries();
+      },
+      onError: (error: Error) => toast.error(error.message),
+    }),
+  );
+  const complete = useMutation(
+    orpc.tutorActions.completeSession.mutationOptions({
+      onSuccess: () => {
+        toast.success("Session completed");
+        refreshBookingQueries();
       },
       onError: (error: Error) => toast.error(error.message),
     }),
@@ -92,9 +138,9 @@ export function BookingDetailPage({ bookingId }: { bookingId: string }) {
             </Button>
             <Button
               variant="plain"
-              onClick={() => void navigate({ to: "/bookings" })}
+              onClick={() => void navigate({ to: bookingsPath })}
             >
-              Back to bookings
+              Back to {bookingsLabel.toLowerCase()}
             </Button>
           </div>
         </CardBody>
@@ -109,6 +155,12 @@ export function BookingDetailPage({ bookingId }: { bookingId: string }) {
   const history = booking.stateHistory.toSorted(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
+  const canReview = isTutor && booking.currentState === "awaiting_tutor_review";
+  const canComplete = isTutor && booking.currentState === "scheduled";
+  const sessionHasEnded =
+    new Date(booking.scheduledEndAt).getTime() <= Date.now();
+  const tutorActionPending =
+    accept.isPending || decline.isPending || complete.isPending;
 
   function requestCancellation() {
     const confirmed = window.confirm(
@@ -117,23 +169,49 @@ export function BookingDetailPage({ bookingId }: { bookingId: string }) {
     if (confirmed) cancel.mutate({ bookingId });
   }
 
+  function acceptBooking() {
+    const confirmed = window.confirm(
+      "Accept this booking request and schedule the session?",
+    );
+    if (confirmed) accept.mutate({ bookingId });
+  }
+
+  function declineBooking() {
+    const reason = window.prompt(
+      "Why are you declining this request? The student will see this reason.",
+    );
+    if (reason === null) return;
+    decline.mutate({ bookingId, reason: reason.trim() || undefined });
+  }
+
+  function completeSession() {
+    const confirmed = window.confirm(
+      "Mark this session as completed? Held Marks will be settled.",
+    );
+    if (confirmed) complete.mutate({ bookingId });
+  }
+
   return (
     <Stack direction="column" spacing="lg">
       <div>
         <Button
           variant="plain"
           size="sm"
-          render={<Link to="/bookings" aria-label="Back to bookings" />}
+          render={
+            <Link to={bookingsPath} aria-label={`Back to ${bookingsLabel}`} />
+          }
           nativeButton={false}
           className="mb-3"
         >
-          <IconArrowLeft /> Back to bookings
+          <IconArrowLeft /> Back to {bookingsLabel.toLowerCase()}
         </Button>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Heading size="md">{getBookingTypeLabel(booking.type)}</Heading>
             <Text className="text-muted">
-              Booking with {booking.tutor?.name ?? "your Cogito tutor"}
+              {isTutor
+                ? `Requested by ${booking.proposer?.name ?? "a Cogito student"}`
+                : `Booking with ${booking.tutor?.name ?? "your Cogito tutor"}`}
             </Text>
           </div>
           <Badge variant={getBookingStateVariant(booking.currentState)} pill>
@@ -188,7 +266,7 @@ export function BookingDetailPage({ bookingId }: { bookingId: string }) {
               value={`${booking.confirmedHeadcount} of ${booking.targetGroupSize} confirmed`}
             />
           </CardBody>
-          {canCancelBooking(booking.currentState) ? (
+          {!isTutor && canCancelBooking(booking.currentState) ? (
             <CardFooter className="justify-end">
               <Button
                 variant="danger"
@@ -198,6 +276,42 @@ export function BookingDetailPage({ bookingId }: { bookingId: string }) {
                 disabled={cancel.isPending}
               >
                 Cancel booking
+              </Button>
+            </CardFooter>
+          ) : canReview ? (
+            <CardFooter className="justify-end gap-2">
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={declineBooking}
+                progress={decline.isPending}
+                disabled={tutorActionPending}
+              >
+                Decline request
+              </Button>
+              <Button
+                size="sm"
+                onClick={acceptBooking}
+                progress={accept.isPending}
+                disabled={tutorActionPending}
+              >
+                Accept booking
+              </Button>
+            </CardFooter>
+          ) : canComplete ? (
+            <CardFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Text className="text-sm text-muted">
+                {sessionHasEnded
+                  ? "Confirm completion to settle the held Marks."
+                  : "Completion becomes available after the scheduled end time."}
+              </Text>
+              <Button
+                size="sm"
+                onClick={completeSession}
+                progress={complete.isPending}
+                disabled={!sessionHasEnded || tutorActionPending}
+              >
+                Complete session
               </Button>
             </CardFooter>
           ) : null}

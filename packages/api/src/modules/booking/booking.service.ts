@@ -26,6 +26,7 @@ import {
   BookingNotAwaitingConfirmationError,
   BookingNotAwaitingReconfirmationError,
   BookingNotAwaitingReviewError,
+  BookingSessionNotEndedError,
   BookingSeriesSizeError,
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
@@ -598,6 +599,9 @@ export function createBookingService(deps: {
           "complete",
           BOOKING_STATE.COMPLETED,
         );
+      }
+      if (b.scheduledEndAt.getTime() > Date.now()) {
+        throw new BookingSessionNotEndedError(bookingId, b.scheduledEndAt);
       }
 
       const proposerWallet = await wallet.getByUserId(tx, b.proposerId);

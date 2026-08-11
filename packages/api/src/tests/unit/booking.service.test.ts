@@ -14,6 +14,7 @@ import {
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
   BookingCancelledError,
+  BookingSessionNotEndedError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -30,6 +31,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findBookingById: mock(async () => null),
     findBookingWithParticipants: mock(async () => null),
     listBookingsByProposer: mock(async () => []),
+    listBookingsByTutor: mock(async () => []),
     findTutorProfile: mock(async () => null),
     findAvailabilitySlot: mock(async () => null),
     findOverlappingBookings: mock(async () => []),
@@ -345,6 +347,49 @@ describe("BookingService", () => {
 
       await service.listMine("student1", { limit: 200 });
       expect(repo.listBookingsByProposer).toHaveBeenCalledWith("student1", {
+        states: undefined,
+        limit: 100,
+        cursor: undefined,
+      });
+    });
+  });
+
+  describe("listForTutor", () => {
+    test("returns paginated assigned bookings with nextCursor", async () => {
+      const scheduledStartAt = new Date("2026-08-16T03:00:00.000Z");
+      const bookings = Array.from({ length: 6 }, (_, index) => ({
+        id: `b${index}`,
+        scheduledStartAt,
+      }));
+      const { service } = createService({
+        repo: { listBookingsByTutor: mock(async () => bookings) },
+      });
+
+      const result = await service.listForTutor("tutor1", { limit: 5 });
+
+      expect(result.items).toHaveLength(5);
+      expect(result.nextCursor).toBe(scheduledStartAt.toISOString());
+    });
+
+    test("passes state and cursor filters to the repository", async () => {
+      const { service, repo } = createService();
+      const input = {
+        states: ["awaiting_tutor_review"],
+        limit: 10,
+        cursor: "2026-08-16T03:00:00.000Z",
+      };
+
+      await service.listForTutor("tutor1", input);
+
+      expect(repo.listBookingsByTutor).toHaveBeenCalledWith("tutor1", input);
+    });
+
+    test("caps the requested page size", async () => {
+      const { service, repo } = createService();
+
+      await service.listForTutor("tutor1", { limit: 200 });
+
+      expect(repo.listBookingsByTutor).toHaveBeenCalledWith("tutor1", {
         states: undefined,
         limit: 100,
         cursor: undefined,
@@ -1092,10 +1137,30 @@ describe("BookingService", () => {
       );
     });
 
+    test("throws BookingSessionNotEndedError before the scheduled end", async () => {
+      const { service, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({
+              currentState: "scheduled",
+              scheduledEndAt: new Date(Date.now() + 60 * 60 * 1000),
+            }),
+          ),
+        },
+      });
+
+      await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
+        BookingSessionNotEndedError,
+      );
+      expect(wallet.deduct).not.toHaveBeenCalled();
+    });
+
     test("completes session, deducts marks, sets holdAmount to 0", async () => {
       const booking = makeBooking({
         currentState: "scheduled",
         holdAmount: 42,
+        scheduledStartAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
       });
       const { service, wallet, repo, notification } = createService({
         repo: {

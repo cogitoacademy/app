@@ -54,6 +54,7 @@ describe("createBookingRepo", () => {
     expect(repo).toHaveProperty("findBookingById");
     expect(repo).toHaveProperty("findBookingWithParticipants");
     expect(repo).toHaveProperty("listBookingsByProposer");
+    expect(repo).toHaveProperty("listBookingsByTutor");
     expect(repo).toHaveProperty("findTutorProfile");
     expect(repo).toHaveProperty("findAvailabilitySlot");
     expect(repo).toHaveProperty("findParticipant");
@@ -598,6 +599,37 @@ describe("createBookingRepo", () => {
       });
 
       expect(findMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("listBookingsByTutor", () => {
+    test("delegates to db.query.booking.findMany", async () => {
+      const rows = [{ id: "b1" }];
+      const findMany = mock(() => Promise.resolve(rows));
+      const findFirst = mock(() => Promise.resolve(null));
+      const db: any = { query: { booking: { findFirst, findMany } } };
+      const repo = createBookingRepo(db);
+
+      const result = await repo.listBookingsByTutor("t1", { limit: 10 });
+
+      expect(result).toEqual(rows);
+      expect(findMany).toHaveBeenCalledTimes(1);
+    });
+
+    test("accepts state and cursor filters", async () => {
+      const findMany = mock(() => Promise.resolve([]));
+      const findFirst = mock(() => Promise.resolve(null));
+      const db: any = { query: { booking: { findFirst, findMany } } };
+      const repo = createBookingRepo(db);
+
+      await repo.listBookingsByTutor("t1", {
+        limit: 5,
+        states: ["awaiting_tutor_review", "scheduled"],
+        cursor: "2026-08-16T03:00:00.000Z",
+      });
+
+      expect(findMany).toHaveBeenCalledTimes(1);
+      expect(findMany.mock.calls[0]?.[0]).toMatchObject({ limit: 6 });
     });
   });
 });

@@ -10,6 +10,7 @@ function makeBookingService() {
     createSolo: mock(async () => ({ id: "b1" })),
     getById: mock(async () => ({ id: "b1" })),
     listMine: mock(async () => ({ items: [] })),
+    listForTutor: mock(async () => ({ items: [], nextCursor: null })),
     cancel: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     proposeReschedule: mock(async () => ({
       id: "b1",
@@ -343,6 +344,23 @@ describe("bookingHandler", () => {
 describe("tutorActionsHandler", () => {
   beforeEach(() => {
     bookingIdempotency["store"].clear();
+  });
+
+  describe("listBookings", () => {
+    test("lists bookings assigned to the signed-in tutor", async () => {
+      const booking = makeBookingService();
+      const handler = createTutorActionsHandler(booking as any);
+      const context = makeContext("t1");
+      const input = { states: ["awaiting_tutor_review"], limit: 10 };
+
+      const result = await handler.listBookings({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.listForTutor).toHaveBeenCalledWith("t1", input);
+      expect(result).toEqual({ items: [], nextCursor: null });
+    });
   });
 
   describe("acceptBooking", () => {

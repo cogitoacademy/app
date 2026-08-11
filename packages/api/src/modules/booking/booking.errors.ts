@@ -22,6 +22,16 @@ export class BookingNotEditableError extends DomainError {
   }
 }
 
+export class BookingSessionNotEndedError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string, scheduledEndAt: Date) {
+    super("BOOKING_SESSION_NOT_ENDED", "Session has not ended yet", {
+      id,
+      scheduledEndAt: scheduledEndAt.toISOString(),
+    });
+  }
+}
+
 export class InsufficientMarksError extends DomainError {
   readonly domain = "booking";
   constructor(required: number, available: number) {
@@ -231,6 +241,8 @@ export function mapBookingError(
   if (err instanceof BookingStateTransitionError)
     return conflict(err.message, err);
   if (err instanceof BookingNotEditableError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingSessionNotEndedError)
     return badRequest(err.message, err);
   if (err instanceof InsufficientMarksError)
     return badRequest(err.message, err);
