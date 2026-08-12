@@ -15,6 +15,7 @@ import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   GROUP_SERIES_DISCLAIMER,
+  TUTOR_PAYOUT_RATE_IDR,
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
@@ -83,6 +84,14 @@ export interface CreateSeriesInput {
   modality: "online" | "offline";
   sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
   timezone: string;
+}
+
+export interface TutorPayoutResult {
+  completedSessions: number;
+  totalMarks: number;
+  cogitoTake: number;
+  tutorPayout: number;
+  tutorPayoutIdr: number;
 }
 
 export interface BookingTransition {
@@ -1707,6 +1716,65 @@ export function createBookingService(deps: {
     return repo.listSessionsBySeriesId(db, bookingId);
   }
 
+  /**
+   * Aggregates tutor earnings from COMPLETED bookings in a date range.
+   *
+   * The stored per-booking `priceSnapshot` (G19-correct tutorShare/cogitoTake)
+   * is authoritative — no flat-rate recomputation. For series bookings the
+   * per-session snapshots are summed so a completed series pays out every
+   * session; a series completed without session rows falls back to its
+   * booking-level snapshot.
+   */
+  async function getTutorPayouts(input: {
+    tutorId: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<TutorPayoutResult> {
+    const bookings = await repo.findCompletedBookingsByTutor(
+      db,
+      input.tutorId,
+      input.dateFrom,
+      input.dateTo,
+    );
+
+    let completedSessions = 0;
+    let totalMarks = 0;
+    let cogitoTake = 0;
+    let tutorPayout = 0;
+
+    for (const b of bookings) {
+      if (b.type === BOOKING_TYPE.SERIES) {
+        const sessions = await repo.listSessionsBySeriesId(db, b.id);
+        const completed = sessions.filter(
+          (s) => s.currentState === BOOKING_STATE.COMPLETED,
+        );
+        if (completed.length > 0) {
+          for (const s of completed) {
+            completedSessions++;
+            const snap = s.priceSnapshot ?? b.priceSnapshot;
+            totalMarks += snap?.baseline ?? 0;
+            cogitoTake += snap?.cogitoTake ?? 0;
+            tutorPayout += snap?.tutorShare ?? 0;
+          }
+          continue;
+        }
+      }
+      completedSessions++;
+      const snap = b.priceSnapshot;
+      totalMarks += snap?.baseline ?? 0;
+      cogitoTake += snap?.cogitoTake ?? 0;
+      tutorPayout += snap?.tutorShare ?? 0;
+    }
+
+    return {
+      completedSessions,
+      totalMarks,
+      cogitoTake,
+      tutorPayout,
+      tutorPayoutIdr: Math.round(tutorPayout * TUTOR_PAYOUT_RATE_IDR),
+    };
+  }
+
   async function expireBookings() {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
@@ -1947,6 +2015,7 @@ export function createBookingService(deps: {
     addSessionNote,
     getSessionNotes,
     listSessions,
+    getTutorPayouts,
     expireBookings,
     releaseExpiredHolds,
     checkTutorLateness,

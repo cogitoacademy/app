@@ -7,6 +7,7 @@ import {
 import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
 import type { TutorAuditPort, TutorPricingPort } from "./index";
+import type { BookingPayoutPort } from "../booking";
 import {
   TutorProfileNotFoundError,
   TutorProfileNotEditableError,
@@ -15,6 +16,8 @@ import {
   TutorProfileIncompleteError,
   InvalidTutorPricingError,
   OptimisticLockError,
+  InvalidDateRangeError,
+
   WeeklyAvailabilityRangeError,
 } from "./tutor.errors";
 
@@ -127,8 +130,9 @@ export function createTutorService(deps: {
   pricingPort: TutorPricingPort;
   auditPort: TutorAuditPort;
   db: DbType;
+  payout: BookingPayoutPort;
 }) {
-  const { tutorRepo, pricingPort, auditPort, db } = deps;
+  const { tutorRepo, pricingPort, auditPort, db, payout } = deps;
 
   /**
    * Fetches the tutor profile for the requesting user.
@@ -249,6 +253,8 @@ export function createTutorService(deps: {
     });
   }
 
+
+
   async function createWeeklyAvailability(
     userId: string,
     input: {
@@ -309,7 +315,6 @@ export function createTutorService(deps: {
       );
     });
   }
-
   /**
    * Deactivates an availability slot (soft delete) if it belongs to the tutor.
    *
@@ -326,6 +331,23 @@ export function createTutorService(deps: {
     await tutorRepo.deleteAvailability(db, slotId);
   }
 
+  async function getMyPayouts(
+    userId: string,
+    input: { dateFrom?: string; dateTo?: string },
+  ) {
+    if (input.dateFrom && Number.isNaN(Date.parse(input.dateFrom))) {
+      throw new InvalidDateRangeError("dateFrom");
+    }
+    if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
+      throw new InvalidDateRangeError("dateTo");
+    }
+    return payout.getTutorPayouts({
+      tutorId: userId,
+      dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+      dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+    });
+  }
+
   return {
     getMyProfile,
     updateMyProfile,
@@ -334,6 +356,7 @@ export function createTutorService(deps: {
     upsertAvailability,
     createWeeklyAvailability,
     deleteAvailability,
+    getMyPayouts,
   };
 }
 

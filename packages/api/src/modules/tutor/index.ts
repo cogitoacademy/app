@@ -5,6 +5,7 @@ import type {
   Modality,
   PriceSnapshot,
 } from "../pricing/pricing.service";
+import type { BookingPayoutPort } from "../booking";
 import { createTutorRepo } from "./tutor.repo";
 import { createTutorService } from "./tutor.service";
 import { createTutorHandler } from "./tutor.handler";
@@ -33,6 +34,7 @@ export function createTutorModule(deps: {
   db: DbType;
   pricing: TutorPricingPort;
   audit: TutorAuditPort;
+  payout: BookingPayoutPort;
 }) {
   const repo = createTutorRepo();
   const service = createTutorService({
@@ -40,6 +42,7 @@ export function createTutorModule(deps: {
     pricingPort: deps.pricing,
     auditPort: deps.audit,
     db: deps.db,
+    payout: deps.payout,
   });
   const handler = createTutorHandler(service);
   return { service, handler };

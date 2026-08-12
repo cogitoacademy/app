@@ -33,6 +33,7 @@ import {
   LATENESS_TOLERANCE_MS,
   MODALITY,
 } from "../../shared/constants";
+import { BOOKING_STATE } from "./booking-state.types";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
@@ -175,6 +176,9 @@ async function findUserEmails(
     .where(inArray(user.id, userIds));
 }
 
+
+
+
 /**
  * Lists participants whose confirmation state is RECONFIRMED for a booking.
  *
@@ -258,6 +262,9 @@ async function updateBookingPriceSnapshot(
       tutorShare: number;
       cogitoTake: number;
 
+
+
+
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -269,6 +276,9 @@ async function updateBookingPriceSnapshot(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
+
 
 /**
  * Sets a booking's confirmed headcount.
@@ -393,6 +403,9 @@ async function updateRescheduleProposal(
     .where(eq(bookingRescheduleProposal.id, proposalId));
 }
 
+
+
+
 /**
  * Inserts a session for a series booking.
  *
@@ -473,6 +486,9 @@ async function listSessionNotes(conn: DbOrTx, bookingId: string) {
     .orderBy(desc(sessionNote.createdAt));
 }
 
+
+
+
 /**
  * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
  *
@@ -533,6 +549,9 @@ async function updateBookingSchedule(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
+
 
 /**
  * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).
@@ -631,6 +650,26 @@ async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
     .set({ currentState: "cancelled" })
     .where(eq(bookingSession.seriesBookingId, bookingId));
 }
+
+async function findCompletedBookingsByTutor(
+  conn: DbOrTx,
+  tutorId: string,
+  dateFrom?: Date,
+  dateTo?: Date,
+): Promise<BookingRow[]> {
+  const conditions = [
+    eq(booking.tutorId, tutorId),
+    eq(booking.currentState, BOOKING_STATE.COMPLETED),
+  ];
+  if (dateFrom) {
+    conditions.push(gte(booking.scheduledStartAt, dateFrom));
+  }
+  if (dateTo) {
+    conditions.push(lte(booking.scheduledStartAt, dateTo));
+  }
+  return conn.select().from(booking).where(and(...conditions));
+}
+
 
 /**
  * Updates a booking with optimistic concurrency via version, returning the new row and version.
@@ -801,6 +840,7 @@ export function createBookingRepo(db: DbType) {
     updateBookingDeadline,
     decrementBookingConfirmedHeadcount,
     cancelAllSessions,
+    findCompletedBookingsByTutor,
   };
 }
 

@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { protectedProcedure, tutorProcedure } from "../../procedures";
+import { updateMyProfileInput, getMyPayoutsInput } from "./tutor.types";
+
 import { tutorProcedure } from "../../procedures";
 import { updateMyProfileInput } from "./tutor.types";
 import {
@@ -89,5 +92,17 @@ export function createTutorRouter(handler: TutorHandler) {
       })
       .input(deleteAvailabilityInput)
       .handler(handler.deleteAvailability),
+
+    getMyPayouts: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/payouts/get",
+        tags: ["Tutor"],
+        summary: "Get my payout summary",
+        description:
+          "Returns the authenticated tutor's payout summary from completed bookings",
+      })
+      .input(getMyPayoutsInput)
+      .handler(handler.getMyPayouts),
   };
 }
