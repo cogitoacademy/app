@@ -166,7 +166,10 @@ export function createServer() {
         request.headers.get("x-real-ip") ??
         "unknown";
 
-      if (path.startsWith("/rpc/auth.")) {
+      if (
+        path.startsWith("/api/auth/sign-in/") ||
+        path.startsWith("/api/auth/sign-up/")
+      ) {
         const { allowed, retryAfterMs } = await authRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
