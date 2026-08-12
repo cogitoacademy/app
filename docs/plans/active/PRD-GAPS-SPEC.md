@@ -46,8 +46,9 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 | G17 | Full notification matrix                  | FR-17                      | Medium   | 2d     | notification  |
 | G18 | Series session completion                 | FR-20                      | Medium   | 1d     | booking       |
 | G19 | Pricing extra-take rule (above-baseline)  | FR-05, FR-19, DL-22, TC-06 | High     | 1d     | pricing       |
+| G20 | Scheduler never boots (prereq for G2/G3)  | —                          | High     | —      | scheduler     |
 
-**Total estimated effort: ~25 days (backend)**
+**Total estimated effort: ~25 days (backend)** (G19 done; G20 was a boot fix, not feature effort)
 
 > **Note:** Frontend gaps are tracked separately in `docs/plans/active/FRONTEND-GAPS-SPEC.md`. This document is backend-only.
 
@@ -100,7 +101,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** DL-25 (12-Hour Confirmation Window)
 
-**Current state:** Scheduler has `expireBookings` job but it's either not running or not processing correctly (N1 bug). Even after bug fix, there's no periodic enforcement of the 12-hour deadline.
+**Current state:** The repeatable 5-minute `expireBookings` job IS wired on main (`scheduler.ts:86` → `scheduleBookingExpiryCheck`, `expire-bookings.job.ts:4`). It only runs if the scheduler boots (see G20 — fixed by PR C). Notification on expiry is the remaining gap.
 
 **Required:**
 
@@ -115,7 +116,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 - Booking created with 12h deadline → after 12h, scheduler expires it
 - Held funds released when booking expires
 - Series session with past deadline → expired by scheduler
-- Notification sent when booking expires
+- Notification sent when booking expires — **remaining gap** (expiry + hold release are implemented; student notification on expiry is not yet sent)
 
 ---
 
@@ -180,7 +181,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-20 (Series)
 
-**Current state:** Series bookings can be cancelled but don't enforce the H-2 cancellation window.
+**Current state:** The H-2 window IS enforced on whole-booking cancel (`booking.service.ts:391-398` — late cancellations transition to `LATE_CANCELLED`). The real gap is per-session cancellation: no `booking.cancelSession` endpoint exists.
 
 **Required:**
 
@@ -238,7 +239,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-09 (Session Notes), DL-18 (Post-Session Documentation), PRD §Session Notes (prd.tex:1033-1043)
 
-**Current state:** `_sessionNote` field exists in schema but is unused and undocumented. No sanitization.
+**Current state:** There is no `_sessionNote` column. The dead `sessionNote` input on `completeSessionInput` (`booking.types.ts:107`) is discarded by the handler — `booking.handler.ts:300-315` calls `booking.completeSession(input.bookingId, ...)` only. No sanitization.
 
 **Required:**
 
@@ -270,7 +271,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-10 (Admin Override)
 
-**Current state:** `applyOverride` exists but `listBookings` returns null cursor (N9), no urgency sorting, no SLA tracking.
+**Current state:** `applyOverride` exists. Pagination is FIXED by PR #28 — `listBookingsByState` consumes the cursor (`admin-booking.repo.ts:31-33`). Urgency sorting, SLA tracking, and exception filters are still missing.
 
 **Required:**
 
@@ -332,7 +333,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-21 (Meeting Link)
 
-**Current state:** Meeting link created immediately on booking confirmation, regardless of participant status.
+**Current state:** The meeting link is created on **tutor accept** (`booking.service.ts:440+` — `tutorAccept` calls `meeting.createEvent`), not at confirmation. Gating is largely satisfied by the booking state machine. The remaining gap is placeholder UX for participants before the link exists.
 
 **Required:**
 
@@ -403,7 +404,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-22 (Offline Room Booking)
 
-**Current state:** Room bookings have `requested` status but no admin endpoints to approve/relocate/cancel.
+**Current state:** `room.assign` exists and acts as the approve-equivalent (`room.router.ts:29`, `room.handler.ts:25`). Relocate and cancel endpoints are missing.
 
 **Required:**
 
@@ -538,7 +539,9 @@ Implement the full notification matrix **as defined in the PRD** (prd.tex:912-95
 
 **PRD:** FR-05 (tutor prices respect Cogito floors), FR-19 (tutor self-pricing), DL-22 (extra-take rule), TC-06 (verify above-floor tutor pricing split)
 
-**Current state — BUG:** `pricing.service.ts:69-79` (`computeSplit`) uses a flat `COGITO_TAKE_RATE = 0.2` (20% of total Marks). This is **wrong**. The PRD requires the **extra-take rule**:
+> **Status: IMPLEMENTED** by BACKEND-HARDENING PR C (task C7). `computeSplit` now implements the PRD extra-take rule. Spec retained below as historical reference for the acceptance cases.
+
+**Current state — BUG (as of v1.2):** `pricing.service.ts:69-79` (`computeSplit`) uses a flat `COGITO_TAKE_RATE = 0.2` (20% of total Marks). This is **wrong**. The PRD requires the **extra-take rule**:
 
 - Baseline total = floor price per student × final confirmed headcount
 - Tutor total = tutor-set per-student price × final confirmed headcount
@@ -583,6 +586,24 @@ The constant `EXTRA_TAKE_DIVISOR = 5` is defined in `packages/api/src/shared/con
 - Below-floor price → rejected (existing `validatePrices` handles this)
 
 **Depends on:** G16 (tutor payout) must use the corrected `computeSplit` output.
+
+---
+
+### G20: Scheduler Never Boots
+
+**PRD:** — (foundation — prerequisite for G2/G3)
+
+**Current state — BUG (as of v1.3):** `initScheduler()` is defined in `apps/server/src/scheduler.ts:11` but was **never called** in `apps/server/src/index.ts` — only `shutdownScheduler` is imported/wired. The BullMQ worker and its 3 repeatable jobs (`expire-bookings` 5min, `release-expired-holds` 10min, `send-notification-email` 60s) therefore never start, so G2 (12-hour deadline) and G3 (lateness auto-cancel) can never run.
+
+> **Status: FIXED** by BACKEND-HARDENING PR C (task C1) — `initScheduler()` is now invoked during server bootstrap, gated on `SCHEDULER_ENABLED=true` + `REDIS_URL`.
+
+**Depends on:** G2/G3 require the scheduler to be running.
+
+**Acceptance tests:**
+
+- Server starts with `SCHEDULER_ENABLED=false` → logs `scheduler_skip`, no crash
+- Server starts with `SCHEDULER_ENABLED=true` + `REDIS_URL` → logs `scheduler_initialized`, all 3 repeatable jobs registered
+- Graceful shutdown closes the worker and queue
 
 ---
 
@@ -678,3 +699,4 @@ All new endpoints must use these patterns established by the foundation-hardenin
 - v1.0 (2026-07-21): Created. 18 PRD gaps catalogued with specifications, acceptance tests, and timeline. Reference document for future `feature/prd-gaps` branch.
 - v1.1 (2026-07-27): Added "Established Patterns" section documenting foundation-hardening patterns that all new endpoints must use. Updated dependency line (consolidation merged → foundation-hardening).
 - v1.2 (2026-07-29): Codebase audit. Added G19 (pricing extra-take rule bug — `computeSplit` uses flat 20% instead of PRD's 1-per-5-Marks-above-baseline). Fixed G6 (proposeReschedule already exists but as student action, not tutor — reframed as role fix + add accept/reject). Fixed G7 (added sanitization requirement). Replaced G17 matrix with PRD source-of-truth matrix (prd.tex:912-955). Added "Other PRD Requirements Not Yet Tracked" section (FR-02 parent contact, OQ-04 WhatsApp SLA, full override form UX). Updated timeline to ~31 days. Marked scope as backend-only with reference to FRONTEND-GAPS-SPEC.md.
+- v1.3 (2026-08-12): Audit against verified main. G19 marked IMPLEMENTED (PR C / task C7 — extra-take rule now in `computeSplit`). Added G20 (scheduler never boots — `initScheduler()` never called; FIXED by PR C / task C1). Corrected stale current-state claims: G2 (5-min `expireBookings` job now wired; notification on expiry remains the gap), G5 (H-2 window enforced on whole-booking cancel; real gap is per-session `cancelSession`), G7 (no `_sessionNote` column; dead `sessionNote` input discarded by handler), G8 (N9 pagination fixed by PR #28), G11 (link created on tutor accept, not confirmation; gating satisfied by state machine; placeholder UX is the gap), G14 (`room.assign` exists as approve-equivalent; relocate/cancel missing).
