@@ -80,10 +80,7 @@ describe("wallet repo (real DB)", () => {
       .select()
       .from(ledgerEntry)
       .where(
-        and(
-          eq(ledgerEntry.walletId, w.id),
-          eq(ledgerEntry.entryType, "hold"),
-        ),
+        and(eq(ledgerEntry.walletId, w.id), eq(ledgerEntry.entryType, "hold")),
       );
     expect(entries.length).toBe(1);
     expect(entries[0]!.amount).toBe(30);

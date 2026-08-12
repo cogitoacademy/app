@@ -75,7 +75,10 @@ describe("booking repo (real DB)", () => {
   });
 
   test("updateBookingVersioned rejects a stale version", async () => {
-    const b = await repo.insertBooking(db, makeBooking({ tutorId, proposerId }));
+    const b = await repo.insertBooking(
+      db,
+      makeBooking({ tutorId, proposerId }),
+    );
     const stale = await repo.updateBookingVersioned(db, b.id, 99, {
       currentState: "confirmed",
     });
@@ -83,7 +86,10 @@ describe("booking repo (real DB)", () => {
   });
 
   test("updateBookingVersioned updates and bumps the version on a matching version", async () => {
-    const b = await repo.insertBooking(db, makeBooking({ tutorId, proposerId }));
+    const b = await repo.insertBooking(
+      db,
+      makeBooking({ tutorId, proposerId }),
+    );
     const result = await repo.updateBookingVersioned(db, b.id, 1, {
       currentState: "confirmed",
     });
