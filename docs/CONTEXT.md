@@ -251,19 +251,19 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-| Plan                                                              | Branch                             | Status                                    |
-| ----------------------------------------------------------------- | ---------------------------------- | ----------------------------------------- |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                      |
-| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                      |
-| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                      |
+| Plan                                                              | Branch                             | Status                                                                             |
+| ----------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                                                               |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                                                               |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                                                               |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                                                               |
+| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                               |
+| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                               |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps (1.4/1.5/1.7/1.8 done in BACKEND-HARDENING PRs B/C) + ops tasks |
 | `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, next to execute — G19 implemented (PR C), G20 fixed (PR C)         |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Frontend gap spec, parallel with PRD Gaps |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                      |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Frontend gap spec, parallel with PRD Gaps                                          |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                         |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                               |
 
 ### Execution Order
 
@@ -355,7 +355,7 @@ Status column: **Fixed** = verified in code on main after #17 merge; **Open** = 
 | J4  | `any` type casts in route files                                        | P2       | 9     | Fixed                                                                                          |
 | K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     | Fixed                                                                                          |
 | K2  | No body size limit on webhook endpoints                                | P2       | 6     | Fixed                                                                                          |
-| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 3 jobs have `attempts: 3` + exponential backoff (no DLQ)                                                        |
+| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 3 jobs have `attempts: 3` + exponential backoff (no DLQ)                           |
 | K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states              | P3       | 2     | Accepted (dead states, no action needed)                                                       |
 | K5  | repricedMarks column is dead — never set or read                       | P3       | 2     | Accepted (dead column, no action needed)                                                       |
 | K6  | timezone field stored but never used                                   | P3       | 2     | Accepted (stored, no action needed)                                                            |
