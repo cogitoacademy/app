@@ -183,9 +183,7 @@ describe("G5: series session cancellation rules", () => {
 
   test("cancel another session inside H-2 → rejected", async () => {
     const sessions = await studentClient.booking.listSessions({ bookingId });
-    const target = sessions.find(
-      (s) => s.currentState === "scheduled",
-    )!;
+    const target = sessions.find((s) => s.currentState === "scheduled")!;
 
     // nudge the session to be within 2h of start
     await db

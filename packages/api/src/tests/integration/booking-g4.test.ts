@@ -234,9 +234,7 @@ describe("G4: group repricing on headcount change", () => {
       const notifs = await db
         .select()
         .from(notification)
-        .where(
-          eq(notification.eventKey, `booking.${bookingId}.reprice.${id}`),
-        );
+        .where(eq(notification.eventKey, `booking.${bookingId}.reprice.${id}`));
       expect(notifs.length).toBe(1);
       expect(notifs[0]!.title).toBe("Group price updated");
     }
