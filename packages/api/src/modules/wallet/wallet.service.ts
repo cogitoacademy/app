@@ -1,5 +1,3 @@
-import { eq, and, inArray, sum } from "drizzle-orm";
-import { wallet, ledgerEntry } from "@cogito-app/db/schema";
 import { KNOWLEDGE_BANK_THRESHOLD } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -110,9 +108,6 @@ export interface WalletPort {
       updatedAt: Date;
     }[]
   >;
-  reconcile(query?: {
-    walletId?: string;
-  }): Promise<{ expected: number; actual: number; drift: number }>;
 }
 
 export type WalletService = ReturnType<typeof createWalletService>;
@@ -439,46 +434,6 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return repo.listActivePackages(db);
   }
 
-  /**
-   * Reconciles the ledger against the wallet total balance to detect drift.
-   *
-   * @param query - optional walletId to reconcile a single wallet
-   * @returns the expected (ledger-derived), actual (wallet) totals and the drift
-   */
-  async function reconcile(query?: { walletId?: string }) {
-    const ADD_TYPES = ["credit", "compensate_credit"];
-    const SUB_TYPES = ["deduct", "compensate_deduct"];
-
-    const walletCondition = query?.walletId
-      ? eq(ledgerEntry.walletId, query.walletId)
-      : undefined;
-
-    const [addRow] = await db
-      .select({ total: sum(ledgerEntry.amount) })
-      .from(ledgerEntry)
-      .where(and(walletCondition, inArray(ledgerEntry.entryType, ADD_TYPES)));
-    const [subRow] = await db
-      .select({ total: sum(ledgerEntry.amount) })
-      .from(ledgerEntry)
-      .where(and(walletCondition, inArray(ledgerEntry.entryType, SUB_TYPES)));
-
-    const expected = Number(addRow?.total ?? 0) - Number(subRow?.total ?? 0);
-
-    const walletRows = query?.walletId
-      ? await db
-          .select()
-          .from(wallet)
-          .where(eq(wallet.id, query.walletId))
-          .limit(1000)
-      : await db.select().from(wallet).limit(1000);
-    const actual = walletRows.reduce(
-      (acc, w) => acc + (w.totalBalance ?? 0),
-      0,
-    );
-
-    return { expected, actual, drift: actual - expected };
-  }
-
   return {
     hold,
     release,
@@ -491,6 +446,5 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     listLedger,
     knowledgeBankEligible,
     listActivePackages,
-    reconcile,
   };
 }

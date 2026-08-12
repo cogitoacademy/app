@@ -97,14 +97,12 @@ export type NotificationService = ReturnType<typeof createNotificationService>;
  *
  * @param repo - the notification repository
  * @param emailPort - optional email sender used for action/critical severity notifications
- * @returns an InAppNotificationPort with write/list/read-status methods plus dispatchStatus
+ * @returns an InAppNotificationPort with write/list/read-status methods
  */
 export function createNotificationService(
   repo: NotificationRepo,
   emailPort?: NotificationEmailPort,
-): InAppNotificationPort & {
-  dispatchStatus: (notificationId: string) => Promise<unknown>;
-} {
+): InAppNotificationPort {
   async function writeInternal(params: NotificationWriteParams): Promise<void> {
     const conn = params.db;
 
@@ -272,16 +270,6 @@ export function createNotificationService(
     await repo.markAllRead(userId);
   }
 
-  /**
-   * Looks up the dispatch status for a notification.
-   *
-   * @param notificationId - the notification to inspect
-   * @returns the dispatch row, or null when no dispatch exists
-   */
-  async function dispatchStatus(notificationId: string) {
-    return repo.findDispatch(notificationId);
-  }
-
   return {
     write,
     writeBestEffort,
@@ -289,6 +277,5 @@ export function createNotificationService(
     getUnreadCount,
     markAsRead,
     markAllAsRead,
-    dispatchStatus,
   };
 }

@@ -621,43 +621,4 @@ describe("WalletService", () => {
       expect(outerTx.atomicHold).toHaveBeenCalledWith(outerTx, "wallet1", 10);
     });
   });
-
-  describe("reconcile", () => {
-    test("returns expected, actual, and drift", async () => {
-      let selectCallCount = 0;
-      const db = {
-        select: mock(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) {
-            return {
-              from: mock(() => ({
-                where: mock(async () => [{ total: 150 }]),
-              })),
-            };
-          }
-          if (selectCallCount === 2) {
-            return {
-              from: mock(() => ({
-                where: mock(async () => [{ total: 50 }]),
-              })),
-            };
-          }
-          return {
-            from: mock(() => ({
-              limit: mock(async () => [{ totalBalance: 80 }]),
-            })),
-          };
-        }),
-      } as any;
-
-      const repo = makeRepo();
-      const service = createWalletService(repo as any, db);
-
-      const result = await service.reconcile();
-
-      expect(result.expected).toBe(100);
-      expect(result.actual).toBe(80);
-      expect(result.drift).toBe(-20);
-    });
-  });
 });

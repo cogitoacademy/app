@@ -367,7 +367,6 @@ describe("NotificationService (unit)", () => {
     expect(typeof service.getUnreadCount).toBe("function");
     expect(typeof service.markAsRead).toBe("function");
     expect(typeof service.markAllAsRead).toBe("function");
-    expect(typeof service.dispatchStatus).toBe("function");
   });
 
   test("writeInternal does not dispatch email for info severity", async () => {
@@ -570,37 +569,6 @@ describe("NotificationService (unit)", () => {
     await service.markAllAsRead("user1");
 
     expect(repo.markAllRead).toHaveBeenCalledWith("user1");
-  });
-
-  test("dispatchStatus delegates to repo and returns result when found", async () => {
-    const dispatchRecord = {
-      id: "d1",
-      notificationId: "n1",
-      channel: "email",
-      recipientEmail: "user@example.com",
-      status: "sent",
-      createdAt: new Date(),
-    };
-
-    const repo = makeRepo({
-      findDispatch: mock(async () => dispatchRecord),
-    });
-
-    const service = createNotificationService(repo);
-    const result = await service.dispatchStatus("n1");
-
-    expect(result).toEqual(dispatchRecord);
-  });
-
-  test("dispatchStatus returns null when not found", async () => {
-    const repo = makeRepo({
-      findDispatch: mock(async () => null),
-    });
-
-    const service = createNotificationService(repo);
-    const result = await service.dispatchStatus("nonexistent");
-
-    expect(result).toBeNull();
   });
 
   test("writeInternal dispatches email for refund category with action severity", async () => {
