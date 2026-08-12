@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
+import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
@@ -420,22 +421,19 @@ export function AvailabilityPage() {
           <CardBody>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
               {!editingSlotId ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={form.mode === "weekly" ? "primary" : "outline"}
-                    onClick={() => setScheduleMode("weekly")}
-                  >
-                    Weekly schedule
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={form.mode === "custom" ? "primary" : "outline"}
-                    onClick={() => setScheduleMode("custom")}
-                  >
-                    One-time slot
-                  </Button>
-                </div>
+                <Tabs
+                  value={form.mode}
+                  onValueChange={(value) => {
+                    if (value === "weekly" || value === "custom") {
+                      setScheduleMode(value);
+                    }
+                  }}
+                >
+                  <TabsList>
+                    <TabsItem value="weekly">Weekly schedule</TabsItem>
+                    <TabsItem value="custom">One-time slot</TabsItem>
+                  </TabsList>
+                </Tabs>
               ) : null}
 
               <Field>
