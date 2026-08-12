@@ -21,6 +21,18 @@ export function createAdminBookingRouter(handler: AdminBookingHandler) {
       .input(applyOverrideInput)
       .handler(handler.applyOverride),
 
+    previewOverride: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/booking/override/preview",
+        tags: ["Admin Booking"],
+        summary: "Preview an admin override before applying",
+        description:
+          "Returns the projected booking state and wallet impact without persisting anything",
+      })
+      .input(applyOverrideInput)
+      .handler(handler.previewOverride),
+
     listBookings: adminProcedure
       .route({
         method: "POST",

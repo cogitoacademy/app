@@ -183,6 +183,7 @@ function createServices() {
     audit: audit.service,
     wallet: wallet.service,
     refund: refund.service,
+    notification: notification.service,
   });
 
   const support = createSupportModule({

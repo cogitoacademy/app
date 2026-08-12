@@ -88,6 +88,12 @@ function makeRefundPort() {
   };
 }
 
+function makeNotificationPort() {
+  return {
+    writeBestEffort: mock(async () => {}),
+  };
+}
+
 describe("AdminBookingService", () => {
   describe("applyOverride", () => {
     test("throws BookingNotFoundError when booking does not exist", async () => {
@@ -438,6 +444,185 @@ describe("AdminBookingService", () => {
 
       expect(wallet.release).not.toHaveBeenCalled();
       expect(wallet.compensate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("previewOverride", () => {
+    test("returns projected state and wallet impact without writing anything", async () => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+          holdAmount: 100,
+        })),
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.previewOverride({
+        bookingId: "b1",
+        category: "tutor_no_show",
+        reason: "Preview",
+        marksAction: "release_holds",
+        affectedParticipants: ["u1"],
+      });
+
+      expect(result.bookingId).toBe("b1");
+      expect(result.currentState).toBe("confirmed");
+      expect(result.projectedState).toBe("no_show");
+      expect(result.affectedParticipants).toEqual(["u1"]);
+      expect(result.marksAction).toBe("release_holds");
+      expect(result.perParticipantImpact).toHaveLength(1);
+      expect(result.perParticipantImpact[0]).toMatchObject({
+        userId: "u1",
+        participantId: "p1",
+        heldAmount: 50,
+        walletId: "w1",
+        action: "release_holds",
+        before: { totalBalance: 200, heldBalance: 0, availableBalance: 200 },
+        after: { totalBalance: 200, heldBalance: 0, availableBalance: 250 },
+      });
+      expect(repo.updateBookingWithOverride).not.toHaveBeenCalled();
+      expect(repo.insertStateHistoryEntry).not.toHaveBeenCalled();
+    });
+
+    test("throws BookingNotFoundError for missing booking", async () => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => null),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      try {
+        await service.previewOverride({
+          bookingId: "missing",
+          category: "force_cancel",
+          reason: "Preview",
+        });
+        expect(true).toBe(false);
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(BookingNotFoundError);
+      }
+    });
+
+    test("throws TerminalStateOverrideError for terminal booking", async () => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "completed",
+          holdAmount: 0,
+        })),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      try {
+        await service.previewOverride({
+          bookingId: "b1",
+          category: "force_cancel",
+          reason: "Preview",
+        });
+        expect(true).toBe(false);
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(TerminalStateOverrideError);
+      }
+    });
+
+    test("no marksAction returns empty impact and null marksAction", async () => {
+      const repo = mockRepo();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.previewOverride({
+        bookingId: "b1",
+        category: "admin_correction",
+        reason: "Preview",
+      });
+      expect(result.marksAction).toBeNull();
+      expect(result.perParticipantImpact).toEqual([]);
+    });
+  });
+
+  describe("applyOverride notifications", () => {
+    test("writes best-effort notification to affected participants", async () => {
+      const notification = makeNotificationPort();
+      const repo = mockRepo({
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+          { id: "p2", userId: "u2", heldAmount: 0 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        notification: notification as any,
+      });
+
+      await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "force_cancel",
+        reason: "Notify",
+        affectedParticipants: ["u1", "u2"],
+      });
+
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(2);
+      const first = notification.writeBestEffort.mock.calls[0][0];
+      expect(first).toMatchObject({
+        userId: "u1",
+        bookingId: "b1",
+        category: "override",
+        severity: "action",
+      });
+      expect(first.eventKey).toBe("override.applied.b1.u1");
+    });
+
+    test("skips notifications when no port provided", async () => {
+      const repo = mockRepo({
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "force_cancel",
+        reason: "No notify",
+        affectedParticipants: ["u1"],
+      });
+      expect(repo.updateBookingWithOverride).toHaveBeenCalledTimes(1);
     });
   });
 

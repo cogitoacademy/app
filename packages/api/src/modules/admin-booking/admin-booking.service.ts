@@ -8,16 +8,20 @@ import {
   ACTOR_TYPE,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
+  NOTIFICATION_CATEGORY,
+  NOTIFICATION_SEVERITY,
   PAYMENT_STATUS,
   RESPONSE_WINDOW_MS,
 } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
 import type {
   AdminBookingAuditPort,
   AdminBookingWalletPort,
   AdminBookingRefundPort,
+  AdminBookingNotificationPort,
 } from "./index";
 
 export const OVERRIDE_CATEGORIES = [
@@ -47,6 +51,32 @@ const CATEGORY_STATE_MAP: Record<OverrideCategory, string> = {
   student_no_show: BOOKING_STATE.NO_SHOW,
   force_cancel: BOOKING_STATE.CANCELLED,
 };
+
+export interface WalletBalances {
+  totalBalance: number;
+  heldBalance: number;
+  availableBalance: number;
+}
+
+export interface PerParticipantImpact {
+  userId: string;
+  participantId: string;
+  heldAmount: number;
+  walletId: string;
+  action: MarksAction;
+  before: WalletBalances;
+  after: WalletBalances;
+}
+
+export interface OverrideInput {
+  bookingId: string;
+  category: OverrideCategory;
+  reason: string;
+  affectedParticipants?: string[];
+  marksAction?: MarksAction;
+  userNote?: string;
+  internalNote?: string;
+}
 
 export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
 
@@ -80,6 +110,8 @@ function toOverrideCursor(row: {
   return `${rank}~${row.scheduledStartAt.toISOString()}~${row.id}`;
 }
 
+
+
  * Creates the admin booking service for overrides, listing, history, and refunds.
  *
  * @param deps - the dependency ports (db, repo, auditPort, wallet, refund)
@@ -91,10 +123,46 @@ export function createAdminBookingService(deps: {
   auditPort: AdminBookingAuditPort;
   wallet: AdminBookingWalletPort;
   refund: AdminBookingRefundPort;
+  notification?: AdminBookingNotificationPort;
 }) {
-  const { db, repo, auditPort, wallet, refund } = deps;
+  const { db, repo, auditPort, wallet, refund, notification } = deps;
+
+  function projectWalletAfter(
+    w: WalletBalances,
+    action: MarksAction,
+    amount: number,
+  ): WalletBalances {
+    if (action === "release_holds") {
+      return {
+        totalBalance: w.totalBalance,
+        heldBalance: Math.max(w.heldBalance - amount, 0),
+        availableBalance: w.availableBalance + amount,
+      };
+    }
+    if (action === "compensate_credit") {
+      return {
+        totalBalance: w.totalBalance + amount,
+        heldBalance: w.heldBalance,
+        availableBalance: w.availableBalance + amount,
+      };
+    }
+    return {
+      totalBalance: w.totalBalance - amount,
+      heldBalance: w.heldBalance,
+      availableBalance: w.availableBalance - amount,
+    };
+  }
 
   /**
+   * Pure planning for an override: computes the projected target state and per
+   * participant wallet impact WITHOUT writing anything. Shared by applyOverride
+   * (which executes the plan) and previewOverride (which only reports it).
+   */
+  async function planOverride(
+    conn: DbOrTx,
+    bookingRow: { id: string; currentState: string; holdAmount: number },
+    input: OverrideInput,
+
    * Applies an admin override to a booking, optionally releasing/compensating held Marks.
    *
    * @param adminId - the admin applying the override
@@ -117,6 +185,15 @@ export function createAdminBookingService(deps: {
   ) {
     const newState = CATEGORY_STATE_MAP[input.category];
 
+    if (
+      (TERMINAL_STATES as readonly string[]).includes(bookingRow.currentState)
+    ) {
+      throw new TerminalStateOverrideError(
+        input.bookingId,
+        bookingRow.currentState,
+      );
+    }
+
     const overrideMeta: Record<string, unknown> = {
       category: input.category,
       reason: input.reason,
@@ -127,111 +204,142 @@ export function createAdminBookingService(deps: {
       overriddenAt: new Date().toISOString(),
     };
 
+    const participants = await repo.findParticipantsByBookingId(
+      conn,
+      input.bookingId,
+    );
+    const affectedParts =
+      input.affectedParticipants && input.affectedParticipants.length > 0
+        ? participants.filter((p) =>
+            input.affectedParticipants!.includes(p.userId),
+          )
+        : [];
+
+    const perParticipantImpact: PerParticipantImpact[] = [];
+    if (input.marksAction && bookingRow.holdAmount > 0) {
+      for (const participant of affectedParts) {
+        if (participant.heldAmount <= 0) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const participantWallet = await wallet.getByUserId(
+          conn,
+          participant.userId,
+        );
+        if (!participantWallet) continue;
+        perParticipantImpact.push({
+          userId: participant.userId,
+          participantId: participant.id,
+          heldAmount: participant.heldAmount,
+          walletId: participantWallet.id,
+          action: input.marksAction,
+          before: {
+            totalBalance: participantWallet.totalBalance,
+            heldBalance: participantWallet.heldBalance,
+            availableBalance: participantWallet.availableBalance,
+          },
+          after: projectWalletAfter(
+            participantWallet,
+            input.marksAction,
+            participant.heldAmount,
+          ),
+        });
+      }
+    }
+
+    return {
+      newState,
+      affectedParticipantIds: affectedParts.map((p) => p.userId),
+      projectedMarksAction: input.marksAction ?? null,
+      perParticipantImpact,
+      overrideMeta,
+    };
+  }
+
+  async function applyOverride(adminId: string, input: OverrideInput) {
     const result = await db.transaction(async (tx) => {
       const bookingRow = await repo.findBookingById(tx, input.bookingId);
       if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
 
-      if (
-        (TERMINAL_STATES as readonly string[]).includes(bookingRow.currentState)
-      ) {
-        throw new TerminalStateOverrideError(
-          input.bookingId,
-          bookingRow.currentState,
-        );
-      }
+      const plan = await planOverride(tx, bookingRow, input);
 
       const updateResult = await repo.updateBookingWithOverride(
         tx,
         input.bookingId,
-        newState,
+        plan.newState,
         input.reason,
-        overrideMeta,
+        plan.overrideMeta,
       );
       if (!updateResult) throw new BookingNotFoundError(input.bookingId);
 
       await repo.insertStateHistoryEntry(tx, {
         bookingId: input.bookingId,
         fromState: updateResult.previousState,
-        toState: newState,
+        toState: plan.newState,
         reason: input.reason,
         actorId: adminId,
         actorType: ACTOR_TYPE.ADMIN,
-        metadata: overrideMeta,
+        metadata: plan.overrideMeta,
       });
 
-      if (
-        input.marksAction &&
-        bookingRow.holdAmount > 0 &&
-        input.affectedParticipants &&
-        input.affectedParticipants.length > 0
-      ) {
-        const participants = await repo.findParticipantsByBookingId(
-          tx,
-          input.bookingId,
-        );
-        const affectedParts = participants.filter((p) =>
-          input.affectedParticipants!.includes(p.userId),
-        );
+      let totalReleased = 0;
 
-        let totalReleased = 0;
-
-        for (const participant of affectedParts) {
+      for (const impact of plan.perParticipantImpact) {
+        if (impact.action === "release_holds") {
           // eslint-disable-next-line no-await-in-loop
-          const participantWallet = await wallet.getByUserId(
-            tx,
-            participant.userId,
-          );
-          if (!participantWallet) continue;
-
-          if (
-            input.marksAction === "release_holds" &&
-            participant.heldAmount > 0
-          ) {
-            // eslint-disable-next-line no-await-in-loop
-            await wallet.release(tx, {
-              walletId: participantWallet.id,
-              amount: participant.heldAmount,
-              eventKey: `override.release.${input.bookingId}.${participant.id}`,
-              actorType: ACTOR_TYPE.ADMIN,
-              reason: `Admin override: ${input.reason}`,
-              bookingId: input.bookingId,
-            });
-            totalReleased += participant.heldAmount;
-          } else if (
-            input.marksAction === "compensate_credit" &&
-            participant.heldAmount > 0
-          ) {
-            // eslint-disable-next-line no-await-in-loop
-            await wallet.compensate(tx, {
-              walletId: participantWallet.id,
-              amount: participant.heldAmount,
-              eventKey: `override.compensate_credit.${input.bookingId}.${participant.id}`,
-              actorType: ACTOR_TYPE.ADMIN,
-              reason: `Admin override credit: ${input.reason}`,
-              type: "compensate_credit",
-              bookingId: input.bookingId,
-            });
-            totalReleased += participant.heldAmount;
-          } else if (
-            input.marksAction === "compensate_deduct" &&
-            participant.heldAmount > 0
-          ) {
-            // eslint-disable-next-line no-await-in-loop
-            await wallet.compensate(tx, {
-              walletId: participantWallet.id,
-              amount: participant.heldAmount,
-              eventKey: `override.compensate_deduct.${input.bookingId}.${participant.id}`,
-              actorType: ACTOR_TYPE.ADMIN,
-              reason: `Admin override deduct: ${input.reason}`,
-              type: "compensate_deduct",
-              bookingId: input.bookingId,
-            });
-            totalReleased += participant.heldAmount;
-          }
+          await wallet.release(tx, {
+            walletId: impact.walletId,
+            amount: impact.heldAmount,
+            eventKey: `override.release.${input.bookingId}.${impact.participantId}`,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: `Admin override: ${input.reason}`,
+            bookingId: input.bookingId,
+          });
+          totalReleased += impact.heldAmount;
+        } else if (impact.action === "compensate_credit") {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.compensate(tx, {
+            walletId: impact.walletId,
+            amount: impact.heldAmount,
+            eventKey: `override.compensate_credit.${input.bookingId}.${impact.participantId}`,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: `Admin override credit: ${input.reason}`,
+            type: "compensate_credit",
+            bookingId: input.bookingId,
+          });
+          totalReleased += impact.heldAmount;
+        } else if (impact.action === "compensate_deduct") {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.compensate(tx, {
+            walletId: impact.walletId,
+            amount: impact.heldAmount,
+            eventKey: `override.compensate_deduct.${input.bookingId}.${impact.participantId}`,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: `Admin override deduct: ${input.reason}`,
+            type: "compensate_deduct",
+            bookingId: input.bookingId,
+          });
+          totalReleased += impact.heldAmount;
         }
+      }
 
-        if (totalReleased > 0) {
-          await repo.updateBookingHoldAmount(tx, input.bookingId, 0);
+      if (totalReleased > 0) {
+        await repo.updateBookingHoldAmount(tx, input.bookingId, 0);
+      }
+
+      if (notification) {
+        for (const userId of plan.affectedParticipantIds) {
+          // eslint-disable-next-line no-await-in-loop
+          await notification.writeBestEffort({
+            db: tx,
+            userId,
+            bookingId: input.bookingId,
+            category: NOTIFICATION_CATEGORY.OVERRIDE,
+            severity: NOTIFICATION_SEVERITY.ACTION,
+            title: "Your booking was updated by an admin",
+            body: `Your booking was updated (${input.category})${
+              input.userNote ? `: ${input.userNote}` : ""
+            }.`,
+            eventKey: `override.applied.${input.bookingId}.${userId}`,
+          });
         }
       }
 
@@ -243,13 +351,30 @@ export function createAdminBookingService(deps: {
         targetId: input.bookingId,
         targetType: "booking",
         beforeState: { currentState: updateResult.previousState },
-        afterState: { currentState: newState, overrideMeta },
+        afterState: { currentState: plan.newState, overrideMeta: plan.overrideMeta },
       });
 
       return updateResult.updated;
     });
 
     return result;
+  }
+
+  /** Returns the projected override outcome without persisting anything. */
+  async function previewOverride(input: OverrideInput) {
+    const bookingRow = await repo.findBookingById(db, input.bookingId);
+    if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
+
+    const plan = await planOverride(db, bookingRow, input);
+
+    return {
+      bookingId: input.bookingId,
+      currentState: bookingRow.currentState,
+      projectedState: plan.newState,
+      affectedParticipants: plan.affectedParticipantIds,
+      marksAction: plan.projectedMarksAction,
+      perParticipantImpact: plan.perParticipantImpact,
+    };
   }
 
   /**
@@ -373,5 +498,11 @@ export function createAdminBookingService(deps: {
     });
   }
 
-  return { applyOverride, listBookings, getBookingStateHistory, adminRefund };
+  return {
+    applyOverride,
+    previewOverride,
+    listBookings,
+    getBookingStateHistory,
+    adminRefund,
+  };
 }
