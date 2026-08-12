@@ -234,6 +234,30 @@ async function updateBookingHoldAmount(
     .where(eq(booking.id, bookingId));
 }
 
+async function updateBookingPriceSnapshot(
+  conn: DbOrTx,
+  bookingId: string,
+  values: {
+    priceSnapshot: {
+      perStudent: number;
+      baseline: number;
+      tutorShare: number;
+      cogitoTake: number;
+      baselineCogitoTake: number;
+      baselineTutorShare: number;
+      extraTotal: number;
+      cogitoExtraTake: number;
+      tutorExtraShare: number;
+    };
+    holdAmount: number;
+  },
+) {
+  await conn
+    .update(booking)
+    .set(values)
+    .where(eq(booking.id, bookingId));
+}
+
 /**
  * Sets a booking's confirmed headcount.
  *
@@ -641,6 +665,7 @@ export function createBookingRepo(db: DbType) {
     insertRescheduleProposal,
     insertBookingSession,
     listSessionsBySeriesId,
+    updateBookingPriceSnapshot,
     findBookingsExpiringByDeadline,
     findBookingsWithTutorLateness,
     findTutorParticipant,

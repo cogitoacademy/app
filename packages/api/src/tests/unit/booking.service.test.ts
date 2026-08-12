@@ -54,6 +54,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     decrementBookingConfirmedHeadcount: mock(async () => {}),
     cancelAllSessions: mock(async () => {}),
     updateBookingDeadline: mock(async () => {}),
+    updateBookingPriceSnapshot: mock(async () => {}),
     ...overrides,
   };
 }
@@ -207,17 +208,30 @@ function makeParticipant(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function realComputeSplit(totalMarks: number, groupSize: number) {
+  const perStudent = Math.floor(totalMarks / groupSize);
+  return {
+    perStudent,
+    baseline: totalMarks,
+    tutorShare: totalMarks - Math.floor(totalMarks * 0.2),
+    cogitoTake: Math.floor(totalMarks * 0.2),
+  };
+}
+
 function createService(
   overrides: {
     repo?: Record<string, unknown>;
     wallet?: Record<string, unknown>;
     meeting?: Record<string, unknown>;
+    pricing?: Record<string, unknown>;
   } = {},
 ) {
   const db = makeDb();
   const repo = mockRepo(overrides.repo);
   const wallet = makeWallet(overrides.wallet);
-  const pricing = makePricing();
+  const pricing = overrides.pricing
+    ? { ...makePricing(), ...overrides.pricing }
+    : makePricing();
   const audit = makeAudit();
   const notification = makeNotification();
   const meeting = overrides.meeting
@@ -2946,6 +2960,203 @@ describe("BookingService", () => {
           expect.objectContaining({ currentState: "expired" }),
         );
       });
+    });
+  });
+
+  describe("G4 group repricing on headcount change", () => {
+    function makeGroupBooking(overrides: Record<string, unknown> = {}) {
+      return makeBooking({
+        type: "group",
+        currentState: "awaiting_tutor_review",
+        targetGroupSize: 4,
+        confirmedHeadcount: 4,
+        holdAmount: 112,
+        priceSnapshot: {
+          perStudent: 28,
+          baseline: 112,
+          tutorShare: 89.6,
+          cogitoTake: 22.4,
+        },
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        ...overrides,
+      });
+    }
+
+    function makeRemainingParticipant(
+      id: string,
+      userId: string,
+      heldAmount: number,
+    ) {
+      return {
+        id,
+        bookingId: "b1",
+        userId,
+        role: "invitee",
+        confirmationState: "confirmed",
+        heldAmount,
+      };
+    }
+
+    test("withdraw from group reprices remaining participants to higher per-student price", async () => {
+      const booking = makeGroupBooking();
+      const proposer = makeParticipant({ heldAmount: 112 });
+      const remaining = [
+        makeRemainingParticipant("p2", "student2", 28),
+        makeRemainingParticipant("p3", "student3", 28),
+        makeRemainingParticipant("p4", "student4", 28),
+      ];
+      const { service, wallet, repo, notification } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => proposer),
+          findConfirmedParticipants: mock(async () => remaining),
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ prices: { "3": 35 } }),
+          ),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        pricing: { computeSplit: mock(realComputeSplit) },
+      });
+
+      const result = await service.withdraw("student1", "b1");
+
+      expect(result.withdrawn).toBe(true);
+      // 3 remaining participants each need +7 (28 -> 35)
+      expect(wallet.hold).toHaveBeenCalledTimes(3);
+      for (const call of wallet.hold.mock.calls) {
+        expect(call[1].amount).toBe(7);
+        expect(call[1].reason).toContain("Group repricing");
+      }
+      expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({ holdAmount: 105 }),
+      );
+      const snapshotArg = repo.updateBookingPriceSnapshot.mock.calls[0][2] as {
+        priceSnapshot: { perStudent: number };
+      };
+      expect(snapshotArg.priceSnapshot.perStudent).toBe(35);
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p2",
+        expect.objectContaining({ heldAmount: 35 }),
+      );
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(3);
+      expect(notification.writeBestEffort.mock.calls[0][0]).toMatchObject({
+        title: "Group price updated",
+      });
+    });
+
+    test("withdraw repricing rolls back when a remaining participant cannot cover the increased hold", async () => {
+      const booking = makeGroupBooking();
+      const proposer = makeParticipant({ heldAmount: 112 });
+      const remaining = [
+        makeRemainingParticipant("p2", "student2", 28),
+        makeRemainingParticipant("p3", "student3", 28),
+      ];
+      const { service, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => proposer),
+          findConfirmedParticipants: mock(async () => remaining),
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ prices: { "3": 35 } }),
+          ),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w2",
+            totalBalance: 28,
+            heldBalance: 28,
+            availableBalance: 0,
+          })),
+        },
+        pricing: { computeSplit: mock(realComputeSplit) },
+      });
+
+      await expect(service.withdraw("student1", "b1")).rejects.toThrow(
+        InsufficientMarksError,
+      );
+      // the transaction aborts before any repricing hold is placed
+      expect(wallet.hold).not.toHaveBeenCalled();
+    });
+
+    test("withdraw repricing releases excess hold when per-student price drops", async () => {
+      const booking = makeGroupBooking();
+      const proposer = makeParticipant({ heldAmount: 112 });
+      const remaining = [
+        makeRemainingParticipant("p2", "student2", 28),
+        makeRemainingParticipant("p3", "student3", 28),
+      ];
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => proposer),
+          findConfirmedParticipants: mock(async () => remaining),
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ prices: { "2": 20 } }),
+          ),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        pricing: { computeSplit: mock(realComputeSplit) },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      // 1 release for the withdrawn proposer + 2 excess releases (28 -> 20)
+      expect(wallet.release).toHaveBeenCalledTimes(3);
+      const repriceReleases = wallet.release.mock.calls.slice(1);
+      for (const call of repriceReleases) {
+        expect(call[1].amount).toBe(8);
+      }
+      expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({ holdAmount: 40 }),
+      );
+    });
+
+    test("withdraw from non-group booking does not reprice", async () => {
+      const booking = makeBooking({
+        type: "solo",
+        currentState: "awaiting_tutor_review",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
     });
   });
 });

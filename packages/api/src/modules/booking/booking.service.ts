@@ -15,6 +15,7 @@ import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
 } from "../../shared/constants";
+import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import {
@@ -229,6 +230,113 @@ export function createBookingService(deps: {
         withdrawnAt: new Date(),
         withdrawnReason: reason,
         heldAmount: 0,
+      });
+    }
+  }
+
+  /**
+   * Recalculates per-student price and adjusts holds when a group booking's
+   * confirmed headcount changes. Called from withdraw()/reconfirm().
+   *
+   * If a remaining participant cannot cover an increased hold, an
+   * InsufficientMarksError is thrown inside the caller's transaction, rolling
+   * back the headcount change.
+   */
+  async function repriceGroupForHeadcount(
+    tx: DbOrTx,
+    b: {
+      id: string;
+      type: string;
+      tutorId: string;
+      modality: string;
+      priceSnapshot: { perStudent: number } | null;
+    },
+    remaining: { id: string; userId: string; heldAmount: number }[],
+    actorType: "student" | "tutor" | "system",
+  ): Promise<void> {
+    if (b.type !== BOOKING_TYPE.GROUP) return;
+    if (remaining.length < MIN_GROUP_HEADCOUNT) return;
+
+    const profile = await repo.findTutorProfile(tx, b.tutorId);
+    if (!profile) {
+      log({
+        level: "warn",
+        action: "group_reprice_skipped",
+        bookingId: b.id,
+        message: "Tutor profile missing; group repricing skipped",
+      });
+      return;
+    }
+
+    const newSize = remaining.length;
+    const pricePerStudent = (profile.prices?.[String(newSize)] ??
+      DEFAULT_SOLO_PRICE) as number;
+    const newSnapshot = pricing.computeSplit(
+      b.modality as Modality,
+      pricePerStudent,
+      newSize as GroupSize,
+    );
+    const newPerStudent = newSnapshot.perStudent;
+    const oldPerStudent = b.priceSnapshot?.perStudent ?? newPerStudent;
+
+    if (newPerStudent === oldPerStudent) return;
+
+    for (const p of remaining) {
+      if (p.heldAmount === newPerStudent) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const w = await wallet.getByUserId(tx, p.userId);
+      if (!w) throw new BookingNotFoundError(p.userId);
+
+      if (newPerStudent > p.heldAmount) {
+        const delta = newPerStudent - p.heldAmount;
+        if (w.availableBalance < delta) {
+          throw new InsufficientMarksError(
+            newPerStudent,
+            w.availableBalance + p.heldAmount,
+          );
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await wallet.hold(tx, {
+          walletId: w.id,
+          amount: delta,
+          eventKey: `booking.${b.id}.reprice.increase.${p.userId}`,
+          sourceReference: b.id,
+          bookingId: b.id,
+          actorType,
+          reason: "Group repricing: increased hold for new headcount",
+        });
+      } else if (newPerStudent < p.heldAmount) {
+        // eslint-disable-next-line no-await-in-loop
+        await wallet.release(tx, {
+          walletId: w.id,
+          amount: p.heldAmount - newPerStudent,
+          eventKey: `booking.${b.id}.reprice.release.${p.userId}`,
+          sourceReference: b.id,
+          bookingId: b.id,
+          actorType,
+          reason: "Group repricing: released excess hold",
+        });
+      }
+      // eslint-disable-next-line no-await-in-loop
+      await repo.updateParticipantState(tx, p.id, { heldAmount: newPerStudent });
+    }
+
+    await repo.updateBookingPriceSnapshot(tx, b.id, {
+      priceSnapshot: newSnapshot,
+      holdAmount: newPerStudent * newSize,
+    });
+
+    for (const p of remaining) {
+      // eslint-disable-next-line no-await-in-loop
+      await notification.writeBestEffort({
+        db: tx,
+        userId: p.userId,
+        bookingId: b.id,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title: "Group price updated",
+        body: `Your group's per-student price changed to ${newPerStudent} Marks because the headcount changed.`,
+        eventKey: `booking.${b.id}.reprice.${p.userId}`,
       });
     }
   }
@@ -1017,6 +1125,17 @@ export function createBookingService(deps: {
             actorType: ACTOR_TYPE.STUDENT,
             reason: "All reconfirmed",
           });
+
+          const confirmed = await repo.findConfirmedParticipants(
+            tx,
+            bookingId,
+          );
+          await repriceGroupForHeadcount(
+            tx,
+            b,
+            confirmed,
+            ACTOR_TYPE.STUDENT,
+          );
         }
         return { reconfirmed: true };
       } else {
@@ -1066,6 +1185,7 @@ export function createBookingService(deps: {
         confirmationState: participantState,
         withdrawnAt: new Date(),
         withdrawnReason: reason,
+        heldAmount: 0,
       });
 
       await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
@@ -1110,6 +1230,13 @@ export function createBookingService(deps: {
               actorType: ACTOR_TYPE.STUDENT,
               reason: "Participant withdrew before H-2",
             },
+          );
+
+          await repriceGroupForHeadcount(
+            tx,
+            b,
+            remaining,
+            ACTOR_TYPE.STUDENT,
           );
         } else {
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
