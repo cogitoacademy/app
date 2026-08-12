@@ -114,7 +114,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       input: { query: debouncedStudentSearch || "--", limit: 5 },
     }),
     enabled: bookingMode === "group" && debouncedStudentSearch.length >= 2,
+    retry: 1,
   });
+  const availableStudents = (studentSearchQuery.data ?? []).filter(
+    (student) => !invitees.some((invitee) => invitee.id === student.id),
+  );
 
   const createBooking = useMutation(
     orpc.booking.createSolo.mutationOptions({
@@ -449,37 +453,46 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   <Text className="text-sm text-muted">
                     Searching students...
                   </Text>
+                ) : studentSearchQuery.isError ? (
+                  <div className="flex items-center justify-between gap-3 rounded border border-danger-border bg-danger-subtle p-3">
+                    <Text className="text-sm">
+                      Student search is temporarily unavailable.
+                    </Text>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void studentSearchQuery.refetch()}
+                    >
+                      Try again
+                    </Button>
+                  </div>
                 ) : debouncedStudentSearch.length >= 2 ? (
                   <div className="space-y-2">
-                    {(studentSearchQuery.data ?? [])
-                      .filter(
-                        (student) =>
-                          !invitees.some((item) => item.id === student.id),
-                      )
-                      .map((student) => (
-                        <Button
-                          key={student.id}
-                          type="button"
-                          variant="outline"
-                          className="h-auto w-full justify-start py-2.5"
-                          onClick={() => {
-                            setInvitees((current) => [...current, student]);
-                            setStudentSearch("");
-                            setDebouncedStudentSearch("");
-                          }}
-                        >
-                          <IconUserPlus />
-                          <span className="min-w-0 text-left">
-                            <span className="block font-medium">
-                              {student.name}
-                            </span>
-                            <span className="block truncate text-xs opacity-70">
-                              {student.email}
-                            </span>
+                    {availableStudents.map((student) => (
+                      <Button
+                        key={student.id}
+                        type="button"
+                        variant="outline"
+                        className="h-auto w-full justify-start py-2.5"
+                        onClick={() => {
+                          setInvitees((current) => [...current, student]);
+                          setStudentSearch("");
+                          setDebouncedStudentSearch("");
+                        }}
+                      >
+                        <IconUserPlus />
+                        <span className="min-w-0 text-left">
+                          <span className="block font-medium">
+                            {student.name}
                           </span>
-                        </Button>
-                      ))}
-                    {studentSearchQuery.data?.length === 0 ? (
+                          <span className="block truncate text-xs opacity-70">
+                            {student.email}
+                          </span>
+                        </span>
+                      </Button>
+                    ))}
+                    {availableStudents.length === 0 ? (
                       <Text className="text-sm text-muted">
                         No matching students found.
                       </Text>
