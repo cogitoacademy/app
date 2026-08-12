@@ -60,29 +60,60 @@ describe("Pricing Service", () => {
     });
   });
 
-  describe("computeSplit", () => {
-    test("splits 50 marks for solo (1 student)", () => {
-      const result = pricing.computeSplit(50, 1);
-      expect(result.perStudent).toBe(50);
-      expect(result.baseline).toBe(50);
-      expect(result.cogitoTake).toBe(10);
-      expect(result.tutorShare).toBe(40);
+  describe("computeSplit (extra-take rule)", () => {
+    test("online class for 1 at floor (42) → tutor 30, Cogito 12", () => {
+      const r = pricing.computeSplit("online", 42, 1);
+      expect(r.tutorShare).toBe(30);
+      expect(r.cogitoTake).toBe(12);
+      expect(r.extraTotal).toBe(0);
+      expect(r.cogitoExtraTake).toBe(0);
     });
 
-    test("splits 100 marks for group of 2", () => {
-      const result = pricing.computeSplit(100, 2);
-      expect(result.perStudent).toBe(50);
-      expect(result.baseline).toBe(100);
-      expect(result.cogitoTake).toBe(20);
-      expect(result.tutorShare).toBe(80);
+    test("online class for 1 at 50 → tutor 37, Cogito 13 (extra 8, Cogito extra 1)", () => {
+      const r = pricing.computeSplit("online", 50, 1);
+      expect(r.extraTotal).toBe(8);
+      expect(r.cogitoExtraTake).toBe(1);
+      expect(r.tutorExtraShare).toBe(7);
+      expect(r.tutorShare).toBe(37);
+      expect(r.cogitoTake).toBe(13);
     });
 
-    test("cogito take is always 20%", () => {
-      for (const size of [1, 2, 3, 4, 5, 6] as const) {
-        const result = pricing.computeSplit(200, size);
-        expect(result.cogitoTake).toBe(40);
-        expect(result.tutorShare).toBe(160);
-      }
+    test("online class for 3 at floor (28) → tutor 64, Cogito 20", () => {
+      const r = pricing.computeSplit("online", 28, 3);
+      expect(r.tutorShare).toBe(64);
+      expect(r.cogitoTake).toBe(20);
+    });
+
+    test("online class for 3 at 32 → tutor 74, Cogito 22 (extra 12, Cogito extra 2)", () => {
+      const r = pricing.computeSplit("online", 32, 3);
+      expect(r.extraTotal).toBe(12);
+      expect(r.cogitoExtraTake).toBe(2);
+      expect(r.tutorShare).toBe(74);
+      expect(r.cogitoTake).toBe(22);
+    });
+
+    test("offline class for 2 at floor (45) → tutor 70, Cogito 20", () => {
+      const r = pricing.computeSplit("offline", 45, 2);
+      expect(r.tutorShare).toBe(70);
+      expect(r.cogitoTake).toBe(20);
+    });
+
+    test("extra total of 4 → Cogito extra 0, all to tutor", () => {
+      const r = pricing.computeSplit("online", 46, 1); // baseline 42, extra 4
+      expect(r.cogitoExtraTake).toBe(0);
+      expect(r.tutorShare).toBe(34);
+    });
+
+    test("extra total of 5 → Cogito extra 1, 4 to tutor", () => {
+      const r = pricing.computeSplit("online", 47, 1); // baseline 42, extra 5
+      expect(r.cogitoExtraTake).toBe(1);
+      expect(r.tutorShare).toBe(34);
+    });
+
+    test("perStudent is floored and baseline total is the floor total", () => {
+      const r = pricing.computeSplit("online", 32.5, 3);
+      expect(r.perStudent).toBe(32);
+      expect(r.baseline).toBe(84);
     });
   });
 

@@ -14,6 +14,13 @@ export interface ProfileInput {
 export type StudentProfileRow = typeof studentProfile.$inferSelect;
 export type TutorProfileRow = typeof tutorProfile.$inferSelect;
 
+/**
+ * Fetches a user's student profile.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the student profile row, or null
+ */
 async function getStudentProfile(
   conn: DbOrTx,
   userId: string,
@@ -25,6 +32,13 @@ async function getStudentProfile(
   );
 }
 
+/**
+ * Fetches a user's tutor profile.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the tutor profile row, or null
+ */
 async function getTutorProfile(
   conn: DbOrTx,
   userId: string,
@@ -36,6 +50,14 @@ async function getTutorProfile(
   );
 }
 
+/**
+ * Updates an existing student profile with the given input.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param input - the profile fields to update
+ * @returns the updated student profile row
+ */
 async function upsertProfile(
   conn: DbOrTx,
   userId: string,
@@ -49,6 +71,14 @@ async function upsertProfile(
   return updated!;
 }
 
+/**
+ * Creates a new student profile for a user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param input - the initial profile fields
+ * @returns the created student profile row
+ */
 async function createProfile(
   conn: DbOrTx,
   userId: string,

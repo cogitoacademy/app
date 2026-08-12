@@ -9,6 +9,7 @@ import {
   lte,
   lt,
   sql,
+  getTableColumns,
 } from "drizzle-orm";
 import {
   booking,
@@ -26,18 +27,33 @@ import { CONFIRMATION_STATE, ONBOARDING_STATUS } from "../../shared/constants";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
+/**
+ * Finds a booking by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @returns the booking row, or null
+ */
 async function findBookingById(
   conn: DbOrTx,
   bookingId: string,
 ): Promise<BookingRow | null> {
   const [b] = await conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(eq(booking.id, bookingId))
     .limit(1);
   return (b as BookingRow | undefined) ?? null;
 }
 
+/**
+ * Finds a tutor's profile, optionally restricted to published profiles.
+ *
+ * @param conn - the database connection or active transaction
+ * @param tutorId - the tutor's user id
+ * @param opts - options (publishedOnly)
+ * @returns the tutor profile, or null
+ */
 async function findTutorProfile(
   conn: DbOrTx,
   tutorId: string,
@@ -56,6 +72,15 @@ async function findTutorProfile(
   );
 }
 
+/**
+ * Finds an active availability slot for a tutor, optionally future-only.
+ *
+ * @param conn - the database connection or active transaction
+ * @param slotId - the slot id
+ * @param tutorId - the tutor's user id
+ * @param opts - options (futureOnly)
+ * @returns the availability slot, or null
+ */
 async function findAvailabilitySlot(
   conn: DbOrTx,
   slotId: string,
@@ -75,13 +100,21 @@ async function findAvailabilitySlot(
   });
 }
 
+/**
+ * Finds a booking participant by booking and user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param userId - the participant's user id
+ * @returns the participant row, or null
+ */
 async function findParticipant(
   conn: DbOrTx,
   bookingId: string,
   userId: string,
 ) {
   const [participant] = await conn
-    .select()
+    .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(
       and(
@@ -93,6 +126,14 @@ async function findParticipant(
   return participant ?? null;
 }
 
+/**
+ * Lists confirmed participants for a booking, optionally excluding one user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param excludeUserId - optional user to exclude
+ * @returns the confirmed participant rows
+ */
 async function findConfirmedParticipants(
   conn: DbOrTx,
   bookingId: string,
@@ -109,14 +150,21 @@ async function findConfirmedParticipants(
     conditions.push(ne(bookingParticipant.userId, excludeUserId));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(and(...conditions));
 }
 
+/**
+ * Lists participants whose confirmation state is RECONFIRMED for a booking.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @returns the reconfirmed participant rows
+ */
 async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
   return conn
-    .select()
+    .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(
       and(
@@ -129,6 +177,13 @@ async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
     );
 }
 
+/**
+ * Inserts a booking row.
+ *
+ * @param conn - the database connection or active transaction
+ * @param values - the booking insert values
+ * @returns the inserted booking row
+ */
 async function insertBooking(
   conn: DbOrTx,
   values: typeof booking.$inferInsert,
@@ -137,6 +192,13 @@ async function insertBooking(
   return b!;
 }
 
+/**
+ * Sets a booking's cancellation reason.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param reason - the cancellation reason (null to clear)
+ */
 async function updateBookingCancellationReason(
   conn: DbOrTx,
   bookingId: string,
@@ -148,6 +210,13 @@ async function updateBookingCancellationReason(
     .where(eq(booking.id, bookingId));
 }
 
+/**
+ * Sets a booking's held Marks amount.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param holdAmount - the new hold amount
+ */
 async function updateBookingHoldAmount(
   conn: DbOrTx,
   bookingId: string,
@@ -159,6 +228,13 @@ async function updateBookingHoldAmount(
     .where(eq(booking.id, bookingId));
 }
 
+/**
+ * Sets a booking's confirmed headcount.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param confirmedHeadcount - the new headcount
+ */
 async function updateBookingConfirmedHeadcount(
   conn: DbOrTx,
   bookingId: string,
@@ -170,6 +246,12 @@ async function updateBookingConfirmedHeadcount(
     .where(eq(booking.id, bookingId));
 }
 
+/**
+ * Inserts a booking participant row.
+ *
+ * @param conn - the database connection or active transaction
+ * @param values - the participant insert values
+ */
 async function insertParticipant(
   conn: DbOrTx,
   values: typeof bookingParticipant.$inferInsert,
@@ -177,6 +259,13 @@ async function insertParticipant(
   await conn.insert(bookingParticipant).values(values);
 }
 
+/**
+ * Updates a participant's state fields.
+ *
+ * @param conn - the database connection or active transaction
+ * @param participantId - the participant id
+ * @param values - the fields to update
+ */
 async function updateParticipantState(
   conn: DbOrTx,
   participantId: string,
@@ -188,6 +277,12 @@ async function updateParticipantState(
     .where(eq(bookingParticipant.id, participantId));
 }
 
+/**
+ * Inserts a booking state history entry.
+ *
+ * @param conn - the database connection or active transaction
+ * @param entry - the state history entry details
+ */
 async function insertStateHistory(
   conn: DbOrTx,
   entry: {
@@ -211,6 +306,12 @@ async function insertStateHistory(
   });
 }
 
+/**
+ * Inserts a reschedule proposal for a booking.
+ *
+ * @param conn - the database connection or active transaction
+ * @param values - the proposal details
+ */
 async function insertRescheduleProposal(
   conn: DbOrTx,
   values: {
@@ -224,6 +325,12 @@ async function insertRescheduleProposal(
   await conn.insert(bookingRescheduleProposal).values(values);
 }
 
+/**
+ * Inserts a session for a series booking.
+ *
+ * @param conn - the database connection or active transaction
+ * @param values - the session details including the price snapshot
+ */
 async function insertBookingSession(
   conn: DbOrTx,
   values: {
@@ -237,23 +344,45 @@ async function insertBookingSession(
       baseline: number;
       tutorShare: number;
       cogitoTake: number;
+      baselineCogitoTake: number;
+      baselineTutorShare: number;
+      extraTotal: number;
+      cogitoExtraTake: number;
+      tutorExtraShare: number;
     };
   },
 ) {
   await conn.insert(bookingSession).values(values);
 }
 
+/**
+ * Lists sessions for a series booking, ordered by start time.
+ *
+ * @param conn - the database connection or active transaction
+ * @param seriesBookingId - the series booking id
+ * @returns the session rows
+ */
 export async function listSessionsBySeriesId(
   conn: DbOrTx,
   seriesBookingId: string,
 ) {
   return conn
-    .select()
+    .select({ ...getTableColumns(bookingSession) })
     .from(bookingSession)
     .where(eq(bookingSession.seriesBookingId, seriesBookingId))
     .orderBy(bookingSession.scheduledStartAt);
 }
 
+/**
+ * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
+ *
+ * @param conn - the database connection or active transaction
+ * @param tutorId - the tutor's user id
+ * @param startAt - window start
+ * @param endAt - window end
+ * @param opts - options (excludeBookingId, excludeStates)
+ * @returns the first overlapping booking id, or empty
+ */
 async function findOverlappingBookings(
   conn: DbOrTx,
   tutorId: string,
@@ -279,6 +408,13 @@ async function findOverlappingBookings(
     .limit(1);
 }
 
+/**
+ * Updates a booking's deadline.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param deadlineAt - the new deadline
+ */
 async function updateBookingDeadline(
   conn: DbOrTx,
   bookingId: string,
@@ -290,9 +426,16 @@ async function updateBookingDeadline(
     .where(eq(booking.id, bookingId));
 }
 
+/**
+ * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).
+ *
+ * @param conn - the database connection or active transaction
+ * @param states - states eligible for expiry
+ * @returns up to 500 matching booking rows
+ */
 async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
   return conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(
       and(
@@ -303,6 +446,12 @@ async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
     .limit(500);
 }
 
+/**
+ * Decrements a booking's confirmed headcount (floored at 0).
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ */
 async function decrementBookingConfirmedHeadcount(
   conn: DbOrTx,
   bookingId: string,
@@ -315,6 +464,12 @@ async function decrementBookingConfirmedHeadcount(
     .where(eq(booking.id, bookingId));
 }
 
+/**
+ * Marks all sessions of a series booking as cancelled.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the series booking id
+ */
 async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
   await conn
     .update(bookingSession)
@@ -322,6 +477,15 @@ async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
     .where(eq(bookingSession.seriesBookingId, bookingId));
 }
 
+/**
+ * Updates a booking with optimistic concurrency via version, returning the new row and version.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param expectedVersion - the version the booking must currently have
+ * @param updates - the fields to update
+ * @returns the updated row and new version, or null when the version did not match
+ */
 async function updateBookingVersioned(
   conn: DbOrTx,
   bookingId: string,
@@ -361,6 +525,12 @@ async function updateBookingVersioned(
 }
 
 export function createBookingRepo(db: DbType) {
+  /**
+   * Finds a booking with participants, state history, meeting, and room bookings eager-loaded.
+   *
+   * @param bookingId - the booking id
+   * @returns the booking with related data, or null
+   */
   async function findBookingWithParticipants(bookingId: string) {
     return db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
@@ -373,6 +543,13 @@ export function createBookingRepo(db: DbType) {
     });
   }
 
+  /**
+   * Lists a proposer's bookings with cursor pagination and optional state filter.
+   *
+   * @param proposerId - the proposer's user id
+   * @param opts - pagination and state options
+   * @returns the matching bookings with participants, newest first
+   */
   async function listBookingsByProposer(
     proposerId: string,
     opts: { states?: string[]; limit: number; cursor?: string },

@@ -76,13 +76,30 @@ describe("createBookingRepo", () => {
 
   describe("findBookingById", () => {
     test("returns row when found", async () => {
-      const row = { id: "b1", currentState: "confirmed" };
+      const row = {
+        id: "b1",
+        currentState: "confirmed",
+        priceSnapshot: {
+          perStudent: 42000,
+          baseline: 42000,
+          tutorShare: 33600,
+          cogitoTake: 8400,
+          baselineCogitoTake: 12000,
+          baselineTutorShare: 30000,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      };
       const conn: any = { ...makeSelectConn([row]) };
       const repo = makeBookingRepo();
 
       const result = await repo.findBookingById(conn, "b1");
 
       expect(result).toEqual(row);
+      expect(result?.id).toBe("b1");
+      expect(result?.currentState).toBe("confirmed");
+      expect(result?.priceSnapshot).toEqual(row.priceSnapshot);
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
     });
@@ -165,13 +182,22 @@ describe("createBookingRepo", () => {
 
   describe("findParticipant", () => {
     test("returns participant when found", async () => {
-      const participant = { id: "p1", bookingId: "b1", userId: "u1" };
+      const participant = {
+        id: "p1",
+        bookingId: "b1",
+        userId: "u1",
+        confirmationState: "pending",
+      };
       const conn: any = { ...makeSelectConn([participant]) };
       const repo = makeBookingRepo();
 
       const result = await repo.findParticipant(conn, "b1", "u1");
 
       expect(result).toEqual(participant);
+      expect(result?.id).toBe("p1");
+      expect(result?.bookingId).toBe("b1");
+      expect(result?.userId).toBe("u1");
+      expect(result?.confirmationState).toBe("pending");
       expect(conn.from).toHaveBeenCalledTimes(1);
     });
 
@@ -194,8 +220,12 @@ describe("createBookingRepo", () => {
       const conn: any = { ...makeSelectConn(rows) };
       const repo = makeBookingRepo();
 
-      await repo.findConfirmedParticipants(conn, "b1");
+      const result = await repo.findConfirmedParticipants(conn, "b1");
 
+      expect(result).toEqual(rows);
+      expect(result[0]).toHaveProperty("id", "p1");
+      expect(result[0]).toHaveProperty("confirmationState", "confirmed");
+      expect(result[1]).toHaveProperty("confirmationState", "reconfirmed");
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
     });
@@ -205,8 +235,11 @@ describe("createBookingRepo", () => {
       const conn: any = { ...makeSelectConn(rows) };
       const repo = makeBookingRepo();
 
-      await repo.findConfirmedParticipants(conn, "b1", "u1");
+      const result = await repo.findConfirmedParticipants(conn, "b1", "u1");
 
+      expect(result).toEqual(rows);
+      expect(result[0]).toHaveProperty("id", "p2");
+      expect(result[0]).toHaveProperty("confirmationState", "confirmed");
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
     });
@@ -218,8 +251,11 @@ describe("createBookingRepo", () => {
       const conn: any = { ...makeSelectConn(rows) };
       const repo = makeBookingRepo();
 
-      await repo.findReconfirmedParticipants(conn, "b1");
+      const result = await repo.findReconfirmedParticipants(conn, "b1");
 
+      expect(result).toEqual(rows);
+      expect(result[0]).toHaveProperty("id", "p1");
+      expect(result[0]).toHaveProperty("confirmationState", "reconfirmed");
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
     });
@@ -408,6 +444,11 @@ describe("createBookingRepo", () => {
           baseline: 42000,
           tutorShare: 33600,
           cogitoTake: 8400,
+          baselineCogitoTake: 12000,
+          baselineTutorShare: 30000,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
         },
       });
 
@@ -418,12 +459,18 @@ describe("createBookingRepo", () => {
 
   describe("listSessionsBySeriesId", () => {
     test("returns sessions ordered by scheduledStartAt", async () => {
-      const rows = [{ id: "s1" }, { id: "s2" }];
+      const rows = [
+        { id: "s1", currentState: "scheduled" },
+        { id: "s2", currentState: "scheduled" },
+      ];
       const conn: any = { ...makeSelectConn(rows) };
       const repo = makeBookingRepo();
 
-      await repo.listSessionsBySeriesId(conn, "sb1");
+      const result = await repo.listSessionsBySeriesId(conn, "sb1");
 
+      expect(result).toEqual(rows);
+      expect(result[0]).toHaveProperty("id", "s1");
+      expect(result[0]).toHaveProperty("currentState", "scheduled");
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
       expect(conn.orderBy).toHaveBeenCalledTimes(1);
@@ -499,14 +546,23 @@ describe("createBookingRepo", () => {
 
   describe("findBookingsExpiringByDeadline", () => {
     test("finds bookings past deadline with given states", async () => {
-      const rows = [{ id: "b1" }, { id: "b2" }];
+      const rows = [
+        { id: "b1", currentState: "awaiting_participant_confirmation" },
+        { id: "b2", currentState: "awaiting_participant_confirmation" },
+      ];
       const conn: any = { ...makeSelectConn(rows) };
       const repo = makeBookingRepo();
 
-      await repo.findBookingsExpiringByDeadline(conn, [
+      const result = await repo.findBookingsExpiringByDeadline(conn, [
         "awaiting_participant_confirmation",
       ]);
 
+      expect(result).toEqual(rows);
+      expect(result[0]).toHaveProperty("id", "b1");
+      expect(result[0]).toHaveProperty(
+        "currentState",
+        "awaiting_participant_confirmation",
+      );
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
     });

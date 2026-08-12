@@ -18,7 +18,11 @@ export interface TutorPricingPort {
     prices: Record<string, number>,
     modality: Modality,
   ): string | null;
-  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
+  computeSplit(
+    modality: Modality,
+    tutorPricePerStudent: number,
+    confirmedHeadcount: GroupSize,
+  ): PriceSnapshot;
 }
 
 export interface TutorAuditPort {

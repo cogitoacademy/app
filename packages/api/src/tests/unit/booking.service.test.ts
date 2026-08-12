@@ -100,11 +100,16 @@ function makeWallet(overrides: Record<string, unknown> = {}) {
 
 function makePricing() {
   return {
-    computeSplit: mock((_total: number, _size: number) => ({
+    computeSplit: mock((_modality: string, _price: number, _size: number) => ({
       perStudent: 42,
       baseline: 42,
       tutorShare: 33.6,
       cogitoTake: 8.4,
+      baselineCogitoTake: 12,
+      baselineTutorShare: 30,
+      extraTotal: 0,
+      cogitoExtraTake: 0,
+      tutorExtraShare: 0,
     })),
     validatePrices: mock(() => null),
   };
@@ -151,6 +156,11 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
       baseline: 42,
       tutorShare: 33.6,
       cogitoTake: 8.4,
+      baselineCogitoTake: 12,
+      baselineTutorShare: 30,
+      extraTotal: 0,
+      cogitoExtraTake: 0,
+      tutorExtraShare: 0,
     },
     scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
     scheduledEndAt: new Date(Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000),
@@ -1214,6 +1224,11 @@ describe("BookingService", () => {
           baseline: 42,
           tutorShare: 33.6,
           cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
         },
       });
       const { service, wallet, repo } = createService({
@@ -1257,6 +1272,11 @@ describe("BookingService", () => {
           baseline: 42,
           tutorShare: 33.6,
           cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
         },
       });
       const { service } = createService({
@@ -2117,6 +2137,11 @@ describe("BookingService", () => {
           baseline: 42,
           tutorShare: 33.6,
           cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
         },
       });
       const { service } = createService({
@@ -2154,6 +2179,11 @@ describe("BookingService", () => {
           baseline: 42,
           tutorShare: 33.6,
           cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
         },
       });
       const { service } = createService({

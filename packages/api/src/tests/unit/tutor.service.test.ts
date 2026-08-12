@@ -32,12 +32,20 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
 
 const mockPricingPort: PricingPort = {
   validatePrices: () => null,
-  computeSplit: (total: number, size: number) => ({
-    perStudent: Math.floor(total / size),
-    baseline: total,
-    tutorShare: Math.floor(total * 0.8),
-    cogitoTake: Math.floor(total * 0.2),
-  }),
+  computeSplit: (modality: string, pricePerStudent: number, size: number) => {
+    const perStudent = Math.floor(pricePerStudent);
+    return {
+      perStudent,
+      baseline: perStudent * size,
+      tutorShare: Math.floor(perStudent * size * 0.8),
+      cogitoTake: Math.floor(perStudent * size * 0.2),
+      baselineCogitoTake: Math.floor(perStudent * size * 0.2),
+      baselineTutorShare: Math.floor(perStudent * size * 0.8),
+      extraTotal: 0,
+      cogitoExtraTake: 0,
+      tutorExtraShare: 0,
+    };
+  },
 };
 
 const failPricingPort: PricingPort = {

@@ -70,6 +70,11 @@ export const booking = pgTable(
       baseline: number;
       tutorShare: number;
       cogitoTake: number;
+      baselineCogitoTake: number;
+      baselineTutorShare: number;
+      extraTotal: number;
+      cogitoExtraTake: number;
+      tutorExtraShare: number;
     }>(),
     originalMarks: integer("original_marks").notNull(),
     holdAmount: integer("hold_amount").notNull().default(0),
@@ -260,6 +265,11 @@ export const bookingSession = pgTable(
       baseline: number;
       tutorShare: number;
       cogitoTake: number;
+      baselineCogitoTake: number;
+      baselineTutorShare: number;
+      extraTotal: number;
+      cogitoExtraTake: number;
+      tutorExtraShare: number;
     }>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")

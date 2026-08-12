@@ -87,6 +87,12 @@ export interface BookingTransition {
 
 export type BookingService = ReturnType<typeof createBookingService>;
 
+/**
+ * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
+ *
+ * @param deps - the dependency ports (db, repo, wallet, pricing, audit, notification, meeting)
+ * @returns a BookingService with create/list/action methods and scheduler helpers
+ */
 export function createBookingService(deps: {
   db: DbType;
   repo: BookingRepo;
@@ -224,6 +230,15 @@ export function createBookingService(deps: {
     }
   }
 
+  /**
+   * Gets a booking by id, enforcing that the requesting user has access.
+   *
+   * @param bookingId - the booking to fetch
+   * @param userId - the requesting user (proposer, tutor, or participant)
+   * @returns the booking with participants and related data
+   * @throws {BookingNotFoundError} if the booking does not exist
+   * @throws {BookingNotOwnedError} if the user lacks access
+   */
   async function getById(bookingId: string, userId: string) {
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
@@ -231,6 +246,13 @@ export function createBookingService(deps: {
     return b;
   }
 
+  /**
+   * Lists bookings where the user is the proposer, with cursor pagination.
+   *
+   * @param userId - the proposer user
+   * @param opts - pagination and state filter options
+   * @returns the bookings and a nextCursor when more pages exist
+   */
   async function listMine(
     userId: string,
     opts: { cursor?: string; limit?: number; states?: string[] } = {},
@@ -249,6 +271,16 @@ export function createBookingService(deps: {
     return { items, nextCursor };
   }
 
+  /**
+   * Creates a solo booking, holds Marks, and notifies the tutor.
+   *
+   * @param proposerId - the student creating the booking
+   * @param input - the solo booking details
+   * @returns the created booking
+   * @throws {BookingNotFoundError} if the tutor profile or slot is invalid
+   * @throws {InsufficientMarksError} if the student cannot cover the hold
+   * @throws {BookingConflictError} if the tutor already has an overlapping booking
+   */
   async function createSolo(proposerId: string, input: CreateSoloInput) {
     const profile = await repo.findTutorProfile(db, input.tutorId, {
       publishedOnly: true,
@@ -272,10 +304,11 @@ export function createBookingService(deps: {
     }
 
     const priceSnapshot = pricing.computeSplit(
+      modality,
       (profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE) as number,
       1,
     );
-    const totalMarks = priceSnapshot.baseline;
+    const totalMarks = priceSnapshot.perStudent * 1;
 
     const w = await wallet.getByUserId(db, proposerId);
     if (!w) throw new BookingNotFoundError(proposerId);
@@ -374,6 +407,15 @@ export function createBookingService(deps: {
     });
   }
 
+  /**
+   * Cancels a booking, releasing held Marks (late cancellations become LATE_CANCELLED).
+   *
+   * @param userId - the user cancelling (must have access)
+   * @param bookingId - the booking to cancel
+   * @param cancellationReason - optional reason for the cancellation
+   * @returns the updated booking
+   * @throws {BookingStateTransitionError} if the booking is in a terminal state
+   */
   async function cancel(
     userId: string,
     bookingId: string,
@@ -693,10 +735,11 @@ export function createBookingService(deps: {
     const pricePerStudent = (profile.prices?.[String(size)] ??
       DEFAULT_SOLO_PRICE) as number;
     const priceSnapshot = pricing.computeSplit(
-      pricePerStudent * size,
+      input.modality,
+      pricePerStudent,
       size as 1 | 2 | 3 | 4 | 5 | 6,
     );
-    const totalMarks = priceSnapshot.baseline;
+    const totalMarks = priceSnapshot.perStudent * size;
 
     const w = await wallet.getByUserId(db, proposerId);
     if (!w) throw new BookingNotFoundError(proposerId);
@@ -1067,8 +1110,12 @@ export function createBookingService(deps: {
 
     const pricePerStudent = (profile.prices?.["1"] ??
       DEFAULT_SOLO_PRICE) as number;
-    const priceSnapshot = pricing.computeSplit(pricePerStudent, 1);
-    const perSession = priceSnapshot.baseline;
+    const priceSnapshot = pricing.computeSplit(
+      input.modality,
+      pricePerStudent,
+      1,
+    );
+    const perSession = priceSnapshot.perStudent;
     const totalMarks = perSession * input.sessions.length;
 
     const w = await wallet.getByUserId(db, proposerId);
