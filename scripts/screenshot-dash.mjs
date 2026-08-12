@@ -24,11 +24,14 @@ await page.waitForSelector('input[name="email"]', { timeout: 10000 });
 await page.type('input[name="email"]', EMAIL);
 await page.type('input[name="password"]', PASS);
 await page.click('button[type="submit"]');
-await new Promise(r => setTimeout(r, 3000));
+await new Promise((r) => setTimeout(r, 3000));
 
 try {
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 20000 });
-  await new Promise(r => setTimeout(r, 3000));
+  await page.goto(`${BASE}/dashboard`, {
+    waitUntil: "domcontentloaded",
+    timeout: 20000,
+  });
+  await new Promise((r) => setTimeout(r, 3000));
   const path = join(OUT, "02-dashboard.png");
   await page.screenshot({ path, fullPage: true });
   console.log("✅ 02-dashboard.png");
