@@ -245,7 +245,9 @@ function realComputeSplit(
   const perStudent = Math.floor(tutorPricePerStudent);
   const tutorTotal = perStudent * confirmedHeadcount;
   const baseline =
-    modality === "offline" ? OFFLINE[confirmedHeadcount] : ONLINE[confirmedHeadcount];
+    modality === "offline"
+      ? OFFLINE[confirmedHeadcount]
+      : ONLINE[confirmedHeadcount];
   const baselineTotal = baseline!.tutor + baseline!.cogito;
   const extraTotal = Math.max(0, tutorTotal - baselineTotal);
   const cogitoExtraTake = Math.floor(extraTotal / 5);

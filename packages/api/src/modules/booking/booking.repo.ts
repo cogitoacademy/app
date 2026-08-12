@@ -245,11 +245,6 @@ async function updateBookingPriceSnapshot(
       tutorShare: number;
       cogitoTake: number;
 
-
-
-
-
-
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -385,8 +380,6 @@ async function updateRescheduleProposal(
     .where(eq(bookingRescheduleProposal.id, proposalId));
 }
 
-
-
 /**
  * Inserts a session for a series booking.
  *
@@ -467,8 +460,6 @@ async function listSessionNotes(conn: DbOrTx, bookingId: string) {
     .orderBy(desc(sessionNote.createdAt));
 }
 
-
-
 /**
  * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
  *
@@ -529,8 +520,6 @@ async function updateBookingSchedule(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
-
-
 
 /**
  * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).

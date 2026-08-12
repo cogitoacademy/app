@@ -257,7 +257,6 @@ export function createBookingService(deps: {
       type: string;
       tutorId: string;
 
-
       modality: string;
       priceSnapshot: { perStudent: number } | null;
     },
@@ -332,7 +331,9 @@ export function createBookingService(deps: {
         heldAmount: newPerStudent,
       });
 
-      await repo.updateParticipantState(tx, p.id, { heldAmount: newPerStudent });
+      await repo.updateParticipantState(tx, p.id, {
+        heldAmount: newPerStudent,
+      });
     }
 
     await repo.updateBookingPriceSnapshot(tx, b.id, {
