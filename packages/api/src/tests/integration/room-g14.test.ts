@@ -128,7 +128,11 @@ describe("G14 admin room relocate and cancel", () => {
   const endISO = new Date(Date.now() + 25 * 3600_000).toISOString();
 
   beforeAll(async () => {
-    const adminRes = await signUpAndSignIn(adminEmail, "Test1234!", "Admin G14");
+    const adminRes = await signUpAndSignIn(
+      adminEmail,
+      "Test1234!",
+      "Admin G14",
+    );
     const adminCtx = await createTestContext(adminRes.cookie);
     if (!adminCtx.session?.user) throw new Error("Admin session missing");
     await setUserRole(adminCtx.session.user.id, "admin");

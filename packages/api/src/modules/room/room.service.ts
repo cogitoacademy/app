@@ -79,7 +79,10 @@ export function createRoomService(repo: RoomRepo, db: DbType) {
       const roomRow = await repo.findRoomById(tx, roomId);
       if (!roomRow) throw new RoomNotFoundError(roomId);
 
-      const current = await repo.findActiveRoomBookingByBookingId(tx, bookingId);
+      const current = await repo.findActiveRoomBookingByBookingId(
+        tx,
+        bookingId,
+      );
       if (!current) throw new RoomBookingNotFoundError(bookingId);
 
       const conflicting = await repo.findRoomBookingsForUpdate(
@@ -114,7 +117,10 @@ export function createRoomService(repo: RoomRepo, db: DbType) {
 
   async function cancelRoomBooking(bookingId: string) {
     return db.transaction(async (tx) => {
-      const current = await repo.findActiveRoomBookingByBookingId(tx, bookingId);
+      const current = await repo.findActiveRoomBookingByBookingId(
+        tx,
+        bookingId,
+      );
       if (!current) throw new RoomBookingNotFoundError(bookingId);
 
       return repo.updateRoomBookingStatus(

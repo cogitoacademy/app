@@ -22,10 +22,12 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
     findRoomBookingsForUpdate: mock(async (_conn: any) => []),
     insertRoomBooking: mock(async (_conn: any, _values: any) => ({})),
     findActiveRoomBookingByBookingId: mock(async (_conn: any) => null),
-    updateRoomBookingStatus: mock(async (_conn: any, _id: string, status: string) => ({
-      id: "rb1",
-      status,
-    })),
+    updateRoomBookingStatus: mock(
+      async (_conn: any, _id: string, status: string) => ({
+        id: "rb1",
+        status,
+      }),
+    ),
     ...overrides,
   } as RoomRepo;
 }
