@@ -449,6 +449,28 @@ describe("AchievementService", () => {
       }
     });
 
+    test("rejects an achievement that has already been moderated", async () => {
+      const repo = makeAchievementRepo({
+        getById: mock(async () => ({
+          id: "a1",
+          status: ACHIEVEMENT_STATUS.APPROVED,
+        })),
+      });
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: makeAuditPort() as any,
+        db: makeDb(),
+      });
+
+      expect(
+        service.adminReview("admin1", {
+          achievementId: "a1",
+          status: "rejected",
+        }),
+      ).rejects.toBeInstanceOf(AchievementNotEditableError);
+      expect(repo.updateStatus).not.toHaveBeenCalled();
+    });
+
     test("updates status and records audit in transaction", async () => {
       const existing = { id: "a1", status: ACHIEVEMENT_STATUS.PENDING_REVIEW };
       const updated = { id: "a1", status: "approved" };

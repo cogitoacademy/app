@@ -60,7 +60,11 @@ export function TutorInviteForm() {
         <CardTitle>Invite Tutor</CardTitle>
       </CardHeader>
       <CardBody>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form
+          id="tutor-invite-form"
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-4"
+        >
           <Field>
             <FieldLabel>Email Address *</FieldLabel>
             <Input
@@ -93,6 +97,7 @@ export function TutorInviteForm() {
       <CardFooter>
         <Button
           type="submit"
+          form="tutor-invite-form"
           block
           progress={createMutation.isPending}
           disabled={!email || !displayName || createMutation.isPending}

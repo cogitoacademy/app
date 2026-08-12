@@ -101,6 +101,12 @@ export function createAchievementService(deps: {
   async function adminReview(adminId: string, input: AdminReviewInput) {
     const existing = await achievementRepo.getById(db, input.achievementId);
     if (!existing) throw new AchievementNotFoundError(input.achievementId);
+    if (
+      existing.status !== ACHIEVEMENT_STATUS.PENDING &&
+      existing.status !== ACHIEVEMENT_STATUS.PENDING_REVIEW
+    ) {
+      throw new AchievementNotEditableError(input.achievementId);
+    }
 
     return db.transaction(async (tx) => {
       const updated = await achievementRepo.updateStatus(

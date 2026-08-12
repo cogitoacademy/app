@@ -29,6 +29,21 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  Dialog,
+  DialogBody,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@cogito-app/ui/components/selia/dialog";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import {
   Item,
   ItemContent,
@@ -64,6 +79,12 @@ const STATUS_CONFIG = {
 export function AchievementModerationPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [reviewTarget, setReviewTarget] = useState<{
+    id: string;
+    eventName: string;
+    action: "approved" | "rejected";
+  } | null>(null);
+  const [rejectionNote, setRejectionNote] = useState("");
   const achievementsQuery = useQuery(
     orpc.achievement.adminList.queryOptions({
       input: { limit: 100, offset: 0 },
@@ -72,6 +93,8 @@ export function AchievementModerationPage() {
   const review = useMutation(
     orpc.achievement.adminReview.mutationOptions({
       onSuccess: (achievement) => {
+        setReviewTarget(null);
+        setRejectionNote("");
         void queryClient.invalidateQueries({
           queryKey: orpc.achievement.adminList.key(),
         });
@@ -131,31 +154,14 @@ export function AchievementModerationPage() {
     (item) => item.status === "rejected",
   ).length;
 
-  function approveAchievement(achievementId: string) {
-    const confirmed = window.confirm(
-      "Approve this achievement and publish it to the student's portfolio?",
-    );
-    if (confirmed) {
-      review.mutate({ achievementId, status: "approved" });
-    }
-  }
-
-  function rejectAchievement(achievementId: string) {
-    const adminNote = window.prompt(
-      "Explain what the student needs to correct before resubmitting.",
-    );
-    if (adminNote === null) return;
-    if (!adminNote.trim()) {
-      toastManager.add({
-        title: "A rejection note is required",
-        type: "error",
-      });
-      return;
-    }
+  function submitReview() {
+    if (!reviewTarget) return;
+    const adminNote = rejectionNote.trim();
+    if (reviewTarget.action === "rejected" && !adminNote) return;
     review.mutate({
-      achievementId,
-      status: "rejected",
-      adminNote: adminNote.trim(),
+      achievementId: reviewTarget.id,
+      status: reviewTarget.action,
+      adminNote: reviewTarget.action === "rejected" ? adminNote : undefined,
     });
   }
 
@@ -215,12 +221,81 @@ export function AchievementModerationPage() {
               mutationPending={review.isPending}
               reviewingId={review.variables?.achievementId}
               reviewingStatus={review.variables?.status}
-              onApprove={approveAchievement}
-              onReject={rejectAchievement}
+              onApprove={(id, eventName) =>
+                setReviewTarget({ id, eventName, action: "approved" })
+              }
+              onReject={(id, eventName) =>
+                setReviewTarget({ id, eventName, action: "rejected" })
+              }
             />
           ))}
         </div>
       )}
+
+      <Dialog
+        open={reviewTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !review.isPending) {
+            setReviewTarget(null);
+            setRejectionNote("");
+          }
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader className="flex-col items-start gap-1.5">
+            <DialogTitle>
+              {reviewTarget?.action === "rejected"
+                ? "Reject achievement?"
+                : "Approve achievement?"}
+            </DialogTitle>
+            <DialogDescription>
+              {reviewTarget?.action === "rejected"
+                ? `Tell the student what needs to be corrected for “${reviewTarget.eventName}”.`
+                : `“${reviewTarget?.eventName ?? "This achievement"}” will be approved for the student's portfolio.`}
+            </DialogDescription>
+          </DialogHeader>
+          {reviewTarget?.action === "rejected" ? (
+            <DialogBody>
+              <Field>
+                <FieldLabel>Moderator note</FieldLabel>
+                <Input
+                  value={rejectionNote}
+                  onChange={(event) => setRejectionNote(event.target.value)}
+                  placeholder="Explain what the student should correct"
+                />
+                <FieldDescription>
+                  This note will be visible to the student.
+                </FieldDescription>
+              </Field>
+            </DialogBody>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setReviewTarget(null);
+                setRejectionNote("");
+              }}
+              disabled={review.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={
+                reviewTarget?.action === "rejected" ? "danger" : "primary"
+              }
+              onClick={submitReview}
+              progress={review.isPending}
+              disabled={
+                review.isPending ||
+                (reviewTarget?.action === "rejected" && !rejectionNote.trim())
+              }
+            >
+              {reviewTarget?.action === "rejected" ? "Reject" : "Approve"}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </Stack>
   );
 }
@@ -237,8 +312,8 @@ function ModerationCard({
   mutationPending: boolean;
   reviewingId?: string;
   reviewingStatus?: "approved" | "rejected";
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
+  onApprove: (id: string, eventName: string) => void;
+  onReject: (id: string, eventName: string) => void;
 }) {
   const status =
     STATUS_CONFIG[achievement.status as keyof typeof STATUS_CONFIG] ??
@@ -344,7 +419,7 @@ function ModerationCard({
             <Button
               variant="danger"
               size="sm"
-              onClick={() => onReject(achievement.id)}
+              onClick={() => onReject(achievement.id, achievement.eventName)}
               progress={isReviewing && reviewingStatus === "rejected"}
               disabled={mutationPending}
             >
@@ -352,7 +427,7 @@ function ModerationCard({
             </Button>
             <Button
               size="sm"
-              onClick={() => onApprove(achievement.id)}
+              onClick={() => onApprove(achievement.id, achievement.eventName)}
               progress={isReviewing && reviewingStatus === "approved"}
               disabled={mutationPending}
             >
