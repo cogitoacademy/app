@@ -38,6 +38,7 @@
     "db:generate": "turbo -F @cogito-app/db db:generate",
     "db:migrate": "turbo -F @cogito-app/db db:migrate",
     "db:start": "turbo -F @cogito-app/db db:start",
+    "db:test": "turbo -F @cogito-app/db db:test",
     "db:watch": "turbo -F @cogito-app/db db:watch",
     "db:stop": "turbo -F @cogito-app/db db:stop",
     "db:down": "turbo -F @cogito-app/db db:down",
