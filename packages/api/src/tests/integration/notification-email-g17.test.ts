@@ -48,7 +48,9 @@ async function createPublishedTutor(email: string, ts: number) {
   await setUserRole(tutorId, "tutor");
 
   const tutorCookie = await signInAndGetCookie(email, "Test1234!");
-  const tutorClient = createTestClient(await createTestContext(tutorCookie ?? ""));
+  const tutorClient = createTestClient(
+    await createTestContext(tutorCookie ?? ""),
+  );
 
   const [invite] = await db
     .insert(tutorInvite)
@@ -113,7 +115,9 @@ describe("Notification email matrix (G17)", () => {
       "Test1234!",
       "Student NotifMail",
     );
-    studentClient = createTestClient(await createTestContext(studentRes.cookie));
+    studentClient = createTestClient(
+      await createTestContext(studentRes.cookie),
+    );
     const studentCtx = await createTestContext(studentRes.cookie);
     studentId = studentCtx.session!.user.id;
     await creditWallet(studentId, 500);
@@ -141,7 +145,9 @@ describe("Notification email matrix (G17)", () => {
     const [notif] = await db
       .select()
       .from(notificationTable)
-      .where(eq(notificationTable.eventKey, `booking.${bookingId}.tutor_request`));
+      .where(
+        eq(notificationTable.eventKey, `booking.${bookingId}.tutor_request`),
+      );
     expect(notif).toBeDefined();
     expect(notif!.severity).toBe("action");
 
@@ -199,7 +205,9 @@ describe("Notification email matrix (G17)", () => {
     const [notif] = await db
       .select()
       .from(notificationTable)
-      .where(eq(notificationTable.eventKey, `achievement.${created.id}.submitted`));
+      .where(
+        eq(notificationTable.eventKey, `achievement.${created.id}.submitted`),
+      );
     expect(notif).toBeDefined();
     expect(notif!.category).toBe("achievement");
     expect(notif!.severity).toBe("info");

@@ -945,10 +945,7 @@ export function createBookingService(deps: {
       // After a group repricing the holds live on each remaining
       // participant's wallet (the proposer may have withdrawn and hold 0),
       // so deduct from each confirmed participant individually.
-      const participants = await repo.findConfirmedParticipants(
-        tx,
-        bookingId,
-      );
+      const participants = await repo.findConfirmedParticipants(tx, bookingId);
       for (const p of participants) {
         if (p.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop

@@ -196,7 +196,9 @@ export function createAdminService(deps: {
 
   async function getTutorPayouts(input: GetTutorPayoutsInput) {
     if (input.dateFrom && Number.isNaN(Date.parse(input.dateFrom))) {
-      throw new InvalidLedgerFilterError("dateFrom must be a valid ISO datetime");
+      throw new InvalidLedgerFilterError(
+        "dateFrom must be a valid ISO datetime",
+      );
     }
     if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
       throw new InvalidLedgerFilterError("dateTo must be a valid ISO datetime");

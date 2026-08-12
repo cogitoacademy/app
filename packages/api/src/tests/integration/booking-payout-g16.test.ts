@@ -49,7 +49,9 @@ async function createPublishedTutor(email: string, ts: number) {
   await setUserRole(tutorId, "tutor");
 
   const tutorCookie = await signInAndGetCookie(email, "Test1234!");
-  const tutorClient = createTestClient(await createTestContext(tutorCookie ?? ""));
+  const tutorClient = createTestClient(
+    await createTestContext(tutorCookie ?? ""),
+  );
 
   const [invite] = await db
     .insert(tutorInvite)
@@ -92,7 +94,9 @@ async function createPublishedTutor(email: string, ts: number) {
   return { tutorId, tutorClient, slotId: slot!.id };
 }
 
-async function insertBookingRow(overrides: Partial<typeof bookingTable.$inferInsert>) {
+async function insertBookingRow(
+  overrides: Partial<typeof bookingTable.$inferInsert>,
+) {
   const [row] = await db
     .insert(bookingTable)
     .values({
@@ -146,7 +150,9 @@ describe("Tutor payouts (G16)", () => {
       "Test1234!",
       "Student Payout",
     );
-    studentClient = createTestClient(await createTestContext(studentRes.cookie));
+    studentClient = createTestClient(
+      await createTestContext(studentRes.cookie),
+    );
     const studentCtx = await createTestContext(studentRes.cookie);
     studentId = studentCtx.session!.user.id;
     await creditWallet(studentId, 500);
@@ -156,10 +162,18 @@ describe("Tutor payouts (G16)", () => {
     tutorClient = tutorData.tutorClient;
     slotId = tutorData.slotId;
 
-    const adminRes = await signUpAndSignIn(adminEmail, "Test1234!", "Admin Payout");
+    const adminRes = await signUpAndSignIn(
+      adminEmail,
+      "Test1234!",
+      "Admin Payout",
+    );
     const adminCtx = await createTestContext(adminRes.cookie);
     await setUserRole(adminCtx.session!.user.id, "admin");
-    adminClient = createTestClient(await createTestContext((await signInAndGetCookie(adminEmail, "Test1234!")) ?? ""));
+    adminClient = createTestClient(
+      await createTestContext(
+        (await signInAndGetCookie(adminEmail, "Test1234!")) ?? "",
+      ),
+    );
   });
 
   test("solo booking flows to completed with snapshot 50/40/10", async () => {
@@ -176,10 +190,15 @@ describe("Tutor payouts (G16)", () => {
     });
 
     await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
-    const updated = await tutorClient.tutorActions.completeSession({ bookingId: b.id });
+    const updated = await tutorClient.tutorActions.completeSession({
+      bookingId: b.id,
+    });
     expect(updated.currentState).toBe("completed");
 
-    const [row] = await db.select().from(bookingTable).where(eq(bookingTable.id, b.id));
+    const [row] = await db
+      .select()
+      .from(bookingTable)
+      .where(eq(bookingTable.id, b.id));
     expect(row!.priceSnapshot).toMatchObject({
       baseline: 50,
       tutorShare: 40,
@@ -240,7 +259,12 @@ describe("Tutor payouts (G16)", () => {
         scheduledEndAt: new Date(s1.getTime() + 3600_000),
         currentState: "completed",
         holdAmount: 50,
-        priceSnapshot: { perStudent: 50, baseline: 50, tutorShare: 40, cogitoTake: 10 },
+        priceSnapshot: {
+          perStudent: 50,
+          baseline: 50,
+          tutorShare: 40,
+          cogitoTake: 10,
+        },
       },
       {
         seriesBookingId: series.id,
@@ -248,7 +272,12 @@ describe("Tutor payouts (G16)", () => {
         scheduledEndAt: new Date(s2.getTime() + 3600_000),
         currentState: "completed",
         holdAmount: 50,
-        priceSnapshot: { perStudent: 50, baseline: 50, tutorShare: 40, cogitoTake: 10 },
+        priceSnapshot: {
+          perStudent: 50,
+          baseline: 50,
+          tutorShare: 40,
+          cogitoTake: 10,
+        },
       },
     ]);
   });

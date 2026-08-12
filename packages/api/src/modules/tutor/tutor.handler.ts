@@ -110,8 +110,7 @@ export function createTutorHandler(tutorService: TutorService) {
       input: GetMyPayoutsInput;
     }) => {
       return withDomainMap(
-        () =>
-          tutorService.getMyPayouts(context.session!.user.id, input ?? {}),
+        () => tutorService.getMyPayouts(context.session!.user.id, input ?? {}),
         mapTutorError,
       );
     },

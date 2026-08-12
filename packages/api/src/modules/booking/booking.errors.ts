@@ -243,11 +243,9 @@ export class BookingSessionRequiredError extends DomainError {
 export class BookingSessionNotStartedError extends DomainError {
   readonly domain = "booking";
   constructor(id: string) {
-    super(
-      "BOOKING_SESSION_NOT_STARTED",
-      "Series session has not started yet",
-      { id },
-    );
+    super("BOOKING_SESSION_NOT_STARTED", "Series session has not started yet", {
+      id,
+    });
   }
 }
 

@@ -50,7 +50,9 @@ async function createPublishedTutor(email: string, ts: number) {
   await setUserRole(tutorId, "tutor");
 
   const tutorCookie = await signInAndGetCookie(email, "Test1234!");
-  const tutorClient = createTestClient(await createTestContext(tutorCookie ?? ""));
+  const tutorClient = createTestClient(
+    await createTestContext(tutorCookie ?? ""),
+  );
 
   const [invite] = await db
     .insert(tutorInvite)
@@ -117,7 +119,9 @@ describe("Series session completion (G18)", () => {
       "Test1234!",
       "Student Series18",
     );
-    studentClient = createTestClient(await createTestContext(studentRes.cookie));
+    studentClient = createTestClient(
+      await createTestContext(studentRes.cookie),
+    );
     const studentCtx = await createTestContext(studentRes.cookie);
     studentId = studentCtx.session!.user.id;
     await creditWallet(studentId, 500);
@@ -262,13 +266,23 @@ describe("Series session completion (G18)", () => {
     const perSessionNotifs = await db
       .select()
       .from(notificationTable)
-      .where(eq(notificationTable.eventKey, `booking.${bookingId}.session.${sessionIds[0]!}.completed.student`));
+      .where(
+        eq(
+          notificationTable.eventKey,
+          `booking.${bookingId}.session.${sessionIds[0]!}.completed.student`,
+        ),
+      );
     expect(perSessionNotifs.length).toBe(1);
 
     const finalNotifs = await db
       .select()
       .from(notificationTable)
-      .where(eq(notificationTable.eventKey, `booking.${bookingId}.series_completed.student`));
+      .where(
+        eq(
+          notificationTable.eventKey,
+          `booking.${bookingId}.series_completed.student`,
+        ),
+      );
     expect(finalNotifs.length).toBe(1);
   });
 });
