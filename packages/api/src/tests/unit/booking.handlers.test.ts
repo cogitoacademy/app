@@ -24,6 +24,8 @@ function makeBookingService() {
       currentState: "awaiting_tutor_review",
     })),
     cancelSession: mock(async () => ({ cancelled: true, sessionId: "s1" })),
+    addSessionNote: mock(async () => ({ id: "n1", content: "note" })),
+    getSessionNotes: mock(async () => [{ id: "n1", content: "note" }]),
     createGroup: mock(async () => ({ id: "bg1" })),
     createSeries: mock(async () => ({ id: "bs1" })),
     confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
@@ -358,6 +360,61 @@ describe("bookingHandler", () => {
 
       expect(booking.listSessions).toHaveBeenCalledWith("b1", "u1");
       expect(result).toEqual({ items: [] });
+    });
+  });
+
+  describe("cancelSession", () => {
+    test("calls booking.cancelSession with session user id and sessionId", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("u1");
+      const input = { sessionId: "s1" };
+
+      const result = await handler.cancelSession({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.cancelSession).toHaveBeenCalledWith("u1", "s1");
+      expect(result).toEqual({ cancelled: true, sessionId: "s1" });
+    });
+  });
+
+  describe("addSessionNote", () => {
+    test("calls booking.addSessionNote with session user id, bookingId, and content", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("t1");
+      const input = { bookingId: "b1", content: "Great session" };
+
+      const result = await handler.addSessionNote({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.addSessionNote).toHaveBeenCalledWith(
+        "t1",
+        "b1",
+        "Great session",
+      );
+      expect(result).toEqual({ id: "n1", content: "note" });
+    });
+  });
+
+  describe("getSessionNotes", () => {
+    test("calls booking.getSessionNotes with session user id and bookingId", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("u1");
+      const input = { bookingId: "b1" };
+
+      const result = await handler.getSessionNotes({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.getSessionNotes).toHaveBeenCalledWith("u1", "b1");
+      expect(result).toEqual([{ id: "n1", content: "note" }]);
     });
   });
 });

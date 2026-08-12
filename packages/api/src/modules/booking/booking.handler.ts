@@ -19,6 +19,7 @@ import type {
   completeSessionInput,
   markAttendanceInput,
   cancelSessionInput,
+  addSessionNoteInput,
 } from "./booking.types";
 import type { BookingService } from "./booking.service";
 
@@ -37,6 +38,7 @@ type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
 type CompleteSessionInput = z.infer<typeof completeSessionInput>;
 type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;
 type CancelSessionInput = z.infer<typeof cancelSessionInput>;
+type AddSessionNoteInput = z.infer<typeof addSessionNoteInput>;
 
 export type BookingHandler = ReturnType<typeof createBookingHandler>;
 export type TutorActionsHandler = ReturnType<typeof createTutorActionsHandler>;
@@ -149,6 +151,38 @@ export function createBookingHandler(booking: BookingService) {
     }) => {
       return withDomainMap(
         () => booking.cancelSession(context.session!.user.id, input.sessionId),
+        mapBookingError,
+      );
+    },
+
+    addSessionNote: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: AddSessionNoteInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.addSessionNote(
+            context.session!.user.id,
+            input.bookingId,
+            input.content,
+          ),
+        mapBookingError,
+      );
+    },
+
+    getSessionNotes: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: BookingActionInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.getSessionNotes(context.session!.user.id, input.bookingId),
         mapBookingError,
       );
     },

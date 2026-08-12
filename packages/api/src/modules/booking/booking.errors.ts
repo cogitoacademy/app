@@ -230,6 +230,13 @@ export class BookingSessionNotCancellableError extends DomainError {
   }
 }
 
+export class BookingNotCompletedError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super("BOOKING_NOT_COMPLETED", "Booking has not been completed", { id });
+  }
+}
+
 export function mapBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -270,6 +277,8 @@ export function mapBookingError(
   if (err instanceof BookingRescheduleNotPendingError)
     return badRequest(err.message, err);
   if (err instanceof BookingSessionNotCancellableError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingNotCompletedError)
     return badRequest(err.message, err);
   if (err instanceof BookingRoomNotAssignedError)
     return badRequest(err.message, err);

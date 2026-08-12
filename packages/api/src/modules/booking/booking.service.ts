@@ -40,7 +40,9 @@ import {
   BookingSessionNotCancellableError,
   BookingRescheduleNotFoundError,
   BookingRescheduleNotPendingError,
+  BookingNotCompletedError,
 } from "./booking.errors";
+import { sanitizeHtml } from "../../lib/sanitize";
 import { log } from "../../lib/logger";
 import {
   BOOKING_STATE,
@@ -866,6 +868,36 @@ export function createBookingService(deps: {
 
       return { cancelled: true, sessionId };
     });
+  }
+
+  async function addSessionNote(
+    userId: string,
+    bookingId: string,
+    content: string,
+  ) {
+    const b = await repo.findBookingById(db, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    await assertBookingAccess(b, userId, db, bookingId);
+    if (b.currentState !== BOOKING_STATE.COMPLETED) {
+      throw new BookingNotCompletedError(bookingId);
+    }
+    const sanitized = sanitizeHtml(content).trim();
+    if (!sanitized) throw new BookingNotEditableError(bookingId);
+    return repo.insertSessionNote(db, {
+      bookingId,
+      authorId: userId,
+      content: sanitized,
+    });
+  }
+
+  async function getSessionNotes(userId: string, bookingId: string) {
+    const b = await repo.findBookingById(db, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    await assertBookingAccess(b, userId, db, bookingId);
+    if (b.currentState !== BOOKING_STATE.COMPLETED) {
+      throw new BookingNotCompletedError(bookingId);
+    }
+    return repo.listSessionNotes(db, bookingId);
   }
 
   async function markTutorAttendance(
@@ -1835,6 +1867,8 @@ export function createBookingService(deps: {
     acceptReschedule,
     rejectReschedule,
     cancelSession,
+    addSessionNote,
+    getSessionNotes,
     listSessions,
     expireBookings,
     releaseExpiredHolds,

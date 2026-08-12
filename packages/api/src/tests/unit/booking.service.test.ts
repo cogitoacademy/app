@@ -19,6 +19,7 @@ import {
   BookingSessionNotCancellableError,
   BookingRescheduleNotFoundError,
   BookingRescheduleNotPendingError,
+  BookingNotCompletedError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -65,6 +66,8 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateBookingSchedule: mock(async () => {}),
     findSessionById: mock(async () => null),
     cancelSession: mock(async () => {}),
+    insertSessionNote: mock(async () => ({})),
+    listSessionNotes: mock(async () => []),
     ...overrides,
   };
 }
@@ -3485,6 +3488,71 @@ describe("BookingService", () => {
         userId: "tutor1",
         title: "Reschedule rejected",
       });
+    });
+  });
+
+  describe("G7 session notes", () => {
+    test("addSessionNote rejects when booking is not completed", async () => {
+      const booking = makeBooking({ currentState: "scheduled" });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+        },
+      });
+
+      await expect(
+        service.addSessionNote("student1", "b1", "great session"),
+      ).rejects.toThrow(BookingNotCompletedError);
+    });
+
+    test("addSessionNote stores sanitized content on completed booking", async () => {
+      const booking = makeBooking({ currentState: "completed" });
+      const note = { id: "n1", bookingId: "b1", content: "ok", authorId: "t1" };
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          insertSessionNote: mock(async () => note),
+        },
+      });
+
+      const result = await service.addSessionNote(
+        "tutor1",
+        "b1",
+        "<script>alert(1)</script>Great <b>session</b>",
+      );
+
+      expect(result).toEqual(note);
+      expect(repo.insertSessionNote).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ content: "Great <b>session</b>" }),
+      );
+    });
+
+    test("getSessionNotes rejects when booking is not completed", async () => {
+      const booking = makeBooking({ currentState: "scheduled" });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+        },
+      });
+
+      await expect(service.getSessionNotes("student1", "b1")).rejects.toThrow(
+        BookingNotCompletedError,
+      );
+    });
+
+    test("getSessionNotes returns notes for a completed booking", async () => {
+      const booking = makeBooking({ currentState: "completed" });
+      const notes = [{ id: "n1", bookingId: "b1", content: "ok" }];
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          listSessionNotes: mock(async () => notes),
+        },
+      });
+
+      const result = await service.getSessionNotes("student1", "b1");
+      expect(result).toEqual(notes);
     });
   });
 });

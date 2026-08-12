@@ -19,6 +19,8 @@ import {
   cancelSessionInput,
   acceptRescheduleInput,
   rejectRescheduleInput,
+  addSessionNoteInput,
+  getSessionNotesInput,
 } from "./booking.types";
 import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
@@ -105,6 +107,29 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(cancelSessionInput)
       .handler(handler.cancelSession),
+
+    addSessionNote: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/session-note/add",
+        tags: ["Bookings"],
+        summary: "Add session note",
+        description:
+          "Tutor or student adds a note to a completed session (sanitized)",
+      })
+      .input(addSessionNoteInput)
+      .handler(handler.addSessionNote),
+
+    getSessionNotes: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/session-note/list",
+        tags: ["Bookings"],
+        summary: "Get session notes",
+        description: "Tutor or student lists notes for a completed session",
+      })
+      .input(getSessionNotesInput)
+      .handler(handler.getSessionNotes),
 
     createGroup: protectedProcedure
       .route({

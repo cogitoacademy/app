@@ -18,6 +18,7 @@ import {
   bookingStateHistory,
   bookingRescheduleProposal,
   bookingSession,
+  sessionNote,
   availabilitySlot,
   tutorProfile,
   type booking as bookingTable,
@@ -247,6 +248,8 @@ async function updateBookingPriceSnapshot(
 
 
 
+
+
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -258,6 +261,8 @@ async function updateBookingPriceSnapshot(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
 
 
 
@@ -390,6 +395,8 @@ async function updateRescheduleProposal(
     .where(eq(bookingRescheduleProposal.id, proposalId));
 }
 
+
+
 /**
  * Inserts a session for a series booking.
  *
@@ -454,6 +461,22 @@ async function cancelSession(conn: DbOrTx, sessionId: string) {
     .where(eq(bookingSession.id, sessionId));
 }
 
+async function insertSessionNote(
+  conn: DbOrTx,
+  values: { bookingId: string; authorId: string; content: string },
+) {
+  const [note] = await conn.insert(sessionNote).values(values).returning();
+  return note!;
+}
+
+async function listSessionNotes(conn: DbOrTx, bookingId: string) {
+  return conn
+    .select()
+    .from(sessionNote)
+    .where(eq(sessionNote.bookingId, bookingId))
+    .orderBy(desc(sessionNote.createdAt));
+}
+
 
 
 /**
@@ -516,6 +539,8 @@ async function updateBookingSchedule(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
 
 /**
  * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).
@@ -729,11 +754,15 @@ export function createBookingRepo(db: DbType) {
     insertBookingSession,
     findSessionById,
     cancelSession,
+    insertSessionNote,
+    listSessionNotes,
     listSessionsBySeriesId,
     updateBookingPriceSnapshot,
     updateBookingSchedule,
 
-
+    listSessionsBySeriesId,
+    updateBookingPriceSnapshot,
+    updateBookingSchedule,
     findBookingsExpiringByDeadline,
     findBookingsWithTutorLateness,
     findTutorParticipant,
