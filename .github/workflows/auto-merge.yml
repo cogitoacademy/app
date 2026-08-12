@@ -2,8 +2,6 @@ name: Auto-merge Dependabot
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  pull_request_review:
-    types: [submitted]
   check_suite:
     types: [completed]
 
@@ -15,7 +13,9 @@ jobs:
       pull-requests: write
       contents: write
     steps:
+      # Durable gate: enable "Require status checks" branch protection for main with CI required.
       - uses: fastify/github-action-merge-dependabot@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           merge-method: squash
+          target: minor
