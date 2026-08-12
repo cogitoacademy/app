@@ -17,6 +17,7 @@ import {
   resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
+import { GROUP_SERIES_DISCLAIMER } from "../../shared/constants";
 
 async function creditWallet(userId: string, amount: number) {
   const { services } = await import("@cogito-app/api/services");
@@ -249,5 +250,43 @@ describe("G5: series session cancellation rules", () => {
     await expect(
       studentClient.booking.cancelSession({ sessionId: session!.id }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  test("group series get response includes the disclaimer (G15)", async () => {
+    const { booking: bookingTable } = await import("@cogito-app/db/schema");
+    const start = new Date(Date.now() + 48 * 3600_000);
+    const priceSnapshot = {
+      perStudent: 40,
+      baseline: 120,
+      tutorShare: 96,
+      cogitoTake: 24,
+    };
+
+    const [groupSeries] = await db
+      .insert(bookingTable)
+      .values({
+        id: crypto.randomUUID(),
+        type: "series",
+        modality: "online",
+        tutorId,
+        proposerId: studentId,
+        targetGroupSize: 3,
+        minConfirmedHeadcount: 2,
+        confirmedHeadcount: 3,
+        currentState: "scheduled",
+        scheduledStartAt: start,
+        scheduledEndAt: new Date(start.getTime() + 3600_000),
+        timezone: "Asia/Jakarta",
+        priceSnapshot,
+        originalMarks: 120,
+        holdAmount: 120,
+        deadlineAt: new Date(Date.now() + 86400000),
+      })
+      .returning();
+
+    const b = await studentClient.booking.get({
+      bookingId: groupSeries!.id,
+    });
+    expect(b.disclaimer).toBe(GROUP_SERIES_DISCLAIMER);
   });
 });
