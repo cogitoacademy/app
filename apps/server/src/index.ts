@@ -4,7 +4,7 @@ import { createServer } from "./routes";
 import { env } from "@cogito-app/env/server";
 import { log } from "@cogito-app/api/lib/logger";
 import { sql } from "drizzle-orm";
-import { shutdownScheduler } from "./scheduler";
+import { initScheduler, shutdownScheduler } from "./scheduler";
 
 initLogger({
   env: { service: "cogito-app-server" },
@@ -62,6 +62,8 @@ await waitForDb();
 const server = app.listen(port, () => {
   log({ level: "info", action: "server_started", url: env.BETTER_AUTH_URL });
 });
+
+await initScheduler();
 
 async function gracefulShutdown(signal: string) {
   log({ level: "info", action: "shutdown_signal", signal });
