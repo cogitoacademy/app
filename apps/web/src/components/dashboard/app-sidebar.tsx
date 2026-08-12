@@ -107,12 +107,14 @@ export function AppSidebar({
       : role === "tutor"
         ? tutorNavItems
         : studentNavItems;
+  const profilePath = role === "tutor" ? "/onboarding" : "/profile";
+  const profileLabel = role === "tutor" ? "My Profile" : "Profile";
 
   function signOut() {
     authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
-          navigate({ to: "/" });
+          navigate({ to: "/login" });
         },
       },
     });
@@ -228,10 +230,10 @@ export function AppSidebar({
                   }
                 />
                 <MenuPopup className="w-(--anchor-width)" side="top">
-                  <Link to="/profile">
+                  <Link to={profilePath}>
                     <MenuItem>
                       <IconUser />
-                      Profile
+                      {profileLabel}
                     </MenuItem>
                   </Link>
                   <MenuItem>

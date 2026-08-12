@@ -18,10 +18,11 @@ import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AppTutorBookingsRouteImport } from './routes/_app.tutor-bookings'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
-import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
+import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
+import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
 import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
@@ -70,6 +71,11 @@ const AppProfileRoute = AppProfileRouteImport.update({
 const AppOnboardingRoute = AppOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -129,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
@@ -148,6 +155,7 @@ export interface FileRoutesByTo {
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
@@ -169,6 +177,7 @@ export interface FileRoutesById {
   '/_app/balance': typeof AppBalanceRoute
   '/_app/bookings': typeof AppBookingsRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/notifications': typeof AppNotificationsRoute
   '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/tutor-bookings': typeof AppTutorBookingsRoute
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/balance'
     | '/bookings'
     | '/dashboard'
+    | '/notifications'
     | '/onboarding'
     | '/profile'
     | '/tutor-bookings'
@@ -209,6 +219,7 @@ export interface FileRouteTypes {
     | '/balance'
     | '/bookings'
     | '/dashboard'
+    | '/notifications'
     | '/onboarding'
     | '/profile'
     | '/tutor-bookings'
@@ -229,6 +240,7 @@ export interface FileRouteTypes {
     | '/_app/balance'
     | '/_app/bookings'
     | '/_app/dashboard'
+    | '/_app/notifications'
     | '/_app/onboarding'
     | '/_app/profile'
     | '/_app/tutor-bookings'
@@ -311,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/notifications': {
+      id: '/_app/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -385,6 +404,7 @@ interface AppRouteChildren {
   AppBalanceRoute: typeof AppBalanceRoute
   AppBookingsRoute: typeof AppBookingsRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppNotificationsRoute: typeof AppNotificationsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
   AppTutorBookingsRoute: typeof AppTutorBookingsRoute
@@ -401,6 +421,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBalanceRoute: AppBalanceRoute,
   AppBookingsRoute: AppBookingsRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppNotificationsRoute: AppNotificationsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
   AppTutorBookingsRoute: AppTutorBookingsRoute,

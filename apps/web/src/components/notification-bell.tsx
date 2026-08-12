@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { IconBell } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -166,6 +167,19 @@ export function NotificationBell() {
             ))}
           </div>
         )}
+        <Separator />
+        <div className="px-2 py-1.5">
+          <Button
+            variant="plain"
+            block
+            nativeButton={false}
+            render={
+              <Link to="/notifications" aria-label="View all notifications" />
+            }
+          >
+            View all notifications
+          </Button>
+        </div>
       </MenuPopup>
     </Menu>
   );

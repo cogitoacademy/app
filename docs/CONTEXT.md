@@ -285,7 +285,7 @@ Use this section as the current role-readiness baseline. Re-audit only after the
 
 **Primary promotion flow is ready:** email/password auth -> tutor discovery -> solo booking -> Marks hold -> booking list/detail -> cancellation. Profile, balance/top-up, basic achievements, notification bell, calendar export, and WhatsApp contact surfaces are also present.
 
-**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject, lateness/no-show reporting, notification center, full Knowledge Bank gating polish, public achievements, email verification, and session-expiry UX remain open.
+**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject, lateness/no-show reporting, public achievements, email verification, and session-expiry UX remain open. The notification center and Knowledge Bank gating UX are now implemented.
 
 ### Tutor
 
