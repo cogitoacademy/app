@@ -49,7 +49,7 @@ import {
   TERMINAL_STATES,
   type BookingState,
 } from "./booking-state.types";
-import { canTransition } from "./booking-transitions";
+import { canTransition, TRANSITIONS } from "./booking-transitions";
 import type { BookingRepo } from "./booking.repo";
 import type {
   BookingWalletPort,
@@ -1105,16 +1105,22 @@ export function createBookingService(deps: {
         decidedAt: new Date(),
       });
 
-      const revertStates: BookingState[] = [
-        BOOKING_STATE.AWAITING_TUTOR_REVIEW,
-        BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
-        BOOKING_STATE.AWAITING_RECONFIRMATION,
-      ];
+      // The only legal states a booking can enter reschedule_proposed from are
+      // the sources in the transitions table, so derive the revert set from it
+      // to guarantee the booking returns to its exact prior state.
+      const rescheduleSources = (
+        Object.entries(TRANSITIONS) as [BookingState, { to: BookingState[] }][]
+      )
+        .filter(([, t]) => t.to.includes(BOOKING_STATE.RESCHEDULE_PROPOSED))
+        .map(([state]) => state);
       const previous = b.previousState as BookingState | null;
       const revertTarget =
-        previous && revertStates.includes(previous)
+        previous && rescheduleSources.includes(previous)
           ? previous
-          : BOOKING_STATE.AWAITING_RECONFIRMATION;
+          : // Unreachable given the current transitions table; kept as a
+            // defensive fallback if a future legal source is added without a
+            // matching revert target.
+            BOOKING_STATE.AWAITING_RECONFIRMATION;
 
       const updated = await transition(tx, bookingId, revertTarget, {
         actorId: userId,

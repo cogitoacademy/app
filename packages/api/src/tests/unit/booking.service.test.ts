@@ -3585,6 +3585,40 @@ describe("BookingService", () => {
         title: "Reschedule rejected",
       });
     });
+
+    test("rejectReschedule reverts to awaiting_admin_room_approval when that was the prior state", async () => {
+      const booking = makeRescheduleBooking({
+        previousState: "awaiting_admin_room_approval",
+      });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      const result = await service.rejectReschedule("student1", "b1");
+
+      expect(result.currentState).toBe("awaiting_admin_room_approval");
+      const transitionCall = repo.updateBookingVersioned.mock.calls[0][3];
+      expect(transitionCall).toMatchObject({
+        currentState: "awaiting_admin_room_approval",
+      });
+    });
   });
 
   describe("G7 session notes", () => {

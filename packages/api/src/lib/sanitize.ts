@@ -66,7 +66,8 @@ const DANGEROUS_URL = /^\s*(?:javascript:|vbscript:|data:\s*text\/html)/i;
 function sanitizeAttributeValue(prefix: string, rawValue: string): string {
   const value = rawValue.trim().replace(/^["']|["']$/g, "");
   if (DANGEROUS_URL.test(value)) {
-    return `${prefix}=""`;
+    // `prefix` already ends with `=`, so empty the attribute value directly.
+    return `${prefix}""`;
   }
   return prefix + rawValue;
 }
