@@ -173,7 +173,7 @@ export function createServer() {
         }
       }
 
-      if (path === "/rpc/payment.createIntent") {
+      if (path === "/rpc/payment.createPurchase") {
         const { allowed, retryAfterMs } = await paymentRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
