@@ -84,6 +84,11 @@ describe("createBookingRepo", () => {
           baseline: 42000,
           tutorShare: 33600,
           cogitoTake: 8400,
+          baselineCogitoTake: 12000,
+          baselineTutorShare: 30000,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
         },
       };
       const conn: any = { ...makeSelectConn([row]) };
@@ -439,6 +444,11 @@ describe("createBookingRepo", () => {
           baseline: 42000,
           tutorShare: 33600,
           cogitoTake: 8400,
+          baselineCogitoTake: 12000,
+          baselineTutorShare: 30000,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
         },
       });
 

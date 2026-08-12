@@ -304,10 +304,11 @@ export function createBookingService(deps: {
     }
 
     const priceSnapshot = pricing.computeSplit(
+      modality,
       (profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE) as number,
       1,
     );
-    const totalMarks = priceSnapshot.baseline;
+    const totalMarks = priceSnapshot.perStudent * 1;
 
     const w = await wallet.getByUserId(db, proposerId);
     if (!w) throw new BookingNotFoundError(proposerId);
@@ -734,10 +735,11 @@ export function createBookingService(deps: {
     const pricePerStudent = (profile.prices?.[String(size)] ??
       DEFAULT_SOLO_PRICE) as number;
     const priceSnapshot = pricing.computeSplit(
-      pricePerStudent * size,
+      input.modality,
+      pricePerStudent,
       size as 1 | 2 | 3 | 4 | 5 | 6,
     );
-    const totalMarks = priceSnapshot.baseline;
+    const totalMarks = priceSnapshot.perStudent * size;
 
     const w = await wallet.getByUserId(db, proposerId);
     if (!w) throw new BookingNotFoundError(proposerId);
@@ -1108,8 +1110,12 @@ export function createBookingService(deps: {
 
     const pricePerStudent = (profile.prices?.["1"] ??
       DEFAULT_SOLO_PRICE) as number;
-    const priceSnapshot = pricing.computeSplit(pricePerStudent, 1);
-    const perSession = priceSnapshot.baseline;
+    const priceSnapshot = pricing.computeSplit(
+      input.modality,
+      pricePerStudent,
+      1,
+    );
+    const perSession = priceSnapshot.perStudent;
     const totalMarks = perSession * input.sessions.length;
 
     const w = await wallet.getByUserId(db, proposerId);

@@ -344,6 +344,11 @@ async function insertBookingSession(
       baseline: number;
       tutorShare: number;
       cogitoTake: number;
+      baselineCogitoTake: number;
+      baselineTutorShare: number;
+      extraTotal: number;
+      cogitoExtraTake: number;
+      tutorExtraShare: number;
     };
   },
 ) {
