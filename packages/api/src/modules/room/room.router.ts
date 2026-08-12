@@ -3,6 +3,8 @@ import {
   createRoomInput,
   assignRoomInput,
   checkAvailabilityInput,
+  relocateRoomInput,
+  cancelRoomInput,
 } from "./room.types";
 import { adminProcedure, protectedProcedure } from "../../procedures";
 import type { RoomHandler } from "./room.handler";
@@ -52,5 +54,29 @@ export function createRoomRouter(handler: RoomHandler) {
       })
       .input(checkAvailabilityInput)
       .handler(handler.checkAvailability),
+
+    relocate: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/rooms/relocate",
+        tags: ["Admin", "Rooms"],
+        summary: "Relocate booking to another room",
+        description:
+          "Moves a booking to a different room, freeing the previous one",
+      })
+      .input(relocateRoomInput)
+      .handler(handler.relocate),
+
+    cancelBooking: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/rooms/cancel-booking",
+        tags: ["Admin", "Rooms"],
+        summary: "Cancel room booking",
+        description:
+          "Cancels a booking's room assignment; the booking continues without a room",
+      })
+      .input(cancelRoomInput)
+      .handler(handler.cancelBooking),
   };
 }

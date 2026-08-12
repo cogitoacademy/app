@@ -6,6 +6,8 @@ import type {
   CreateRoomInput,
   AssignRoomInput,
   CheckAvailabilityInput,
+  RelocateRoomInput,
+  CancelRoomInput,
 } from "./room.types";
 
 export type RoomHandler = ReturnType<typeof createRoomHandler>;
@@ -60,6 +62,38 @@ export function createRoomHandler(room: RoomService) {
             input.endAt,
           ),
         }),
+        mapRoomError,
+      );
+    },
+
+    relocate: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: RelocateRoomInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          room.relocateRoom(
+            input.bookingId,
+            input.roomId,
+            input.startAt,
+            input.endAt,
+          ),
+        mapRoomError,
+      );
+    },
+
+    cancelBooking: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: CancelRoomInput;
+    }) => {
+      return withDomainMap(
+        () => room.cancelRoomBooking(input.bookingId),
         mapRoomError,
       );
     },

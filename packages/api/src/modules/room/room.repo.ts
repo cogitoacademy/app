@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, ne } from "drizzle-orm";
+import { eq, and, gte, lte, ne, desc } from "drizzle-orm";
 import { room, roomBooking } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { ROOM_BOOKING_STATUS } from "../../shared/constants";
@@ -131,6 +131,36 @@ export async function insertRoomBooking(
   return row!;
 }
 
+/**
+ * Returns the most recent non-cancelled room booking for a booking — the
+ * active room assignment (relocated rows are historical).
+ */
+export async function findActiveRoomBookingByBookingId(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  return conn.query.roomBooking.findFirst({
+    where: and(
+      eq(roomBooking.bookingId, bookingId),
+      ne(roomBooking.status, ROOM_BOOKING_STATUS.CANCELLED),
+    ),
+    orderBy: [desc(roomBooking.createdAt)],
+  });
+}
+
+export async function updateRoomBookingStatus(
+  conn: DbOrTx,
+  roomBookingId: string,
+  status: string,
+) {
+  const [row] = await conn
+    .update(roomBooking)
+    .set({ status })
+    .where(eq(roomBooking.id, roomBookingId))
+    .returning();
+  return row!;
+}
+
 export function createRoomRepo() {
   return {
     findActiveRooms,
@@ -139,5 +169,7 @@ export function createRoomRepo() {
     findRoomBookings,
     findRoomBookingsForUpdate,
     insertRoomBooking,
+    findActiveRoomBookingByBookingId,
+    updateRoomBookingStatus,
   };
 }

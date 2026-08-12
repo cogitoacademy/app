@@ -21,6 +21,11 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
     findRoomBookings: mock(async (_conn: any) => []),
     findRoomBookingsForUpdate: mock(async (_conn: any) => []),
     insertRoomBooking: mock(async (_conn: any, _values: any) => ({})),
+    findActiveRoomBookingByBookingId: mock(async (_conn: any) => null),
+    updateRoomBookingStatus: mock(async (_conn: any, _id: string, status: string) => ({
+      id: "rb1",
+      status,
+    })),
     ...overrides,
   } as RoomRepo;
 }
@@ -143,6 +148,147 @@ describe("createRoomService", () => {
         new Date("2024-01-01T11:00:00Z"),
       );
       expect(result).toEqual(roomBookingRow);
+    });
+  });
+
+  describe("relocateRoom", () => {
+    test("throws notFound when room not found", async () => {
+      const repo = makeRepo({ findRoomById: mock(async () => null) });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(
+        service.relocateRoom(
+          "b1",
+          "room_missing",
+          new Date("2024-01-01T10:00:00Z"),
+          new Date("2024-01-01T11:00:00Z"),
+        ),
+      ).rejects.toThrow("Room not found");
+    });
+
+    test("throws notFound when booking has no active room booking", async () => {
+      const repo = makeRepo({
+        findRoomById: mock(async () => makeRoom()),
+        findActiveRoomBookingByBookingId: mock(async () => null),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(
+        service.relocateRoom(
+          "b1",
+          "room1",
+          new Date("2024-01-01T10:00:00Z"),
+          new Date("2024-01-01T11:00:00Z"),
+        ),
+      ).rejects.toThrow("no active room assignment");
+    });
+
+    test("throws conflict when new room is occupied", async () => {
+      const repo = makeRepo({
+        findRoomById: mock(async () => makeRoom()),
+        findActiveRoomBookingByBookingId: mock(async () => ({
+          id: "rb_old",
+          roomId: "room_old",
+          status: "confirmed",
+        })),
+        findRoomBookingsForUpdate: mock(async () => [{ id: "rb_x" }]),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(
+        service.relocateRoom(
+          "b1",
+          "room1",
+          new Date("2024-01-01T10:00:00Z"),
+          new Date("2024-01-01T11:00:00Z"),
+        ),
+      ).rejects.toThrow("Room is already booked");
+    });
+
+    test("frees old room and confirms new room", async () => {
+      const oldRow = {
+        id: "rb_old",
+        roomId: "room_old",
+        bookingId: "b1",
+        status: "confirmed",
+      };
+      const newRow = {
+        id: "rb_new",
+        roomId: "room1",
+        bookingId: "b1",
+        status: "confirmed",
+      };
+
+      const repo = makeRepo({
+        findRoomById: mock(async () => makeRoom()),
+        findActiveRoomBookingByBookingId: mock(async () => oldRow),
+        findRoomBookingsForUpdate: mock(async () => []),
+        updateRoomBookingStatus: mock(async () => ({
+          ...oldRow,
+          status: "relocated",
+        })),
+        insertRoomBooking: mock(async () => newRow),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      const result = await service.relocateRoom(
+        "b1",
+        "room1",
+        new Date("2024-01-01T10:00:00Z"),
+        new Date("2024-01-01T11:00:00Z"),
+      );
+
+      expect(repo.updateRoomBookingStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "rb_old",
+        "relocated",
+      );
+      expect(repo.insertRoomBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          roomId: "room1",
+          bookingId: "b1",
+          status: "confirmed",
+        }),
+      );
+      expect(result).toEqual(newRow);
+    });
+  });
+
+  describe("cancelRoomBooking", () => {
+    test("throws notFound when booking has no active room booking", async () => {
+      const repo = makeRepo({
+        findActiveRoomBookingByBookingId: mock(async () => null),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(service.cancelRoomBooking("b1")).rejects.toThrow(
+        "no active room assignment",
+      );
+    });
+
+    test("sets the active room booking to cancelled", async () => {
+      const repo = makeRepo({
+        findActiveRoomBookingByBookingId: mock(async () => ({
+          id: "rb1",
+          roomId: "room1",
+          status: "confirmed",
+        })),
+        updateRoomBookingStatus: mock(async () => ({
+          id: "rb1",
+          status: "cancelled",
+        })),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      const result = await service.cancelRoomBooking("b1");
+
+      expect(repo.updateRoomBookingStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "rb1",
+        "cancelled",
+      );
+      expect(result.status).toBe("cancelled");
     });
   });
 });

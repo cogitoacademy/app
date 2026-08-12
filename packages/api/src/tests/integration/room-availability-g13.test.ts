@@ -116,7 +116,11 @@ describe("G13 offline room availability", () => {
   const earlierEndISO = new Date(Date.now() + 21 * 3600_000).toISOString();
 
   beforeAll(async () => {
-    const adminRes = await signUpAndSignIn(adminEmail, "Test1234!", "Admin Avail");
+    const adminRes = await signUpAndSignIn(
+      adminEmail,
+      "Test1234!",
+      "Admin Avail",
+    );
     const adminCtx = await createTestContext(adminRes.cookie);
     if (!adminCtx.session?.user) throw new Error("Admin session missing");
     await setUserRole(adminCtx.session.user.id, "admin");
