@@ -528,7 +528,9 @@ export function AvailabilityPage() {
                 </FieldDescription>
               </Field>
 
-              {errors.form ? <FieldError>{errors.form}</FieldError> : null}
+              {errors.form ? (
+                <Text className="text-danger">{errors.form}</Text>
+              ) : null}
 
               <div className="flex flex-wrap justify-end gap-2">
                 {editingSlotId ? (
