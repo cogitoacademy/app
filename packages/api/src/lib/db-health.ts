@@ -3,10 +3,7 @@ import { sql } from "drizzle-orm";
 import type { RedisClient } from "./redis";
 import type { DbType } from "./db";
 
-export async function healthCheck(
-  redis?: RedisClient,
-  db: DbType = defaultDb,
-) {
+export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
   const checks: Record<string, "ok" | "degraded" | "error"> = {};
 
   try {
