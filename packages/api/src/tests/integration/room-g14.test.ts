@@ -296,4 +296,26 @@ describe("G14 admin room relocate and cancel", () => {
     const booking = await student2Client.booking.get({ bookingId: booking2Id });
     expect(booking.currentState).toBe("awaiting_admin_room_approval");
   });
+
+  test("G14 regression: cancel after relocate leaves no active row; second cancel and relocate are rejected", async () => {
+    const rb = await adminClient.room.cancelBooking({ bookingId: booking1Id });
+    expect(rb.status).toBe("cancelled");
+
+    const rows = await listRoomBookings(booking1Id);
+    const active = rows.find((r) => r.status === "confirmed");
+    expect(active).toBeUndefined();
+
+    await expect(
+      adminClient.room.cancelBooking({ bookingId: booking1Id }),
+    ).rejects.toThrow(/no active room assignment/i);
+
+    await expect(
+      adminClient.room.relocate({
+        bookingId: booking1Id,
+        roomId: roomCId,
+        startAt: startISO,
+        endAt: endISO,
+      }),
+    ).rejects.toThrow(/no active room assignment/i);
+  });
 });

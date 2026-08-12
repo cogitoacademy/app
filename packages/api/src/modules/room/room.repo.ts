@@ -132,8 +132,8 @@ export async function insertRoomBooking(
 }
 
 /**
- * Returns the most recent non-cancelled room booking for a booking — the
- * active room assignment (relocated rows are historical).
+ * Returns the most recent confirmed room booking for a booking — the active
+ * room assignment. Relocated and cancelled rows are historical.
  */
 export async function findActiveRoomBookingByBookingId(
   conn: DbOrTx,
@@ -142,7 +142,7 @@ export async function findActiveRoomBookingByBookingId(
   return conn.query.roomBooking.findFirst({
     where: and(
       eq(roomBooking.bookingId, bookingId),
-      ne(roomBooking.status, ROOM_BOOKING_STATUS.CANCELLED),
+      eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
     ),
     orderBy: [desc(roomBooking.createdAt)],
   });
