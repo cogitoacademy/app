@@ -110,34 +110,7 @@ function toOverrideCursor(row: {
   return `${rank}~${row.scheduledStartAt.toISOString()}~${row.id}`;
 }
 
-function projectWalletAfter(
-  w: WalletBalances,
-  action: MarksAction,
-  amount: number,
-): WalletBalances {
-  if (action === "release_holds") {
-    return {
-      totalBalance: w.totalBalance,
-      heldBalance: Math.max(w.heldBalance - amount, 0),
-      availableBalance: w.availableBalance + amount,
-    };
-  }
-  if (action === "compensate_credit") {
-    return {
-      totalBalance: w.totalBalance + amount,
-      heldBalance: w.heldBalance,
-      availableBalance: w.availableBalance + amount,
-    };
-  }
-  return {
-    totalBalance: w.totalBalance - amount,
-    heldBalance: w.heldBalance,
-    availableBalance: w.availableBalance - amount,
-  };
-}
-
-
-
+/**
  * Creates the admin booking service for overrides, listing, history, and refunds.
  *
  * @param deps - the dependency ports (db, repo, auditPort, wallet, refund)
@@ -189,28 +162,6 @@ export function createAdminBookingService(deps: {
     conn: DbOrTx,
     bookingRow: { id: string; currentState: string; holdAmount: number },
     input: OverrideInput,
-
-
-
-   * Applies an admin override to a booking, optionally releasing/compensating held Marks.
-   *
-   * @param adminId - the admin applying the override
-   * @param input - the override details (bookingId, category, reason, marksAction, affectedParticipants)
-   * @returns the updated booking
-   * @throws {BookingNotFoundError} if the booking does not exist
-   * @throws {TerminalStateOverrideError} if the booking is in a terminal state
-   */
-  async function applyOverride(
-    adminId: string,
-    input: {
-      bookingId: string;
-      category: OverrideCategory;
-      reason: string;
-      affectedParticipants?: string[];
-      marksAction?: MarksAction;
-      userNote?: string;
-      internalNote?: string;
-    },
   ) {
     const newState = CATEGORY_STATE_MAP[input.category];
 
@@ -408,9 +359,6 @@ export function createAdminBookingService(deps: {
       perParticipantImpact: plan.perParticipantImpact,
     };
   }
-
-
-
   /**
    * Lists bookings for the admin, by bookingId or with cursor pagination.
    *

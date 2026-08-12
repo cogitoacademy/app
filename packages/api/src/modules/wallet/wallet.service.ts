@@ -1,4 +1,5 @@
 import { KNOWLEDGE_BANK_THRESHOLD } from "../../shared/constants";
+import { ledgerEntry } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { WalletRepo, AtomicResult } from "./wallet.repo";
@@ -387,11 +388,6 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
       return updated;
     });
   }
-
-  async function listLedger(
-    walletId: string,
-    opts?: LedgerQueryOptions,
-  ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }> {
 
   /**
    * Lists ledger entries for a wallet with pagination.
