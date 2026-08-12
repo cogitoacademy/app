@@ -13,6 +13,7 @@ import {
   IconMapPin,
   IconSchool,
   IconWallet,
+  IconRepeat,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -43,6 +44,7 @@ import {
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 
 import { orpc } from "@/utils/orpc";
 
@@ -50,6 +52,7 @@ const BOOKING_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_SOLO_PRICE = 42;
 
 type Modality = "online" | "offline";
+type BookingMode = "solo" | "series";
 
 function getBookingErrorMessage(error: Error) {
   if (error.message.toLowerCase().includes("input validation failed")) {
@@ -82,8 +85,9 @@ function formatSlotTime(start: Date | string, end: Date | string) {
 export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [bookingMode, setBookingMode] = useState<BookingMode>("solo");
   const [selectedModality, setSelectedModality] = useState<Modality>("online");
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
 
   const profileQuery = useQuery(
     orpc.tutors.getProfile.queryOptions({ input: { tutorId } }),
@@ -135,6 +139,54 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       },
     }),
   );
+  const createSeries = useMutation(
+    orpc.booking.createSeries.mutationOptions({
+      onSuccess: (booking) => handleCreatedBooking(booking),
+      onError: (error: Error) => showBookingError(error),
+    }),
+  );
+
+  function refreshAfterCreate() {
+    return Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: orpc.booking.listMine.queryKey({ input: {} }),
+      }),
+      queryClient.invalidateQueries({ queryKey: orpc.wallet.get.queryKey() }),
+    ]);
+  }
+
+  function handleCreatedBooking(booking: unknown) {
+    if (
+      !booking ||
+      typeof booking !== "object" ||
+      !("id" in booking) ||
+      typeof booking.id !== "string"
+    ) {
+      void navigate({ to: "/bookings" });
+      return;
+    }
+    void refreshAfterCreate();
+    toastManager.add({
+      title:
+        bookingMode === "series"
+          ? "Series request sent"
+          : "Booking request sent",
+      description: "Your tutor can now review the request.",
+      type: "success",
+    });
+    void navigate({
+      to: "/bookings/$bookingId",
+      params: { bookingId: booking.id },
+    });
+  }
+
+  function showBookingError(error: Error) {
+    toastManager.add({
+      title: "Booking request could not be sent",
+      description: getBookingErrorMessage(error),
+      type: "error",
+    });
+  }
 
   if (profileQuery.isPending) return <CreateBookingSkeleton />;
 
@@ -180,9 +232,19 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const availableSlots = availabilitySlots.filter(
     (slot) => slot.modality === "both" || slot.modality === effectiveModality,
   );
-  const selectedSlot =
-    availableSlots.find((slot) => slot.id === selectedSlotId) ?? null;
-  const price = Number(profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE);
+  const selectedSlots = selectedSlotIds
+    .map((id) => availableSlots.find((slot) => slot.id === id))
+    .filter((slot): slot is (typeof availableSlots)[number] => Boolean(slot))
+    .toSorted(
+      (a, b) =>
+        new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
+    );
+  const selectedSlot = selectedSlots[0] ?? null;
+  const perSessionPrice = Number(profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE);
+  const price =
+    bookingMode === "series"
+      ? perSessionPrice * selectedSlots.length
+      : perSessionPrice;
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
   const hasEnoughMarks = availableBalance >= price;
   const tutorName = profile.displayName ?? profile.user?.name ?? "Cogito tutor";
@@ -191,13 +253,27 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     event.preventDefault();
     if (!selectedSlot) return;
 
-    createBooking.mutate({
+    const baseInput = {
       tutorId: profile.userId,
       availabilitySlotId: selectedSlot.id,
       modality: effectiveModality,
+      timezone: BOOKING_TIMEZONE,
+    };
+    if (bookingMode === "series") {
+      if (selectedSlots.length < 2 || selectedSlots.length > 4) return;
+      createSeries.mutate({
+        ...baseInput,
+        sessions: selectedSlots.map((slot) => ({
+          scheduledStartAt: new Date(slot.startDate),
+          scheduledEndAt: new Date(slot.endDate),
+        })),
+      });
+      return;
+    }
+    createBooking.mutate({
+      ...baseInput,
       scheduledStartAt: new Date(selectedSlot.startDate),
       scheduledEndAt: new Date(selectedSlot.endDate),
-      timezone: BOOKING_TIMEZONE,
     });
   }
 
@@ -216,14 +292,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Badge variant="info" pill>
-              Solo session
+              {bookingMode === "series" ? "Session series" : "Solo session"}
             </Badge>
             <Heading size="md" className="mt-3">
               Book {tutorName}
             </Heading>
             <Text className="mt-1 text-muted">
-              Choose an available slot and review the Marks hold before sending
-              your request.
+              {bookingMode === "series"
+                ? "Choose 2–4 available times for a recurring learning plan."
+                : "Choose an available slot and review the Marks hold before sending your request."}
             </Text>
           </div>
           <Badge variant="secondary" pill>
@@ -237,6 +314,35 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:items-start"
       >
         <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <IconBox variant="primary-subtle">
+                <IconRepeat />
+              </IconBox>
+              <CardTitle>Booking type</CardTitle>
+              <CardDescription>
+                Choose one session or a short series
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              <Tabs
+                value={bookingMode}
+                onValueChange={(value) => {
+                  if (value !== "solo" && value !== "series") return;
+                  setBookingMode(value);
+                  setSelectedSlotIds([]);
+                  createBooking.reset();
+                  createSeries.reset();
+                }}
+              >
+                <TabsList>
+                  <TabsItem value="solo">Solo session</TabsItem>
+                  <TabsItem value="series">Series (2–4 sessions)</TabsItem>
+                </TabsList>
+              </Tabs>
+            </CardBody>
+          </Card>
+
           <Card>
             <CardHeader>
               <IconBox variant="info-subtle">
@@ -255,8 +361,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                     if (modality !== "online" && modality !== "offline") return;
 
                     setSelectedModality(modality);
-                    setSelectedSlotId(null);
+                    setSelectedSlotIds([]);
                     createBooking.reset();
+                    createSeries.reset();
                   }}
                   disabled={modalityOptions.length === 1}
                 >
@@ -304,7 +411,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {availableSlots.map((slot) => {
-                    const selected = slot.id === selectedSlotId;
+                    const selected = selectedSlotIds.includes(slot.id);
                     return (
                       <Button
                         key={slot.id}
@@ -313,8 +420,17 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                         aria-pressed={selected}
                         className="h-auto min-h-20 justify-start px-4 py-3 text-left"
                         onClick={() => {
-                          setSelectedSlotId(slot.id);
+                          setSelectedSlotIds((current) => {
+                            if (bookingMode === "solo") return [slot.id];
+                            if (current.includes(slot.id)) {
+                              return current.filter((id) => id !== slot.id);
+                            }
+                            return current.length < 4
+                              ? [...current, slot.id]
+                              : current;
+                          });
                           createBooking.reset();
+                          createSeries.reset();
                         }}
                       >
                         <span className="flex min-w-0 flex-col items-start gap-1">
@@ -358,18 +474,31 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               }
             />
             <SummaryRow
-              label="Schedule"
+              label={bookingMode === "series" ? "Schedule" : "Schedule"}
               value={
-                selectedSlot
-                  ? `${formatSlotDate(selectedSlot.startDate)}, ${formatSlotTime(selectedSlot.startDate, selectedSlot.endDate)}`
-                  : "Choose a time"
+                bookingMode === "series"
+                  ? selectedSlots.length > 0
+                    ? `${selectedSlots.length} of 2–4 sessions selected`
+                    : "Choose 2–4 times"
+                  : selectedSlot
+                    ? `${formatSlotDate(selectedSlot.startDate)}, ${formatSlotTime(selectedSlot.startDate, selectedSlot.endDate)}`
+                    : "Choose a time"
               }
             />
             <div className="rounded-lg border border-item-border bg-item p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <Text className="text-sm text-muted">Session price</Text>
+                  <Text className="text-sm text-muted">
+                    {bookingMode === "series"
+                      ? "Series total"
+                      : "Session price"}
+                  </Text>
                   <Text className="text-xl font-semibold">{price} Marks</Text>
+                  {bookingMode === "series" ? (
+                    <Text className="text-xs text-muted">
+                      {perSessionPrice} Marks per session
+                    </Text>
+                  ) : null}
                 </div>
                 <IconBox variant="warning-subtle">
                   <IconCoins />
@@ -408,10 +537,17 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 type="submit"
                 block
                 size="lg"
-                progress={createBooking.isPending}
-                disabled={!selectedSlot || createBooking.isPending}
+                progress={createBooking.isPending || createSeries.isPending}
+                disabled={
+                  !selectedSlot ||
+                  createBooking.isPending ||
+                  createSeries.isPending ||
+                  (bookingMode === "series" && selectedSlots.length < 2)
+                }
               >
-                Send booking request
+                {bookingMode === "series"
+                  ? `Send series request (${selectedSlots.length})`
+                  : "Send booking request"}
               </Button>
             ) : (
               <Button
@@ -423,10 +559,12 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 Top up Marks
               </Button>
             )}
-            {createBooking.isError ? (
+            {createBooking.isError || createSeries.isError ? (
               <div className="w-full rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="text-center text-sm text-danger">
-                  {getBookingErrorMessage(createBooking.error)}
+                  {getBookingErrorMessage(
+                    (createBooking.error ?? createSeries.error) as Error,
+                  )}
                 </Text>
               </div>
             ) : null}

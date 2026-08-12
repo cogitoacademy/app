@@ -291,7 +291,7 @@ Use this section as the current role-readiness baseline. Re-audit only after the
 
 The tutor workspace now has the primary management surfaces: tutor-only onboarding, a weekly-first availability page, an incoming booking list, and booking detail actions for accept, decline, and complete. Weekly availability is materialized into concrete future slots through the selected end date (up to 52 weeks); one-time custom slots remain available for exceptions or force majeure. The incoming list uses the tutor-owned booking query rather than proposer-only `booking.listMine`.
 
-The remaining Tutor E2E work is verification with seeded accounts: create availability, book as a student, accept as a tutor, and confirm the student's scheduled state, notification, and meeting state. Tutor rescheduling, lateness/no-show support, session notes, payout, and individual series completion remain backend-dependent gaps.
+The primary Tutor E2E flow has been manually verified with seeded accounts, including availability, incoming booking review, Google Meet link creation, student notification/state, and completion. Tutor rescheduling, lateness/no-show support, session notes, payout, and individual series completion remain backend-dependent gaps.
 
 ### Admin
 
@@ -306,10 +306,11 @@ Do not prioritize the full booking operations console or offline room workflow u
 
 ### Current Execution Order
 
-1. Verify Tutor availability -> incoming booking -> detail -> accept/decline/complete E2E with seeded accounts.
-2. Verify Admin achievement moderation as the next low-risk complete flow.
-3. Return to Student secondary flows only where the backend contract is already stable.
-4. Defer admin booking override and offline-room UI until their backend blockers are closed.
+1. Complete Admin Tutor invite -> claim -> onboarding -> review -> publish E2E and verify published discovery.
+2. Complete Student series booking UI and its booking detail/session presentation.
+3. Add Student group booking UI after a student-facing invitee lookup endpoint is available.
+4. Keep achievement moderation/public surfacing at the end of the frontend queue.
+5. Defer admin booking override and offline-room UI until their backend blockers are closed.
 
 ## Known Bugs
 
