@@ -29,29 +29,39 @@ Configured in scheduler.service.ts: `attempts: 3, backoff: { type: 'exponential'
 
 Replaced `SELECT *` in `wallet.repo.ts` getById/getByUserId with explicit column lists.
 
-### 1.4 Booking repo explicit column lists (from 3.3)
+### 1.4 Booking repo explicit column lists (from 3.3) ✅
 
-Replace `.select()` in `booking.repo.ts` findBookingById and other queries with explicit columns.
+Replaced `.select()` in `booking.repo.ts` findBookingById and other queries with explicit columns.
 
-### 1.5 Webhook IP allowlisting (from 5.1)
+- Landed in **BACKEND-HARDENING PR C** (task C3).
+
+### 1.5 Webhook IP allowlisting (from 5.1) ✅
 
 Add configurable IP allowlist for Xendit webhook endpoint. Signature verification already exists.
+
+- Landed in **BACKEND-HARDENING PR C** (task C5) — `WEBHOOK_ALLOWED_IPS` config.
 
 ### 1.6 Redis health check (from INFRASTRUCTURE-PLAN 5.2) ✅
 
 Added Redis ping to `db-health.ts` alongside the existing DB SELECT 1 check.
 
-### 1.7 JSDoc on public functions (from 6.5)
+### 1.7 JSDoc on public functions (from 6.5) ✅
 
 Add JSDoc (`@param`, `@returns`, `@throws`) to all exported service, repo, and router functions.
 
-### 1.8 Docker test database (from 4.0.1)
+- Landed in **BACKEND-HARDENING PR C** (task C4).
+
+### 1.8 Docker test database (from 4.0.1) ✅
 
 Create `docker-compose.test.yml` for test-specific PostgreSQL.
+
+- Landed in **BACKEND-HARDENING PR B** (task B2).
 
 ---
 
 ## 2. Redis Session Caching (from PRODUCTION-READINESS-PLAN 2.2)
+
+> **Deferred / needs separate plan.** Not implemented.
 
 Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed session storage with DB fallback.
 
@@ -108,3 +118,4 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 
 - v1.0 (2026-07-29): Created from post-merge audit of #18 + #19. Groups code gaps (done in next PR), manual verification (needs running env), and production ops (needs live VPS).
 - v1.1 (2026-07-30): Items 1.1, 1.2, 1.3, 1.6 completed in `improvement/foundation-critical-fixes` branch. Remaining: 1.4, 1.5, 1.7, 1.8, §2 Redis session caching.
+- v1.2 (2026-08-12): Items 1.4 (PR C / C3), 1.5 (PR C / C5), 1.7 (PR C / C4), 1.8 (PR B / B2) completed in BACKEND-HARDENING PRs. §2 Redis session caching remains unimplemented and moved under a "Deferred / needs separate plan" note.
