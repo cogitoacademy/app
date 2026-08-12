@@ -119,12 +119,12 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
       | "publish"
       | "unpublish"
       | "suspend",
-    adminNote?: string,
+    note?: string,
   ) {
     reviewMutation.mutate({
       tutorProfileId: profile.id,
       action,
-      adminNote,
+      adminNote: note,
     });
   }
 
@@ -144,58 +144,115 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>{profile.displayName ?? "Unnamed Tutor"}</CardTitle>
+      <Card className="flex h-full min-w-0 flex-col overflow-hidden">
+        <CardHeader className="items-start">
+          <div className="min-w-0">
+            <CardTitle className="truncate">
+              {profile.displayName ?? "Unnamed Tutor"}
+            </CardTitle>
+            {profile.user && (
+              <Text className="mt-1 truncate text-sm text-muted">
+                {profile.user.email}
+              </Text>
+            )}
+          </div>
           <CardHeaderAction>
             <Badge variant={badge.variant}>{badge.label}</Badge>
           </CardHeaderAction>
         </CardHeader>
-        <CardBody>
-          <Stack direction="column" spacing="sm">
-            {profile.user && (
-              <Text className="text-sm text-muted">{profile.user.email}</Text>
-            )}
-            {profile.shortBio && <Text>{profile.shortBio}</Text>}
-            {profile.credentialsSummary && (
-              <Text className="text-sm">
-                Credentials: {profile.credentialsSummary}
+        <CardBody className="flex-1">
+          <Stack direction="column" spacing="md">
+            {profile.shortBio ? (
+              <Text className="leading-relaxed text-muted">
+                {profile.shortBio}
+              </Text>
+            ) : (
+              <Text className="text-sm italic text-dimmed">
+                No bio provided.
               </Text>
             )}
-            {profile.expertise && profile.expertise.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {profile.expertise.map((e) => (
-                  <Badge key={e} variant="secondary">
-                    {e}
-                  </Badge>
-                ))}
+            {profile.credentialsSummary && (
+              <div>
+                <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Credentials
+                </Text>
+                <Text className="mt-1 text-sm">
+                  {profile.credentialsSummary}
+                </Text>
               </div>
             )}
-            {profile.modality && (
-              <Text className="text-sm">Modality: {profile.modality}</Text>
-            )}
-            {profile.prices && (
-              <div className="text-sm">
-                <Text className="font-medium">Pricing:</Text>
-                <div className="grid grid-cols-3 gap-1 mt-1">
-                  {Object.entries(profile.prices).map(([size, price]) => (
-                    <Text key={size} className="text-xs">
-                      Class for {size}: {price} Marks (floor:{" "}
-                      {floorPrices[size] ?? "?"})
-                    </Text>
+            {profile.expertise && profile.expertise.length > 0 && (
+              <div>
+                <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Expertise
+                </Text>
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.expertise.map((e) => (
+                    <Badge key={e} variant="secondary">
+                      {e}
+                    </Badge>
                   ))}
                 </div>
               </div>
             )}
+            {profile.modality && (
+              <div className="flex items-center justify-between rounded-lg bg-accent p-3">
+                <Text className="text-sm text-muted">Teaching mode</Text>
+                <Badge variant="info" className="capitalize">
+                  {profile.modality}
+                </Badge>
+              </div>
+            )}
+            {profile.prices && (
+              <div>
+                <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Marks per student
+                </Text>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {Object.entries(profile.prices).map(([size, price]) => {
+                    const floor = floorPrices[size];
+                    const belowFloor = floor !== undefined && price < floor;
+                    return (
+                      <div
+                        key={size}
+                        className="rounded-lg border border-item-border bg-item p-2.5"
+                      >
+                        <Text className="text-xs text-muted">
+                          {size} {size === "1" ? "student" : "students"}
+                        </Text>
+                        <Text
+                          className={
+                            belowFloor
+                              ? "font-semibold text-danger"
+                              : "font-semibold"
+                          }
+                        >
+                          {price} Marks
+                        </Text>
+                        <Text className="text-xs text-dimmed">
+                          Floor {floor ?? "-"}
+                        </Text>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {profile.availabilitySummary && (
-              <Text className="text-sm">
-                Availability: {profile.availabilitySummary}
-              </Text>
+              <div className="rounded-lg bg-accent p-3">
+                <Text className="text-xs text-muted">Availability</Text>
+                <Text className="mt-1 text-sm font-medium">
+                  {profile.availabilitySummary}
+                </Text>
+              </div>
             )}
             {profile.adminReviewNote && (
-              <Text className="text-sm text-muted">
-                Admin note: {profile.adminReviewNote}
-              </Text>
+              <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
+                  Latest admin note
+                </Text>
+                <Text className="mt-1 text-sm">{profile.adminReviewNote}</Text>
+              </div>
             )}
 
             {profile.onboardingStatus === "changes_requested" && (
@@ -205,9 +262,9 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
             )}
           </Stack>
         </CardBody>
-        <CardFooter>
+        <CardFooter className="flex-wrap gap-2">
           {profile.onboardingStatus === "pending_review" && (
-            <Stack direction="row" spacing="sm" className="mt-2">
+            <Stack direction="row" spacing="sm" className="flex-wrap">
               <Button
                 size="sm"
                 variant="secondary"
@@ -228,7 +285,7 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
           )}
 
           {profile.onboardingStatus === "approved_unpublished" && (
-            <Stack direction="row" spacing="sm" className="mt-2">
+            <Stack direction="row" spacing="sm" className="flex-wrap">
               <Button size="sm" onClick={() => handleAction("publish")}>
                 Publish Now
               </Button>
@@ -243,7 +300,7 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
           )}
 
           {profile.onboardingStatus === "published" && (
-            <Stack direction="row" spacing="sm" className="mt-2">
+            <Stack direction="row" spacing="sm" className="flex-wrap">
               <Button
                 size="sm"
                 variant="secondary"

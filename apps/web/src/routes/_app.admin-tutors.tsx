@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
-import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -181,7 +180,7 @@ function RouteComponent() {
           {profiles.length === 0 ? (
             <Text className="text-muted">No tutor profiles found.</Text>
           ) : (
-            <Stack direction="row" spacing="md">
+            <div className="grid items-stretch gap-4 lg:grid-cols-2">
               {profiles.map(
                 (
                   profile: Awaited<
@@ -198,7 +197,7 @@ function RouteComponent() {
                   />
                 ),
               )}
-            </Stack>
+            </div>
           )}
         </CardBody>
       </Card>
