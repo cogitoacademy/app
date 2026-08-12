@@ -1,4 +1,4 @@
-FROM oven/bun:1 AS deps
+FROM oven/bun:1.3.14 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/api/package.json packages/api/
@@ -12,7 +12,7 @@ FROM deps AS builder
 COPY . .
 RUN bun run build
 
-FROM oven/bun:1-slim AS runner
+FROM oven/bun:1.3.14-slim AS runner
 WORKDIR /app
 COPY --from=builder /app/apps/server/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
