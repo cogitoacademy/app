@@ -9,6 +9,7 @@ import {
   lte,
   lt,
   sql,
+  getTableColumns,
 } from "drizzle-orm";
 import {
   booking,
@@ -31,7 +32,7 @@ async function findBookingById(
   bookingId: string,
 ): Promise<BookingRow | null> {
   const [b] = await conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(eq(booking.id, bookingId))
     .limit(1);
@@ -81,7 +82,7 @@ async function findParticipant(
   userId: string,
 ) {
   const [participant] = await conn
-    .select()
+    .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(
       and(
@@ -109,14 +110,14 @@ async function findConfirmedParticipants(
     conditions.push(ne(bookingParticipant.userId, excludeUserId));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(and(...conditions));
 }
 
 async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
   return conn
-    .select()
+    .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(
       and(
@@ -248,7 +249,7 @@ export async function listSessionsBySeriesId(
   seriesBookingId: string,
 ) {
   return conn
-    .select()
+    .select({ ...getTableColumns(bookingSession) })
     .from(bookingSession)
     .where(eq(bookingSession.seriesBookingId, seriesBookingId))
     .orderBy(bookingSession.scheduledStartAt);
@@ -292,7 +293,7 @@ async function updateBookingDeadline(
 
 async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
   return conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(
       and(
