@@ -457,7 +457,7 @@ export function createBookingService(deps: {
   }
 
   async function tutorAccept(bookingId: string, tutorId: string) {
-    const result = await db.transaction(async (tx) => {
+    const accepted = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
@@ -468,38 +468,23 @@ export function createBookingService(deps: {
 
       const isOffline = b.modality === MODALITY.OFFLINE;
 
-      let updated;
       if (!isOffline) {
-        await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
-          actorId: tutorId,
-          actorType: ACTOR_TYPE.TUTOR,
-        });
-
-        try {
-          const meetingResult = await meeting.createEvent(
-            bookingId,
-            b.scheduledStartAt,
-            b.scheduledEndAt,
-          );
-
-          if (meetingResult.status === "failed") {
-            updated = await repo.findBookingById(tx, bookingId);
-          } else {
-            updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
-              actorId: tutorId,
-              actorType: ACTOR_TYPE.TUTOR,
-              reason: "Meeting created automatically",
-            });
-
-            await repo.updateBookingDeadline(
-              tx,
-              bookingId,
-              new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
-            );
-          }
-        } catch {
-          updated = await repo.findBookingById(tx, bookingId);
-        }
+        const updated = await transition(
+          tx,
+          bookingId,
+          BOOKING_STATE.CONFIRMED,
+          {
+            actorId: tutorId,
+            actorType: ACTOR_TYPE.TUTOR,
+          },
+        );
+        return {
+          updated,
+          isOffline,
+          proposerId: b.proposerId,
+          scheduledStartAt: b.scheduledStartAt,
+          scheduledEndAt: b.scheduledEndAt,
+        };
       } else {
         await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
           actorId: tutorId,
@@ -518,26 +503,93 @@ export function createBookingService(deps: {
         );
 
         await repo.updateBookingDeadline(tx, bookingId, b.scheduledStartAt);
-        updated = await repo.findBookingById(tx, bookingId);
+        const updated = await repo.findBookingById(tx, bookingId);
+        return {
+          updated: updated!,
+          isOffline,
+          proposerId: b.proposerId,
+          scheduledStartAt: b.scheduledStartAt,
+          scheduledEndAt: b.scheduledEndAt,
+        };
       }
+    });
 
+    if (accepted.isOffline) {
       await notification.write({
-        db: tx,
-        userId: b.proposerId,
+        db,
+        userId: accepted.proposerId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Booking accepted",
-        body: isOffline
-          ? "Tutor accepted. Waiting for admin room approval."
-          : "Tutor accepted. Session scheduled.",
+        body: "Tutor accepted. Waiting for admin room approval.",
         eventKey: `booking.${bookingId}.accepted`,
       });
 
-      return { updated, isOffline, b };
+      return accepted.updated!;
+    }
+
+    let finalBooking = accepted.updated!;
+    let notificationBody =
+      "Tutor accepted. Meeting link will be assigned shortly.";
+
+    try {
+      const meetingResult = await meeting.createEvent(
+        bookingId,
+        accepted.scheduledStartAt,
+        accepted.scheduledEndAt,
+      );
+
+      if (
+        meetingResult.status !== "failed" &&
+        meetingResult.status !== "manual"
+      ) {
+        finalBooking = await db.transaction(async (tx) => {
+          const current = await repo.findBookingById(tx, bookingId);
+          if (!current) throw new BookingNotFoundError(bookingId);
+          if (current.currentState !== BOOKING_STATE.CONFIRMED) {
+            return current;
+          }
+
+          const scheduled = await transition(
+            tx,
+            bookingId,
+            BOOKING_STATE.SCHEDULED,
+            {
+              actorId: tutorId,
+              actorType: ACTOR_TYPE.TUTOR,
+              reason: "Meeting created automatically",
+            },
+          );
+
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(accepted.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+          );
+
+          return scheduled;
+        });
+
+        notificationBody = "Tutor accepted. Session scheduled.";
+      }
+    } catch {
+      finalBooking =
+        (await repo.findBookingById(db, bookingId)) ?? finalBooking;
+    }
+
+    await notification.write({
+      db,
+      userId: accepted.proposerId,
+      bookingId,
+      category: NOTIFICATION_CATEGORY.BOOKING,
+      severity: NOTIFICATION_SEVERITY.ACTION,
+      title: "Booking accepted",
+      body: notificationBody,
+      eventKey: `booking.${bookingId}.accepted`,
     });
 
-    return result.updated!;
+    return finalBooking;
   }
 
   async function tutorDecline(

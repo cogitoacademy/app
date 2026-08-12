@@ -95,6 +95,29 @@ export interface HandlerRegistry {
 function createServices() {
   const redis = initRedis(env.REDIS_URL);
   initIdempotencyStores(redis);
+  const googleMeetClientId = env.GOOGLE_MEET_CLIENT_ID ?? env.GOOGLE_CLIENT_ID;
+  const googleMeetClientSecret =
+    env.GOOGLE_MEET_CLIENT_SECRET ?? env.GOOGLE_CLIENT_SECRET;
+  const googleMeetConfig =
+    googleMeetClientId &&
+    googleMeetClientSecret &&
+    env.GOOGLE_MEET_REFRESH_TOKEN
+      ? {
+          authType: "oauth_refresh_token" as const,
+          clientId: googleMeetClientId,
+          clientSecret: googleMeetClientSecret,
+          refreshToken: env.GOOGLE_MEET_REFRESH_TOKEN,
+          calendarId: env.GOOGLE_CALENDAR_ID ?? "primary",
+        }
+      : env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY
+        ? {
+            authType: "service_account" as const,
+            clientEmail: env.GOOGLE_CLIENT_EMAIL,
+            privateKey: env.GOOGLE_PRIVATE_KEY,
+            impersonatedUser: env.GOOGLE_IMPERSONATED_USER,
+            calendarId: env.GOOGLE_CALENDAR_ID ?? "primary",
+          }
+        : undefined;
 
   // Infrastructure modules
   const audit = createAuditModule();
@@ -106,19 +129,8 @@ function createServices() {
   });
   const meeting = createMeetingModule({
     db,
-    googleMeetEnabled: !!(
-      env.GOOGLE_MEET_ENABLED &&
-      env.GOOGLE_CLIENT_EMAIL &&
-      env.GOOGLE_PRIVATE_KEY
-    ),
-    googleConfig:
-      env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY
-        ? {
-            clientEmail: env.GOOGLE_CLIENT_EMAIL!,
-            privateKey: env.GOOGLE_PRIVATE_KEY!,
-            calendarId: env.GOOGLE_CALENDAR_ID ?? "primary",
-          }
-        : undefined,
+    googleMeetEnabled: !!(env.GOOGLE_MEET_ENABLED && googleMeetConfig),
+    googleConfig: googleMeetConfig,
     redis,
   });
 
