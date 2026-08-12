@@ -112,22 +112,30 @@ export function createBookingHandler(booking: BookingService) {
       );
     },
 
-    proposeReschedule: async ({
+    acceptReschedule: async ({
       context,
       input,
     }: {
       context: Context;
-      input: ProposeRescheduleInput;
+      input: BookingActionInput;
     }) => {
       return withDomainMap(
         () =>
-          booking.proposeReschedule(
-            context.session!.user.id,
-            input.bookingId,
-            input.proposedStartAt,
-            input.proposedEndAt,
-            input.reason,
-          ),
+          booking.acceptReschedule(context.session!.user.id, input.bookingId),
+        mapBookingError,
+      );
+    },
+
+    rejectReschedule: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: BookingActionInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.rejectReschedule(context.session!.user.id, input.bookingId),
         mapBookingError,
       );
     },
@@ -283,6 +291,26 @@ export function createBookingHandler(booking: BookingService) {
 
 export function createTutorActionsHandler(booking: BookingService) {
   return {
+    proposeReschedule: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: ProposeRescheduleInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.proposeReschedule(
+            context.session!.user.id,
+            input.bookingId,
+            input.proposedStartAt,
+            input.proposedEndAt,
+            input.reason,
+          ),
+        mapBookingError,
+      );
+    },
+
     acceptBooking: async ({
       context,
       input,

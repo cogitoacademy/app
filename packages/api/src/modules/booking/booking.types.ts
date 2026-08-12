@@ -110,6 +110,9 @@ export const cancelSessionInput = z.object({
   sessionId: z.string().max(100),
 });
 
+export const acceptRescheduleInput = bookingActionInput;
+export const rejectRescheduleInput = bookingActionInput;
+
 export const markAttendanceInput = z.object({
   bookingId: z.string().max(100),
   attendance: z.enum(["present", "late"]),

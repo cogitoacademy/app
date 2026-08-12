@@ -17,6 +17,8 @@ import {
   completeSessionInput,
   markAttendanceInput,
   cancelSessionInput,
+  acceptRescheduleInput,
+  rejectRescheduleInput,
 } from "./booking.types";
 import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
@@ -70,16 +72,27 @@ export function createBookingRouter(handler: BookingHandler) {
       )
       .handler(handler.cancel),
 
-    proposeReschedule: protectedProcedure
+    acceptReschedule: protectedProcedure
       .route({
         method: "POST",
-        path: "/booking/reschedule/propose",
+        path: "/booking/reschedule/accept",
         tags: ["Bookings"],
-        summary: "Propose reschedule",
-        description: "Student proposes a new slot for an existing booking",
+        summary: "Accept reschedule",
+        description: "Student accepts the tutor's reschedule proposal",
       })
-      .input(proposeRescheduleInput)
-      .handler(handler.proposeReschedule),
+      .input(acceptRescheduleInput)
+      .handler(handler.acceptReschedule),
+
+    rejectReschedule: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/reschedule/reject",
+        tags: ["Bookings"],
+        summary: "Reject reschedule",
+        description: "Student rejects the tutor's reschedule proposal",
+      })
+      .input(rejectRescheduleInput)
+      .handler(handler.rejectReschedule),
 
     cancelSession: protectedProcedure
       .route({
@@ -176,6 +189,17 @@ export function createBookingRouter(handler: BookingHandler) {
 
 export function createTutorActionsRouter(handler: TutorActionsHandler) {
   return {
+    proposeReschedule: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/reschedule/propose",
+        tags: ["Tutor", "Bookings"],
+        summary: "Propose reschedule",
+        description: "Tutor proposes a new slot for an existing booking",
+      })
+      .input(proposeRescheduleInput)
+      .handler(handler.proposeReschedule),
+
     acceptBooking: tutorProcedure
       .route({
         method: "POST",

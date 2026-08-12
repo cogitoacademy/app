@@ -17,6 +17,8 @@ import {
   BookingCancellationDeadlinePassedError,
   BookingSessionNotFoundError,
   BookingSessionNotCancellableError,
+  BookingRescheduleNotFoundError,
+  BookingRescheduleNotPendingError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -48,6 +50,8 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findConfirmedParticipants: mock(async () => []),
     findReconfirmedParticipants: mock(async () => []),
     insertRescheduleProposal: mock(async () => {}),
+    findPendingRescheduleProposal: mock(async () => null),
+    updateRescheduleProposal: mock(async () => {}),
     insertBookingSession: mock(async () => {}),
     listSessionsBySeriesId: mock(async () => []),
     findBookingsExpiringByDeadline: mock(async () => []),
@@ -58,6 +62,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     cancelAllSessions: mock(async () => {}),
     updateBookingDeadline: mock(async () => {}),
     updateBookingPriceSnapshot: mock(async () => {}),
+    updateBookingSchedule: mock(async () => {}),
     findSessionById: mock(async () => null),
     cancelSession: mock(async () => {}),
     ...overrides,
@@ -1564,7 +1569,7 @@ describe("BookingService", () => {
       ).rejects.toThrow(BookingNotFoundError);
     });
 
-    test("proposes reschedule successfully", async () => {
+    test("proposes reschedule successfully (tutor-only)", async () => {
       const booking = makeBooking({
         currentState: "awaiting_tutor_review",
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
@@ -1589,7 +1594,7 @@ describe("BookingService", () => {
       const end = new Date(start.getTime() + 90 * 60 * 1000);
 
       await service.proposeReschedule(
-        "student1",
+        "tutor1",
         "b1",
         start,
         end,
@@ -1598,9 +1603,31 @@ describe("BookingService", () => {
 
       expect(repo.insertRescheduleProposal).toHaveBeenCalledTimes(1);
       expect(notification.write).toHaveBeenCalledTimes(1);
-      expect(notification.write.mock.calls[0][0].title).toBe(
-        "Reschedule proposed",
-      );
+      expect(notification.write.mock.calls[0][0]).toMatchObject({
+        userId: "student1",
+        title: "Reschedule proposed",
+        body: "Tutor proposed a new time for the booking.",
+      });
+    });
+
+    test("throws BookingNotOwnedError when a student tries to propose a reschedule", async () => {
+      const booking = makeBooking({
+        currentState: "awaiting_tutor_review",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => makeParticipant()),
+        },
+      });
+
+      const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
+      const end = new Date(start.getTime() + 90 * 60 * 1000);
+
+      await expect(
+        service.proposeReschedule("student1", "b1", start, end),
+      ).rejects.toThrow(BookingNotOwnedError);
     });
   });
 
@@ -2827,7 +2854,7 @@ describe("BookingService", () => {
         const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
         const end = new Date(start.getTime() + 90 * 60 * 1000);
 
-        await service.proposeReschedule("student1", "b1", start, end);
+        await service.proposeReschedule("tutor1", "b1", start, end);
 
         expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
         const deadlineArg = repo.updateBookingDeadline.mock.calls[0][2] as Date;
@@ -3185,7 +3212,9 @@ describe("BookingService", () => {
         repo: {
           findSessionById: mock(async () => session),
           findBookingById: mock(async () => booking),
-          findParticipant: mock(async () => makeParticipant({ heldAmount: 84 })),
+          findParticipant: mock(async () =>
+            makeParticipant({ heldAmount: 84 }),
+          ),
         },
       });
 
@@ -3230,7 +3259,9 @@ describe("BookingService", () => {
         repo: {
           findSessionById: mock(async () => session),
           findBookingById: mock(async () => booking),
-          findParticipant: mock(async () => makeParticipant({ heldAmount: 84 })),
+          findParticipant: mock(async () =>
+            makeParticipant({ heldAmount: 84 }),
+          ),
         },
       });
 
@@ -3294,9 +3325,9 @@ describe("BookingService", () => {
     test("throws BookingSessionNotFoundError for unknown session", async () => {
       const { service } = createService();
 
-      await expect(service.cancelSession("student1", "missing")).rejects.toThrow(
-        BookingSessionNotFoundError,
-      );
+      await expect(
+        service.cancelSession("student1", "missing"),
+      ).rejects.toThrow(BookingSessionNotFoundError);
     });
 
     test("series get response includes group disclaimer", async () => {
@@ -3317,6 +3348,143 @@ describe("BookingService", () => {
       expect(result.disclaimer).toBe(
         "Group series bookings require attendance at all sessions. Individual sessions cannot be cancelled.",
       );
+    });
+  });
+
+  describe("G6 reschedule accept/reject", () => {
+    function makeRescheduleBooking(overrides: Record<string, unknown> = {}) {
+      return makeBooking({
+        currentState: "reschedule_proposed",
+        previousState: "awaiting_tutor_review",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        ...overrides,
+      });
+    }
+
+    test("acceptReschedule updates time, accepts proposal, transitions, notifies tutor", async () => {
+      const booking = makeRescheduleBooking();
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, repo, notification } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      const result = await service.acceptReschedule("student1", "b1");
+
+      expect(result.currentState).toBe("awaiting_reconfirmation");
+      expect(repo.updateRescheduleProposal).toHaveBeenCalledWith(
+        expect.anything(),
+        "r1",
+        expect.objectContaining({ status: "accepted" }),
+      );
+      expect(repo.updateBookingSchedule).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({
+          scheduledStartAt: proposal.proposedStartAt,
+          scheduledEndAt: proposal.proposedEndAt,
+        }),
+      );
+      expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+      expect(notification.write).toHaveBeenCalledTimes(1);
+      expect(notification.write.mock.calls[0][0]).toMatchObject({
+        userId: "tutor1",
+        title: "Reschedule accepted",
+      });
+    });
+
+    test("acceptReschedule throws when caller is not the proposer", async () => {
+      const booking = makeRescheduleBooking({ proposerId: "other" });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+        },
+      });
+
+      await expect(service.acceptReschedule("student1", "b1")).rejects.toThrow(
+        BookingNotOwnedError,
+      );
+    });
+
+    test("acceptReschedule throws when booking is not in reschedule_proposed", async () => {
+      const booking = makeRescheduleBooking({ currentState: "scheduled" });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+        },
+      });
+
+      await expect(service.acceptReschedule("student1", "b1")).rejects.toThrow(
+        BookingRescheduleNotPendingError,
+      );
+    });
+
+    test("acceptReschedule throws when no pending proposal exists", async () => {
+      const booking = makeRescheduleBooking();
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findPendingRescheduleProposal: mock(async () => null),
+        },
+      });
+
+      await expect(service.acceptReschedule("student1", "b1")).rejects.toThrow(
+        BookingRescheduleNotFoundError,
+      );
+    });
+
+    test("rejectReschedule rejects proposal and reverts to previous state", async () => {
+      const booking = makeRescheduleBooking();
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, repo, notification } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      const result = await service.rejectReschedule("student1", "b1");
+
+      expect(result.currentState).toBe("awaiting_tutor_review");
+      expect(repo.updateRescheduleProposal).toHaveBeenCalledWith(
+        expect.anything(),
+        "r1",
+        expect.objectContaining({ status: "rejected" }),
+      );
+      expect(repo.updateBookingSchedule).not.toHaveBeenCalled();
+      expect(notification.write).toHaveBeenCalledTimes(1);
+      expect(notification.write.mock.calls[0][0]).toMatchObject({
+        userId: "tutor1",
+        title: "Reschedule rejected",
+      });
     });
   });
 });

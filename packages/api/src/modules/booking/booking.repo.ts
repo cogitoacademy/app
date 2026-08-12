@@ -245,6 +245,8 @@ async function updateBookingPriceSnapshot(
       cogitoTake: number;
 
 
+
+
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -256,6 +258,8 @@ async function updateBookingPriceSnapshot(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
 
   await conn
     .update(booking)
@@ -360,6 +364,32 @@ async function insertRescheduleProposal(
   await conn.insert(bookingRescheduleProposal).values(values);
 }
 
+async function findPendingRescheduleProposal(conn: DbOrTx, bookingId: string) {
+  const [proposal] = await conn
+    .select()
+    .from(bookingRescheduleProposal)
+    .where(
+      and(
+        eq(bookingRescheduleProposal.bookingId, bookingId),
+        eq(bookingRescheduleProposal.status, "pending"),
+      ),
+    )
+    .orderBy(desc(bookingRescheduleProposal.createdAt))
+    .limit(1);
+  return proposal ?? null;
+}
+
+async function updateRescheduleProposal(
+  conn: DbOrTx,
+  proposalId: string,
+  values: { status: string; decidedAt: Date },
+) {
+  await conn
+    .update(bookingRescheduleProposal)
+    .set(values)
+    .where(eq(bookingRescheduleProposal.id, proposalId));
+}
+
 /**
  * Inserts a session for a series booking.
  *
@@ -424,6 +454,8 @@ async function cancelSession(conn: DbOrTx, sessionId: string) {
     .where(eq(bookingSession.id, sessionId));
 }
 
+
+
 /**
  * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
  *
@@ -475,6 +507,14 @@ async function updateBookingDeadline(
     .update(booking)
     .set({ deadlineAt, updatedAt: new Date() })
     .where(eq(booking.id, bookingId));
+}
+
+async function updateBookingSchedule(
+  conn: DbOrTx,
+  bookingId: string,
+  values: { scheduledStartAt: Date; scheduledEndAt: Date },
+) {
+  await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
 
 /**
@@ -684,11 +724,16 @@ export function createBookingRepo(db: DbType) {
     updateParticipantState,
     insertStateHistory,
     insertRescheduleProposal,
+    findPendingRescheduleProposal,
+    updateRescheduleProposal,
     insertBookingSession,
     findSessionById,
     cancelSession,
     listSessionsBySeriesId,
     updateBookingPriceSnapshot,
+    updateBookingSchedule,
+
+
     findBookingsExpiringByDeadline,
     findBookingsWithTutorLateness,
     findTutorParticipant,

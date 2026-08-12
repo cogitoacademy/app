@@ -38,6 +38,8 @@ import {
   BookingCancellationDeadlinePassedError,
   BookingSessionNotFoundError,
   BookingSessionNotCancellableError,
+  BookingRescheduleNotFoundError,
+  BookingRescheduleNotPendingError,
 } from "./booking.errors";
 import { log } from "../../lib/logger";
 import {
@@ -827,11 +829,7 @@ export function createBookingService(deps: {
       }
 
       const participant = await repo.findParticipant(tx, b.id, userId);
-      if (
-        participant &&
-        participant.heldAmount > 0 &&
-        session.holdAmount > 0
-      ) {
+      if (participant && participant.heldAmount > 0 && session.holdAmount > 0) {
         const w = await wallet.getByUserId(tx, participant.userId);
         if (!w) throw new BookingNotFoundError(participant.userId);
         await wallet.release(tx, {
@@ -917,6 +915,8 @@ export function createBookingService(deps: {
   ) {
     return db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
+      if (b.tutorId !== userId)
+        throw new BookingNotOwnedError(bookingId, userId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
           b.currentState,
@@ -931,7 +931,7 @@ export function createBookingService(deps: {
         BOOKING_STATE.RESCHEDULE_PROPOSED,
         {
           actorId: userId,
-          actorType: ACTOR_TYPE.STUDENT,
+          actorType: ACTOR_TYPE.TUTOR,
           reason,
           metadata: { proposedStartAt, proposedEndAt },
         },
@@ -953,13 +953,122 @@ export function createBookingService(deps: {
 
       await notification.write({
         db: tx,
-        userId: b.tutorId,
+        userId: b.proposerId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Reschedule proposed",
-        body: "Student proposed a new time for the booking.",
+        body: "Tutor proposed a new time for the booking.",
         eventKey: `booking.${bookingId}.reschedule_proposed`,
+      });
+
+      return updated;
+    });
+  }
+
+  async function acceptReschedule(userId: string, bookingId: string) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.proposerId !== userId)
+        throw new BookingNotOwnedError(bookingId, userId);
+      if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
+        throw new BookingRescheduleNotPendingError(bookingId);
+      }
+
+      const proposal = await repo.findPendingRescheduleProposal(tx, bookingId);
+      if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
+
+      await repo.updateRescheduleProposal(tx, proposal.id, {
+        status: "accepted",
+        decidedAt: new Date(),
+      });
+
+      await repo.updateBookingSchedule(tx, bookingId, {
+        scheduledStartAt: proposal.proposedStartAt,
+        scheduledEndAt: proposal.proposedEndAt,
+      });
+
+      const updated = await transition(
+        tx,
+        bookingId,
+        BOOKING_STATE.AWAITING_RECONFIRMATION,
+        {
+          actorId: userId,
+          actorType: ACTOR_TYPE.STUDENT,
+          reason: "Student accepted the reschedule proposal",
+          metadata: {
+            proposedStartAt: proposal.proposedStartAt,
+            proposedEndAt: proposal.proposedEndAt,
+          },
+        },
+      );
+
+      await repo.updateBookingDeadline(
+        tx,
+        bookingId,
+        new Date(Date.now() + RESPONSE_WINDOW_MS),
+      );
+
+      await notification.write({
+        db: tx,
+        userId: b.tutorId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Reschedule accepted",
+        body: "The student accepted the proposed new time.",
+        eventKey: `booking.${bookingId}.reschedule_accepted`,
+      });
+
+      return updated;
+    });
+  }
+
+  async function rejectReschedule(userId: string, bookingId: string) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.proposerId !== userId)
+        throw new BookingNotOwnedError(bookingId, userId);
+      if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
+        throw new BookingRescheduleNotPendingError(bookingId);
+      }
+
+      const proposal = await repo.findPendingRescheduleProposal(tx, bookingId);
+      if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
+
+      await repo.updateRescheduleProposal(tx, proposal.id, {
+        status: "rejected",
+        decidedAt: new Date(),
+      });
+
+      const revertStates: BookingState[] = [
+        BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+        BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+        BOOKING_STATE.AWAITING_RECONFIRMATION,
+      ];
+      const previous = b.previousState as BookingState | null;
+      const revertTarget =
+        previous && revertStates.includes(previous)
+          ? previous
+          : BOOKING_STATE.AWAITING_RECONFIRMATION;
+
+      const updated = await transition(tx, bookingId, revertTarget, {
+        actorId: userId,
+        actorType: ACTOR_TYPE.STUDENT,
+        reason: "Student rejected the reschedule proposal",
+      });
+
+      await notification.write({
+        db: tx,
+        userId: b.tutorId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title: "Reschedule rejected",
+        body: "The student declined the proposed new time.",
+        eventKey: `booking.${bookingId}.reschedule_rejected`,
       });
 
       return updated;
@@ -1723,6 +1832,8 @@ export function createBookingService(deps: {
     completeSession,
     markTutorAttendance,
     proposeReschedule,
+    acceptReschedule,
+    rejectReschedule,
     cancelSession,
     listSessions,
     expireBookings,
