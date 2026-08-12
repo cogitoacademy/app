@@ -16,8 +16,6 @@ import {
   MAX_PAGE_LIMIT,
   GROUP_SERIES_DISCLAIMER,
 } from "../../shared/constants";
-import type { GroupSize } from "../pricing/pricing.service";
-
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -284,8 +282,6 @@ export function createBookingService(deps: {
     const pricePerStudent = (profile.prices?.[String(newSize)] ??
       DEFAULT_SOLO_PRICE) as number;
     const newSnapshot = pricing.computeSplit(
-      pricePerStudent * newSize,
-
       b.modality as Modality,
       pricePerStudent,
       newSize as GroupSize,
@@ -341,8 +337,6 @@ export function createBookingService(deps: {
 
     await repo.updateBookingPriceSnapshot(tx, b.id, {
       priceSnapshot: newSnapshot,
-      holdAmount: newSnapshot.baseline,
-
       holdAmount: newPerStudent * newSize,
     });
 
@@ -1405,17 +1399,6 @@ export function createBookingService(deps: {
 
           const confirmed = await repo.findConfirmedParticipants(tx, bookingId);
           await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.STUDENT);
-
-          const confirmed = await repo.findConfirmedParticipants(
-            tx,
-            bookingId,
-          );
-          await repriceGroupForHeadcount(
-            tx,
-            b,
-            confirmed,
-            ACTOR_TYPE.STUDENT,
-          );
         }
         return { reconfirmed: true };
       } else {
@@ -1513,13 +1496,6 @@ export function createBookingService(deps: {
           );
 
           await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
-
-          await repriceGroupForHeadcount(
-            tx,
-            b,
-            remaining,
-            ACTOR_TYPE.STUDENT,
-          );
         } else {
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,

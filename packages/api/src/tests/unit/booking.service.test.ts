@@ -221,13 +221,45 @@ function makeParticipant(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function realComputeSplit(totalMarks: number, groupSize: number) {
-  const perStudent = Math.floor(totalMarks / groupSize);
+function realComputeSplit(
+  modality: string,
+  tutorPricePerStudent: number,
+  confirmedHeadcount: number,
+) {
+  const ONLINE: Record<number, { tutor: number; cogito: number }> = {
+    1: { tutor: 30, cogito: 12 },
+    2: { tutor: 54, cogito: 16 },
+    3: { tutor: 64, cogito: 20 },
+    4: { tutor: 74, cogito: 22 },
+    5: { tutor: 81, cogito: 24 },
+    6: { tutor: 88, cogito: 26 },
+  };
+  const OFFLINE: Record<number, { tutor: number; cogito: number }> = {
+    1: { tutor: 35, cogito: 15 },
+    2: { tutor: 70, cogito: 20 },
+    3: { tutor: 95, cogito: 25 },
+    4: { tutor: 115, cogito: 25 },
+    5: { tutor: 120, cogito: 30 },
+    6: { tutor: 127, cogito: 35 },
+  };
+  const perStudent = Math.floor(tutorPricePerStudent);
+  const tutorTotal = perStudent * confirmedHeadcount;
+  const baseline =
+    modality === "offline" ? OFFLINE[confirmedHeadcount] : ONLINE[confirmedHeadcount];
+  const baselineTotal = baseline!.tutor + baseline!.cogito;
+  const extraTotal = Math.max(0, tutorTotal - baselineTotal);
+  const cogitoExtraTake = Math.floor(extraTotal / 5);
+  const tutorExtraShare = extraTotal - cogitoExtraTake;
   return {
     perStudent,
-    baseline: totalMarks,
-    tutorShare: totalMarks - Math.floor(totalMarks * 0.2),
-    cogitoTake: Math.floor(totalMarks * 0.2),
+    baseline: baselineTotal,
+    tutorShare: baseline!.tutor + tutorExtraShare,
+    cogitoTake: baseline!.cogito + cogitoExtraTake,
+    baselineCogitoTake: baseline!.cogito,
+    baselineTutorShare: baseline!.tutor,
+    extraTotal,
+    cogitoExtraTake,
+    tutorExtraShare,
   };
 }
 

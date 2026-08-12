@@ -262,16 +262,6 @@ async function updateBookingPriceSnapshot(
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
 
-
-
-
-
-  await conn
-    .update(booking)
-    .set(values)
-    .where(eq(booking.id, bookingId));
-}
-
 /**
  * Sets a booking's confirmed headcount.
  *
@@ -756,10 +746,6 @@ export function createBookingRepo(db: DbType) {
     cancelSession,
     insertSessionNote,
     listSessionNotes,
-    listSessionsBySeriesId,
-    updateBookingPriceSnapshot,
-    updateBookingSchedule,
-
     listSessionsBySeriesId,
     updateBookingPriceSnapshot,
     updateBookingSchedule,
