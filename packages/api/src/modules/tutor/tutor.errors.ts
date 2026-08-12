@@ -45,6 +45,16 @@ export class AvailabilitySlotOverlapError extends DomainError {
   }
 }
 
+export class WeeklyAvailabilityRangeError extends DomainError {
+  readonly domain = "tutor";
+  constructor() {
+    super(
+      "WEEKLY_AVAILABILITY_RANGE_INVALID",
+      "Weekly availability can be scheduled for up to 52 weeks",
+    );
+  }
+}
+
 export class TutorProfileIncompleteError extends DomainError {
   readonly domain = "tutor";
   constructor(id: string, missingFields: string[]) {
@@ -84,6 +94,8 @@ export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof InvalidTutorStatusError) return conflict(err.message, err);
   if (err instanceof AvailabilitySlotOverlapError)
     return conflict(err.message, err);
+  if (err instanceof WeeklyAvailabilityRangeError)
+    return badRequest(err.message, err);
   if (err instanceof TutorProfileIncompleteError)
     return badRequest(err.message, err);
   if (err instanceof InvalidTutorPricingError)

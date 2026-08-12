@@ -2,7 +2,7 @@
 
 | Field      | Value                                         |
 | ---------- | --------------------------------------------- |
-| Status     | Planning reference                            |
+| Status     | Living gap inventory (updated 2026-08-12)     |
 | Branch     | `feature/frontend-gaps` (future)              |
 | Created    | 2026-07-29                                    |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed |
@@ -32,10 +32,13 @@ The backend spec is `docs/plans/active/PRD-GAPS-SPEC.md` (backend-only). This is
 | `/_app/achievements`   | achivements-page.tsx        | Exists (submission + list)            |
 | `/_app/profile`        | profile-page.tsx            | Exists (incl. parent contact fields)  |
 | `/_app/onboarding`     | onboarding-form.tsx         | Exists (tutor onboarding)             |
-| `/_app/tutor-bookings` | tutor-bookings-page.tsx     | Exists (accept/decline only)          |
+| `/_app/tutor-bookings` | tutor-bookings-page.tsx     | Exists (incoming list + review link)  |
+| `/_app/availability`   | availability-page.tsx       | Exists (weekly + one-time slots)      |
+| `/_app/bookings/$bookingId` | booking-detail-page.tsx | Exists (student/tutor detail actions) |
 | `/_app/admin-tutors`   | admin tutor invite + review | Exists                                |
+| `/_app/admin-achievements` | achievement-moderation-page.tsx | Exists (moderation UI)          |
 
-### What's missing (no route, no component)
+### Remaining gaps (no complete surface yet)
 
 The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required screens. The following are **not implemented**:
 
@@ -48,8 +51,8 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                   | 3d     | High     |
 | F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                           | 2d     | High     |
 | F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                            | 1d     | High     |
-| F4  | Competition Calendar link                     | FR-11                  | None (external link)                          | 0.5d   | Medium   |
-| F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                          | 0.5d   | Medium   |
+| F4  | Competition Calendar link (implemented)       | FR-11                  | None (external link)                          | 0.5d   | Closed   |
+| F5  | WhatsApp support button (implemented)         | FR-14, OQ-04           | None (external link)                          | 0.5d   | Closed   |
 | F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                            | 1d     | Medium   |
 | F7  | Student reschedule approval UI                | FR-15                  | G6                                            | 1d     | Medium   |
 | F8  | Series session completion UI                  | FR-20                  | G18                                           | 1d     | Medium   |
@@ -61,7 +64,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                           | 0.5d   | Low      |
 | F15 | Knowledge Bank gating flow (full)             | FR-12                  | Partial (wallet.knowledgeBankEligible exists) | 0.5d   | Medium   |
 | F16 | Achievements public landing surfacing         | FR-18                  | None (public site)                            | 1d     | Low      |
-| F17 | Booking detail page (full)                    | FR-07, FR-08           | G6, G11                                       | 2d     | High     |
+| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                       | 2d     | Partial  |
 
 **Total estimated effort: ~20 days (frontend)**
 
@@ -152,7 +155,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-11
 
-**Current state:** No Competition Calendar link anywhere in the frontend. PRD requires it on public site + student dashboard.
+**Current state:** Implemented in the authenticated sidebar as an external resource link. Public-site surfacing is outside the current app scope.
 
 **Required:**
 
@@ -171,7 +174,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-14, OQ-04, prd.tex:1260
 
-**Current state:** No WhatsApp support button.
+**Current state:** Implemented in the authenticated sidebar as an external WhatsApp support link.
 
 **Required:**
 
@@ -424,7 +427,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** `bookings-page.tsx` shows a list with cancel button. No detail page. No meeting link display. No reschedule actions. No report button.
+**Current state:** The booking detail route is implemented for student and tutor views, including state, session details, Marks summary, meeting/room sections, cancellation, tutor accept/decline, and tutor completion. Reschedule, lateness/no-show reporting, and rich notes remain separate backend-dependent gaps.
 
 **Required:**
 

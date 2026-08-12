@@ -18,6 +18,7 @@ import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AppTutorBookingsRouteImport } from './routes/_app.tutor-bookings'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
+import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
@@ -86,6 +87,11 @@ const AppBalanceRoute = AppBalanceRouteImport.update({
   path: '/balance',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAvailabilityRoute = AppAvailabilityRouteImport.update({
+  id: '/availability',
+  path: '/availability',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminTutorsRoute = AppAdminTutorsRouteImport.update({
   id: '/admin-tutors',
   path: '/admin-tutors',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/achievements': typeof AppAchievementsRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
+  '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/dashboard': typeof AppDashboardRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/achievements': typeof AppAchievementsRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
+  '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/dashboard': typeof AppDashboardRoute
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/_app/achievements': typeof AppAchievementsRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
   '/_app/admin-tutors': typeof AppAdminTutorsRoute
+  '/_app/availability': typeof AppAvailabilityRoute
   '/_app/balance': typeof AppBalanceRoute
   '/_app/bookings': typeof AppBookingsRoute
   '/_app/dashboard': typeof AppDashboardRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/admin-achievements'
     | '/admin-tutors'
+    | '/availability'
     | '/balance'
     | '/bookings'
     | '/dashboard'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/admin-achievements'
     | '/admin-tutors'
+    | '/availability'
     | '/balance'
     | '/bookings'
     | '/dashboard'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '/_app/achievements'
     | '/_app/admin-achievements'
     | '/_app/admin-tutors'
+    | '/_app/availability'
     | '/_app/balance'
     | '/_app/bookings'
     | '/_app/dashboard'
@@ -320,6 +332,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBalanceRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/availability': {
+      id: '/_app/availability'
+      path: '/availability'
+      fullPath: '/availability'
+      preLoaderRoute: typeof AppAvailabilityRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-tutors': {
       id: '/_app/admin-tutors'
       path: '/admin-tutors'
@@ -362,6 +381,7 @@ interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
   AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
   AppAdminTutorsRoute: typeof AppAdminTutorsRoute
+  AppAvailabilityRoute: typeof AppAvailabilityRoute
   AppBalanceRoute: typeof AppBalanceRoute
   AppBookingsRoute: typeof AppBookingsRoute
   AppDashboardRoute: typeof AppDashboardRoute
@@ -377,6 +397,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
   AppAdminAchievementsRoute: AppAdminAchievementsRoute,
   AppAdminTutorsRoute: AppAdminTutorsRoute,
+  AppAvailabilityRoute: AppAvailabilityRoute,
   AppBalanceRoute: AppBalanceRoute,
   AppBookingsRoute: AppBookingsRoute,
   AppDashboardRoute: AppDashboardRoute,

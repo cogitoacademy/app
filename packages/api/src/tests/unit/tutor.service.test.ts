@@ -292,6 +292,80 @@ describe("Tutor Service", () => {
       expect(result.id).toBe("slot1");
     });
 
+    test("createWeeklyAvailability creates one concrete slot per week", async () => {
+      const day = 24 * 60 * 60 * 1000;
+      const startDate = new Date(Date.now() + 2 * day);
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+      const repeatUntil = new Date(startDate.getTime() + 21 * day);
+      const upsertAvailability = mock(
+        async (
+          _db: unknown,
+          _userId: string,
+          input: Record<string, unknown>,
+        ) => ({ id: `slot-${String(input.startDate)}`, ...input }),
+      );
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listAvailability: mock(async () => []),
+          upsertAvailability,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      const result = await service.createWeeklyAvailability("u1", {
+        startDate,
+        endDate,
+        repeatUntil,
+        modality: "online",
+      });
+
+      expect(result).toHaveLength(4);
+      expect(upsertAvailability).toHaveBeenCalledTimes(4);
+      expect(upsertAvailability.mock.calls[0]?.[2]).toMatchObject({
+        modality: "online",
+        isRecurring: true,
+        recurrenceRule: "weekly",
+        isActive: true,
+      });
+      expect(
+        new Date(result[1].startDate).getTime() -
+          new Date(result[0].startDate).getTime(),
+      ).toBe(7 * day);
+    });
+
+    test("createWeeklyAvailability rejects the whole schedule on overlap", async () => {
+      const day = 24 * 60 * 60 * 1000;
+      const startDate = new Date(Date.now() + 2 * day);
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+      const repeatUntil = new Date(startDate.getTime() + 21 * day);
+      const upsertAvailability = mock(async () => ({ id: "slot1" }));
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listAvailability: mock(async () => [
+            {
+              id: "existing",
+              startDate: new Date(startDate.getTime() + 7 * day),
+              endDate: new Date(startDate.getTime() + 8 * day),
+            },
+          ]),
+          upsertAvailability,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(
+        service.createWeeklyAvailability("u1", {
+          startDate,
+          endDate,
+          repeatUntil,
+          modality: "online",
+        }),
+      ).rejects.toThrow(AvailabilitySlotOverlapError);
+      expect(upsertAvailability).not.toHaveBeenCalled();
+    });
+
     test("upsertAvailability allows updating own slot (same id)", async () => {
       const existing = [
         {

@@ -4,6 +4,7 @@ import {
   TutorProfileNotFoundError,
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
+  WeeklyAvailabilityRangeError,
 } from "../../modules/tutor/tutor.errors";
 
 describe("tutorHandlers", () => {
@@ -135,6 +136,55 @@ describe("tutorHandlers", () => {
         expect.unreachable("Should have thrown");
       } catch (err: any) {
         expect(err.status).toBe(409);
+      }
+    });
+  });
+
+  describe("createWeeklyAvailability", () => {
+    test("calls tutor.createWeeklyAvailability with userId and input", async () => {
+      const createWeeklyAvailability = mock(async () => [{ id: "slot1" }]);
+      const tutorService = { createWeeklyAvailability } as any;
+      const handler = createTutorHandler(tutorService);
+      const context = { session: { user: { id: "u1" } } } as any;
+      const input = {
+        startDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+        endDate: new Date(
+          Date.now() + 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000,
+        ),
+        repeatUntil: new Date(Date.now() + 23 * 24 * 60 * 60 * 1000),
+        modality: "online" as const,
+      };
+
+      const result = await handler.createWeeklyAvailability({
+        context,
+        input,
+      });
+
+      expect(createWeeklyAvailability).toHaveBeenCalledWith("u1", input);
+      expect(result).toEqual([{ id: "slot1" }]);
+    });
+
+    test("maps WeeklyAvailabilityRangeError to 400", async () => {
+      const createWeeklyAvailability = mock(async () => {
+        throw new WeeklyAvailabilityRangeError();
+      });
+      const tutorService = { createWeeklyAvailability } as any;
+      const handler = createTutorHandler(tutorService);
+      const context = { session: { user: { id: "u1" } } } as any;
+      const input = {
+        startDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+        endDate: new Date(
+          Date.now() + 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000,
+        ),
+        repeatUntil: new Date(Date.now() + 23 * 24 * 60 * 60 * 1000),
+        modality: "online" as const,
+      };
+
+      try {
+        await handler.createWeeklyAvailability({ context, input });
+        expect.unreachable("Should have thrown");
+      } catch (err: any) {
+        expect(err.status).toBe(400);
       }
     });
   });
