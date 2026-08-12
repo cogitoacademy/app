@@ -308,7 +308,7 @@ Do not prioritize the full booking operations console or offline room workflow u
 
 1. Complete Admin Tutor invite -> claim -> onboarding -> review -> publish E2E and verify published discovery.
 2. Complete Student series booking UI and its booking detail/session presentation.
-3. Add Student group booking UI after a student-facing invitee lookup endpoint is available.
+3. Complete group invite accept/decline and reconfirmation UI; group creation and debounced student lookup are implemented.
 4. Keep achievement moderation/public surfacing at the end of the frontend queue.
 5. Defer admin booking override and offline-room UI until their backend blockers are closed.
 

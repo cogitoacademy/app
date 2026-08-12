@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -14,6 +14,8 @@ import {
   IconSchool,
   IconWallet,
   IconRepeat,
+  IconUsersGroup,
+  IconUserPlus,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -32,6 +34,8 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import { Input } from "@cogito-app/ui/components/selia/input";
+import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import {
   getSelectItemValue,
   Select,
@@ -52,7 +56,8 @@ const BOOKING_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_SOLO_PRICE = 42;
 
 type Modality = "online" | "offline";
-type BookingMode = "solo" | "series";
+type BookingMode = "solo" | "group" | "series";
+type StudentMatch = { id: string; name: string; email: string };
 
 function getBookingErrorMessage(error: Error) {
   if (error.message.toLowerCase().includes("input validation failed")) {
@@ -88,11 +93,28 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const [bookingMode, setBookingMode] = useState<BookingMode>("solo");
   const [selectedModality, setSelectedModality] = useState<Modality>("online");
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [debouncedStudentSearch, setDebouncedStudentSearch] = useState("");
+  const [invitees, setInvitees] = useState<StudentMatch[]>([]);
 
   const profileQuery = useQuery(
     orpc.tutors.getProfile.queryOptions({ input: { tutorId } }),
   );
   const walletQuery = useQuery(orpc.wallet.get.queryOptions());
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedStudentSearch(studentSearch.trim()),
+      300,
+    );
+    return () => window.clearTimeout(timer);
+  }, [studentSearch]);
+
+  const studentSearchQuery = useQuery({
+    ...orpc.auth.searchStudents.queryOptions({
+      input: { query: debouncedStudentSearch || "--", limit: 5 },
+    }),
+    enabled: bookingMode === "group" && debouncedStudentSearch.length >= 2,
+  });
 
   const createBooking = useMutation(
     orpc.booking.createSolo.mutationOptions({
@@ -141,6 +163,12 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   );
   const createSeries = useMutation(
     orpc.booking.createSeries.mutationOptions({
+      onSuccess: (booking) => handleCreatedBooking(booking),
+      onError: (error: Error) => showBookingError(error),
+    }),
+  );
+  const createGroup = useMutation(
+    orpc.booking.createGroup.mutationOptions({
       onSuccess: (booking) => handleCreatedBooking(booking),
       onError: (error: Error) => showBookingError(error),
     }),
@@ -244,7 +272,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const price =
     bookingMode === "series"
       ? perSessionPrice * selectedSlots.length
-      : perSessionPrice;
+      : bookingMode === "group"
+        ? Number(
+            profile.prices?.[String(invitees.length + 1)] ?? perSessionPrice,
+          )
+        : perSessionPrice;
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
   const hasEnoughMarks = availableBalance >= price;
   const tutorName = profile.displayName ?? profile.user?.name ?? "Cogito tutor";
@@ -259,6 +291,17 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       modality: effectiveModality,
       timezone: BOOKING_TIMEZONE,
     };
+    if (bookingMode === "group") {
+      if (invitees.length < 1 || invitees.length > 5) return;
+      createGroup.mutate({
+        ...baseInput,
+        targetGroupSize: invitees.length + 1,
+        inviteeUserIds: invitees.map((student) => student.id),
+        scheduledStartAt: new Date(selectedSlot.startDate),
+        scheduledEndAt: new Date(selectedSlot.endDate),
+      });
+      return;
+    }
     if (bookingMode === "series") {
       if (selectedSlots.length < 2 || selectedSlots.length > 4) return;
       createSeries.mutate({
@@ -292,7 +335,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Badge variant="info" pill>
-              {bookingMode === "series" ? "Session series" : "Solo session"}
+              {bookingMode === "series"
+                ? "Session series"
+                : bookingMode === "group"
+                  ? "Group session"
+                  : "Solo session"}
             </Badge>
             <Heading size="md" className="mt-3">
               Book {tutorName}
@@ -300,7 +347,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             <Text className="mt-1 text-muted">
               {bookingMode === "series"
                 ? "Choose 2–4 available times for a recurring learning plan."
-                : "Choose an available slot and review the Marks hold before sending your request."}
+                : bookingMode === "group"
+                  ? "Invite friends, choose one time, and review each student's Marks price."
+                  : "Choose an available slot and review the Marks hold before sending your request."}
             </Text>
           </div>
           <Badge variant="secondary" pill>
@@ -328,20 +377,118 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               <Tabs
                 value={bookingMode}
                 onValueChange={(value) => {
-                  if (value !== "solo" && value !== "series") return;
+                  if (
+                    value !== "solo" &&
+                    value !== "group" &&
+                    value !== "series"
+                  )
+                    return;
                   setBookingMode(value);
                   setSelectedSlotIds([]);
+                  setInvitees([]);
+                  setStudentSearch("");
                   createBooking.reset();
+                  createGroup.reset();
                   createSeries.reset();
                 }}
               >
                 <TabsList>
                   <TabsItem value="solo">Solo session</TabsItem>
+                  <TabsItem value="group">Group</TabsItem>
                   <TabsItem value="series">Series (2–4 sessions)</TabsItem>
                 </TabsList>
               </Tabs>
             </CardBody>
           </Card>
+
+          {bookingMode === "group" ? (
+            <Card>
+              <CardHeader>
+                <IconBox variant="info-subtle">
+                  <IconUsersGroup />
+                </IconBox>
+                <CardTitle>Invite students</CardTitle>
+                <CardDescription>
+                  Search by name or email and add up to five friends
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="space-y-3">
+                {invitees.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {invitees.map((student) => (
+                      <Chip key={student.id}>
+                        {student.name}
+                        <ChipButton
+                          aria-label={`Remove ${student.name}`}
+                          onClick={() =>
+                            setInvitees((current) =>
+                              current.filter((item) => item.id !== student.id),
+                            )
+                          }
+                        >
+                          ×
+                        </ChipButton>
+                      </Chip>
+                    ))}
+                  </div>
+                ) : null}
+                <Field>
+                  <FieldLabel>Find a student</FieldLabel>
+                  <Input
+                    value={studentSearch}
+                    onChange={(event) => setStudentSearch(event.target.value)}
+                    placeholder="Type a name or email"
+                    disabled={invitees.length >= 5}
+                  />
+                  <FieldDescription>
+                    Search updates after you pause typing. Group size:{" "}
+                    {invitees.length + 1}/6.
+                  </FieldDescription>
+                </Field>
+                {studentSearchQuery.isFetching ? (
+                  <Text className="text-sm text-muted">
+                    Searching students...
+                  </Text>
+                ) : debouncedStudentSearch.length >= 2 ? (
+                  <div className="space-y-2">
+                    {(studentSearchQuery.data ?? [])
+                      .filter(
+                        (student) =>
+                          !invitees.some((item) => item.id === student.id),
+                      )
+                      .map((student) => (
+                        <Button
+                          key={student.id}
+                          type="button"
+                          variant="outline"
+                          className="h-auto w-full justify-start py-2.5"
+                          onClick={() => {
+                            setInvitees((current) => [...current, student]);
+                            setStudentSearch("");
+                            setDebouncedStudentSearch("");
+                          }}
+                        >
+                          <IconUserPlus />
+                          <span className="min-w-0 text-left">
+                            <span className="block font-medium">
+                              {student.name}
+                            </span>
+                            <span className="block truncate text-xs opacity-70">
+                              {student.email}
+                            </span>
+                          </span>
+                        </Button>
+                      ))}
+                    {studentSearchQuery.data?.length === 0 ? (
+                      <Text className="text-sm text-muted">
+                        No matching students found.
+                      </Text>
+                    ) : null}
+                  </div>
+                ) : null}
+              </CardBody>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>
@@ -421,7 +568,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                         className="h-auto min-h-20 justify-start px-4 py-3 text-left"
                         onClick={() => {
                           setSelectedSlotIds((current) => {
-                            if (bookingMode === "solo") return [slot.id];
+                            if (bookingMode !== "series") return [slot.id];
                             if (current.includes(slot.id)) {
                               return current.filter((id) => id !== slot.id);
                             }
@@ -491,7 +638,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   <Text className="text-sm text-muted">
                     {bookingMode === "series"
                       ? "Series total"
-                      : "Session price"}
+                      : bookingMode === "group"
+                        ? "Price per student"
+                        : "Session price"}
                   </Text>
                   <Text className="text-xl font-semibold">{price} Marks</Text>
                   {bookingMode === "series" ? (
@@ -537,17 +686,25 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 type="submit"
                 block
                 size="lg"
-                progress={createBooking.isPending || createSeries.isPending}
+                progress={
+                  createBooking.isPending ||
+                  createGroup.isPending ||
+                  createSeries.isPending
+                }
                 disabled={
                   !selectedSlot ||
                   createBooking.isPending ||
+                  createGroup.isPending ||
                   createSeries.isPending ||
+                  (bookingMode === "group" && invitees.length < 1) ||
                   (bookingMode === "series" && selectedSlots.length < 2)
                 }
               >
                 {bookingMode === "series"
                   ? `Send series request (${selectedSlots.length})`
-                  : "Send booking request"}
+                  : bookingMode === "group"
+                    ? `Invite ${invitees.length} ${invitees.length === 1 ? "student" : "students"}`
+                    : "Send booking request"}
               </Button>
             ) : (
               <Button
@@ -559,11 +716,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 Top up Marks
               </Button>
             )}
-            {createBooking.isError || createSeries.isError ? (
+            {createBooking.isError ||
+            createGroup.isError ||
+            createSeries.isError ? (
               <div className="w-full rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="text-center text-sm text-danger">
                   {getBookingErrorMessage(
-                    (createBooking.error ?? createSeries.error) as Error,
+                    (createBooking.error ??
+                      createGroup.error ??
+                      createSeries.error) as Error,
                   )}
                 </Text>
               </div>

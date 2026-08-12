@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { studentProfile, tutorProfile } from "@cogito-app/db/schema";
+import { and, eq, ilike, ne, or } from "drizzle-orm";
+import { studentProfile, tutorProfile, user } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
 export interface ProfileInput {
@@ -61,8 +61,33 @@ async function createProfile(
   return created!;
 }
 
+async function searchStudents(
+  conn: DbOrTx,
+  query: string,
+  excludeUserId: string,
+  limit: number,
+) {
+  return conn
+    .select({ id: user.id, name: user.name, email: user.email })
+    .from(user)
+    .where(
+      and(
+        or(ilike(user.name, `%${query}%`), ilike(user.email, `%${query}%`)),
+        eq(user.role, "student"),
+        ne(user.id, excludeUserId),
+      ),
+    )
+    .limit(limit);
+}
+
 export function createAuthRepo() {
-  return { getStudentProfile, getTutorProfile, upsertProfile, createProfile };
+  return {
+    getStudentProfile,
+    getTutorProfile,
+    upsertProfile,
+    createProfile,
+    searchStudents,
+  };
 }
 
 export type AuthRepo = ReturnType<typeof createAuthRepo>;

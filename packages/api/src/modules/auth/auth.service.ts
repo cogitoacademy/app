@@ -61,5 +61,13 @@ export function createAuthService(deps: {
     return authRepo.createProfile(db, userId, input);
   }
 
-  return { me, getProfile, updateProfile };
+  async function searchStudents(
+    requesterId: string,
+    query: string,
+    limit: number,
+  ) {
+    return authRepo.searchStudents(db, query.trim(), requesterId, limit);
+  }
+
+  return { me, getProfile, updateProfile, searchStudents };
 }

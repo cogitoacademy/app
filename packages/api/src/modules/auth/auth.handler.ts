@@ -2,10 +2,11 @@ import type { Context } from "../../context";
 import { withDomainMap } from "../../lib/handler-utils";
 import { z } from "zod";
 import { mapAuthError } from "./auth.errors";
-import type { updateProfileInput } from "./auth.types";
+import type { updateProfileInput, searchStudentsInput } from "./auth.types";
 import type { AuthService, MeResult } from "./auth.service";
 
 type UpdateProfileInput = z.infer<typeof updateProfileInput>;
+type SearchStudentsInput = z.infer<typeof searchStudentsInput>;
 
 export type { MeResult };
 
@@ -41,6 +42,24 @@ export function createAuthHandler(authService: AuthService) {
     }) => {
       return withDomainMap(
         () => authService.updateProfile(context.session!.user.id, input),
+        mapAuthError,
+      );
+    },
+
+    searchStudents: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: SearchStudentsInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          authService.searchStudents(
+            context.session!.user.id,
+            input.query,
+            input.limit,
+          ),
         mapAuthError,
       );
     },
