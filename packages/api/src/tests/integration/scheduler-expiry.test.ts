@@ -314,7 +314,7 @@ describe("Scheduler: expireBookings against real Postgres", () => {
     expect(solo!.currentState).toBe(BOOKING_STATE.EXPIRED);
   });
 
-  test("no expiry notification is emitted for the affected user (PRD gap, not part of this fix)", async () => {
+  test("expiry emits a notification for the affected user (G2)", async () => {
     const notifs = await db
       .select()
       .from(notification)
@@ -322,7 +322,7 @@ describe("Scheduler: expireBookings against real Postgres", () => {
     const expiryNotifs = notifs.filter((n) =>
       /expir/i.test(`${n.title} ${n.body}`),
     );
-    expect(expiryNotifs.length).toBe(0);
+    expect(expiryNotifs.length).toBeGreaterThan(0);
   });
 });
 

@@ -69,6 +69,7 @@ const TRUNCATE_TABLES = [
   "wallet",
   "achievement",
   "audit_log",
+  "support_ticket",
   "student_profile",
   "mark_package",
   "account",

@@ -15,6 +15,7 @@ import {
   withdrawInput,
   proposeRescheduleInput,
   completeSessionInput,
+  markAttendanceInput,
 } from "./booking.types";
 import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
@@ -198,5 +199,17 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       })
       .input(completeSessionInput)
       .handler(handler.completeSession),
+
+    markAttendance: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/mark-attendance",
+        tags: ["Tutor", "Bookings"],
+        summary: "Mark tutor attendance",
+        description:
+          "Tutor marks themselves present or late for a scheduled booking. Marks attendance so the lateness auto-cancel job skips the booking.",
+      })
+      .input(markAttendanceInput)
+      .handler(handler.markAttendance),
   };
 }

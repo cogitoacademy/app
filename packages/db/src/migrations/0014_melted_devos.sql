@@ -1,0 +1,2 @@
+ALTER TABLE "booking_participant" DROP CONSTRAINT "booking_participant_role_check";--> statement-breakpoint
+ALTER TABLE "booking_participant" ADD CONSTRAINT "booking_participant_role_check" CHECK ("booking_participant"."role" IN ('proposer','invitee','tutor'));

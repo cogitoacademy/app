@@ -166,7 +166,7 @@ export const bookingParticipant = pgTable(
   (table) => [
     check(
       "booking_participant_role_check",
-      sql`${table.role} IN ('proposer','invitee')`,
+      sql`${table.role} IN ('proposer','invitee','tutor')`,
     ),
     check(
       "booking_participant_confirmation_check",

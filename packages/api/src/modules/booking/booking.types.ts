@@ -107,6 +107,11 @@ export const completeSessionInput = z.object({
   sessionNote: z.string().max(2000).optional(),
 });
 
+export const markAttendanceInput = z.object({
+  bookingId: z.string().max(100),
+  attendance: z.enum(["present", "late"]),
+});
+
 export const getBookingInput = z.object({
   bookingId: z.string().max(100),
 });
@@ -131,3 +136,4 @@ export type ReconfirmInput = z.infer<typeof reconfirmInput>;
 export type WithdrawInput = z.infer<typeof withdrawInput>;
 export type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
 export type CompleteSessionInput = z.infer<typeof completeSessionInput>;
+export type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;
