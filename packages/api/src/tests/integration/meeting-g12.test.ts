@@ -93,7 +93,9 @@ async function createPublishedTutor(
   return { tutorId, slotId: slot!.id };
 }
 
-async function getMeetingAttendees(bookingId: string): Promise<string[] | null> {
+async function getMeetingAttendees(
+  bookingId: string,
+): Promise<string[] | null> {
   const [row] = await db
     .select({ attendeeEmails: meetingEvent.attendeeEmails })
     .from(meetingEvent)
@@ -154,7 +156,7 @@ describe("G12 Google Meet attendee automation", () => {
 
       const attendeeEmails = await getMeetingAttendees(bookingId);
       expect(attendeeEmails).toBeDefined();
-      expect(attendeeEmails!.sort()).toEqual([studentEmail, tutorEmail].sort());
+      expect(attendeeEmails!.toSorted()).toEqual([studentEmail, tutorEmail].toSorted());
     });
   });
 
@@ -229,8 +231,8 @@ describe("G12 Google Meet attendee automation", () => {
 
       const attendeeEmails = await getMeetingAttendees(bookingId);
       expect(attendeeEmails).toBeDefined();
-      expect(attendeeEmails!.sort()).toEqual(
-        [proposerEmail, inviteeEmail, tutorEmail].sort(),
+      expect(attendeeEmails!.toSorted()).toEqual(
+        [proposerEmail, inviteeEmail, tutorEmail].toSorted(),
       );
     });
   });

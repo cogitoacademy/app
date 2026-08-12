@@ -1,9 +1,6 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import type {
-  MeetingAttendee,
-  MeetingEvent,
-} from "../meeting/meeting.types";
+import type { MeetingAttendee, MeetingEvent } from "../meeting/meeting.types";
 import type { AuditRecordParams } from "../audit/audit.service";
 import type {
   GroupSize,
