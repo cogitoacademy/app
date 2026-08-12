@@ -5,6 +5,7 @@ import {
   NOTIFICATION_CATEGORY,
   NOTIFICATION_SEVERITY,
   ACTOR_TYPE,
+  ATTENDANCE_STATE,
   RESPONSE_WINDOW_MS,
   LATE_CANCEL_THRESHOLD_MS,
   MIN_GROUP_HEADCOUNT,
@@ -1348,6 +1349,90 @@ export function createBookingService(deps: {
     return { released };
   }
 
+  async function checkTutorLateness(): Promise<{
+    autoCancelled: number;
+    failed: number;
+  }> {
+    const candidates = await repo.findBookingsWithTutorLateness(db);
+
+    let autoCancelled = 0;
+    let failed = 0;
+    for (const b of candidates) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await db.transaction(async (tx) => {
+          await releaseAllParticipantHolds(
+            tx,
+            b.id,
+            "Tutor no-show: auto-cancelled",
+            ACTOR_TYPE.SYSTEM,
+          );
+
+          await repo.updateBookingHoldAmount(tx, b.id, 0);
+
+          const tutorParticipant = await repo.findTutorParticipant(tx, b.id);
+          if (tutorParticipant) {
+            await repo.updateParticipantState(tx, tutorParticipant.id, {
+              attendanceState: ATTENDANCE_STATE.ABSENT,
+            });
+          } else {
+            await repo.insertParticipant(tx, {
+              bookingId: b.id,
+              userId: b.tutorId,
+              role: "tutor",
+              confirmationState: CONFIRMATION_STATE.CONFIRMED,
+              heldAmount: 0,
+              attendanceState: ATTENDANCE_STATE.ABSENT,
+            });
+          }
+
+          await transition(tx, b.id, BOOKING_STATE.NO_SHOW, {
+            actorId: "system",
+            actorType: ACTOR_TYPE.SYSTEM,
+            reason: "Tutor did not join within the lateness window",
+            metadata: {
+              latenessMinutes: Math.floor(
+                (Date.now() - b.scheduledStartAt.getTime()) / 60_000,
+              ),
+            },
+          });
+
+          await notification.writeBestEffort({
+            db: tx,
+            userId: b.proposerId,
+            bookingId: b.id,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.ACTION,
+            title: "Session auto-cancelled",
+            body: "The tutor did not join within 15 minutes, so the session was auto-cancelled and held marks were released.",
+            eventKey: `booking.${b.id}.tutor_no_show`,
+          });
+
+          await notification.writeBestEffort({
+            db: tx,
+            userId: b.tutorId,
+            bookingId: b.id,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.INFO,
+            title: "Session auto-cancelled",
+            body: "You did not join the session within 15 minutes, so it was auto-cancelled.",
+            eventKey: `booking.${b.id}.tutor_no_show.tutor`,
+          });
+        });
+        autoCancelled++;
+      } catch (error) {
+        failed++;
+        log({
+          level: "error",
+          action: "tutor_lateness_check_failed",
+          bookingId: b.id,
+          error: { message: String(error) },
+        });
+      }
+    }
+    return { autoCancelled, failed };
+  }
+
   return {
     getById,
     listMine,
@@ -1366,6 +1451,7 @@ export function createBookingService(deps: {
     listSessions,
     expireBookings,
     releaseExpiredHolds,
+    checkTutorLateness,
     transition,
     canTransition,
   };

@@ -10,6 +10,7 @@ import {
   lt,
   sql,
   getTableColumns,
+  notExists,
 } from "drizzle-orm";
 import {
   booking,
@@ -23,7 +24,11 @@ import {
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import { CONFIRMATION_STATE, ONBOARDING_STATUS } from "../../shared/constants";
+import {
+  CONFIRMATION_STATE,
+  ONBOARDING_STATUS,
+  LATENESS_TOLERANCE_MS,
+} from "../../shared/constants";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
@@ -446,6 +451,52 @@ async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
     .limit(500);
 }
 
+async function findBookingsWithTutorLateness(conn: DbOrTx) {
+  const cutoff = new Date(Date.now() - LATENESS_TOLERANCE_MS);
+  const tutorAttended = conn
+    .select({ id: bookingParticipant.id })
+    .from(bookingParticipant)
+    .where(
+      and(
+        eq(bookingParticipant.bookingId, booking.id),
+        eq(bookingParticipant.role, "tutor"),
+        inArray(bookingParticipant.attendanceState, [
+          "present",
+          "late",
+          "absent",
+        ]),
+      ),
+    );
+  return conn
+    .select()
+    .from(booking)
+    .where(
+      and(
+        eq(booking.currentState, "scheduled"),
+        lt(booking.scheduledStartAt, cutoff),
+        notExists(tutorAttended),
+      ),
+    )
+    .limit(500);
+}
+
+async function findTutorParticipant(
+  conn: DbOrTx,
+  bookingId: string,
+): Promise<typeof bookingParticipant.$inferSelect | null> {
+  const [participant] = await conn
+    .select()
+    .from(bookingParticipant)
+    .where(
+      and(
+        eq(bookingParticipant.bookingId, bookingId),
+        eq(bookingParticipant.role, "tutor"),
+      ),
+    )
+    .limit(1);
+  return participant ?? null;
+}
+
 /**
  * Decrements a booking's confirmed headcount (floored at 0).
  *
@@ -589,6 +640,8 @@ export function createBookingRepo(db: DbType) {
     insertBookingSession,
     listSessionsBySeriesId,
     findBookingsExpiringByDeadline,
+    findBookingsWithTutorLateness,
+    findTutorParticipant,
     findOverlappingBookings,
     updateBookingVersioned,
     updateBookingDeadline,

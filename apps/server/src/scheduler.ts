@@ -3,6 +3,7 @@ import { log } from "@cogito-app/api/lib/logger";
 import { createSchedulerService } from "@cogito-app/api/modules/scheduler/scheduler.service";
 import { scheduleBookingExpiryCheck } from "@cogito-app/api/modules/scheduler/jobs/expire-bookings.job";
 import { scheduleHoldReleaseCheck } from "@cogito-app/api/modules/scheduler/jobs/release-holds.job";
+import { scheduleCheckTutorLateness } from "@cogito-app/api/modules/scheduler/jobs/check-tutor-lateness.job";
 import { scheduleSendNotificationEmail } from "@cogito-app/api/modules/scheduler/jobs/send-notification-email.job";
 import { services } from "@cogito-app/api";
 
@@ -26,6 +27,7 @@ export async function initScheduler(): Promise<void> {
   scheduler = createSchedulerService(env.REDIS_URL!, {
     onExpireBookings: () => services.booking.expireBookings(),
     onReleaseHolds: () => services.booking.releaseExpiredHolds(),
+    onCheckTutorLateness: () => services.booking.checkTutorLateness(),
     onSendNotificationEmail: async (data) => {
       try {
         const db = (await import("@cogito-app/db")).db;
@@ -90,6 +92,7 @@ export async function initScheduler(): Promise<void> {
 
   await scheduleBookingExpiryCheck(scheduler.queue);
   await scheduleHoldReleaseCheck(scheduler.queue);
+  await scheduleCheckTutorLateness(scheduler.queue);
   await scheduleSendNotificationEmail(scheduler.queue);
 
   log({
