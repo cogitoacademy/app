@@ -812,7 +812,9 @@ describe("write vs writeBestEffort", () => {
 });
 
 describe("NotificationService email routing decision (G17)", () => {
-  function makeRepo(overrides: Partial<NotificationRepo> = {}): NotificationRepo {
+  function makeRoutingRepo(
+    overrides: Partial<NotificationRepo> = {},
+  ): NotificationRepo {
     return {
       findNotificationByEventKey: mock(async () => null),
       findNotificationByIdForUser: mock(async () => ({ id: "n1" })),
@@ -840,7 +842,7 @@ describe("NotificationService email routing decision (G17)", () => {
   };
 
   test("emailRequired true + action severity + supported category → email dispatched and status sent", async () => {
-    const repo = makeRepo();
+    const repo = makeRoutingRepo();
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
     const service = createNotificationService(repo, emailPort as any);
 
@@ -865,7 +867,7 @@ describe("NotificationService email routing decision (G17)", () => {
   });
 
   test("emailRequired default false + action severity + supported category → no email", async () => {
-    const repo = makeRepo();
+    const repo = makeRoutingRepo();
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
     const service = createNotificationService(repo, emailPort as any);
 
@@ -876,7 +878,7 @@ describe("NotificationService email routing decision (G17)", () => {
   });
 
   test("emailRequired true + info severity + supported category → no email (severity gate)", async () => {
-    const repo = makeRepo();
+    const repo = makeRoutingRepo();
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
     const service = createNotificationService(repo, emailPort as any);
 
@@ -891,7 +893,7 @@ describe("NotificationService email routing decision (G17)", () => {
   });
 
   test("emailRequired true + achievement category → no email (category backstop), in-app row kept", async () => {
-    const repo = makeRepo();
+    const repo = makeRoutingRepo();
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
     const service = createNotificationService(repo, emailPort as any);
 
@@ -907,7 +909,7 @@ describe("NotificationService email routing decision (G17)", () => {
   });
 
   test("achievement in-app only: emailRequired false → notification row, no dispatch", async () => {
-    const repo = makeRepo();
+    const repo = makeRoutingRepo();
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
     const service = createNotificationService(repo, emailPort as any);
 

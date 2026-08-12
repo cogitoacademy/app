@@ -65,15 +65,17 @@ export function createAchievementService(deps: {
     input: Omit<InsertAchievementParams, "userId">,
   ) {
     const created = await achievementRepo.insert(db, { ...input, userId });
-    await notificationPort.writeBestEffort({
-      db,
-      userId,
-      category: NOTIFICATION_CATEGORY.ACHIEVEMENT,
-      severity: NOTIFICATION_SEVERITY.INFO,
-      title: "Achievement submitted",
-      body: `Your achievement "${created.eventName}" was submitted for review.`,
-      eventKey: `achievement.${created.id}.submitted`,
-    });
+    if (created) {
+      await notificationPort.writeBestEffort({
+        db,
+        userId,
+        category: NOTIFICATION_CATEGORY.ACHIEVEMENT,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title: "Achievement submitted",
+        body: `Your achievement "${created.eventName}" was submitted for review.`,
+        eventKey: `achievement.${created.id}.submitted`,
+      });
+    }
     return created;
   }
 

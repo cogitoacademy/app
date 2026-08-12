@@ -470,6 +470,13 @@ async function cancelSession(conn: DbOrTx, sessionId: string) {
     .where(eq(bookingSession.id, sessionId));
 }
 
+async function completeSession(conn: DbOrTx, sessionId: string) {
+  await conn
+    .update(bookingSession)
+    .set({ currentState: BOOKING_STATE.COMPLETED })
+    .where(eq(bookingSession.id, sessionId));
+}
+
 async function insertSessionNote(
   conn: DbOrTx,
   values: { bookingId: string; authorId: string; content: string },
@@ -830,6 +837,7 @@ export function createBookingRepo(db: DbType) {
     insertBookingSession,
     findSessionById,
     cancelSession,
+    completeSession,
     insertSessionNote,
     listSessionNotes,
     listSessionsBySeriesId,
