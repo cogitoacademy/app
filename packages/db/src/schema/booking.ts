@@ -287,6 +287,29 @@ export const bookingSession = pgTable(
   ],
 );
 
+export const sessionNote = pgTable(
+  "session_note",
+  {
+    id: uuidPrimaryKey,
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => booking.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("session_note_bookingId_idx").on(table.bookingId),
+    index("session_note_authorId_idx").on(table.authorId),
+  ],
+);
+
 export const room = pgTable(
   "room",
   {
@@ -395,6 +418,7 @@ export const bookingRelations = relations(booking, ({ one, many }) => ({
     relationName: "seriesParent",
   }),
   sessions: many(bookingSession),
+  sessionNotes: many(sessionNote),
 }));
 
 export const bookingParticipantRelations = relations(
@@ -469,5 +493,16 @@ export const bookingSessionRelations = relations(bookingSession, ({ one }) => ({
   seriesBooking: one(booking, {
     fields: [bookingSession.seriesBookingId],
     references: [booking.id],
+  }),
+}));
+
+export const sessionNoteRelations = relations(sessionNote, ({ one }) => ({
+  booking: one(booking, {
+    fields: [sessionNote.bookingId],
+    references: [booking.id],
+  }),
+  author: one(user, {
+    fields: [sessionNote.authorId],
+    references: [user.id],
   }),
 }));

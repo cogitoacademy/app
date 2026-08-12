@@ -95,6 +95,9 @@ describe("Booking State Transitions", () => {
     expect(canTransition("awaiting_reconfirmation", "confirmed")).toBe(true);
     expect(canTransition("awaiting_reconfirmation", "expired")).toBe(true);
     expect(canTransition("awaiting_reconfirmation", "cancelled")).toBe(false);
+    expect(
+      canTransition("awaiting_reconfirmation", "awaiting_tutor_review"),
+    ).toBe(true);
   });
 
   test("awaiting_admin_room_approval transitions", () => {

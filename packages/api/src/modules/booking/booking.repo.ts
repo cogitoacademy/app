@@ -18,6 +18,7 @@ import {
   bookingStateHistory,
   bookingRescheduleProposal,
   bookingSession,
+  sessionNote,
   availabilitySlot,
   tutorProfile,
   type booking as bookingTable,
@@ -234,6 +235,28 @@ async function updateBookingHoldAmount(
     .where(eq(booking.id, bookingId));
 }
 
+async function updateBookingPriceSnapshot(
+  conn: DbOrTx,
+  bookingId: string,
+  values: {
+    priceSnapshot: {
+      perStudent: number;
+      baseline: number;
+      tutorShare: number;
+      cogitoTake: number;
+
+      baselineCogitoTake: number;
+      baselineTutorShare: number;
+      extraTotal: number;
+      cogitoExtraTake: number;
+      tutorExtraShare: number;
+    };
+    holdAmount: number;
+  },
+) {
+  await conn.update(booking).set(values).where(eq(booking.id, bookingId));
+}
+
 /**
  * Sets a booking's confirmed headcount.
  *
@@ -331,6 +354,32 @@ async function insertRescheduleProposal(
   await conn.insert(bookingRescheduleProposal).values(values);
 }
 
+async function findPendingRescheduleProposal(conn: DbOrTx, bookingId: string) {
+  const [proposal] = await conn
+    .select()
+    .from(bookingRescheduleProposal)
+    .where(
+      and(
+        eq(bookingRescheduleProposal.bookingId, bookingId),
+        eq(bookingRescheduleProposal.status, "pending"),
+      ),
+    )
+    .orderBy(desc(bookingRescheduleProposal.createdAt))
+    .limit(1);
+  return proposal ?? null;
+}
+
+async function updateRescheduleProposal(
+  conn: DbOrTx,
+  proposalId: string,
+  values: { status: string; decidedAt: Date },
+) {
+  await conn
+    .update(bookingRescheduleProposal)
+    .set(values)
+    .where(eq(bookingRescheduleProposal.id, proposalId));
+}
+
 /**
  * Inserts a session for a series booking.
  *
@@ -377,6 +426,38 @@ export async function listSessionsBySeriesId(
     .from(bookingSession)
     .where(eq(bookingSession.seriesBookingId, seriesBookingId))
     .orderBy(bookingSession.scheduledStartAt);
+}
+
+async function findSessionById(conn: DbOrTx, sessionId: string) {
+  const [session] = await conn
+    .select()
+    .from(bookingSession)
+    .where(eq(bookingSession.id, sessionId))
+    .limit(1);
+  return session ?? null;
+}
+
+async function cancelSession(conn: DbOrTx, sessionId: string) {
+  await conn
+    .update(bookingSession)
+    .set({ currentState: "cancelled", holdAmount: 0 })
+    .where(eq(bookingSession.id, sessionId));
+}
+
+async function insertSessionNote(
+  conn: DbOrTx,
+  values: { bookingId: string; authorId: string; content: string },
+) {
+  const [note] = await conn.insert(sessionNote).values(values).returning();
+  return note!;
+}
+
+async function listSessionNotes(conn: DbOrTx, bookingId: string) {
+  return conn
+    .select()
+    .from(sessionNote)
+    .where(eq(sessionNote.bookingId, bookingId))
+    .orderBy(desc(sessionNote.createdAt));
 }
 
 /**
@@ -430,6 +511,14 @@ async function updateBookingDeadline(
     .update(booking)
     .set({ deadlineAt, updatedAt: new Date() })
     .where(eq(booking.id, bookingId));
+}
+
+async function updateBookingSchedule(
+  conn: DbOrTx,
+  bookingId: string,
+  values: { scheduledStartAt: Date; scheduledEndAt: Date },
+) {
+  await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
 
 /**
@@ -639,8 +728,16 @@ export function createBookingRepo(db: DbType) {
     updateParticipantState,
     insertStateHistory,
     insertRescheduleProposal,
+    findPendingRescheduleProposal,
+    updateRescheduleProposal,
     insertBookingSession,
+    findSessionById,
+    cancelSession,
+    insertSessionNote,
+    listSessionNotes,
     listSessionsBySeriesId,
+    updateBookingPriceSnapshot,
+    updateBookingSchedule,
     findBookingsExpiringByDeadline,
     findBookingsWithTutorLateness,
     findTutorParticipant,
