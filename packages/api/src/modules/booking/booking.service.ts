@@ -80,7 +80,7 @@ export interface BookingTransition {
   fromState: BookingState | null;
   toState: BookingState;
   reason?: string;
-  actorId: string;
+  actorId: string | null;
   actorType: "student" | "tutor" | "admin" | "system";
   metadata?: Record<string, unknown>;
 }
@@ -178,7 +178,8 @@ export function createBookingService(deps: {
       fromState,
       toState,
       reason: params.reason,
-      actorId: params.actorId,
+      actorId:
+        params.actorType === "system" ? null : params.actorId,
       actorType: params.actorType,
       metadata: params.metadata,
     });
@@ -219,6 +220,7 @@ export function createBookingService(deps: {
         confirmationState: CONFIRMATION_STATE.WITHDRAWN_PRE_H2,
         withdrawnAt: new Date(),
         withdrawnReason: reason,
+        heldAmount: 0,
       });
     }
   }

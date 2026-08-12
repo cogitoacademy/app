@@ -195,7 +195,7 @@ async function insertStateHistory(
     fromState: string | null;
     toState: string;
     reason?: string | null;
-    actorId: string;
+    actorId: string | null;
     actorType: string;
     metadata?: Record<string, unknown>;
   },
