@@ -766,17 +766,43 @@ export function createBookingService(deps: {
         );
       }
 
-      const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-      if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-      await wallet.deduct(tx, {
-        walletId: proposerWallet.id,
-        amount: b.holdAmount,
-        eventKey: `booking.${bookingId}.deduct`,
-        sourceReference: bookingId,
-        bookingId,
-        actorType: ACTOR_TYPE.TUTOR,
-        reason: "Session completed",
-      });
+      if (b.type === BOOKING_TYPE.GROUP) {
+        // After a group repricing the holds live on each remaining
+        // participant's wallet (the proposer may have withdrawn and hold 0),
+        // so deduct from each confirmed participant individually.
+        const participants = await repo.findConfirmedParticipants(
+          tx,
+          bookingId,
+        );
+        for (const p of participants) {
+          if (p.heldAmount <= 0) continue;
+          // eslint-disable-next-line no-await-in-loop
+          const w = await wallet.getByUserId(tx, p.userId);
+          if (!w) throw new BookingNotFoundError(p.userId);
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.deduct(tx, {
+            walletId: w.id,
+            amount: p.heldAmount,
+            eventKey: `booking.${bookingId}.complete.${p.userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.TUTOR,
+            reason: "Session completed",
+          });
+        }
+      } else {
+        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+        await wallet.deduct(tx, {
+          walletId: proposerWallet.id,
+          amount: b.holdAmount,
+          eventKey: `booking.${bookingId}.deduct`,
+          sourceReference: bookingId,
+          bookingId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Session completed",
+        });
+      }
 
       const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
         actorId: tutorId,
@@ -807,6 +833,10 @@ export function createBookingService(deps: {
       const b = await repo.findBookingById(tx, session.seriesBookingId);
       if (!b) throw new BookingNotFoundError(session.seriesBookingId);
       await assertBookingAccess(b, userId, tx, session.seriesBookingId);
+
+      if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
+        throw new BookingCancelledError(session.seriesBookingId);
+      }
 
       if (b.type !== BOOKING_TYPE.SERIES) {
         throw new BookingNotEditableError(session.seriesBookingId);

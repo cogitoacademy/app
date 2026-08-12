@@ -111,6 +111,7 @@ describe("G4: group repricing on headcount change", () => {
   let i1Client: TestClient;
   let i2Client: TestClient;
   let i3Client: TestClient;
+  let tutorClient: TestClient;
   let tutorId: string;
   let slotId: string;
   let bookingId: string;
@@ -123,6 +124,8 @@ describe("G4: group repricing on headcount change", () => {
     const tutorData = await createPublishedTutor(tutorEmail, ts);
     tutorId = tutorData.tutorId;
     slotId = tutorData.slotId;
+    const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
+    tutorClient = createTestClient(await createTestContext(tutorCookie ?? ""));
 
     const proposerRes = await signUpAndSignIn(
       proposerEmail,
@@ -238,5 +241,44 @@ describe("G4: group repricing on headcount change", () => {
       expect(notifs.length).toBe(1);
       expect(notifs[0]!.title).toBe("Group price updated");
     }
+  });
+
+  test("all remaining participants reconfirm → awaiting_tutor_review → tutor accepts → scheduled", async () => {
+    await i1Client.booking.reconfirm({ bookingId, accept: true });
+    await i2Client.booking.reconfirm({ bookingId, accept: true });
+    const r = await i3Client.booking.reconfirm({ bookingId, accept: true });
+    expect(r.reconfirmed).toBe(true);
+
+    const b = await i1Client.booking.get({ bookingId });
+    expect(b.currentState).toBe("awaiting_tutor_review");
+    expect(b.confirmedHeadcount).toBe(3);
+
+    const scheduled = await tutorClient.tutorActions.acceptBooking({
+      bookingId,
+    });
+    expect(scheduled.currentState).toBe("scheduled");
+  });
+
+  test("tutor completes → deducts each remaining participant's hold, proposer untouched", async () => {
+    const completed = await tutorClient.tutorActions.completeSession({
+      bookingId,
+    });
+    expect(completed.currentState).toBe("completed");
+
+    for (const id of [i1Id, i2Id, i3Id]) {
+      const [w] = await db.select().from(wallet).where(eq(wallet.userId, id));
+      expect(w!.heldBalance).toBe(0);
+      expect(w!.totalBalance).toBe(200 - 35);
+    }
+
+    const [proposerWallet] = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, proposerId));
+    expect(proposerWallet!.totalBalance).toBe(200);
+    expect(proposerWallet!.heldBalance).toBe(0);
+
+    const b = await i1Client.booking.get({ bookingId });
+    expect(b.holdAmount).toBe(0);
   });
 });
