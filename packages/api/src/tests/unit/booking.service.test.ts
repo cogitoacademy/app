@@ -2062,7 +2062,11 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.markTutorAttendance("b1", "tutor1", "present");
+      const result = await service.markTutorAttendance(
+        "b1",
+        "tutor1",
+        "present",
+      );
 
       expect(repo.insertParticipant).toHaveBeenCalledTimes(1);
       expect(repo.insertParticipant.mock.calls[0][1]).toMatchObject({
