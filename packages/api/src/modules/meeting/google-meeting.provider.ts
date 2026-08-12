@@ -21,16 +21,12 @@ interface GoogleMeetingConfig {
 interface GoogleCalendarEvent {
   id?: string | null;
   hangoutLink?: string | null;
-  conferenceData?:
-    | {
-        entryPoints?:
-          | Array<{
-              entryPointType?: string | null;
-              uri?: string | null;
-            }>
-          | null;
-      }
-    | null;
+  conferenceData?: {
+    entryPoints?: Array<{
+      entryPointType?: string | null;
+      uri?: string | null;
+    }> | null;
+  } | null;
 }
 
 interface GoogleOAuthTokenResponse {
