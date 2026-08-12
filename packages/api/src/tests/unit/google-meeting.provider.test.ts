@@ -67,17 +67,6 @@ mock.module("googleapis", () => ({
   },
 }));
 
-mock.module("@cogito-app/db/schema", () => ({
-  meetingEvent: {
-    bookingId: "bookingId",
-    provider: "provider",
-    status: "status",
-    meetingUrl: "meetingUrl",
-    externalEventId: "externalEventId",
-    errorReason: "errorReason",
-  },
-}));
-
 import {
   createGoogleMeetingProvider,
   createGoogleMeetingProviderWithFallback,
