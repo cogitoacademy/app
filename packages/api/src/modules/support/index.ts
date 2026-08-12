@@ -10,7 +10,6 @@ import type { SupportHandler } from "./support.handler";
 export type SupportModule = ReturnType<typeof createSupportModule>;
 
 export interface SupportNotificationPort {
-  write(params: NotificationWriteParams): Promise<void>;
   writeBestEffort(params: NotificationWriteParams): Promise<void>;
 }
 

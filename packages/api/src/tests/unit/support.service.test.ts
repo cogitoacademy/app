@@ -51,7 +51,7 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
 }
 
 function makeNotification() {
-  return { write: mock(async () => {}), writeBestEffort: mock(async () => {}) };
+  return { writeBestEffort: mock(async () => {}) };
 }
 
 function makeAudit() {
@@ -228,7 +228,7 @@ describe("SupportService", () => {
 
       expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
         status: undefined,
-        limit: 20,
+        limit: 50,
         offset: 0,
       });
     });

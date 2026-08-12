@@ -119,7 +119,8 @@ async function findBookingForReporter(
     .where(eq(booking.id, bookingId))
     .limit(1);
   if (!b) return null;
-  if (b.proposerId === userId || b.tutorId === userId) return b;
+  if (b.proposerId === userId) return b;
+  if (b.tutorId === userId) return null;
   const participant = await conn
     .select({ id: bookingParticipant.id })
     .from(bookingParticipant)

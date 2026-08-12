@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 
 export const SUPPORT_CATEGORIES = [
   "tutor_late",
@@ -31,7 +32,7 @@ export const listTicketsInput = z
 export const adminListTicketsInput = z
   .object({
     status: z.enum(SUPPORT_STATUSES).optional(),
-    limit: z.number().int().min(1).max(100).default(50),
+    limit: z.number().int().min(1).max(100).default(ADMIN_DEFAULT_PAGE_LIMIT),
     offset: z.number().int().min(0).default(0),
   })
   .optional();

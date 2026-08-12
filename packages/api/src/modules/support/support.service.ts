@@ -7,6 +7,7 @@ import {
   LATENESS_TOLERANCE_MS,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
+  ADMIN_DEFAULT_PAGE_LIMIT,
 } from "../../shared/constants";
 import type { SupportRepo } from "./support.repo";
 import type { SupportNotificationPort, SupportAuditPort } from "./index";
@@ -84,7 +85,10 @@ export function createSupportService(deps: {
   }
 
   async function adminList(input: AdminListInput = {}) {
-    const limit = Math.min(input.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+    const limit = Math.min(
+      input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT,
+      MAX_PAGE_LIMIT,
+    );
     return supportRepo.adminList(db, {
       status: input.status,
       limit,
