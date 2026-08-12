@@ -22,6 +22,7 @@ export const env = createEnv({
       .string()
       .url()
       .default("https://cogitoacademy.id/knowledge-bank"),
+    WEBHOOK_ALLOWED_IPS: z.string().optional(),
     XENDIT_SECRET_KEY: z.string().min(1).optional(),
     XENDIT_WEBHOOK_TOKEN: z.string().min(1).optional(),
     XENDIT_SUCCESS_REDIRECT_URL: z.string().url().optional(),
