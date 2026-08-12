@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer";
-import { writeFileSync, mkdirSync } from "fs";
+import { mkdirSync } from "fs";
 import { join } from "path";
 
 const BASE = "http://localhost:3000";
@@ -33,13 +33,16 @@ await page.waitForSelector('input[name="email"]', { timeout: 10000 });
 await page.type('input[name="email"]', EMAIL);
 await page.type('input[name="password"]', PASS);
 await page.click('button[type="submit"]');
-await new Promise(r => setTimeout(r, 3000));
+await new Promise((r) => setTimeout(r, 3000));
 
 // Screenshot each page
 for (const p of pages) {
   try {
-    await page.goto(`${BASE}${p.route}`, { waitUntil: "networkidle0", timeout: 15000 });
-    await new Promise(r => setTimeout(r, 2000));
+    await page.goto(`${BASE}${p.route}`, {
+      waitUntil: "networkidle0",
+      timeout: 15000,
+    });
+    await new Promise((r) => setTimeout(r, 2000));
     const path = join(OUT, `${p.name}.png`);
     await page.screenshot({ path, fullPage: true });
     console.log(`✅ ${p.name}.png`);

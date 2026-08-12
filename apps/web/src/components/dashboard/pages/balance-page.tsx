@@ -23,11 +23,38 @@ import {
   IconShoppingCart,
   IconWallet,
   IconLoader2,
+  IconArrowDown,
+  IconArrowUp,
+  IconArrowsExchange,
 } from "@tabler/icons-react";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import { StatCard } from "../stat-card";
 import { orpc } from "@/utils/orpc";
+
+const LEDGER_LABELS: Record<string, string> = {
+  credit: "Marks added",
+  hold: "Marks reserved",
+  release: "Marks released",
+  deduct: "Session payment",
+  compensate_credit: "Balance correction",
+  compensate_deduct: "Balance correction",
+};
+
+type LedgerEntry = {
+  id: string;
+  entryType: string;
+  amount: number;
+  afterBalance: number;
+  reason: string | null;
+  createdAt: string | Date;
+};
+
+function getLedgerDirection(entryType: string) {
+  if (entryType === "credit" || entryType === "compensate_credit") return 1;
+  if (entryType === "deduct" || entryType === "compensate_deduct") return -1;
+  return 0;
+}
 
 function formatIdr(amount: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -47,6 +74,12 @@ export function BalancePage() {
   const { data: packages = [], isLoading: packagesLoading } = useQuery(
     orpc.wallet.listPackages.queryOptions(),
   );
+  const { data: ledgerData, isLoading: ledgerLoading } = useQuery(
+    orpc.wallet.listLedger.queryOptions({ input: { limit: 50 } }),
+  );
+  const ledger = ledgerData as
+    | { items: LedgerEntry[]; nextCursor: string | null }
+    | undefined;
 
   const purchase = useMutation(
     orpc.payment.createPurchase.mutationOptions({
@@ -58,6 +91,9 @@ export function BalancePage() {
         await queryClient.invalidateQueries({
           queryKey: orpc.wallet.get.queryKey(),
         });
+        await queryClient.invalidateQueries({
+          queryKey: orpc.wallet.listLedger.key(),
+        });
         setBuying(false);
       },
     }),
@@ -67,11 +103,6 @@ export function BalancePage() {
   const heldBalance = wallet?.heldBalance ?? 0;
   const availableBalance = wallet?.availableBalance ?? 0;
   const kbAccessible = totalBalance >= 35;
-
-  const openKnowledgeBank = () => {
-    if (!kbAccessible) return;
-    window.open("https://knowledge.cogito.academy", "_blank");
-  };
 
   return (
     <Stack direction="column" spacing="lg">
@@ -130,8 +161,8 @@ export function BalancePage() {
         <CardHeader>
           <CardTitle>Knowledge Bank Access</CardTitle>
           <CardDescription>
-            Access requires at least 35 Marks in your wallet. Opening the
-            Knowledge Bank does not deduct Marks.
+            Knowledge Bank access requires at least 35 Marks in your wallet. You
+            are not paying 35 Marks to open it.
           </CardDescription>
         </CardHeader>
         <CardBody>
@@ -153,19 +184,36 @@ export function BalancePage() {
                   : "Top up your wallet to unlock the Knowledge Bank."}
               </Text>
             </div>
-            <Button
-              className="w-full sm:w-auto sm:ml-auto sm:shrink-0 group"
-              variant={kbAccessible ? "primary" : "secondary"}
-              disabled={!kbAccessible}
-              onClick={openKnowledgeBank}
-            >
-              Open Knowledge Bank
-            </Button>
+            {kbAccessible ? (
+              <Button
+                className="w-full sm:ml-auto sm:w-auto sm:shrink-0 group"
+                render={
+                  <a
+                    href="https://knowledge.cogito.academy"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open Knowledge Bank"
+                  />
+                }
+                nativeButton={false}
+              >
+                Open Knowledge Bank
+              </Button>
+            ) : (
+              <Button
+                className="w-full sm:ml-auto sm:w-auto sm:shrink-0"
+                variant="secondary"
+                render={<a href="#top-up-marks" aria-label="Top up wallet" />}
+                nativeButton={false}
+              >
+                Top up wallet
+              </Button>
+            )}
           </div>
         </CardBody>
       </Card>
 
-      <Card>
+      <Card id="top-up-marks">
         <CardHeader>
           <CardTitle>Top Up Marks</CardTitle>
           <CardDescription>
@@ -198,7 +246,7 @@ export function BalancePage() {
             <Text className="text-muted">Loading packages...</Text>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {[...packages].reverse().map((pkg) => (
+              {packages.toReversed().map((pkg) => (
                 <Card
                   key={pkg.code}
                   className={cn(
@@ -249,6 +297,84 @@ export function BalancePage() {
                   </CardFooter>
                 </Card>
               ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Marks history</CardTitle>
+          <CardDescription>
+            Top-ups, booking reservations, releases, and completed session
+            payments
+          </CardDescription>
+        </CardHeader>
+        <CardBody>
+          {ledgerLoading ? (
+            <Text className="text-muted">Loading transaction history...</Text>
+          ) : !ledger?.items.length ? (
+            <div className="rounded-lg border border-border p-6 text-center">
+              <Text className="font-medium">No transactions yet</Text>
+              <Text className="mt-1 text-sm text-muted">
+                Your top-ups and booking activity will appear here.
+              </Text>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {ledger.items.map((entry) => {
+                const direction = getLedgerDirection(entry.entryType);
+                const EntryIcon =
+                  direction > 0
+                    ? IconArrowDown
+                    : direction < 0
+                      ? IconArrowUp
+                      : IconArrowsExchange;
+
+                return (
+                  <div
+                    key={entry.id}
+                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-muted">
+                      <EntryIcon className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <Text className="font-medium">
+                        {LEDGER_LABELS[entry.entryType] ?? "Marks activity"}
+                      </Text>
+                      <Text className="truncate text-sm text-muted">
+                        {entry.reason ?? "Cogito Marks transaction"} ·{" "}
+                        {new Intl.DateTimeFormat("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }).format(new Date(entry.createdAt))}
+                      </Text>
+                    </div>
+                    <div className="text-right">
+                      <Text
+                        className={cn(
+                          "font-semibold",
+                          direction > 0
+                            ? "text-success"
+                            : direction < 0
+                              ? "text-danger"
+                              : "text-foreground",
+                        )}
+                      >
+                        {direction > 0 ? "+" : direction < 0 ? "-" : ""}
+                        {entry.amount} Marks
+                      </Text>
+                      <Text className="text-sm text-muted">
+                        Balance {entry.afterBalance}
+                      </Text>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardBody>

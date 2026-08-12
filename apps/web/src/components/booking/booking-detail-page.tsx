@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -24,6 +25,16 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  Dialog,
+  DialogBody,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@cogito-app/ui/components/selia/dialog";
 import {
   Item,
   ItemContent,
@@ -56,6 +67,10 @@ export function BookingDetailPage({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [reviewDialog, setReviewDialog] = useState<"accept" | "decline" | null>(
+    null,
+  );
+  const [declineReason, setDeclineReason] = useState("");
   const isTutor = viewerRole === "tutor";
   const bookingsPath = isTutor ? "/tutor-bookings" : "/bookings";
   const bookingsLabel = isTutor ? "Tutor bookings" : "My bookings";
@@ -84,27 +99,42 @@ export function BookingDetailPage({
         refreshBookingQueries();
       },
       onError: (error: Error) =>
-        toastManager.add({ title: error.message, type: "error" }),
+        toastManager.add({
+          title: "Booking could not be cancelled",
+          description: error.message,
+          type: "error",
+        }),
     }),
   );
   const accept = useMutation(
     orpc.tutorActions.acceptBooking.mutationOptions({
       onSuccess: () => {
+        setReviewDialog(null);
         toastManager.add({ title: "Booking accepted", type: "success" });
         refreshBookingQueries();
       },
       onError: (error: Error) =>
-        toastManager.add({ title: error.message, type: "error" }),
+        toastManager.add({
+          title: "Booking could not be accepted",
+          description: error.message,
+          type: "error",
+        }),
     }),
   );
   const decline = useMutation(
     orpc.tutorActions.declineBooking.mutationOptions({
       onSuccess: () => {
+        setReviewDialog(null);
+        setDeclineReason("");
         toastManager.add({ title: "Booking declined", type: "success" });
         refreshBookingQueries();
       },
       onError: (error: Error) =>
-        toastManager.add({ title: error.message, type: "error" }),
+        toastManager.add({
+          title: "Booking could not be declined",
+          description: error.message,
+          type: "error",
+        }),
     }),
   );
   const complete = useMutation(
@@ -173,19 +203,10 @@ export function BookingDetailPage({
     if (confirmed) cancel.mutate({ bookingId });
   }
 
-  function acceptBooking() {
-    const confirmed = window.confirm(
-      "Accept this booking request and schedule the session?",
-    );
-    if (confirmed) accept.mutate({ bookingId });
-  }
-
   function declineBooking() {
-    const reason = window.prompt(
-      "Why are you declining this request? The student will see this reason.",
-    );
-    if (reason === null) return;
-    decline.mutate({ bookingId, reason: reason.trim() || undefined });
+    const reason = declineReason.trim();
+    if (!reason) return;
+    decline.mutate({ bookingId, reason });
   }
 
   function completeSession() {
@@ -287,7 +308,7 @@ export function BookingDetailPage({
               <Button
                 variant="danger"
                 size="sm"
-                onClick={declineBooking}
+                onClick={() => setReviewDialog("decline")}
                 progress={decline.isPending}
                 disabled={tutorActionPending}
               >
@@ -295,7 +316,7 @@ export function BookingDetailPage({
               </Button>
               <Button
                 size="sm"
-                onClick={acceptBooking}
+                onClick={() => setReviewDialog("accept")}
                 progress={accept.isPending}
                 disabled={tutorActionPending}
               >
@@ -467,6 +488,82 @@ export function BookingDetailPage({
           </CardBody>
         </Card>
       </div>
+
+      <Dialog
+        open={reviewDialog !== null}
+        onOpenChange={(open) => {
+          if (!open && !tutorActionPending) {
+            setReviewDialog(null);
+            setDeclineReason("");
+          }
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader className="flex-col items-start gap-1.5">
+            <DialogTitle>
+              {reviewDialog === "decline"
+                ? "Decline booking request?"
+                : "Accept booking request?"}
+            </DialogTitle>
+            <DialogDescription>
+              {reviewDialog === "decline"
+                ? "The held Marks will be released and the student will receive your reason."
+                : "The student will be notified and this online session will move to scheduling."}
+            </DialogDescription>
+          </DialogHeader>
+          {reviewDialog === "decline" ? (
+            <DialogBody>
+              <label
+                htmlFor="decline-booking-reason"
+                className="text-foreground font-medium"
+              >
+                Reason
+              </label>
+              <Input
+                id="decline-booking-reason"
+                value={declineReason}
+                onChange={(event) => setDeclineReason(event.target.value)}
+                placeholder="For example: I am unavailable at this time"
+              />
+              <Text className="text-sm text-muted">
+                Give the student enough context to choose another tutor or time.
+              </Text>
+            </DialogBody>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              type="button"
+              aria-label="Close booking review dialog"
+              onClick={() => {
+                setReviewDialog(null);
+                setDeclineReason("");
+              }}
+              disabled={tutorActionPending}
+            >
+              Cancel
+            </Button>
+            {reviewDialog === "decline" ? (
+              <Button
+                variant="danger"
+                onClick={declineBooking}
+                progress={decline.isPending}
+                disabled={!declineReason.trim() || tutorActionPending}
+              >
+                Decline request
+              </Button>
+            ) : (
+              <Button
+                onClick={() => accept.mutate({ bookingId })}
+                progress={accept.isPending}
+                disabled={tutorActionPending}
+              >
+                Accept booking
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </Stack>
   );
 }
