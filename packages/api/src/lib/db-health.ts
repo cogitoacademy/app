@@ -1,8 +1,12 @@
-import { db } from "@cogito-app/db";
+import { db as defaultDb } from "@cogito-app/db";
 import { sql } from "drizzle-orm";
 import type { RedisClient } from "./redis";
+import type { DbType } from "./db";
 
-export async function healthCheck(redis?: RedisClient) {
+export async function healthCheck(
+  redis?: RedisClient,
+  db: DbType = defaultDb,
+) {
   const checks: Record<string, "ok" | "degraded" | "error"> = {};
 
   try {
