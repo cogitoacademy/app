@@ -21,12 +21,16 @@ interface GoogleMeetingConfig {
 interface GoogleCalendarEvent {
   id?: string | null;
   hangoutLink?: string | null;
-  conferenceData?: {
-    entryPoints?: Array<{
-      entryPointType?: string;
-      uri?: string | null;
-    }>;
-  };
+  conferenceData?:
+    | {
+        entryPoints?:
+          | Array<{
+              entryPointType?: string | null;
+              uri?: string | null;
+            }>
+          | null;
+      }
+    | null;
 }
 
 interface GoogleOAuthTokenResponse {
@@ -56,23 +60,23 @@ export function createGoogleMeetingProvider(
     },
   });
   const auth =
-    config.authType === "oauth_refresh_token"
-      ? null
-      : new google.auth.JWT({
+    config.authType === "service_account"
+      ? new google.auth.JWT({
           email: config.clientEmail,
           key: config.privateKey?.replace(/\\n/g, "\n"),
           scopes: ["https://www.googleapis.com/auth/calendar"],
           subject: config.impersonatedUser,
-        });
+        })
+      : undefined;
 
   const calendar =
     config.authType === "service_account"
       ? google.calendar({ version: "v3", auth })
-      : null;
+      : undefined;
 
   function getMeetUrl(event: GoogleCalendarEvent): string | null {
     const meetEntry = event.conferenceData?.entryPoints?.find(
-      (entry: { entryPointType?: string }) => entry.entryPointType === "video",
+      (entry) => entry.entryPointType === "video",
     );
     return (
       meetEntry?.uri ??
