@@ -212,6 +212,24 @@ export class BookingCancelledError extends DomainError {
   }
 }
 
+export class BookingSessionNotFoundError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super("BOOKING_SESSION_NOT_FOUND", "Series session not found", { id });
+  }
+}
+
+export class BookingSessionNotCancellableError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "BOOKING_SESSION_NOT_CANCELLABLE",
+      "This series session cannot be cancelled",
+      { id },
+    );
+  }
+}
+
 export function mapBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -219,6 +237,8 @@ export function mapBookingError(
   if (err instanceof BookingRescheduleNotFoundError)
     return notFound(err.message, err);
   if (err instanceof BookingParticipantNotFoundError)
+    return notFound(err.message, err);
+  if (err instanceof BookingSessionNotFoundError)
     return notFound(err.message, err);
   if (err instanceof BookingTutorNotAssignedError)
     return notFound(err.message, err);
@@ -248,6 +268,8 @@ export function mapBookingError(
   if (err instanceof BookingParticipantAlreadyConfirmedError)
     return badRequest(err.message, err);
   if (err instanceof BookingRescheduleNotPendingError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingSessionNotCancellableError)
     return badRequest(err.message, err);
   if (err instanceof BookingRoomNotAssignedError)
     return badRequest(err.message, err);

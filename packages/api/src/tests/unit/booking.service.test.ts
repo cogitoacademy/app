@@ -14,6 +14,9 @@ import {
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
   BookingCancelledError,
+  BookingCancellationDeadlinePassedError,
+  BookingSessionNotFoundError,
+  BookingSessionNotCancellableError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -55,6 +58,8 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     cancelAllSessions: mock(async () => {}),
     updateBookingDeadline: mock(async () => {}),
     updateBookingPriceSnapshot: mock(async () => {}),
+    findSessionById: mock(async () => null),
+    cancelSession: mock(async () => {}),
     ...overrides,
   };
 }
@@ -265,7 +270,7 @@ describe("BookingService", () => {
       });
 
       const result = await service.getById("b1", "student1");
-      expect(result).toEqual(booking);
+      expect(result).toEqual({ ...booking, disclaimer: null });
     });
 
     test("returns booking when user is assigned tutor", async () => {
@@ -282,7 +287,7 @@ describe("BookingService", () => {
       });
 
       const result = await service.getById("b1", "tutor1");
-      expect(result).toEqual(booking);
+      expect(result).toEqual({ ...booking, disclaimer: null });
     });
 
     test("throws BookingNotFoundError when booking does not exist", async () => {
@@ -3157,6 +3162,161 @@ describe("BookingService", () => {
       await service.withdraw("student1", "b1");
 
       expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("G5 series session cancellation", () => {
+    test("cancels a solo series session before H-2 and releases its hold", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 1,
+        holdAmount: 84,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        scheduledEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        currentState: "scheduled",
+        holdAmount: 42,
+      };
+      const { service, repo, wallet, notification } = createService({
+        repo: {
+          findSessionById: mock(async () => session),
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () => makeParticipant({ heldAmount: 84 })),
+        },
+      });
+
+      const result = await service.cancelSession("student1", "s1");
+
+      expect(result).toEqual({ cancelled: true, sessionId: "s1" });
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release.mock.calls[0][1]).toMatchObject({
+        amount: 42,
+        reason: "Series session cancelled",
+      });
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({ heldAmount: 42 }),
+      );
+      expect(repo.cancelSession).toHaveBeenCalledWith(expect.anything(), "s1");
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        42,
+      );
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+    });
+
+    test("rejects cancellation within 2h of session start", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 1,
+        holdAmount: 84,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000),
+        scheduledEndAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+        currentState: "scheduled",
+        holdAmount: 42,
+      };
+      const { service } = createService({
+        repo: {
+          findSessionById: mock(async () => session),
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () => makeParticipant({ heldAmount: 84 })),
+        },
+      });
+
+      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
+        BookingCancellationDeadlinePassedError,
+      );
+    });
+
+    test("rejects cancellation for group series bookings", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        holdAmount: 252,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        scheduledEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        currentState: "scheduled",
+        holdAmount: 84,
+      };
+      const { service } = createService({
+        repo: {
+          findSessionById: mock(async () => session),
+          findBookingById: mock(async () => booking),
+        },
+      });
+
+      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
+        BookingSessionNotCancellableError,
+      );
+    });
+
+    test("rejects cancellation for non-series bookings", async () => {
+      const booking = makeBooking({
+        type: "solo",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        scheduledEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        currentState: "scheduled",
+        holdAmount: 42,
+      };
+      const { service } = createService({
+        repo: {
+          findSessionById: mock(async () => session),
+          findBookingById: mock(async () => booking),
+        },
+      });
+
+      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
+        BookingNotEditableError,
+      );
+    });
+
+    test("throws BookingSessionNotFoundError for unknown session", async () => {
+      const { service } = createService();
+
+      await expect(service.cancelSession("student1", "missing")).rejects.toThrow(
+        BookingSessionNotFoundError,
+      );
+    });
+
+    test("series get response includes group disclaimer", async () => {
+      const series = {
+        id: "b1",
+        type: "series",
+        targetGroupSize: 3,
+        proposerId: "student1",
+        tutorId: "tutor1",
+      };
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => series),
+        },
+      });
+
+      const result = await service.getById("b1", "student1");
+      expect(result.disclaimer).toBe(
+        "Group series bookings require attendance at all sessions. Individual sessions cannot be cancelled.",
+      );
     });
   });
 });

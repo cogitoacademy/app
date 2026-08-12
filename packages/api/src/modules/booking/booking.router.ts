@@ -16,6 +16,7 @@ import {
   proposeRescheduleInput,
   completeSessionInput,
   markAttendanceInput,
+  cancelSessionInput,
 } from "./booking.types";
 import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
@@ -79,6 +80,18 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(proposeRescheduleInput)
       .handler(handler.proposeReschedule),
+
+    cancelSession: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/session/cancel",
+        tags: ["Bookings"],
+        summary: "Cancel series session",
+        description:
+          "Student cancels an individual series session more than 2h before start",
+      })
+      .input(cancelSessionInput)
+      .handler(handler.cancelSession),
 
     createGroup: protectedProcedure
       .route({

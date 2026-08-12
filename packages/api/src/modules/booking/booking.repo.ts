@@ -243,6 +243,8 @@ async function updateBookingPriceSnapshot(
       baseline: number;
       tutorShare: number;
       cogitoTake: number;
+
+
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -252,6 +254,9 @@ async function updateBookingPriceSnapshot(
     holdAmount: number;
   },
 ) {
+  await conn.update(booking).set(values).where(eq(booking.id, bookingId));
+}
+
   await conn
     .update(booking)
     .set(values)
@@ -401,6 +406,22 @@ export async function listSessionsBySeriesId(
     .from(bookingSession)
     .where(eq(bookingSession.seriesBookingId, seriesBookingId))
     .orderBy(bookingSession.scheduledStartAt);
+}
+
+async function findSessionById(conn: DbOrTx, sessionId: string) {
+  const [session] = await conn
+    .select()
+    .from(bookingSession)
+    .where(eq(bookingSession.id, sessionId))
+    .limit(1);
+  return session ?? null;
+}
+
+async function cancelSession(conn: DbOrTx, sessionId: string) {
+  await conn
+    .update(bookingSession)
+    .set({ currentState: "cancelled", holdAmount: 0 })
+    .where(eq(bookingSession.id, sessionId));
 }
 
 /**
@@ -664,6 +685,8 @@ export function createBookingRepo(db: DbType) {
     insertStateHistory,
     insertRescheduleProposal,
     insertBookingSession,
+    findSessionById,
+    cancelSession,
     listSessionsBySeriesId,
     updateBookingPriceSnapshot,
     findBookingsExpiringByDeadline,

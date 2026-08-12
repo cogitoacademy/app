@@ -14,7 +14,10 @@ import {
   DEFAULT_SOLO_PRICE,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
+  GROUP_SERIES_DISCLAIMER,
 } from "../../shared/constants";
+import type { GroupSize } from "../pricing/pricing.service";
+
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -32,6 +35,9 @@ import {
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
   BookingCancelledError,
+  BookingCancellationDeadlinePassedError,
+  BookingSessionNotFoundError,
+  BookingSessionNotCancellableError,
 } from "./booking.errors";
 import { log } from "../../lib/logger";
 import {
@@ -248,6 +254,8 @@ export function createBookingService(deps: {
       id: string;
       type: string;
       tutorId: string;
+
+
       modality: string;
       priceSnapshot: { perStudent: number } | null;
     },
@@ -272,6 +280,8 @@ export function createBookingService(deps: {
     const pricePerStudent = (profile.prices?.[String(newSize)] ??
       DEFAULT_SOLO_PRICE) as number;
     const newSnapshot = pricing.computeSplit(
+      pricePerStudent * newSize,
+
       b.modality as Modality,
       pricePerStudent,
       newSize as GroupSize,
@@ -318,11 +328,17 @@ export function createBookingService(deps: {
         });
       }
       // eslint-disable-next-line no-await-in-loop
+      await repo.updateParticipantState(tx, p.id, {
+        heldAmount: newPerStudent,
+      });
+
       await repo.updateParticipantState(tx, p.id, { heldAmount: newPerStudent });
     }
 
     await repo.updateBookingPriceSnapshot(tx, b.id, {
       priceSnapshot: newSnapshot,
+      holdAmount: newSnapshot.baseline,
+
       holdAmount: newPerStudent * newSize,
     });
 
@@ -341,6 +357,16 @@ export function createBookingService(deps: {
     }
   }
 
+  function computeDisclaimer(b: {
+    type: string;
+    targetGroupSize: number;
+  }): string | null {
+    if (b.type !== BOOKING_TYPE.SERIES) return null;
+    if (b.targetGroupSize > 1) return GROUP_SERIES_DISCLAIMER;
+    return null;
+  }
+
+  /**
   /**
    * Gets a booking by id, enforcing that the requesting user has access.
    *
@@ -354,7 +380,7 @@ export function createBookingService(deps: {
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     await assertBookingAccess(b, userId, db, bookingId);
-    return b;
+    return { ...b, disclaimer: computeDisclaimer(b) };
   }
 
   /**
@@ -770,6 +796,80 @@ export function createBookingService(deps: {
     });
   }
 
+  async function cancelSession(userId: string, sessionId: string) {
+    return db.transaction(async (tx) => {
+      const session = await repo.findSessionById(tx, sessionId);
+      if (!session) throw new BookingSessionNotFoundError(sessionId);
+      const b = await repo.findBookingById(tx, session.seriesBookingId);
+      if (!b) throw new BookingNotFoundError(session.seriesBookingId);
+      await assertBookingAccess(b, userId, tx, session.seriesBookingId);
+
+      if (b.type !== BOOKING_TYPE.SERIES) {
+        throw new BookingNotEditableError(session.seriesBookingId);
+      }
+      if (b.targetGroupSize > 1) {
+        throw new BookingSessionNotCancellableError(sessionId);
+      }
+      if (session.currentState !== BOOKING_STATE.SCHEDULED) {
+        throw new BookingStateTransitionError(
+          session.currentState,
+          "cancelSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
+
+      const now = new Date();
+      const h2 = new Date(
+        session.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
+      );
+      if (now > h2) {
+        throw new BookingCancellationDeadlinePassedError(sessionId);
+      }
+
+      const participant = await repo.findParticipant(tx, b.id, userId);
+      if (
+        participant &&
+        participant.heldAmount > 0 &&
+        session.holdAmount > 0
+      ) {
+        const w = await wallet.getByUserId(tx, participant.userId);
+        if (!w) throw new BookingNotFoundError(participant.userId);
+        await wallet.release(tx, {
+          walletId: w.id,
+          amount: session.holdAmount,
+          eventKey: `booking.${b.id}.session.${session.id}.cancel`,
+          sourceReference: b.id,
+          bookingId: b.id,
+          actorType: ACTOR_TYPE.STUDENT,
+          reason: "Series session cancelled",
+        });
+        await repo.updateParticipantState(tx, participant.id, {
+          heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
+        });
+      }
+
+      await repo.cancelSession(tx, session.id);
+      await repo.updateBookingHoldAmount(
+        tx,
+        b.id,
+        Math.max(0, b.holdAmount - session.holdAmount),
+      );
+
+      await notification.writeBestEffort({
+        db: tx,
+        userId: b.tutorId,
+        bookingId: b.id,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title: "Series session cancelled",
+        body: "A student cancelled one session of the series.",
+        eventKey: `booking.${b.id}.session.${session.id}.cancelled`,
+      });
+
+      return { cancelled: true, sessionId };
+    });
+  }
+
   async function markTutorAttendance(
     bookingId: string,
     tutorId: string,
@@ -1126,6 +1226,9 @@ export function createBookingService(deps: {
             reason: "All reconfirmed",
           });
 
+          const confirmed = await repo.findConfirmedParticipants(tx, bookingId);
+          await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.STUDENT);
+
           const confirmed = await repo.findConfirmedParticipants(
             tx,
             bookingId,
@@ -1231,6 +1334,8 @@ export function createBookingService(deps: {
               reason: "Participant withdrew before H-2",
             },
           );
+
+          await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
 
           await repriceGroupForHeadcount(
             tx,
@@ -1372,7 +1477,7 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.STUDENT,
       });
 
-      return b;
+      return { ...b, disclaimer: computeDisclaimer(b) };
     });
   }
 
@@ -1618,6 +1723,7 @@ export function createBookingService(deps: {
     completeSession,
     markTutorAttendance,
     proposeReschedule,
+    cancelSession,
     listSessions,
     expireBookings,
     releaseExpiredHolds,

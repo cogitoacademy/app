@@ -104,7 +104,10 @@ export const proposeRescheduleInput = z
 
 export const completeSessionInput = z.object({
   bookingId: z.string().max(100),
-  sessionNote: z.string().max(2000).optional(),
+});
+
+export const cancelSessionInput = z.object({
+  sessionId: z.string().max(100),
 });
 
 export const markAttendanceInput = z.object({
