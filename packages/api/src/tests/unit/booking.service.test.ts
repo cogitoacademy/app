@@ -312,7 +312,12 @@ describe("BookingService", () => {
       });
 
       const result = await service.getById("b1", "student1");
-      expect(result).toEqual({ ...booking, disclaimer: null });
+      expect(result).toEqual({
+        ...booking,
+        disclaimer: null,
+        meetingStatus: "pending",
+        meetingUrl: null,
+      });
     });
 
     test("returns booking when user is assigned tutor", async () => {
@@ -329,7 +334,58 @@ describe("BookingService", () => {
       });
 
       const result = await service.getById("b1", "tutor1");
-      expect(result).toEqual({ ...booking, disclaimer: null });
+      expect(result).toEqual({
+        ...booking,
+        disclaimer: null,
+        meetingStatus: "pending",
+        meetingUrl: null,
+      });
+    });
+
+    test("returns ready meeting status and url when meeting is created", async () => {
+      const booking = {
+        id: "b1",
+        currentState: "scheduled",
+        proposerId: "student1",
+        tutorId: "tutor1",
+        meeting: {
+          id: "m1",
+          status: "created",
+          meetingUrl: "https://meet.google.com/abc",
+        },
+      };
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => booking),
+        },
+      });
+
+      const result = await service.getById("b1", "student1");
+      expect(result.meetingStatus).toBe("ready");
+      expect(result.meetingUrl).toBe("https://meet.google.com/abc");
+    });
+
+    test("returns pending meeting status when meeting exists but is manual", async () => {
+      const booking = {
+        id: "b1",
+        currentState: "confirmed",
+        proposerId: "student1",
+        tutorId: "tutor1",
+        meeting: {
+          id: "m1",
+          status: "manual",
+          meetingUrl: null,
+        },
+      };
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => booking),
+        },
+      });
+
+      const result = await service.getById("b1", "student1");
+      expect(result.meetingStatus).toBe("pending");
+      expect(result.meetingUrl).toBeNull();
     });
 
     test("throws BookingNotFoundError when booking does not exist", async () => {

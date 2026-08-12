@@ -16,6 +16,8 @@ import {
   MAX_PAGE_LIMIT,
   GROUP_SERIES_DISCLAIMER,
 } from "../../shared/constants";
+import type { GroupSize } from "../pricing/pricing.service";
+
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -93,6 +95,29 @@ export interface BookingTransition {
   actorId: string | null;
   actorType: "student" | "tutor" | "admin" | "system";
   metadata?: Record<string, unknown>;
+}
+
+export type MeetingStatus = "pending" | "ready" | "failed";
+
+/**
+ * Derives the frontend-facing meeting status for a booking.
+ *
+ * `meeting.createEvent` fires only on tutor accept (online bookings), and
+ * for group bookings tutor accept only happens after every participant
+ * confirmed — so "all confirmed AND tutor accepted" is satisfied by
+ * construction. Withdrawal after creation does not revoke the link.
+ */
+function computeMeetingInfo(b: {
+  meeting: { status: string; meetingUrl: string | null } | null;
+}): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
+  const event = b.meeting;
+  if (!event || event.status === "pending" || event.status === "manual") {
+    return { meetingStatus: "pending", meetingUrl: null };
+  }
+  if (event.status === "failed") {
+    return { meetingStatus: "failed", meetingUrl: null };
+  }
+  return { meetingStatus: "ready", meetingUrl: event.meetingUrl };
 }
 
 export type BookingService = ReturnType<typeof createBookingService>;
@@ -257,6 +282,8 @@ export function createBookingService(deps: {
       type: string;
       tutorId: string;
 
+
+
       modality: string;
       priceSnapshot: { perStudent: number } | null;
     },
@@ -281,6 +308,8 @@ export function createBookingService(deps: {
     const pricePerStudent = (profile.prices?.[String(newSize)] ??
       DEFAULT_SOLO_PRICE) as number;
     const newSnapshot = pricing.computeSplit(
+      pricePerStudent * newSize,
+
       b.modality as Modality,
       pricePerStudent,
       newSize as GroupSize,
@@ -331,6 +360,8 @@ export function createBookingService(deps: {
         heldAmount: newPerStudent,
       });
 
+
+
       await repo.updateParticipantState(tx, p.id, {
         heldAmount: newPerStudent,
       });
@@ -338,6 +369,8 @@ export function createBookingService(deps: {
 
     await repo.updateBookingPriceSnapshot(tx, b.id, {
       priceSnapshot: newSnapshot,
+      holdAmount: newSnapshot.baseline,
+
       holdAmount: newPerStudent * newSize,
     });
 
@@ -366,6 +399,10 @@ export function createBookingService(deps: {
   }
 
   /**
+   * Derives the frontend-facing meeting status for a booking — see the
+   * module-scope computeMeetingInfo.
+
+  /**
   /**
    * Gets a booking by id, enforcing that the requesting user has access.
    *
@@ -379,6 +416,12 @@ export function createBookingService(deps: {
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     await assertBookingAccess(b, userId, db, bookingId);
+    return {
+      ...b,
+      disclaimer: computeDisclaimer(b),
+      ...computeMeetingInfo(b),
+    };
+
     return { ...b, disclaimer: computeDisclaimer(b) };
   }
 
