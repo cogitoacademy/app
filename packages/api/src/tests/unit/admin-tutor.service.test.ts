@@ -222,14 +222,32 @@ describe("AdminTutor Service", () => {
       const deps = makeDeps();
       const service = createAdminTutorService(deps as any);
       const result = await service.listInvites();
-      expect(result).toEqual([makeInvite()]);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: "inv1",
+        email: "tutor@example.com",
+        displayName: "Tutor",
+        token: "tok1",
+        status: "invited",
+        invitedBy: "admin1",
+        internalNotes: null,
+      });
     });
 
     test("listInvites passes status filter", async () => {
       const deps = makeDeps();
       const service = createAdminTutorService(deps as any);
       const result = await service.listInvites({ status: "invited" });
-      expect(result).toEqual([makeInvite()]);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: "inv1",
+        email: "tutor@example.com",
+        displayName: "Tutor",
+        token: "tok1",
+        status: "invited",
+        invitedBy: "admin1",
+        internalNotes: null,
+      });
     });
 
     test("resendInvite throws InviteNotFoundError for missing invite", async () => {
