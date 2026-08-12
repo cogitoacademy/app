@@ -351,7 +351,10 @@ export function createAdminBookingService(deps: {
         targetId: input.bookingId,
         targetType: "booking",
         beforeState: { currentState: updateResult.previousState },
-        afterState: { currentState: plan.newState, overrideMeta: plan.overrideMeta },
+        afterState: {
+          currentState: plan.newState,
+          overrideMeta: plan.overrideMeta,
+        },
       });
 
       return updateResult.updated;

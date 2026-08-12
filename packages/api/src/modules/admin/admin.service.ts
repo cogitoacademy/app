@@ -67,7 +67,9 @@ export function createAdminService(deps: {
   function assertValidDateFilter(value: string, field: string): Date {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
-      throw new InvalidLedgerFilterError(`${field} must be a valid ISO datetime`);
+      throw new InvalidLedgerFilterError(
+        `${field} must be a valid ISO datetime`,
+      );
     }
     return parsed;
   }
@@ -173,9 +175,7 @@ export function createAdminService(deps: {
       ? assertValidDateFilter(input.dateTo, "dateTo")
       : undefined;
     if (dateFrom && dateTo && dateFrom.getTime() > dateTo.getTime()) {
-      throw new InvalidLedgerFilterError(
-        "dateFrom must not be after dateTo",
-      );
+      throw new InvalidLedgerFilterError("dateFrom must not be after dateTo");
     }
 
     return wallet.listLedger(walletId, {

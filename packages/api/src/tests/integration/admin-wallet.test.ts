@@ -132,9 +132,9 @@ describe("Admin wallet and ledger views (G9)", () => {
   });
 
   test("admin listLedgerEntries requires walletId or userId", async () => {
-    await expect(
-      adminClient.admin.listLedgerEntries({}),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(adminClient.admin.listLedgerEntries({})).rejects.toMatchObject(
+      { code: "BAD_REQUEST" },
+    );
   });
 
   test("non-admin gets 403 on admin wallet endpoints", async () => {

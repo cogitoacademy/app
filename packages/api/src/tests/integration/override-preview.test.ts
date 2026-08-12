@@ -44,7 +44,11 @@ describe("Admin override preview (G10)", () => {
   beforeAll(async () => {
     await resetDatabase();
 
-    const adminRes = await signUpAndSignIn(adminEmail, "Test1234!", "G10 Admin");
+    const adminRes = await signUpAndSignIn(
+      adminEmail,
+      "Test1234!",
+      "G10 Admin",
+    );
     const adminCtx = await createTestContext(adminRes.cookie);
     adminId = adminCtx.session!.user!.id;
     await setUserRole(adminId, "admin");
