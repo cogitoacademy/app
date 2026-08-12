@@ -93,12 +93,15 @@ function validatePrices(
  * @param size - the group size (1-6)
  * @returns the baseline tutor share and Cogito take in Marks
  */
-function getBaselineSplit(modality: Modality, size: GroupSize) {
+function getBaselineSplit(
+  modality: Modality,
+  size: GroupSize,
+): { tutor: number; cogito: number } {
   const table =
     modality === MODALITY.OFFLINE
       ? OFFLINE_BASELINE_SPLIT
       : ONLINE_BASELINE_SPLIT;
-  return table[size];
+  return table[size]!;
 }
 
 /**
