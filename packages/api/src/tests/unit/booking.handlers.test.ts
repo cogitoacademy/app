@@ -28,6 +28,10 @@ function makeBookingService() {
       id: "b1",
       currentState: "completed",
     })),
+    markTutorAttendance: mock(async () => ({
+      bookingId: "b1",
+      attendanceState: "present",
+    })),
   };
 }
 
@@ -397,6 +401,27 @@ describe("tutorActionsHandler", () => {
 
       expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1");
       expect(result).toEqual({ id: "b1", currentState: "completed" });
+    });
+  });
+
+  describe("markAttendance", () => {
+    test("calls booking.markTutorAttendance with bookingId, session user id, and attendance", async () => {
+      const booking = makeBookingService();
+      const handler = createTutorActionsHandler(booking as any);
+      const context = makeContext("t1");
+      const input = { bookingId: "b1", attendance: "present" };
+
+      const result = await handler.markAttendance({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.markTutorAttendance).toHaveBeenCalledWith(
+        "b1",
+        "t1",
+        "present",
+      );
+      expect(result).toEqual({ bookingId: "b1", attendanceState: "present" });
     });
   });
 });

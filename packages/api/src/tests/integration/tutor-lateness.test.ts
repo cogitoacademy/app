@@ -247,4 +247,47 @@ describe("Tutor lateness auto-cancel flow", () => {
     const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
     expect(row!.currentState).toBe("scheduled");
   });
+
+  test("tutor markAttendance present after start → no auto-cancel (G3 acceptance)", async () => {
+    const start = new Date(Date.now() + 96 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 97 * 3600_000).toISOString();
+    const b = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+
+    await db
+      .update(booking)
+      .set({ scheduledStartAt: new Date(Date.now() - 5 * 60_000) })
+      .where(eq(booking.id, b.id));
+
+    const marked = await tutorClient.tutorActions.markAttendance({
+      bookingId: b.id,
+      attendance: "present",
+    });
+    expect(marked.attendanceState).toBe("present");
+
+    const result = await services.booking.checkTutorLateness();
+    expect(result.autoCancelled).toBe(0);
+
+    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
+    expect(row!.currentState).toBe("scheduled");
+
+    const [participant] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(
+        and(
+          eq(bookingParticipant.bookingId, b.id),
+          eq(bookingParticipant.userId, tutorId),
+        ),
+      );
+    expect(participant!.attendanceState).toBe("present");
+  });
 });

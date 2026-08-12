@@ -17,6 +17,7 @@ import type {
   withdrawInput,
   proposeRescheduleInput,
   completeSessionInput,
+  markAttendanceInput,
 } from "./booking.types";
 import type { BookingService } from "./booking.service";
 
@@ -33,6 +34,7 @@ type ReconfirmInput = z.infer<typeof reconfirmInput>;
 type WithdrawInput = z.infer<typeof withdrawInput>;
 type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
 type CompleteSessionInput = z.infer<typeof completeSessionInput>;
+type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;
 
 export type BookingHandler = ReturnType<typeof createBookingHandler>;
 export type TutorActionsHandler = ReturnType<typeof createTutorActionsHandler>;
@@ -307,6 +309,24 @@ export function createTutorActionsHandler(booking: BookingService) {
       return withDomainMap(
         () =>
           booking.completeSession(input.bookingId, context.session!.user.id),
+        mapBookingError,
+      );
+    },
+
+    markAttendance: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: MarkAttendanceInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.markTutorAttendance(
+            input.bookingId,
+            context.session!.user.id,
+            input.attendance,
+          ),
         mapBookingError,
       );
     },

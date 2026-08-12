@@ -28,6 +28,7 @@ import {
   CONFIRMATION_STATE,
   ONBOARDING_STATUS,
   LATENESS_TOLERANCE_MS,
+  MODALITY,
 } from "../../shared/constants";
 
 type BookingRow = typeof bookingTable.$inferSelect;
@@ -473,6 +474,7 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
     .where(
       and(
         eq(booking.currentState, "scheduled"),
+        eq(booking.modality, MODALITY.ONLINE),
         lt(booking.scheduledStartAt, cutoff),
         notExists(tutorAttended),
       ),

@@ -1755,7 +1755,17 @@ describe("BookingService", () => {
       const studentNotif = notification.writeBestEffort.mock.calls.find(
         (c: any) => c[0].userId === "student1",
       );
+      const tutorNotif = notification.writeBestEffort.mock.calls.find(
+        (c: any) => c[0].userId === "tutor1",
+      );
       expect(studentNotif[0].title).toBe("Session marked as no-show");
+      expect(studentNotif[0].body).toBe(
+        "The session was marked as no-show and held marks were released.",
+      );
+      expect(tutorNotif[0].title).toBe("Session marked as no-show");
+      expect(tutorNotif[0].body).toBe(
+        "The session was marked as no-show and held marks were released.",
+      );
     });
 
     test("skips release when holdAmount is 0", async () => {
@@ -2017,6 +2027,90 @@ describe("BookingService", () => {
 
       const result = await service.checkTutorLateness();
       expect(result).toEqual({ autoCancelled: 1, failed: 1 });
+    });
+  });
+
+  describe("markTutorAttendance", () => {
+    test("throws BookingNotOwnedError when caller is not the booking tutor", async () => {
+      const booking = makeBooking({ currentState: "scheduled" });
+      const { service } = createService({
+        repo: { findBookingById: mock(async () => booking) },
+      });
+
+      await expect(
+        service.markTutorAttendance("b1", "other-tutor", "present"),
+      ).rejects.toThrow(BookingNotOwnedError);
+    });
+
+    test("throws BookingStateTransitionError when booking is not scheduled", async () => {
+      const booking = makeBooking({ currentState: "confirmed" });
+      const { service } = createService({
+        repo: { findBookingById: mock(async () => booking) },
+      });
+
+      await expect(
+        service.markTutorAttendance("b1", "tutor1", "present"),
+      ).rejects.toThrow(BookingStateTransitionError);
+    });
+
+    test("upserts a tutor participant with present attendance when no row exists", async () => {
+      const booking = makeBooking({ currentState: "scheduled" });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findTutorParticipant: mock(async () => null),
+        },
+      });
+
+      const result = await service.markTutorAttendance("b1", "tutor1", "present");
+
+      expect(repo.insertParticipant).toHaveBeenCalledTimes(1);
+      expect(repo.insertParticipant.mock.calls[0][1]).toMatchObject({
+        bookingId: "b1",
+        userId: "tutor1",
+        role: "tutor",
+        confirmationState: "confirmed",
+        heldAmount: 0,
+        attendanceState: "present",
+      });
+      expect(repo.updateParticipantState).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        bookingId: "b1",
+        attendanceState: "present",
+      });
+    });
+
+    test("updates an existing tutor participant attendance to late", async () => {
+      const booking = makeBooking({ currentState: "scheduled" });
+      const existing = makeParticipant({
+        id: "tp1",
+        userId: "tutor1",
+        role: "tutor",
+        attendanceState: "unknown",
+      });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findTutorParticipant: mock(async () => existing),
+        },
+      });
+
+      await service.markTutorAttendance("b1", "tutor1", "late");
+
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "tp1",
+        expect.objectContaining({ attendanceState: "late" }),
+      );
+      expect(repo.insertParticipant).not.toHaveBeenCalled();
+    });
+
+    test("throws BookingNotFoundError when booking does not exist", async () => {
+      const { service } = createService();
+
+      await expect(
+        service.markTutorAttendance("missing", "tutor1", "present"),
+      ).rejects.toThrow(BookingNotFoundError);
     });
   });
 

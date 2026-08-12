@@ -137,7 +137,9 @@ export function createBookingService(deps: {
       fromState: entry.fromState,
       toState: entry.toState,
       reason: entry.reason,
-      actorId: entry.actorType === ACTOR_TYPE.SYSTEM ? null : entry.actorId,
+      // system actors carry no user row; transition() below nulls actorId
+      // before it reaches recordTransition.
+      actorId: entry.actorId,
       actorType: entry.actorType,
       metadata: entry.metadata,
     });
@@ -657,6 +659,44 @@ export function createBookingService(deps: {
       });
 
       return updated;
+    });
+  }
+
+  async function markTutorAttendance(
+    bookingId: string,
+    tutorId: string,
+    attendance: "present" | "late",
+  ) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.tutorId !== tutorId)
+        throw new BookingNotOwnedError(bookingId, tutorId);
+      if (b.currentState !== BOOKING_STATE.SCHEDULED) {
+        throw new BookingStateTransitionError(
+          b.currentState,
+          "mark_attendance",
+          BOOKING_STATE.SCHEDULED,
+        );
+      }
+
+      const tutorParticipant = await repo.findTutorParticipant(tx, bookingId);
+      if (tutorParticipant) {
+        await repo.updateParticipantState(tx, tutorParticipant.id, {
+          attendanceState: attendance,
+        });
+      } else {
+        await repo.insertParticipant(tx, {
+          bookingId,
+          userId: b.tutorId,
+          role: "tutor",
+          confirmationState: CONFIRMATION_STATE.CONFIRMED,
+          heldAmount: 0,
+          attendanceState: attendance,
+        });
+      }
+
+      return { bookingId, attendanceState: attendance };
     });
   }
 
@@ -1283,7 +1323,9 @@ export function createBookingService(deps: {
             category: NOTIFICATION_CATEGORY.BOOKING,
             severity: NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
-            body: "The booking expired because its deadline passed.",
+            body: noShow
+              ? "The session was marked as no-show and held marks were released."
+              : "The booking expired because its deadline passed.",
             eventKey: `booking.${b.id}.expired.tutor`,
           });
         });
@@ -1447,6 +1489,7 @@ export function createBookingService(deps: {
     tutorAccept,
     tutorDecline,
     completeSession,
+    markTutorAttendance,
     proposeReschedule,
     listSessions,
     expireBookings,
