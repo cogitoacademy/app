@@ -185,4 +185,39 @@ describe("G11 meeting link visibility gating", () => {
     expect(fetched.meetingStatus).toBe("failed");
     expect(fetched.meetingUrl).toBeNull();
   });
+
+  test("stale failed row does not flip meeting status when a newer manual row exists (G12 regression)", async () => {
+    await db.delete(meetingEvent).where(eq(meetingEvent.bookingId, bookingId));
+
+    const [failedRow] = await db
+      .insert(meetingEvent)
+      .values({
+        bookingId,
+        provider: "google_meet",
+        status: "failed",
+        errorReason: "Error: Google API error",
+        meetingUrl: null,
+        externalEventId: null,
+        createdAt: new Date(Date.now() - 60_000),
+      })
+      .returning();
+    expect(failedRow).toBeDefined();
+
+    const [manualRow] = await db
+      .insert(meetingEvent)
+      .values({
+        bookingId,
+        provider: "manual",
+        status: "manual",
+        meetingUrl: null,
+        externalEventId: null,
+      })
+      .returning();
+    expect(manualRow).toBeDefined();
+
+    const fetched = await studentClient.booking.get({ bookingId });
+    expect(fetched.meeting?.id).toBe(manualRow!.id);
+    expect(fetched.meetingStatus).toBe("pending");
+    expect(fetched.meetingUrl).toBeNull();
+  });
 });

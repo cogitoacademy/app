@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { eq } from "drizzle-orm";
 import { meetingEvent } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import type {
@@ -7,7 +8,6 @@ import type {
   MeetingPort,
 } from "./meeting.types";
 import { log } from "../../lib/logger";
-import { createFallbackMeetingProvider } from "./fallback.provider";
 import { CircuitBreaker } from "../../lib/circuit-breaker";
 import type { RedisClient } from "../../lib/redis";
 
@@ -161,7 +161,6 @@ export function createGoogleMeetingProviderWithFallback(
   redis?: RedisClient,
 ): MeetingPort {
   const googleProvider = createGoogleMeetingProvider(config, db, redis);
-  const fallbackProvider = createFallbackMeetingProvider(db);
 
   async function createEvent(
     bookingId: string,
@@ -176,12 +175,28 @@ export function createGoogleMeetingProviderWithFallback(
       attendees,
     );
     if (result.status === "failed") {
-      return fallbackProvider.createEvent(
+      // Update the failed google row in place instead of inserting a second
+      // row, so a booking has exactly one meeting_event and the `meeting`
+      // one-relation stays deterministic.
+      const [row] = await db
+        .update(meetingEvent)
+        .set({
+          provider: "manual",
+          status: "manual",
+          errorReason: null,
+        })
+        .where(eq(meetingEvent.id, result.id))
+        .returning();
+
+      log({
+        level: "warn",
+        action: "meeting_manual_created",
+        message:
+          "Meeting created with manual provider — admin needs to assign a meeting link",
         bookingId,
-        scheduledStartAt,
-        scheduledEndAt,
-        attendees,
-      );
+      });
+
+      return row as typeof meetingEvent.$inferSelect;
     }
     return result;
   }

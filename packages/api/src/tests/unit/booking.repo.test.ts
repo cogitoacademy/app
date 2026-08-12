@@ -610,22 +610,51 @@ describe("createBookingRepo", () => {
   });
 
   describe("findBookingWithParticipants", () => {
-    test("delegates to db.query.booking.findFirst", async () => {
+    test("delegates to db.query.booking.findFirst and attaches newest meeting row", async () => {
+      const meetingRow = { id: "me1", bookingId: "b1", status: "manual" };
       const bookingRow = {
         id: "b1",
         participants: [],
         stateHistory: [],
-        meeting: null,
         roomBookings: [],
       };
+      const limit = mock(async () => [meetingRow]);
+      const orderBy = mock(() => ({ limit }));
+      const where = mock(() => ({ orderBy }));
+      const from = mock(() => ({ where }));
+      const select = mock(() => ({ from }));
       const findFirst = mock(() => Promise.resolve(bookingRow));
       const findMany = mock(() => Promise.resolve([]));
-      const db: any = { query: { booking: { findFirst, findMany } } };
+      const db: any = { select, query: { booking: { findFirst, findMany } } };
       const repo = createBookingRepo(db);
 
-      await repo.findBookingWithParticipants("b1");
+      const result = await repo.findBookingWithParticipants("b1");
 
+      expect(select).toHaveBeenCalledTimes(1);
       expect(findFirst).toHaveBeenCalledTimes(1);
+      expect(result!.meeting).toEqual(meetingRow);
+    });
+
+    test("attaches null meeting when no meeting row exists", async () => {
+      const bookingRow = {
+        id: "b1",
+        participants: [],
+        stateHistory: [],
+        roomBookings: [],
+      };
+      const limit = mock(async () => []);
+      const orderBy = mock(() => ({ limit }));
+      const where = mock(() => ({ orderBy }));
+      const from = mock(() => ({ where }));
+      const select = mock(() => ({ from }));
+      const findFirst = mock(() => Promise.resolve(bookingRow));
+      const findMany = mock(() => Promise.resolve([]));
+      const db: any = { select, query: { booking: { findFirst, findMany } } };
+      const repo = createBookingRepo(db);
+
+      const result = await repo.findBookingWithParticipants("b1");
+
+      expect(result!.meeting).toBeNull();
     });
   });
 

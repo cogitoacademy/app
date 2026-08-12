@@ -242,43 +242,44 @@ describe("createGoogleMeetingProviderWithFallback", () => {
       throw new Error("Google API error");
     });
 
-    let callCount = 0;
+    const failedRow = {
+      id: "me2",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: null,
+      meetingUrl: null,
+      status: "failed",
+      errorReason: "Error: Google API error",
+    };
+    const manualRow = {
+      id: "me2",
+      bookingId: "b1",
+      provider: "manual",
+      externalEventId: null,
+      meetingUrl: null,
+      status: "manual",
+      errorReason: null,
+    };
+
     const insert = mock(() => ({
       values: mock(() => ({
-        returning: mock(async () => {
-          callCount++;
-          if (callCount === 1) {
-            return [
-              {
-                id: "me2",
-                bookingId: "b1",
-                provider: "google_meet",
-                externalEventId: null,
-                meetingUrl: null,
-                status: "failed",
-                errorReason: "Error: Google API error",
-              },
-            ];
-          }
-          return [
-            {
-              id: "me3",
-              bookingId: "b1",
-              provider: "manual",
-              meetingUrl: null,
-              externalEventId: null,
-              status: "manual",
-              errorReason: null,
-            },
-          ];
-        }),
+        returning: mock(async () => [failedRow]),
       })),
     }));
+    const returning = mock(async () => [manualRow]);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const db = { insert, update } as any;
 
-    const db = { insert } as any;
     const provider = createGoogleMeetingProviderWithFallback(config, db);
     const result = await provider.createEvent("b1");
 
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "manual", status: "manual" }),
+    );
     expect(result.provider).toBe("manual");
     expect(result.status).toBe("manual");
   });

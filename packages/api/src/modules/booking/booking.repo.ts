@@ -22,6 +22,7 @@ import {
   availabilitySlot,
   tutorProfile,
   user,
+  meetingEvent,
   type booking as bookingTable,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
@@ -696,15 +697,26 @@ export function createBookingRepo(db: DbType) {
    * @returns the booking with related data, or null
    */
   async function findBookingWithParticipants(bookingId: string) {
-    return db.query.booking.findFirst({
+    // The `meeting` one-relation returns an unspecified row when a booking has
+    // multiple meeting_event rows (e.g. a pre-fix google-failed row plus the
+    // manual fallback). Fetch the newest explicitly so G11 status is stable.
+    const [meetingRow] = await db
+      .select()
+      .from(meetingEvent)
+      .where(eq(meetingEvent.bookingId, bookingId))
+      .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
+      .limit(1);
+
+    const b = await db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
       with: {
         participants: { with: { user: true } },
         stateHistory: true,
-        meeting: true,
         roomBookings: { with: { room: true } },
       },
     });
+    if (!b) return null;
+    return { ...b, meeting: meetingRow ?? null };
   }
 
   /**
