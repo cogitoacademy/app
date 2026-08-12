@@ -9,9 +9,11 @@ import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   PAYMENT_STATUS,
+  RESPONSE_WINDOW_MS,
 } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminBookingRepo } from "./admin-booking.repo";
+import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
 import type {
   AdminBookingAuditPort,
   AdminBookingWalletPort,
@@ -49,6 +51,35 @@ const CATEGORY_STATE_MAP: Record<OverrideCategory, string> = {
 export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
 
 /**
+ * A booking is escalated when it carries an active override record whose
+ * overriddenAt timestamp is older than the 12h SLA response window. Computed
+ * from booking.override_meta (no column added).
+ */
+function computeEscalated(overrideMeta: unknown): boolean {
+  if (typeof overrideMeta !== "object" || overrideMeta === null) return false;
+  const overriddenAt = (overrideMeta as Record<string, unknown>).overriddenAt;
+  if (typeof overriddenAt !== "string") return false;
+  const appliedAt = Date.parse(overriddenAt);
+  if (Number.isNaN(appliedAt)) return false;
+  return Date.now() - appliedAt > RESPONSE_WINDOW_MS;
+}
+
+function toOverrideQueueItem<T extends { overrideMeta: unknown }>(
+  row: T,
+): T & { escalated: boolean } {
+  return { ...row, escalated: computeEscalated(row.overrideMeta) };
+}
+
+/** Composite keyset cursor: rank, scheduledStartAt, id. */
+function toOverrideCursor(row: {
+  id: string;
+  currentState: string;
+  scheduledStartAt: Date;
+}): string {
+  const rank = URGENCY_RANK[row.currentState] ?? 2;
+  return `${rank}~${row.scheduledStartAt.toISOString()}~${row.id}`;
+}
+
  * Creates the admin booking service for overrides, listing, history, and refunds.
  *
  * @param deps - the dependency ports (db, repo, auditPort, wallet, refund)
@@ -231,15 +262,33 @@ export function createAdminBookingService(deps: {
     bookingId?: string;
     limit?: number;
     cursor?: string;
+    category?: OverrideCategory;
+    urgency?: UrgencyLevel;
+    escalated?: boolean;
   }) {
     if (opts?.bookingId) {
       const bookingRow = await repo.findBookingById(db, opts.bookingId);
-      return { items: bookingRow ? [bookingRow] : [], nextCursor: null };
+      return {
+        items: bookingRow ? [toOverrideQueueItem(bookingRow)] : [],
+        nextCursor: null,
+      };
     }
     const limit = Math.min(opts?.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
-    const rows = await repo.listBookingsByState(db, [], limit, opts?.cursor);
-    const items = rows.slice(0, limit);
-    const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+    const filters = {
+      category: opts?.category,
+      urgency: opts?.urgency,
+      escalated: opts?.escalated,
+    };
+    const hasFilters =
+      filters.category !== undefined ||
+      filters.urgency !== undefined ||
+      filters.escalated !== undefined;
+    const rows = hasFilters
+      ? await repo.listBookingsByState(db, [], limit, opts?.cursor, filters)
+      : await repo.listBookingsByState(db, [], limit, opts?.cursor);
+    const items = rows.slice(0, limit).map(toOverrideQueueItem);
+    const nextCursor =
+      rows.length > limit ? toOverrideCursor(items[items.length - 1]!) : null;
     return { items, nextCursor };
   }
 

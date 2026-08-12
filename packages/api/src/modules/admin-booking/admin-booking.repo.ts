@@ -5,9 +5,65 @@ import {
   bookingParticipant,
   paymentRecord,
 } from "@cogito-app/db/schema";
+import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
+import { RESPONSE_WINDOW_MS } from "../../shared/constants";
 import type { DbOrTx } from "../../lib/tx";
 
 export type AdminBookingRepo = ReturnType<typeof createAdminBookingRepo>;
+
+export type UrgencyLevel = "high" | "medium" | "low";
+
+/**
+ * Urgency bands used to sort the admin override queue.
+ * Band 0 (pending action) first, band 1 (scheduled/confirmed) second,
+ * band 2 (terminal) last. Within a band, bookings are ordered by
+ * scheduledStartAt ascending (soonest first).
+ */
+export const URGENCY_BANDS: Record<UrgencyLevel, readonly string[]> = {
+  high: [
+    BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+    BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+    BOOKING_STATE.AWAITING_RECONFIRMATION,
+    BOOKING_STATE.RESCHEDULE_PROPOSED,
+    BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+  ],
+  medium: [BOOKING_STATE.CONFIRMED, BOOKING_STATE.SCHEDULED],
+  low: [...TERMINAL_STATES],
+};
+
+/**
+ * State -> urgency rank lookup used to build the composite queue cursor.
+ * Any state not listed here falls back to rank 2 (terminal).
+ * Keep in sync with URGENCY_RANK_EXPR.
+ */
+export const URGENCY_RANK: Record<string, number> = {
+  [BOOKING_STATE.AWAITING_TUTOR_REVIEW]: 0,
+  [BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION]: 0,
+  [BOOKING_STATE.AWAITING_RECONFIRMATION]: 0,
+  [BOOKING_STATE.RESCHEDULE_PROPOSED]: 0,
+  [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: 0,
+  [BOOKING_STATE.CONFIRMED]: 1,
+  [BOOKING_STATE.SCHEDULED]: 1,
+};
+
+const URGENCY_RANK_EXPR = sql`CASE ${booking.currentState}
+  WHEN 'awaiting_tutor_review' THEN 0
+  WHEN 'awaiting_participant_confirmation' THEN 0
+  WHEN 'awaiting_reconfirmation' THEN 0
+  WHEN 'reschedule_proposed' THEN 0
+  WHEN 'awaiting_admin_room_approval' THEN 0
+  WHEN 'confirmed' THEN 1
+  WHEN 'scheduled' THEN 1
+  ELSE 2
+END`;
+
+export interface ListOverridesQueryOptions {
+  /** Matches booking.override_meta.category. */
+  category?: string;
+  urgency?: UrgencyLevel;
+  /** True = override record older than the 12h response window. */
+  escalated?: boolean;
+}
 
 /**
  * Finds a booking by id.
@@ -39,20 +95,49 @@ export async function listBookingsByState(
   states: string[],
   limit: number,
   cursor?: string,
+  opts?: ListOverridesQueryOptions,
 ) {
   const conditions = [];
   if (states.length > 0) {
     conditions.push(inArray(booking.currentState, states));
   }
   if (cursor) {
-    conditions.push(gt(booking.id, cursor));
+    // Composite cursor: "<rank>~<scheduledStartAt ISO>~<id>". Falls back to a
+    // legacy plain-id cursor (id > cursor) for backward compatibility.
+    const parts = cursor.split("~");
+    if (parts.length === 3) {
+      const rank = Number(parts[0]);
+      const start = new Date(parts[1]!);
+      if (Number.isInteger(rank) && !Number.isNaN(start.getTime())) {
+        conditions.push(
+          sql`(${URGENCY_RANK_EXPR}, ${booking.scheduledStartAt}, ${booking.id}) > (${rank}, ${start}, ${parts[2]})`,
+        );
+      } else {
+        conditions.push(gt(booking.id, cursor));
+      }
+    } else {
+      conditions.push(gt(booking.id, cursor));
+    }
+  }
+  if (opts?.category) {
+    conditions.push(
+      sql`${booking.overrideMeta}->>'category' = ${opts.category}`,
+    );
+  }
+  if (opts?.urgency) {
+    conditions.push(inArray(booking.currentState, URGENCY_BANDS[opts.urgency]));
+  }
+  if (opts?.escalated === true) {
+    conditions.push(
+      sql`${booking.overrideMeta}->>'overriddenAt' < ${new Date(Date.now() - RESPONSE_WINDOW_MS).toISOString()}`,
+    );
   }
 
   return conn
     .select()
     .from(booking)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(asc(booking.id))
+    .orderBy(URGENCY_RANK_EXPR, asc(booking.scheduledStartAt), asc(booking.id))
     .limit(limit + 1);
 }
 

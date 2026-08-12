@@ -15,6 +15,9 @@ export const listOverridesInput = z.object({
   bookingId: z.string().max(100).optional(),
   limit: z.number().min(1).max(100).optional(),
   cursor: z.string().max(100).optional(),
+  category: z.enum(OVERRIDE_CATEGORIES).optional(),
+  urgency: z.enum(["high", "medium", "low"]).optional(),
+  escalated: z.boolean().optional(),
 });
 
 export const getBookingStateHistoryInput = z.object({

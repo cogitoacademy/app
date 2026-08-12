@@ -470,7 +470,7 @@ describe("AdminBookingService", () => {
       });
 
       const result = await service.listBookings({ bookingId: "b1" });
-      expect(result.items).toEqual([booking]);
+      expect(result.items).toEqual([{ ...booking, escalated: false }]);
     });
 
     test("returns empty list when bookingId provided but not found", async () => {
@@ -491,9 +491,9 @@ describe("AdminBookingService", () => {
 
     test("returns bookings with limit from repo", async () => {
       const bookings = [
-        { id: "b1", currentState: "confirmed" },
-        { id: "b2", currentState: "pending" },
-        { id: "b3", currentState: "completed" },
+        { id: "b1", currentState: "confirmed", scheduledStartAt: new Date() },
+        { id: "b2", currentState: "pending", scheduledStartAt: new Date() },
+        { id: "b3", currentState: "completed", scheduledStartAt: new Date() },
       ];
       const repo = mockRepo({
         listBookingsByState: mock(async () => bookings),
@@ -508,8 +508,18 @@ describe("AdminBookingService", () => {
 
       const result = await service.listBookings({ limit: 2 });
       expect(result.items).toEqual([
-        { id: "b1", currentState: "confirmed" },
-        { id: "b2", currentState: "pending" },
+        {
+          id: "b1",
+          currentState: "confirmed",
+          scheduledStartAt: expect.any(Date),
+          escalated: false,
+        },
+        {
+          id: "b2",
+          currentState: "pending",
+          scheduledStartAt: expect.any(Date),
+          escalated: false,
+        },
       ]);
       expect(repo.listBookingsByState).toHaveBeenCalledWith(
         expect.anything(),
@@ -521,9 +531,9 @@ describe("AdminBookingService", () => {
 
     test("passes cursor to repo for pagination", async () => {
       const bookings = [
-        { id: "b10", currentState: "confirmed" },
-        { id: "b11", currentState: "confirmed" },
-        { id: "b12", currentState: "confirmed" },
+        { id: "b10", currentState: "confirmed", scheduledStartAt: new Date() },
+        { id: "b11", currentState: "confirmed", scheduledStartAt: new Date() },
+        { id: "b12", currentState: "confirmed", scheduledStartAt: new Date() },
       ];
       const repo = mockRepo({
         listBookingsByState: mock(async () => bookings),
@@ -544,8 +554,86 @@ describe("AdminBookingService", () => {
         "b9",
       );
       expect(result.items).toEqual([
-        { id: "b10", currentState: "confirmed" },
-        { id: "b11", currentState: "confirmed" },
+        {
+          id: "b10",
+          currentState: "confirmed",
+          scheduledStartAt: expect.any(Date),
+          escalated: false,
+        },
+        {
+          id: "b11",
+          currentState: "confirmed",
+          scheduledStartAt: expect.any(Date),
+          escalated: false,
+        },
+      ]);
+    });
+
+    test("passes category/urgency/escalated filters to repo as 5th arg", async () => {
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => []),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      await service.listBookings({
+        limit: 2,
+        category: "force_cancel",
+        urgency: "high",
+        escalated: true,
+      });
+      expect(repo.listBookingsByState).toHaveBeenCalledWith(
+        expect.anything(),
+        [],
+        2,
+        undefined,
+        { category: "force_cancel", urgency: "high", escalated: true },
+      );
+    });
+
+    test("flags booking as escalated when overrideMeta.overriddenAt is stale", async () => {
+      const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
+      const fresh = new Date().toISOString();
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => [
+          {
+            id: "b1",
+            currentState: "confirmed",
+            scheduledStartAt: new Date(),
+            overrideMeta: { overriddenAt: stale },
+          },
+          {
+            id: "b2",
+            currentState: "scheduled",
+            scheduledStartAt: new Date(),
+            overrideMeta: { overriddenAt: fresh },
+          },
+          {
+            id: "b3",
+            currentState: "confirmed",
+            scheduledStartAt: new Date(),
+            overrideMeta: null,
+          },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.listBookings({ limit: 5 });
+      expect(result.items.map((i) => i.escalated)).toEqual([
+        true,
+        false,
+        false,
       ]);
     });
   });
