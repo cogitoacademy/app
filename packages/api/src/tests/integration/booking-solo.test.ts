@@ -187,6 +187,15 @@ describe("Booking solo flow", () => {
   });
 
   test("TC-16: tutor completes session → completed", async () => {
+    const { booking } = await import("@cogito-app/db/schema");
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() - 2 * 60_000),
+        scheduledEndAt: new Date(Date.now() - 60_000),
+      })
+      .where(eq(booking.id, bookingId));
+
     const updated = await tutorClient.tutorActions.completeSession({
       bookingId,
     });

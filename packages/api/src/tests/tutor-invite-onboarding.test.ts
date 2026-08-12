@@ -49,6 +49,7 @@ describe("Tutor Invite & Onboarding", () => {
   let tutorClient: TestClient;
   let otherClient: TestClient;
   let tutorId: string;
+  let tutorCookie: string;
 
   beforeAll(async () => {
     const adminRes = await signUpAndSignIn(
@@ -67,6 +68,7 @@ describe("Tutor Invite & Onboarding", () => {
       "Test1234!",
       "Tutor Test",
     );
+    tutorCookie = tutorRes.cookie;
     const tutorCtx = await createTestContext(tutorRes.cookie);
     if (!tutorCtx.session?.user) throw new Error("Tutor session not found");
     tutorId = tutorCtx.session.user.id;
@@ -123,6 +125,8 @@ describe("Tutor Invite & Onboarding", () => {
         .limit(1);
       expect(p).toBeDefined();
       expect(p!.displayName).toBe("Prof Awesome");
+
+      tutorClient = createTestClient(await createTestContext(tutorCookie));
     });
 
     test("claimed invite cannot be verified again", async () => {

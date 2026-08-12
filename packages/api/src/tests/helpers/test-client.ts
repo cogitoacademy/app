@@ -13,6 +13,13 @@ export async function createTestContext(sessionCookie?: string) {
   const headers = new Headers();
   if (sessionCookie) headers.set("cookie", sessionCookie);
   const session = await auth.api.getSession({ headers });
+  if (session?.user) {
+    const currentUser = await db.query.user.findFirst({
+      columns: { role: true },
+      where: eq(user.id, session.user.id),
+    });
+    if (currentUser) session.user.role = currentUser.role;
+  }
   return { session, services, headers };
 }
 

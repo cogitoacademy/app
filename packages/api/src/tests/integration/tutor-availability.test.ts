@@ -23,7 +23,7 @@ describe("Tutor availability", () => {
     const ctx = await createTestContext(res.cookie);
     if (!ctx.session?.user) throw new Error("Tutor session not found");
     await setUserRole(ctx.session.user.id, "tutor");
-    tutorClient = createTestClient(ctx);
+    tutorClient = createTestClient(await createTestContext(res.cookie));
   });
 
   // eslint-disable-next-line unicorn/consistent-function-scoping

@@ -540,10 +540,7 @@ export function createBookingService(deps: {
         accepted.scheduledEndAt,
       );
 
-      if (
-        meetingResult.status !== "failed" &&
-        meetingResult.status !== "manual"
-      ) {
+      if (meetingResult.status !== "failed") {
         finalBooking = await db.transaction(async (tx) => {
           const current = await repo.findBookingById(tx, bookingId);
           if (!current) throw new BookingNotFoundError(bookingId);
