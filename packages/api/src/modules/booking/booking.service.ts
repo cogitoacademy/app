@@ -1114,9 +1114,11 @@ export function createBookingService(deps: {
     });
 
     const participant = await repo.findParticipant(tx, bookingId, b.proposerId);
+    let residualHeld = 0;
     if (participant) {
+      residualHeld = Math.max(0, participant.heldAmount - session.holdAmount);
       await repo.updateParticipantState(tx, participant.id, {
-        heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
+        heldAmount: residualHeld,
       });
     }
     await repo.updateBookingHoldAmount(
@@ -1153,11 +1155,26 @@ export function createBookingService(deps: {
       (s) => s.currentState === BOOKING_STATE.COMPLETED,
     );
     if (!allCompleted) {
-      return b;
+      const refreshed = await repo.findBookingById(tx, bookingId);
+      if (!refreshed) throw new BookingNotFoundError(bookingId);
+      return refreshed;
+    }
+
+    if (residualHeld > 0) {
+      await wallet.release(tx, {
+        walletId: proposerWallet.id,
+        amount: residualHeld,
+        eventKey: `booking.${bookingId}.series-release`,
+        sourceReference: bookingId,
+        bookingId,
+        actorType: ACTOR_TYPE.TUTOR,
+        reason: "Series completed: released residual hold",
+      });
+      await repo.updateParticipantState(tx, participant!.id, { heldAmount: 0 });
     }
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
-    const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
+    await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
       actorId: tutorId,
       actorType: ACTOR_TYPE.TUTOR,
       reason: "All series sessions completed",
@@ -1184,7 +1201,9 @@ export function createBookingService(deps: {
       eventKey: `booking.${bookingId}.series_completed.tutor`,
     });
 
-    return updated;
+    const refreshed = await repo.findBookingById(tx, bookingId);
+    if (!refreshed) throw new BookingNotFoundError(bookingId);
+    return refreshed;
   }
 
   async function cancelSession(userId: string, sessionId: string) {

@@ -1255,9 +1255,12 @@ describe("BookingService", () => {
         { ...session, id: "s2", currentState: "scheduled" },
         { ...session, id: "s3", currentState: "scheduled" },
       ];
+      const refreshed = { ...booking, holdAmount: 100, version: 2 };
       const { service, wallet, repo, notification } = createService({
         repo: {
-          findBookingById: mock(async () => booking),
+          findBookingById: mock(async () => refreshed)
+            .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => refreshed),
           findSessionById: mock(async () => session),
           listSessionsBySeriesId: mock(async () => sessions),
           findParticipant: mock(async () => ({
@@ -1299,6 +1302,9 @@ describe("BookingService", () => {
       );
       expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
       expect(result.currentState).toBe("scheduled");
+      expect(result.holdAmount).toBe(100);
+      expect(result.originalMarks).toBe(150);
+      expect(wallet.release).not.toHaveBeenCalled();
       expect(notification.writeBestEffort.mock.calls.length).toBe(2);
     });
 
@@ -1338,9 +1344,17 @@ describe("BookingService", () => {
           priceSnapshot: null,
         },
       ];
-      const { service, repo, notification } = createService({
+      const completedBooking = {
+        ...booking,
+        currentState: "completed",
+        holdAmount: 0,
+        version: 2,
+      };
+      const { service, repo, notification, wallet } = createService({
         repo: {
-          findBookingById: mock(async () => booking),
+          findBookingById: mock(async () => completedBooking)
+            .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => booking),
           findSessionById: mock(async () => sessions[2]),
           listSessionsBySeriesId: mock(async () => [
             ...sessions.slice(0, 2),
@@ -1355,7 +1369,7 @@ describe("BookingService", () => {
           updateBookingHoldAmount: mock(async () => {}),
           completeSession: mock(async () => {}),
           updateBookingVersioned: mock(async () => ({
-            updated: { ...booking, currentState: "completed" },
+            updated: { ...booking, currentState: "completed", holdAmount: 0 },
             newVersion: 2,
           })),
         },
@@ -1370,7 +1384,98 @@ describe("BookingService", () => {
         0,
       );
       expect(result.currentState).toBe("completed");
+      expect(result.holdAmount).toBe(0);
+      expect(wallet.release).not.toHaveBeenCalled();
       // 2 per-session notifications + 2 series-completed notifications
+      expect(notification.writeBestEffort.mock.calls.length).toBe(4);
+    });
+
+    test("completing the last series session releases a residual participant hold (G18)", async () => {
+      const booking = makeBooking({
+        type: "series",
+        currentState: "scheduled",
+        holdAmount: 50,
+        originalMarks: 150,
+      });
+      const sessions = [
+        {
+          id: "s1",
+          seriesBookingId: "b1",
+          scheduledStartAt: new Date(Date.now() - 3600_000),
+          scheduledEndAt: new Date(Date.now() + 3600_000),
+          currentState: "completed",
+          holdAmount: 50,
+          priceSnapshot: null,
+        },
+        {
+          id: "s2",
+          seriesBookingId: "b1",
+          scheduledStartAt: new Date(Date.now() - 3600_000),
+          scheduledEndAt: new Date(Date.now() + 3600_000),
+          currentState: "completed",
+          holdAmount: 50,
+          priceSnapshot: null,
+        },
+        {
+          id: "s3",
+          seriesBookingId: "b1",
+          scheduledStartAt: new Date(Date.now() - 3600_000),
+          scheduledEndAt: new Date(Date.now() + 3600_000),
+          currentState: "scheduled",
+          holdAmount: 50,
+          priceSnapshot: null,
+        },
+      ];
+      const completedBooking = {
+        ...booking,
+        currentState: "completed",
+        holdAmount: 0,
+        version: 2,
+      };
+      const { service, repo, notification, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => completedBooking)
+            .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => booking),
+          findSessionById: mock(async () => sessions[2]),
+          listSessionsBySeriesId: mock(async () => [
+            ...sessions.slice(0, 2),
+            { ...sessions[2]!, currentState: "completed" },
+          ]),
+          findParticipant: mock(async () => ({
+            id: "p1",
+            userId: "student1",
+            heldAmount: 60,
+          })),
+          updateParticipantState: mock(async () => {}),
+          updateBookingHoldAmount: mock(async () => {}),
+          completeSession: mock(async () => {}),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "completed", holdAmount: 0 },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.completeSession("b1", "tutor1", "s3");
+
+      expect(result.currentState).toBe("completed");
+      expect(result.holdAmount).toBe(0);
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        { heldAmount: 10 },
+      );
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release.mock.calls[0][1]).toMatchObject({
+        walletId: "w1",
+        amount: 10,
+        eventKey: "booking.b1.series-release",
+        sourceReference: "b1",
+        bookingId: "b1",
+        actorType: "tutor",
+        reason: "Series completed: released residual hold",
+      });
       expect(notification.writeBestEffort.mock.calls.length).toBe(4);
     });
 

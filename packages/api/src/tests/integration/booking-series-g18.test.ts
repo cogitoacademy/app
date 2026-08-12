@@ -189,6 +189,7 @@ describe("Series session completion (G18)", () => {
       sessionId: sessionIds[0]!,
     });
     expect(result.currentState).toBe("scheduled");
+    expect(result.holdAmount).toBe(2 * perSession);
 
     const [session] = await db
       .select()
@@ -232,12 +233,14 @@ describe("Series session completion (G18)", () => {
       sessionId: sessionIds[1]!,
     });
     expect(r2.currentState).toBe("scheduled");
+    expect(r2.holdAmount).toBe(perSession);
 
     const r3 = await tutorClient.tutorActions.completeSession({
       bookingId,
       sessionId: sessionIds[2]!,
     });
     expect(r3.currentState).toBe("completed");
+    expect(r3.holdAmount).toBe(0);
 
     const [booking] = await db
       .select()
