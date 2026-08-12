@@ -18,6 +18,7 @@ import { createRoomRouter } from "./modules/room/room.router";
 import { createNotificationRouter } from "./modules/notification/notification.router";
 import { createAdminBookingRouter } from "./modules/admin-booking/admin-booking.router";
 import { createRefundRouter } from "./modules/refund/refund.router";
+import { createSupportRouter } from "./modules/support/support.router";
 import { handlers } from "./services";
 
 const authRouter = createAuthRouter(handlers.auth);
@@ -35,6 +36,7 @@ const roomRouter = createRoomRouter(handlers.room);
 const notificationRouter = createNotificationRouter(handlers.notification);
 const adminBookingRouter = createAdminBookingRouter(handlers.adminBooking);
 const refundRouter = createRefundRouter(handlers.refund);
+const supportRouter = createSupportRouter(handlers.support);
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -63,6 +65,7 @@ export const appRouter = {
   notification: notificationRouter,
   adminBooking: adminBookingRouter,
   refund: refundRouter,
+  support: supportRouter,
 };
 
 export type AppRouter = typeof appRouter;

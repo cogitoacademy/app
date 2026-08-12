@@ -4,6 +4,8 @@ export const KNOWLEDGE_BANK_THRESHOLD = 35;
 
 export const RESPONSE_WINDOW_MS = 12 * 60 * 60 * 1000;
 export const LATE_CANCEL_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+export const LATENESS_TOLERANCE_MS = 15 * 60 * 1000;
+export const SUPPORT_SLA_MS = 12 * 60 * 60 * 1000;
 export const MIN_GROUP_HEADCOUNT = 2;
 export const MIN_SERIES_SESSIONS = 2;
 export const MAX_SERIES_SESSIONS = 4;
