@@ -166,7 +166,11 @@ function createServices() {
   });
   const discovery = createDiscoveryModule({ db });
   const invite = createInviteModule({ db, audit: audit.service });
-  const achievement = createAchievementModule({ db, audit: audit.service });
+  const achievement = createAchievementModule({
+    db,
+    audit: audit.service,
+    notification: notification.service,
+  });
   const room = createRoomModule({ db });
 
   const payment = createPaymentModule({

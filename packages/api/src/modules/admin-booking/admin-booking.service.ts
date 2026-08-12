@@ -317,6 +317,7 @@ export function createAdminBookingService(deps: {
               input.userNote ? `: ${input.userNote}` : ""
             }.`,
             eventKey: `override.applied.${input.bookingId}.${userId}`,
+            emailRequired: true,
           });
         }
       }

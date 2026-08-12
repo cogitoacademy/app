@@ -52,6 +52,10 @@ function makeAuditPort() {
   return { record: mock(async () => {}) };
 }
 
+function makeNotificationPort() {
+  return { writeBestEffort: mock(async () => {}) };
+}
+
 function makeContext(userId = "u1") {
   return { session: { user: { id: userId } } } as any;
 }
@@ -67,6 +71,7 @@ describe("AchievementHandler", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: auditPort as any,
+        notificationPort: makeNotificationPort() as any,
         db,
       });
       const handler = createAchievementHandler({ achievementService: service });
@@ -89,6 +94,7 @@ describe("AchievementHandler", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
       const handler = createAchievementHandler({ achievementService: service });
@@ -111,6 +117,7 @@ describe("AchievementHandler", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
       const handler = createAchievementHandler({ achievementService: service });
@@ -130,6 +137,7 @@ describe("AchievementHandler", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
       const handler = createAchievementHandler({ achievementService: service });
@@ -151,6 +159,7 @@ describe("AchievementHandler", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
       const handler = createAchievementHandler({ achievementService: service });
@@ -171,6 +180,7 @@ describe("AchievementHandler", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: auditPort as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
       const handler = createAchievementHandler({ achievementService: service });
@@ -197,6 +207,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -215,6 +226,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -230,6 +242,33 @@ describe("AchievementService", () => {
         ...input,
         userId: "u1",
       });
+    });
+
+    test("writes an in-app notification without email on submit (G17)", async () => {
+      const repo = makeAchievementRepo({
+        insert: mock(async (params: any) => ({ id: "a1", ...params })),
+      });
+      const notificationPort = makeNotificationPort();
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: makeAuditPort() as any,
+        notificationPort: notificationPort as any,
+        db: makeDb(),
+      });
+
+      await service.create("u1", {
+        eventName: "Test",
+        category: "cat",
+        award: "1st",
+        level: "regional",
+      });
+
+      expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(1);
+      const params = notificationPort.writeBestEffort.mock.calls[0][0];
+      expect(params.category).toBe("achievement");
+      expect(params.userId).toBe("u1");
+      expect(params.emailRequired).toBeUndefined();
+      expect(params.eventKey).toBe("achievement.a1.submitted");
     });
   });
 
@@ -249,6 +288,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -275,6 +315,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -302,6 +343,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -332,6 +374,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -352,6 +395,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -375,6 +419,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -395,6 +440,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -415,6 +461,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -435,6 +482,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -482,6 +530,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: auditPort as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -512,6 +561,7 @@ describe("AchievementService", () => {
       const service = createAchievementService({
         achievementRepo: repo as any,
         auditPort: auditPort as any,
+        notificationPort: makeNotificationPort() as any,
         db: makeDb(),
       });
 
@@ -525,6 +575,38 @@ describe("AchievementService", () => {
           action: "achievement_rejected",
         }),
       );
+    });
+
+    test("writes an in-app review notification to the achievement owner without email (G17)", async () => {
+      const existing = {
+        id: "a1",
+        userId: "owner1",
+        eventName: "Olympiad",
+        status: ACHIEVEMENT_STATUS.PENDING_REVIEW,
+      };
+      const repo = makeAchievementRepo({
+        getById: mock(async () => existing),
+        updateStatus: mock(async () => ({ id: "a1", status: "approved" })),
+      });
+      const notificationPort = makeNotificationPort();
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: makeAuditPort() as any,
+        notificationPort: notificationPort as any,
+        db: makeDb(),
+      });
+
+      await service.adminReview("admin1", {
+        achievementId: "a1",
+        status: "approved",
+      });
+
+      expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(1);
+      const params = notificationPort.writeBestEffort.mock.calls[0][0];
+      expect(params.userId).toBe("owner1");
+      expect(params.category).toBe("achievement");
+      expect(params.emailRequired).toBeUndefined();
+      expect(params.eventKey).toBe("achievement.a1.reviewed");
     });
   });
 });

@@ -380,10 +380,11 @@ export function createBookingService(deps: {
         userId: p.userId,
         bookingId: b.id,
         category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
+        severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Group price updated",
         body: `Your group's per-student price changed to ${newPerStudent} Marks because the headcount changed.`,
         eventKey: `booking.${b.id}.reprice.${p.userId}`,
+        emailRequired: true,
       });
     }
   }
@@ -595,6 +596,7 @@ export function createBookingService(deps: {
         title: "New booking request",
         body: "A student has requested a solo session with you.",
         eventKey: `booking.${bookingId}.tutor_request`,
+        emailRequired: true,
       });
 
       return b;
@@ -664,11 +666,37 @@ export function createBookingService(deps: {
         userId: b.tutorId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
+        severity: NOTIFICATION_SEVERITY.ACTION,
         title: `Booking ${toState}`,
         body: `A student has ${toState} the booking.`,
         eventKey: `booking.${bookingId}.${toState}`,
+        emailRequired: true,
       });
+
+      if (
+        b.type === BOOKING_TYPE.GROUP ||
+        b.type === BOOKING_TYPE.SERIES
+      ) {
+        const participants = await repo.findConfirmedParticipants(
+          tx,
+          bookingId,
+          userId,
+        );
+        for (const p of participants) {
+          // eslint-disable-next-line no-await-in-loop
+          await notification.writeBestEffort({
+            db: tx,
+            userId: p.userId,
+            bookingId,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.ACTION,
+            title: `Booking ${toState}`,
+            body: `A participant ${toState} the booking.`,
+            eventKey: `booking.${bookingId}.${toState}.${p.userId}`,
+            emailRequired: true,
+          });
+        }
+      }
 
       return updated;
     });
@@ -728,6 +756,34 @@ export function createBookingService(deps: {
               bookingId,
               new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
             );
+
+            await notification.writeBestEffort({
+              db: tx,
+              userId: b.tutorId,
+              bookingId,
+              category: NOTIFICATION_CATEGORY.BOOKING,
+              severity: NOTIFICATION_SEVERITY.ACTION,
+              title: "Meeting link ready",
+              body: "The meeting link for the session is ready.",
+              eventKey: `booking.${bookingId}.scheduled.tutor`,
+              emailRequired: true,
+            });
+
+            for (const p of participants) {
+              if (p.userId === b.proposerId) continue;
+              // eslint-disable-next-line no-await-in-loop
+              await notification.writeBestEffort({
+                db: tx,
+                userId: p.userId,
+                bookingId,
+                category: NOTIFICATION_CATEGORY.BOOKING,
+                severity: NOTIFICATION_SEVERITY.ACTION,
+                title: "Meeting link ready",
+                body: "The meeting link for your group session is ready.",
+                eventKey: `booking.${bookingId}.scheduled.${p.userId}`,
+                emailRequired: true,
+              });
+            }
           }
         } catch {
           updated = await repo.findBookingById(tx, bookingId);
@@ -764,6 +820,7 @@ export function createBookingService(deps: {
           ? "Tutor accepted. Waiting for admin room approval."
           : "Tutor accepted. Session scheduled.",
         eventKey: `booking.${bookingId}.accepted`,
+        emailRequired: true,
       });
 
       return { updated, isOffline, b };
@@ -806,10 +863,11 @@ export function createBookingService(deps: {
         userId: b.proposerId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
+        severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Booking declined",
         body: `Tutor declined the booking. ${reason ?? ""}`,
         eventKey: `booking.${bookingId}.declined`,
+        emailRequired: true,
       });
 
       return updated;
@@ -1089,6 +1147,7 @@ export function createBookingService(deps: {
         title: "Reschedule proposed",
         body: "Tutor proposed a new time for the booking.",
         eventKey: `booking.${bookingId}.reschedule_proposed`,
+        emailRequired: true,
       });
 
       return updated;
@@ -1148,6 +1207,7 @@ export function createBookingService(deps: {
         title: "Reschedule accepted",
         body: "The student accepted the proposed new time.",
         eventKey: `booking.${bookingId}.reschedule_accepted`,
+        emailRequired: true,
       });
 
       return updated;
@@ -1200,10 +1260,11 @@ export function createBookingService(deps: {
         userId: b.tutorId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
+        severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Reschedule rejected",
         body: "The student declined the proposed new time.",
         eventKey: `booking.${bookingId}.reschedule_rejected`,
+        emailRequired: true,
       });
 
       return updated;
@@ -1315,6 +1376,7 @@ export function createBookingService(deps: {
           title: "Group booking invitation",
           body: "You have been invited to a group session. Confirm within 12 hours.",
           eventKey: `booking.${bookingId}.invite.${inviteeId}`,
+          emailRequired: true,
         });
       }
 
@@ -1394,6 +1456,7 @@ export function createBookingService(deps: {
           title: "Group booking ready",
           body: "All participants confirmed. Review the booking.",
           eventKey: `booking.${bookingId}.full_headcount`,
+          emailRequired: true,
         });
       }
 
@@ -1703,6 +1766,18 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.STUDENT,
       });
 
+      await notification.writeBestEffort({
+        db: tx,
+        userId: input.tutorId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "New series request",
+        body: `A student requested a ${input.sessions.length}-session series with you.`,
+        eventKey: `booking.${bookingId}.tutor_request`,
+        emailRequired: true,
+      });
+
       return { ...b, disclaimer: computeDisclaimer(b) };
     });
   }
@@ -1825,12 +1900,15 @@ export function createBookingService(deps: {
             userId: b.proposerId,
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
-            severity: NOTIFICATION_SEVERITY.INFO,
+            severity: noShow
+              ? NOTIFICATION_SEVERITY.ACTION
+              : NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
             body: noShow
               ? "The session was marked as no-show and held marks were released."
               : "The booking deadline passed and held marks were released.",
             eventKey: `booking.${b.id}.expired.student`,
+            emailRequired: noShow,
           });
 
           await notification.writeBestEffort({
@@ -1838,12 +1916,15 @@ export function createBookingService(deps: {
             userId: b.tutorId,
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
-            severity: NOTIFICATION_SEVERITY.INFO,
+            severity: noShow
+              ? NOTIFICATION_SEVERITY.ACTION
+              : NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
             body: noShow
               ? "The session was marked as no-show and held marks were released."
               : "The booking expired because its deadline passed.",
             eventKey: `booking.${b.id}.expired.tutor`,
+            emailRequired: noShow,
           });
         });
         succeeded++;
@@ -1965,6 +2046,7 @@ export function createBookingService(deps: {
             title: "Session auto-cancelled",
             body: "The tutor did not join within 15 minutes, so the session was auto-cancelled and held marks were released.",
             eventKey: `booking.${b.id}.tutor_no_show`,
+            emailRequired: true,
           });
 
           await notification.writeBestEffort({

@@ -667,7 +667,10 @@ async function findCompletedBookingsByTutor(
   if (dateTo) {
     conditions.push(lte(booking.scheduledStartAt, dateTo));
   }
-  return conn.select().from(booking).where(and(...conditions));
+  return conn
+    .select()
+    .from(booking)
+    .where(and(...conditions));
 }
 
 
