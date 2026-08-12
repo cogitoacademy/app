@@ -48,6 +48,12 @@ const CATEGORY_STATE_MAP: Record<OverrideCategory, string> = {
 
 export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
 
+/**
+ * Creates the admin booking service for overrides, listing, history, and refunds.
+ *
+ * @param deps - the dependency ports (db, repo, auditPort, wallet, refund)
+ * @returns an AdminBookingService with applyOverride/listBookings/getBookingStateHistory/adminRefund
+ */
 export function createAdminBookingService(deps: {
   db: DbType;
   repo: AdminBookingRepo;
@@ -57,6 +63,15 @@ export function createAdminBookingService(deps: {
 }) {
   const { db, repo, auditPort, wallet, refund } = deps;
 
+  /**
+   * Applies an admin override to a booking, optionally releasing/compensating held Marks.
+   *
+   * @param adminId - the admin applying the override
+   * @param input - the override details (bookingId, category, reason, marksAction, affectedParticipants)
+   * @returns the updated booking
+   * @throws {BookingNotFoundError} if the booking does not exist
+   * @throws {TerminalStateOverrideError} if the booking is in a terminal state
+   */
   async function applyOverride(
     adminId: string,
     input: {
@@ -206,6 +221,12 @@ export function createAdminBookingService(deps: {
     return result;
   }
 
+  /**
+   * Lists bookings for the admin, by bookingId or with cursor pagination.
+   *
+   * @param opts - list options (bookingId, limit, cursor)
+   * @returns the booking items and a nextCursor when more pages exist
+   */
   async function listBookings(opts?: {
     bookingId?: string;
     limit?: number;
@@ -222,6 +243,13 @@ export function createAdminBookingService(deps: {
     return { items, nextCursor };
   }
 
+  /**
+   * Fetches the state history for a booking.
+   *
+   * @param bookingId - the booking to inspect
+   * @returns the chronological state history entries
+   * @throws {BookingNotFoundError} if the booking does not exist
+   */
   async function getBookingStateHistory(bookingId: string) {
     const bookingRow = await repo.findBookingById(db, bookingId);
     if (!bookingRow) throw new BookingNotFoundError(bookingId);
@@ -229,6 +257,15 @@ export function createAdminBookingService(deps: {
     return repo.getStateHistory(db, bookingId);
   }
 
+  /**
+   * Processes an admin refund: credits the payer's wallet, marks the payment REFUNDED, and records the refund.
+   *
+   * @param adminId - the admin processing the refund
+   * @param input - the refund details (paymentId, reason)
+   * @returns a confirmation with the payment id and "refunded" status
+   * @throws {BookingNotFoundError} if the payment or payer wallet is not found
+   * @throws {InvalidRefundStateError} if the payment is not PAID or SETTLED
+   */
   async function adminRefund(
     adminId: string,
     input: { paymentId: string; reason: string },

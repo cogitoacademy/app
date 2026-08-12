@@ -38,6 +38,14 @@ function getFloorPrices(modality: Modality): Record<number, number> {
   return higher;
 }
 
+/**
+ * Validates tutor-set prices against the Cogito floor for each group size.
+ *
+ * @param prices - map of group size (as string) to price in Marks
+ * @param modality - online/offline/both (both takes the max floor)
+ * @returns an error message string, or null when all prices are valid
+ * @throws {never} - returns a string instead of throwing
+ */
 function validatePrices(
   prices: Record<string, number>,
   modality: Modality,
@@ -66,6 +74,13 @@ function validatePrices(
   return null;
 }
 
+/**
+ * Computes the price split for a group session.
+ *
+ * @param totalMarks - total Marks paid for the session
+ * @param groupSize - number of students in the group (1-6)
+ * @returns the PriceSnapshot with per-student price, baseline, tutor share, and Cogito take
+ */
 function computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot {
   const perStudent = Math.floor(totalMarks / groupSize);
   const cogitoTake = Math.floor(totalMarks * COGITO_TAKE_RATE);
@@ -78,6 +93,11 @@ function computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot {
   };
 }
 
+/**
+ * Creates the pricing service with price validation and split computation.
+ *
+ * @returns a PricingPort with validatePrices and computeSplit
+ */
 export function createPricingService(): PricingPort {
   return { validatePrices, computeSplit };
 }

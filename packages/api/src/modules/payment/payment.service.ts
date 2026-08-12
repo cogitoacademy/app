@@ -62,6 +62,12 @@ const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
   REFUNDED: [],
 };
 
+/**
+ * Creates the payment service for purchase intents, webhook confirmation, and purchase lookups.
+ *
+ * @param deps - the dependency ports (db, wallet, repo, provider, providerName)
+ * @returns a PaymentPort with createIntent, confirmFromWebhook, getPurchase and the provider
+ */
 export function createPaymentService(deps: {
   db: DbType;
   wallet: PaymentWalletPort;
@@ -71,6 +77,17 @@ export function createPaymentService(deps: {
 }) {
   const { db, wallet, repo, provider, providerName } = deps;
 
+  /**
+   * Creates a payment intent for a mark package purchase, reusing pending intents.
+   *
+   * @param userId - the purchasing student
+   * @param walletId - the student's wallet to credit on confirmation
+   * @param packageCode - the mark package code to purchase
+   * @returns the payment id, provider reference, and checkout URL
+   * @throws {PackageNotFoundError} if the package is missing or inactive
+   * @throws {PackageAlreadyPurchasedError} if the user already has a non-pending purchase
+   * @throws {PaymentProviderError} if the provider rejects intent creation
+   */
   async function createIntent(
     userId: string,
     walletId: string,
@@ -128,6 +145,13 @@ export function createPaymentService(deps: {
     }
   }
 
+  /**
+   * Confirms a provider webhook, crediting the wallet on PAID/SETTLED and enforcing idempotency.
+   *
+   * @param input - the webhook confirmation details (provider, references, status, receipt)
+   * @returns the resulting payment status
+   * @throws {PaymentNotFoundError} if no payment matches the provider reference
+   */
   async function confirmFromWebhook(
     input: ConfirmInput,
   ): Promise<{ status: string }> {
@@ -209,6 +233,14 @@ export function createPaymentService(deps: {
     });
   }
 
+  /**
+   * Fetches a payment record, verifying the requesting user owns it.
+   *
+   * @param paymentId - the payment to fetch
+   * @param userId - the requesting user
+   * @returns the payment record
+   * @throws {PaymentNotFoundError} if the payment does not exist or belongs to another user
+   */
   async function getPurchase(paymentId: string, userId: string) {
     const record = await repo.findPaymentById(paymentId);
     if (!record || record.userId !== userId)

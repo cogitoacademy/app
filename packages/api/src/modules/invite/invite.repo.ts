@@ -9,6 +9,13 @@ export interface InsertTutorProfileParams {
   displayName: string;
 }
 
+/**
+ * Finds a valid (unexpired, invited) invite by token.
+ *
+ * @param conn - the database connection or active transaction
+ * @param token - the invite token
+ * @returns the invite, or null
+ */
 export async function findInviteByToken(conn: DbOrTx, token: string) {
   return conn.query.tutorInvite.findFirst({
     where: and(
@@ -19,6 +26,15 @@ export async function findInviteByToken(conn: DbOrTx, token: string) {
   });
 }
 
+/**
+ * Updates an invite's status when it matches the given conditions (status and unexpired).
+ *
+ * @param conn - the database connection or active transaction
+ * @param inviteId - the invite id
+ * @param updates - the fields to update (status, acceptance)
+ * @param conditions - the required current state (status, expiresAt)
+ * @returns the updated rows (empty when conditions did not match)
+ */
 export async function updateInviteStatus(
   conn: DbOrTx,
   inviteId: string,
@@ -42,12 +58,26 @@ export async function updateInviteStatus(
     .returning();
 }
 
+/**
+ * Finds a tutor profile by user id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the tutor profile, or null
+ */
 export async function findTutorProfileByUserId(conn: DbOrTx, userId: string) {
   return conn.query.tutorProfile.findFirst({
     where: eq(tutorProfile.userId, userId),
   });
 }
 
+/**
+ * Creates a draft tutor profile for an accepted invitee.
+ *
+ * @param conn - the database connection or active transaction
+ * @param params - the initial profile fields (userId, inviteId, displayName)
+ * @returns the created tutor profile
+ */
 export async function insertTutorProfile(
   conn: DbOrTx,
   params: InsertTutorProfileParams,
@@ -66,6 +96,13 @@ export async function insertTutorProfile(
   return profile;
 }
 
+/**
+ * Updates a user's role (used when an invite is accepted).
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param role - the new role
+ */
 export async function updateUserRole(
   conn: DbOrTx,
   userId: string,

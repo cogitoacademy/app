@@ -93,6 +93,11 @@ const apiHandler = new OpenAPIHandler(appRouter, {
   interceptors: [onError(logRpcError)],
 });
 
+/**
+ * Builds the Elysia HTTP server with auth, RPC, OpenAPI, health, metrics, and webhook routes.
+ *
+ * @returns a configured Elysia instance with security headers, rate limits, and CORS applied
+ */
 export function createServer() {
   return new Elysia()
     .use(evlog())

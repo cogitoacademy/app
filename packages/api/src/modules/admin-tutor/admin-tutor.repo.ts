@@ -51,6 +51,13 @@ export interface TutorProfileUpdates {
   publishedAt?: Date | null;
 }
 
+/**
+ * Finds an active (unexpired, invited) tutor invite by email.
+ *
+ * @param conn - the database connection or active transaction
+ * @param email - the invitee's email
+ * @returns the matching invite, or null
+ */
 async function findActiveInviteByEmail(
   conn: DbOrTx,
   email: string,
@@ -65,6 +72,13 @@ async function findActiveInviteByEmail(
   );
 }
 
+/**
+ * Inserts a new tutor invite.
+ *
+ * @param conn - the database connection or active transaction
+ * @param params - the invite details
+ * @returns the inserted invite row
+ */
 async function insertInvite(
   conn: DbOrTx,
   params: InsertInviteParams,
@@ -73,6 +87,13 @@ async function insertInvite(
   return row!;
 }
 
+/**
+ * Fetches an invite by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the invite id
+ * @returns the invite row, or null
+ */
 async function getInviteById(
   conn: DbOrTx,
   id: string,
@@ -84,6 +105,14 @@ async function getInviteById(
   );
 }
 
+/**
+ * Updates an invite (e.g. status, revocation).
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the invite id
+ * @param updates - the fields to update
+ * @returns the updated invite row
+ */
 async function updateInvite(
   conn: DbOrTx,
   id: string,
@@ -97,6 +126,13 @@ async function updateInvite(
   return row!;
 }
 
+/**
+ * Lists tutor invites with pagination and optional status filter.
+ *
+ * @param conn - the database connection or active transaction
+ * @param input - list options (status, limit, offset)
+ * @returns the matching invite rows, newest first
+ */
 async function listInvites(
   conn: DbOrTx,
   input: ListInvitesRepoInput,
@@ -109,6 +145,13 @@ async function listInvites(
   });
 }
 
+/**
+ * Fetches a tutor profile by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the profile id
+ * @returns the profile row, or null
+ */
 async function getTutorProfileById(
   conn: DbOrTx,
   id: string,
@@ -120,6 +163,14 @@ async function getTutorProfileById(
   );
 }
 
+/**
+ * Updates a tutor profile's admin-controlled fields.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the profile id
+ * @param updates - the fields to update
+ * @returns the updated profile row
+ */
 async function updateTutorProfile(
   conn: DbOrTx,
   id: string,
@@ -133,6 +184,13 @@ async function updateTutorProfile(
   return row!;
 }
 
+/**
+ * Lists tutor profiles with pagination and optional onboarding status filter, including the user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param input - list options (status, limit, offset)
+ * @returns the matching profile rows with their user, newest first
+ */
 async function listTutorProfiles(
   conn: DbOrTx,
   input: ListTutorProfilesRepoInput,

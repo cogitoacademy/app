@@ -9,6 +9,13 @@ import type { DbOrTx } from "../../lib/tx";
 
 export type AdminBookingRepo = ReturnType<typeof createAdminBookingRepo>;
 
+/**
+ * Finds a booking by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @returns the booking row, or null when not found
+ */
 export async function findBookingById(conn: DbOrTx, bookingId: string) {
   const [row] = await conn
     .select()
@@ -18,6 +25,15 @@ export async function findBookingById(conn: DbOrTx, bookingId: string) {
   return row ?? null;
 }
 
+/**
+ * Lists bookings by state with cursor pagination (fetches limit+1 for nextCursor).
+ *
+ * @param conn - the database connection or active transaction
+ * @param states - states to filter by (empty means all)
+ * @param limit - the max number of rows to return
+ * @param cursor - optional booking id to page after
+ * @returns the matching booking rows ordered by id
+ */
 export async function listBookingsByState(
   conn: DbOrTx,
   states: string[],
@@ -40,6 +56,13 @@ export async function listBookingsByState(
     .limit(limit + 1);
 }
 
+/**
+ * Fetches the chronological state history for a booking.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @returns the state history rows, oldest first
+ */
 export async function getStateHistory(conn: DbOrTx, bookingId: string) {
   return conn
     .select()
@@ -48,6 +71,16 @@ export async function getStateHistory(conn: DbOrTx, bookingId: string) {
     .orderBy(asc(bookingStateHistory.createdAt));
 }
 
+/**
+ * Updates a booking's state with optimistic concurrency, returning the previous and new state.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param newState - the state to transition to
+ * @param reason - the state reason
+ * @param overrideMeta - metadata recorded on the booking
+ * @returns previousState and updated row, or null when the booking does not exist or the version raced
+ */
 export async function updateBookingWithOverride(
   conn: DbOrTx,
   bookingId: string,
@@ -85,6 +118,12 @@ export async function updateBookingWithOverride(
   return { previousState: existing.currentState, updated: result[0] };
 }
 
+/**
+ * Inserts a state history entry for an admin override.
+ *
+ * @param conn - the database connection or active transaction
+ * @param params - the state history entry details
+ */
 export async function insertStateHistoryEntry(
   conn: DbOrTx,
   params: {
@@ -108,6 +147,13 @@ export async function insertStateHistoryEntry(
   });
 }
 
+/**
+ * Finds participants of a booking.
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @returns the participant rows
+ */
 export async function findParticipantsByBookingId(
   conn: DbOrTx,
   bookingId: string,
@@ -118,6 +164,13 @@ export async function findParticipantsByBookingId(
     .where(eq(bookingParticipant.bookingId, bookingId));
 }
 
+/**
+ * Finds a payment record by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param paymentId - the payment id
+ * @returns the payment row, or null when not found
+ */
 export async function findPaymentById(conn: DbOrTx, paymentId: string) {
   const [row] = await conn
     .select()
@@ -127,6 +180,14 @@ export async function findPaymentById(conn: DbOrTx, paymentId: string) {
   return row ?? null;
 }
 
+/**
+ * Updates a payment record's status.
+ *
+ * @param conn - the database connection or active transaction
+ * @param paymentId - the payment id
+ * @param status - the new status
+ * @returns the updated row, or null when the payment does not exist
+ */
 export async function updatePaymentStatus(
   conn: DbOrTx,
   paymentId: string,
@@ -140,6 +201,13 @@ export async function updatePaymentStatus(
   return updated ?? null;
 }
 
+/**
+ * Sets a booking's held Marks amount (used after release/compensation).
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @param holdAmount - the new hold amount
+ */
 export async function updateBookingHoldAmount(
   conn: DbOrTx,
   bookingId: string,

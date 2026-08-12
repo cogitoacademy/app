@@ -6,6 +6,14 @@ import { USER_ROLE } from "../../shared/constants";
 export type UserRole = "student" | "tutor" | "admin";
 export type UserRow = typeof user.$inferSelect;
 
+/**
+ * Lists users with pagination, newest first.
+ *
+ * @param conn - the database connection or active transaction
+ * @param limit - the max number of rows to return
+ * @param offset - the number of rows to skip
+ * @returns the user rows
+ */
 export async function listUsers(
   conn: DbOrTx,
   limit: number,
@@ -19,11 +27,24 @@ export async function listUsers(
     .offset(offset);
 }
 
+/**
+ * Counts all users.
+ *
+ * @param conn - the database connection or active transaction
+ * @returns the total user count
+ */
 export async function countUsers(conn: DbOrTx): Promise<number> {
   const [row] = await conn.select({ count: count() }).from(user);
   return row?.count ?? 0;
 }
 
+/**
+ * Fetches a user by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the user row, or null
+ */
 export async function getById(
   conn: DbOrTx,
   userId: string,
@@ -36,6 +57,12 @@ export async function getById(
   return row ?? null;
 }
 
+/**
+ * Counts admin-role users.
+ *
+ * @param conn - the database connection or active transaction
+ * @returns the admin user count
+ */
 export async function countAdmins(conn: DbOrTx): Promise<number> {
   const [row] = await conn
     .select({ count: count() })
@@ -44,6 +71,14 @@ export async function countAdmins(conn: DbOrTx): Promise<number> {
   return row?.count ?? 0;
 }
 
+/**
+ * Updates a user's role.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param role - the new role
+ * @returns the updated user row
+ */
 export async function updateRole(
   conn: DbOrTx,
   userId: string,
@@ -57,6 +92,15 @@ export async function updateRole(
   return row!;
 }
 
+/**
+ * Updates a user's role only when the current role matches expectedRole (optimistic).
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param role - the new role
+ * @param expectedRole - the role the user must currently have
+ * @returns the updated rows (empty when the expected role did not match)
+ */
 export async function updateRoleWithExpected(
   conn: DbOrTx,
   userId: string,

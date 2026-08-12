@@ -8,6 +8,11 @@ import { services } from "@cogito-app/api";
 
 let scheduler: ReturnType<typeof createSchedulerService> = null;
 
+/**
+ * Initializes the BullMQ scheduler and repeatable jobs when enabled.
+ *
+ * @returns a promise resolving once the scheduler and repeatable jobs are registered
+ */
 export async function initScheduler(): Promise<void> {
   if (!env.SCHEDULER_ENABLED || !env.REDIS_URL) {
     log({
@@ -96,6 +101,11 @@ export async function initScheduler(): Promise<void> {
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
+/**
+ * Gracefully shuts down the scheduler worker and queue, forcing close on timeout.
+ *
+ * @returns a promise resolving once shutdown completes or the timeout forces close
+ */
 export async function shutdownScheduler(): Promise<void> {
   if (!scheduler) return;
 

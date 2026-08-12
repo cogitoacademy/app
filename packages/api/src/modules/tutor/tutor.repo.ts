@@ -24,12 +24,28 @@ export interface UpsertAvailabilityInput {
   isActive?: boolean;
 }
 
+/**
+ * Fetches a tutor's profile by user id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the tutor profile, or null
+ */
 export async function getByUserId(conn: DbOrTx, userId: string) {
   return conn.query.tutorProfile.findFirst({
     where: eq(tutorProfile.userId, userId),
   });
 }
 
+/**
+ * Updates a tutor profile with optimistic concurrency via version.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param expectedVersion - the version the profile must currently have
+ * @param input - the fields to update
+ * @returns the updated rows (empty when the version did not match)
+ */
 export async function updateProfileWithVersion(
   conn: DbOrTx,
   userId: string,
@@ -49,6 +65,14 @@ export async function updateProfileWithVersion(
   return rows;
 }
 
+/**
+ * Updates a tutor profile's onboarding status.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param status - the new onboarding status
+ * @returns the updated profile row, or undefined when not found
+ */
 export async function updateStatus(
   conn: DbOrTx,
   userId: string,
@@ -62,6 +86,14 @@ export async function updateStatus(
   return updated;
 }
 
+/**
+ * Lists a tutor's active availability slots, optionally from a start date.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param opts - options (from date filter)
+ * @returns the matching availability slot rows
+ */
 export async function listAvailability(
   conn: DbOrTx,
   userId: string,
@@ -80,6 +112,14 @@ export async function listAvailability(
     .where(and(...conditions));
 }
 
+/**
+ * Creates or updates an availability slot (by id when provided, else inserts).
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param input - the slot details
+ * @returns the created or updated slot row
+ */
 export async function upsertAvailability(
   conn: DbOrTx,
   userId: string,
@@ -115,6 +155,12 @@ export async function upsertAvailability(
   return created;
 }
 
+/**
+ * Soft-deletes an availability slot by setting isActive to false.
+ *
+ * @param conn - the database connection or active transaction
+ * @param slotId - the slot id
+ */
 export async function deleteAvailability(conn: DbOrTx, slotId: string) {
   await conn
     .update(availabilitySlot)

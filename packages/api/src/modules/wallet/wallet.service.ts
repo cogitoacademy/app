@@ -117,7 +117,13 @@ export interface WalletPort {
 
 export type WalletService = ReturnType<typeof createWalletService>;
 
-/** Wallet service providing atomic balance operations with ledger tracking. */
+/**
+ * Creates the wallet service providing atomic balance operations with ledger tracking.
+ *
+ * @param repo - the wallet repository providing atomic balance mutations
+ * @param db - the database connection used for standalone (non-transaction) operations
+ * @returns a WalletPort with hold/release/deduct/credit/compensate and read operations
+ */
 export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
   async function runInTx<T>(conn: DbOrTx, fn: (tx: DbOrTx) => Promise<T>) {
     if (conn === db) return db.transaction(fn);
@@ -138,6 +144,13 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return repo.getByUserId(conn, userId);
   }
 
+  /**
+   * Gets or creates the wallet for a user.
+   *
+   * @param userId - the user to look up (and create a wallet for if absent)
+   * @returns the user's wallet snapshot with zeroed balances when newly created
+   * @throws {WalletNotFoundError} if the wallet cannot be created or found after an upsert race
+   */
   async function getOrCreate(userId: string): Promise<WalletSnapshot> {
     const existing = await repo.getByUserId(db, userId);
     if (existing) return existing;
@@ -153,6 +166,15 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return afterConflict;
   }
 
+  /**
+   * Moves Marks from available to held balance atomically, with a ledger entry.
+   *
+   * @param conn - the database connection or active transaction
+   * @param params - hold details (wallet, amount, eventKey, actor, reason)
+   * @returns the updated wallet snapshot
+   * @throws {WalletNotFoundError} if the wallet does not exist
+   * @throws {InsufficientBalanceError} if the available balance is too low
+   */
   async function hold(
     conn: DbOrTx,
     params: HoldParams,
@@ -186,6 +208,15 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     });
   }
 
+  /**
+   * Moves Marks from held back to available balance atomically, with a ledger entry.
+   *
+   * @param conn - the database connection or active transaction
+   * @param params - release details (wallet, amount, eventKey, actor, reason)
+   * @returns the updated wallet snapshot
+   * @throws {WalletNotFoundError} if the wallet does not exist
+   * @throws {InsufficientBalanceError} if the held balance is too low
+   */
   async function release(
     conn: DbOrTx,
     params: ReleaseParams,
@@ -220,6 +251,15 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     });
   }
 
+  /**
+   * Consumes held Marks as payment, reducing total and held balance atomically.
+   *
+   * @param conn - the database connection or active transaction
+   * @param params - deduct details (wallet, amount, eventKey, actor, reason)
+   * @returns the updated wallet snapshot
+   * @throws {WalletNotFoundError} if the wallet does not exist
+   * @throws {InsufficientBalanceError} if the held balance is too low
+   */
   async function deduct(
     conn: DbOrTx,
     params: DeductParams,
@@ -253,6 +293,14 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     });
   }
 
+  /**
+   * Credits Marks to the wallet (e.g. package purchase), atomically.
+   *
+   * @param conn - the database connection or active transaction
+   * @param params - credit details (wallet, amount, eventKey, actor, reason)
+   * @returns the updated wallet snapshot
+   * @throws {WalletNotFoundError} if the wallet does not exist
+   */
   async function credit(
     conn: DbOrTx,
     params: CreditParams,
@@ -283,6 +331,15 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     });
   }
 
+  /**
+   * Applies an admin/refund compensation credit or deduct atomically.
+   *
+   * @param conn - the database connection or active transaction
+   * @param params - compensate details including the compensation type
+   * @returns the updated wallet snapshot
+   * @throws {WalletNotFoundError} if the wallet does not exist
+   * @throws {InsufficientBalanceError} if compensating a deduct and the available balance is too low
+   */
   async function compensate(
     conn: DbOrTx,
     params: CompensateParams,
@@ -331,6 +388,13 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     });
   }
 
+  /**
+   * Lists ledger entries for a wallet with pagination.
+   *
+   * @param walletId - the wallet to query
+   * @param opts - pagination/filter options (cursor, limit, bookingId, eventKey)
+   * @returns the ledger items and a nextCursor when more pages exist
+   */
   async function listLedger(walletId: string, opts?: LedgerQueryOptions) {
     const limit = Math.min(opts?.limit ?? 20, 100);
     const rows = await repo.findLedgerEntries(db, walletId, {
@@ -344,6 +408,12 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return { items, nextCursor };
   }
 
+  /**
+   * Checks whether a user's available balance meets the Knowledge Bank threshold.
+   *
+   * @param userId - the user to check
+   * @returns eligibility, the available balance, and the threshold
+   */
   async function knowledgeBankEligible(userId: string) {
     const w = await repo.getByUserId(db, userId);
     if (!w) {
@@ -360,10 +430,21 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     };
   }
 
+  /**
+   * Lists all active mark packages available for purchase.
+   *
+   * @returns the active mark packages
+   */
   async function listActivePackages() {
     return repo.listActivePackages(db);
   }
 
+  /**
+   * Reconciles the ledger against the wallet total balance to detect drift.
+   *
+   * @param query - optional walletId to reconcile a single wallet
+   * @returns the expected (ledger-derived), actual (wallet) totals and the drift
+   */
   async function reconcile(query?: { walletId?: string }) {
     const ADD_TYPES = ["credit", "compensate_credit"];
     const SUB_TYPES = ["deduct", "compensate_deduct"];

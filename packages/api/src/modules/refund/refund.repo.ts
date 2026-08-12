@@ -4,6 +4,13 @@ import type { DbOrTx } from "../../lib/tx";
 
 export type RefundRepo = ReturnType<typeof createRefundRepo>;
 
+/**
+ * Inserts a refund record.
+ *
+ * @param conn - the database connection or active transaction
+ * @param record - the refund fields
+ * @returns the inserted refund row
+ */
 async function insertRefundRecord(
   conn: DbOrTx,
   record: {
@@ -29,6 +36,14 @@ async function insertRefundRecord(
   return inserted;
 }
 
+/**
+ * Updates a payment record's status.
+ *
+ * @param conn - the database connection or active transaction
+ * @param paymentId - the payment id
+ * @param status - the new status
+ * @returns the updated row, or null
+ */
 async function updatePaymentStatus(
   conn: DbOrTx,
   paymentId: string,
