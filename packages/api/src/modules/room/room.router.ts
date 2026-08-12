@@ -1,4 +1,9 @@
-import { listRoomsInput, createRoomInput, assignRoomInput } from "./room.types";
+import {
+  listRoomsInput,
+  createRoomInput,
+  assignRoomInput,
+  checkAvailabilityInput,
+} from "./room.types";
 import { adminProcedure, protectedProcedure } from "../../procedures";
 import type { RoomHandler } from "./room.handler";
 
@@ -36,5 +41,16 @@ export function createRoomRouter(handler: RoomHandler) {
       })
       .input(assignRoomInput)
       .handler(handler.assign),
+
+    checkAvailability: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/rooms/check-availability",
+        tags: ["Rooms"],
+        summary: "Check room availability",
+        description: "Returns whether a room is free for a time slot",
+      })
+      .input(checkAvailabilityInput)
+      .handler(handler.checkAvailability),
   };
 }
