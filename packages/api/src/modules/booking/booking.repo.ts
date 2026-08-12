@@ -21,6 +21,8 @@ import {
   sessionNote,
   availabilitySlot,
   tutorProfile,
+  user,
+  meetingEvent,
   type booking as bookingTable,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
@@ -162,6 +164,17 @@ async function findConfirmedParticipants(
     .where(and(...conditions));
 }
 
+async function findUserEmails(
+  conn: DbOrTx,
+  userIds: string[],
+): Promise<{ id: string; email: string; name: string }[]> {
+  if (userIds.length === 0) return [];
+  return conn
+    .select({ id: user.id, email: user.email, name: user.name })
+    .from(user)
+    .where(inArray(user.id, userIds));
+}
+
 /**
  * Lists participants whose confirmation state is RECONFIRMED for a booking.
  *
@@ -245,6 +258,8 @@ async function updateBookingPriceSnapshot(
       tutorShare: number;
       cogitoTake: number;
 
+
+
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -256,6 +271,8 @@ async function updateBookingPriceSnapshot(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
 
 /**
  * Sets a booking's confirmed headcount.
@@ -380,6 +397,8 @@ async function updateRescheduleProposal(
     .where(eq(bookingRescheduleProposal.id, proposalId));
 }
 
+
+
 /**
  * Inserts a session for a series booking.
  *
@@ -460,6 +479,8 @@ async function listSessionNotes(conn: DbOrTx, bookingId: string) {
     .orderBy(desc(sessionNote.createdAt));
 }
 
+
+
 /**
  * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
  *
@@ -520,6 +541,8 @@ async function updateBookingSchedule(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
 
 /**
  * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).
@@ -674,15 +697,26 @@ export function createBookingRepo(db: DbType) {
    * @returns the booking with related data, or null
    */
   async function findBookingWithParticipants(bookingId: string) {
-    return db.query.booking.findFirst({
+    // The `meeting` one-relation returns an unspecified row when a booking has
+    // multiple meeting_event rows (e.g. a pre-fix google-failed row plus the
+    // manual fallback). Fetch the newest explicitly so G11 status is stable.
+    const [meetingRow] = await db
+      .select()
+      .from(meetingEvent)
+      .where(eq(meetingEvent.bookingId, bookingId))
+      .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
+      .limit(1);
+
+    const b = await db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
       with: {
         participants: { with: { user: true } },
         stateHistory: true,
-        meeting: true,
         roomBookings: { with: { room: true } },
       },
     });
+    if (!b) return null;
+    return { ...b, meeting: meetingRow ?? null };
   }
 
   /**
@@ -719,6 +753,7 @@ export function createBookingRepo(db: DbType) {
     findAvailabilitySlot,
     findParticipant,
     findConfirmedParticipants,
+    findUserEmails,
     findReconfirmedParticipants,
     insertBooking,
     updateBookingCancellationReason,

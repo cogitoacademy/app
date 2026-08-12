@@ -15,5 +15,25 @@ export const assignRoomInput = z.object({
   endAt: z.coerce.date(),
 });
 
+export const checkAvailabilityInput = z.object({
+  roomId: z.string().min(1).max(100),
+  startAt: z.coerce.date(),
+  endAt: z.coerce.date(),
+});
+
+export const relocateRoomInput = z.object({
+  bookingId: z.string().min(1).max(100),
+  roomId: z.string().min(1).max(100),
+  startAt: z.coerce.date(),
+  endAt: z.coerce.date(),
+});
+
+export const cancelRoomInput = z.object({
+  bookingId: z.string().min(1).max(100),
+});
+
 export type CreateRoomInput = z.infer<typeof createRoomInput>;
 export type AssignRoomInput = z.infer<typeof assignRoomInput>;
+export type CheckAvailabilityInput = z.infer<typeof checkAvailabilityInput>;
+export type RelocateRoomInput = z.infer<typeof relocateRoomInput>;
+export type CancelRoomInput = z.infer<typeof cancelRoomInput>;

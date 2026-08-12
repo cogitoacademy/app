@@ -95,6 +95,29 @@ export interface BookingTransition {
   metadata?: Record<string, unknown>;
 }
 
+export type MeetingStatus = "pending" | "ready" | "failed";
+
+/**
+ * Derives the frontend-facing meeting status for a booking.
+ *
+ * `meeting.createEvent` fires only on tutor accept (online bookings), and
+ * for group bookings tutor accept only happens after every participant
+ * confirmed — so "all confirmed AND tutor accepted" is satisfied by
+ * construction. Withdrawal after creation does not revoke the link.
+ */
+function computeMeetingInfo(b: {
+  meeting: { status: string; meetingUrl: string | null } | null;
+}): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
+  const event = b.meeting;
+  if (!event || event.status === "pending" || event.status === "manual") {
+    return { meetingStatus: "pending", meetingUrl: null };
+  }
+  if (event.status === "failed") {
+    return { meetingStatus: "failed", meetingUrl: null };
+  }
+  return { meetingStatus: "ready", meetingUrl: event.meetingUrl };
+}
+
 export type BookingService = ReturnType<typeof createBookingService>;
 
 /**
@@ -257,6 +280,8 @@ export function createBookingService(deps: {
       type: string;
       tutorId: string;
 
+
+
       modality: string;
       priceSnapshot: { perStudent: number } | null;
     },
@@ -331,6 +356,8 @@ export function createBookingService(deps: {
         heldAmount: newPerStudent,
       });
 
+
+
       await repo.updateParticipantState(tx, p.id, {
         heldAmount: newPerStudent,
       });
@@ -366,6 +393,10 @@ export function createBookingService(deps: {
   }
 
   /**
+   * Derives the frontend-facing meeting status for a booking — see the
+   * module-scope computeMeetingInfo.
+
+  /**
   /**
    * Gets a booking by id, enforcing that the requesting user has access.
    *
@@ -379,7 +410,11 @@ export function createBookingService(deps: {
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     await assertBookingAccess(b, userId, db, bookingId);
-    return { ...b, disclaimer: computeDisclaimer(b) };
+    return {
+      ...b,
+      disclaimer: computeDisclaimer(b),
+      ...computeMeetingInfo(b),
+    };
   }
 
   /**
@@ -636,10 +671,24 @@ export function createBookingService(deps: {
         });
 
         try {
+          const participants = await repo.findConfirmedParticipants(
+            tx,
+            bookingId,
+          );
+          const users = await repo.findUserEmails(tx, [
+            b.tutorId,
+            ...participants.map((p) => p.userId),
+          ]);
+          const attendees = users.map((u) => ({
+            email: u.email,
+            name: u.name,
+          }));
+
           const meetingResult = await meeting.createEvent(
             bookingId,
             b.scheduledStartAt,
             b.scheduledEndAt,
+            attendees,
           );
 
           if (meetingResult.status === "failed") {

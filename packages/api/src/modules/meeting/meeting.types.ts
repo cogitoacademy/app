@@ -8,10 +8,16 @@ export interface MeetingEvent {
   errorReason: string | null;
 }
 
+export interface MeetingAttendee {
+  email: string;
+  name?: string;
+}
+
 export interface MeetingPort {
   createEvent(
     bookingId: string,
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
+    attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent>;
 }

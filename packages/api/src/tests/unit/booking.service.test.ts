@@ -49,6 +49,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateParticipantState: mock(async () => {}),
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
+    findUserEmails: mock(async () => []),
     findReconfirmedParticipants: mock(async () => []),
     insertRescheduleProposal: mock(async () => {}),
     findPendingRescheduleProposal: mock(async () => null),
@@ -312,7 +313,12 @@ describe("BookingService", () => {
       });
 
       const result = await service.getById("b1", "student1");
-      expect(result).toEqual({ ...booking, disclaimer: null });
+      expect(result).toEqual({
+        ...booking,
+        disclaimer: null,
+        meetingStatus: "pending",
+        meetingUrl: null,
+      });
     });
 
     test("returns booking when user is assigned tutor", async () => {
@@ -329,7 +335,58 @@ describe("BookingService", () => {
       });
 
       const result = await service.getById("b1", "tutor1");
-      expect(result).toEqual({ ...booking, disclaimer: null });
+      expect(result).toEqual({
+        ...booking,
+        disclaimer: null,
+        meetingStatus: "pending",
+        meetingUrl: null,
+      });
+    });
+
+    test("returns ready meeting status and url when meeting is created", async () => {
+      const booking = {
+        id: "b1",
+        currentState: "scheduled",
+        proposerId: "student1",
+        tutorId: "tutor1",
+        meeting: {
+          id: "m1",
+          status: "created",
+          meetingUrl: "https://meet.google.com/abc",
+        },
+      };
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => booking),
+        },
+      });
+
+      const result = await service.getById("b1", "student1");
+      expect(result.meetingStatus).toBe("ready");
+      expect(result.meetingUrl).toBe("https://meet.google.com/abc");
+    });
+
+    test("returns pending meeting status when meeting exists but is manual", async () => {
+      const booking = {
+        id: "b1",
+        currentState: "confirmed",
+        proposerId: "student1",
+        tutorId: "tutor1",
+        meeting: {
+          id: "m1",
+          status: "manual",
+          meetingUrl: null,
+        },
+      };
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => booking),
+        },
+      });
+
+      const result = await service.getById("b1", "student1");
+      expect(result.meetingStatus).toBe("pending");
+      expect(result.meetingUrl).toBeNull();
     });
 
     test("throws BookingNotFoundError when booking does not exist", async () => {
@@ -903,7 +960,7 @@ describe("BookingService", () => {
       );
     });
 
-    test("accepts online booking — transitions to confirmed then scheduled and creates meeting", async () => {
+    test("accepts online booking — transitions to confirmed then scheduled and creates meeting with attendees", async () => {
       const booking = makeBooking({ modality: "online" });
       let findCallCount = 0;
       const {
@@ -930,6 +987,23 @@ describe("BookingService", () => {
               };
             },
           ),
+          findConfirmedParticipants: mock(async () => [
+            { userId: "student1" },
+            { userId: "student2" },
+          ]),
+          findUserEmails: mock(async () => [
+            { id: "tutor1", email: "tutor1@example.com", name: "Tutor One" },
+            {
+              id: "student1",
+              email: "student1@example.com",
+              name: "Student One",
+            },
+            {
+              id: "student2",
+              email: "student2@example.com",
+              name: "Student Two",
+            },
+          ]),
         },
       });
 
@@ -940,6 +1014,11 @@ describe("BookingService", () => {
         "b1",
         booking.scheduledStartAt,
         booking.scheduledEndAt,
+        [
+          { email: "tutor1@example.com", name: "Tutor One" },
+          { email: "student1@example.com", name: "Student One" },
+          { email: "student2@example.com", name: "Student Two" },
+        ],
       );
       expect(notification.write).toHaveBeenCalledTimes(1);
       expect(notification.write.mock.calls[0][0].title).toBe(
