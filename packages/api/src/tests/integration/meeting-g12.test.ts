@@ -156,7 +156,9 @@ describe("G12 Google Meet attendee automation", () => {
 
       const attendeeEmails = await getMeetingAttendees(bookingId);
       expect(attendeeEmails).toBeDefined();
-      expect(attendeeEmails!.toSorted()).toEqual([studentEmail, tutorEmail].toSorted());
+      expect(attendeeEmails!.toSorted()).toEqual(
+        [studentEmail, tutorEmail].toSorted(),
+      );
     });
   });
 
