@@ -3,14 +3,17 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const envFile =
   process.env.ENV_FILE && existsSync(path.resolve(process.env.ENV_FILE))
     ? path.resolve(process.env.ENV_FILE)
-    : [".env.test", ".env.test.example"]
+    : ([".env.test", ".env.test.example"]
         .map((name) => path.join(rootDir, "apps/server", name))
         .find((candidate) => existsSync(candidate)) ??
-      path.join(rootDir, "apps/server/.env.test.example");
+      path.join(rootDir, "apps/server/.env.test.example"));
 const dbDir = path.join(rootDir, "packages/db");
 const e2eDir = path.join(rootDir, "packages/e2e");
 
@@ -47,9 +50,7 @@ function run(command, args, cwd = rootDir, env = {}) {
 
 function hasExplicitTarget(args, cwd = rootDir) {
   return args.some(
-    (arg) =>
-      !arg.startsWith("-") &&
-      existsSync(path.resolve(cwd, arg)),
+    (arg) => !arg.startsWith("-") && existsSync(path.resolve(cwd, arg)),
   );
 }
 
@@ -61,14 +62,9 @@ async function prepareTestDatabase() {
   await run("node", ["ensure-test-database.mjs"], dbDir, {
     ENV_FILE: envFile,
   });
-  await run(
-    "bun",
-    ["run", "db:migrate"],
-    dbDir,
-    {
-      ENV_FILE: envFile,
-    },
-  );
+  await run("bun", ["run", "db:migrate"], dbDir, {
+    ENV_FILE: envFile,
+  });
 }
 
 async function main() {
