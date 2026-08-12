@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-07-28
+Last updated: 2026-08-12
 
 ## Starting the Server
 
@@ -27,6 +27,7 @@ The server runs on port 3001 by default (configurable via `PORT` env var).
 
 ```bash
 bun run db:start         # Starts PostgreSQL on port 6767
+bun run db:start:test    # Starts isolated test PostgreSQL on port 6768
 ```
 
 ### Run Migrations
@@ -35,6 +36,9 @@ bun run db:start         # Starts PostgreSQL on port 6767
 bun run db:migrate       # Apply pending migrations
 bun run db:generate      # Generate new migration from schema changes
 ```
+
+For isolated local test runs, the test runner migrates `cogito-test` automatically
+using `apps/server/.env.test` or `apps/server/.env.test.example`.
 
 ### Seed the Database
 
@@ -52,6 +56,13 @@ docker compose down -v
 bun run db:start
 bun run db:migrate
 bun run db:seed
+```
+
+Test database reset:
+
+```bash
+bun run db:down:test
+bun run db:start:test
 ```
 
 ### Drizzle Studio (Database GUI)
@@ -140,7 +151,13 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 ### Database Connection Errors
 
 - `ECONNREFUSED` — PostgreSQL not running. Run `bun run db:start`.
+- `ECONNREFUSED` during tests — Start the isolated test DB with `bun run db:start:test`.
 - `connection timeout` — Check `DATABASE_URL` in `.env`.
+
+### Test Safety Guard
+
+- `Refusing to run tests against a non-test database` — The test harness detected a `DATABASE_URL` whose database name does not include `test`.
+- `resetDatabase() is blocked outside a dedicated test database` — An integration test tried to truncate tables while pointed at a non-test database.
 
 ### Redis Connection Errors
 
@@ -183,3 +200,23 @@ Key environment variables (see `.env.example` for full list):
 | `RESEND_FROM_EMAIL`      | No       | Sender email address                    |
 | `XENDIT_SECRET_KEY`      | No       | Xendit API secret key                   |
 | `XENDIT_WEBHOOK_TOKEN`   | No       | Xendit webhook verification token       |
+
+## Test Environment
+
+Tracked template:
+
+```bash
+apps/server/.env.test.example
+```
+
+Optional local override:
+
+```bash
+apps/server/.env.test
+```
+
+Default local test ports:
+
+- Web: `3100`
+- Server: `3101`
+- PostgreSQL: `6768`

@@ -7,6 +7,33 @@ import { eq } from "drizzle-orm";
 import { appRouter, type AppRouter } from "../../routers";
 import { services } from "../../services";
 
+function getDatabaseName(databaseUrl: string | undefined) {
+  if (!databaseUrl) return "";
+
+  try {
+    return new URL(databaseUrl).pathname.replace(/^\/+/, "");
+  } catch {
+    return "";
+  }
+}
+
+function assertSafeTestDatabase() {
+  const databaseUrl = process.env.DATABASE_URL;
+  const databaseName = getDatabaseName(databaseUrl);
+
+  if (
+    process.env.NODE_ENV !== "test" ||
+    !databaseName.toLowerCase().includes("test")
+  ) {
+    throw new Error(
+      [
+        "resetDatabase() is blocked outside a dedicated test database.",
+        `NODE_ENV='${process.env.NODE_ENV ?? ""}', DATABASE_URL database='${databaseName}'.`,
+      ].join(" "),
+    );
+  }
+}
+
 export type TestClient = ReturnType<typeof createTestClient>;
 
 export async function createTestContext(sessionCookie?: string) {
@@ -85,6 +112,7 @@ const TRUNCATE_TABLES = [
 ];
 
 export async function resetDatabase() {
+  assertSafeTestDatabase();
   await db.execute(
     `TRUNCATE TABLE ${TRUNCATE_TABLES.map((t) => `"${t}"`).join(", ")} CASCADE`,
   );

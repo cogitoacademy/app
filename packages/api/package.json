@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "test": "bun test --env-file ../../apps/server/.env"
+    "test": "bun ../../scripts/run-test-suite.mjs api"
   },
   "dependencies": {
     "@cogito-app/auth": "workspace:*",

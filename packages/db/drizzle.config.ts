@@ -3,15 +3,19 @@ import { resolve } from "node:path";
 import dotenv from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
-const envPath = resolve("../../apps/server/.env");
+const requestedEnvPath = process.env.ENV_FILE;
+const envPath = requestedEnvPath
+  ? resolve(requestedEnvPath)
+  : resolve("../../apps/server/.env");
+
 if (existsSync(envPath)) {
-  dotenv.config({ path: envPath });
+  dotenv.config({ path: envPath, override: true });
 }
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error(
-    "DATABASE_URL is required. Set it as an env var or create apps/server/.env",
+    `DATABASE_URL is required. Set it as an env var or create ${envPath}`,
   );
 }
 

@@ -1,6 +1,6 @@
 # Cogito Onboarding Guide
 
-Last updated: 2026-07-28
+Last updated: 2026-08-12
 
 ## Prerequisites
 
@@ -23,6 +23,9 @@ bun install
 # Copy the example env file
 cp apps/server/.env.example apps/server/.env
 
+# Optional: create a local test override
+cp apps/server/.env.test.example apps/server/.env.test
+
 # Edit with your values:
 # DATABASE_URL=postgresql://cogito:cogito@localhost:6767/cogito
 # BETTER_AUTH_SECRET=<generate with: openssl rand -hex 32>
@@ -37,6 +40,9 @@ cp apps/server/.env.example apps/server/.env
 ```bash
 # Start PostgreSQL
 bun run db:start
+
+# Optional: start isolated PostgreSQL for tests
+bun run db:start:test
 
 # Run migrations
 bun run db:migrate
@@ -53,14 +59,20 @@ The server runs on `http://localhost:3001` and the web app on `http://localhost:
 ## Running Tests
 
 ```bash
-# All tests (unit only - no DB required)
-bun test packages/api/src/tests/
+# Full test harness against isolated test DB
+bun run test
 
-# Single test file
-bun test packages/api/src/tests/unit/booking.service.test.ts
+# API tests only
+bun run test:api
+
+# Single API test file
+bun scripts/run-test-suite.mjs api packages/api/src/tests/unit/booking.service.test.ts
 
 # With coverage
-bun test --coverage packages/api/src/tests/
+bun run test:coverage
+
+# E2E (uses isolated ports 3100/3101)
+bun run test:e2e
 
 # Type checking
 bun run check-types
@@ -74,13 +86,15 @@ bun run build
 
 ### Integration Tests
 
-Integration tests require a running PostgreSQL instance. They skip gracefully when no DB is available:
+Integration and e2e tests use the isolated test database and ports:
 
 ```bash
-# With Docker PostgreSQL running:
-bun run db:start
-bun test packages/api/src/tests/integration/
+bun run db:start:test
+bun run test:api
 ```
+
+The harness migrates `cogito-test` automatically and blocks execution if
+`DATABASE_URL` points at a non-test database.
 
 ## Project Structure
 
@@ -264,6 +278,8 @@ The server uses structured JSON logging via `evlog`. In development, logs are pr
 ### Common Issues
 
 - **Port 3001 already in use:** Kill existing process or change `PORT` env var
+- **Port 3100/3101 already in use during tests:** Stop prior test servers or change `WEB_PORT` / `PORT` in `.env.test`
 - **Database connection refused:** Run `bun run db:start` first
+- **Test database connection refused:** Run `bun run db:start:test` first
 - **Migration errors:** Check `DATABASE_URL` and run `bun run db:migrate`
 - **Type errors after schema changes:** Run `bun run db:generate` then `bun run check-types`
