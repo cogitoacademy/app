@@ -56,6 +56,14 @@ export function validateRoleChange(
   return { previousRole };
 }
 
+function assertValidDateFilter(value: string, field: string): Date {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new InvalidLedgerFilterError(`${field} must be a valid ISO datetime`);
+  }
+  return parsed;
+}
+
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
@@ -63,16 +71,6 @@ export function createAdminService(deps: {
   wallet: AdminWalletPort;
 }) {
   const { adminRepo, auditPort, db, wallet } = deps;
-
-  function assertValidDateFilter(value: string, field: string): Date {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-      throw new InvalidLedgerFilterError(
-        `${field} must be a valid ISO datetime`,
-      );
-    }
-    return parsed;
-  }
 
   async function listUsers(
     input: ListUsersInput = {},

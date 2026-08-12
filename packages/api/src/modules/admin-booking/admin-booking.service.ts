@@ -110,6 +110,32 @@ function toOverrideCursor(row: {
   return `${rank}~${row.scheduledStartAt.toISOString()}~${row.id}`;
 }
 
+function projectWalletAfter(
+  w: WalletBalances,
+  action: MarksAction,
+  amount: number,
+): WalletBalances {
+  if (action === "release_holds") {
+    return {
+      totalBalance: w.totalBalance,
+      heldBalance: Math.max(w.heldBalance - amount, 0),
+      availableBalance: w.availableBalance + amount,
+    };
+  }
+  if (action === "compensate_credit") {
+    return {
+      totalBalance: w.totalBalance + amount,
+      heldBalance: w.heldBalance,
+      availableBalance: w.availableBalance + amount,
+    };
+  }
+  return {
+    totalBalance: w.totalBalance - amount,
+    heldBalance: w.heldBalance,
+    availableBalance: w.availableBalance - amount,
+  };
+}
+
 
 
  * Creates the admin booking service for overrides, listing, history, and refunds.
@@ -126,6 +152,8 @@ export function createAdminBookingService(deps: {
   notification?: AdminBookingNotificationPort;
 }) {
   const { db, repo, auditPort, wallet, refund, notification } = deps;
+
+
 
   function projectWalletAfter(
     w: WalletBalances,
@@ -152,7 +180,6 @@ export function createAdminBookingService(deps: {
       availableBalance: w.availableBalance - amount,
     };
   }
-
   /**
    * Pure planning for an override: computes the projected target state and per
    * participant wallet impact WITHOUT writing anything. Shared by applyOverride
@@ -162,6 +189,8 @@ export function createAdminBookingService(deps: {
     conn: DbOrTx,
     bookingRow: { id: string; currentState: string; holdAmount: number },
     input: OverrideInput,
+
+
 
    * Applies an admin override to a booking, optionally releasing/compensating held Marks.
    *
@@ -379,6 +408,8 @@ export function createAdminBookingService(deps: {
       perParticipantImpact: plan.perParticipantImpact,
     };
   }
+
+
 
   /**
    * Lists bookings for the admin, by bookingId or with cursor pagination.
