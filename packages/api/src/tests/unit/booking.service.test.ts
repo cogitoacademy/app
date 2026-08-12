@@ -1677,6 +1677,85 @@ describe("BookingService", () => {
       });
     });
 
+    test("writes expiry notifications to proposer and tutor", async () => {
+      const expiringBooking = makeBooking({
+        currentState: "awaiting_tutor_review",
+        holdAmount: 42,
+        proposerId: "student1",
+        tutorId: "tutor1",
+      });
+
+      const { service, notification } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
+          findBookingById: mock(async () => ({
+            ...expiringBooking,
+            currentState: "awaiting_tutor_review",
+            version: 1,
+          })),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...expiringBooking, currentState: "expired" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.expireBookings();
+
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(2);
+      const studentNotif = notification.writeBestEffort.mock.calls.find(
+        (c: any) => c[0].userId === "student1",
+      );
+      const tutorNotif = notification.writeBestEffort.mock.calls.find(
+        (c: any) => c[0].userId === "tutor1",
+      );
+      expect(studentNotif).toBeDefined();
+      expect(studentNotif[0]).toMatchObject({
+        bookingId: "b1",
+        eventKey: "booking.b1.expired.student",
+        title: "Booking expired",
+      });
+      expect(tutorNotif).toBeDefined();
+      expect(tutorNotif[0].eventKey).toBe("booking.b1.expired.tutor");
+    });
+
+    test("uses no-show notification title for scheduled expiry", async () => {
+      const expiringBooking = makeBooking({
+        currentState: "scheduled",
+        holdAmount: 42,
+        proposerId: "student1",
+        tutorId: "tutor1",
+      });
+
+      const { service, notification } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
+          findBookingById: mock(async () => ({
+            ...expiringBooking,
+            currentState: "scheduled",
+            version: 1,
+          })),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...expiringBooking, currentState: "no_show" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.expireBookings();
+
+      const studentNotif = notification.writeBestEffort.mock.calls.find(
+        (c: any) => c[0].userId === "student1",
+      );
+      expect(studentNotif[0].title).toBe("Session marked as no-show");
+    });
+
     test("skips release when holdAmount is 0", async () => {
       const expiringBooking = makeBooking({
         currentState: "awaiting_tutor_review",
@@ -2243,7 +2322,7 @@ describe("BookingService", () => {
         proposerId: "student1",
       });
 
-      const { service, wallet } = createService({
+      const { service, wallet, notification } = createService({
         repo: {
           findBookingsExpiringByDeadline: mock(async () => [b1]),
           findBookingById: mock(async () => ({ ...b1, version: 1 })),
@@ -2260,6 +2339,13 @@ describe("BookingService", () => {
       const result = await service.releaseExpiredHolds();
       expect(result).toEqual({ released: 1 });
       expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort.mock.calls[0][0]).toMatchObject({
+        userId: "student1",
+        bookingId: "b1",
+        eventKey: "booking.b1.hold_released_expiry",
+        title: "Booking hold released",
+      });
     });
 
     test("skips bookings with holdAmount of 0", async () => {

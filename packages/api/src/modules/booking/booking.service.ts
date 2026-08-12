@@ -136,7 +136,7 @@ export function createBookingService(deps: {
       fromState: entry.fromState,
       toState: entry.toState,
       reason: entry.reason,
-      actorId: entry.actorId,
+      actorId: entry.actorType === ACTOR_TYPE.SYSTEM ? null : entry.actorId,
       actorType: entry.actorType,
       metadata: entry.metadata,
     });
@@ -1260,6 +1260,31 @@ export function createBookingService(deps: {
           if (b.type === BOOKING_TYPE.SERIES) {
             await repo.cancelAllSessions(tx, b.id);
           }
+
+          const noShow = targetState === BOOKING_STATE.NO_SHOW;
+          await notification.writeBestEffort({
+            db: tx,
+            userId: b.proposerId,
+            bookingId: b.id,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.INFO,
+            title: noShow ? "Session marked as no-show" : "Booking expired",
+            body: noShow
+              ? "The session was marked as no-show and held marks were released."
+              : "The booking deadline passed and held marks were released.",
+            eventKey: `booking.${b.id}.expired.student`,
+          });
+
+          await notification.writeBestEffort({
+            db: tx,
+            userId: b.tutorId,
+            bookingId: b.id,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.INFO,
+            title: noShow ? "Session marked as no-show" : "Booking expired",
+            body: "The booking expired because its deadline passed.",
+            eventKey: `booking.${b.id}.expired.tutor`,
+          });
         });
         succeeded++;
       } catch (error) {
@@ -1298,6 +1323,17 @@ export function createBookingService(deps: {
             ACTOR_TYPE.SYSTEM,
           );
           await repo.updateBookingHoldAmount(tx, b.id, 0);
+
+          await notification.writeBestEffort({
+            db: tx,
+            userId: b.proposerId,
+            bookingId: b.id,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.INFO,
+            title: "Booking hold released",
+            body: "Held marks for an expired booking were released back to your balance.",
+            eventKey: `booking.${b.id}.hold_released_expiry`,
+          });
         });
         released++;
       } catch (error) {
