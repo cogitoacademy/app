@@ -49,6 +49,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateParticipantState: mock(async () => {}),
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
+    findUserEmails: mock(async () => []),
     findReconfirmedParticipants: mock(async () => []),
     insertRescheduleProposal: mock(async () => {}),
     findPendingRescheduleProposal: mock(async () => null),
@@ -959,7 +960,7 @@ describe("BookingService", () => {
       );
     });
 
-    test("accepts online booking — transitions to confirmed then scheduled and creates meeting", async () => {
+    test("accepts online booking — transitions to confirmed then scheduled and creates meeting with attendees", async () => {
       const booking = makeBooking({ modality: "online" });
       let findCallCount = 0;
       const {
@@ -986,6 +987,23 @@ describe("BookingService", () => {
               };
             },
           ),
+          findConfirmedParticipants: mock(async () => [
+            { userId: "student1" },
+            { userId: "student2" },
+          ]),
+          findUserEmails: mock(async () => [
+            { id: "tutor1", email: "tutor1@example.com", name: "Tutor One" },
+            {
+              id: "student1",
+              email: "student1@example.com",
+              name: "Student One",
+            },
+            {
+              id: "student2",
+              email: "student2@example.com",
+              name: "Student Two",
+            },
+          ]),
         },
       });
 
@@ -996,6 +1014,11 @@ describe("BookingService", () => {
         "b1",
         booking.scheduledStartAt,
         booking.scheduledEndAt,
+        [
+          { email: "tutor1@example.com", name: "Tutor One" },
+          { email: "student1@example.com", name: "Student One" },
+          { email: "student2@example.com", name: "Student Two" },
+        ],
       );
       expect(notification.write).toHaveBeenCalledTimes(1);
       expect(notification.write.mock.calls[0][0].title).toBe(

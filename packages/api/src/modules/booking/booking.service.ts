@@ -679,10 +679,24 @@ export function createBookingService(deps: {
         });
 
         try {
+          const participants = await repo.findConfirmedParticipants(
+            tx,
+            bookingId,
+          );
+          const users = await repo.findUserEmails(tx, [
+            b.tutorId,
+            ...participants.map((p) => p.userId),
+          ]);
+          const attendees = users.map((u) => ({
+            email: u.email,
+            name: u.name,
+          }));
+
           const meetingResult = await meeting.createEvent(
             bookingId,
             b.scheduledStartAt,
             b.scheduledEndAt,
+            attendees,
           );
 
           if (meetingResult.status === "failed") {

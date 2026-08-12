@@ -21,6 +21,7 @@ import {
   sessionNote,
   availabilitySlot,
   tutorProfile,
+  user,
   type booking as bookingTable,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
@@ -162,6 +163,17 @@ async function findConfirmedParticipants(
     .where(and(...conditions));
 }
 
+async function findUserEmails(
+  conn: DbOrTx,
+  userIds: string[],
+): Promise<{ id: string; email: string; name: string }[]> {
+  if (userIds.length === 0) return [];
+  return conn
+    .select({ id: user.id, email: user.email, name: user.name })
+    .from(user)
+    .where(inArray(user.id, userIds));
+}
+
 /**
  * Lists participants whose confirmation state is RECONFIRMED for a booking.
  *
@@ -245,6 +257,8 @@ async function updateBookingPriceSnapshot(
       tutorShare: number;
       cogitoTake: number;
 
+
+
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -256,6 +270,8 @@ async function updateBookingPriceSnapshot(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
 
 /**
  * Sets a booking's confirmed headcount.
@@ -380,6 +396,8 @@ async function updateRescheduleProposal(
     .where(eq(bookingRescheduleProposal.id, proposalId));
 }
 
+
+
 /**
  * Inserts a session for a series booking.
  *
@@ -460,6 +478,8 @@ async function listSessionNotes(conn: DbOrTx, bookingId: string) {
     .orderBy(desc(sessionNote.createdAt));
 }
 
+
+
 /**
  * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
  *
@@ -520,6 +540,8 @@ async function updateBookingSchedule(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
+
+
 
 /**
  * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).
@@ -719,6 +741,7 @@ export function createBookingRepo(db: DbType) {
     findAvailabilitySlot,
     findParticipant,
     findConfirmedParticipants,
+    findUserEmails,
     findReconfirmedParticipants,
     insertBooking,
     updateBookingCancellationReason,

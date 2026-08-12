@@ -115,6 +115,53 @@ describe("createGoogleMeetingProvider", () => {
     expect(result.errorReason).toBeNull();
   });
 
+  test("createEvent passes attendees to calendar insert and persists attendeeEmails", async () => {
+    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+      data: {
+        id: "evt_123",
+        conferenceData: {
+          entryPoints: [{ uri: "https://meet.google.com/abc" }],
+        },
+      },
+    }));
+
+    const successRow = {
+      id: "me1",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: "evt_123",
+      meetingUrl: "https://meet.google.com/abc",
+      attendeeEmails: ["tutor@example.com", "student@example.com"],
+      status: "created",
+      errorReason: null,
+    };
+
+    const returning = mock(async () => [successRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { insert } as any;
+
+    const provider = createGoogleMeetingProvider(config, db);
+    await provider.createEvent("b1", undefined, undefined, [
+      { email: "tutor@example.com", name: "Tutor" },
+      { email: "student@example.com" },
+    ]);
+
+    const insertCall = mockCalendarEventsInsert.mock.calls.at(-1)?.[0];
+    expect(insertCall?.requestBody?.attendees).toEqual([
+      { email: "tutor@example.com", displayName: "Tutor" },
+      { email: "student@example.com" },
+    ]);
+
+    const insertValues = values.mock.calls[0]?.[0] as {
+      attendeeEmails: string[] | null;
+    };
+    expect(insertValues.attendeeEmails).toEqual([
+      "tutor@example.com",
+      "student@example.com",
+    ]);
+  });
+
   test("createEvent returns failed status on Google API error", async () => {
     mockCalendarEventsInsert.mockImplementationOnce(async () => {
       throw new Error("Google API error");

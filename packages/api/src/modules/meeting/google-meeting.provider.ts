@@ -1,7 +1,11 @@
 import { google } from "googleapis";
 import { meetingEvent } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
-import type { MeetingEvent, MeetingPort } from "./meeting.types";
+import type {
+  MeetingAttendee,
+  MeetingEvent,
+  MeetingPort,
+} from "./meeting.types";
 import { log } from "../../lib/logger";
 import { createFallbackMeetingProvider } from "./fallback.provider";
 import { CircuitBreaker } from "../../lib/circuit-breaker";
@@ -45,12 +49,14 @@ export function createGoogleMeetingProvider(
     bookingId: string,
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
+    attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent> {
     try {
       const now = new Date();
       const start =
         scheduledStartAt ?? new Date(now.getTime() + 60 * 60 * 1000);
       const end = scheduledEndAt ?? new Date(start.getTime() + 90 * 60 * 1000);
+      const attendeeEmails = attendees?.map((a) => a.email) ?? null;
 
       const TIMEOUT_MS = 30_000;
       const response = await googleMeetBreaker.execute(() =>
@@ -61,6 +67,14 @@ export function createGoogleMeetingProvider(
               summary: `Cogito Booking ${bookingId}`,
               start: { dateTime: start.toISOString() },
               end: { dateTime: end.toISOString() },
+              ...(attendees?.length
+                ? {
+                    attendees: attendees.map((a) => ({
+                      email: a.email,
+                      ...(a.name ? { displayName: a.name } : {}),
+                    })),
+                  }
+                : {}),
               conferenceData: {
                 createRequest: {
                   requestId: bookingId,
@@ -91,6 +105,7 @@ export function createGoogleMeetingProvider(
           provider: "google_meet",
           externalEventId,
           meetingUrl,
+          attendeeEmails,
           status: "created",
         })
         .returning();
@@ -121,6 +136,7 @@ export function createGoogleMeetingProvider(
           errorReason: String(error),
           meetingUrl: null,
           externalEventId: null,
+          attendeeEmails: attendees?.map((a) => a.email) ?? null,
         })
         .returning();
 
@@ -151,17 +167,20 @@ export function createGoogleMeetingProviderWithFallback(
     bookingId: string,
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
+    attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent> {
     const result = await googleProvider.createEvent(
       bookingId,
       scheduledStartAt,
       scheduledEndAt,
+      attendees,
     );
     if (result.status === "failed") {
       return fallbackProvider.createEvent(
         bookingId,
         scheduledStartAt,
         scheduledEndAt,
+        attendees,
       );
     }
     return result;
