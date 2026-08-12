@@ -215,7 +215,7 @@ describe("Scheduler: releaseExpiredHolds (real DB)", () => {
     expect(byBooking.get(futureId)!.heldAmount).toBe(50);
   });
 
-  test("N3 pin: participant.heldAmount is left stale after the wallet release", async () => {
+  test("release zeroes participant.heldAmount along with the wallet hold", async () => {
     const participants = await db
       .select()
       .from(bookingParticipant)
@@ -226,8 +226,8 @@ describe("Scheduler: releaseExpiredHolds (real DB)", () => {
         ),
       );
     const byBooking = new Map(participants.map((p) => [p.bookingId, p]));
-    expect(byBooking.get(expiredAId)!.heldAmount).toBe(42);
-    expect(byBooking.get(expiredBId)!.heldAmount).toBe(100);
+    expect(byBooking.get(expiredAId)!.heldAmount).toBe(0);
+    expect(byBooking.get(expiredBId)!.heldAmount).toBe(0);
   });
 
   test("booking state is left untouched (holds-only sweeper)", async () => {

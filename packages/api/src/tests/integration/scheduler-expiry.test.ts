@@ -193,22 +193,34 @@ describe("Scheduler: expireBookings against real Postgres", () => {
     expect(holds.length).toBe(1);
   });
 
-  test("N1 pin: expireBookings fails to expire (booking_state_history.actor_id FK rejects 'system')", async () => {
+  test("expireBookings expires an eligible booking, releases the hold, and records state history", async () => {
     const result = await services.booking.expireBookings();
-    expect(result.expired).toBe(0);
-    expect(result.failed).toBe(1);
+    expect(result.expired).toBe(1);
+    expect(result.failed).toBe(0);
 
     const [b] = await db
       .select()
       .from(booking)
       .where(eq(booking.id, soloBookingId));
-    expect(b!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
-    expect(b!.holdAmount).toBeGreaterThan(0);
+    expect(b!.currentState).toBe(BOOKING_STATE.EXPIRED);
+    expect(b!.holdAmount).toBe(0);
 
     const w = await getWalletByUserId(studentA.id);
-    expect(w!.heldBalance).toBeGreaterThan(0);
+    expect(w!.heldBalance).toBe(0);
+    expect(w!.availableBalance).toBe(200);
 
-    const expired = await db
+    const releases = await db
+      .select()
+      .from(ledgerEntry)
+      .where(
+        and(
+          eq(ledgerEntry.bookingId, soloBookingId),
+          eq(ledgerEntry.entryType, ENTRY_TYPE.RELEASE),
+        ),
+      );
+    expect(releases.length).toBe(1);
+
+    const history = await db
       .select()
       .from(bookingStateHistory)
       .where(
@@ -217,20 +229,36 @@ describe("Scheduler: expireBookings against real Postgres", () => {
           eq(bookingStateHistory.toState, BOOKING_STATE.EXPIRED),
         ),
       );
-    expect(expired.length).toBe(0);
+    expect(history.length).toBe(1);
+    expect(history[0]!.actorType).toBe(ACTOR_TYPE.SYSTEM);
+    expect(history[0]!.actorId).toBeNull();
   });
 
-  test("every eligible state fails to transition (mapping never applied)", async () => {
+  test("every eligible state transitions to its expiry target (mapping applied)", async () => {
     const cases = [
-      { state: BOOKING_STATE.SCHEDULED, holdAmount: 40 },
+      {
+        state: BOOKING_STATE.SCHEDULED,
+        target: BOOKING_STATE.NO_SHOW,
+        holdAmount: 40,
+      },
       {
         state: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+        target: BOOKING_STATE.EXPIRED,
         holdAmount: 50,
       },
-      { state: BOOKING_STATE.AWAITING_RECONFIRMATION, holdAmount: 60 },
-      { state: BOOKING_STATE.RESCHEDULE_PROPOSED, holdAmount: 70 },
+      {
+        state: BOOKING_STATE.AWAITING_RECONFIRMATION,
+        target: BOOKING_STATE.EXPIRED,
+        holdAmount: 60,
+      },
+      {
+        state: BOOKING_STATE.RESCHEDULE_PROPOSED,
+        target: BOOKING_STATE.EXPIRED,
+        holdAmount: 70,
+      },
       {
         state: BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+        target: BOOKING_STATE.CANCELLED,
         holdAmount: 80,
       },
     ];
@@ -246,19 +274,24 @@ describe("Scheduler: expireBookings against real Postgres", () => {
     }
 
     const result = await services.booking.expireBookings();
-    expect(result.expired).toBe(0);
-    expect(result.failed).toBeGreaterThanOrEqual(5);
+    expect(result.expired).toBeGreaterThanOrEqual(5);
+    expect(result.failed).toBe(0);
 
-    for (const id of ids) {
+    for (const c of cases) {
+      const id = ids[cases.indexOf(c)]!;
       const [row] = await db.select().from(booking).where(eq(booking.id, id));
-      expect(row!.currentState).toBe(cases[ids.indexOf(id)]!.state);
-      expect(row!.holdAmount).toBe(cases[ids.indexOf(id)]!.holdAmount);
+      expect(row!.currentState).toBe(c.target);
+      expect(row!.holdAmount).toBe(0);
     }
+
+    const wB = await getWalletByUserId(studentB.id);
+    expect(wB!.heldBalance).toBe(0);
+    expect(wB!.availableBalance).toBe(500);
   });
 
-  test("differential: releaseExpiredHolds releases the same wallet holds (failure is isolated to transition)", async () => {
+  test("differential: releaseExpiredHolds is a no-op once expireBookings released the holds", async () => {
     const result = await services.booking.releaseExpiredHolds();
-    expect(result.released).toBeGreaterThanOrEqual(1);
+    expect(result.released).toBe(0);
 
     const wA = await getWalletByUserId(studentA.id);
     expect(wA!.heldBalance).toBe(0);
@@ -278,10 +311,10 @@ describe("Scheduler: expireBookings against real Postgres", () => {
       .select()
       .from(booking)
       .where(eq(booking.id, soloBookingId));
-    expect(solo!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
+    expect(solo!.currentState).toBe(BOOKING_STATE.EXPIRED);
   });
 
-  test("no expiry notification is emitted for the affected user (PRD gap)", async () => {
+  test("no expiry notification is emitted for the affected user (PRD gap, not part of this fix)", async () => {
     const notifs = await db
       .select()
       .from(notification)

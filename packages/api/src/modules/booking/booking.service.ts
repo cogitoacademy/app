@@ -178,8 +178,7 @@ export function createBookingService(deps: {
       fromState,
       toState,
       reason: params.reason,
-      actorId:
-        params.actorType === "system" ? null : params.actorId,
+      actorId: params.actorType === "system" ? null : params.actorId,
       actorType: params.actorType,
       metadata: params.metadata,
     });
