@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte } from "drizzle-orm";
 import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -320,20 +320,39 @@ export async function findLedgerEntries(
     cursor?: string;
     bookingId?: string;
     eventKey?: string;
+    entryType?: string;
+    dateFrom?: string;
+    dateTo?: string;
   },
 ) {
   const conditions = [eq(ledgerEntry.walletId, walletId)];
+  if (opts.cursor) {
+    conditions.push(
+      sql`(${ledgerEntry.createdAt}, ${ledgerEntry.id}) < (
+        SELECT created_at, id FROM ledger_entry WHERE id = ${opts.cursor}
+      )`,
+    );
+  }
   if (opts.bookingId) {
     conditions.push(eq(ledgerEntry.bookingId, opts.bookingId));
   }
   if (opts.eventKey) {
     conditions.push(eq(ledgerEntry.eventKey, opts.eventKey));
   }
+  if (opts.entryType) {
+    conditions.push(eq(ledgerEntry.entryType, opts.entryType));
+  }
+  if (opts.dateFrom) {
+    conditions.push(gte(ledgerEntry.createdAt, new Date(opts.dateFrom)));
+  }
+  if (opts.dateTo) {
+    conditions.push(lte(ledgerEntry.createdAt, new Date(opts.dateTo)));
+  }
   return conn
     .select()
     .from(ledgerEntry)
     .where(and(...conditions))
-    .orderBy(desc(ledgerEntry.createdAt))
+    .orderBy(desc(ledgerEntry.createdAt), desc(ledgerEntry.id))
     .limit(opts.limit + 1);
 }
 

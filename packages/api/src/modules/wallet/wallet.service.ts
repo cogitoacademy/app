@@ -71,11 +71,16 @@ export interface WalletSnapshot {
   availableBalance: number;
 }
 
+export type LedgerEntryRow = typeof ledgerEntry.$inferSelect;
+
 export interface LedgerQueryOptions {
   cursor?: string;
   limit?: number;
   bookingId?: string;
   eventKey?: string;
+  entryType?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface WalletPort {
@@ -90,7 +95,7 @@ export interface WalletPort {
   listLedger(
     walletId: string,
     opts?: LedgerQueryOptions,
-  ): Promise<{ items: unknown[]; nextCursor: string | null }>;
+  ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }>;
   knowledgeBankEligible(userId: string): Promise<{
     eligible: boolean;
     balance: number;
@@ -383,6 +388,11 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     });
   }
 
+  async function listLedger(
+    walletId: string,
+    opts?: LedgerQueryOptions,
+  ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }> {
+
   /**
    * Lists ledger entries for a wallet with pagination.
    *
@@ -397,8 +407,11 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
       cursor: opts?.cursor,
       bookingId: opts?.bookingId,
       eventKey: opts?.eventKey,
+      entryType: opts?.entryType,
+      dateFrom: opts?.dateFrom,
+      dateTo: opts?.dateTo,
     });
-    const items = rows.slice(0, limit);
+    const items = rows.slice(0, limit) as LedgerEntryRow[];
     const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
     return { items, nextCursor };
   }

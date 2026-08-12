@@ -1,11 +1,13 @@
 import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
-import type { AdminAuditPort } from "./index";
+import type { AdminAuditPort, AdminWalletPort } from "./index";
 import {
   UserNotFoundError,
   LastAdminError,
   OptimisticLockError,
+  WalletNotFoundError,
+  InvalidLedgerFilterError,
 } from "./admin.errors";
 
 export interface ListUsersInput {
@@ -58,8 +60,17 @@ export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
   db: DbType;
+  wallet: AdminWalletPort;
 }) {
-  const { adminRepo, auditPort, db } = deps;
+  const { adminRepo, auditPort, db, wallet } = deps;
+
+  function assertValidDateFilter(value: string, field: string): Date {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new InvalidLedgerFilterError(`${field} must be a valid ISO datetime`);
+    }
+    return parsed;
+  }
 
   async function listUsers(
     input: ListUsersInput = {},
@@ -120,7 +131,64 @@ export function createAdminService(deps: {
     });
   }
 
-  return { listUsers, setRole };
+  async function getWallet(input: { userId: string }) {
+    const w = await wallet.getByUserId(db, input.userId);
+    if (!w) throw new WalletNotFoundError(input.userId);
+    return {
+      id: w.id,
+      totalBalance: w.totalBalance,
+      heldBalance: w.heldBalance,
+      availableBalance: w.availableBalance,
+    };
+  }
+
+  async function listLedgerEntries(input: {
+    walletId?: string;
+    userId?: string;
+    limit?: number;
+    cursor?: string;
+    bookingId?: string;
+    entryType?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }) {
+    if (input.walletId && input.userId) {
+      throw new InvalidLedgerFilterError(
+        "Provide either walletId or userId, not both",
+      );
+    }
+    let walletId = input.walletId;
+    if (!walletId && input.userId) {
+      const w = await wallet.getByUserId(db, input.userId);
+      if (!w) throw new WalletNotFoundError(input.userId);
+      walletId = w.id;
+    }
+    if (!walletId) {
+      throw new InvalidLedgerFilterError("walletId or userId is required");
+    }
+    const dateFrom = input.dateFrom
+      ? assertValidDateFilter(input.dateFrom, "dateFrom")
+      : undefined;
+    const dateTo = input.dateTo
+      ? assertValidDateFilter(input.dateTo, "dateTo")
+      : undefined;
+    if (dateFrom && dateTo && dateFrom.getTime() > dateTo.getTime()) {
+      throw new InvalidLedgerFilterError(
+        "dateFrom must not be after dateTo",
+      );
+    }
+
+    return wallet.listLedger(walletId, {
+      limit: input.limit,
+      cursor: input.cursor,
+      bookingId: input.bookingId,
+      entryType: input.entryType,
+      dateFrom: dateFrom?.toISOString(),
+      dateTo: dateTo?.toISOString(),
+    });
+  }
+
+  return { listUsers, setRole, getWallet, listLedgerEntries };
 }
 
 export type AdminService = ReturnType<typeof createAdminService>;

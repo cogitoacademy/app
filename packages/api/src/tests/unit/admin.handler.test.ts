@@ -42,6 +42,13 @@ function makeAuditPort() {
   return { record: mock(async () => {}) };
 }
 
+function makeWalletPort() {
+  return {
+    getByUserId: mock(async () => null),
+    listLedger: mock(async () => ({ items: [], nextCursor: null })),
+  };
+}
+
 describe("AdminHandler", () => {
   describe("listUsers", () => {
     test("calls adminService.listUsers with input from handler", async () => {
@@ -52,6 +59,7 @@ describe("AdminHandler", () => {
         adminRepo: repo as any,
         auditPort: auditPort as any,
         db,
+        wallet: makeWalletPort() as any,
       });
       const handler = createAdminHandler(service);
       const context = {
@@ -75,6 +83,7 @@ describe("AdminHandler", () => {
         adminRepo: repo as any,
         auditPort: auditPort as any,
         db,
+        wallet: makeWalletPort() as any,
       });
       const handler = createAdminHandler(service);
       const context = {
@@ -100,6 +109,7 @@ describe("AdminService", () => {
         adminRepo: repo as any,
         auditPort: makeAuditPort() as any,
         db: makeDb(),
+        wallet: makeWalletPort() as any,
       });
 
       const result = await service.listUsers({});
@@ -120,6 +130,7 @@ describe("AdminService", () => {
         adminRepo: repo as any,
         auditPort: makeAuditPort() as any,
         db: makeDb(),
+        wallet: makeWalletPort() as any,
       });
 
       const result = await service.listUsers({ limit: 10, offset: 20 });
@@ -146,6 +157,7 @@ describe("AdminService", () => {
         adminRepo: repo as any,
         auditPort: makeAuditPort() as any,
         db: makeDb(),
+        wallet: makeWalletPort() as any,
       });
 
       await service.listUsers({});
@@ -164,6 +176,7 @@ describe("AdminService", () => {
         adminRepo: repo as any,
         auditPort: makeAuditPort() as any,
         db: makeDb(),
+        wallet: makeWalletPort() as any,
       });
 
       try {
@@ -191,6 +204,7 @@ describe("AdminService", () => {
         adminRepo: repo as any,
         auditPort: makeAuditPort() as any,
         db: makeDb(),
+        wallet: makeWalletPort() as any,
       });
 
       try {
@@ -220,6 +234,7 @@ describe("AdminService", () => {
         adminRepo: repo as any,
         auditPort: auditPort as any,
         db: makeDb(),
+        wallet: makeWalletPort() as any,
       });
 
       const result = await service.setRole("admin1", {
@@ -254,6 +269,7 @@ describe("AdminService", () => {
         adminRepo: repo as any,
         auditPort: auditPort as any,
         db: makeDb(),
+        wallet: makeWalletPort() as any,
       });
 
       const result = await service.setRole("admin1", {

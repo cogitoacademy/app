@@ -1,5 +1,10 @@
 import { adminProcedure } from "../../procedures";
-import { listUsersInput, setRoleInput } from "./admin.types";
+import {
+  listUsersInput,
+  setRoleInput,
+  adminGetWalletInput,
+  adminListLedgerEntriesInput,
+} from "./admin.types";
 import type { AdminHandler } from "./admin.handler";
 
 export function createAdminRouter(handler: AdminHandler) {
@@ -26,5 +31,28 @@ export function createAdminRouter(handler: AdminHandler) {
       })
       .input(setRoleInput)
       .handler(handler.setRole),
+
+    getWallet: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/wallet/get",
+        tags: ["Admin"],
+        summary: "Get any user's wallet",
+        description: "Returns balance, held, and available Marks for a user",
+      })
+      .input(adminGetWalletInput)
+      .handler(handler.getWallet),
+
+    listLedgerEntries: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/wallet/ledger",
+        tags: ["Admin"],
+        summary: "List ledger entries for any wallet",
+        description:
+          "Paginated ledger entries filtered by entry type, date range, or booking",
+      })
+      .input(adminListLedgerEntriesInput)
+      .handler(handler.listLedgerEntries),
   };
 }

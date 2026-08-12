@@ -130,7 +130,11 @@ function createServices() {
   // Core modules
   const wallet = createWalletModule({ db });
   const auth = createAuthModule({ db, wallet: wallet.service });
-  const admin = createAdminModule({ db, audit: audit.service });
+  const admin = createAdminModule({
+    db,
+    audit: audit.service,
+    wallet: wallet.service,
+  });
   const adminTutor = createAdminTutorModule({ db, audit: audit.service });
   const tutor = createTutorModule({
     db,
