@@ -1,6 +1,7 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { AuditRecordParams } from "../audit/audit.service";
+import type { NotificationWriteParams } from "../notification/notification.service";
 import type {
   WalletSnapshot,
   ReleaseParams,
@@ -38,11 +39,16 @@ export interface AdminBookingRefundPort {
   ): Promise<void>;
 }
 
+export interface AdminBookingNotificationPort {
+  writeBestEffort(params: NotificationWriteParams): Promise<void>;
+}
+
 export function createAdminBookingModule(deps: {
   db: DbType;
   audit: AdminBookingAuditPort;
   wallet: AdminBookingWalletPort;
   refund: AdminBookingRefundPort;
+  notification?: AdminBookingNotificationPort;
 }) {
   const repo = createAdminBookingRepo();
   const service = createAdminBookingService({
@@ -51,6 +57,7 @@ export function createAdminBookingModule(deps: {
     auditPort: deps.audit,
     wallet: deps.wallet,
     refund: deps.refund,
+    notification: deps.notification,
   });
   const handler = createAdminBookingHandler(service);
   return { service, handler };

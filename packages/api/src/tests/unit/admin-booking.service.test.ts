@@ -88,6 +88,12 @@ function makeRefundPort() {
   };
 }
 
+function makeNotificationPort() {
+  return {
+    writeBestEffort: mock(async () => {}),
+  };
+}
+
 describe("AdminBookingService", () => {
   describe("applyOverride", () => {
     test("throws BookingNotFoundError when booking does not exist", async () => {
@@ -441,6 +447,185 @@ describe("AdminBookingService", () => {
     });
   });
 
+  describe("previewOverride", () => {
+    test("returns projected state and wallet impact without writing anything", async () => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+          holdAmount: 100,
+        })),
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.previewOverride({
+        bookingId: "b1",
+        category: "tutor_no_show",
+        reason: "Preview",
+        marksAction: "release_holds",
+        affectedParticipants: ["u1"],
+      });
+
+      expect(result.bookingId).toBe("b1");
+      expect(result.currentState).toBe("confirmed");
+      expect(result.projectedState).toBe("no_show");
+      expect(result.affectedParticipants).toEqual(["u1"]);
+      expect(result.marksAction).toBe("release_holds");
+      expect(result.perParticipantImpact).toHaveLength(1);
+      expect(result.perParticipantImpact[0]).toMatchObject({
+        userId: "u1",
+        participantId: "p1",
+        heldAmount: 50,
+        walletId: "w1",
+        action: "release_holds",
+        before: { totalBalance: 200, heldBalance: 0, availableBalance: 200 },
+        after: { totalBalance: 200, heldBalance: 0, availableBalance: 250 },
+      });
+      expect(repo.updateBookingWithOverride).not.toHaveBeenCalled();
+      expect(repo.insertStateHistoryEntry).not.toHaveBeenCalled();
+    });
+
+    test("throws BookingNotFoundError for missing booking", async () => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => null),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      try {
+        await service.previewOverride({
+          bookingId: "missing",
+          category: "force_cancel",
+          reason: "Preview",
+        });
+        expect(true).toBe(false);
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(BookingNotFoundError);
+      }
+    });
+
+    test("throws TerminalStateOverrideError for terminal booking", async () => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "completed",
+          holdAmount: 0,
+        })),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      try {
+        await service.previewOverride({
+          bookingId: "b1",
+          category: "force_cancel",
+          reason: "Preview",
+        });
+        expect(true).toBe(false);
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(TerminalStateOverrideError);
+      }
+    });
+
+    test("no marksAction returns empty impact and null marksAction", async () => {
+      const repo = mockRepo();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.previewOverride({
+        bookingId: "b1",
+        category: "admin_correction",
+        reason: "Preview",
+      });
+      expect(result.marksAction).toBeNull();
+      expect(result.perParticipantImpact).toEqual([]);
+    });
+  });
+
+  describe("applyOverride notifications", () => {
+    test("writes best-effort notification to affected participants", async () => {
+      const notification = makeNotificationPort();
+      const repo = mockRepo({
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+          { id: "p2", userId: "u2", heldAmount: 0 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        notification: notification as any,
+      });
+
+      await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "force_cancel",
+        reason: "Notify",
+        affectedParticipants: ["u1", "u2"],
+      });
+
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(2);
+      const first = notification.writeBestEffort.mock.calls[0][0];
+      expect(first).toMatchObject({
+        userId: "u1",
+        bookingId: "b1",
+        category: "override",
+        severity: "action",
+      });
+      expect(first.eventKey).toBe("override.applied.b1.u1");
+    });
+
+    test("skips notifications when no port provided", async () => {
+      const repo = mockRepo({
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "force_cancel",
+        reason: "No notify",
+        affectedParticipants: ["u1"],
+      });
+      expect(repo.updateBookingWithOverride).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("listBookings", () => {
     test("returns empty list when no bookings found", async () => {
       const repo = mockRepo();
@@ -470,7 +655,7 @@ describe("AdminBookingService", () => {
       });
 
       const result = await service.listBookings({ bookingId: "b1" });
-      expect(result.items).toEqual([booking]);
+      expect(result.items).toEqual([{ ...booking, escalated: false }]);
     });
 
     test("returns empty list when bookingId provided but not found", async () => {
@@ -491,9 +676,9 @@ describe("AdminBookingService", () => {
 
     test("returns bookings with limit from repo", async () => {
       const bookings = [
-        { id: "b1", currentState: "confirmed" },
-        { id: "b2", currentState: "pending" },
-        { id: "b3", currentState: "completed" },
+        { id: "b1", currentState: "confirmed", scheduledStartAt: new Date() },
+        { id: "b2", currentState: "pending", scheduledStartAt: new Date() },
+        { id: "b3", currentState: "completed", scheduledStartAt: new Date() },
       ];
       const repo = mockRepo({
         listBookingsByState: mock(async () => bookings),
@@ -508,8 +693,18 @@ describe("AdminBookingService", () => {
 
       const result = await service.listBookings({ limit: 2 });
       expect(result.items).toEqual([
-        { id: "b1", currentState: "confirmed" },
-        { id: "b2", currentState: "pending" },
+        {
+          id: "b1",
+          currentState: "confirmed",
+          scheduledStartAt: expect.any(Date),
+          escalated: false,
+        },
+        {
+          id: "b2",
+          currentState: "pending",
+          scheduledStartAt: expect.any(Date),
+          escalated: false,
+        },
       ]);
       expect(repo.listBookingsByState).toHaveBeenCalledWith(
         expect.anything(),
@@ -521,9 +716,9 @@ describe("AdminBookingService", () => {
 
     test("passes cursor to repo for pagination", async () => {
       const bookings = [
-        { id: "b10", currentState: "confirmed" },
-        { id: "b11", currentState: "confirmed" },
-        { id: "b12", currentState: "confirmed" },
+        { id: "b10", currentState: "confirmed", scheduledStartAt: new Date() },
+        { id: "b11", currentState: "confirmed", scheduledStartAt: new Date() },
+        { id: "b12", currentState: "confirmed", scheduledStartAt: new Date() },
       ];
       const repo = mockRepo({
         listBookingsByState: mock(async () => bookings),
@@ -544,8 +739,86 @@ describe("AdminBookingService", () => {
         "b9",
       );
       expect(result.items).toEqual([
-        { id: "b10", currentState: "confirmed" },
-        { id: "b11", currentState: "confirmed" },
+        {
+          id: "b10",
+          currentState: "confirmed",
+          scheduledStartAt: expect.any(Date),
+          escalated: false,
+        },
+        {
+          id: "b11",
+          currentState: "confirmed",
+          scheduledStartAt: expect.any(Date),
+          escalated: false,
+        },
+      ]);
+    });
+
+    test("passes category/urgency/escalated filters to repo as 5th arg", async () => {
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => []),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      await service.listBookings({
+        limit: 2,
+        category: "force_cancel",
+        urgency: "high",
+        escalated: true,
+      });
+      expect(repo.listBookingsByState).toHaveBeenCalledWith(
+        expect.anything(),
+        [],
+        2,
+        undefined,
+        { category: "force_cancel", urgency: "high", escalated: true },
+      );
+    });
+
+    test("flags booking as escalated when overrideMeta.overriddenAt is stale", async () => {
+      const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
+      const fresh = new Date().toISOString();
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => [
+          {
+            id: "b1",
+            currentState: "confirmed",
+            scheduledStartAt: new Date(),
+            overrideMeta: { overriddenAt: stale },
+          },
+          {
+            id: "b2",
+            currentState: "scheduled",
+            scheduledStartAt: new Date(),
+            overrideMeta: { overriddenAt: fresh },
+          },
+          {
+            id: "b3",
+            currentState: "confirmed",
+            scheduledStartAt: new Date(),
+            overrideMeta: null,
+          },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.listBookings({ limit: 5 });
+      expect(result.items.map((i) => i.escalated)).toEqual([
+        true,
+        false,
+        false,
       ]);
     });
   });
