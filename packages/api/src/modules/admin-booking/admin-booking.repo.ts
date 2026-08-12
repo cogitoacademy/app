@@ -110,7 +110,7 @@ export async function listBookingsByState(
       const start = new Date(parts[1]!);
       if (Number.isInteger(rank) && !Number.isNaN(start.getTime())) {
         conditions.push(
-          sql`(${URGENCY_RANK_EXPR}, ${booking.scheduledStartAt}, ${booking.id}) > (${rank}, ${start}, ${parts[2]})`,
+          sql`(${URGENCY_RANK_EXPR}, ${booking.scheduledStartAt}, ${booking.id}) > (${rank}, ${start.toISOString()}, ${parts[2]})`,
         );
       } else {
         conditions.push(gt(booking.id, cursor));
