@@ -4,8 +4,8 @@ Use this checklist to prepare a consistent visual review of the Cogito web app. 
 
 ## Setup
 
-1. Start Docker Desktop, then run `docker compose up -d db`.
-2. Run `bun run db:seed` and `bun run dev`.
+1. Start Docker Desktop, then run `bun run db:start`.
+2. Run `bun --env-file apps/server/.env apps/server/src/seed.ts` and `bun run dev`.
 3. Use these local-only seeded accounts:
    - Student: `student.seed@cogitoacademy.id` / `student123`
    - Tutor: `tutor.seed@cogitoacademy.id` / `tutor123`
