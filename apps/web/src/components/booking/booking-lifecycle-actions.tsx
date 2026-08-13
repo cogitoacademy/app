@@ -8,6 +8,7 @@ import {
   IconMessage,
   IconNotes,
 } from "@tabler/icons-react";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
@@ -107,7 +108,7 @@ export function BookingLifecycleActions({
     isStudent && currentState === "reschedule_proposed";
   const canReportLateness =
     isStudent &&
-    currentState === "scheduled" &&
+    ["scheduled", "no_show"].includes(currentState) &&
     Date.now() >= new Date(scheduledStartAt).getTime() + 15 * 60_000;
   const canRespondToInvite =
     isStudent &&
@@ -125,6 +126,12 @@ export function BookingLifecycleActions({
     ...orpc.booking.getSessionNotes.queryOptions({ input: { bookingId } }),
     enabled: isCompleted,
   });
+  const ticketsQuery = useQuery({
+    ...orpc.support.listTickets.queryOptions({ input: { limit: 50 } }),
+    enabled: isStudent,
+  });
+  const bookingTickets =
+    ticketsQuery.data?.filter((ticket) => ticket.bookingId === bookingId) ?? [];
 
   function refreshNotes() {
     void queryClient.invalidateQueries({
@@ -449,6 +456,40 @@ export function BookingLifecycleActions({
               <IconMessage /> Add note
             </Button>
           </CardFooter>
+        </Card>
+      ) : null}
+
+      {bookingTickets.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <IconBox variant="warning-subtle">
+              <IconAlertTriangle />
+            </IconBox>
+            <CardTitle>Support reports</CardTitle>
+            <CardDescription>Reports linked to this booking</CardDescription>
+          </CardHeader>
+          <CardBody className="space-y-3">
+            {bookingTickets.map((ticket) => (
+              <div
+                key={ticket.id}
+                className="flex flex-col gap-2 rounded-lg border border-border p-4 sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div>
+                  <Text className="font-medium">
+                    {ticket.category.replaceAll("_", " ")}
+                  </Text>
+                  <Text className="text-sm text-muted">
+                    {ticket.description}
+                  </Text>
+                </div>
+                <Badge
+                  variant={ticket.status === "resolved" ? "success" : "warning"}
+                >
+                  {ticket.status.replaceAll("_", " ")}
+                </Badge>
+              </div>
+            ))}
+          </CardBody>
         </Card>
       ) : null}
 

@@ -46,25 +46,25 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 ## Frontend Gap Summary
 
-| #   | Gap                                           | PRD Ref                | Depends on (backend)                          | Effort | Priority |
-| --- | --------------------------------------------- | ---------------------- | --------------------------------------------- | ------ | -------- |
-| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                   | 3d     | High     |
-| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                           | 2d     | High     |
-| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                            | 1d     | High     |
-| F4  | Competition Calendar link (implemented)       | FR-11                  | None (external link)                          | 0.5d   | Closed   |
-| F5  | WhatsApp support button (implemented)         | FR-14, OQ-04           | None (external link)                          | 0.5d   | Closed   |
-| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                            | 1d     | Medium   |
-| F7  | Student reschedule approval UI                | FR-15                  | G6                                            | 1d     | Medium   |
-| F8  | Series session completion UI                  | FR-20                  | G18                                           | 1d     | Medium   |
-| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                            | 1.5d   | Low      |
-| F10 | Notifications page                            | FR-17                  | G17                                           | 1.5d   | Medium   |
-| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                            | 1d     | Medium   |
-| F12 | Admin room approval UI                        | FR-22                  | G14                                           | 1d     | Low      |
-| F13 | Tutor payout view                             | DL-11                  | G16                                           | 0.5d   | Medium   |
-| F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                           | 0.5d   | Low      |
-| F15 | Knowledge Bank gating flow (full)             | FR-12                  | Partial (wallet.knowledgeBankEligible exists) | 0.5d   | Medium   |
-| F16 | Achievements public landing surfacing         | FR-18                  | None (public site)                            | 1d     | Low      |
-| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                       | 2d     | Partial  |
+| #   | Gap                                                         | PRD Ref                | Depends on (backend)                          | Effort | Priority |
+| --- | ----------------------------------------------------------- | ---------------------- | --------------------------------------------- | ------ | -------- |
+| F1  | Admin dashboard + override queue (implemented baseline)     | FR-10, OQ-04           | G8, G9, G10                                   | 3d     | Partial  |
+| F2  | Admin override form with before/after preview (implemented) | FR-10, prd.tex:717-728 | G10                                           | 2d     | Closed   |
+| F3  | Report tutor lateness/no-show button (implemented)          | FR-14, DL-26           | G1                                            | 1d     | Closed   |
+| F4  | Competition Calendar link (implemented)                     | FR-11                  | None (external link)                          | 0.5d   | Closed   |
+| F5  | WhatsApp support button (implemented)                       | FR-14, OQ-04           | None (external link)                          | 0.5d   | Closed   |
+| F6  | Tutor reschedule proposal UI (implemented)                  | FR-15                  | G6                                            | 1d     | Closed   |
+| F7  | Student reschedule approval UI (implemented)                | FR-15                  | G6                                            | 1d     | Closed   |
+| F8  | Series session completion UI                                | FR-20                  | G18                                           | 1d     | Medium   |
+| F9  | Session notes view + add (implemented baseline)             | FR-09, DL-18           | G7                                            | 1.5d   | Partial  |
+| F10 | Notifications page (implemented)                            | FR-17                  | G17                                           | 1.5d   | Closed   |
+| F11 | Admin wallet/ledger view (implemented)                      | FR-10                  | G9                                            | 1d     | Closed   |
+| F12 | Admin room approval UI (implemented baseline)               | FR-22                  | G14                                           | 1d     | Partial  |
+| F13 | Tutor payout view                                           | DL-11                  | G16                                           | 0.5d   | Medium   |
+| F14 | Group series no opt-out disclaimer display                  | FR-20                  | G15                                           | 0.5d   | Low      |
+| F15 | Knowledge Bank gating flow (full)                           | FR-12                  | Partial (wallet.knowledgeBankEligible exists) | 0.5d   | Medium   |
+| F16 | Achievements public landing surfacing                       | FR-18                  | None (public site)                            | 1d     | Low      |
+| F17 | Booking detail page (implemented lifecycle)                 | FR-07, FR-08           | G6, G11                                       | 2d     | Closed   |
 
 **Total estimated effort: ~20 days (frontend)**
 
@@ -76,7 +76,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10 (Admin Override), OQ-04 (SLA escalation), prd.tex:717-728
 
-**Current state:** No admin dashboard route exists. Only `_app.admin-tutors` (tutor invite + review). No booking monitor, no override queue, no urgency sorting.
+**Current state:** `/_app/admin-operations` now provides the urgency-sorted booking monitor and escalated filter. Dedicated support-ticket assignment/SLA automation remains outside this baseline.
 
 **Required:**
 
@@ -103,7 +103,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10, prd.tex:717-728 (Emergency Override UI/UX Requirements)
 
-**Current state:** `applyOverride` endpoint exists but no UI.
+**Current state:** Implemented in the Admin Operations workspace with category, reason, participant IDs, Marks action, user/internal notes, before/after preview, and apply action.
 
 **Required:**
 
@@ -132,7 +132,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-14, DL-26, prd.tex:747
 
-**Current state:** No report button on booking detail. Backend G1 not yet implemented.
+**Current state:** Implemented on booking detail after the 15-minute tolerance, including ticket status display for the current booking.
 
 **Required:**
 
@@ -193,7 +193,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** `proposeReschedule` exists but is student-action (wrong role — G6 backend fix needed). No tutor UI for proposing reschedule.
+**Current state:** Implemented for tutors on eligible booking-detail states.
 
 **Required (after G6 backend fix):**
 
@@ -213,7 +213,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** No `acceptReschedule`/`rejectReschedule` endpoints (G6 backend) or UI.
+**Current state:** Implemented for students, including the proposed schedule recovered from booking state-history metadata.
 
 **Required (after G6 backend):**
 
@@ -257,7 +257,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-09, DL-18, prd.tex:1033-1043
 
-**Current state:** No session notes UI. Backend G7 not implemented.
+**Current state:** Completed bookings show sanitized notes and allow both parties to add notes. A full toolbar-based rich-text editor remains optional polish.
 
 **Required (after G7 backend):**
 
@@ -279,7 +279,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-17
 
-**Current state:** `notification-bell.tsx` component exists but no full notifications page/route.
+**Current state:** Implemented with cursor pagination, unread state, mark-one/mark-all actions, and booking links.
 
 **Required:**
 
@@ -302,7 +302,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-10
 
-**Current state:** No admin wallet view. Backend G9 not implemented.
+**Current state:** Implemented in Admin Operations with exact user-ID lookup, balance summary, and latest ledger entries.
 
 **Required (after G9 backend):**
 
@@ -323,7 +323,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-22
 
-**Current state:** No admin room approval UI. Backend G14 not implemented.
+**Current state:** Admin Operations supports room assignment, relocation, and cancellation. A dedicated visual approval queue remains optional refinement.
 
 **Required (after G14 backend):**
 
@@ -427,7 +427,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** The booking detail route is implemented for student and tutor views, including state, session details, Marks summary, meeting/room sections, cancellation, tutor accept/decline, and tutor completion. Reschedule, lateness/no-show reporting, and rich notes remain separate backend-dependent gaps.
+**Current state:** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes.
 
 **Required:**
 
@@ -469,3 +469,4 @@ Card, Button, Badge, Heading, Text, Stack, Input, Field, Select, Menu, Table, It
 ### Version Notes
 
 - v1.0 (2026-07-29): Created. 17 frontend gaps catalogued (F1-F17) with PRD references, backend dependencies, and acceptance criteria. Derived from PRD §Product Surfaces and audit of `apps/web/src/`. Runs parallel with backend PRD-GAPS-SPEC.md.
+- v1.1 (2026-08-13): Synced implemented booking lifecycle and Admin Operations surfaces. Closed F2/F3/F6/F7/F10/F11/F17; marked F1/F9/F12 as partial where deeper workflow polish remains.
