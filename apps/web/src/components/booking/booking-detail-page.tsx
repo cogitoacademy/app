@@ -61,9 +61,11 @@ import { orpc } from "@/utils/orpc";
 
 export function BookingDetailPage({
   bookingId,
+  viewerId,
   viewerRole,
 }: {
   bookingId: string;
+  viewerId: string;
   viewerRole: string;
 }) {
   const navigate = useNavigate();
@@ -186,6 +188,9 @@ export function BookingDetailPage({
   const booking = bookingQuery.data;
   const activeRoomBooking = booking.roomBookings.find(
     (entry) => entry.status !== "cancelled",
+  );
+  const viewerParticipant = booking.participants.find(
+    (participant) => participant.userId === viewerId,
   );
   const history = booking.stateHistory.toSorted(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -440,8 +445,12 @@ export function BookingDetailPage({
         bookingId={bookingId}
         viewerRole={viewerRole}
         currentState={booking.currentState}
+        bookingType={booking.type}
         scheduledStartAt={booking.scheduledStartAt}
         timezone={booking.timezone}
+        participantRole={viewerParticipant?.role}
+        participantState={viewerParticipant?.confirmationState}
+        perStudentMarks={booking.priceSnapshot?.perStudent}
         proposedStartAt={proposedStartAt}
         proposedEndAt={proposedEndAt}
         onBookingChanged={refreshBookingQueries}

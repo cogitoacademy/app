@@ -52,7 +52,7 @@ const BOOKING_TIMEZONE = "Asia/Jakarta";
 const TEXTAREA_CLASS =
   "min-h-28 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none transition-colors placeholder:text-dimmed focus:border-input-accent-border";
 
-type DialogKind = "report" | "reschedule" | null;
+type DialogKind = "report" | "reschedule" | "decline-invite" | null;
 type SupportCategory =
   | "tutor_late"
   | "tutor_no_show"
@@ -64,8 +64,12 @@ export function BookingLifecycleActions({
   bookingId,
   viewerRole,
   currentState,
+  bookingType,
   scheduledStartAt,
   timezone,
+  participantRole,
+  participantState,
+  perStudentMarks,
   proposedStartAt,
   proposedEndAt,
   onBookingChanged,
@@ -73,8 +77,12 @@ export function BookingLifecycleActions({
   bookingId: string;
   viewerRole: string;
   currentState: string;
+  bookingType: string;
   scheduledStartAt: string | Date;
   timezone?: string;
+  participantRole?: string;
+  participantState?: string;
+  perStudentMarks?: number;
   proposedStartAt?: string | Date;
   proposedEndAt?: string | Date;
   onBookingChanged: () => void;
@@ -84,6 +92,7 @@ export function BookingLifecycleActions({
   const [supportCategory, setSupportCategory] =
     useState<SupportCategory>("tutor_late");
   const [description, setDescription] = useState("");
+  const [inviteDeclineReason, setInviteDeclineReason] = useState("");
   const [newStartAt, setNewStartAt] = useState("");
   const [newEndAt, setNewEndAt] = useState("");
   const [rescheduleReason, setRescheduleReason] = useState("");
@@ -100,6 +109,17 @@ export function BookingLifecycleActions({
     isStudent &&
     currentState === "scheduled" &&
     Date.now() >= new Date(scheduledStartAt).getTime() + 15 * 60_000;
+  const canRespondToInvite =
+    isStudent &&
+    bookingType === "group" &&
+    currentState === "awaiting_participant_confirmation" &&
+    participantRole === "invitee" &&
+    participantState === "pending";
+  const canReconfirm =
+    isStudent &&
+    currentState === "awaiting_reconfirmation" &&
+    ["confirmed", "reconfirmed"].includes(participantState ?? "") &&
+    participantState !== "reconfirmed";
 
   const notesQuery = useQuery({
     ...orpc.booking.getSessionNotes.queryOptions({ input: { bookingId } }),
@@ -172,10 +192,56 @@ export function BookingLifecycleActions({
         showMutationError("Session note could not be added", error),
     }),
   );
+  const confirmInvite = useMutation(
+    orpc.booking.confirmInvite.mutationOptions({
+      onSuccess: () => {
+        toastManager.add({
+          title: "Group invitation accepted",
+          type: "success",
+        });
+        onBookingChanged();
+      },
+      onError: (error: Error) =>
+        showMutationError("Invitation could not be accepted", error),
+    }),
+  );
+  const declineInvite = useMutation(
+    orpc.booking.declineInvite.mutationOptions({
+      onSuccess: () => {
+        setDialog(null);
+        setInviteDeclineReason("");
+        toastManager.add({
+          title: "Group invitation declined",
+          type: "success",
+        });
+        onBookingChanged();
+      },
+      onError: (error: Error) =>
+        showMutationError("Invitation could not be declined", error),
+    }),
+  );
+  const reconfirm = useMutation(
+    orpc.booking.reconfirm.mutationOptions({
+      onSuccess: (_result, variables) => {
+        toastManager.add({
+          title: variables.accept ? "Booking reconfirmed" : "Booking declined",
+          type: "success",
+        });
+        onBookingChanged();
+      },
+      onError: (error: Error) =>
+        showMutationError("Reconfirmation could not be saved", error),
+    }),
+  );
 
   const hasActions =
-    canProposeReschedule || canDecideReschedule || canReportLateness;
+    canProposeReschedule ||
+    canDecideReschedule ||
+    canReportLateness ||
+    canRespondToInvite ||
+    canReconfirm;
   const decisionPending = accept.isPending || reject.isPending;
+  const invitePending = confirmInvite.isPending || declineInvite.isPending;
 
   return (
     <>
@@ -209,6 +275,26 @@ export function BookingLifecycleActions({
                   Review the proposed schedule and choose whether to continue.
                 </Text>
               )}
+            </CardBody>
+          ) : null}
+          {canRespondToInvite ? (
+            <CardBody className="space-y-2">
+              <Text className="font-medium">
+                You have been invited to this group session
+              </Text>
+              <Text className="text-muted">
+                Accepting reserves {perStudentMarks ?? "the required"} Marks
+                from your wallet.
+              </Text>
+            </CardBody>
+          ) : null}
+          {canReconfirm ? (
+            <CardBody className="space-y-2">
+              <Text className="font-medium">The booking details changed</Text>
+              <Text className="text-muted">
+                Review the updated schedule and price of{" "}
+                {perStudentMarks ?? "the required"} Marks before continuing.
+              </Text>
             </CardBody>
           ) : null}
           <CardFooter className="flex-wrap justify-end gap-2">
@@ -248,6 +334,51 @@ export function BookingLifecycleActions({
                   disabled={decisionPending}
                 >
                   Accept new time
+                </Button>
+              </>
+            ) : null}
+            {canRespondToInvite ? (
+              <>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setDialog("decline-invite")}
+                  disabled={invitePending}
+                >
+                  Decline invitation
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => confirmInvite.mutate({ bookingId })}
+                  progress={confirmInvite.isPending}
+                  disabled={invitePending}
+                >
+                  Accept invitation
+                </Button>
+              </>
+            ) : null}
+            {canReconfirm ? (
+              <>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => reconfirm.mutate({ bookingId, accept: false })}
+                  progress={
+                    reconfirm.isPending && reconfirm.variables?.accept === false
+                  }
+                  disabled={reconfirm.isPending}
+                >
+                  Decline changes
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => reconfirm.mutate({ bookingId, accept: true })}
+                  progress={
+                    reconfirm.isPending && reconfirm.variables?.accept === true
+                  }
+                  disabled={reconfirm.isPending}
+                >
+                  Reconfirm booking
                 </Button>
               </>
             ) : null}
@@ -320,6 +451,58 @@ export function BookingLifecycleActions({
           </CardFooter>
         </Card>
       ) : null}
+
+      <Dialog
+        open={dialog === "decline-invite"}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
+        <DialogPopup>
+          <DialogHeader className="flex-col items-start gap-1.5">
+            <DialogTitle>Decline group invitation?</DialogTitle>
+            <DialogDescription>
+              You will not be included in this booking and no Marks will be
+              held.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <Field>
+              <FieldLabel htmlFor="invite-decline-reason">
+                Reason (optional)
+              </FieldLabel>
+              <textarea
+                id="invite-decline-reason"
+                className={TEXTAREA_CLASS}
+                value={inviteDeclineReason}
+                maxLength={2_000}
+                onChange={(event) => setInviteDeclineReason(event.target.value)}
+                placeholder="Let the group know why you cannot join."
+              />
+            </Field>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setDialog(null)}
+              disabled={declineInvite.isPending}
+            >
+              Keep invitation
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() =>
+                declineInvite.mutate({
+                  bookingId,
+                  reason: inviteDeclineReason.trim() || undefined,
+                })
+              }
+              progress={declineInvite.isPending}
+              disabled={declineInvite.isPending}
+            >
+              Decline invitation
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
 
       <Dialog
         open={dialog === "report"}
