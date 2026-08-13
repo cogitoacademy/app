@@ -20,6 +20,7 @@ import {
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import {
+  getSelectItemValue,
   Select,
   SelectItem,
   SelectList,
@@ -28,12 +29,15 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
+import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { z } from "zod";
 
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 const LEVELS = [
@@ -91,6 +95,18 @@ const DEFAULT_VALUES: AchievementFormValues = {
   imageUrl: "",
 };
 
+const achievementFormSchema = z.object({
+  eventName: z.string().trim().min(1, "Event name is required").max(255),
+  category: z.string().min(1, "Category is required").max(255),
+  award: z.string().trim().min(1, "Award / result is required").max(255),
+  level: z.string().min(1, "Level is required").max(255),
+  eventDate: z.string().max(255),
+  location: z.string().max(255),
+  description: z.string().max(2000),
+  subjects: z.array(z.string().max(255)).max(20),
+  imageUrl: z.string().max(2048),
+});
+
 export function AchievementForm({
   mode,
   defaultValues,
@@ -101,6 +117,7 @@ export function AchievementForm({
   onSuccess,
 }: AchievementFormProps) {
   const [subjectInput, setSubjectInput] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const createMutation = useMutation(
@@ -114,8 +131,18 @@ export function AchievementForm({
           description: "It\u2019ll appear on cogitoacademy.id once approved.",
           type: "success",
         });
+        form.reset(DEFAULT_VALUES);
+        setSubjectInput("");
+        setFormError(null);
         onOpenChange(false);
         onSuccess?.();
+      },
+      onError: (error) => {
+        toastManager.add({
+          title: "Achievement could not be submitted",
+          description: getUserFacingError(error),
+          type: "error",
+        });
       },
     }),
   );
@@ -134,19 +161,50 @@ export function AchievementForm({
         onOpenChange(false);
         onSuccess?.();
       },
+      onError: (error) => {
+        toastManager.add({
+          title: "Achievement could not be updated",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
     }),
   );
 
   const form = useForm({
     defaultValues: { ...DEFAULT_VALUES, ...defaultValues },
     onSubmit: async ({ value }) => {
-      if (mode === "edit" && editId) {
-        if (expectedVersion === undefined)
-          throw new Error("expectedVersion is required in edit mode");
-        updateMutation.mutate({
-          id: editId,
-          version: expectedVersion,
-          data: {
+      const validation = achievementFormSchema.safeParse(value);
+      if (!validation.success) {
+        setFormError(
+          validation.error.issues[0]?.message ??
+            "Check the form fields and try again.",
+        );
+        return;
+      }
+
+      setFormError(null);
+      try {
+        if (mode === "edit" && editId) {
+          if (expectedVersion === undefined)
+            throw new Error("expectedVersion is required in edit mode");
+          await updateMutation.mutateAsync({
+            id: editId,
+            version: expectedVersion,
+            data: {
+              eventName: value.eventName,
+              category: value.category,
+              award: value.award,
+              level: value.level,
+              eventDate: value.eventDate || undefined,
+              location: value.location || undefined,
+              description: value.description || undefined,
+              subjects: value.subjects,
+              imageUrl: value.imageUrl || undefined,
+            },
+          });
+        } else {
+          await createMutation.mutateAsync({
             eventName: value.eventName,
             category: value.category,
             award: value.award,
@@ -156,25 +214,22 @@ export function AchievementForm({
             description: value.description || undefined,
             subjects: value.subjects,
             imageUrl: value.imageUrl || undefined,
-          },
-        });
-      } else {
-        createMutation.mutate({
-          eventName: value.eventName,
-          category: value.category,
-          award: value.award,
-          level: value.level,
-          eventDate: value.eventDate || undefined,
-          location: value.location || undefined,
-          description: value.description || undefined,
-          subjects: value.subjects,
-          imageUrl: value.imageUrl || undefined,
-        });
+          });
+        }
+      } catch {
+        // The mutation's onError callback has already shown a user-facing error.
       }
     },
   });
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const submitLabel = isPending
+    ? mode === "create"
+      ? "Submitting achievement..."
+      : "Resubmitting achievement..."
+    : mode === "create"
+      ? "Submit Achievement"
+      : "Resubmit";
 
   const addSubject = () => {
     const trimmed = subjectInput.trim();
@@ -209,11 +264,15 @@ export function AchievementForm({
         </DialogHeader>
 
         <DialogBody>
+          {formError ? (
+            <Text className="mb-4 text-danger">{formError}</Text>
+          ) : null}
           <form
+            id="achievement-form"
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              form.handleSubmit();
+              void form.handleSubmit();
             }}
           >
             <Stack direction="column" spacing="lg">
@@ -246,7 +305,9 @@ export function AchievementForm({
                     <FieldLabel>Category</FieldLabel>
                     <Select
                       value={field.state.value}
-                      onValueChange={(v) => field.handleChange(v as string)}
+                      onValueChange={(value) =>
+                        field.handleChange(getSelectItemValue(value) ?? "")
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
@@ -261,6 +322,11 @@ export function AchievementForm({
                         </SelectList>
                       </SelectPopup>
                     </Select>
+                    {field.state.meta.errors.map((error) => (
+                      <FieldError key={String(error)}>
+                        {String(error)}
+                      </FieldError>
+                    ))}
                   </Field>
                 )}
               </form.Field>
@@ -277,6 +343,11 @@ export function AchievementForm({
                       onChange={(e) => field.handleChange(e.target.value)}
                       placeholder="e.g. Best Delegate, Juara 1"
                     />
+                    {field.state.meta.errors.map((error) => (
+                      <FieldError key={String(error)}>
+                        {String(error)}
+                      </FieldError>
+                    ))}
                   </Field>
                 )}
               </form.Field>
@@ -287,7 +358,9 @@ export function AchievementForm({
                     <FieldLabel>Level</FieldLabel>
                     <Select
                       value={field.state.value}
-                      onValueChange={(v) => field.handleChange(v as string)}
+                      onValueChange={(value) =>
+                        field.handleChange(getSelectItemValue(value) ?? "")
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select level" />
@@ -302,6 +375,11 @@ export function AchievementForm({
                         </SelectList>
                       </SelectPopup>
                     </Select>
+                    {field.state.meta.errors.map((error) => (
+                      <FieldError key={String(error)}>
+                        {String(error)}
+                      </FieldError>
+                    ))}
                   </Field>
                 )}
               </form.Field>
@@ -383,6 +461,7 @@ export function AchievementForm({
                             {subject}
                             <button
                               type="button"
+                              aria-label={`Remove ${subject}`}
                               onClick={() => removeSubject(subject)}
                               className="ml-1 hover:text-danger"
                             >
@@ -418,28 +497,22 @@ export function AchievementForm({
         </DialogBody>
 
         <DialogFooter>
-          <DialogClose>
-            <Button variant="secondary" type="button">
-              Cancel
-            </Button>
-          </DialogClose>
-          <form.Subscribe
-            selector={(state) => ({
-              canSubmit: state.canSubmit,
-              isSubmitting: state.isSubmitting,
-            })}
+          <DialogClose
+            render={
+              <Button variant="secondary" type="button" aria-label="Cancel" />
+            }
           >
-            {({ canSubmit, isSubmitting }) => (
-              <Button
-                type="submit"
-                disabled={!canSubmit || isSubmitting || isPending}
-                progress={isSubmitting || isPending}
-                onClick={() => form.handleSubmit()}
-              >
-                {mode === "create" ? "Submit Achievement" : "Resubmit"}
-              </Button>
-            )}
-          </form.Subscribe>
+            Cancel
+          </DialogClose>
+          <Button
+            type="button"
+            disabled={isPending}
+            progress={isPending}
+            aria-busy={isPending}
+            onClick={() => void form.handleSubmit()}
+          >
+            {submitLabel}
+          </Button>
         </DialogFooter>
       </DialogPopup>
     </Dialog>

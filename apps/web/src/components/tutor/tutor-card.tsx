@@ -2,6 +2,11 @@
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
+import {
   Card,
   CardBody,
   CardHeader,
@@ -21,6 +26,16 @@ const MODALITY_VARIANTS: Record<string, "info" | "success" | "warning"> = {
   both: "warning",
 };
 
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
 type TutorCardProps = {
   tutor: {
     id: string;
@@ -35,6 +50,8 @@ type TutorCardProps = {
 };
 
 export function TutorCard({ tutor, onClick }: TutorCardProps) {
+  const tutorName = tutor.displayName ?? tutor.user?.name ?? "Tutor";
+
   return (
     <Card
       className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
@@ -48,10 +65,12 @@ export function TutorCard({ tutor, onClick }: TutorCardProps) {
       role="button"
       tabIndex={0}
     >
-      <CardHeader>
-        <CardTitle>
-          {tutor.displayName ?? tutor.user?.name ?? "Tutor"}
-        </CardTitle>
+      <CardHeader className="grid-cols-[auto_1fr_auto]!">
+        <Avatar size="md">
+          <AvatarImage src={tutor.user?.image ?? undefined} alt={tutorName} />
+          <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
+        </Avatar>
+        <CardTitle>{tutorName}</CardTitle>
         {tutor.modality && (
           <Badge
             variant={MODALITY_VARIANTS[tutor.modality] ?? "secondary"}
