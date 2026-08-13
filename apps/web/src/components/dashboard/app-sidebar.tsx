@@ -39,6 +39,7 @@ import {
   IconSearch,
   IconSelector,
   IconSettings,
+  IconShieldCheck,
   IconUser,
   IconUserSquare,
   IconUsersGroup,
@@ -65,6 +66,7 @@ const tutorNavItems = [
 
 const adminNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
   { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
   {
     to: "/admin-achievements",
