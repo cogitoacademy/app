@@ -56,6 +56,7 @@ import {
   getBookingStateVariant,
   getBookingTypeLabel,
 } from "./booking-ui";
+import { BookingLifecycleActions } from "./booking-lifecycle-actions";
 import { orpc } from "@/utils/orpc";
 
 export function BookingDetailPage({
@@ -188,6 +189,17 @@ export function BookingDetailPage({
   );
   const history = booking.stateHistory.toSorted(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const rescheduleEntry = history.find(
+    (entry) => entry.toState === "reschedule_proposed",
+  );
+  const proposedStartAt = getMetadataDate(
+    rescheduleEntry?.metadata,
+    "proposedStartAt",
+  );
+  const proposedEndAt = getMetadataDate(
+    rescheduleEntry?.metadata,
+    "proposedEndAt",
   );
   const canReview = isTutor && booking.currentState === "awaiting_tutor_review";
   const canComplete = isTutor && booking.currentState === "scheduled";
@@ -424,6 +436,17 @@ export function BookingDetailPage({
         </Card>
       ) : null}
 
+      <BookingLifecycleActions
+        bookingId={bookingId}
+        viewerRole={viewerRole}
+        currentState={booking.currentState}
+        scheduledStartAt={booking.scheduledStartAt}
+        timezone={booking.timezone}
+        proposedStartAt={proposedStartAt}
+        proposedEndAt={proposedEndAt}
+        onBookingChanged={refreshBookingQueries}
+      />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -606,4 +629,12 @@ function BookingDetailSkeleton() {
       <Card className="min-h-80 bg-accent/40" />
     </div>
   );
+}
+
+function getMetadataDate(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "string" || value instanceof Date ? value : undefined;
 }
