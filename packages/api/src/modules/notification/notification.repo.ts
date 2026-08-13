@@ -9,6 +9,14 @@ import type { DbOrTx } from "../../lib/tx";
 
 export type NotificationRepo = ReturnType<typeof createNotificationRepo>;
 
+/**
+ * Finds a notification by id, scoped to the owning user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the notification id
+ * @param userId - the owning user
+ * @returns a row with the notification id, or null
+ */
 export async function findNotificationByIdForUser(
   conn: DbOrTx,
   id: string,
@@ -22,6 +30,13 @@ export async function findNotificationByIdForUser(
   return row ?? null;
 }
 
+/**
+ * Finds a notification by eventKey (for idempotency/deduplication).
+ *
+ * @param conn - the database connection or active transaction
+ * @param eventKey - the event key
+ * @returns a row with the notification id, or null
+ */
 export async function findNotificationByEventKey(
   conn: DbOrTx,
   eventKey: string,
@@ -34,6 +49,13 @@ export async function findNotificationByEventKey(
   return row ?? null;
 }
 
+/**
+ * Inserts a notification row.
+ *
+ * @param conn - the database connection or active transaction
+ * @param values - the notification fields
+ * @returns the inserted notification row
+ */
 export async function insertNotification(
   conn: DbOrTx,
   values: {
@@ -63,6 +85,13 @@ export async function insertNotification(
   return inserted;
 }
 
+/**
+ * Looks up a user's email address.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the email, or an empty string when not found
+ */
 export async function findUserEmail(conn: DbOrTx, userId: string) {
   const [row] = await conn
     .select({ email: user.email })
@@ -72,6 +101,12 @@ export async function findUserEmail(conn: DbOrTx, userId: string) {
   return row?.email ?? "";
 }
 
+/**
+ * Inserts a dispatch (email delivery) row for a notification.
+ *
+ * @param conn - the database connection or active transaction
+ * @param values - the dispatch fields
+ */
 export async function insertDispatch(
   conn: DbOrTx,
   values: {
@@ -89,6 +124,13 @@ export async function insertDispatch(
   });
 }
 
+/**
+ * Updates a notification dispatch status.
+ *
+ * @param conn - the database connection or active transaction
+ * @param notificationId - the notification id
+ * @param status - the new dispatch status
+ */
 export async function updateDispatchStatus(
   conn: DbOrTx,
   notificationId: string,
@@ -100,6 +142,14 @@ export async function updateDispatchStatus(
     .where(eq(notificationDispatch.notificationId, notificationId));
 }
 
+/**
+ * Lists a user's notifications with cursor pagination and optional unread filter.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @param opts - list options (unreadOnly, cursor, limit)
+ * @returns up to limit+1 rows for nextCursor determination
+ */
 export async function listNotifications(
   conn: DbOrTx,
   userId: string,
@@ -123,6 +173,13 @@ export async function listNotifications(
   return rows;
 }
 
+/**
+ * Counts a user's unread notifications.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the number of unread notifications
+ */
 export async function countUnread(conn: DbOrTx, userId: string) {
   const [row] = await conn
     .select({ value: count() })
@@ -133,6 +190,14 @@ export async function countUnread(conn: DbOrTx, userId: string) {
   return Number(row?.value ?? 0);
 }
 
+/**
+ * Sets a notification's read status, scoped to the owning user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the notification id
+ * @param userId - the owning user
+ * @param read - whether the notification is read
+ */
 export async function updateReadStatus(
   conn: DbOrTx,
   id: string,
@@ -145,6 +210,12 @@ export async function updateReadStatus(
     .where(and(eq(notification.id, id), eq(notification.userId, userId)));
 }
 
+/**
+ * Marks all of a user's notifications as read.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ */
 export async function markAllRead(conn: DbOrTx, userId: string) {
   await conn
     .update(notification)
@@ -154,6 +225,13 @@ export async function markAllRead(conn: DbOrTx, userId: string) {
     );
 }
 
+/**
+ * Finds the dispatch row for a notification.
+ *
+ * @param conn - the database connection or active transaction
+ * @param notificationId - the notification id
+ * @returns the dispatch row, or null
+ */
 export async function findDispatch(conn: DbOrTx, notificationId: string) {
   const [row] = await conn
     .select()

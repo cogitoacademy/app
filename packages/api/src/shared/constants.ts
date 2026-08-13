@@ -4,9 +4,13 @@ export const KNOWLEDGE_BANK_THRESHOLD = 35;
 
 export const RESPONSE_WINDOW_MS = 12 * 60 * 60 * 1000;
 export const LATE_CANCEL_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+export const LATENESS_TOLERANCE_MS = 15 * 60 * 1000;
+export const SUPPORT_SLA_MS = 12 * 60 * 60 * 1000;
 export const MIN_GROUP_HEADCOUNT = 2;
 export const MIN_SERIES_SESSIONS = 2;
 export const MAX_SERIES_SESSIONS = 4;
+export const GROUP_SERIES_DISCLAIMER =
+  "Group series bookings require attendance at all sessions. Individual sessions cannot be cancelled.";
 export const DEFAULT_SOLO_PRICE = 42;
 export const SESSION_DURATION_MINUTES = 90;
 
@@ -17,6 +21,30 @@ export const ADMIN_DEFAULT_PAGE_LIMIT = 50;
 export const COGITO_TAKE_RATE = 0.2;
 export const TUTOR_PAYOUT_RATE_IDR = 7000;
 export const EXTRA_TAKE_DIVISOR = 5;
+
+export const ONLINE_BASELINE_SPLIT: Record<
+  number,
+  { tutor: number; cogito: number }
+> = {
+  1: { tutor: 30, cogito: 12 },
+  2: { tutor: 54, cogito: 16 },
+  3: { tutor: 64, cogito: 20 },
+  4: { tutor: 74, cogito: 22 },
+  5: { tutor: 81, cogito: 24 },
+  6: { tutor: 88, cogito: 26 },
+};
+
+export const OFFLINE_BASELINE_SPLIT: Record<
+  number,
+  { tutor: number; cogito: number }
+> = {
+  1: { tutor: 35, cogito: 15 },
+  2: { tutor: 70, cogito: 20 },
+  3: { tutor: 95, cogito: 25 },
+  4: { tutor: 115, cogito: 25 },
+  5: { tutor: 120, cogito: 30 },
+  6: { tutor: 127, cogito: 35 },
+};
 
 export const ONLINE_FLOOR_PRICES: Record<number, number> = {
   1: 42,

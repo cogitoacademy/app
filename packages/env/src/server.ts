@@ -18,10 +18,7 @@ export const env = createEnv({
       .string()
       .url()
       .default("https://cogitoacademy.id/en/calendar"),
-    KNOWLEDGE_BANK_URL: z
-      .string()
-      .url()
-      .default("https://cogitoacademy.id/knowledge-bank"),
+    WEBHOOK_ALLOWED_IPS: z.string().optional(),
     XENDIT_SECRET_KEY: z.string().min(1).optional(),
     XENDIT_WEBHOOK_TOKEN: z.string().min(1).optional(),
     XENDIT_SUCCESS_REDIRECT_URL: z.string().url().optional(),
@@ -33,8 +30,6 @@ export const env = createEnv({
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     PORT: z.coerce.number().default(3001),
     SESSION_COOKIE_CACHE_MAX_AGE: z.coerce.number().default(60),
-    SENTRY_DSN: z.string().url().optional(),
-    SENTRY_ENVIRONMENT: z.string().default("development"),
     REDIS_URL: z.string().url().optional(),
     SCHEDULER_ENABLED: z.coerce.boolean().default(false),
     GOOGLE_CLIENT_EMAIL: z.string().email().optional(),

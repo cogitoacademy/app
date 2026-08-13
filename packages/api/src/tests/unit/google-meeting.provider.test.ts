@@ -80,17 +80,6 @@ mock.module("googleapis", () => ({
   },
 }));
 
-mock.module("@cogito-app/db/schema", () => ({
-  meetingEvent: {
-    bookingId: "bookingId",
-    provider: "provider",
-    status: "status",
-    meetingUrl: "meetingUrl",
-    externalEventId: "externalEventId",
-    errorReason: "errorReason",
-  },
-}));
-
 import {
   createGoogleMeetingProvider,
   createGoogleMeetingProviderWithFallback,
@@ -138,6 +127,53 @@ describe("createGoogleMeetingProvider", () => {
     expect(result.meetingUrl).toBe("https://meet.google.com/abc");
     expect(result.externalEventId).toBe("evt_123");
     expect(result.errorReason).toBeNull();
+  });
+
+  test("createEvent passes attendees to calendar insert and persists attendeeEmails", async () => {
+    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+      data: {
+        id: "evt_123",
+        conferenceData: {
+          entryPoints: [{ uri: "https://meet.google.com/abc" }],
+        },
+      },
+    }));
+
+    const successRow = {
+      id: "me1",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: "evt_123",
+      meetingUrl: "https://meet.google.com/abc",
+      attendeeEmails: ["tutor@example.com", "student@example.com"],
+      status: "created",
+      errorReason: null,
+    };
+
+    const returning = mock(async () => [successRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { insert } as any;
+
+    const provider = createGoogleMeetingProvider(config, db);
+    await provider.createEvent("b1", undefined, undefined, [
+      { email: "tutor@example.com", name: "Tutor" },
+      { email: "student@example.com" },
+    ]);
+
+    const insertCall = mockCalendarEventsInsert.mock.calls.at(-1)?.[0];
+    expect(insertCall?.requestBody?.attendees).toEqual([
+      { email: "tutor@example.com", displayName: "Tutor" },
+      { email: "student@example.com" },
+    ]);
+
+    const insertValues = values.mock.calls[0]?.[0] as {
+      attendeeEmails: string[] | null;
+    };
+    expect(insertValues.attendeeEmails).toEqual([
+      "tutor@example.com",
+      "student@example.com",
+    ]);
   });
 
   test("createEvent returns failed status on Google API error", async () => {
@@ -289,43 +325,44 @@ describe("createGoogleMeetingProviderWithFallback", () => {
       throw new Error("Google API error");
     });
 
-    let callCount = 0;
+    const failedRow = {
+      id: "me2",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: null,
+      meetingUrl: null,
+      status: "failed",
+      errorReason: "Error: Google API error",
+    };
+    const manualRow = {
+      id: "me2",
+      bookingId: "b1",
+      provider: "manual",
+      externalEventId: null,
+      meetingUrl: null,
+      status: "manual",
+      errorReason: null,
+    };
+
     const insert = mock(() => ({
       values: mock(() => ({
-        returning: mock(async () => {
-          callCount++;
-          if (callCount === 1) {
-            return [
-              {
-                id: "me2",
-                bookingId: "b1",
-                provider: "google_meet",
-                externalEventId: null,
-                meetingUrl: null,
-                status: "failed",
-                errorReason: "Error: Google API error",
-              },
-            ];
-          }
-          return [
-            {
-              id: "me3",
-              bookingId: "b1",
-              provider: "manual",
-              meetingUrl: null,
-              externalEventId: null,
-              status: "manual",
-              errorReason: null,
-            },
-          ];
-        }),
+        returning: mock(async () => [failedRow]),
       })),
     }));
+    const returning = mock(async () => [manualRow]);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const db = { insert, update } as any;
 
-    const db = { insert } as any;
     const provider = createGoogleMeetingProviderWithFallback(config, db);
     const result = await provider.createEvent("b1");
 
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "manual", status: "manual" }),
+    );
     expect(result.provider).toBe("manual");
     expect(result.status).toBe("manual");
   });

@@ -3,11 +3,17 @@ import { log } from "@cogito-app/api/lib/logger";
 import { createSchedulerService } from "@cogito-app/api/modules/scheduler/scheduler.service";
 import { scheduleBookingExpiryCheck } from "@cogito-app/api/modules/scheduler/jobs/expire-bookings.job";
 import { scheduleHoldReleaseCheck } from "@cogito-app/api/modules/scheduler/jobs/release-holds.job";
+import { scheduleCheckTutorLateness } from "@cogito-app/api/modules/scheduler/jobs/check-tutor-lateness.job";
 import { scheduleSendNotificationEmail } from "@cogito-app/api/modules/scheduler/jobs/send-notification-email.job";
 import { services } from "@cogito-app/api";
 
 let scheduler: ReturnType<typeof createSchedulerService> = null;
 
+/**
+ * Initializes the BullMQ scheduler and repeatable jobs when enabled.
+ *
+ * @returns a promise resolving once the scheduler and repeatable jobs are registered
+ */
 export async function initScheduler(): Promise<void> {
   if (!env.SCHEDULER_ENABLED || !env.REDIS_URL) {
     log({
@@ -21,6 +27,7 @@ export async function initScheduler(): Promise<void> {
   scheduler = createSchedulerService(env.REDIS_URL!, {
     onExpireBookings: () => services.booking.expireBookings(),
     onReleaseHolds: () => services.booking.releaseExpiredHolds(),
+    onCheckTutorLateness: () => services.booking.checkTutorLateness(),
     onSendNotificationEmail: async (data) => {
       try {
         const db = (await import("@cogito-app/db")).db;
@@ -85,6 +92,7 @@ export async function initScheduler(): Promise<void> {
 
   await scheduleBookingExpiryCheck(scheduler.queue);
   await scheduleHoldReleaseCheck(scheduler.queue);
+  await scheduleCheckTutorLateness(scheduler.queue);
   await scheduleSendNotificationEmail(scheduler.queue);
 
   log({
@@ -96,6 +104,11 @@ export async function initScheduler(): Promise<void> {
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
+/**
+ * Gracefully shuts down the scheduler worker and queue, forcing close on timeout.
+ *
+ * @returns a promise resolving once shutdown completes or the timeout forces close
+ */
 export async function shutdownScheduler(): Promise<void> {
   if (!scheduler) return;
 

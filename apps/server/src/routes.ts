@@ -94,6 +94,11 @@ const apiHandler = new OpenAPIHandler(appRouter, {
   interceptors: [onError(logRpcError)],
 });
 
+/**
+ * Builds the Elysia HTTP server with auth, RPC, OpenAPI, health, metrics, and webhook routes.
+ *
+ * @returns a configured Elysia instance with security headers, rate limits, and CORS applied
+ */
 export function createServer() {
   return new Elysia()
     .use(evlog())
@@ -182,7 +187,7 @@ export function createServer() {
         }
       }
 
-      if (path === "/rpc/payment.createIntent") {
+      if (path === "/rpc/payment.createPurchase") {
         const { allowed, retryAfterMs } = await paymentRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {

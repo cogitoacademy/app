@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte } from "drizzle-orm";
 import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -20,6 +20,13 @@ export type AtomicResult =
 
 export type WalletRepo = ReturnType<typeof createWalletRepo>;
 
+/**
+ * Fetches a wallet by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @returns the wallet snapshot, or null
+ */
 export async function getById(
   conn: DbOrTx,
   walletId: string,
@@ -32,6 +39,13 @@ export async function getById(
   return (w as WalletSnapshot | undefined) ?? null;
 }
 
+/**
+ * Fetches a wallet by user id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the wallet snapshot, or null
+ */
 export async function getByUserId(
   conn: DbOrTx,
   userId: string,
@@ -44,6 +58,13 @@ export async function getByUserId(
   return (w as WalletSnapshot | undefined) ?? null;
 }
 
+/**
+ * Inserts a new wallet row.
+ *
+ * @param conn - the database connection or active transaction
+ * @param params - the initial balance values
+ * @returns the created wallet snapshot
+ */
 export async function insert(
   conn: DbOrTx,
   params: {
@@ -65,6 +86,14 @@ export async function insert(
   return created as WalletSnapshot;
 }
 
+/**
+ * Directly sets a wallet's balances.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param balances - the new balance values
+ * @returns the updated wallet snapshot
+ */
 export async function updateBalances(
   conn: DbOrTx,
   walletId: string,
@@ -86,6 +115,14 @@ export async function updateBalances(
   return updated as WalletSnapshot;
 }
 
+/**
+ * Atomically moves Marks from available to held, guarded by sufficient available balance.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param amount - the amount to hold
+ * @returns success with the updated wallet, or failure with a reason
+ */
 export async function atomicHold(
   conn: DbOrTx,
   walletId: string,
@@ -103,6 +140,14 @@ export async function atomicHold(
   return { success: true, wallet: rows[0] as WalletSnapshot };
 }
 
+/**
+ * Atomically moves Marks from held back to available, guarded by sufficient held balance.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param amount - the amount to release
+ * @returns success with the updated wallet, or failure with a reason
+ */
 export async function atomicRelease(
   conn: DbOrTx,
   walletId: string,
@@ -120,6 +165,14 @@ export async function atomicRelease(
   return { success: true, wallet: rows[0] as WalletSnapshot };
 }
 
+/**
+ * Atomically consumes held Marks, reducing total and held balance.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param amount - the amount to deduct
+ * @returns success with the updated wallet, or failure with a reason
+ */
 export async function atomicDeduct(
   conn: DbOrTx,
   walletId: string,
@@ -139,6 +192,14 @@ export async function atomicDeduct(
   return { success: true, wallet: rows[0] as WalletSnapshot };
 }
 
+/**
+ * Atomically credits Marks to total and available balance.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param amount - the amount to credit
+ * @returns the updated wallet snapshot
+ */
 export async function atomicCredit(
   conn: DbOrTx,
   walletId: string,
@@ -155,6 +216,14 @@ export async function atomicCredit(
   return updated as WalletSnapshot;
 }
 
+/**
+ * Atomically credits total and available balance for a compensation credit.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param amount - the amount to credit
+ * @returns the updated wallet snapshot
+ */
 export async function atomicCompensateCredit(
   conn: DbOrTx,
   walletId: string,
@@ -171,6 +240,14 @@ export async function atomicCompensateCredit(
   return updated as WalletSnapshot;
 }
 
+/**
+ * Atomically reduces total and available balance for a compensation deduct.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param amount - the amount to deduct
+ * @returns success with the updated wallet, or failure with a reason
+ */
 export async function atomicCompensateDeduct(
   conn: DbOrTx,
   walletId: string,
@@ -188,6 +265,12 @@ export async function atomicCompensateDeduct(
   return { success: true, wallet: rows[0] as WalletSnapshot };
 }
 
+/**
+ * Inserts a ledger entry recording a wallet balance mutation.
+ *
+ * @param conn - the database connection or active transaction
+ * @param params - the ledger entry fields
+ */
 export async function insertLedger(
   conn: DbOrTx,
   params: {
@@ -221,6 +304,14 @@ export async function insertLedger(
   });
 }
 
+/**
+ * Lists ledger entries for a wallet with optional filters, newest first (fetches limit+1).
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param opts - list options (limit, cursor, bookingId, eventKey)
+ * @returns the matching ledger rows
+ */
 export async function findLedgerEntries(
   conn: DbOrTx,
   walletId: string,
@@ -229,27 +320,59 @@ export async function findLedgerEntries(
     cursor?: string;
     bookingId?: string;
     eventKey?: string;
+    entryType?: string;
+    dateFrom?: string;
+    dateTo?: string;
   },
 ) {
   const conditions = [eq(ledgerEntry.walletId, walletId)];
+  if (opts.cursor) {
+    conditions.push(
+      sql`(${ledgerEntry.createdAt}, ${ledgerEntry.id}) < (
+        SELECT created_at, id FROM ledger_entry WHERE id = ${opts.cursor}
+      )`,
+    );
+  }
   if (opts.bookingId) {
     conditions.push(eq(ledgerEntry.bookingId, opts.bookingId));
   }
   if (opts.eventKey) {
     conditions.push(eq(ledgerEntry.eventKey, opts.eventKey));
   }
+  if (opts.entryType) {
+    conditions.push(eq(ledgerEntry.entryType, opts.entryType));
+  }
+  if (opts.dateFrom) {
+    conditions.push(gte(ledgerEntry.createdAt, new Date(opts.dateFrom)));
+  }
+  if (opts.dateTo) {
+    conditions.push(lte(ledgerEntry.createdAt, new Date(opts.dateTo)));
+  }
   return conn
     .select()
     .from(ledgerEntry)
     .where(and(...conditions))
-    .orderBy(desc(ledgerEntry.createdAt))
+    .orderBy(desc(ledgerEntry.createdAt), desc(ledgerEntry.id))
     .limit(opts.limit + 1);
 }
 
+/**
+ * Lists all active mark packages.
+ *
+ * @param conn - the database connection or active transaction
+ * @returns the active package rows
+ */
 export async function listActivePackages(conn: DbOrTx) {
   return conn.select().from(markPackage).where(eq(markPackage.isActive, true));
 }
 
+/**
+ * Inserts a wallet only if one does not already exist for the user.
+ *
+ * @param db - the database connection
+ * @param values - the initial balance values
+ * @returns the created wallet, or null when the user already has a wallet
+ */
 export async function upsert(
   db: DbType,
   values: {

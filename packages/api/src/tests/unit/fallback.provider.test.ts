@@ -91,4 +91,35 @@ describe("createFallbackMeetingProvider", () => {
 
     expect(result.bookingId).toBe("b2");
   });
+
+  test("createEvent persists attendeeEmails when attendees provided", async () => {
+    const insertedRow = {
+      id: "me1",
+      bookingId: "b3",
+      provider: "manual",
+      status: "manual",
+      meetingUrl: null,
+      externalEventId: null,
+    };
+
+    const returning = mock(async () => [insertedRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+
+    const db = { insert } as any;
+
+    const provider = createFallbackMeetingProvider(db);
+    await provider.createEvent("b3", undefined, undefined, [
+      { email: "tutor@example.com", name: "Tutor" },
+      { email: "student@example.com" },
+    ]);
+
+    const insertValues = values.mock.calls[0]?.[0] as {
+      attendeeEmails: string[] | null;
+    };
+    expect(insertValues.attendeeEmails).toEqual([
+      "tutor@example.com",
+      "student@example.com",
+    ]);
+  });
 });

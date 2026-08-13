@@ -1,8 +1,12 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import type { MeetingEvent } from "../meeting/meeting.types";
+import type { MeetingAttendee, MeetingEvent } from "../meeting/meeting.types";
 import type { AuditRecordParams } from "../audit/audit.service";
-import type { GroupSize, PriceSnapshot } from "../pricing/pricing.service";
+import type {
+  GroupSize,
+  Modality,
+  PriceSnapshot,
+} from "../pricing/pricing.service";
 import type { NotificationWriteParams } from "../notification/notification.service";
 import type {
   WalletSnapshot,
@@ -29,7 +33,11 @@ export interface BookingWalletPort {
 }
 
 export interface BookingPricingPort {
-  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
+  computeSplit(
+    modality: Modality,
+    tutorPricePerStudent: number,
+    confirmedHeadcount: GroupSize,
+  ): PriceSnapshot;
 }
 
 export interface BookingAuditPort {
@@ -46,6 +54,7 @@ export interface BookingMeetingPort {
     bookingId: string,
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
+    attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent>;
 }
 

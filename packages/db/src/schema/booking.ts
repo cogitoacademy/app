@@ -70,6 +70,11 @@ export const booking = pgTable(
       baseline: number;
       tutorShare: number;
       cogitoTake: number;
+      baselineCogitoTake: number;
+      baselineTutorShare: number;
+      extraTotal: number;
+      cogitoExtraTake: number;
+      tutorExtraShare: number;
     }>(),
     originalMarks: integer("original_marks").notNull(),
     holdAmount: integer("hold_amount").notNull().default(0),
@@ -161,7 +166,7 @@ export const bookingParticipant = pgTable(
   (table) => [
     check(
       "booking_participant_role_check",
-      sql`${table.role} IN ('proposer','invitee')`,
+      sql`${table.role} IN ('proposer','invitee','tutor')`,
     ),
     check(
       "booking_participant_confirmation_check",
@@ -260,6 +265,11 @@ export const bookingSession = pgTable(
       baseline: number;
       tutorShare: number;
       cogitoTake: number;
+      baselineCogitoTake: number;
+      baselineTutorShare: number;
+      extraTotal: number;
+      cogitoExtraTake: number;
+      tutorExtraShare: number;
     }>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -274,6 +284,29 @@ export const bookingSession = pgTable(
     ),
     index("booking_session_seriesBookingId_idx").on(table.seriesBookingId),
     index("booking_session_scheduledStartAt_idx").on(table.scheduledStartAt),
+  ],
+);
+
+export const sessionNote = pgTable(
+  "session_note",
+  {
+    id: uuidPrimaryKey,
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => booking.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("session_note_bookingId_idx").on(table.bookingId),
+    index("session_note_authorId_idx").on(table.authorId),
   ],
 );
 
@@ -385,6 +418,7 @@ export const bookingRelations = relations(booking, ({ one, many }) => ({
     relationName: "seriesParent",
   }),
   sessions: many(bookingSession),
+  sessionNotes: many(sessionNote),
 }));
 
 export const bookingParticipantRelations = relations(
@@ -459,5 +493,16 @@ export const bookingSessionRelations = relations(bookingSession, ({ one }) => ({
   seriesBooking: one(booking, {
     fields: [bookingSession.seriesBookingId],
     references: [booking.id],
+  }),
+}));
+
+export const sessionNoteRelations = relations(sessionNote, ({ one }) => ({
+  booking: one(booking, {
+    fields: [sessionNote.bookingId],
+    references: [booking.id],
+  }),
+  author: one(user, {
+    fields: [sessionNote.authorId],
+    references: [user.id],
   }),
 }));

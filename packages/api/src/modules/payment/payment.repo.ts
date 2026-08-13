@@ -5,6 +5,13 @@ import type { DbOrTx } from "../../lib/tx";
 
 export type PaymentRepo = ReturnType<typeof createPaymentRepo>;
 
+/**
+ * Finds a mark package by its code.
+ *
+ * @param conn - the database connection or active transaction
+ * @param code - the package code
+ * @returns the package row, or null
+ */
 export async function findPackageByCode(conn: DbOrTx, code: string) {
   const [pkg] = await conn
     .select()
@@ -14,6 +21,13 @@ export async function findPackageByCode(conn: DbOrTx, code: string) {
   return pkg ?? null;
 }
 
+/**
+ * Finds a payment by its provider reference (used for idempotency).
+ *
+ * @param conn - the database connection or active transaction
+ * @param providerReference - the provider's reference
+ * @returns the payment row, or null
+ */
 export async function findPaymentByProviderReference(
   conn: DbOrTx,
   providerReference: string,
@@ -26,6 +40,13 @@ export async function findPaymentByProviderReference(
   return record ?? null;
 }
 
+/**
+ * Finds a payment by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the payment id
+ * @returns the payment row, or null
+ */
 export async function findPaymentById(conn: DbOrTx, id: string) {
   const [record] = await conn
     .select()
@@ -35,6 +56,13 @@ export async function findPaymentById(conn: DbOrTx, id: string) {
   return record ?? null;
 }
 
+/**
+ * Finds a payment by provider event id (for webhook deduplication).
+ *
+ * @param conn - the database connection or active transaction
+ * @param providerEventId - the provider's event id
+ * @returns the payment row, or null
+ */
 export async function findPaymentByProviderEventId(
   conn: DbOrTx,
   providerEventId: string,
@@ -47,6 +75,12 @@ export async function findPaymentByProviderEventId(
   return record ?? null;
 }
 
+/**
+ * Inserts a payment record.
+ *
+ * @param conn - the database connection or active transaction
+ * @param values - the payment fields
+ */
 export async function insertPayment(
   conn: DbOrTx,
   values: typeof paymentRecord.$inferInsert,
@@ -54,6 +88,13 @@ export async function insertPayment(
   await conn.insert(paymentRecord).values(values);
 }
 
+/**
+ * Updates a payment's status and related webhook fields.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the payment id
+ * @param data - the status and optional receipt/failure fields
+ */
 export async function updatePaymentStatus(
   conn: DbOrTx,
   id: string,

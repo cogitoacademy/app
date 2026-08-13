@@ -245,24 +245,25 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 - **Coverage**: 90% for `packages/api`, 80% overall (after foundation hardening)
 - **Health**: `GET /health` with DB ping (Redis ping not yet implemented — see DEFERRED-OPS-TASKS 1.6)
 - **Deployment platform**: Coolify (self-hosted PaaS on Hetzner VPS)
+- **Scheduler boot**: The BullMQ worker + 3 repeatable jobs only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and booking-expiry/hold-release/email jobs never run.
 
 ## Plans
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-| Plan                                                              | Branch                             | Status                                    |
-| ----------------------------------------------------------------- | ---------------------------------- | ----------------------------------------- |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                      |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                      |
-| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                      |
-| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                      |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps + ops tasks            |
-| `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, next to execute           |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Frontend gap spec, parallel with PRD Gaps |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                      |
+| Plan                                                              | Branch                             | Status                                                                             |
+| ----------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                                                               |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                                                               |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                                                               |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                                                               |
+| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                               |
+| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                               |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps (1.4/1.5/1.7/1.8 done in BACKEND-HARDENING PRs B/C) + ops tasks |
+| `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, next to execute — G19 implemented (PR C), G20 fixed (PR C)         |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Frontend gap spec, parallel with PRD Gaps                                          |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                         |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                               |
 
 ### Execution Order
 
@@ -322,9 +323,7 @@ Do not prioritize the full booking operations console or offline room workflow u
 | N3  | Scheduler not shut down gracefully                 | P1       | **Fixed** |
 | N8  | withdraw doesn't release other participants' holds | P2       | **Fixed** |
 
-The following bugs from the production-readiness plan are **fixed** (see completed plan for details): B1 (double session validation), B2 (meeting rollback), B3 (refund correction), B4 (series deadline), N1 (release holds), N2 (send emails), N4 (series sessions), N5 (listLedger filters), N7 (randomUUID), N15 (holdAmount update), B6 (overlap check in tx).
-
-> **N9 (nextCursor) — NOT fully fixed.** Commit `86e29ed` set a `nextCursor` value in the `adminBooking.listBookings` response mapper, but `listBookingsByState` in `admin-booking.repo.ts:21-36` never consumes the cursor — it fetches the same first page every time (`listBookingsByState(db, [], limit)` with no `WHERE id > cursor` clause). Pagination is still broken. Tracked as part of G8 in `docs/plans/active/PRD-GAPS-SPEC.md`.
+The following bugs from the production-readiness plan are **fixed** (see completed plan for details): B1 (double session validation), B2 (meeting rollback), B3 (refund correction), B4 (series deadline), N1 (release holds), N2 (send emails), N4 (series sessions), N5 (listLedger filters), N7 (randomUUID), N15 (holdAmount update), B6 (overlap check in tx). N9 (pagination) was also fixed by PR #28 — `listBookingsByState` in `admin-booking.repo.ts:31-33` now consumes the cursor (`gt(booking.id, cursor)`).
 
 ### Frontend error UX TODO
 
@@ -333,10 +332,6 @@ The following bugs from the production-readiness plan are **fixed** (see complet
 **Remaining deferred items** are tracked in `docs/plans/active/DEFERRED-OPS-TASKS.md`:
 
 - Redis session caching (2.2) — not yet implemented
-- Booking repo SELECT \* (1.4) — need explicit column lists
-- JSDoc on public functions (1.7) — not yet added
-- Webhook IP allowlisting (1.5) — not yet implemented
-- Docker test database (1.8) — not yet created
 - BullMQ dead-letter queue — retry backoff is implemented, but no DLQ exists yet
 
 **Fixed by PR #28 (`improvement/foundation-critical-fixes`):**
@@ -399,7 +394,7 @@ Status column: **Fixed** = verified in code on main after #17 merge; **Open** = 
 | J4  | `any` type casts in route files                                        | P2       | 9     | Fixed                                                                                          |
 | K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     | Fixed                                                                                          |
 | K2  | No body size limit on webhook endpoints                                | P2       | 6     | Fixed                                                                                          |
-| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Partial — `attempts: 3` set, no backoff/DLQ (see DEFERRED-OPS 1.2)                             |
+| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 3 jobs have `attempts: 3` + exponential backoff (no DLQ)                           |
 | K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states              | P3       | 2     | Accepted (dead states, no action needed)                                                       |
 | K5  | repricedMarks column is dead — never set or read                       | P3       | 2     | Accepted (dead column, no action needed)                                                       |
 | K6  | timezone field stored but never used                                   | P3       | 2     | Accepted (stored, no action needed)                                                            |

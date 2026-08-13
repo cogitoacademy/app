@@ -92,12 +92,17 @@ const EMAIL_SUPPORTED_CATEGORIES: Set<string> = new Set([
 
 export type NotificationService = ReturnType<typeof createNotificationService>;
 
+/**
+ * Creates the notification service for in-app and best-effort email notifications.
+ *
+ * @param repo - the notification repository
+ * @param emailPort - optional email sender used for action/critical severity notifications
+ * @returns an InAppNotificationPort with write/list/read-status methods
+ */
 export function createNotificationService(
   repo: NotificationRepo,
   emailPort?: NotificationEmailPort,
-): InAppNotificationPort & {
-  dispatchStatus: (notificationId: string) => Promise<unknown>;
-} {
+): InAppNotificationPort {
   async function writeInternal(params: NotificationWriteParams): Promise<void> {
     const conn = params.db;
 
@@ -176,10 +181,22 @@ export function createNotificationService(
     }
   }
 
+  /**
+   * Writes a notification (deduplicated by eventKey), dispatching email for action/critical severity.
+   *
+   * @param params - the notification write parameters (db, userId, category, title, body, eventKey)
+   * @returns a promise resolving when the notification is recorded
+   */
   async function write(params: NotificationWriteParams): Promise<void> {
     await writeInternal(params);
   }
 
+  /**
+   * Writes a notification best-effort, logging failures without throwing.
+   *
+   * @param params - the notification write parameters
+   * @returns a promise that never rejects
+   */
   async function writeBestEffort(
     params: NotificationWriteParams,
   ): Promise<void> {
@@ -194,6 +211,13 @@ export function createNotificationService(
     });
   }
 
+  /**
+   * Lists notifications for a user with optional unread filter and cursor pagination.
+   *
+   * @param userId - the user to list notifications for
+   * @param opts - list options (unreadOnly, limit, cursor)
+   * @returns the notification items and a nextCursor when more pages exist
+   */
   async function list(
     userId: string,
     opts: NotificationListInput = {},
@@ -214,22 +238,36 @@ export function createNotificationService(
     return { items, nextCursor };
   }
 
+  /**
+   * Counts unread notifications for a user.
+   *
+   * @param userId - the user to count for
+   * @returns the number of unread notifications
+   */
   async function getUnreadCount(userId: string): Promise<number> {
     return repo.countUnread(userId);
   }
 
+  /**
+   * Marks a single notification as read, verifying ownership.
+   *
+   * @param userId - the owning user
+   * @param id - the notification id
+   * @throws {NotificationNotFoundError} if the notification does not exist for the user
+   */
   async function markAsRead(userId: string, id: string): Promise<void> {
     const existing = await repo.findNotificationByIdForUser(id, userId);
     if (!existing) throw new NotificationNotFoundError(id);
     await repo.updateReadStatus(id, userId, true);
   }
 
+  /**
+   * Marks all of a user's notifications as read.
+   *
+   * @param userId - the user to update
+   */
   async function markAllAsRead(userId: string): Promise<void> {
     await repo.markAllRead(userId);
-  }
-
-  async function dispatchStatus(notificationId: string) {
-    return repo.findDispatch(notificationId);
   }
 
   return {
@@ -239,6 +277,5 @@ export function createNotificationService(
     getUnreadCount,
     markAsRead,
     markAllAsRead,
-    dispatchStatus,
   };
 }

@@ -3,6 +3,12 @@ import type { DbOrTx } from "../../lib/tx";
 
 export type AuditRepo = ReturnType<typeof createAuditRepo>;
 
+/**
+ * Inserts an audit log entry.
+ *
+ * @param conn - the database connection or active transaction
+ * @param params - the audit log fields (actor, action, target, before/after state, details)
+ */
 export async function insertAuditLog(
   conn: DbOrTx,
   params: {

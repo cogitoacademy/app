@@ -7,10 +7,19 @@ import type {
   ListUsersInput,
   ListUsersResult,
 } from "./admin.service";
-import type { listUsersInput, setRoleInput } from "./admin.types";
+import type {
+  listUsersInput,
+  setRoleInput,
+  adminGetWalletInput,
+  adminListLedgerEntriesInput,
+} from "./admin.types";
 
 type ListUsersInputZod = z.infer<typeof listUsersInput>;
 type SetRoleInputZod = z.infer<typeof setRoleInput>;
+type AdminGetWalletInputZod = z.infer<typeof adminGetWalletInput>;
+type AdminListLedgerEntriesInputZod = z.infer<
+  typeof adminListLedgerEntriesInput
+>;
 
 export type { ListUsersInput, ListUsersResult };
 
@@ -40,6 +49,29 @@ export function createAdminHandler(adminService: AdminService) {
     }) => {
       return withDomainMap(
         () => adminService.setRole(context.session!.user.id, input),
+        mapAdminError,
+      );
+    },
+
+    getWallet: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: AdminGetWalletInputZod;
+    }) => {
+      return withDomainMap(() => adminService.getWallet(input), mapAdminError);
+    },
+
+    listLedgerEntries: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: AdminListLedgerEntriesInputZod;
+    }) => {
+      return withDomainMap(
+        () => adminService.listLedgerEntries(input),
         mapAdminError,
       );
     },

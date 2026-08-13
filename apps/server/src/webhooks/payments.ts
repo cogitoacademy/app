@@ -6,6 +6,15 @@ import { env } from "@cogito-app/env/server";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 
+export function ipAllowed(request: Request, allowlist: string[]): boolean {
+  if (allowlist.length === 0) return true;
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "";
+  return allowlist.some((entry) => entry === ip);
+}
+
 function validateWebhookTimestamp(request: Request): void {
   const timestamp =
     request.headers.get("x-timestamp") ?? request.headers.get("date");
@@ -32,6 +41,15 @@ export function paymentsWebhook(app: Elysia) {
           : (request.headers.get("x-webhook-signature") ?? "");
       const rawBody = typeof body === "string" ? body : JSON.stringify(body);
       const idempotencyKey = `${provider}:${request.headers.get("x-event-id") ?? crypto.randomUUID()}`;
+
+      const allowlist = (env.WEBHOOK_ALLOWED_IPS ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (!ipAllowed(request, allowlist)) {
+        set.status = 403;
+        return { error: "Forbidden" };
+      }
 
       log({
         level: "info",

@@ -1,9 +1,13 @@
 import { google } from "googleapis";
+import { eq } from "drizzle-orm";
 import { meetingEvent } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
-import type { MeetingEvent, MeetingPort } from "./meeting.types";
+import type {
+  MeetingAttendee,
+  MeetingEvent,
+  MeetingPort,
+} from "./meeting.types";
 import { log } from "../../lib/logger";
-import { createFallbackMeetingProvider } from "./fallback.provider";
 import { CircuitBreaker } from "../../lib/circuit-breaker";
 import type { RedisClient } from "../../lib/redis";
 
@@ -168,6 +172,7 @@ export function createGoogleMeetingProvider(
     bookingId: string,
     start: Date,
     end: Date,
+    attendees: MeetingAttendee[] | undefined,
     timeoutMs: number,
   ): Promise<GoogleCalendarEvent> {
     const calendarId = encodeURIComponent(config.calendarId);
@@ -183,6 +188,14 @@ export function createGoogleMeetingProvider(
           summary: `Cogito Booking ${bookingId}`,
           start: { dateTime: start.toISOString() },
           end: { dateTime: end.toISOString() },
+          ...(attendees?.length
+            ? {
+                attendees: attendees.map((attendee) => ({
+                  email: attendee.email,
+                  ...(attendee.name ? { displayName: attendee.name } : {}),
+                })),
+              }
+            : {}),
           conferenceData: {
             createRequest: {
               requestId: bookingId,
@@ -244,6 +257,7 @@ export function createGoogleMeetingProvider(
     bookingId: string,
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
+    attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent> {
     const startedAt = Date.now();
     try {
@@ -265,6 +279,7 @@ export function createGoogleMeetingProvider(
               bookingId,
               start,
               end,
+              attendees,
               TIMEOUT_MS,
             )
           : withTimeout(
@@ -275,6 +290,16 @@ export function createGoogleMeetingProvider(
                     summary: `Cogito Booking ${bookingId}`,
                     start: { dateTime: start.toISOString() },
                     end: { dateTime: end.toISOString() },
+                    ...(attendees?.length
+                      ? {
+                          attendees: attendees.map((attendee) => ({
+                            email: attendee.email,
+                            ...(attendee.name
+                              ? { displayName: attendee.name }
+                              : {}),
+                          })),
+                        }
+                      : {}),
                     conferenceData: {
                       createRequest: {
                         requestId: bookingId,
@@ -305,6 +330,7 @@ export function createGoogleMeetingProvider(
           provider: "google_meet",
           externalEventId,
           meetingUrl,
+          attendeeEmails: attendees?.map((attendee) => attendee.email) ?? null,
           status: "created",
         })
         .returning();
@@ -336,6 +362,7 @@ export function createGoogleMeetingProvider(
           errorReason: String(error),
           meetingUrl: null,
           externalEventId: null,
+          attendeeEmails: attendees?.map((attendee) => attendee.email) ?? null,
         })
         .returning();
 
@@ -360,24 +387,38 @@ export function createGoogleMeetingProviderWithFallback(
   redis?: RedisClient,
 ): MeetingPort {
   const googleProvider = createGoogleMeetingProvider(config, db, redis);
-  const fallbackProvider = createFallbackMeetingProvider(db);
-
   async function createEvent(
     bookingId: string,
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
+    attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent> {
     const result = await googleProvider.createEvent(
       bookingId,
       scheduledStartAt,
       scheduledEndAt,
+      attendees,
     );
     if (result.status === "failed") {
-      return fallbackProvider.createEvent(
+      const [row] = await db
+        .update(meetingEvent)
+        .set({
+          provider: "manual",
+          status: "manual",
+          errorReason: null,
+        })
+        .where(eq(meetingEvent.id, result.id))
+        .returning();
+
+      log({
+        level: "warn",
+        action: "meeting_manual_created",
+        message:
+          "Meeting created with manual provider - admin needs to assign a meeting link",
         bookingId,
-        scheduledStartAt,
-        scheduledEndAt,
-      );
+      });
+
+      return row as typeof meetingEvent.$inferSelect;
     }
     return result;
   }

@@ -11,6 +11,13 @@ export interface ListPublishedInput {
   offset: number;
 }
 
+/**
+ * Lists published tutor profiles with search/expertise/modality filters and pagination.
+ *
+ * @param conn - the database connection or active transaction
+ * @param input - the list options (search, expertise, modality, limit, offset)
+ * @returns the matching profiles with their user, newest published first
+ */
 async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
   const conditions: SQL<unknown>[] = [
     eq(tutorProfile.onboardingStatus, "published"),
@@ -46,6 +53,13 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
   });
 }
 
+/**
+ * Fetches a published tutor profile by id with its user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param tutorId - the profile id
+ * @returns the published profile, or null
+ */
 async function getProfileById(conn: DbOrTx, tutorId: string) {
   return conn.query.tutorProfile.findFirst({
     where: and(

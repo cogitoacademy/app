@@ -1,7 +1,9 @@
 import {
   ONLINE_FLOOR_PRICES,
   OFFLINE_FLOOR_PRICES,
-  COGITO_TAKE_RATE,
+  ONLINE_BASELINE_SPLIT,
+  OFFLINE_BASELINE_SPLIT,
+  EXTRA_TAKE_DIVISOR,
   MODALITY,
 } from "../../shared/constants";
 
@@ -13,6 +15,11 @@ export interface PriceSnapshot {
   baseline: number;
   tutorShare: number;
   cogitoTake: number;
+  baselineCogitoTake: number;
+  baselineTutorShare: number;
+  extraTotal: number;
+  cogitoExtraTake: number;
+  tutorExtraShare: number;
 }
 
 export interface PricingPort {
@@ -20,7 +27,11 @@ export interface PricingPort {
     prices: Record<string, number>,
     modality: Modality,
   ): string | null;
-  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
+  computeSplit(
+    modality: Modality,
+    tutorPricePerStudent: number,
+    confirmedHeadcount: GroupSize,
+  ): PriceSnapshot;
 }
 
 export type PricingService = ReturnType<typeof createPricingService>;
@@ -38,6 +49,14 @@ function getFloorPrices(modality: Modality): Record<number, number> {
   return higher;
 }
 
+/**
+ * Validates tutor-set prices against the Cogito floor for each group size.
+ *
+ * @param prices - map of group size (as string) to price in Marks
+ * @param modality - online/offline/both (both takes the max floor)
+ * @returns an error message string, or null when all prices are valid
+ * @throws {never} - returns a string instead of throwing
+ */
 function validatePrices(
   prices: Record<string, number>,
   modality: Modality,
@@ -66,18 +85,74 @@ function validatePrices(
   return null;
 }
 
-function computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot {
-  const perStudent = Math.floor(totalMarks / groupSize);
-  const cogitoTake = Math.floor(totalMarks * COGITO_TAKE_RATE);
-  const tutorShare = totalMarks - cogitoTake;
+/**
+ * Returns the baseline split (tutor share + Cogito take) for a modality
+ * and group size, per the PRD floor pricing tables.
+ *
+ * @param modality - the session modality (online/offline; both uses online)
+ * @param size - the group size (1-6)
+ * @returns the baseline tutor share and Cogito take in Marks
+ */
+function getBaselineSplit(
+  modality: Modality,
+  size: GroupSize,
+): { tutor: number; cogito: number } {
+  const table =
+    modality === MODALITY.OFFLINE
+      ? OFFLINE_BASELINE_SPLIT
+      : ONLINE_BASELINE_SPLIT;
+  return table[size]!;
+}
+
+/**
+ * Computes the price split for a group session using the PRD extra-take rule.
+ *
+ * Baseline split comes from the modality/group-size tables. Any amount above
+ * the baseline total is split by the extra-take rule: Cogito takes 1 Mark per
+ * full 5 Marks of extra total, the remainder goes to the tutor.
+ *
+ * @param modality - the session modality (online/offline)
+ * @param tutorPricePerStudent - the tutor-set per-student price in Marks
+ * @param confirmedHeadcount - the confirmed number of students (1-6)
+ * @returns the PriceSnapshot with baseline, tutor share, and Cogito take breakdown
+ */
+function computeSplit(
+  modality: Modality,
+  tutorPricePerStudent: number,
+  confirmedHeadcount: GroupSize,
+): PriceSnapshot {
+  const perStudent = Math.floor(tutorPricePerStudent);
+  const tutorTotal = perStudent * confirmedHeadcount;
+  const baseline = getBaselineSplit(modality, confirmedHeadcount);
+  const baselineTotal = baseline.tutor + baseline.cogito;
+  const extraTotal = tutorTotal - baselineTotal;
+  const cogitoExtraTake =
+    extraTotal > 0 ? Math.floor(extraTotal / EXTRA_TAKE_DIVISOR) : 0;
+  const tutorExtraShare = extraTotal - cogitoExtraTake;
+
+  const baselineCogitoTake = baseline.cogito;
+  const baselineTutorShare = baseline.tutor;
+  const cogitoTake = baselineCogitoTake + cogitoExtraTake;
+  const tutorShare = baselineTutorShare + tutorExtraShare;
+
   return {
     perStudent,
-    baseline: totalMarks,
+    baseline: baselineTotal,
     tutorShare,
     cogitoTake,
+    baselineCogitoTake,
+    baselineTutorShare,
+    extraTotal,
+    cogitoExtraTake,
+    tutorExtraShare,
   };
 }
 
+/**
+ * Creates the pricing service with price validation and split computation.
+ *
+ * @returns a PricingPort with validatePrices and computeSplit
+ */
 export function createPricingService(): PricingPort {
   return { validatePrices, computeSplit };
 }

@@ -23,6 +23,7 @@
     "bullmq": "^6",
     "drizzle-orm": "catalog:",
     "googleapis": "^174.0.1",
+    "ioredis": "^6.0.0",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -15,6 +15,12 @@ import {
   withdrawInput,
   proposeRescheduleInput,
   completeSessionInput,
+  markAttendanceInput,
+  cancelSessionInput,
+  acceptRescheduleInput,
+  rejectRescheduleInput,
+  addSessionNoteInput,
+  getSessionNotesInput,
 } from "./booking.types";
 import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
@@ -68,16 +74,62 @@ export function createBookingRouter(handler: BookingHandler) {
       )
       .handler(handler.cancel),
 
-    proposeReschedule: protectedProcedure
+    acceptReschedule: protectedProcedure
       .route({
         method: "POST",
-        path: "/booking/reschedule/propose",
+        path: "/booking/reschedule/accept",
         tags: ["Bookings"],
-        summary: "Propose reschedule",
-        description: "Student proposes a new slot for an existing booking",
+        summary: "Accept reschedule",
+        description: "Student accepts the tutor's reschedule proposal",
       })
-      .input(proposeRescheduleInput)
-      .handler(handler.proposeReschedule),
+      .input(acceptRescheduleInput)
+      .handler(handler.acceptReschedule),
+
+    rejectReschedule: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/reschedule/reject",
+        tags: ["Bookings"],
+        summary: "Reject reschedule",
+        description: "Student rejects the tutor's reschedule proposal",
+      })
+      .input(rejectRescheduleInput)
+      .handler(handler.rejectReschedule),
+
+    cancelSession: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/session/cancel",
+        tags: ["Bookings"],
+        summary: "Cancel series session",
+        description:
+          "Student cancels an individual series session more than 2h before start",
+      })
+      .input(cancelSessionInput)
+      .handler(handler.cancelSession),
+
+    addSessionNote: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/session-note/add",
+        tags: ["Bookings"],
+        summary: "Add session note",
+        description:
+          "Tutor or student adds a note to a completed session (sanitized)",
+      })
+      .input(addSessionNoteInput)
+      .handler(handler.addSessionNote),
+
+    getSessionNotes: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/session-note/list",
+        tags: ["Bookings"],
+        summary: "Get session notes",
+        description: "Tutor or student lists notes for a completed session",
+      })
+      .input(getSessionNotesInput)
+      .handler(handler.getSessionNotes),
 
     createGroup: protectedProcedure
       .route({
@@ -173,6 +225,17 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       .input(listMineInput)
       .handler(handler.listBookings),
 
+    proposeReschedule: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/reschedule/propose",
+        tags: ["Tutor", "Bookings"],
+        summary: "Propose reschedule",
+        description: "Tutor proposes a new slot for an existing booking",
+      })
+      .input(proposeRescheduleInput)
+      .handler(handler.proposeReschedule),
+
     acceptBooking: tutorProcedure
       .route({
         method: "POST",
@@ -209,5 +272,17 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       })
       .input(completeSessionInput)
       .handler(handler.completeSession),
+
+    markAttendance: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/mark-attendance",
+        tags: ["Tutor", "Bookings"],
+        summary: "Mark tutor attendance",
+        description:
+          "Tutor marks themselves present or late for a scheduled booking. Marks attendance so the lateness auto-cancel job skips the booking.",
+      })
+      .input(markAttendanceInput)
+      .handler(handler.markAttendance),
   };
 }

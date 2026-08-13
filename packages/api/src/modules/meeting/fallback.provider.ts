@@ -1,6 +1,10 @@
 import { meetingEvent } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
-import type { MeetingEvent, MeetingPort } from "./meeting.types";
+import type {
+  MeetingAttendee,
+  MeetingEvent,
+  MeetingPort,
+} from "./meeting.types";
 import { log } from "../../lib/logger";
 
 export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
@@ -8,6 +12,7 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
     bookingId: string,
     _scheduledStartAt?: Date,
     _scheduledEndAt?: Date,
+    attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent> {
     const [row] = await db
       .insert(meetingEvent)
@@ -17,6 +22,7 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
         status: "manual",
         meetingUrl: null,
         externalEventId: null,
+        attendeeEmails: attendees?.map((a) => a.email) ?? null,
       })
       .returning();
 

@@ -33,6 +33,13 @@ export interface AdminListInput {
   offset: number;
 }
 
+/**
+ * Lists achievements for a user, newest first.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the owner of the achievements
+ * @returns the user's achievement rows
+ */
 async function listByUserId(conn: DbOrTx, userId: string) {
   return conn
     .select()
@@ -41,6 +48,13 @@ async function listByUserId(conn: DbOrTx, userId: string) {
     .orderBy(desc(achievement.createdAt));
 }
 
+/**
+ * Inserts a new achievement.
+ *
+ * @param conn - the database connection or active transaction
+ * @param params - the achievement fields to insert
+ * @returns the inserted achievement row
+ */
 async function insert(conn: DbOrTx, params: InsertAchievementParams) {
   const [result] = await conn
     .insert(achievement)
@@ -60,6 +74,14 @@ async function insert(conn: DbOrTx, params: InsertAchievementParams) {
   return result;
 }
 
+/**
+ * Finds an achievement by id, scoped to the owning user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the achievement id
+ * @param userId - the owning user
+ * @returns the achievement row, or null when not found
+ */
 async function findByIdForUser(conn: DbOrTx, id: string, userId: string) {
   const [existing] = await conn
     .select()
@@ -69,6 +91,15 @@ async function findByIdForUser(conn: DbOrTx, id: string, userId: string) {
   return existing;
 }
 
+/**
+ * Updates an achievement scoped to the owning user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the achievement id
+ * @param userId - the owning user
+ * @param data - the fields to update
+ * @returns the updated row, or undefined when the achievement was not found
+ */
 async function update(
   conn: DbOrTx,
   id: string,
@@ -83,6 +114,16 @@ async function update(
   return updated;
 }
 
+/**
+ * Updates an achievement with optimistic concurrency via version.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the achievement id
+ * @param userId - the owning user
+ * @param expectedVersion - the version the row must currently have
+ * @param data - the fields to update
+ * @returns the updated rows (empty when the version did not match)
+ */
 async function updateWithVersion(
   conn: DbOrTx,
   id: string,
@@ -104,6 +145,15 @@ async function updateWithVersion(
   return rows;
 }
 
+/**
+ * Deletes an achievement with optimistic concurrency via version.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the achievement id
+ * @param userId - the owning user
+ * @param expectedVersion - the version the row must currently have
+ * @returns the deleted rows (empty when the version did not match)
+ */
 async function deleteWithVersion(
   conn: DbOrTx,
   id: string,
@@ -122,12 +172,26 @@ async function deleteWithVersion(
     .returning();
 }
 
+/**
+ * Deletes an achievement scoped to the owning user.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the achievement id
+ * @param userId - the owning user
+ */
 async function deleteRow(conn: DbOrTx, id: string, userId: string) {
   return conn
     .delete(achievement)
     .where(and(eq(achievement.id, id), eq(achievement.userId, userId)));
 }
 
+/**
+ * Lists achievements for admin review with pagination and optional status filter.
+ *
+ * @param conn - the database connection or active transaction
+ * @param input - the admin list input (status, limit, offset)
+ * @returns the matching achievement rows, newest first
+ */
 async function adminList(conn: DbOrTx, input: AdminListInput) {
   const { limit, offset, status } = input;
   return conn
@@ -148,6 +212,13 @@ async function adminList(conn: DbOrTx, input: AdminListInput) {
     .offset(offset);
 }
 
+/**
+ * Finds an achievement by id.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the achievement id
+ * @returns the achievement row, or null when not found
+ */
 async function getById(conn: DbOrTx, id: string) {
   const [existing] = await conn
     .select()
@@ -157,6 +228,15 @@ async function getById(conn: DbOrTx, id: string) {
   return existing;
 }
 
+/**
+ * Updates an achievement's admin review status and optional admin note.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the achievement id
+ * @param status - the new review status
+ * @param adminNote - optional note from the admin reviewer
+ * @returns the updated row, or undefined when the achievement was not found
+ */
 async function updateStatus(
   conn: DbOrTx,
   id: string,

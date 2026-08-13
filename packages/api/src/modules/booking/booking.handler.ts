@@ -17,6 +17,9 @@ import type {
   withdrawInput,
   proposeRescheduleInput,
   completeSessionInput,
+  markAttendanceInput,
+  cancelSessionInput,
+  addSessionNoteInput,
 } from "./booking.types";
 import type { BookingService } from "./booking.service";
 
@@ -33,6 +36,9 @@ type ReconfirmInput = z.infer<typeof reconfirmInput>;
 type WithdrawInput = z.infer<typeof withdrawInput>;
 type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
 type CompleteSessionInput = z.infer<typeof completeSessionInput>;
+type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;
+type CancelSessionInput = z.infer<typeof cancelSessionInput>;
+type AddSessionNoteInput = z.infer<typeof addSessionNoteInput>;
 
 export type BookingHandler = ReturnType<typeof createBookingHandler>;
 export type TutorActionsHandler = ReturnType<typeof createTutorActionsHandler>;
@@ -108,22 +114,75 @@ export function createBookingHandler(booking: BookingService) {
       );
     },
 
-    proposeReschedule: async ({
+    acceptReschedule: async ({
       context,
       input,
     }: {
       context: Context;
-      input: ProposeRescheduleInput;
+      input: BookingActionInput;
     }) => {
       return withDomainMap(
         () =>
-          booking.proposeReschedule(
+          booking.acceptReschedule(context.session!.user.id, input.bookingId),
+        mapBookingError,
+      );
+    },
+
+    rejectReschedule: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: BookingActionInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.rejectReschedule(context.session!.user.id, input.bookingId),
+        mapBookingError,
+      );
+    },
+
+    cancelSession: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: CancelSessionInput;
+    }) => {
+      return withDomainMap(
+        () => booking.cancelSession(context.session!.user.id, input.sessionId),
+        mapBookingError,
+      );
+    },
+
+    addSessionNote: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: AddSessionNoteInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.addSessionNote(
             context.session!.user.id,
             input.bookingId,
-            input.proposedStartAt,
-            input.proposedEndAt,
-            input.reason,
+            input.content,
           ),
+        mapBookingError,
+      );
+    },
+
+    getSessionNotes: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: BookingActionInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.getSessionNotes(context.session!.user.id, input.bookingId),
         mapBookingError,
       );
     },
@@ -279,6 +338,26 @@ export function createTutorActionsHandler(booking: BookingService) {
       );
     },
 
+    proposeReschedule: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: ProposeRescheduleInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.proposeReschedule(
+            context.session!.user.id,
+            input.bookingId,
+            input.proposedStartAt,
+            input.proposedEndAt,
+            input.reason,
+          ),
+        mapBookingError,
+      );
+    },
+
     acceptBooking: async ({
       context,
       input,
@@ -320,6 +399,24 @@ export function createTutorActionsHandler(booking: BookingService) {
       return withDomainMap(
         () =>
           booking.completeSession(input.bookingId, context.session!.user.id),
+        mapBookingError,
+      );
+    },
+
+    markAttendance: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: MarkAttendanceInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.markTutorAttendance(
+            input.bookingId,
+            context.session!.user.id,
+            input.attendance,
+          ),
         mapBookingError,
       );
     },

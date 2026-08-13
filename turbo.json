@@ -43,6 +43,9 @@
       "cache": false,
       "persistent": true
     },
+    "db:test": {
+      "cache": false
+    },
     "db:stop": {
       "cache": false
     },

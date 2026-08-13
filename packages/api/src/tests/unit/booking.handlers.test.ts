@@ -10,12 +10,22 @@ function makeBookingService() {
     createSolo: mock(async () => ({ id: "b1" })),
     getById: mock(async () => ({ id: "b1" })),
     listMine: mock(async () => ({ items: [] })),
-    listForTutor: mock(async () => ({ items: [], nextCursor: null })),
     cancel: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     proposeReschedule: mock(async () => ({
       id: "b1",
       currentState: "reschedule_proposed",
     })),
+    acceptReschedule: mock(async () => ({
+      id: "b1",
+      currentState: "awaiting_reconfirmation",
+    })),
+    rejectReschedule: mock(async () => ({
+      id: "b1",
+      currentState: "awaiting_tutor_review",
+    })),
+    cancelSession: mock(async () => ({ cancelled: true, sessionId: "s1" })),
+    addSessionNote: mock(async () => ({ id: "n1", content: "note" })),
+    getSessionNotes: mock(async () => [{ id: "n1", content: "note" }]),
     createGroup: mock(async () => ({ id: "bg1" })),
     createSeries: mock(async () => ({ id: "bs1" })),
     confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
@@ -28,6 +38,10 @@ function makeBookingService() {
     completeSession: mock(async () => ({
       id: "b1",
       currentState: "completed",
+    })),
+    markTutorAttendance: mock(async () => ({
+      bookingId: "b1",
+      attendanceState: "present",
     })),
   };
 }
@@ -142,33 +156,42 @@ describe("bookingHandler", () => {
     });
   });
 
-  describe("proposeReschedule", () => {
-    test("calls booking.proposeReschedule with session user id, bookingId, Date-converted times, and reason", async () => {
+  describe("acceptReschedule", () => {
+    test("calls booking.acceptReschedule with session user id and bookingId", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
       const context = makeContext("u1");
-      const input = {
-        bookingId: "b1",
-        proposedStartAt: new Date("2025-02-01T10:00:00Z"),
-        proposedEndAt: new Date("2025-02-01T11:00:00Z"),
-        reason: "time change",
-      };
+      const input = { bookingId: "b1" };
 
-      const result = await handler.proposeReschedule({
+      const result = await handler.acceptReschedule({
         context: context as any,
         input: input as any,
       });
 
-      expect(booking.proposeReschedule).toHaveBeenCalledWith(
-        "u1",
-        "b1",
-        new Date("2025-02-01T10:00:00Z"),
-        new Date("2025-02-01T11:00:00Z"),
-        "time change",
-      );
+      expect(booking.acceptReschedule).toHaveBeenCalledWith("u1", "b1");
       expect(result).toEqual({
         id: "b1",
-        currentState: "reschedule_proposed",
+        currentState: "awaiting_reconfirmation",
+      });
+    });
+  });
+
+  describe("rejectReschedule", () => {
+    test("calls booking.rejectReschedule with session user id and bookingId", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("u1");
+      const input = { bookingId: "b1" };
+
+      const result = await handler.rejectReschedule({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.rejectReschedule).toHaveBeenCalledWith("u1", "b1");
+      expect(result).toEqual({
+        id: "b1",
+        currentState: "awaiting_tutor_review",
       });
     });
   });
@@ -339,6 +362,61 @@ describe("bookingHandler", () => {
       expect(result).toEqual({ items: [] });
     });
   });
+
+  describe("cancelSession", () => {
+    test("calls booking.cancelSession with session user id and sessionId", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("u1");
+      const input = { sessionId: "s1" };
+
+      const result = await handler.cancelSession({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.cancelSession).toHaveBeenCalledWith("u1", "s1");
+      expect(result).toEqual({ cancelled: true, sessionId: "s1" });
+    });
+  });
+
+  describe("addSessionNote", () => {
+    test("calls booking.addSessionNote with session user id, bookingId, and content", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("t1");
+      const input = { bookingId: "b1", content: "Great session" };
+
+      const result = await handler.addSessionNote({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.addSessionNote).toHaveBeenCalledWith(
+        "t1",
+        "b1",
+        "Great session",
+      );
+      expect(result).toEqual({ id: "n1", content: "note" });
+    });
+  });
+
+  describe("getSessionNotes", () => {
+    test("calls booking.getSessionNotes with session user id and bookingId", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("u1");
+      const input = { bookingId: "b1" };
+
+      const result = await handler.getSessionNotes({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.getSessionNotes).toHaveBeenCalledWith("u1", "b1");
+      expect(result).toEqual([{ id: "n1", content: "note" }]);
+    });
+  });
 });
 
 describe("tutorActionsHandler", () => {
@@ -346,20 +424,34 @@ describe("tutorActionsHandler", () => {
     bookingIdempotency["store"].clear();
   });
 
-  describe("listBookings", () => {
-    test("lists bookings assigned to the signed-in tutor", async () => {
+  describe("proposeReschedule", () => {
+    test("calls booking.proposeReschedule with session user id, bookingId, Date-converted times, and reason", async () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
       const context = makeContext("t1");
-      const input = { states: ["awaiting_tutor_review"], limit: 10 };
+      const input = {
+        bookingId: "b1",
+        proposedStartAt: new Date("2025-02-01T10:00:00Z"),
+        proposedEndAt: new Date("2025-02-01T11:00:00Z"),
+        reason: "time change",
+      };
 
-      const result = await handler.listBookings({
+      const result = await handler.proposeReschedule({
         context: context as any,
         input: input as any,
       });
 
-      expect(booking.listForTutor).toHaveBeenCalledWith("t1", input);
-      expect(result).toEqual({ items: [], nextCursor: null });
+      expect(booking.proposeReschedule).toHaveBeenCalledWith(
+        "t1",
+        "b1",
+        new Date("2025-02-01T10:00:00Z"),
+        new Date("2025-02-01T11:00:00Z"),
+        "time change",
+      );
+      expect(result).toEqual({
+        id: "b1",
+        currentState: "reschedule_proposed",
+      });
     });
   });
 
@@ -415,6 +507,27 @@ describe("tutorActionsHandler", () => {
 
       expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1");
       expect(result).toEqual({ id: "b1", currentState: "completed" });
+    });
+  });
+
+  describe("markAttendance", () => {
+    test("calls booking.markTutorAttendance with bookingId, session user id, and attendance", async () => {
+      const booking = makeBookingService();
+      const handler = createTutorActionsHandler(booking as any);
+      const context = makeContext("t1");
+      const input = { bookingId: "b1", attendance: "present" };
+
+      const result = await handler.markAttendance({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.markTutorAttendance).toHaveBeenCalledWith(
+        "b1",
+        "t1",
+        "present",
+      );
+      expect(result).toEqual({ bookingId: "b1", attendanceState: "present" });
     });
   });
 });

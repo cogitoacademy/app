@@ -43,6 +43,28 @@ export function createAdminBookingHandler(
       );
     },
 
+    previewOverride: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: ApplyOverrideInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          adminBookingService.previewOverride({
+            bookingId: input.bookingId,
+            category: input.category,
+            reason: input.reason,
+            affectedParticipants: input.affectedParticipants,
+            marksAction: input.marksAction,
+            userNote: input.userNote,
+            internalNote: input.internalNote,
+          }),
+        mapAdminBookingError,
+      );
+    },
+
     listBookings: async ({
       context: _context,
       input,

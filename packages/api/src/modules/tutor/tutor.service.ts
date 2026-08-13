@@ -12,14 +12,24 @@ import {
   TutorProfileNotEditableError,
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
-  WeeklyAvailabilityRangeError,
   TutorProfileIncompleteError,
   InvalidTutorPricingError,
   OptimisticLockError,
+  WeeklyAvailabilityRangeError,
 } from "./tutor.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 
+/**
+ * Validates tutor profile update input against status and pricing constraints.
+ *
+ * @param profile - the existing tutor profile (undefined means not found)
+ * @param input - the update input to validate
+ * @param pricingPort - the pricing port used to validate prices
+ * @throws {TutorProfileNotFoundError} if the profile does not exist
+ * @throws {TutorProfileNotEditableError} if the profile is published
+ * @throws {InvalidTutorPricingError} if prices violate the Cogito floor
+ */
 export function validateUpdateInput(
   profile: TutorProfileRow | undefined,
   input: UpdateProfileInput,
@@ -48,6 +58,16 @@ export function validateUpdateInput(
   }
 }
 
+/**
+ * Validates a tutor profile for submission to review (draft/changes_requested, required fields, pricing).
+ *
+ * @param profile - the existing tutor profile (undefined means not found)
+ * @param pricingPort - the pricing port used to validate prices
+ * @throws {TutorProfileNotFoundError} if the profile does not exist
+ * @throws {InvalidTutorStatusError} if the profile is not in a submittable state
+ * @throws {TutorProfileIncompleteError} if required fields are missing
+ * @throws {InvalidTutorPricingError} if prices violate the Cogito floor
+ */
 export function validateSubmitForReview(
   profile: TutorProfileRow | undefined,
   pricingPort: TutorPricingPort,
@@ -96,6 +116,12 @@ export function validateSubmitForReview(
   }
 }
 
+/**
+ * Creates the tutor service for profile and availability management.
+ *
+ * @param deps - the dependency ports (tutorRepo, pricingPort, auditPort, db)
+ * @returns a TutorService with profile and availability methods
+ */
 export function createTutorService(deps: {
   tutorRepo: TutorRepo;
   pricingPort: TutorPricingPort;
@@ -104,12 +130,27 @@ export function createTutorService(deps: {
 }) {
   const { tutorRepo, pricingPort, auditPort, db } = deps;
 
+  /**
+   * Fetches the tutor profile for the requesting user.
+   *
+   * @param userId - the tutor user
+   * @returns the tutor profile
+   * @throws {TutorProfileNotFoundError} if the profile does not exist
+   */
   async function getMyProfile(userId: string) {
     const profile = await tutorRepo.getByUserId(db, userId);
     if (!profile) throw new TutorProfileNotFoundError(userId);
     return profile;
   }
 
+  /**
+   * Updates the tutor profile with optimistic concurrency via version.
+   *
+   * @param userId - the tutor user
+   * @param input - the update input including the expected version
+   * @returns the updated tutor profile
+   * @throws {OptimisticLockError} if the version does not match
+   */
   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateUpdateInput(profile, input, pricingPort);
@@ -124,6 +165,13 @@ export function createTutorService(deps: {
     return rows[0];
   }
 
+  /**
+   * Submits the tutor profile for admin review, recording an audit entry.
+   *
+   * @param userId - the tutor user
+   * @returns the updated tutor profile
+   * @throws {TutorProfileNotFoundError} if the profile does not exist
+   */
   async function submitForReview(userId: string) {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateSubmitForReview(profile, pricingPort);
@@ -150,10 +198,24 @@ export function createTutorService(deps: {
     });
   }
 
+  /**
+   * Lists the tutor's future availability slots.
+   *
+   * @param userId - the tutor user
+   * @returns the active future availability slots
+   */
   async function listAvailability(userId: string) {
     return tutorRepo.listAvailability(db, userId, { from: new Date() });
   }
 
+  /**
+   * Creates or updates an availability slot, rejecting overlaps.
+   *
+   * @param userId - the tutor user
+   * @param input - the slot details (id when updating an existing slot)
+   * @returns the created or updated slot
+   * @throws {AvailabilitySlotOverlapError} if the slot overlaps an existing one
+   */
   async function upsertAvailability(
     userId: string,
     input: {
@@ -248,6 +310,13 @@ export function createTutorService(deps: {
     });
   }
 
+  /**
+   * Deactivates an availability slot (soft delete) if it belongs to the tutor.
+   *
+   * @param userId - the tutor user
+   * @param slotId - the slot to deactivate
+   * @throws {TutorProfileNotFoundError} if the slot does not exist
+   */
   async function deleteAvailability(userId: string, slotId: string) {
     const slots = await tutorRepo.listAvailability(db, userId, {
       from: new Date(),

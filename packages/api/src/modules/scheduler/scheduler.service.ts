@@ -6,6 +6,10 @@ const QUEUE_NAME = "cogito-jobs";
 export interface SchedulerHandlers {
   onExpireBookings: () => Promise<{ expired: number; failed: number }>;
   onReleaseHolds: () => Promise<{ released: number }>;
+  onCheckTutorLateness: () => Promise<{
+    autoCancelled: number;
+    failed: number;
+  }>;
   onSendNotificationEmail: (data: {
     notificationId: string;
     userId: string;
@@ -55,6 +59,15 @@ export function createSchedulerService(
             message: `Released ${releaseResult.released} holds`,
           });
           return releaseResult;
+        case "check-tutor-lateness":
+          const latenessResult = await handlers.onCheckTutorLateness();
+          log({
+            level: latenessResult.failed > 0 ? "warn" : "info",
+            action: "check_tutor_lateness_complete",
+            message: `Auto-cancelled ${latenessResult.autoCancelled} bookings for tutor lateness, ${latenessResult.failed} failed`,
+            ...latenessResult,
+          });
+          return latenessResult;
         case "send-notification-email":
           await handlers.onSendNotificationEmail(job.data);
           break;

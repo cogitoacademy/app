@@ -20,6 +20,7 @@ import { createRoomModule } from "./modules/room";
 import { createAdminBookingModule } from "./modules/admin-booking";
 import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
+import { createSupportModule } from "./modules/support";
 
 import type { AuditPort } from "./modules/audit/audit.service";
 import type { PricingPort } from "./modules/pricing/pricing.service";
@@ -54,6 +55,8 @@ import type { AchievementHandler } from "./modules/achievement/achievement.handl
 import type { NotificationHandler } from "./modules/notification/notification.handler";
 import type { AdminBookingHandler } from "./modules/admin-booking/admin-booking.handler";
 import type { RefundHandler } from "./modules/refund/refund.handler";
+import type { SupportService } from "./modules/support/support.service";
+import type { SupportHandler } from "./modules/support/support.handler";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -72,6 +75,7 @@ export interface ServiceRegistry {
   room: RoomService;
   adminBooking: AdminBookingService;
   refund: RefundService;
+  support: SupportService;
 }
 
 export interface HandlerRegistry {
@@ -90,6 +94,7 @@ export interface HandlerRegistry {
   tutorActions: TutorActionsHandler;
   payment: PaymentHandler;
   room: RoomHandler;
+  support: SupportHandler;
 }
 
 function createServices() {
@@ -137,7 +142,11 @@ function createServices() {
   // Core modules
   const wallet = createWalletModule({ db });
   const auth = createAuthModule({ db, wallet: wallet.service });
-  const admin = createAdminModule({ db, audit: audit.service });
+  const admin = createAdminModule({
+    db,
+    audit: audit.service,
+    wallet: wallet.service,
+  });
   const adminTutor = createAdminTutorModule({ db, audit: audit.service });
   const tutor = createTutorModule({
     db,
@@ -186,6 +195,13 @@ function createServices() {
     audit: audit.service,
     wallet: wallet.service,
     refund: refund.service,
+    notification: notification.service,
+  });
+
+  const support = createSupportModule({
+    db,
+    audit: audit.service,
+    notification: notification.service,
   });
 
   const services: ServiceRegistry = {
@@ -205,6 +221,7 @@ function createServices() {
     room: room.service,
     adminBooking: adminBooking.service,
     refund: refund.service,
+    support: support.service,
   };
 
   const handlers: HandlerRegistry = {
@@ -223,6 +240,7 @@ function createServices() {
     tutorActions: booking.tutorActionsHandler,
     payment: payment.handler,
     room: room.handler,
+    support: support.handler,
   };
 
   return { services, handlers, redis };
