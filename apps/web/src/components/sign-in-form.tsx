@@ -146,8 +146,7 @@ export default function SignInForm({
                     id={field.name}
                     name={field.name}
                     type="email"
-                    placeholder="you@example.com"
-                    autoComplete="email"
+                    placeholder="Enter your email"
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
@@ -164,14 +163,18 @@ export default function SignInForm({
             <form.Field name="password">
               {(field) => (
                 <Field>
-                  <FieldLabel htmlFor={field.name}>Password</FieldLabel>
+                  <div className="flex items-center">
+                    <FieldLabel htmlFor={field.name}>Password</FieldLabel>
+                    <TextLink href="#" className="ml-auto">
+                      Forgot password?
+                    </TextLink>
+                  </div>
                   <div className="relative">
                     <Input
                       id={field.name}
                       name={field.name}
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
-                      autoComplete="current-password"
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}

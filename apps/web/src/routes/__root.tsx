@@ -23,12 +23,11 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "Cogito Academy | Learning Workspace",
+        title: "Cogito Digital",
       },
       {
         name: "description",
-        content:
-          "Discover tutors, book academic coaching, manage Marks, and track achievements with Cogito Academy.",
+        content: "cogito-app is a web application",
       },
     ],
     links: [

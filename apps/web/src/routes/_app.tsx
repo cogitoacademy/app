@@ -55,13 +55,11 @@ function RouteComponent() {
     <Layout
       title={title}
       sidebar={
-        <div id="app-sidebar" className="h-full">
-          <AppSidebar
-            userEmail={session.data?.user.email}
-            userName={session.data?.user.name}
-            role={(session.data?.user as CogitoUser | undefined)?.role}
-          />
-        </div>
+        <AppSidebar
+          userEmail={session.data?.user.email}
+          userName={session.data?.user.name}
+          role={(session.data?.user as CogitoUser | undefined)?.role}
+        />
       }
     >
       <Outlet />
