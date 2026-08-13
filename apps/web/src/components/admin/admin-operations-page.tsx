@@ -70,6 +70,7 @@ import {
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
 import { client, orpc } from "@/utils/orpc";
+import { getUserFacingError } from "@/lib/error-message";
 
 const TEXTAREA_CLASS =
   "min-h-24 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none placeholder:text-dimmed focus:border-input-accent-border";
@@ -769,5 +770,9 @@ function humanize(value: string) {
     .replace(/^./, (letter) => letter.toUpperCase());
 }
 function showError(title: string, error: Error) {
-  toastManager.add({ title, description: error.message, type: "error" });
+  toastManager.add({
+    title,
+    description: getUserFacingError(error),
+    type: "error",
+  });
 }

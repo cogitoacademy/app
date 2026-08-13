@@ -325,9 +325,10 @@ Do not prioritize the full booking operations console or offline room workflow u
 
 The following bugs from the production-readiness plan are **fixed** (see completed plan for details): B1 (double session validation), B2 (meeting rollback), B3 (refund correction), B4 (series deadline), N1 (release holds), N2 (send emails), N4 (series sessions), N5 (listLedger filters), N7 (randomUUID), N15 (holdAmount update), B6 (overlap check in tx). N9 (pagination) was also fixed by PR #28 — `listBookingsByState` in `admin-booking.repo.ts:31-33` now consumes the cursor (`gt(booking.id, cursor)`).
 
-### Frontend error UX TODO
+### Frontend error UX
 
-- Map oRPC/Zod input-validation issues to field-specific, non-technical messages across every form. Raw transport errors such as `Input validation failed` must never be shown directly to users. The solo-booking form currently provides a readable fallback, but a shared mapper remains to be implemented.
+- A shared transport-error mapper now lives in `apps/web/src/lib/error-message.ts` and is used by the global query client plus new booking/admin flows. Existing older forms should adopt it incrementally when touched.
+- `UNAUTHORIZED` redirects to login with `reason=session-expired`; `FORBIDDEN` remains in-app and shows a permission message instead of incorrectly logging the user out.
 
 **Remaining deferred items** are tracked in `docs/plans/active/DEFERRED-OPS-TASKS.md`:
 
@@ -389,7 +390,7 @@ Status column: **Fixed** = verified in code on main after #17 merge; **Open** = 
 | I2  | Missing composite index for overlap check query                        | P2       | 8     | Fixed                                                                                          |
 | I3  | Dev DB logging may expose sensitive params                             | P2       | 8     | Fixed                                                                                          |
 | J1  | No React error boundary — blank page on crash                          | P1       | 9     | Fixed (`apps/web/src/components/error-boundary.tsx`)                                           |
-| J2  | No auth session expiry handling on frontend                            | P1       | 9     | Open                                                                                           |
+| J2  | No auth session expiry handling on frontend                            | P1       | 9     | Fixed (`apps/web/src/utils/orpc.ts` redirects expired sessions with return path)               |
 | J3  | 4 dead frontend components                                             | P2       | 9     | Fixed                                                                                          |
 | J4  | `any` type casts in route files                                        | P2       | 9     | Fixed                                                                                          |
 | K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     | Fixed                                                                                          |

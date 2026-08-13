@@ -47,6 +47,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { formatBookingDate } from "./booking-ui";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
@@ -713,8 +714,9 @@ function isValidSchedule(start: string, end: string) {
 }
 
 function showMutationError(title: string, error: Error) {
-  const description = error.message.toLowerCase().includes("input validation")
-    ? "Check the form fields and try again."
-    : error.message;
+  const description = getUserFacingError(
+    error,
+    "This booking action could not be completed.",
+  );
   toastManager.add({ title, description, type: "error" });
 }

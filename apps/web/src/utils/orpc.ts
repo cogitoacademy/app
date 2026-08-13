@@ -6,6 +6,7 @@ import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { serverUrl } from "@/lib/server-url";
+import { getUserFacingError } from "@/lib/error-message";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,15 +19,14 @@ export const queryClient = new QueryClient({
   },
   queryCache: new QueryCache({
     onError: (error, query) => {
-      if (
-        error instanceof ORPCError &&
-        (error.code === "UNAUTHORIZED" || error.code === "FORBIDDEN")
-      ) {
+      if (error instanceof ORPCError && error.code === "UNAUTHORIZED") {
         window.location.href =
-          "/login?redirect=" + encodeURIComponent(window.location.pathname);
+          "/login?redirect=" +
+          encodeURIComponent(window.location.pathname) +
+          "&reason=session-expired";
         return;
       }
-      toast.error(`Error: ${error.message}`, {
+      toast.error(getUserFacingError(error), {
         action: {
           label: "retry",
           onClick: query.invalidate,
