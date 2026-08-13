@@ -1,5 +1,5 @@
-import { eq, desc, and, sql } from "drizzle-orm";
-import { achievement } from "@cogito-app/db/schema";
+import { eq, desc, and, getTableColumns, sql } from "drizzle-orm";
+import { achievement, user } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
 export interface InsertAchievementParams {
@@ -195,8 +195,17 @@ async function deleteRow(conn: DbOrTx, id: string, userId: string) {
 async function adminList(conn: DbOrTx, input: AdminListInput) {
   const { limit, offset, status } = input;
   return conn
-    .select()
+    .select({
+      ...getTableColumns(achievement),
+      student: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+      },
+    })
     .from(achievement)
+    .leftJoin(user, eq(achievement.userId, user.id))
     .where(status ? eq(achievement.status, status) : undefined)
     .orderBy(desc(achievement.createdAt))
     .limit(limit)

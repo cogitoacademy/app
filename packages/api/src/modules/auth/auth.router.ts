@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { protectedProcedure } from "../../procedures";
-import { updateProfileInput } from "./auth.types";
+import { updateProfileInput, searchStudentsInput } from "./auth.types";
 import type { AuthHandler } from "./auth.handler";
 
 export function createAuthRouter(handler: AuthHandler) {
@@ -40,5 +40,16 @@ export function createAuthRouter(handler: AuthHandler) {
       })
       .input(updateProfileInput)
       .handler(handler.updateProfile),
+
+    searchStudents: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/auth/students/search",
+        tags: ["Auth"],
+        summary: "Search students",
+        description: "Returns up to ten students matching a name or email",
+      })
+      .input(searchStudentsInput)
+      .handler(handler.searchStudents),
   };
 }

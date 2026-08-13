@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardBody,
@@ -16,15 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
-import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import { Button } from "@cogito-app/ui/components/selia/button";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import type { CogitoUser } from "@cogito-app/auth";
-import { client } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 import { TutorInviteForm } from "@/components/admin/tutor-invite-form";
 import { TutorReviewCard } from "@/components/admin/tutor-review-card";
-import { IconCopy } from "@tabler/icons-react";
+import { IconCopy, IconRefresh, IconTrash } from "@tabler/icons-react";
 
 export const Route = createFileRoute("/_app/admin-tutors")({
   component: RouteComponent,
@@ -56,7 +56,7 @@ function RouteComponent() {
         : client.adminTutor.listTutorProfiles(),
   });
 
-  const { data: invites = [] } = useQuery({
+  const { data: invites = [], refetch: refetchInvites } = useQuery({
     queryKey: ["adminTutorInvites", inviteFilter],
     queryFn: () =>
       inviteFilter
@@ -69,6 +69,36 @@ function RouteComponent() {
           })
         : client.adminTutor.listInvites(),
   });
+
+  const resendInvite = useMutation(
+    orpc.adminTutor.resendInvite.mutationOptions({
+      onSuccess: () => {
+        void refetchInvites();
+        toastManager.add({ title: "Invitation renewed", type: "success" });
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Invitation could not be renewed",
+          description: error.message,
+          type: "error",
+        }),
+    }),
+  );
+
+  const revokeInvite = useMutation(
+    orpc.adminTutor.revokeInvite.mutationOptions({
+      onSuccess: () => {
+        void refetchInvites();
+        toastManager.add({ title: "Invitation revoked", type: "success" });
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Invitation could not be revoked",
+          description: error.message,
+          type: "error",
+        }),
+    }),
+  );
 
   return (
     <div className="p-6 flex flex-col gap-6">
@@ -114,31 +144,70 @@ function RouteComponent() {
                 }) => (
                   <div
                     key={invite.id}
-                    className="flex items-center justify-between border-b border-item-border pb-2"
+                    className="flex flex-col gap-3 rounded-lg border border-item-border bg-item p-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex flex-col">
                       <Text className="font-medium">{invite.displayName}</Text>
                       <Text className="text-sm text-muted">{invite.email}</Text>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <Text className="text-sm">{invite.status}</Text>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="capitalize">
+                        {invite.status}
+                      </Badge>
                       {invite.status === "invited" && invite.token && (
-                        <IconBox
+                        <Button
                           size="sm"
-                          variant="info"
+                          variant="secondary"
                           onClick={() => {
                             const url = `${window.location.origin}/invite?token=${invite.token}`;
-                            navigator.clipboard.writeText(url);
-                            toastManager.add({
-                              title: "Invite link copied!",
-                              type: "success",
-                            });
+                            void navigator.clipboard.writeText(url).then(() =>
+                              toastManager.add({
+                                title: "Invite link copied",
+                                type: "success",
+                              }),
+                            );
                           }}
                         >
-                          <IconCopy />
-                        </IconBox>
+                          <IconCopy /> Copy link
+                        </Button>
                       )}
+                      {invite.status === "invited" ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="plain"
+                            onClick={() =>
+                              resendInvite.mutate({ inviteId: invite.id })
+                            }
+                            progress={
+                              resendInvite.isPending &&
+                              resendInvite.variables?.inviteId === invite.id
+                            }
+                            disabled={
+                              resendInvite.isPending || revokeInvite.isPending
+                            }
+                          >
+                            <IconRefresh /> Renew
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() =>
+                              revokeInvite.mutate({ inviteId: invite.id })
+                            }
+                            progress={
+                              revokeInvite.isPending &&
+                              revokeInvite.variables?.inviteId === invite.id
+                            }
+                            disabled={
+                              resendInvite.isPending || revokeInvite.isPending
+                            }
+                          >
+                            <IconTrash /> Revoke
+                          </Button>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 ),
@@ -181,7 +250,7 @@ function RouteComponent() {
           {profiles.length === 0 ? (
             <Text className="text-muted">No tutor profiles found.</Text>
           ) : (
-            <Stack direction="row" spacing="md">
+            <div className="grid items-stretch gap-4 lg:grid-cols-2">
               {profiles.map(
                 (
                   profile: Awaited<
@@ -198,7 +267,7 @@ function RouteComponent() {
                   />
                 ),
               )}
-            </Stack>
+            </div>
           )}
         </CardBody>
       </Card>

@@ -1,16 +1,17 @@
 import { z } from "zod";
 
-import { protectedProcedure } from "../../procedures";
+import { tutorProcedure } from "../../procedures";
 import { updateMyProfileInput } from "./tutor.types";
 import {
   upsertAvailabilityInput,
+  createWeeklyAvailabilityInput,
   deleteAvailabilityInput,
 } from "./availability.types";
 import type { TutorHandler } from "./tutor.handler";
 
 export function createTutorRouter(handler: TutorHandler) {
   return {
-    getMyProfile: protectedProcedure
+    getMyProfile: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/profile/get",
@@ -21,7 +22,7 @@ export function createTutorRouter(handler: TutorHandler) {
       .input(z.void())
       .handler(handler.getMyProfile),
 
-    updateMyProfile: protectedProcedure
+    updateMyProfile: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/profile/update",
@@ -32,7 +33,7 @@ export function createTutorRouter(handler: TutorHandler) {
       .input(updateMyProfileInput)
       .handler(handler.updateMyProfile),
 
-    submitForReview: protectedProcedure
+    submitForReview: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/profile/submit",
@@ -43,7 +44,7 @@ export function createTutorRouter(handler: TutorHandler) {
       .input(z.void())
       .handler(handler.submitForReview),
 
-    listAvailability: protectedProcedure
+    listAvailability: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/availability/list",
@@ -55,7 +56,7 @@ export function createTutorRouter(handler: TutorHandler) {
       .input(z.void())
       .handler(handler.listAvailability),
 
-    upsertAvailability: protectedProcedure
+    upsertAvailability: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/availability/upsert",
@@ -66,7 +67,19 @@ export function createTutorRouter(handler: TutorHandler) {
       .input(upsertAvailabilityInput)
       .handler(handler.upsertAvailability),
 
-    deleteAvailability: protectedProcedure
+    createWeeklyAvailability: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/availability/weekly/create",
+        tags: ["Tutor"],
+        summary: "Create weekly availability",
+        description:
+          "Creates concrete weekly availability windows through the selected end date",
+      })
+      .input(createWeeklyAvailabilityInput)
+      .handler(handler.createWeeklyAvailability),
+
+    deleteAvailability: tutorProcedure
       .route({
         method: "POST",
         path: "/tutor/availability/delete",

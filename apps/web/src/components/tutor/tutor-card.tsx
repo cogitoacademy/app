@@ -39,6 +39,14 @@ export function TutorCard({ tutor, onClick }: TutorCardProps) {
     <Card
       className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       <CardHeader>
         <CardTitle>

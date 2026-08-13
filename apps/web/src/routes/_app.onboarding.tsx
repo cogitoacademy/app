@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import type { CogitoUser } from "@cogito-app/auth";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 import { OnboardingForm } from "@/components/tutor/onboarding-form";
 import Loader from "@/components/loader";
 
@@ -10,6 +10,14 @@ export const Route = createFileRoute("/_app/onboarding")({
   beforeLoad: async ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;
     if (user?.role !== "tutor") {
+      throw redirect({ to: "/dashboard" });
+    }
+    const profile = await client.tutor.getMyProfile().catch(() => null);
+    if (
+      profile &&
+      profile.onboardingStatus !== "draft" &&
+      profile.onboardingStatus !== "changes_requested"
+    ) {
       throw redirect({ to: "/dashboard" });
     }
   },

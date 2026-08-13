@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { IconBell } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -88,25 +89,26 @@ export function NotificationBell() {
       <MenuTrigger
         render={
           <Button
-            variant="plain"
-            size="sm-icon"
+            variant="outline"
+            size="icon"
             aria-label="Notifications"
             data-slot="notification-trigger"
+            className="relative"
           />
         }
       >
-        <span className="relative">
-          <IconBell />
-          {unread > 0 && (
-            <Badge
-              variant="danger"
-              size="sm"
-              className="absolute -right-1.5 -top-1.5 min-w-[1.25rem] px-1 text-center text-[10px]"
-            >
-              {unread > 99 ? "99+" : unread}
-            </Badge>
-          )}
-        </span>
+        <IconBell className="h-[1.2rem] w-[1.2rem]" />
+        {unread > 0 ? (
+          <Badge
+            variant="danger-solid"
+            size="sm"
+            pill
+            className="absolute -right-1 -top-1 min-w-5 px-1 text-center text-[10px] justify-center"
+          >
+            {unread > 99 ? "99+" : unread}
+          </Badge>
+        ) : null}
+        <span className="sr-only">Notifications</span>
       </MenuTrigger>
       <MenuPopup className="w-80 max-w-[calc(100vw-2rem)]">
         <div className="flex items-center justify-between px-3 py-2">
@@ -165,6 +167,19 @@ export function NotificationBell() {
             ))}
           </div>
         )}
+        <Separator />
+        <div className="px-2 py-1.5">
+          <Button
+            variant="plain"
+            block
+            nativeButton={false}
+            render={
+              <Link to="/notifications" aria-label="View all notifications" />
+            }
+          >
+            View all notifications
+          </Button>
+        </div>
       </MenuPopup>
     </Menu>
   );

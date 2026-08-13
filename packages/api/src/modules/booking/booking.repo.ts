@@ -258,8 +258,6 @@ async function updateBookingPriceSnapshot(
       tutorShare: number;
       cogitoTake: number;
 
-
-
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -271,8 +269,6 @@ async function updateBookingPriceSnapshot(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
-
-
 
 /**
  * Sets a booking's confirmed headcount.
@@ -397,8 +393,6 @@ async function updateRescheduleProposal(
     .where(eq(bookingRescheduleProposal.id, proposalId));
 }
 
-
-
 /**
  * Inserts a session for a series booking.
  *
@@ -479,8 +473,6 @@ async function listSessionNotes(conn: DbOrTx, bookingId: string) {
     .orderBy(desc(sessionNote.createdAt));
 }
 
-
-
 /**
  * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
  *
@@ -541,8 +533,6 @@ async function updateBookingSchedule(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
-
-
 
 /**
  * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).
@@ -710,6 +700,8 @@ export function createBookingRepo(db: DbType) {
     const b = await db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
       with: {
+        tutor: true,
+        proposer: true,
         participants: { with: { user: true } },
         stateHistory: true,
         roomBookings: { with: { room: true } },
@@ -741,7 +733,34 @@ export function createBookingRepo(db: DbType) {
       where: and(...conditions),
       orderBy: [desc(booking.scheduledStartAt)],
       limit: opts.limit + 1,
-      with: { participants: { with: { user: true } } },
+      with: {
+        tutor: true,
+        proposer: true,
+        participants: { with: { user: true } },
+      },
+    });
+  }
+
+  async function listBookingsByTutor(
+    tutorId: string,
+    opts: { states?: string[]; limit: number; cursor?: string },
+  ) {
+    const conditions = [eq(booking.tutorId, tutorId)];
+    if (opts.states?.length) {
+      conditions.push(inArray(booking.currentState, opts.states));
+    }
+    if (opts.cursor) {
+      conditions.push(lt(booking.scheduledStartAt, new Date(opts.cursor)));
+    }
+    return db.query.booking.findMany({
+      where: and(...conditions),
+      orderBy: [desc(booking.scheduledStartAt)],
+      limit: opts.limit + 1,
+      with: {
+        tutor: true,
+        proposer: true,
+        participants: { with: { user: true } },
+      },
     });
   }
 
@@ -749,6 +768,7 @@ export function createBookingRepo(db: DbType) {
     findBookingById,
     findBookingWithParticipants,
     listBookingsByProposer,
+    listBookingsByTutor,
     findTutorProfile,
     findAvailabilitySlot,
     findParticipant,

@@ -5,12 +5,16 @@ import type { TutorService } from "./tutor.service";
 import { updateMyProfileInput } from "./tutor.types";
 import {
   upsertAvailabilityInput,
+  createWeeklyAvailabilityInput,
   deleteAvailabilityInput,
 } from "./availability.types";
 import { mapTutorError } from "./tutor.errors";
 
 type UpdateMyProfileInput = z.infer<typeof updateMyProfileInput>;
 type UpsertAvailabilityInput = z.infer<typeof upsertAvailabilityInput>;
+type CreateWeeklyAvailabilityInput = z.infer<
+  typeof createWeeklyAvailabilityInput
+>;
 type DeleteAvailabilityInput = z.infer<typeof deleteAvailabilityInput>;
 
 export type TutorHandler = ReturnType<typeof createTutorHandler>;
@@ -60,6 +64,23 @@ export function createTutorHandler(tutorService: TutorService) {
     }) => {
       return withDomainMap(
         () => tutorService.upsertAvailability(context.session!.user.id, input),
+        mapTutorError,
+      );
+    },
+
+    createWeeklyAvailability: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: CreateWeeklyAvailabilityInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          tutorService.createWeeklyAvailability(
+            context.session!.user.id,
+            input,
+          ),
         mapTutorError,
       );
     },

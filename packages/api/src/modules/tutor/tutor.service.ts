@@ -15,6 +15,7 @@ import {
   TutorProfileIncompleteError,
   InvalidTutorPricingError,
   OptimisticLockError,
+  WeeklyAvailabilityRangeError,
 } from "./tutor.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
@@ -248,6 +249,67 @@ export function createTutorService(deps: {
     });
   }
 
+  async function createWeeklyAvailability(
+    userId: string,
+    input: {
+      startDate: Date;
+      endDate: Date;
+      repeatUntil: Date;
+      modality: "online" | "offline" | "both";
+    },
+  ) {
+    const durationMs = input.endDate.getTime() - input.startDate.getTime();
+    const occurrences: Array<{ startDate: Date; endDate: Date }> = [];
+
+    for (
+      let startDate = new Date(input.startDate);
+      startDate <= input.repeatUntil;
+      startDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000)
+    ) {
+      occurrences.push({
+        startDate,
+        endDate: new Date(startDate.getTime() + durationMs),
+      });
+    }
+
+    if (occurrences.length === 0 || occurrences.length > 53) {
+      throw new WeeklyAvailabilityRangeError();
+    }
+
+    return db.transaction(async (tx) => {
+      const existing = await tutorRepo.listAvailability(tx, userId);
+      const overlaps = occurrences.some((occurrence, occurrenceIndex) => {
+        const overlapsExisting = existing.some(
+          (slot) =>
+            occurrence.startDate < slot.endDate &&
+            occurrence.endDate > slot.startDate,
+        );
+        const overlapsEarlierOccurrence = occurrences
+          .slice(0, occurrenceIndex)
+          .some(
+            (earlier) =>
+              occurrence.startDate < earlier.endDate &&
+              occurrence.endDate > earlier.startDate,
+          );
+        return overlapsExisting || overlapsEarlierOccurrence;
+      });
+
+      if (overlaps) throw new AvailabilitySlotOverlapError(userId);
+
+      return Promise.all(
+        occurrences.map((occurrence) =>
+          tutorRepo.upsertAvailability(tx, userId, {
+            ...occurrence,
+            modality: input.modality,
+            isRecurring: true,
+            recurrenceRule: "weekly",
+            isActive: true,
+          }),
+        ),
+      );
+    });
+  }
+
   /**
    * Deactivates an availability slot (soft delete) if it belongs to the tutor.
    *
@@ -270,6 +332,7 @@ export function createTutorService(deps: {
     submitForReview,
     listAvailability,
     upsertAvailability,
+    createWeeklyAvailability,
     deleteAvailability,
   };
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Card,
   CardBody,
@@ -62,6 +63,7 @@ interface OnboardingFormProps {
 
 export function OnboardingForm({ profile }: OnboardingFormProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     displayName: profile.displayName ?? "",
     shortBio: profile.shortBio ?? "",
@@ -115,6 +117,7 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
           queryKey: orpc.tutor.getMyProfile.key(),
         });
         void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
+        void navigate({ to: "/dashboard" });
       },
       onError: (error: unknown) => {
         const message =

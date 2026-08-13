@@ -4,6 +4,7 @@ let logCaptures: any[] = [];
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 const originalConsoleWarn = console.warn;
+const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
   logCaptures = [];
@@ -34,6 +35,7 @@ afterEach(() => {
   console.log = originalConsoleLog;
   console.error = originalConsoleError;
   console.warn = originalConsoleWarn;
+  globalThis.fetch = originalFetch;
 });
 
 const mockCalendarEventsInsert = mock(async () => ({
@@ -44,24 +46,35 @@ const mockCalendarEventsInsert = mock(async () => ({
     },
   },
 }));
+const mockCalendarEventsGet = mock(async () => ({
+  data: {
+    id: "evt_123",
+    conferenceData: {
+      entryPoints: [
+        { entryPointType: "video", uri: "https://meet.google.com/abc" },
+      ],
+    },
+  },
+}));
 
 mock.module("googleapis", () => ({
   google: {
     auth: {
       JWT: class {
-        email: string;
-        key: string;
-        scopes: string[];
-        constructor(e: string, k: string, s: string[]) {
-          this.email = e;
-          this.key = k;
-          this.scopes = s;
+        constructor(_config: unknown) {}
+      },
+      OAuth2: class {
+        credentials: unknown;
+        constructor(_clientId: string, _clientSecret: string) {}
+        setCredentials(credentials: unknown) {
+          this.credentials = credentials;
         }
       },
     },
     calendar: () => ({
       events: {
         insert: mockCalendarEventsInsert,
+        get: mockCalendarEventsGet,
       },
     }),
   },
@@ -74,6 +87,7 @@ import {
 
 describe("createGoogleMeetingProvider", () => {
   const config = {
+    authType: "service_account" as const,
     clientEmail: "test@example.com",
     privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
     calendarId: "primary",
@@ -196,10 +210,79 @@ describe("createGoogleMeetingProvider", () => {
     );
     expect(errorLog).toBeDefined();
   });
+
+  test("createEvent creates event with OAuth refresh token flow", async () => {
+    const config = {
+      authType: "oauth_refresh_token" as const,
+      clientId: "oauth-client-id",
+      clientSecret: "oauth-client-secret",
+      refreshToken: "oauth-refresh-token",
+      calendarId: "primary",
+    };
+
+    globalThis.fetch = mock(async (input: string | URL | Request) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url === "https://oauth2.googleapis.com/token") {
+        return new Response(
+          JSON.stringify({ access_token: "oauth-access-token" }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (
+        url ===
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1"
+      ) {
+        return new Response(
+          JSON.stringify({
+            id: "evt_oauth",
+            conferenceData: {
+              entryPoints: [
+                {
+                  entryPointType: "video",
+                  uri: "https://meet.google.com/oauth",
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as typeof globalThis.fetch;
+
+    const successRow = {
+      id: "me_oauth",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: "evt_oauth",
+      meetingUrl: "https://meet.google.com/oauth",
+      status: "created",
+      errorReason: null,
+    };
+
+    const returning = mock(async () => [successRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { insert } as any;
+
+    const provider = createGoogleMeetingProvider(config, db);
+    const result = await provider.createEvent("b1");
+
+    expect(result.bookingId).toBe("b1");
+    expect(result.provider).toBe("google_meet");
+    expect(result.status).toBe("created");
+    expect(result.meetingUrl).toBe("https://meet.google.com/oauth");
+    expect(result.externalEventId).toBe("evt_oauth");
+    expect(result.errorReason).toBeNull();
+  });
 });
 
 describe("createGoogleMeetingProviderWithFallback", () => {
   const config = {
+    authType: "service_account" as const,
     clientEmail: "test@example.com",
     privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
     calendarId: "primary",
@@ -287,6 +370,7 @@ describe("createGoogleMeetingProviderWithFallback", () => {
 
 describe("createGoogleMeetingProvider timeout", () => {
   const config = {
+    authType: "service_account" as const,
     clientEmail: "test@example.com",
     privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
     calendarId: "primary",

@@ -18,11 +18,16 @@ import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AppTutorBookingsRouteImport } from './routes/_app.tutor-bookings'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
+import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
+import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
 import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
+import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
+import { Route as AppBookingsBookingIdRouteImport } from './routes/_app.bookings_.$bookingId'
+import { Route as AppTutorsTutorIdBookRouteImport } from './routes/_app.tutors_.$tutorId.book'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -68,6 +73,11 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -83,14 +93,34 @@ const AppBalanceRoute = AppBalanceRouteImport.update({
   path: '/balance',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAvailabilityRoute = AppAvailabilityRouteImport.update({
+  id: '/availability',
+  path: '/availability',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminTutorsRoute = AppAdminTutorsRouteImport.update({
   id: '/admin-tutors',
   path: '/admin-tutors',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
+  id: '/admin-achievements',
+  path: '/admin-achievements',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAchievementsRoute = AppAchievementsRouteImport.update({
   id: '/achievements',
   path: '/achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBookingsBookingIdRoute = AppBookingsBookingIdRouteImport.update({
+  id: '/bookings_/$bookingId',
+  path: '/bookings/$bookingId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTutorsTutorIdBookRoute = AppTutorsTutorIdBookRouteImport.update({
+  id: '/tutors_/$tutorId/book',
+  path: '/tutors/$tutorId/book',
   getParentRoute: () => AppRoute,
 } as any)
 
@@ -99,30 +129,40 @@ export interface FileRoutesByFullPath {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
+  '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
+  '/tutors/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
+  '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
+  '/tutors/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -131,15 +171,20 @@ export interface FileRoutesById {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/_app/achievements': typeof AppAchievementsRoute
+  '/_app/admin-achievements': typeof AppAdminAchievementsRoute
   '/_app/admin-tutors': typeof AppAdminTutorsRoute
+  '/_app/availability': typeof AppAvailabilityRoute
   '/_app/balance': typeof AppBalanceRoute
   '/_app/bookings': typeof AppBookingsRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/notifications': typeof AppNotificationsRoute
   '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/tutor-bookings': typeof AppTutorBookingsRoute
   '/_app/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/_app/bookings_/$bookingId': typeof AppBookingsBookingIdRoute
+  '/_app/tutors_/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -148,30 +193,40 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/achievements'
+    | '/admin-achievements'
     | '/admin-tutors'
+    | '/availability'
     | '/balance'
     | '/bookings'
     | '/dashboard'
+    | '/notifications'
     | '/onboarding'
     | '/profile'
     | '/tutor-bookings'
     | '/tutors'
     | '/auth/callback'
+    | '/bookings/$bookingId'
+    | '/tutors/$tutorId/book'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/invite'
     | '/login'
     | '/achievements'
+    | '/admin-achievements'
     | '/admin-tutors'
+    | '/availability'
     | '/balance'
     | '/bookings'
     | '/dashboard'
+    | '/notifications'
     | '/onboarding'
     | '/profile'
     | '/tutor-bookings'
     | '/tutors'
     | '/auth/callback'
+    | '/bookings/$bookingId'
+    | '/tutors/$tutorId/book'
   id:
     | '__root__'
     | '/'
@@ -179,15 +234,20 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/_app/achievements'
+    | '/_app/admin-achievements'
     | '/_app/admin-tutors'
+    | '/_app/availability'
     | '/_app/balance'
     | '/_app/bookings'
     | '/_app/dashboard'
+    | '/_app/notifications'
     | '/_app/onboarding'
     | '/_app/profile'
     | '/_app/tutor-bookings'
     | '/_app/tutors'
     | '/auth/callback'
+    | '/_app/bookings_/$bookingId'
+    | '/_app/tutors_/$tutorId/book'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -263,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/notifications': {
+      id: '/_app/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -284,11 +351,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBalanceRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/availability': {
+      id: '/_app/availability'
+      path: '/availability'
+      fullPath: '/availability'
+      preLoaderRoute: typeof AppAvailabilityRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-tutors': {
       id: '/_app/admin-tutors'
       path: '/admin-tutors'
       fullPath: '/admin-tutors'
       preLoaderRoute: typeof AppAdminTutorsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-achievements': {
+      id: '/_app/admin-achievements'
+      path: '/admin-achievements'
+      fullPath: '/admin-achievements'
+      preLoaderRoute: typeof AppAdminAchievementsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/achievements': {
@@ -298,31 +379,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAchievementsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/bookings_/$bookingId': {
+      id: '/_app/bookings_/$bookingId'
+      path: '/bookings/$bookingId'
+      fullPath: '/bookings/$bookingId'
+      preLoaderRoute: typeof AppBookingsBookingIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tutors_/$tutorId/book': {
+      id: '/_app/tutors_/$tutorId/book'
+      path: '/tutors/$tutorId/book'
+      fullPath: '/tutors/$tutorId/book'
+      preLoaderRoute: typeof AppTutorsTutorIdBookRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
+  AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
   AppAdminTutorsRoute: typeof AppAdminTutorsRoute
+  AppAvailabilityRoute: typeof AppAvailabilityRoute
   AppBalanceRoute: typeof AppBalanceRoute
   AppBookingsRoute: typeof AppBookingsRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppNotificationsRoute: typeof AppNotificationsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
   AppTutorBookingsRoute: typeof AppTutorBookingsRoute
   AppTutorsRoute: typeof AppTutorsRoute
+  AppBookingsBookingIdRoute: typeof AppBookingsBookingIdRoute
+  AppTutorsTutorIdBookRoute: typeof AppTutorsTutorIdBookRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
+  AppAdminAchievementsRoute: AppAdminAchievementsRoute,
   AppAdminTutorsRoute: AppAdminTutorsRoute,
+  AppAvailabilityRoute: AppAvailabilityRoute,
   AppBalanceRoute: AppBalanceRoute,
   AppBookingsRoute: AppBookingsRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppNotificationsRoute: AppNotificationsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
   AppTutorBookingsRoute: AppTutorBookingsRoute,
   AppTutorsRoute: AppTutorsRoute,
+  AppBookingsBookingIdRoute: AppBookingsBookingIdRoute,
+  AppTutorsTutorIdBookRoute: AppTutorsTutorIdBookRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

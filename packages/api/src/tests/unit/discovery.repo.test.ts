@@ -1,13 +1,18 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createDiscoveryRepo } from "../../modules/tutor-discovery/discovery.repo";
 
-function makeConn(findMany: any, findFirst?: any) {
+function makeConn(
+  findMany: any,
+  findFirst?: any,
+  availabilityFindMany = mock(async () => []),
+) {
   return {
     query: {
       tutorProfile: {
         findMany: findMany,
         ...(findFirst ? { findFirst } : {}),
       },
+      availabilitySlot: { findMany: availabilityFindMany },
     },
   } as any;
 }
@@ -151,6 +156,28 @@ describe("DiscoveryRepo", () => {
       const result = await repo.getProfileById("missing");
 
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe("listFutureAvailability", () => {
+    test("returns active future slots ordered by start time", async () => {
+      const slots = [{ id: "slot1", tutorId: "u1" }];
+      const availabilityFindMany = mock(async () => slots);
+      const conn = makeConn(
+        mock(async () => []),
+        undefined,
+        availabilityFindMany,
+      );
+      const repo = createDiscoveryRepo(conn);
+
+      const result = await repo.listFutureAvailability("u1");
+
+      expect(result).toEqual(slots);
+      expect(availabilityFindMany).toHaveBeenCalledTimes(1);
+      const callArg = availabilityFindMany.mock.calls[0]![0];
+      expect(callArg.where).toBeDefined();
+      expect(callArg.orderBy).toHaveLength(1);
+      expect(callArg.limit).toBe(30);
     });
   });
 });

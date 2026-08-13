@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Card,
@@ -25,6 +25,14 @@ export function InviteClaimPage({ token }: { token: string }) {
   } | null>(null);
 
   async function handleVerify() {
+    if (!token) {
+      toastManager.add({
+        title: "Invitation link is incomplete",
+        description: "Ask the administrator to send a new invitation link.",
+        type: "error",
+      });
+      return;
+    }
     setLoading(true);
     try {
       const result = await client.invite.verify({ token });
@@ -39,6 +47,12 @@ export function InviteClaimPage({ token }: { token: string }) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    void handleVerify();
+    // The token is the only input that should restart verification.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   async function handleClaim() {
     setLoading(true);
@@ -75,12 +89,13 @@ export function InviteClaimPage({ token }: { token: string }) {
       }
 
       await client.invite.claim({ token });
-      await authClient.signOut();
+      await authClient.getSession({ query: { disableCookieCache: true } });
       toastManager.add({
-        title: "Tutor access activated! Please sign in to continue.",
+        title: "Tutor access activated",
+        description: "Complete your tutor profile to continue.",
         type: "success",
       });
-      navigate({ to: "/login" });
+      window.location.assign("/onboarding");
     } catch (error: unknown) {
       const message =
         error && typeof error === "object" && "message" in error
@@ -128,14 +143,16 @@ export function InviteClaimPage({ token }: { token: string }) {
             </CardDescription>
           </CardHeader>
           <CardBody className="flex flex-col gap-4">
-            <Button
-              block
-              progress={loading}
-              disabled={loading}
-              onClick={handleVerify}
-            >
-              Verify Invitation
-            </Button>
+            <Text className="text-center text-muted">
+              {loading
+                ? "Checking your invitation..."
+                : "This invitation could not be verified."}
+            </Text>
+            {!loading ? (
+              <Button block variant="secondary" onClick={handleVerify}>
+                Try again
+              </Button>
+            ) : null}
           </CardBody>
         </Card>
       </div>

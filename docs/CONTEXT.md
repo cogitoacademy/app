@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-07-30
+Last updated: 2026-08-11
 
 ## Architecture
 
@@ -278,6 +278,41 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 
 Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops tasks are active code gaps. Next: PRD Gaps (feature completeness).
 
+## Role E2E Readiness Snapshot (2026-08-12)
+
+Use this section as the current role-readiness baseline. Re-audit only after the related backend or frontend plans materially change.
+
+### Student
+
+**Primary promotion flow is ready:** email/password auth -> tutor discovery -> solo booking -> Marks hold -> booking list/detail -> cancellation. Profile, balance/top-up, basic achievements, notification bell, calendar export, and WhatsApp contact surfaces are also present.
+
+**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject, lateness/no-show reporting, public achievements, email verification, and session-expiry UX remain open. The notification center and Knowledge Bank gating UX are now implemented.
+
+### Tutor
+
+The tutor workspace now has the primary management surfaces: tutor-only onboarding, a weekly-first availability page, an incoming booking list, and booking detail actions for accept, decline, and complete. Weekly availability is materialized into concrete future slots through the selected end date (up to 52 weeks); one-time custom slots remain available for exceptions or force majeure. The incoming list uses the tutor-owned booking query rather than proposer-only `booking.listMine`.
+
+The primary Tutor E2E flow has been manually verified with seeded accounts, including availability, incoming booking review, Google Meet link creation, student notification/state, and completion. Tutor rescheduling, lateness/no-show support, session notes, payout, and individual series completion remain backend-dependent gaps.
+
+### Admin
+
+Backend is ready for user role management, tutor invite/review, achievement moderation, basic booking list/history/override/refund, room list/create/assign, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
+
+Do not prioritize the full booking operations console or offline room workflow until the backend gaps for queue urgency/pagination (G8), wallet lookup (G9), override preview (G10), and room availability/approval (G13-G14) are resolved.
+
+### Backend Gap Groups
+
+- Ready now: student solo/group/series booking primitives, wallet/ledger/packages/Knowledge Bank, achievements, notifications, tutor onboarding/availability/incoming-booking actions, and the admin capabilities listed above.
+- Still blocking later flows: support/lateness tickets (G1), group repricing (G4), series cancellation rules (G5), reschedule ownership and accept/reject (G6), rich notes (G7), admin queue/wallet/preview (G8-G10), meeting attendance/gating (G11-G12), offline rooms (G13-G14), disclaimer (G15), payout (G16), full notification matrix (G17), series completion (G18), and pricing extra-take correctness (G19).
+
+### Current Execution Order
+
+1. Complete Admin Tutor invite -> claim -> onboarding -> review -> publish E2E and verify published discovery.
+2. Complete Student series booking UI and its booking detail/session presentation.
+3. Complete group invite accept/decline and reconfirmation UI; group creation and debounced student lookup are implemented.
+4. Keep achievement moderation/public surfacing at the end of the frontend queue.
+5. Defer admin booking override and offline-room UI until their backend blockers are closed.
+
 ## Known Bugs
 
 ### Existing bugs (planned in `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`)
@@ -289,6 +324,10 @@ Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops
 | N8  | withdraw doesn't release other participants' holds | P2       | **Fixed** |
 
 The following bugs from the production-readiness plan are **fixed** (see completed plan for details): B1 (double session validation), B2 (meeting rollback), B3 (refund correction), B4 (series deadline), N1 (release holds), N2 (send emails), N4 (series sessions), N5 (listLedger filters), N7 (randomUUID), N15 (holdAmount update), B6 (overlap check in tx). N9 (pagination) was also fixed by PR #28 — `listBookingsByState` in `admin-booking.repo.ts:31-33` now consumes the cursor (`gt(booking.id, cursor)`).
+
+### Frontend error UX TODO
+
+- Map oRPC/Zod input-validation issues to field-specific, non-technical messages across every form. Raw transport errors such as `Input validation failed` must never be shown directly to users. The solo-booking form currently provides a readable fallback, but a shared mapper remains to be implemented.
 
 **Remaining deferred items** are tracked in `docs/plans/active/DEFERRED-OPS-TASKS.md`:
 

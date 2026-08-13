@@ -31,6 +31,7 @@ import {
 } from "@cogito-app/ui/components/selia/sidebar";
 import {
   IconCalendarEvent,
+  IconBrandWhatsapp,
   IconCertificate,
   IconCoins,
   IconHome,
@@ -57,6 +58,7 @@ const studentNavItems = [
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/onboarding", label: "My Profile", icon: IconUser },
+  { to: "/availability", label: "Availability", icon: IconCalendarEvent },
   { to: "/tutor-bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
@@ -64,7 +66,25 @@ const tutorNavItems = [
 const adminNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
+  {
+    to: "/admin-achievements",
+    label: "Review Achievements",
+    icon: IconCertificate,
+  },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
+] as const;
+
+const resourceItems = [
+  {
+    href: "https://cogitoacademy.id/en/calendar",
+    label: "Competition Calendar",
+    icon: IconCalendarEvent,
+  },
+  {
+    href: "https://wa.me/6288101190195",
+    label: "WhatsApp Support",
+    icon: IconBrandWhatsapp,
+  },
 ] as const;
 
 export function AppSidebar({
@@ -87,12 +107,14 @@ export function AppSidebar({
       : role === "tutor"
         ? tutorNavItems
         : studentNavItems;
+  const profilePath = role === "tutor" ? "/onboarding" : "/profile";
+  const profileLabel = role === "tutor" ? "My Profile" : "Profile";
 
   function signOut() {
     authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
-          navigate({ to: "/" });
+          navigate({ to: "/login" });
         },
       },
     });
@@ -105,14 +127,14 @@ export function AppSidebar({
     >
       <SidebarHeader>
         <SidebarLogo>
-          <IconBox variant="tertiary">
+          <IconBox variant="secondary">
             <img
               src="/c of cogito.png"
               alt="logo"
-              className="relative z-1 size-6 invert"
+              className="relative z-1 size-6"
             />
           </IconBox>
-          <span className="font-semibold">Cogito</span>
+          <span className="font-semibold">Cogito Academy</span>
         </SidebarLogo>
         <InputGroup className="mt-4">
           <InputGroupAddon>
@@ -152,6 +174,32 @@ export function AppSidebar({
               })}
             </SidebarList>
           </SidebarGroup>
+          <SidebarGroup>
+            <SidebarGroupTitle>Resources</SidebarGroupTitle>
+            <SidebarList>
+              {resourceItems.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <SidebarItem key={item.href}>
+                    <SidebarItemButton
+                      render={
+                        <a
+                          href={item.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={item.label}
+                        />
+                      }
+                    >
+                      <Icon />
+                      {item.label}
+                    </SidebarItemButton>
+                  </SidebarItem>
+                );
+              })}
+            </SidebarList>
+          </SidebarGroup>
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
@@ -161,7 +209,6 @@ export function AppSidebar({
               <Menu>
                 <MenuTrigger
                   data-slot="sidebar-item-button"
-                  nativeButton={false}
                   render={
                     <SidebarItemButton>
                       <Avatar>
@@ -183,10 +230,10 @@ export function AppSidebar({
                   }
                 />
                 <MenuPopup className="w-(--anchor-width)" side="top">
-                  <Link to="/profile">
+                  <Link to={profilePath}>
                     <MenuItem>
                       <IconUser />
-                      Profile
+                      {profileLabel}
                     </MenuItem>
                   </Link>
                   <MenuItem>

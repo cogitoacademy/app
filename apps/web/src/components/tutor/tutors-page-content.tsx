@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { IconSearch } from "@tabler/icons-react";
 import {
   Card,
@@ -15,6 +15,7 @@ import {
   InputGroupAddon,
 } from "@cogito-app/ui/components/selia/input-group";
 import {
+  getSelectItemValue,
   Select,
   SelectItem,
   SelectList,
@@ -60,9 +61,10 @@ export function TutorsPageContent() {
   const [expertise, setExpertise] = useState("");
   const [modality, setModality] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: tutors = [], isLoading } = useQuery(
-    orpc.tutors.listPublished.queryOptions({
+  const { data: tutors = [], isPending } = useQuery({
+    ...orpc.tutors.listPublished.queryOptions({
       search: search || undefined,
       expertise: expertise || undefined,
       modality: (modality || undefined) as
@@ -71,11 +73,18 @@ export function TutorsPageContent() {
         | "both"
         | undefined,
     }),
-  );
+    placeholderData: keepPreviousData,
+  });
 
   const selected = selectedId
     ? (tutors.find((t: PublishedTutor) => t.id === selectedId) ?? null)
     : null;
+
+  function openTutor(tutorId: string) {
+    setDrawerOpen(false);
+    setSelectedId(tutorId);
+    requestAnimationFrame(() => setDrawerOpen(true));
+  }
 
   return (
     <Stack direction="column" spacing="lg">
@@ -99,7 +108,9 @@ export function TutorsPageContent() {
         </InputGroup>
         <Select
           value={expertise}
-          onValueChange={(v) => setExpertise(v as string)}
+          onValueChange={(value) =>
+            setExpertise(getSelectItemValue(value) ?? "")
+          }
         >
           <SelectTrigger className="w-full sm:w-44">
             <SelectValue placeholder="Expertise" />
@@ -117,7 +128,9 @@ export function TutorsPageContent() {
         </Select>
         <Select
           value={modality}
-          onValueChange={(v) => setModality(v as string)}
+          onValueChange={(value) =>
+            setModality(getSelectItemValue(value) ?? "")
+          }
         >
           <SelectTrigger className="w-full sm:w-44">
             <SelectValue placeholder="Modality" />
@@ -133,10 +146,17 @@ export function TutorsPageContent() {
         </Select>
       </div>
 
-      {isLoading ? (
+      {isPending ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <TutorCardSkeleton key={i} />
+          {[
+            "tutor-skeleton-1",
+            "tutor-skeleton-2",
+            "tutor-skeleton-3",
+            "tutor-skeleton-4",
+            "tutor-skeleton-5",
+            "tutor-skeleton-6",
+          ].map((placeholder) => (
+            <TutorCardSkeleton key={placeholder} />
           ))}
         </div>
       ) : tutors.length === 0 ? (
@@ -149,7 +169,7 @@ export function TutorsPageContent() {
             <TutorCard
               key={tutor.id}
               tutor={tutor}
-              onClick={() => setSelectedId(tutor.id)}
+              onClick={() => openTutor(tutor.id)}
             />
           ))}
         </div>
@@ -157,10 +177,8 @@ export function TutorsPageContent() {
 
       <TutorDrawer
         tutor={selected}
-        open={!!selectedId}
-        onOpenChange={(open) => {
-          if (!open) setSelectedId(null);
-        }}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
       />
     </Stack>
   );

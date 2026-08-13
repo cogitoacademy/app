@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 import { db } from "@cogito-app/db";
+import { getAuthTrustedOrigins } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 
 import * as schema from "@cogito-app/db/schema";
@@ -24,7 +25,7 @@ export function createAuth() {
       provider: "pg",
       schema: schema,
     }),
-    trustedOrigins: [env.CORS_ORIGIN],
+    trustedOrigins: getAuthTrustedOrigins(env.CORS_ORIGIN, env.NODE_ENV),
     user: {
       additionalFields: {
         role: {

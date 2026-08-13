@@ -126,8 +126,6 @@ export function createAdminBookingService(deps: {
 }) {
   const { db, repo, auditPort, wallet, refund, notification } = deps;
 
-
-
   function projectWalletAfter(
     w: WalletBalances,
     action: MarksAction,

@@ -211,9 +211,10 @@ function makeAdminListConn(rows: any[]) {
   const limit = mock(() => ({ offset }));
   const orderBy = mock(() => ({ limit }));
   const where = mock(() => ({ orderBy }));
-  const from = mock(() => ({ where }));
+  const leftJoin = mock(() => ({ where }));
+  const from = mock(() => ({ leftJoin }));
   const select = mock(() => ({ from }));
-  return { select, from, where, orderBy, limit, offset };
+  return { select, from, leftJoin, where, orderBy, limit, offset };
 }
 
 describe("adminList", () => {
@@ -224,6 +225,7 @@ describe("adminList", () => {
     const result = await repo.adminList(conn as any, { limit: 50, offset: 0 });
 
     expect(result).toEqual(rows);
+    expect(conn.leftJoin).toHaveBeenCalledTimes(1);
     expect(conn.limit).toHaveBeenCalledWith(50);
     expect(conn.offset).toHaveBeenCalledWith(0);
   });

@@ -18,3 +18,8 @@ export const updateProfileInput = z.object({
     .refine((val) => val.trim() !== "", "Cannot be blank")
     .optional(),
 });
+
+export const searchStudentsInput = z.object({
+  query: z.string().trim().min(2).max(100),
+  limit: z.number().int().min(1).max(10).default(5),
+});

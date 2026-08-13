@@ -14,11 +14,16 @@ import { authClient } from "@/lib/auth-client";
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/balance": "Balance",
+  "/bookings": "My Bookings",
+  "/tutor-bookings": "Tutor Bookings",
   "/achievements": "Achievements",
   "/tutors": "Tutors",
   "/profile": "Profile",
   "/onboarding": "Tutor Onboarding",
+  "/availability": "Availability",
+  "/notifications": "Notifications",
   "/admin-tutors": "Manage Tutors",
+  "/admin-achievements": "Achievement Moderation",
 };
 
 export const Route = createFileRoute("/_app")({
@@ -39,9 +44,15 @@ function RouteComponent() {
   const { session } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  const title = pathname.startsWith("/bookings/")
+    ? "Booking Details"
+    : pathname.startsWith("/tutors/")
+      ? "Book a Session"
+      : (routeTitles[pathname] ?? "Dashboard");
+
   return (
     <Layout
-      title={routeTitles[pathname] ?? "Dashboard"}
+      title={title}
       sidebar={
         <AppSidebar
           userEmail={session.data?.user.email}

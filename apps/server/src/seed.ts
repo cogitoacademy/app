@@ -179,6 +179,24 @@ async function seed() {
     "student123",
     `${SEED_DISPLAY_TAG} Student`,
   );
+
+  await Promise.all([
+    seedDemoStudent(
+      `student.friend1.${SEED_SUFFIX}@cogitoacademy.id`,
+      "student123",
+      `${SEED_DISPLAY_TAG} Alya Friend`,
+    ),
+    seedDemoStudent(
+      `student.friend2.${SEED_SUFFIX}@cogitoacademy.id`,
+      "student123",
+      `${SEED_DISPLAY_TAG} Bima Friend`,
+    ),
+    seedDemoStudent(
+      `student.friend3.${SEED_SUFFIX}@cogitoacademy.id`,
+      "student123",
+      `${SEED_DISPLAY_TAG} Citra Friend`,
+    ),
+  ]);
 }
 
 seed().catch((err) => {

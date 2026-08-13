@@ -1,15 +1,18 @@
 import type { AppRouterClient } from "@cogito-app/api/routers";
-import { env } from "@cogito-app/env/web";
 import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { serverUrl } from "@/lib/server-url";
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
+      gcTime: 30 * 60_000,
+      refetchOnMount: "always",
       refetchOnWindowFocus: false,
     },
   },
@@ -34,7 +37,7 @@ export const queryClient = new QueryClient({
 });
 
 export const link = new RPCLink({
-  url: `${env.VITE_SERVER_URL}/rpc`,
+  url: `${serverUrl}/rpc`,
   fetch(url, options) {
     return fetch(url, {
       ...options,

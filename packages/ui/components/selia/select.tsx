@@ -12,6 +12,20 @@ export type SelectItem = {
   icon?: React.ReactNode;
 };
 
+export function getSelectItemValue(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    "value" in value &&
+    typeof value.value === "string"
+  ) {
+    return value.value;
+  }
+
+  return null;
+}
+
 export function Select({
   ...props
 }: React.ComponentProps<typeof BaseSelect.Root>) {

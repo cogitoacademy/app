@@ -1,19 +1,26 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 /**
  * E2E tests run against the local dev stack.
  *
  * Required environment:
  *   - DATABASE_URL pointing at the local Postgres container
- *   - SERVER_URL=http://localhost:3001
- *   - WEB_URL=http://localhost:3000
+ *   - SERVER_URL=http://localhost:3101
+ *   - WEB_URL=http://localhost:3100
  *
  * Playwright will start the API and web dev servers if they are not already
  * running, then seed the database before the test run.
  */
-const webUrl = process.env.WEB_URL ?? "http://localhost:3000";
-const serverUrl = process.env.SERVER_URL ?? "http://localhost:3001";
-const envFile = process.env.ENV_FILE ?? "../../apps/server/.env";
+const webUrl = process.env.WEB_URL ?? "http://localhost:3100";
+const serverUrl = process.env.SERVER_URL ?? "http://localhost:3101";
+const envFile =
+  process.env.ENV_FILE ??
+  ["../../apps/server/.env.test", "../../apps/server/.env.test.example"].find(
+    (candidate) => existsSync(path.resolve(process.cwd(), candidate)),
+  ) ??
+  "../../apps/server/.env.test.example";
 
 export default defineConfig({
   testDir: "./src/specs",

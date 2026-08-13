@@ -6,6 +6,7 @@ import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
 import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth } from "@cogito-app/auth";
+import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -137,7 +138,12 @@ export function createServer() {
 
     .use(
       cors({
-        origin: env.CORS_ORIGIN,
+        origin: (request) =>
+          isAllowedFrontendOrigin(
+            request.headers.get("origin"),
+            env.CORS_ORIGIN,
+            env.NODE_ENV,
+          ),
         methods: ["GET", "POST", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true,
@@ -165,7 +171,10 @@ export function createServer() {
         request.headers.get("x-real-ip") ??
         "unknown";
 
-      if (path.startsWith("/rpc/auth.")) {
+      if (
+        path.startsWith("/api/auth/sign-in/") ||
+        path.startsWith("/api/auth/sign-up/")
+      ) {
         const { allowed, retryAfterMs } = await authRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {

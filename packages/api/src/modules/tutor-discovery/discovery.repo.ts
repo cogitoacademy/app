@@ -1,5 +1,5 @@
-import { eq, desc, and, sql, type SQL } from "drizzle-orm";
-import { tutorProfile } from "@cogito-app/db/schema";
+import { eq, desc, asc, and, gte, sql, type SQL } from "drizzle-orm";
+import { availabilitySlot, tutorProfile } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 
@@ -70,6 +70,18 @@ async function getProfileById(conn: DbOrTx, tutorId: string) {
   });
 }
 
+async function listFutureAvailability(conn: DbOrTx, tutorUserId: string) {
+  return conn.query.availabilitySlot.findMany({
+    where: and(
+      eq(availabilitySlot.tutorId, tutorUserId),
+      eq(availabilitySlot.isActive, true),
+      gte(availabilitySlot.startDate, new Date()),
+    ),
+    orderBy: [asc(availabilitySlot.startDate)],
+    limit: 30,
+  });
+}
+
 export function createDiscoveryRepo(db: DbType) {
   return {
     listPublished(input: ListPublishedInput, conn?: DbOrTx) {
@@ -77,6 +89,9 @@ export function createDiscoveryRepo(db: DbType) {
     },
     getProfileById(tutorId: string, conn?: DbOrTx) {
       return getProfileById(conn ?? db, tutorId);
+    },
+    listFutureAvailability(tutorUserId: string, conn?: DbOrTx) {
+      return listFutureAvailability(conn ?? db, tutorUserId);
     },
   };
 }

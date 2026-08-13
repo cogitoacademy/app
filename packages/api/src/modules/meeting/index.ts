@@ -7,9 +7,14 @@ import { createGoogleMeetingProviderWithFallback } from "./google-meeting.provid
 export type MeetingModule = MeetingPort;
 
 interface GoogleMeetingConfig {
-  clientEmail: string;
-  privateKey: string;
+  authType: "service_account" | "oauth_refresh_token";
   calendarId: string;
+  clientEmail?: string;
+  privateKey?: string;
+  impersonatedUser?: string;
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
 }
 
 export function createMeetingModule(deps: {

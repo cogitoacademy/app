@@ -15,6 +15,7 @@ describe("authRouter", () => {
     expect(Object.keys(authRouter).toSorted()).toEqual([
       "getProfile",
       "me",
+      "searchStudents",
       "updateProfile",
     ]);
   });
