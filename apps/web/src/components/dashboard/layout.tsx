@@ -36,25 +36,36 @@ export function Layout({
 
   return (
     <>
+      <a
+        href="#main-content"
+        className="fixed left-4 top-4 z-[100] -translate-y-24 rounded bg-primary px-4 py-2 text-primary-foreground shadow focus:translate-y-0"
+      >
+        Skip to content
+      </a>
       <button
         type="button"
         aria-label="Close sidebar overlay"
         className={cn(
-          "fixed inset-0 z-10 hidden bg-black backdrop-blur-sm transition-all max-lg:block",
+          "fixed inset-0 z-10 hidden bg-black backdrop-blur-sm transition-[opacity,visibility] max-lg:block",
           sidebarOpen ? "visible opacity-40" : "invisible opacity-0",
         )}
         onClick={toggleSidebar}
       />
       <div
         className={cn(
-          "fixed top-0 z-50 h-dvh w-full max-w-72 transition-all *:h-full md:w-72",
+          "fixed top-0 z-50 h-dvh w-full max-w-72 transition-[left] *:h-full md:w-72",
           sidebarOpen ? "left-0" : "-left-full",
         )}
       >
         {sidebar}
       </div>
       <main
-        className={cn("transition-all", sidebarOpen ? "xl:ml-72" : "xl:ml-0")}
+        id="main-content"
+        tabIndex={-1}
+        className={cn(
+          "transition-[margin] focus:outline-none",
+          sidebarOpen ? "xl:ml-72" : "xl:ml-0",
+        )}
       >
         <nav
           className={cn(
@@ -62,7 +73,13 @@ export function Layout({
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >
-          <Button variant="plain" size="sm-icon" onClick={toggleSidebar}>
+          <Button
+            variant="plain"
+            size="sm-icon"
+            onClick={toggleSidebar}
+            aria-expanded={sidebarOpen}
+            aria-controls="app-sidebar"
+          >
             <span className="sr-only">
               {sidebarOpen ? "Close sidebar" : "Open sidebar"}
             </span>

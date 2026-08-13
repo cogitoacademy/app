@@ -74,7 +74,13 @@ export function LandingPage() {
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2.5">
             <span className="grid size-9 place-items-center rounded-lg bg-tertiary text-tertiary-foreground ring ring-tertiary-border">
-              <img src="/c of cogito.png" alt="" className="size-5 invert" />
+              <img
+                src="/c of cogito.png"
+                alt=""
+                width={20}
+                height={20}
+                className="size-5 invert"
+              />
             </span>
             <span className="font-semibold">Cogito</span>
           </Link>
@@ -176,7 +182,13 @@ export function LandingPage() {
                     >
                       <Text className="text-xs text-muted">{option.label}</Text>
                       <div className="mt-3 flex items-center gap-1.5">
-                        <img src="/cogito-mark.png" alt="" className="h-5" />
+                        <img
+                          src="/cogito-mark.png"
+                          alt=""
+                          width={20}
+                          height={20}
+                          className="size-5"
+                        />
                         <span className="text-lg font-semibold">
                           {option.marks}
                         </span>
@@ -194,8 +206,8 @@ export function LandingPage() {
                   <ItemContent>
                     <ItemTitle>Next milestone</ItemTitle>
                     <ItemDescription>
-                      Submit mock result, unlock tutor feedback, and prepare the
-                      next session.
+                      Submit a mock result, unlock tutor feedback, and plan what
+                      comes next.
                     </ItemDescription>
                   </ItemContent>
                 </Item>

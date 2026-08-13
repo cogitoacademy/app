@@ -3,12 +3,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
-import { Input } from "@cogito-app/ui/components/selia/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-} from "@cogito-app/ui/components/selia/input-group";
-import { Kbd } from "@cogito-app/ui/components/selia/kbd";
 import {
   Menu,
   MenuItem,
@@ -36,9 +30,7 @@ import {
   IconCoins,
   IconHome,
   IconLogout,
-  IconSearch,
   IconSelector,
-  IconSettings,
   IconShieldCheck,
   IconUser,
   IconUserSquare,
@@ -132,21 +124,14 @@ export function AppSidebar({
           <IconBox variant="secondary">
             <img
               src="/c of cogito.png"
-              alt="logo"
+              alt=""
+              width={24}
+              height={24}
               className="relative z-1 size-6"
             />
           </IconBox>
           <span className="font-semibold">Cogito Academy</span>
         </SidebarLogo>
-        <InputGroup className="mt-4">
-          <InputGroupAddon>
-            <IconSearch />
-          </InputGroupAddon>
-          <Input placeholder="Search" />
-          <InputGroupAddon align="end">
-            <Kbd>/</Kbd>
-          </InputGroupAddon>
-        </InputGroup>
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
@@ -238,10 +223,6 @@ export function AppSidebar({
                       {profileLabel}
                     </MenuItem>
                   </Link>
-                  <MenuItem>
-                    <IconSettings />
-                    Settings
-                  </MenuItem>
                   <MenuItem onClick={signOut}>
                     <IconLogout />
                     Logout

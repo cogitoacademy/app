@@ -119,6 +119,7 @@ export default function SignUpForm({
                   <Input
                     id={field.name}
                     name={field.name}
+                    autoComplete="name"
                     placeholder="Enter your name"
                     value={field.state.value}
                     onBlur={field.handleBlur}
@@ -141,7 +142,8 @@ export default function SignUpForm({
                     id={field.name}
                     name={field.name}
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
@@ -165,6 +167,7 @@ export default function SignUpForm({
                       name={field.name}
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
+                      autoComplete="new-password"
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
