@@ -2,9 +2,11 @@ import { Elysia, type Context as ElysiaContext } from "elysia";
 import { services } from "@cogito-app/api";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
 import { log } from "@cogito-app/api/lib/logger";
+import { readBodyWithLimit } from "@cogito-app/api/lib/request-id";
 import { env } from "@cogito-app/env/server";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
+const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
 export function stubCheckoutEnabled(
   nodeEnv: string,
@@ -41,13 +43,21 @@ function validateWebhookTimestamp(request: Request): void {
 export function paymentsWebhook(app: Elysia) {
   app.post(
     "/webhooks/payments/:provider",
-    async ({ request, body, params, set }: ElysiaContext) => {
+    async ({ request, params, set }: ElysiaContext) => {
       const provider = params.provider as string;
       const signature =
         provider === "xendit"
           ? (request.headers.get("x-callback-token") ?? "")
           : (request.headers.get("x-webhook-signature") ?? "");
-      const rawBody = typeof body === "string" ? body : JSON.stringify(body);
+
+      const { body: rawBody, tooLarge } = await readBodyWithLimit(
+        request,
+        MAX_WEBHOOK_BODY_BYTES,
+      );
+      if (tooLarge) {
+        set.status = 413;
+        return { error: "Request body too large" };
+      }
 
       const allowlist = (env.WEBHOOK_ALLOWED_IPS ?? "")
         .split(",")
@@ -136,7 +146,7 @@ export function paymentsWebhook(app: Elysia) {
         return { error: "Webhook processing failed" };
       }
     },
-    { parse: "text" },
+    { parse: "none" },
   );
 
   app.get("/webhooks/payments/stub/checkout", async ({ query, set }) => {

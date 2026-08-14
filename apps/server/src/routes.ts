@@ -25,6 +25,8 @@ import {
   generateRequestId,
   getClientIp,
   isValidUploadKey,
+  openApiAccessDenied,
+  readBodyWithLimit,
 } from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { healthCheck } from "@cogito-app/api/lib/db-health";
@@ -249,13 +251,33 @@ export function createServer() {
     .all(
       "/rpc*",
       async (context) => {
+        const { body, tooLarge } = await readBodyWithLimit(
+          context.request,
+          MAX_BODY_BYTES,
+        );
+        if (tooLarge) {
+          return new Response(
+            JSON.stringify({ error: "Request body too large" }),
+            {
+              status: 413,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+        const request = body
+          ? new Request(context.request.url, {
+              method: context.request.method,
+              headers: context.request.headers,
+              body,
+            })
+          : context.request;
         const ctx = await createContext({ context });
         if (ctx.session) {
           identifyUserFromSession(context.log, ctx.session, {
             maskEmail: true,
           });
         }
-        const { response } = await rpcHandler.handle(context.request, {
+        const { response } = await rpcHandler.handle(request, {
           prefix: "/rpc",
           context: ctx,
         });
@@ -281,13 +303,19 @@ export function createServer() {
       return new Response(file);
     })
     .get("/openapi.json", async ({ request }) => {
-      if (env.NODE_ENV === "production")
-        return new Response("Not Found", { status: 404 });
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+      if (denied) return denied;
       return Response.json(await generateOpenAPISpec(request));
     })
-    .get("/api-reference", () => {
-      if (env.NODE_ENV === "production")
-        return new Response("Not Found", { status: 404 });
+    .get("/api-reference", async ({ request }) => {
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+      if (denied) return denied;
       return new Response(scalarHtml(), {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
@@ -295,6 +323,11 @@ export function createServer() {
     .all(
       "/api-reference*",
       async (context) => {
+        const session = await auth.api.getSession({
+          headers: context.request.headers,
+        });
+        const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+        if (denied) return denied;
         const ctx = await createContext({ context });
         if (ctx.session) {
           identifyUserFromSession(context.log, ctx.session, {
