@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-08-11
+Last updated: 2026-08-14
 
 ## Architecture
 
@@ -128,7 +128,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Meeting:** Google Meet (production) / manual link fallback via CircuitBreaker
 - **Deployment:** Coolify on Hetzner VPS (after infrastructure branch)
 
-## DB Schema (18 tables)
+## DB Schema (27 tables)
 
 ### `user` (auth.ts) — CHECK(role IN ('student','tutor','admin'))
 
@@ -141,6 +141,8 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 ### `studentProfile` (student-profile.ts) — uuid PK
 
 ### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status
+
+### `availabilitySlot` (availability-slot.ts) — tutor availability windows (one-time + weekly-generated)
 
 ### `tutorInvite` (tutor-invite.ts) — CHECK status, revoked_by/at fields
 
@@ -156,36 +158,50 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ### `bookingStateHistory` (booking.ts) — state transition audit trail
 
-### `bookingRescheduleProposal` (booking.ts) — tutor-proposed reschedule
+### `bookingRescheduleProposal` (booking.ts) — tutor-proposed reschedule; status pending/accepted/rejected/expired
 
-### `paymentRecord` (payment.ts) — payment status tracking
+### `sessionNote` (booking.ts) — notes on completed sessions (author_id + booking_id)
 
-### `refundRecord` (payment.ts) — refund/correction tracking
+### `room` (booking.ts) — offline rooms, is_active flag
+
+### `roomBooking` (booking.ts) — room assignment with status requested/confirmed/relocated/cancelled
+
+### `meetingEvent` (booking.ts) — meeting links (google_meet/manual), status + error_reason
+
+### `paymentRecord` (payment-record.ts) — payment status tracking
+
+### `refundRecord` (payment-record.ts) — refund/correction tracking, UNIQUE(provider_event_id)
+
+### `markPackage` (mark-package.ts) — purchasable mark packages
 
 ### `notification` (notification.ts) — in-app notification records
 
 ### `notificationDispatch` (notification.ts) — email dispatch tracking
 
-## API Modules (18)
+### `supportTicket` (support-ticket.ts) — lateness/no-show + issue reports; status + sla_deadline
+
+## API Modules (16 routers + internal modules)
 
 All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Auth Module (protected)
 
-- `me`, `getProfile`, `updateProfile`
+- `me`, `getProfile`, `updateProfile`, `searchStudents`
 
 ### Admin Module (admin)
 
-- `listUsers`, `setRole`
+- `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`
 
 ### AdminTutor Module (admin)
 
 - `createInvite`, `listInvites`, `resendInvite`, `revokeInvite`
 - `listTutorProfiles`, `reviewTutorProfile`
 
-### Tutor Module (protected)
+### Tutor Module (tutor)
 
 - `getMyProfile`, `updateMyProfile`, `submitForReview`
+- `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `deleteAvailability`
+- `getMyPayouts`
 
 ### TutorDiscovery Module (protected)
 
@@ -200,33 +216,59 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 - `list`, `create`, `update`, `delete`
 - `adminList`, `adminReview`
 
-### Wallet Module (protected + admin)
+### Wallet Module (protected)
 
-- `hold`, `release`, `deduct`, `credit`, `compensate`
-- `getOrCreate`, `listLedger`, `knowledgeBankEligible`, `listPackages`
+- `get`, `listLedger`, `listPackages`, `knowledgeBankEligible`, `competitionCalendarLink`
+- (`hold`/`release`/`deduct`/`credit`/`compensate` are service-layer only — not exposed over RPC)
 
 ### Pricing Module (internal)
 
 - `calculateSoloPrice`, `calculateGroupPrice`, `calculateSeriesPrice`, `validateFloorPrice`
 
-### Booking Module (protected + admin)
+### Booking Module (protected)
 
-- `create`, `confirm`, `withdraw`, `cancel`
-- `createGroup`, `confirmInvite`, `reconfirm`, `withdrawGroup`
-- `createSeries`, `completeSession`
+- `createSolo`, `get`, `listMine`, `cancel`
+- `acceptReschedule`, `rejectReschedule`, `cancelSession`
+- `addSessionNote`, `getSessionNotes`
+- `createGroup`, `createSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
+- `listSessions`
 
-### Payment Module (public webhook + protected)
+### TutorActions Module (tutor)
 
-- `createCheckout`, `listPackages` (protected)
-- `handleWebhook` (public)
+- `listBookings`, `proposeReschedule`, `acceptBooking`, `declineBooking`, `completeSession`, `markAttendance`
+
+### Payment Module (protected + public webhook)
+
+- `createPurchase`, `getPurchase` (protected)
+- `POST /webhooks/payments/:provider` (public — signature + IP allowlist + timestamp validation)
+
+### Room Module (protected + admin)
+
+- `list`, `checkAvailability` (protected)
+- `create`, `assign`, `relocate`, `cancelBooking` (admin)
 
 ### Notification Module (protected)
 
-- `list`, `markRead`, `markAllRead`
+- `list`, `getUnreadCount`, `markAsRead`, `markAllAsRead`
+
+### AdminBooking Module (admin)
+
+- `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`
+
+### Refund Module (admin)
+
+- `createCorrection`, `listCorrections`
+
+### Support Module (protected + admin)
+
+- `createTicket`, `listTickets` (protected)
+- `adminListTickets`, `adminResolveTicket` (admin)
 
 ### Scheduler Module (internal)
 
-- `onExpireBookings`, `onReleaseHolds`, `onSendNotificationEmail`
+- BullMQ repeatable jobs: `expire-bookings` (5m), `release-expired-holds` (10m), `check-tutor-lateness` (5m), `send-notification-email` (60s — never enqueued today; emails are sent synchronously)
+
+Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pricing`, `scheduler`.
 
 ## Auth Config
 
@@ -245,7 +287,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 - **Coverage**: 90% for `packages/api`, 80% overall (after foundation hardening)
 - **Health**: `GET /health` with DB ping (Redis ping not yet implemented — see DEFERRED-OPS-TASKS 1.6)
 - **Deployment platform**: Coolify (self-hosted PaaS on Hetzner VPS)
-- **Scheduler boot**: The BullMQ worker + 3 repeatable jobs only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and booking-expiry/hold-release/email jobs never run.
+- **Scheduler boot**: The BullMQ worker + 4 repeatable jobs (`expire-bookings` 5m, `release-expired-holds` 10m, `check-tutor-lateness` 5m, `send-notification-email` 60s — wired in `apps/server/src/scheduler.ts:93-96`) only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and the booking-expiry/hold-release/email jobs never run. Note: `send-notification-email` is never enqueued today — notification emails are dispatched synchronously via `notification.writeBestEffort`.
 
 ## Plans
 
@@ -259,9 +301,10 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                                                               |
 | `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                               |
 | `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                               |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps (1.4/1.5/1.7/1.8 done in BACKEND-HARDENING PRs B/C) + ops tasks |
-| `docs/plans/active/PRD-GAPS-SPEC.md`                              | `feature/prd-gaps` (future)        | Reference spec, next to execute — G19 implemented (PR C), G20 fixed (PR C)         |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Frontend gap spec, parallel with PRD Gaps                                          |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending |
+| `docs/plans/active/PRD-GAPS-SPEC.md`                              | main (merged)                      | Merged to main (#36, #39–#43) — 13/18 done, G13–G15 partial                          |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Active — 4 closed, 3 partial, 10 open                                                |
+| `docs/plans/active/BACKEND-HARDENING-PHASE2.md`                   | main (targets 5 PRs)               | Planned — not implemented (5 PRs)                                                    |
 | `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                         |
 | `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                               |
 
@@ -271,39 +314,43 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 1. Consolidation (merged #16) → main
 2. Foundation Hardening (merged #17) → main
 3. Production Readiness + Infrastructure (merged #18 + #19) → main
-4. Deferred Ops Tasks (code gaps, manual verification, production ops) → next PR(s)
-5. PRD Gaps Backend (G1-G19, ~30 days) → feature/prd-gaps branch
-6. Frontend Gaps (UI for admin override, lateness report, reschedule, etc.) → parallel with / after PRD Gaps
+4. Deferred Ops Tasks (code gaps 1.1–1.8) → merged to main; §2 Redis session caching deferred
+5. PRD Gaps Backend (G1–G20) → merged to main (#35, #36, #39–#43); 13/18 implemented, G13–G15 partial
+6. Backend Hardening Phase 2 (BACKEND-HARDENING-PHASE2.md, PRs 1–5) → next to execute
+7. Frontend Gaps (FRONTEND-GAPS-SPEC — 10 open: F1–F3, F6, F7, F9, F11–F14; F8/F16/F17 partial) → after / parallel with hardening
+8. Production Ops (DEFERRED-OPS-TASKS §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
-Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops tasks are active code gaps. Next: PRD Gaps (feature completeness).
+Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main. Next: **BACKEND-HARDENING-PHASE2 PRs 1–5** (security, money correctness, email outbox, uploads, PRD-correctness), then the open frontend gaps, then production ops.
 
-## Role E2E Readiness Snapshot (2026-08-12)
+## Role E2E Readiness Snapshot (2026-08-14)
 
 Use this section as the current role-readiness baseline. Re-audit only after the related backend or frontend plans materially change.
+
+**2026-08-14 update:** Backend PRD gaps (G1–G20) landed on main (#35, #36, #39–#43). Tutor reschedule (propose/accept/reject) and session notes are now backend-ready; group invite accept/decline/reconfirm UI and admin override/room UI remain frontend work (FRONTEND-GAPS-SPEC).
 
 ### Student
 
 **Primary promotion flow is ready:** email/password auth -> tutor discovery -> solo booking -> Marks hold -> booking list/detail -> cancellation. Profile, balance/top-up, basic achievements, notification bell, calendar export, and WhatsApp contact surfaces are also present.
 
-**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject, lateness/no-show reporting, public achievements, email verification, and session-expiry UX remain open. The notification center and Knowledge Bank gating UX are now implemented.
+**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject UI (F7), lateness/no-show reporting UI (F3), public achievements (F16), email verification, and session-expiry UX remain open. Backend support for reschedule accept/reject and lateness/no-show reporting (G1/G6) has landed. The notification center and Knowledge Bank gating UX are now implemented.
 
 ### Tutor
 
 The tutor workspace now has the primary management surfaces: tutor-only onboarding, a weekly-first availability page, an incoming booking list, and booking detail actions for accept, decline, and complete. Weekly availability is materialized into concrete future slots through the selected end date (up to 52 weeks); one-time custom slots remain available for exceptions or force majeure. The incoming list uses the tutor-owned booking query rather than proposer-only `booking.listMine`.
 
-The primary Tutor E2E flow has been manually verified with seeded accounts, including availability, incoming booking review, Google Meet link creation, student notification/state, and completion. Tutor rescheduling, lateness/no-show support, session notes, payout, and individual series completion remain backend-dependent gaps.
+The primary Tutor E2E flow has been manually verified with seeded accounts, including availability, incoming booking review, Google Meet link creation, student notification/state, and completion. Tutor reschedule, session notes, payout, and individual series completion are now backend-ready (G6/G7/G16/G18); their UI is tracked in FRONTEND-GAPS-SPEC (F6/F7/F9/F13/F8). Lateness/no-show support is backend-ready via `support.createTicket` (G1) with the report UI still pending (F3).
 
 ### Admin
 
-Backend is ready for user role management, tutor invite/review, achievement moderation, basic booking list/history/override/refund, room list/create/assign, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
+Backend is ready for user role management, tutor invite/review, achievement moderation, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
 
-Do not prioritize the full booking operations console or offline room workflow until the backend gaps for queue urgency/pagination (G8), wallet lookup (G9), override preview (G10), and room availability/approval (G13-G14) are resolved.
+The admin override queue, wallet/ledger view, override preview, and room availability/approval backend (G8–G10, G13–G14) have landed; the corresponding admin UI remains frontend work (F1/F2/F11/F12). Remaining backend sub-gaps are tracked in BACKEND-HARDENING-PHASE2.md PR 5 (see Known Bugs).
 
 ### Backend Gap Groups
 
-- Ready now: student solo/group/series booking primitives, wallet/ledger/packages/Knowledge Bank, achievements, notifications, tutor onboarding/availability/incoming-booking actions, and the admin capabilities listed above.
-- Still blocking later flows: support/lateness tickets (G1), group repricing (G4), series cancellation rules (G5), reschedule ownership and accept/reject (G6), rich notes (G7), admin queue/wallet/preview (G8-G10), meeting attendance/gating (G11-G12), offline rooms (G13-G14), disclaimer (G15), payout (G16), full notification matrix (G17), series completion (G18), and pricing extra-take correctness (G19).
+- Ready now (merged to main): student solo/group/series booking primitives, reschedule propose/accept/reject, session notes, group invite confirm/decline/reconfirm, wallet/ledger/packages/Knowledge Bank, purchases, achievements, notifications, tutor onboarding/availability/payouts/incoming-booking actions, support tickets (G1), and the admin capabilities listed above (G8–G10, G16–G18).
+- Still open backend sub-gaps (tracked in `docs/plans/active/BACKEND-HARDENING-PHASE2.md`): offline room availability not integrated into booking creation (G13), admin room approval doesn't transition to SCHEDULED (G14), group-series flow unreachable (G15/B8), meeting-link update-on-reschedule (G12 partial), plus the 2026-08-14 audit findings B3/B4/B6/B9 (see Known Bugs).
 
 ### Current Execution Order
 
@@ -311,7 +358,7 @@ Do not prioritize the full booking operations console or offline room workflow u
 2. Complete Student series booking UI and its booking detail/session presentation.
 3. Complete group invite accept/decline and reconfirmation UI; group creation and debounced student lookup are implemented.
 4. Keep achievement moderation/public surfacing at the end of the frontend queue.
-5. Defer admin booking override and offline-room UI until their backend blockers are closed.
+5. Admin booking override and offline-room UI (F1/F2/F11/F12) — backend landed (G8–G10, G13–G14); these are now open frontend gaps.
 
 ## Known Bugs
 
@@ -394,11 +441,36 @@ Status column: **Fixed** = verified in code on main after #17 merge; **Open** = 
 | J4  | `any` type casts in route files                                        | P2       | 9     | Fixed                                                                                          |
 | K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     | Fixed                                                                                          |
 | K2  | No body size limit on webhook endpoints                                | P2       | 6     | Fixed                                                                                          |
-| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 3 jobs have `attempts: 3` + exponential backoff (no DLQ)                           |
+| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 4 jobs have `attempts: 3` + exponential backoff (no DLQ)                           |
 | K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states              | P3       | 2     | Accepted (dead states, no action needed)                                                       |
 | K5  | repricedMarks column is dead — never set or read                       | P3       | 2     | Accepted (dead column, no action needed)                                                       |
 | K6  | timezone field stored but never used                                   | P3       | 2     | Accepted (stored, no action needed)                                                            |
 | K7  | metrics.ts has no TTL eviction for stale path entries                  | P3       | 9     | Open                                                                                           |
+
+### 2026-08-14 audit additions (tracked in `docs/plans/active/BACKEND-HARDENING-PHASE2.md` PR 5)
+
+Status: **Open** = not yet implemented (verified at git HEAD `9b7df5e`).
+
+> Note: these B-IDs are distinct from the B1–B6/N-series IDs in the production-readiness plan above (same letter, different findings).
+
+| ID  | Finding                                                                                                                                             | Severity | Status |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B3  | Group booking with 2 ≤ headcount < target EXPIRES at the 12h deadline instead of repricing + reconfirming (FR-16/TC-18) — `expireBookings` `booking.service.ts:2009-2048` has no headcount branch | High     | Open   |
+| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                | Medium   | Open   |
+| B6  | No payment/refund notifications at all (notification matrix rows unfulfilled) — `payment.service.ts` writes none                                     | Medium   | Open   |
+| B8  | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34) — `booking.service.ts:1881` | Medium   | Open   |
+| B9  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules) — `booking.service.ts:1134-1140`                                          | Low-Med  | Open   |
+
+**Security open items (planned in BACKEND-HARDENING-PHASE2.md PRs 1 + 5):**
+
+- Stub payment checkout not flag-gated (dev-only route reachable without an explicit env flag)
+- No `TRUST_PROXY` handling — `x-forwarded-for` rate-limit keys are spoofable
+- Seed script hardcodes `admin123` and has no production guard
+- Webhook idempotency non-atomic (mitigated by DB UNIQUE on `refund_record`/payment provider event)
+- No invite/booking creation rate limits
+- `PAYMENT_PROVIDER` silently falls back to the stub provider
+- Unbounded `reason` inputs (HTML rendered into emails)
+- OpenAPI spec is env-gated, not auth-gated
 
 ## Redis Key Namespace Map
 

@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-07-28
+Last updated: 2026-08-14
 
 ## Overview
 
@@ -35,7 +35,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 - `list(userId)` — Returns achievements for a user
 - `create(userId, input)` — Creates achievement in `pending` status
-- `update(userId, id, input, expectedVersion)` — Updates with optimistic lock check
+- `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
 - `adminList(input)` — Paginated list with optional status filter
 - `adminReview(id, status, adminNote?)` — Approve/reject achievement
@@ -53,56 +53,64 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 ## Admin Module
 
-**Purpose:** System administration — user management and role assignment.
+**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, and payout summaries.
 
 **Files:**
 
-- `admin.types.ts` — `setRoleInput` schema
-- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`
+- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`
+- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`
 - `admin.repo.ts` — `findUserById`, `listUsers`, `updateUserRole`
-- `admin.service.ts` — `listUsers`, `setRole` (prevents removing last admin)
-- `admin.handler.ts` — `listUsers`, `setRole`
+- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`
+- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
 
 - `listUsers(opts)` — Paginated user list with role filter
-- `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; records audit log
+- `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
+- `getWallet({ userId })` — Returns any user's wallet balances; throws `WalletNotFoundError`
+- `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
 
-**Dependencies:** `AdminRepo`, `AuditPort`
+**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`
 
 **Business Rules:**
 
 - Cannot remove the last admin role from the system
 - Role changes are audit-logged
+- Ledger filters must target exactly one wallet (`walletId` or `userId`, not both)
 
 ---
 
 ## Admin-Booking Module
 
-**Purpose:** Admin overrides for booking management — force state transitions, view booking details, adjust pricing.
+**Purpose:** Admin operations console for bookings — override queue with urgency, before/after override preview, state history, and admin refunds.
 
 **Files:**
 
-- `admin-booking.types.ts` — Zod schemas for override and list filters
+- `admin-booking.types.ts` — Zod schemas for override/list/state-history/admin-refund inputs
 - `admin-booking.errors.ts` — `BookingNotFoundError`
-- `admin-booking.repo.ts` — `findBookingById`, `listBookingsByState`, `getStateHistory`, `updateBookingWithOverride`, `findParticipantsByBookingId`, `findPaymentById`, `updatePaymentStatus`, `updateBookingHoldAmount`
-- `admin-booking.service.ts` — Override workflow with audit logging
-- `admin-booking.handler.ts` — `listBookings`, `getBookingDetails`, `overrideBooking`
+- `admin-booking.repo.ts` — booking lookup, override state application, state history
+- `admin-booking.service.ts` — `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`; exports `OVERRIDE_CATEGORIES` and `MARKS_ACTIONS`
+- `admin-booking.handler.ts` — `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`
+- `admin-booking.router.ts` — Admin-only routes
 
 **Service Methods:**
 
-- `listBookings(opts)` — Paginated list filtered by booking states
-- `getBookingDetails(bookingId)` — Returns booking with participants, state history, and payment info
-- `overrideBooking(bookingId, newState, reason, overrideMeta)` — Force state transition bypassing state machine; updates `previousState`, `stateReason`, `overrideMeta`; records audit log and state history entry
+- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated
+- `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
+- `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything
+- `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
+- `adminRefund(adminId, { paymentId, reason })` — Creates a compensating ledger entry for a payment error
 
-**Dependencies:** `AdminBookingRepo`, `AuditPort`
+**Dependencies:** `AdminBookingRepo`, `AuditPort`, wallet port
 
 **Business Rules:**
 
 - Admin overrides bypass the state machine — any state can be set
 - All overrides require a reason and are audit-logged
-- `overrideMeta` stores admin identity and justification
+- `previewOverride` never persists
+- Override categories map to target states (`tutor_no_show`/`student_no_show` → `no_show`; the rest → `cancelled`)
 
 ---
 
@@ -162,18 +170,19 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 **Files:**
 
-- `auth.types.ts` — `updateProfileInput` schema
+- `auth.types.ts` — `updateProfileInput`, `searchStudentsInput`
 - `auth.errors.ts` — `ProfileNotFoundError`
-- `auth.repo.ts` — `findUserWithProfile`, `updateProfile`
-- `auth.service.ts` — `me`, `getProfile`, `updateProfile` (lazy-creates wallet)
+- `auth.repo.ts` — `findUserWithProfile`, `updateProfile`, `searchStudents`
+- `auth.service.ts` — `me`, `getProfile`, `updateProfile`, `searchStudents` (lazy-creates wallet)
 - `auth.handler.ts` — Maps session context to service calls
-- `auth.router.ts` — Protected routes for `me`, `getProfile`, `updateProfile`
+- `auth.router.ts` — Protected routes for `me`, `getProfile`, `updateProfile`, `searchStudents`
 
 **Service Methods:**
 
 - `me(userId)` — Returns user + profile + tutorProfile + wallet (creates wallet if missing)
 - `getProfile(userId)` — Returns user with profile and tutor profile
-- `updateProfile(userId, input)` — Updates user name and profile fields
+- `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts)
+- `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 results
 
 **Dependencies:** `AuthRepo`, `WalletPort` (for lazy wallet creation)
 
@@ -186,38 +195,47 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 ## Booking Module
 
-**Purpose:** Core booking lifecycle — solo, group, and series bookings with state machine transitions, wallet holds, and meeting integration.
+**Purpose:** Core booking lifecycle — solo, group, and series bookings with state machine transitions, reschedule approval, session notes, wallet holds, payouts, and meeting integration.
 
 **Files:**
 
 - `booking-state.types.ts` — Booking state enum and terminal states
 - `booking-transitions.ts` — `canTransition()` state machine logic
 - `booking.types.ts` — Zod schemas for all booking operations
-- `booking.errors.ts` — 11 error classes for booking domain
-- `booking.repo.ts` — 20+ data access methods for bookings, participants, sessions, reschedules
-- `booking.service.ts` — 15+ public methods; consumer ports for wallet, pricing, audit, notification, meeting
-- `booking.handler.ts` — Maps handler context/input to service calls
-- `booking.router.ts` — Protected routes for all booking operations
+- `booking.errors.ts` — error classes for the booking domain
+- `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
+- `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
+- `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
+- `booking.router.ts` — `booking.*` protected routes + `tutorActions.*` tutor-guarded routes
 
 **Service Methods:**
 
 - `getById(bookingId, userId)` — Returns booking with access check
-- `listMine(userId, opts)` — Paginated list of user's bookings
+- `listMine(userId, opts)` — Paginated list of user's bookings (proposer)
+- `listForTutor(tutorId, opts)` — Paginated list of bookings assigned to a tutor
 - `createSolo(proposerId, input)` — Creates solo booking with wallet hold, overlap check, and notification
 - `createGroup(proposerId, input)` — Creates group booking with invitees
 - `createSeries(proposerId, input)` — Creates series booking with sessions (2-4 sessions, each checked for overlaps)
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
 - `declineInvite(userId, bookingId, reason?)` — Invitee declines
-- `reconfirm(userId, bookingId, accept)` — Reconfirms participation after reschedule
-- `withdraw(userId, bookingId, reason?)` — Participant withdraws; releases hold; cancels group if below minimum
+- `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing
+- `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum
 - `cancel(userId, bookingId, reason?)` — Cancels booking; releases all holds; late cancel becomes `late_cancelled`
 - `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; creates meeting for online; sets room approval for offline
 - `tutorDecline(bookingId, tutorId, reason?)` — Tutor declines; releases all holds
-- `completeSession(bookingId, tutorId)` — Marks session complete; deducts held marks
-- `proposeReschedule(userId, bookingId, start, end, reason?)` — Proposes new time
+- `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
+- `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
+- `proposeReschedule(tutorId, bookingId, start, end, reason?)` — Tutor proposes a new slot
+- `acceptReschedule(userId, bookingId)` — Student accepts the proposal
+- `rejectReschedule(userId, bookingId)` — Student rejects the proposal
+- `addSessionNote(userId, bookingId, content)` — Adds a sanitized note to a completed session
+- `getSessionNotes(userId, bookingId)` — Lists notes for a completed session
+- `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late so the lateness job skips the booking
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Releases holds on bookings past deadline
+- `checkTutorLateness()` — Auto-cancels bookings where the tutor never marked attendance past the 15-min lateness tolerance
 
 **Dependencies:** `BookingRepo`, `BookingWalletPort`, `BookingPricingPort`, `BookingAuditPort`, `BookingNotificationPort`, `BookingMeetingPort`
 
@@ -233,6 +251,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - Wallet holds are released on cancel, decline, and expiry
 - Overlap detection prevents double-booking tutor slots
 - Optimistic locking via `version` field prevents concurrent state changes
+- Known open findings: B3 (group with 2 ≤ headcount < target expires instead of repricing, `booking.service.ts:2009-2048`), B8 (group-series unreachable — `createSeries` hardcodes `targetGroupSize:1`, `:1881`), B9 (`cancelSession` after H-2 throws instead of forfeiting, `:1134-1140`) — see BACKEND-HARDENING-PHASE2.md PR 5
 
 ---
 
@@ -242,20 +261,19 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 **Files:**
 
-- `email.service.ts` — `EmailPort` interface, `createEmailService()` with circuit breaker
-- `resend-email.provider.ts` — Production provider using Resend API with 30s timeout
+- `email.service.ts` — `EmailPort` interface + `createEmailService()`
+- `resend-email.provider.ts` — Production provider using Resend API with 30s timeout and circuit breaker
 - `stub-email.provider.ts` — Development stub that logs but doesn't send
 
 **Service Methods:**
 
-- `write(params)` — Sends email, throws on failure
-- `writeBestEffort(params)` — Sends email, swallows errors (logs only)
+- `send(message)` — Sends an email; `message` is `{ to, subject, html, category }` where `category` is `booking`/`payment`/`refund`/`schedule`/`override`; returns `{ messageId }` or `{ skipped: true }`
 
 **Business Rules:**
 
 - Circuit breaker on Resend: 3 failures → open for 120s
 - 30-second timeout per email send request
-- `writeBestEffort` used for non-critical notifications (booking reminders)
+- Emails are dispatched synchronously today (from `notification.writeBestEffort` and the scheduler handler); a queued outbox is planned in BACKEND-HARDENING-PHASE2.md PR 3
 
 ---
 
@@ -268,14 +286,14 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `invite.types.ts` — Zod schemas
 - `invite.errors.ts` — `InviteNotFoundError`, `InviteEmailMismatchError`, `ProfileAlreadyExistsError`
 - `invite.repo.ts` — `findByToken`, `markUsed`
-- `invite.service.ts` — `verify(token)`, `claim(userId, token, email)`
+- `invite.service.ts` — `verify(token)`, `claim(userId, userEmail, token)`
 - `invite.handler.ts` — Maps to service calls
 - `invite.router.ts` — `verify` is public, `claim` is protected
 
 **Service Methods:**
 
 - `verify(token)` — Returns invite details without claiming
-- `claim(userId, token, email)` — Validates token and email match; creates tutor profile in `onboarding` status
+- `claim(userId, userEmail, token)` — Validates the signed-in user's email matches the invited email; creates tutor profile in `onboarding` status
 
 **Dependencies:** `InviteRepo`, `TutorPort` (for profile creation)
 
@@ -319,8 +337,8 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 - `notification.types.ts` — Zod schemas for notification input
 - `notification.errors.ts` — `NotificationNotFoundError`
-- `notification.repo.ts` — `insert`, `listByUserId`, `markRead`, `markAllRead`
-- `notification.service.ts` — `write(params)`, `writeBestEffort(params)`, `list(userId, opts)`, `markRead(id, userId)`, `markAllRead(userId)`
+- `notification.repo.ts` — `insert`, `listByUserId`, `updateReadStatus`, `markAllRead`, `countUnread`
+- `notification.service.ts` — `write(params)`, `writeBestEffort(params)`, `list(userId, opts)`, `getUnreadCount(userId)`, `markAsRead(id, userId)`, `markAllAsRead(userId)`
 - `notification.handler.ts` — Maps handler context/input
 - `notification.router.ts` — Protected routes
 
@@ -328,9 +346,10 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 - `write(params)` — Creates notification and dispatches email; throws on failure
 - `writeBestEffort(params)` — Creates notification and dispatches email; swallows errors
-- `list(userId, opts)` — Paginated list with `includeRead` filter
-- `markRead(id, userId)` — Marks single notification as read
-- `markAllRead(userId)` — Marks all unread notifications as read
+- `list(userId, opts)` — Paginated list with `unreadOnly` filter
+- `getUnreadCount(userId)` — Returns the number of unread notifications
+- `markAsRead(id, userId)` — Marks single notification as read
+- `markAllAsRead(userId)` — Marks all unread notifications as read
 
 **Dependencies:** `NotificationRepo`, `EmailPort`
 
@@ -339,37 +358,41 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - Every notification has a unique `eventKey` for idempotency
 - `write` throws — used for critical notifications
 - `writeBestEffort` swallows errors — used for non-critical notifications
+- Email dispatch is synchronous today; the `send-notification-email` scheduler job exists but is never enqueued
 
 ---
 
 ## Payment Module
 
-**Purpose:** Payment processing via Xendit with webhook handling and idempotency.
+**Purpose:** Mark package purchases via a payment provider (Xendit) with webhook confirmation, idempotency, and wallet crediting.
 
 **Files:**
 
-- `payment.types.ts` — Zod schemas for checkout and webhook
-- `payment.errors.ts` — `PaymentNotFoundError`
-- `payment.repo.ts` — `insertRecord`, `findByProviderReference`, `updateStatus`
-- `payment.service.ts` — `createCheckout`, `handleWebhook`; idempotency via `webhookIdempotency` store
-- `payment.handler.ts` — Maps handler context/input
-- `payment.router.ts` — Protected route for `createCheckout`, public route for `handleWebhook`
-- `xendit-payment.provider.ts` — Xendit API integration with circuit breaker (5 failures → 30s) and retry
+- `payment.types.ts` — `createPurchaseInput`/`getPurchaseInput` + output schemas
+- `payment.errors.ts` — `PackageNotFoundError`, `PaymentNotFoundError`, `PackageAlreadyPurchasedError`, `PaymentProviderError`
+- `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
+- `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
+- `payment.handler.ts` — `createPurchase`, `getPurchase`
+- `payment.router.ts` — Protected routes for `createPurchase`/`getPurchase`
+- `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; `verifyWebhook`
 - `stub-payment.provider.ts` — Development stub
+- Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)
 
 **Service Methods:**
 
-- `createCheckout(userId, input)` — Creates Xendit payment request; returns checkout URL
-- `handleWebhook(rawBody, token)` — Verifies webhook signature; idempotency via `webhookIdempotency`; updates payment status and triggers wallet credit
+- `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reuses an existing PENDING intent for the same provider+user+package; returns `{ paymentId, providerReference, checkoutUrl }`
+- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE
+- `getPurchase(paymentId, userId)` — Returns the payment record if owned by the user
 
-**Dependencies:** `PaymentRepo`, `WalletPort`, `IdempotencyStore`, `PaymentProvider`
+**Dependencies:** `PaymentRepo`, `PaymentWalletPort`, `PaymentProvider`
 
 **Business Rules:**
 
-- Webhook token verification uses `timingSafeEqual`
-- Idempotency prevents double-processing of webhooks
-- Circuit breaker prevents cascading failures to Xendit
-- Payment statuses: `PENDING` → `PAID`/`EXPIRED`/`FAILED`
+- Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min) + IP allowlist
+- Webhook idempotency prevents double-processing (non-atomic check-then-mark today; DB UNIQUE on provider event mitigates)
+- Circuit breaker prevents cascading failures to the provider
+- Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
+- Known finding B6: no payment/refund notifications are written (see BACKEND-HARDENING-PHASE2.md PR 5)
 
 ---
 
@@ -399,111 +422,159 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 ## Refund Module
 
-**Purpose:** Refund and correction processing for wallet operations.
+**Purpose:** Admin wallet corrections — compensating credit/deduct ledger entries and correction listing.
 
 **Files:**
 
-- `refund.types.ts` — Zod schemas
-- `refund.errors.ts` — `RefundNotFoundError`
-- `refund.repo.ts` — `createRefund`, `createCorrection`
-- `refund.service.ts` — `processRefund`, `processCorrection`
-- `refund.handler.ts` — Maps handler context/input
-- `refund.router.ts` — Protected routes
+- `refund.types.ts` — `createCorrectionInput`, `listCorrectionsInput`
+- `refund.errors.ts` — `RefundNotFoundError`, `WalletNotFoundError`
+- `refund.repo.ts` — `insertRefundRecord`
+- `refund.service.ts` — `createCorrection`, `listCorrections`, `createRefundRecord`
+- `refund.handler.ts` — `createCorrection`, `listCorrections`
+- `refund.router.ts` — Admin-only routes
 
 **Service Methods:**
 
-- `processRefund(bookingId, refundReason)` — Creates refund record and credits wallet
-- `processCorrection(paymentId, amount, reason)` — Creates correction record; uses `paymentId` (not `bookingId`)
+- `createCorrection(adminId, { walletId, amount, type, reason, bookingId? })` — Compensates a wallet (`compensate_credit`/`compensate_deduct`), writes a `refund_record`, and records an audit log with before/after balances; throws `WalletNotFoundError` if the wallet is missing
+- `listCorrections({ walletId, limit?, cursor? })` — Returns only `compensate_credit`/`compensate_deduct` ledger entries for a wallet
+- `createRefundRecord(db, params)` — Internal helper used by other modules to persist a refund/correction record
 
-**Dependencies:** `RefundRepo`, `WalletPort`
+**Dependencies:** `RefundRepo`, `RefundWalletPort`, `RefundAuditPort`
 
 **Business Rules:**
 
-- Refunds credit the wallet with held amount
 - Corrections can be positive (credit) or negative (deduct)
-- Event keys use deterministic format: `refund:{bookingId}` or `correction:{paymentId}:{timestamp}`
+- Event keys use deterministic format `correction.{type}.{walletId}.{uuid}`
+- Every correction is audit-logged with before/after wallet state
 
 ---
 
 ## Room Module
 
-**Purpose:** Room management for offline bookings — room CRUD and booking assignment.
+**Purpose:** Room management for offline bookings — room CRUD, availability checks, assignment, relocation, and un-assignment.
 
 **Files:**
 
-- `room.types.ts` — Zod schemas
+- `room.types.ts` — Zod schemas for list/create/assign/check-availability/relocate/cancel inputs
 - `room.errors.ts` — `RoomNotFoundError`, `RoomBookingConflictError`
-- `room.repo.ts` — `createRoom`, `listRooms`, `findRoomById`, `updateRoom`, `deleteRoom`, `createBooking`, `findRoomBookingsForUpdate`
-- `room.service.ts` — Full room and room-booking lifecycle
-- `room.handler.ts` — Maps handler context/input
-- `room.router.ts` — Admin-only routes
+- `room.repo.ts` — room queries, room-booking insert/update/find
+- `room.service.ts` — `listActive`, `createRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`
+- `room.handler.ts` — `list`, `create`, `assign`, `checkAvailability`, `relocate`, `cancelBooking`
+- `room.router.ts` — `list`/`checkAvailability` protected; `create`/`assign`/`relocate`/`cancelBooking` admin-only
 
 **Service Methods:**
 
-- `createRoom(input)`, `listRooms()`, `getRoom(id)`, `updateRoom(id, input)`, `deleteRoom(id)`
-- `bookRoom(roomId, bookingId, start, end)` — Books a room with conflict check
-- `releaseRoom(bookingId)` — Releases room booking
+- `listActive()` — Returns active rooms
+- `createRoom({ name, location, capacity })` — Creates a room
+- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check
+- `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
+- `relocateRoom(bookingId, roomId, startAt, endAt)` — Moves a booking to a different room, freeing the previous one
+- `cancelRoomBooking(bookingId)` — Cancels the booking's room assignment (booking continues without a room)
 
 **Dependencies:** `RoomRepo`
+
+**Business Rules:**
+
+- Room bookings have status `requested`/`confirmed`/`relocated`/`cancelled`
+- Known gaps: G13 (`checkAvailability` not integrated into booking creation), G14 (`assignRoom` doesn't transition the booking to `scheduled`; no student notification) — see BACKEND-HARDENING-PHASE2.md
 
 ---
 
 ## Scheduler Module
 
-**Purpose:** Background job scheduler using BullMQ for booking expiry, hold release, and notification dispatch.
+**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness auto-cancel, and notification email dispatch.
 
 **Files:**
 
-- `scheduler.service.ts` — `start()`, `shutdown()`, job handlers
-- `jobs/expire-bookings.job.ts` — `onExpireBookings` handler
-- `jobs/release-holds.job.ts` — `onReleaseHolds` handler
+- `scheduler.service.ts` — `createSchedulerService()`, `start()`, `shutdown()`, job handlers
+- `jobs/expire-bookings.job.ts` — repeatable job (5 min)
+- `jobs/release-holds.job.ts` — repeatable job (10 min)
+- `jobs/check-tutor-lateness.job.ts` — repeatable job (5 min)
+- `jobs/send-notification-email.job.ts` — repeatable job (60 s)
+- Wiring: `apps/server/src/scheduler.ts` — `initScheduler()` gates on `SCHEDULER_ENABLED=true` + `REDIS_URL`; repeatable jobs registered at `scheduler.ts:93-96`
 
 **Service Methods:**
 
 - `start()` — Registers BullMQ repeatable jobs
-- `shutdown()` — Graceful shutdown with 10s timeout
+- `shutdown()` — Graceful shutdown with 10s timeout (forced close after timeout)
 - `onExpireBookings()` — Calls `bookingService.expireBookings()`
 - `onReleaseHolds()` — Calls `bookingService.releaseExpiredHolds()`
-- `onSendNotificationEmail()` — Sends notification emails (was a no-op, now dispatched via `notification.writeBestEffort`)
+- `onCheckTutorLateness()` — Calls `bookingService.checkTutorLateness()` (15-min lateness auto-cancel, G3)
+- `onSendNotificationEmail(data)` — Looks up a queued notification + user email and calls `emailService.send()`; **never enqueued today** — emails are dispatched synchronously
 
-**Dependencies:** `BookingService`, `NotificationPort`, BullMQ queue
+**Dependencies:** `BookingService`, `EmailService`, BullMQ queue
 
 **Business Rules:**
 
-- Expiry job runs every 5 minutes
-- Hold release job runs every 5 minutes
+- Expiry job runs every 5 minutes; hold-release job every 10 minutes; tutor-lateness job every 5 minutes; email job every 60 seconds
 - Jobs use retry with exponential backoff (3 attempts)
 - Circuit breaker state persisted in Redis (when available)
 
 ---
 
-## Tutor Module
+## Support Module
 
-**Purpose:** Tutor profile management — create, update, submit for review.
+**Purpose:** Support/lateness tickets (G1) — students report tutoring lateness/no-show or other issues; admins triage by SLA urgency and resolve.
 
 **Files:**
 
-- `tutor.types.ts` — Zod schemas for profile fields, availability slots
-- `availability.types.ts` — Availability slot types
-- `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`
-- `tutor.repo.ts` — `findByUserId`, `create`, `update`, `upsertAvailability`
-- `tutor.service.ts` — `getMyProfile`, `updateMyProfile`, `submitForReview`
-- `tutor.handler.ts` — Maps handler context/input
-- `tutor.router.ts` — Protected routes with `tutorProcedure` guard
+- `support.types.ts` — `createTicketInput`, `listTicketsInput`, `adminListTicketsInput`, `adminResolveTicketInput`; `SUPPORT_CATEGORIES`, `SUPPORT_STATUSES`
+- `support.errors.ts` — `SupportTicketNotFoundError`, `SupportBookingAccessError`, `LatenessReportTooEarlyError`, `SupportTicketAlreadyResolvedError`
+- `support.repo.ts` — `findBookingForReporter`, `insert`, `listByReporter`, `adminList`, `findById`, `updateResolution`
+- `support.service.ts` — `createTicket`, `listTickets`, `adminList`, `adminResolveTicket`
+- `support.handler.ts` — Maps handler context/input
+- `support.router.ts` — `createTicket`/`listTickets` protected; `adminListTickets`/`adminResolveTicket` admin-only
 
 **Service Methods:**
 
-- `getMyProfile(userId)` — Returns tutor profile with availability slots
-- `updateMyProfile(userId, input)` — Updates profile fields and availability slots
-- `submitForReview(userId)` — Changes `onboardingStatus` to `submitted_for_review`
+- `createTicket(userId, { category, bookingId?, description })` — Lateness/no-show categories (`tutor_late`/`tutor_no_show`) require the reporter to be a participant and the booking to have started > 15 min ago (`LATENESS_TOLERANCE_MS`); sets `slaDeadline` = now + 12h (`SUPPORT_SLA_MS`)
+- `listTickets(userId, { status?, limit? })` — The user's own tickets
+- `adminList({ status?, limit?, offset? })` — All tickets sorted by SLA urgency (earliest deadline first)
+- `adminResolveTicket(adminId, { ticketId, resolution })` — Sets `resolved` + assignee, notifies the reporter, records an audit log; throws `SupportTicketAlreadyResolvedError` if already resolved/closed
 
-**Dependencies:** `TutorRepo`
+**Dependencies:** `SupportRepo`, `SupportNotificationPort`, `SupportAuditPort`
+
+**Business Rules:**
+
+- Tickets start `open`; statuses `open`/`in_progress`/`resolved`/`closed`
+- SLA deadline is `created + 12 hours`; no SLA auto-escalation job yet (G1 sub-gap)
+- Lateness reports are time-gated (15 min after scheduled start)
+
+---
+
+## Tutor Module
+
+**Purpose:** Tutor profile management — create, update, submit for review, availability management, and payout summaries.
+
+**Files:**
+
+- `tutor.types.ts` — Zod schemas for profile fields, `getMyPayoutsInput`
+- `availability.types.ts` — Availability slot types (`upsert`, weekly-create, delete)
+- `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
+- `tutor.repo.ts` — `findByUserId`, `create`, `update`, `upsertAvailability`
+- `tutor.service.ts` — `getMyProfile`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
+- `tutor.handler.ts` — Maps handler context/input
+- `tutor.router.ts` — Tutor-guarded routes (`tutorProcedure`)
+
+**Service Methods:**
+
+- `getMyProfile(userId)` — Returns tutor profile
+- `updateMyProfile(userId, input)` — Updates draft profile fields with optimistic lock (`version`); throws `TutorProfileNotEditableError` if published
+- `submitForReview(userId)` — Validates required fields + pricing, then sets `onboardingStatus` to `pending_review`; records audit log
+- `listAvailability(userId)` — Lists the tutor's active future availability slots
+- `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
+- `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
+- `deleteAvailability(userId, slotId)` — Deactivates a slot (soft delete)
+- `getMyPayouts(userId, { dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
+
+**Dependencies:** `TutorRepo`, `TutorPricingPort`, `TutorAuditPort`, `BookingPayoutPort`
 
 **Business Rules:**
 
 - Only tutors with `published` status are visible in discovery
-- Availability slots must be in the future
-- `submitForReview` can only be called from `onboarding` status
+- Availability slots must be in the future and non-overlapping
+- `submitForReview` can only be called from `draft`/`changes_requested` status
+- Profile updates use optimistic locking (`version`)
 
 ---
 
@@ -535,12 +606,12 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 **Files:**
 
-- `wallet.types.ts` — Zod schemas for all wallet operations
+- `wallet.types.ts` — Zod schemas for ledger listing + outputs (`walletOutput`, `knowledgeBankOutput`)
 - `wallet.errors.ts` — `WalletNotFoundError`, `InsufficientBalanceError`
 - `wallet.repo.ts` — Atomic operations: `atomicHold`, `atomicRelease`, `atomicDeduct`, `atomicCredit`, `atomicCompensateCredit`, `atomicCompensateDeduct`, plus `insertLedger`, `findLedgerEntries`
-- `wallet.service.ts` — `getOrCreate`, `hold`, `release`, `deduct`, `credit`, `compensate`, `listLedger`, `knowledgeBankEligible`, `listPackages`
-- `wallet.handler.ts` — Maps handler context/input
-- `wallet.router.ts` — Protected + admin routes
+- `wallet.service.ts` — `getOrCreate`, `hold`, `release`, `deduct`, `credit`, `compensate`, `listLedger`, `knowledgeBankEligible`, `listActivePackages`
+- `wallet.handler.ts` — `get`, `listLedger`, `listPackages`, `knowledgeBankEligible`, `competitionCalendarLink`
+- `wallet.router.ts` — Protected routes
 
 **Service Methods:**
 
@@ -550,9 +621,9 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `deduct(db, params)` — Atomically deducts from held balance (session completion)
 - `credit(db, params)` — Atomically credits available balance (payment received)
 - `compensate(db, params)` — Compensation operation (positive or negative)
-- `listLedger(userId, opts)` — Paginated ledger with `bookingId` and `eventKey` filters
-- `knowledgeBankEligible(userId)` — Checks if user meets minimum balance for knowledge bank
-- `listPackages()` — Returns available mark packages
+- `listLedger(walletId, opts)` — Paginated ledger with `bookingId` and `eventKey` filters
+- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; **known bug B4** — uses `availableBalance` instead of total balance (`wallet.service.ts:431`)
+- `listActivePackages()` — Returns active mark packages
 
 **Dependencies:** `WalletRepo`
 
@@ -563,3 +634,4 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - Wallet invariant: `totalBalance = heldBalance + availableBalance`
 - Idempotency via `eventKey` on ledger entries
 - Insufficient available balance throws `InsufficientBalanceError`
+- `hold`/`release`/`deduct`/`credit`/`compensate` are service-layer only — consumed via ports, not exposed over RPC
