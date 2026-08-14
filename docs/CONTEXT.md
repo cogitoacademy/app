@@ -264,9 +264,13 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 - `createTicket`, `listTickets` (protected)
 - `adminListTickets`, `adminResolveTicket` (admin)
 
+### Upload Module (protected)
+
+- `createUploadUrl` — validates content-type allowlist + filename, returns a signed PUT URL (Cloudflare R2) or a local `/uploads/*` URL (dev); `GET /uploads/*` served by the server when `R2_PUBLIC_URL` is unset
+
 ### Scheduler Module (internal)
 
-- BullMQ repeatable jobs: `expire-bookings` (5m), `release-expired-holds` (10m), `check-tutor-lateness` (5m), `send-notification-email` (60s — never enqueued today; emails are sent synchronously)
+- BullMQ repeatable jobs: `expire-bookings` (5m), `release-expired-holds` (10m), `check-tutor-lateness` (5m), `send-notification-email` (60s — consumes the email outbox via `dispatchQueuedEmails`), `escalate-support-tickets` (15m)
 
 Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pricing`, `scheduler`.
 
@@ -276,7 +280,7 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
 - Cookies: sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. Same-origin subdomain sharing works because `app.cogitoacademy.id` and `cogitoacademy.id` share the same site.
 - `CogitoUser` type exported with role field.
-- **Pending (foundation hardening):** password policy (min 8, upper/lower/digit), session expiry (7 days), conditional OAuth. **Email verification (G2) deferred** to production-readiness / PRD-gaps branch (additive; depends on Resend wiring + frontend route).
+- **Pending (foundation hardening):** password policy (min 8, upper/lower/digit) — still open (C6); conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`). **Email verification (G2) deferred** (additive; depends on Resend wiring + frontend route).
 
 ## CI/CD
 
@@ -287,7 +291,7 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 - **Coverage**: 90% for `packages/api`, 80% overall (after foundation hardening)
 - **Health**: `GET /health` with DB ping (Redis ping not yet implemented — see DEFERRED-OPS-TASKS 1.6)
 - **Deployment platform**: Coolify (self-hosted PaaS on Hetzner VPS)
-- **Scheduler boot**: The BullMQ worker + 4 repeatable jobs (`expire-bookings` 5m, `release-expired-holds` 10m, `check-tutor-lateness` 5m, `send-notification-email` 60s — wired in `apps/server/src/scheduler.ts:93-96`) only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and the booking-expiry/hold-release/email jobs never run. Note: `send-notification-email` is never enqueued today — notification emails are dispatched synchronously via `notification.writeBestEffort`.
+- **Scheduler boot**: The BullMQ worker + 5 repeatable jobs (`expire-bookings` 5m, `release-expired-holds` 10m, `check-tutor-lateness` 5m, `send-notification-email` 60s, `escalate-support-tickets` 15m — wired in `apps/server/src/scheduler.ts`) only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and the booking-expiry/hold-release/email/SLA jobs never run. `send-notification-email` consumes the email outbox (`notification.dispatchQueuedEmails`): notification writes queue dispatch rows (`status='queued'`) inside the DB transaction and the scheduler sends them, so no email I/O happens inside open transactions.
 
 ## Plans
 
@@ -301,10 +305,12 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                                                                  |
 | `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                                  |
 | `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                                  |
+| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                      | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46              |
+| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                      | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness) |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending |
-| `docs/plans/active/PRD-GAPS-SPEC.md`                              | main (merged)                      | Merged to main (#36, #39–#43) — 13/18 done, G13–G15 partial                           |
+| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                  | Active — planned: 12 untracked PRD deviations (U1–U12) + B4 (U13) from the 2026-08-14 audit |
+| `docs/plans/active/BACKEND-CLEANUP.md`                            | main (future PR)                   | Active — planned: dead code, silent failure modes, test-quality nits                    |
 | `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Active — 4 closed, 3 partial, 10 open                                                 |
-| `docs/plans/active/BACKEND-HARDENING-PHASE2.md`                   | main (targets 5 PRs)               | Planned — not implemented (5 PRs)                                                     |
 | `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                            |
 | `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                                  |
 
@@ -315,13 +321,14 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 2. Foundation Hardening (merged #17) → main
 3. Production Readiness + Infrastructure (merged #18 + #19) → main
 4. Deferred Ops Tasks (code gaps 1.1–1.8) → merged to main; §2 Redis session caching deferred
-5. PRD Gaps Backend (G1–G20) → merged to main (#35, #36, #39–#43); 13/18 implemented, G13–G15 partial
-6. Backend Hardening Phase 2 (BACKEND-HARDENING-PHASE2.md, PRs 1–5) → next to execute
-7. Frontend Gaps (FRONTEND-GAPS-SPEC — 10 open: F1–F3, F6, F7, F9, F11–F14; F8/F16/F17 partial) → after / parallel with hardening
-8. Production Ops (DEFERRED-OPS-TASKS §3 manual verification, §4 production ops) → requires live env + Coolify
+5. PRD Gaps Backend (G1–G20) → merged to main (#35, #36, #39–#43)
+6. Backend Hardening Phase 2 (BACKEND-HARDENING-PHASE2.md, PRs 1–6) → merged to main (#46)
+7. PRD Gaps Phase 3 (PRD-GAPS-PHASE3.md — U1–U14) + Backend Cleanup (BACKEND-CLEANUP.md) → next to execute
+8. Frontend Gaps (FRONTEND-GAPS-SPEC — 10 open: F1–F3, F6, F7, F9, F11–F14; F8/F16/F17 partial) → after / parallel with #7
+9. Production Ops (DEFERRED-OPS-TASKS §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
-Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main. Next: **BACKEND-HARDENING-PHASE2 PRs 1–5** (security, money correctness, email outbox, uploads, PRD-correctness), then the open frontend gaps, then production ops.
+Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. The only open item from that plan is Task 5.2 (B4 — Knowledge Bank total-balance). Next: **PRD-GAPS-PHASE3 (U1–U14)** and **BACKEND-CLEANUP**, then the open frontend gaps, then production ops.
 
 ## Role E2E Readiness Snapshot (2026-08-14)
 
@@ -345,12 +352,12 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 
 Backend is ready for user role management, tutor invite/review, achievement moderation, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
 
-The admin override queue, wallet/ledger view, override preview, and room availability/approval backend (G8–G10, G13–G14) have landed; the corresponding admin UI remains frontend work (F1/F2/F11/F12). Remaining backend sub-gaps are tracked in BACKEND-HARDENING-PHASE2.md PR 5 (see Known Bugs).
+The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, and room availability/approval backend (G8–G10, G13–G14) have landed; the corresponding admin UI remains frontend work (F1/F2/F11/F12). Remaining backend sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U1–U14) and `docs/plans/active/BACKEND-CLEANUP.md`.
 
 ### Backend Gap Groups
 
 - Ready now (merged to main): student solo/group/series booking primitives, reschedule propose/accept/reject, session notes, group invite confirm/decline/reconfirm, wallet/ledger/packages/Knowledge Bank, purchases, achievements, notifications, tutor onboarding/availability/payouts/incoming-booking actions, support tickets (G1), and the admin capabilities listed above (G8–G10, G16–G18).
-- Still open backend sub-gaps (tracked in `docs/plans/active/BACKEND-HARDENING-PHASE2.md`): offline room availability not integrated into booking creation (G13), admin room approval doesn't transition to SCHEDULED (G14), group-series flow unreachable (G15/B8), meeting-link update-on-reschedule (G12 partial), plus the 2026-08-14 audit findings B3/B4/B6/B9 (see Known Bugs).
+- Still open backend sub-gaps (tracked in `docs/plans/active/PRD-GAPS-PHASE3.md`): Knowledge Bank total-balance eligibility (B4/U13), offline room availability not integrated into booking creation (G13/U14), plus the 12 untracked PRD deviations found by the 2026-08-14 PRD-vs-code audit (U1–U12: manual meeting-link entry, student self-reschedule, reconfirmation-deadline repricing, group-series full withdrawal, per-participant no-show, admin per-session cancel, per-session reschedule, refund reconciliation guard, business-hours SLA windows, achievement field parity, group invitee validation, offline room deadline). Dead-code/silent-failure items tracked in `docs/plans/active/BACKEND-CLEANUP.md`.
 
 ### Current Execution Order
 
@@ -447,30 +454,31 @@ Status column: **Fixed** = verified in code on main after #17 merge; **Open** = 
 | K6  | timezone field stored but never used                                   | P3       | 2     | Accepted (stored, no action needed)                                                            |
 | K7  | metrics.ts has no TTL eviction for stale path entries                  | P3       | 9     | Open                                                                                           |
 
-### 2026-08-14 audit additions (tracked in `docs/plans/active/BACKEND-HARDENING-PHASE2.md` PR 5)
+### 2026-08-14 audit additions (implemented in `docs/plans/completed/BACKEND-HARDENING-PHASE2.md` via PR #46)
 
-Status: **Open** = not yet implemented (verified at git HEAD `9b7df5e`).
+Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B6/B8/B9 are **Fixed**; B4 remains **Open** (tracked as U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`).
 
 > Note: these B-IDs are distinct from the B1–B6/N-series IDs in the production-readiness plan above (same letter, different findings).
 
 | ID  | Finding                                                                                                                                                                                           | Severity | Status |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| B3  | Group booking with 2 ≤ headcount < target EXPIRES at the 12h deadline instead of repricing + reconfirming (FR-16/TC-18) — `expireBookings` `booking.service.ts:2009-2048` has no headcount branch | High     | Open   |
-| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                                                            | Medium   | Open   |
-| B6  | No payment/refund notifications at all (notification matrix rows unfulfilled) — `payment.service.ts` writes none                                                                                  | Medium   | Open   |
-| B8  | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34) — `booking.service.ts:1881`                                            | Medium   | Open   |
-| B9  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules) — `booking.service.ts:1134-1140`                                                                                      | Low-Med  | Open   |
+| B3  | Group booking with 2 ≤ headcount < target EXPIRES at the 12h deadline instead of repricing + reconfirming (FR-16/TC-18) — `expireBookings` `booking.service.ts:2009-2048` has no headcount branch | High     | **Fixed (#46)** — headcount branch reprices to `AWAITING_RECONFIRMATION` + 12h deadline + notify. Reconfirmation-deadline sub-case → U3 |
+| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                                                            | Medium   | **Open** — tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md` |
+| B6  | No payment/refund notifications at all (notification matrix rows unfulfilled) — `payment.service.ts` writes none                                                                                  | Medium   | **Fixed (#46)** — `payment.{id}.credited`/`.refunded` (+ admin refund payer notify) |
+| B8  | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34) — `booking.service.ts:1881`                                            | Medium   | **Fixed (#46)** — `createGroupSeries` with upfront per-session holds |
+| B9  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules) — `booking.service.ts:1134-1140`                                                                                      | Low-Med  | **Fixed (#46)** — post-H2 cancelSession forfeits the session hold |
 
-**Security open items (planned in BACKEND-HARDENING-PHASE2.md PRs 1 + 5):**
+**Security items (all resolved in #46 unless noted):**
 
-- Stub payment checkout not flag-gated (dev-only route reachable without an explicit env flag)
-- No `TRUST_PROXY` handling — `x-forwarded-for` rate-limit keys are spoofable
-- Seed script hardcodes `admin123` and has no production guard
-- Webhook idempotency non-atomic (mitigated by DB UNIQUE on `refund_record`/payment provider event)
-- No invite/booking creation rate limits
-- `PAYMENT_PROVIDER` silently falls back to the stub provider
-- Unbounded `reason` inputs (HTML rendered into emails)
-- OpenAPI spec is env-gated, not auth-gated
+- ✅ Stub payment checkout flag-gated (`STUB_WEBHOOK_ALLOWED` + `NODE_ENV != production` + provider check)
+- ✅ `TRUST_PROXY` handling — `getClientIp` uses `x-forwarded-for` first hop only when trusted
+- ✅ Seed script production guard (`SEED_ALLOWED_IN_PROD` + `SEED_ADMIN_PASSWORD` min 12 chars)
+- ✅ Webhook idempotency atomic — `IdempotencyStore.claim` keyed on verified payload event id
+- ✅ Invite (10/min) + booking creation (30/min) rate limits
+- ✅ `PAYMENT_PROVIDER=xendit` requires Xendit credentials (no silent stub fallback)
+- ✅ Unbounded `reason` inputs bounded (`.max(500)`) + `escapeHtml` in email bodies (adminNote interpolation tracked in BACKEND-CLEANUP)
+- ✅ OpenAPI spec auth-gated in non-production; read-time body-size enforcement (413)
+- Remaining: no invite/booking creation rate limits apply to `/api/auth/*`; password policy (C6) still open.
 
 ## Redis Key Namespace Map
 

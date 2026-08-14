@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-12
+Last updated: 2026-08-14
 
 ## Starting the Server
 
@@ -26,9 +26,11 @@ The server runs on port 3001 by default (configurable via `PORT` env var).
 ### Start PostgreSQL (Docker)
 
 ```bash
-bun run db:start         # Starts PostgreSQL on port 6767
-bun run db:start:test    # Starts isolated test PostgreSQL on port 6768
+bun run db:start         # Starts PostgreSQL (dev DB cogito-app) on port 6767
+bun run db:test          # Starts isolated test PostgreSQL + Redis (docker-compose.test.yml) on port 6767
 ```
+
+> Note: the dev and test PostgreSQL containers both map host port 6767 — do not run `db:start` and `db:test` simultaneously. `db:test` uses `docker-compose.test.yml` (repo root) and the test harness targets `cogito-test` via `apps/server/.env.test(.example)`.
 
 ### Run Migrations
 
@@ -43,10 +45,10 @@ using `apps/server/.env.test` or `apps/server/.env.test.example`.
 ### Seed the Database
 
 ```bash
-bun run db:seed          # Seeds mark packages and test data
+bun run seed-packages          # Seeds mark packages and test data
 ```
 
-Production guard: `NODE_ENV=production bun run db:seed` will exit with error.
+Production guard: `NODE_ENV=production bun run seed-packages` will exit with error.
 
 ### Reset the Database
 
@@ -55,14 +57,14 @@ Production guard: `NODE_ENV=production bun run db:seed` will exit with error.
 docker compose down -v
 bun run db:start
 bun run db:migrate
-bun run db:seed
+bun run seed-packages
 ```
 
 Test database reset:
 
 ```bash
-bun run db:down:test
-bun run db:start:test
+docker compose -f docker-compose.test.yml down -v
+bun run db:test
 ```
 
 ### Drizzle Studio (Database GUI)
@@ -151,7 +153,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 ### Database Connection Errors
 
 - `ECONNREFUSED` — PostgreSQL not running. Run `bun run db:start`.
-- `ECONNREFUSED` during tests — Start the isolated test DB with `bun run db:start:test`.
+- `ECONNREFUSED` during tests — Start the isolated test DB with `bun run db:test`.
 - `connection timeout` — Check `DATABASE_URL` in `.env`.
 
 ### Test Safety Guard
@@ -219,4 +221,4 @@ Default local test ports:
 
 - Web: `3100`
 - Server: `3101`
-- PostgreSQL: `6768`
+- PostgreSQL: `6767` (test container; shared with dev container — see note above)

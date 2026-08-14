@@ -314,7 +314,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ eligible, balance, threshold }`
-- **Description:** Checks Knowledge Bank gating (min balance threshold); **known bug B4** — checks `availableBalance` instead of total balance
+- **Description:** Checks Knowledge Bank gating (min balance threshold); **known bug B4** — checks `availableBalance` instead of total balance (tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
 
 ### `wallet.competitionCalendarLink`
 
@@ -335,7 +335,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Input:** `{ packageCode }`
 - **Output:** `{ paymentId, providerReference, checkoutUrl }`
 - **Errors:** `PACKAGE_NOT_FOUND` (404), `PACKAGE_ALREADY_PURCHASED` (409), `PAYMENT_PROVIDER_ERROR` (502)
-- **Description:** Creates a purchase intent with the payment provider (reuses a pending intent for the same provider+user+package); on success the webhook credits the wallet
+- **Description:** Creates a purchase intent with the payment provider (reuses a pending intent; resets FAILED/EXPIRED payments to PENDING and re-creates the checkout — re-purchase, #46); on success the webhook credits the wallet
 
 ### `payment.getPurchase`
 
@@ -351,7 +351,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature`, `x-event-id`, `x-timestamp`
 - **Output:** `{ ok: true }`
 - **Errors:** 401 signature failure, 408 stale timestamp (> 5 min), 403 IP not allowlisted, 500 processing failure
-- **Description:** Provider webhook; verifies signature, validates timestamp, then calls `payment.confirmFromWebhook` — idempotent; updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`) and credits the wallet on PAID/SETTLED
+- **Description:** Provider webhook; verifies signature, validates timestamp, then atomically claims the idempotency key (keyed on the verified payload's event id — released on processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46)
 
 ---
 
@@ -405,7 +405,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Protected (student proposer)
 - **Input:** `{ sessionId }`
 - **Output:** `{ booking }`
-- **Description:** Student cancels an individual series session more than 2h before start; **known bug B9** — post-H-2 cancel throws instead of forfeiting Marks
+- **Description:** Student cancels an individual series session; pre-H-2 releases the session hold, post-H-2 forfeits it (per-session penalty, #46). Group-series sessions cannot be cancelled (no opt-out)
 
 ### `booking.addSessionNote`
 
@@ -434,7 +434,15 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ scheduledStartAt, scheduledEndAt }], timezone? }` (2–4 sessions)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
-- **Description:** Creates a multi-session series booking; **known bug B8** — group-series is unreachable (`createSeries` hardcodes `targetGroupSize: 1`)
+- **Description:** Creates a multi-session solo series booking
+
+### `booking.createGroupSeries`
+
+- **Auth:** Protected
+- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
+- **Output:** `{ booking }`
+- **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
+- **Description:** Creates a group series with upfront per-participant holds for all sessions (FR-20, #46); invitees accept/decline the full-series package via `booking.confirmInvite`/`booking.declineInvite`
 
 ### `booking.confirmInvite`
 
@@ -538,14 +546,14 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Confirms a room for an offline booking; **known gap G14** — does not transition the booking to `scheduled`
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; notifies tutor + confirmed students (G14, #46)
 
 ### `room.checkAvailability`
 
 - **Auth:** Protected
 - **Input:** `{ roomId, startAt, endAt }`
 - **Output:** `{ available: boolean }`
-- **Description:** Returns whether a room is free for a time slot; **known gap G13** — not yet integrated into booking creation
+- **Description:** Returns whether a room is free for a time slot; **known gap G13** — not yet integrated into booking creation (tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
 
 ### `room.relocate`
 
@@ -681,3 +689,17 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Output:** `{ ticket }`
 - **Errors:** `SUPPORT_TICKET_NOT_FOUND` (404), `SUPPORT_TICKET_ALREADY_RESOLVED` (409)
 - **Description:** Resolves a ticket, assigns the admin, notifies the reporter, and records an audit log
+
+> SLA auto-escalation: the `escalate-support-tickets` scheduler job (15 min) marks open tickets past `slaDeadline` as `in_progress` + escalated (OQ-04 in-app part, #46). Business-hours SLA windows (30 min / 4 h) + WhatsApp escalation tracked U9 in `PRD-GAPS-PHASE3.md`.
+
+---
+
+## Upload (`upload.*`)
+
+### `upload.createUploadUrl`
+
+- **Auth:** Protected
+- **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
+- **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes }` (`maxBytes` 5 MB)
+- **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
+- **Description:** Returns a signed PUT URL (Cloudflare R2) or a direct local URL (dev) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. achievement `imageUrl`, user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset

@@ -42,13 +42,13 @@ cp apps/server/.env.test.example apps/server/.env.test
 bun run db:start
 
 # Optional: start isolated PostgreSQL for tests
-bun run db:start:test
+bun run db:test
 
 # Run migrations
 bun run db:migrate
 
 # Seed the database (optional, creates test data)
-bun run db:seed
+bun run seed-packages
 
 # Start dev server (web + server)
 bun run dev
@@ -89,7 +89,7 @@ bun run build
 Integration and e2e tests use the isolated test database and ports:
 
 ```bash
-bun run db:start:test
+bun run db:test
 bun run test:api
 ```
 
@@ -280,6 +280,6 @@ The server uses structured JSON logging via `evlog`. In development, logs are pr
 - **Port 3001 already in use:** Kill existing process or change `PORT` env var
 - **Port 3100/3101 already in use during tests:** Stop prior test servers or change `WEB_PORT` / `PORT` in `.env.test`
 - **Database connection refused:** Run `bun run db:start` first
-- **Test database connection refused:** Run `bun run db:start:test` first
+- **Test database connection refused:** Run `bun run db:test` first
 - **Migration errors:** Check `DATABASE_URL` and run `bun run db:migrate`
 - **Type errors after schema changes:** Run `bun run db:generate` then `bun run check-types`
