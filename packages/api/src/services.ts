@@ -180,8 +180,11 @@ function createServices() {
   const payment = createPaymentModule({
     db,
     wallet: wallet.service,
+    provider: env.PAYMENT_PROVIDER,
     xenditConfig:
-      env.XENDIT_SECRET_KEY && env.XENDIT_WEBHOOK_TOKEN
+      env.PAYMENT_PROVIDER === "xendit" &&
+      env.XENDIT_SECRET_KEY &&
+      env.XENDIT_WEBHOOK_TOKEN
         ? {
             secretKey: env.XENDIT_SECRET_KEY!,
             webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
@@ -191,6 +194,7 @@ function createServices() {
           }
         : undefined,
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
+    notification: notification.service,
   });
 
   const refund = createRefundModule({

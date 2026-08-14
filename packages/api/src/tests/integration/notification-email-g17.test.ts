@@ -158,6 +158,7 @@ describe("Notification email matrix (G17)", () => {
     expect(dispatch).toBeDefined();
     expect(dispatch!.channel).toBe("email");
     expect(dispatch!.recipientEmail).toBe(tutorEmail);
+    expect(dispatch!.status).toBe("queued");
   });
 
   test("booking accept → student notification row + email dispatch row", async () => {
@@ -177,6 +178,7 @@ describe("Notification email matrix (G17)", () => {
       .where(eq(notificationDispatch.notificationId, notif!.id));
     expect(dispatch).toBeDefined();
     expect(dispatch!.recipientEmail).toBe(studentEmail);
+    expect(dispatch!.status).toBe("queued");
 
     const [tutorScheduled] = await db
       .select()
@@ -191,6 +193,7 @@ describe("Notification email matrix (G17)", () => {
       .where(eq(notificationDispatch.notificationId, tutorScheduled!.id));
     expect(tutorDispatch).toBeDefined();
     expect(tutorDispatch!.recipientEmail).toBe(tutorEmail);
+    expect(tutorDispatch!.status).toBe("queued");
   });
 
   test("achievement submit → in-app notification row, NO email dispatch row", async () => {
@@ -234,5 +237,26 @@ describe("Notification email matrix (G17)", () => {
       .from(notificationDispatch)
       .where(eq(notificationDispatch.notificationId, notif!.id));
     expect(dispatches.length).toBe(0);
+  });
+
+  test("dispatchQueuedEmails consumes queued dispatch rows (outbox)", async () => {
+    const { services } = await import("@cogito-app/api/services");
+
+    const [queued] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.status, "queued"))
+      .limit(1);
+    expect(queued).toBeDefined();
+
+    const result = await services.notification.dispatchQueuedEmails(50);
+
+    const [after] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.id, queued!.id));
+    expect(after!.status).not.toBe("queued");
+    expect(result).toHaveProperty("sent");
+    expect(result).toHaveProperty("failed");
   });
 });

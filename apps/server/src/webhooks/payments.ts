@@ -2,7 +2,7 @@ import { Elysia, type Context as ElysiaContext } from "elysia";
 import { services } from "@cogito-app/api";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
 import { log } from "@cogito-app/api/lib/logger";
-import { readBodyWithLimit } from "@cogito-app/api/lib/request-id";
+import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
 import { env } from "@cogito-app/env/server";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
@@ -16,12 +16,13 @@ export function stubCheckoutEnabled(
   return nodeEnv !== "production" && provider === "stub" && allowed === true;
 }
 
-export function ipAllowed(request: Request, allowlist: string[]): boolean {
+export function ipAllowed(
+  request: Request,
+  allowlist: string[],
+  trustProxy: boolean,
+): boolean {
   if (allowlist.length === 0) return true;
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "";
+  const ip = getClientIp(request, trustProxy);
   return allowlist.some((entry) => entry === ip);
 }
 
@@ -63,7 +64,7 @@ export function paymentsWebhook(app: Elysia) {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (!ipAllowed(request, allowlist)) {
+      if (!ipAllowed(request, allowlist, env.TRUST_PROXY)) {
         set.status = 403;
         return { error: "Forbidden" };
       }

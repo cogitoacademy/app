@@ -1,4 +1,4 @@
-import { eq, and, desc, lt, count } from "drizzle-orm";
+import { eq, and, asc, desc, lt, count, sql } from "drizzle-orm";
 import {
   notification,
   notificationDispatch,
@@ -143,6 +143,77 @@ export async function updateDispatchStatus(
 }
 
 /**
+ * Updates a dispatch row's status by its own id (used by the outbox consumer).
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the dispatch row id
+ * @param status - the new dispatch status
+ */
+export async function updateDispatchStatusById(
+  conn: DbOrTx,
+  id: string,
+  status: string,
+) {
+  await conn
+    .update(notificationDispatch)
+    .set({ status })
+    .where(eq(notificationDispatch.id, id));
+}
+
+/**
+ * Lists queued dispatch rows for the email outbox consumer, oldest first.
+ *
+ * @param conn - the database connection or active transaction
+ * @param limit - the maximum number of rows to return
+ * @returns the queued dispatch rows
+ */
+export async function listQueuedDispatches(conn: DbOrTx, limit = 50) {
+  return conn
+    .select()
+    .from(notificationDispatch)
+    .where(eq(notificationDispatch.status, "queued"))
+    .orderBy(asc(notificationDispatch.createdAt))
+    .limit(limit);
+}
+
+/**
+ * Increments a dispatch row's attempt counter and records the last error.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the dispatch row id
+ * @param lastError - the error message from the last failed send, or null
+ */
+export async function incrementDispatchAttempts(
+  conn: DbOrTx,
+  id: string,
+  lastError?: string | null,
+) {
+  await conn
+    .update(notificationDispatch)
+    .set({
+      attempts: sql`${notificationDispatch.attempts} + 1`,
+      lastError: lastError ?? null,
+    })
+    .where(eq(notificationDispatch.id, id));
+}
+
+/**
+ * Finds a notification by id (used by the email outbox consumer).
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the notification id
+ * @returns the full notification row, or null
+ */
+export async function findNotificationById(conn: DbOrTx, id: string) {
+  const [row] = await conn
+    .select()
+    .from(notification)
+    .where(eq(notification.id, id))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
  * Lists a user's notifications with cursor pagination and optional unread filter.
  *
  * @param conn - the database connection or active transaction
@@ -250,6 +321,10 @@ export function createNotificationRepo(db: DbType) {
     findUserEmail,
     insertDispatch,
     updateDispatchStatus,
+    updateDispatchStatusById,
+    listQueuedDispatches,
+    incrementDispatchAttempts,
+    findNotificationById,
     listNotifications: (
       userId: string,
       opts: { unreadOnly?: boolean; cursor?: string; limit: number },
