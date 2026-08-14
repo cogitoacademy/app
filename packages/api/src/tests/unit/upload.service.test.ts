@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { createUploadService, sanitizeFilename } from "../../modules/upload/upload.service";
+import {
+  createUploadService,
+  sanitizeFilename,
+} from "../../modules/upload/upload.service";
 import {
   InvalidFilenameError,
   UnsupportedContentTypeError,
@@ -33,9 +36,9 @@ describe("sanitizeFilename", () => {
   test("caps length and falls back to 'file'", () => {
     expect(sanitizeFilename("..")).toBe("file");
     expect(sanitizeFilename("")).toBe("file");
-    expect(sanitizeFilename("a".repeat(500) + ".png").length).toBeLessThanOrEqual(
-      100,
-    );
+    expect(
+      sanitizeFilename("a".repeat(500) + ".png").length,
+    ).toBeLessThanOrEqual(100);
   });
 });
 
@@ -97,7 +100,10 @@ describe("upload service createUploadUrl", () => {
     const storage = makeStorage({
       getSignedUploadUrl: async (key) => {
         signedKey = key;
-        return { url: `https://signed.example/${key}?sig=abc`, method: "PUT" as const };
+        return {
+          url: `https://signed.example/${key}?sig=abc`,
+          method: "PUT" as const,
+        };
       },
       resolvePublicUrl: (key) => `https://cdn.example/${key}`,
     });

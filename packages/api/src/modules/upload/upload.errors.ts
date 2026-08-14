@@ -18,9 +18,7 @@ export class UnsupportedContentTypeError extends DomainError {
   }
 }
 
-export function mapUploadError(
-  err: DomainError,
-): ORPCError<string, undefined> {
+export function mapUploadError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof InvalidFilenameError) {
     return badRequest(err.message, err);
   }

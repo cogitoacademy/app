@@ -17,10 +17,7 @@ export function sanitizeFilename(filename: string): string {
 }
 
 export function createUploadService(deps: { storage: StoragePort }) {
-  async function createUploadUrl(
-    userId: string,
-    input: CreateUploadUrlInput,
-  ) {
+  async function createUploadUrl(userId: string, input: CreateUploadUrlInput) {
     if (!ALLOWED_CONTENT_TYPES.includes(input.contentType)) {
       throw new UnsupportedContentTypeError(input.contentType);
     }

@@ -28,13 +28,28 @@ describe("createUploadUrlInput", () => {
   });
 
   test("rejects missing or empty filenames", () => {
-    expect(createUploadUrlInput.safeParse({ filename: "", contentType: "image/png" }).success).toBe(false);
-    expect(createUploadUrlInput.safeParse({ contentType: "image/png" }).success).toBe(false);
+    expect(
+      createUploadUrlInput.safeParse({ filename: "", contentType: "image/png" })
+        .success,
+    ).toBe(false);
+    expect(
+      createUploadUrlInput.safeParse({ contentType: "image/png" }).success,
+    ).toBe(false);
   });
 
   test("rejects filenames with path traversal or a leading slash", () => {
-    expect(createUploadUrlInput.safeParse({ filename: "a/../../x", contentType: "image/png" }).success).toBe(false);
-    expect(createUploadUrlInput.safeParse({ filename: "/etc/passwd", contentType: "image/png" }).success).toBe(false);
+    expect(
+      createUploadUrlInput.safeParse({
+        filename: "a/../../x",
+        contentType: "image/png",
+      }).success,
+    ).toBe(false);
+    expect(
+      createUploadUrlInput.safeParse({
+        filename: "/etc/passwd",
+        contentType: "image/png",
+      }).success,
+    ).toBe(false);
   });
 
   test("rejects filenames longer than 255 chars", () => {
