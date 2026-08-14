@@ -325,3 +325,82 @@ describe("Booking cancel flow", () => {
     expect(w.heldBalance).toBe(0);
   });
 });
+
+describe("Booking late-cancel penalty flow (TC-late)", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
+  const ts = Date.now() + 3000;
+  const studentEmail = `student.late.${ts}@cogito.test`;
+  const tutorEmail = `tutor.late.${ts}@cogito.test`;
+  let studentClient: TestClient;
+  let tutorId: string;
+  let slotId: string;
+  let bookingId: string;
+
+  beforeAll(async () => {
+    const studentRes = await signUpAndSignIn(
+      studentEmail,
+      "Test1234!",
+      "Student Late",
+    );
+    studentClient = createTestClient(
+      await createTestContext(studentRes.cookie),
+    );
+    const studentCtx = await createTestContext(studentRes.cookie);
+    if (studentCtx.session?.user) {
+      await creditWallet(studentCtx.session.user.id, 200);
+    }
+
+    const tutorData = await createPublishedTutor(tutorEmail, ts);
+    tutorId = tutorData.tutorId;
+    slotId = tutorData.slotId;
+  });
+
+  test("TC-late: student cancels after H-2 → Marks deducted (penalty), not released", async () => {
+    const start = new Date(Date.now() + 3 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 4 * 3600_000).toISOString();
+
+    const b = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+    bookingId = b.id;
+
+    const { booking } = await import("@cogito-app/db/schema");
+    const before = await studentClient.wallet.get({});
+    const held = before.heldBalance;
+    expect(held).toBeGreaterThan(0);
+
+    await db
+      .update(booking)
+      .set({ scheduledStartAt: new Date(Date.now() - 3 * 3600_000) })
+      .where(eq(booking.id, bookingId));
+
+    const updated = await studentClient.booking.cancel({
+      bookingId,
+      cancellationReason: "Late cancellation",
+    });
+    expect(updated.currentState).toBe("late_cancelled");
+
+    const w = await studentClient.wallet.get({});
+    expect(w.heldBalance).toBe(0);
+    expect(w.totalBalance).toBe(200 - held);
+
+    const deducts = await db
+      .select()
+      .from(ledgerEntry)
+      .where(eq(ledgerEntry.bookingId, bookingId));
+    const penalty = deducts.find((d) => d.entryType === "deduct");
+    expect(penalty).toBeDefined();
+    expect(penalty!.eventKey).toBe(`booking.${bookingId}.late-cancel.${b.proposerId}`);
+
+    const releases = deducts.filter((d) => d.entryType === "release");
+    expect(releases.length).toBe(0);
+  });
+});

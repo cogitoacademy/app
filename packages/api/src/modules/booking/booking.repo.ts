@@ -628,7 +628,10 @@ async function decrementBookingConfirmedHeadcount(
 }
 
 /**
- * Marks all sessions of a series booking as cancelled.
+ * Marks all non-completed sessions of a series booking as cancelled.
+ *
+ * Completed sessions are never clobbered (TC-30): only `scheduled` sessions
+ * transition to `cancelled`.
  *
  * @param conn - the database connection or active transaction
  * @param bookingId - the series booking id
@@ -637,7 +640,12 @@ async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
   await conn
     .update(bookingSession)
     .set({ currentState: "cancelled" })
-    .where(eq(bookingSession.seriesBookingId, bookingId));
+    .where(
+      and(
+        eq(bookingSession.seriesBookingId, bookingId),
+        eq(bookingSession.currentState, BOOKING_STATE.SCHEDULED),
+      ),
+    );
 }
 
 async function findCompletedBookingsByTutor(

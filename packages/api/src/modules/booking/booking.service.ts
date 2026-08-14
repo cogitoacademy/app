@@ -649,12 +649,39 @@ export function createBookingService(deps: {
         await repo.cancelAllSessions(tx, bookingId);
       }
 
-      await releaseAllParticipantHolds(
-        tx,
-        bookingId,
-        `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
-        ACTOR_TYPE.STUDENT,
-      );
+      if (isLate) {
+        // PRD penalty: cancelling after H-2 forfeits the held Marks instead of
+        // releasing them.
+        const participants = await repo.findConfirmedParticipants(
+          tx,
+          bookingId,
+        );
+        for (const p of participants) {
+          if (p.heldAmount <= 0) continue;
+          // eslint-disable-next-line no-await-in-loop
+          const w = await wallet.getByUserId(tx, p.userId);
+          if (!w) throw new BookingNotFoundError(p.userId);
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.deduct(tx, {
+            walletId: w.id,
+            amount: p.heldAmount,
+            eventKey: `booking.${bookingId}.late-cancel.${p.userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Late cancellation penalty",
+          });
+          // eslint-disable-next-line no-await-in-loop
+          await repo.updateParticipantState(tx, p.id, { heldAmount: 0 });
+        }
+      } else {
+        await releaseAllParticipantHolds(
+          tx,
+          bookingId,
+          `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
+          ACTOR_TYPE.STUDENT,
+        );
+      }
 
       await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
@@ -1778,15 +1805,28 @@ export function createBookingService(deps: {
       if (participant.heldAmount > 0) {
         const participantWallet = await wallet.getByUserId(tx, userId);
         if (!participantWallet) throw new BookingNotFoundError(userId);
-        await wallet.release(tx, {
-          walletId: participantWallet.id,
-          amount: participant.heldAmount,
-          eventKey: `booking.${bookingId}.withdraw.${userId}`,
-          sourceReference: bookingId,
-          bookingId,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: reason ?? "Withdrawal",
-        });
+        if (isLate) {
+          // PRD penalty: withdrawing after H-2 forfeits the held Marks.
+          await wallet.deduct(tx, {
+            walletId: participantWallet.id,
+            amount: participant.heldAmount,
+            eventKey: `booking.${bookingId}.withdraw-late.${userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Late withdrawal penalty",
+          });
+        } else {
+          await wallet.release(tx, {
+            walletId: participantWallet.id,
+            amount: participant.heldAmount,
+            eventKey: `booking.${bookingId}.withdraw.${userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: reason ?? "Withdrawal",
+          });
+        }
       }
 
       await repo.updateParticipantState(tx, participant.id, {

@@ -877,11 +877,11 @@ describe("BookingService", () => {
       });
     });
 
-    test("cancels with late_cancelled state when within threshold", async () => {
+    test("cancels with late_cancelled state when within threshold and deducts holds", async () => {
       const booking = makeBooking({
         scheduledStartAt: new Date(Date.now() + 1 * 60 * 60 * 1000),
       });
-      const { service, wallet } = createService({
+      const { service, wallet, repo } = createService({
         repo: {
           findBookingById: mock(async () => booking),
           findParticipant: mock(async () => makeParticipant()),
@@ -897,8 +897,19 @@ describe("BookingService", () => {
 
       await service.cancel("student1", "b1");
 
-      expect(wallet.release).toHaveBeenCalledTimes(1);
-      expect(wallet.release.mock.calls[0][1].eventKey).toContain("release");
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).toHaveBeenCalledTimes(1);
+      expect(wallet.deduct.mock.calls[0][1].eventKey).toBe(
+        "booking.b1.late-cancel.student1",
+      );
+      expect(wallet.deduct.mock.calls[0][1].reason).toBe(
+        "Late cancellation penalty",
+      );
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({ heldAmount: 0 }),
+      );
     });
 
     test("skips release when holdAmount is 0", async () => {
@@ -1988,6 +1999,45 @@ describe("BookingService", () => {
       expect(wallet.release).toHaveBeenCalledTimes(1);
       expect(wallet.release.mock.calls[0][1].amount).toBe(42);
       expect(repo.updateParticipantState).toHaveBeenCalledTimes(1);
+    });
+
+    test("withdraws after H-2 and deducts held marks (late withdrawal penalty)", async () => {
+      const booking = makeBooking({
+        currentState: "awaiting_participant_confirmation",
+        scheduledStartAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "awaiting_reconfirmation" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.withdraw("student1", "b1", "late withdrawal");
+      expect(result).toEqual({ withdrawn: true, late: true });
+
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).toHaveBeenCalledTimes(1);
+      expect(wallet.deduct.mock.calls[0][1].eventKey).toBe(
+        "booking.b1.withdraw-late.student1",
+      );
+      expect(wallet.deduct.mock.calls[0][1].reason).toBe(
+        "Late withdrawal penalty",
+      );
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({
+          confirmationState: "withdrawn_post_h2",
+          heldAmount: 0,
+        }),
+      );
     });
 
     test("cancels group booking when remaining headcount below minimum", async () => {
