@@ -125,6 +125,52 @@ describe("PaymentService", () => {
     expect(methods).not.toContain("withdraw");
   });
 
+  test("TC-re: FAILED payment can be re-purchased with a fresh intent", async () => {
+    const user = await createTestUser("rerepurchase@cogito.test");
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const first = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: first.providerReference,
+      providerEventId: "evt_rep1",
+      status: "FAILED",
+      failureReason: "declined",
+    });
+
+    const retry = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    expect(retry.paymentId).toBe(first.paymentId);
+    expect(retry.providerReference).toBe(first.providerReference);
+    expect(retry.checkoutUrl).toBeDefined();
+
+    const [record] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, first.paymentId))
+      .limit(1);
+    expect(record!.status).toBe("PENDING");
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: retry.providerReference,
+      providerEventId: "evt_rep2",
+      status: "PAID",
+    });
+
+    const w = await services.wallet.getByUserId(db, user.id);
+    expect(w!.totalBalance).toBe(50);
+  });
+
   const xenditProvider = createXenditPaymentProvider({
     secretKey: "xnd_development_test",
     webhookToken: "wh_token_test",

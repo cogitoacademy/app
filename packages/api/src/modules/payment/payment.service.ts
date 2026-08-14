@@ -112,6 +112,26 @@ export function createPaymentService(deps: {
           checkoutUrl: existingIntent.checkoutUrl,
         };
       }
+      if (
+        existing.status === PAYMENT_STATUS.FAILED ||
+        existing.status === PAYMENT_STATUS.EXPIRED
+      ) {
+        // Reset to PENDING so the webhook can credit, then re-create the intent.
+        // Xendit allows reusing the reference_id for a fresh payment request.
+        await repo.updatePaymentStatus(existing.id, {
+          status: PAYMENT_STATUS.PENDING,
+        });
+        const freshIntent = await provider.createIntent({
+          paymentId: existing.id,
+          amountIdr: pkg.priceIdr,
+          providerReference: existing.providerReference,
+        });
+        return {
+          paymentId: existing.id,
+          providerReference: existing.providerReference,
+          checkoutUrl: freshIntent.checkoutUrl,
+        };
+      }
       throw new PackageAlreadyPurchasedError(packageCode, userId);
     }
 

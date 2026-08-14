@@ -141,6 +141,77 @@ describe("PaymentService", () => {
       expect(result.providerReference).toBe("stub:user1:pkg1");
     });
 
+    test("createIntent re-purchases after a FAILED payment (new checkout)", async () => {
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay_existing",
+          status: PAYMENT_STATUS.FAILED,
+          providerReference: "stub:user1:pkg1",
+        })),
+        updatePaymentStatus,
+      });
+      const db = makeDb();
+
+      const service = createPaymentService({
+        db,
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+      expect(result.paymentId).toBe("pay_existing");
+      expect(result.providerReference).toBe("stub:user1:pkg1");
+      expect(result.checkoutUrl).toBe("https://checkout.test/123");
+      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
+        status: PAYMENT_STATUS.PENDING,
+      });
+    });
+
+    test("createIntent re-purchases after an EXPIRED payment (new checkout)", async () => {
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay_existing",
+          status: PAYMENT_STATUS.EXPIRED,
+          providerReference: "stub:user1:pkg1",
+        })),
+        updatePaymentStatus,
+      });
+      const db = makeDb();
+
+      const service = createPaymentService({
+        db,
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+      expect(result.paymentId).toBe("pay_existing");
+      expect(result.checkoutUrl).toBe("https://checkout.test/123");
+      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
+        status: PAYMENT_STATUS.PENDING,
+      });
+    });
+
     test("creates new payment intent when no existing payment", async () => {
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
