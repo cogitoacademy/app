@@ -129,7 +129,8 @@ export function createSupportService(deps: {
     return { escalated };
   }
 
-  async function adminResolveTicket(adminId: string, input: AdminResolveInput) {    const existing = await supportRepo.findById(db, input.ticketId);
+  async function adminResolveTicket(adminId: string, input: AdminResolveInput) {
+    const existing = await supportRepo.findById(db, input.ticketId);
     if (!existing) throw new SupportTicketNotFoundError(input.ticketId);
     if (RESOLVED_STATUSES.has(existing.status)) {
       throw new SupportTicketAlreadyResolvedError(input.ticketId);

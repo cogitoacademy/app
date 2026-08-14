@@ -159,10 +159,7 @@ async function listPastSla(conn: DbOrTx): Promise<SupportTicketRow[]> {
  * @param conn - the database connection or active transaction
  * @param id - the support ticket id
  */
-async function markEscalated(
-  conn: DbOrTx,
-  id: string,
-): Promise<void> {
+async function markEscalated(conn: DbOrTx, id: string): Promise<void> {
   await conn
     .update(supportTicket)
     .set({ status: "in_progress" })

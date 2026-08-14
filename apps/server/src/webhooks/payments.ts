@@ -2,10 +2,7 @@ import { Elysia, type Context as ElysiaContext } from "elysia";
 import { services } from "@cogito-app/api";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
 import { log } from "@cogito-app/api/lib/logger";
-import {
-  getClientIp,
-  readBodyWithLimit,
-} from "@cogito-app/api/lib/request-id";
+import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
 import { env } from "@cogito-app/env/server";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;

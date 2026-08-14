@@ -9,9 +9,9 @@ describe("createPaymentModule provider selection (C4)", () => {
   };
 
   test("throws when provider=xendit but xenditConfig is missing (no silent stub fallback)", () => {
-    expect(() =>
-      createPaymentModule({ ...base, provider: "xendit" }),
-    ).toThrow(/Xendit credentials are missing/);
+    expect(() => createPaymentModule({ ...base, provider: "xendit" })).toThrow(
+      /Xendit credentials are missing/,
+    );
   });
 
   test("throws on an unknown provider value", () => {
