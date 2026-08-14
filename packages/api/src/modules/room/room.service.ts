@@ -7,10 +7,15 @@ import {
 import type { RoomRepo } from "./room.repo";
 import type { CreateRoomInput } from "./room.types";
 import { ROOM_BOOKING_STATUS } from "../../shared/constants";
+import type { RoomBookingPort } from "./index";
 
 export type RoomService = ReturnType<typeof createRoomService>;
 
-export function createRoomService(repo: RoomRepo, db: DbType) {
+export function createRoomService(
+  repo: RoomRepo,
+  db: DbType,
+  bookingPort?: RoomBookingPort,
+) {
   async function listActive() {
     return repo.findActiveRooms(db);
   }
@@ -40,6 +45,7 @@ export function createRoomService(repo: RoomRepo, db: DbType) {
     roomId: string,
     startAt: Date,
     endAt: Date,
+    actorId?: string,
   ) {
     return db.transaction(async (tx) => {
       const roomRow = await repo.findRoomById(tx, roomId);
@@ -59,13 +65,23 @@ export function createRoomService(repo: RoomRepo, db: DbType) {
           endAt.toISOString(),
         );
 
-      return repo.insertRoomBooking(tx, {
+      const inserted = await repo.insertRoomBooking(tx, {
         roomId,
         bookingId,
         startAt,
         endAt,
         status: ROOM_BOOKING_STATUS.CONFIRMED,
       });
+
+      if (bookingPort && actorId) {
+        await bookingPort.transitionBookingToScheduled(
+          tx,
+          bookingId,
+          actorId,
+        );
+      }
+
+      return inserted;
     });
   }
 

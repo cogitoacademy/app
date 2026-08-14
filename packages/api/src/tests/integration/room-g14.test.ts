@@ -226,7 +226,7 @@ describe("G14 admin room relocate and cancel", () => {
     expect(accepted2.currentState).toBe("awaiting_admin_room_approval");
   });
 
-  test("admin assigns room A to booking1 → confirmed", async () => {
+  test("admin assigns room A to booking1 → confirmed and booking moves to scheduled", async () => {
     const rb = await adminClient.room.assign({
       bookingId: booking1Id,
       roomId: roomAId,
@@ -239,9 +239,13 @@ describe("G14 admin room relocate and cancel", () => {
     expect(rows.length).toBe(1);
     expect(rows[0]!.roomId).toBe(roomAId);
     expect(rows[0]!.status).toBe("confirmed");
+
+    const booking = await student1Client.booking.get({ bookingId: booking1Id });
+    expect(booking.currentState).toBe("scheduled");
+    expect(booking.scheduledEndAt.toISOString()).toBe(endISO);
   });
 
-  test("admin assigns room B to booking2 → confirmed", async () => {
+  test("admin assigns room B to booking2 → confirmed and booking moves to scheduled", async () => {
     const rb = await adminClient.room.assign({
       bookingId: booking2Id,
       roomId: roomBId,
@@ -249,6 +253,9 @@ describe("G14 admin room relocate and cancel", () => {
       endAt: endISO,
     });
     expect(rb.status).toBe("confirmed");
+
+    const booking = await student2Client.booking.get({ bookingId: booking2Id });
+    expect(booking.currentState).toBe("scheduled");
   });
 
   test("relocate booking2 into occupied room A is rejected", async () => {
@@ -294,7 +301,7 @@ describe("G14 admin room relocate and cancel", () => {
     expect(active).toBeUndefined();
 
     const booking = await student2Client.booking.get({ bookingId: booking2Id });
-    expect(booking.currentState).toBe("awaiting_admin_room_approval");
+    expect(booking.currentState).toBe("scheduled");
   });
 
   test("G14 regression: cancel after relocate leaves no active row; second cancel and relocate are rejected", async () => {

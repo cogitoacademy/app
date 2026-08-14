@@ -2101,6 +2101,27 @@ export function createBookingService(deps: {
     };
   }
 
+  /**
+   * Transitions an offline booking awaiting admin room approval to SCHEDULED
+   * once a room has been assigned. Consumed by the room module via a
+   * consumer-driven port so an assigned offline booking can actually be
+   * completed (G14).
+   */
+  async function transitionBookingToScheduled(
+    tx: DbOrTx,
+    bookingId: string,
+    actorId: string,
+  ): Promise<void> {
+    const b = await repo.findBookingById(tx, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    if (b.currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) return;
+    await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+      actorId,
+      actorType: ACTOR_TYPE.ADMIN,
+      reason: "Room assigned",
+    });
+  }
+
   async function expireBookings() {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
@@ -2354,5 +2375,6 @@ export function createBookingService(deps: {
     checkTutorLateness,
     transition,
     canTransition,
+    transitionBookingToScheduled,
   };
 }
