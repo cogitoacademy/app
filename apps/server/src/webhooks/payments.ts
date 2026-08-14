@@ -6,6 +6,14 @@ import { env } from "@cogito-app/env/server";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 
+export function stubCheckoutEnabled(
+  nodeEnv: string,
+  provider: string,
+  allowed: boolean,
+): boolean {
+  return nodeEnv !== "production" && provider === "stub" && allowed === true;
+}
+
 export function ipAllowed(request: Request, allowlist: string[]): boolean {
   if (allowlist.length === 0) return true;
   const ip =
@@ -127,7 +135,9 @@ export function paymentsWebhook(app: Elysia) {
   );
 
   app.get("/webhooks/payments/stub/checkout", async ({ query, set }) => {
-    if (env.NODE_ENV === "production" || env.PAYMENT_PROVIDER !== "stub") {
+    if (
+      !stubCheckoutEnabled(env.NODE_ENV, env.PAYMENT_PROVIDER, env.STUB_WEBHOOK_ALLOWED)
+    ) {
       set.status = 404;
       return { error: "Not found" };
     }
