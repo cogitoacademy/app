@@ -626,6 +626,52 @@ describe("AdminBookingService", () => {
     });
   });
 
+  describe("adminRefund notifications", () => {
+    test("writes best-effort refund notification to the payer", async () => {
+      const notification = makeNotificationPort();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo: mockRepo(),
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        notification: notification as any,
+      });
+
+      const result = await service.adminRefund("admin1", {
+        paymentId: "pay1",
+        reason: "Admin refund",
+      });
+
+      expect(result.status).toBe("refunded");
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      const params = notification.writeBestEffort.mock.calls[0][0];
+      expect(params).toMatchObject({
+        userId: "u1",
+        category: "refund",
+        severity: "action",
+        emailRequired: true,
+      });
+      expect(params.eventKey).toBe("payment.pay1.refunded.admin");
+    });
+
+    test("skips notification when no port provided", async () => {
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo: mockRepo(),
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.adminRefund("admin1", {
+        paymentId: "pay1",
+        reason: "Admin refund",
+      });
+      expect(result.status).toBe("refunded");
+    });
+  });
+
   describe("listBookings", () => {
     test("returns empty list when no bookings found", async () => {
       const repo = mockRepo();

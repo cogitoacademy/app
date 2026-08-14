@@ -467,6 +467,19 @@ export function createAdminBookingService(deps: {
         actorId: adminId,
       });
 
+      if (notification) {
+        await notification.writeBestEffort({
+          db: tx,
+          userId: payment.userId,
+          category: NOTIFICATION_CATEGORY.REFUND,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Refund processed",
+          body: `Your payment of ${payment.amountIdr ?? 0} IDR has been refunded to your account by an admin.`,
+          eventKey: `payment.${payment.id}.refunded.admin`,
+          emailRequired: true,
+        });
+      }
+
       await auditPort.record({
         db: tx,
         actorId: adminId,
