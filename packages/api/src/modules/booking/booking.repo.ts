@@ -177,6 +177,18 @@ async function findUserEmails(
 }
 
 /**
+ * Resolves registered users by id (used to validate group-series invitees).
+ *
+ * @param conn - the database connection or active transaction
+ * @param userIds - the user ids to look up
+ * @returns the matching user rows
+ */
+async function findUsersByIds(conn: DbOrTx, userIds: string[]) {
+  if (userIds.length === 0) return [];
+  return conn.select({ id: user.id }).from(user).where(inArray(user.id, userIds));
+}
+
+/**
  * Lists participants whose confirmation state is RECONFIRMED for a booking.
  *
  * @param conn - the database connection or active transaction
@@ -812,6 +824,7 @@ export function createBookingRepo(db: DbType) {
     findParticipant,
     findConfirmedParticipants,
     findUserEmails,
+    findUsersByIds,
     findReconfirmedParticipants,
     insertBooking,
     updateBookingCancellationReason,

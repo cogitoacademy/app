@@ -51,6 +51,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
     findUserEmails: mock(async () => []),
+    findUsersByIds: mock(async () => []),
     findReconfirmedParticipants: mock(async () => []),
     insertRescheduleProposal: mock(async () => {}),
     findPendingRescheduleProposal: mock(async () => null),
@@ -793,6 +794,86 @@ describe("BookingService", () => {
       await expect(
         service.createSeries("student1", seriesInput),
       ).rejects.toThrow(BookingConflictError);
+    });
+  });
+
+  describe("createGroupSeries (FR-20)", () => {
+    const groupSeriesInput = {
+      tutorId: "tutor1",
+      availabilitySlotId: "slot1",
+      modality: "online" as const,
+      targetGroupSize: 3,
+      inviteeUserIds: ["student2", "student3"],
+      sessions: [
+        {
+          scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          scheduledEndAt: new Date(
+            Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000,
+          ),
+        },
+        {
+          scheduledStartAt: new Date(Date.now() + 96 * 60 * 60 * 1000),
+          scheduledEndAt: new Date(
+            Date.now() + 96 * 60 * 60 * 1000 + 90 * 60 * 1000,
+          ),
+        },
+      ],
+      timezone: "Asia/Jakarta",
+    };
+
+    test("throws BookingNotFoundError when an invitee is not a registered user", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findUsersByIds: mock(async () => [{ id: "student2" }]),
+        },
+      });
+
+      await expect(
+        service.createGroupSeries("student1", groupSeriesInput),
+      ).rejects.toThrow(BookingNotFoundError);
+    });
+
+    test("creates a group series with proposer package hold, invitee rows, and per-session holds", async () => {
+      const booking = makeBooking({ type: "series", targetGroupSize: 3 });
+      const { service, repo, wallet, notification } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findOverlappingBookings: mock(async () => []),
+          findUsersByIds: mock(async () => [
+            { id: "student2" },
+            { id: "student3" },
+          ]),
+          insertBooking: mock(async () => booking),
+        },
+      });
+
+      const result = await service.createGroupSeries(
+        "student1",
+        groupSeriesInput,
+      );
+
+      // Package = perSession (42) × 2 sessions; proposer holds up front.
+      expect(wallet.hold).toHaveBeenCalledTimes(1);
+      expect(wallet.hold.mock.calls[0][1].amount).toBe(84);
+      expect(repo.insertBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          type: "series",
+          targetGroupSize: 3,
+          confirmedHeadcount: 1,
+          currentState: "awaiting_participant_confirmation",
+          holdAmount: 84,
+        }),
+      );
+      expect(repo.insertParticipant).toHaveBeenCalledTimes(3);
+      expect(repo.insertBookingSession).toHaveBeenCalledTimes(2);
+      // One invite + tutor-request notification.
+      expect(notification.write).toHaveBeenCalledTimes(2);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(result.disclaimer).toContain("Group series bookings");
     });
   });
 

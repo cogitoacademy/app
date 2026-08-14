@@ -3,6 +3,7 @@ import {
   createSoloInput,
   createGroupInput,
   createSeriesInput,
+  createGroupSeriesInput,
   getBookingInput,
   listMineInput,
   listSessionsInput,
@@ -149,6 +150,18 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(createSeriesInput)
       .handler(handler.createSeries),
+
+    createGroupSeries: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/group-series/create",
+        tags: ["Bookings"],
+        summary: "Create a group series booking",
+        description:
+          "Creates a multi-session group series (FR-20): the proposer holds the full package up front and invitees accept the whole series",
+      })
+      .input(createGroupSeriesInput)
+      .handler(handler.createGroupSeries),
 
     confirmInvite: protectedProcedure
       .route({
