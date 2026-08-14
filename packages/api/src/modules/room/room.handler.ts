@@ -29,7 +29,7 @@ export function createRoomHandler(room: RoomService) {
     },
 
     assign: async ({
-      context: _context,
+      context,
       input,
     }: {
       context: Context;
@@ -42,6 +42,7 @@ export function createRoomHandler(room: RoomService) {
             input.roomId,
             input.startAt,
             input.endAt,
+            context.session?.user.id,
           ),
         mapRoomError,
       );

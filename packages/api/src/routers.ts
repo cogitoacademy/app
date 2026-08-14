@@ -19,6 +19,7 @@ import { createNotificationRouter } from "./modules/notification/notification.ro
 import { createAdminBookingRouter } from "./modules/admin-booking/admin-booking.router";
 import { createRefundRouter } from "./modules/refund/refund.router";
 import { createSupportRouter } from "./modules/support/support.router";
+import { createUploadRouter } from "./modules/upload/upload.router";
 import { handlers } from "./services";
 
 const authRouter = createAuthRouter(handlers.auth);
@@ -37,6 +38,7 @@ const notificationRouter = createNotificationRouter(handlers.notification);
 const adminBookingRouter = createAdminBookingRouter(handlers.adminBooking);
 const refundRouter = createRefundRouter(handlers.refund);
 const supportRouter = createSupportRouter(handlers.support);
+const uploadRouter = createUploadRouter(handlers.upload);
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -66,6 +68,7 @@ export const appRouter = {
   adminBooking: adminBookingRouter,
   refund: refundRouter,
   support: supportRouter,
+  upload: uploadRouter,
 };
 
 export type AppRouter = typeof appRouter;

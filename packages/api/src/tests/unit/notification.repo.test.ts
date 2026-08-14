@@ -6,6 +6,10 @@ import {
   findUserEmail,
   insertDispatch,
   updateDispatchStatus,
+  updateDispatchStatusById,
+  listQueuedDispatches,
+  incrementDispatchAttempts,
+  findNotificationById,
   listNotifications,
   countUnread,
   updateReadStatus,
@@ -144,6 +148,78 @@ describe("updateDispatchStatus", () => {
     expect(updateFn).toHaveBeenCalledTimes(1);
     expect(set).toHaveBeenCalledTimes(1);
     expect(where).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("updateDispatchStatusById", () => {
+  test("updates dispatch status by row id", async () => {
+    const where = mock(async () => {});
+    const set = mock(() => ({ where }));
+    const updateFn = mock(() => ({ set }));
+    const conn = { update: updateFn } as any;
+
+    await updateDispatchStatusById(conn, "d1", "sent");
+
+    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("listQueuedDispatches", () => {
+  test("returns queued rows ordered oldest first with a limit", async () => {
+    const rows = [{ id: "d1" }, { id: "d2" }];
+    const limit = mock(async () => rows);
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select } as any;
+
+    const result = await listQueuedDispatches(conn, 25);
+    expect(result).toEqual(rows);
+    expect(where).toHaveBeenCalledTimes(1);
+    expect(orderBy).toHaveBeenCalledTimes(1);
+    expect(limit).toHaveBeenCalledWith(25);
+  });
+});
+
+describe("incrementDispatchAttempts", () => {
+  test("increments attempts and records the last error", async () => {
+    const where = mock(async () => {});
+    const set = mock(() => ({ where }));
+    const updateFn = mock(() => ({ set }));
+    const conn = { update: updateFn } as any;
+
+    await incrementDispatchAttempts(conn, "d1", "boom");
+
+    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("findNotificationById", () => {
+  test("returns the row when found", async () => {
+    const limit = mock(async () => [{ id: "n1", title: "T" }]);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select } as any;
+
+    const result = await findNotificationById(conn, "n1");
+    expect(result).toEqual({ id: "n1", title: "T" });
+  });
+
+  test("returns null when not found", async () => {
+    const limit = mock(async () => []);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select } as any;
+
+    const result = await findNotificationById(conn, "missing");
+    expect(result).toBeNull();
   });
 });
 

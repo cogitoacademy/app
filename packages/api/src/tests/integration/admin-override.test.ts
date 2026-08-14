@@ -224,6 +224,9 @@ describe("Admin Override happy path", () => {
     expect(updated.currentState).toBe("cancelled");
     expect(updated.previousState).toBe("awaiting_tutor_review");
     expect(updated.overrideMeta).toMatchObject({ category: "force_cancel" });
+    // P1-5 regression: the response must reflect the post-override holdAmount
+    // (released to 0), not the stale pre-update value.
+    expect(updated.holdAmount).toBe(0);
 
     const [after] = await db
       .select()

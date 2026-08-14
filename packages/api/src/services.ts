@@ -21,6 +21,8 @@ import { createAdminBookingModule } from "./modules/admin-booking";
 import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
 import { createSupportModule } from "./modules/support";
+import { createUploadModule } from "./modules/upload";
+import { createStorage } from "./lib/storage";
 
 import type { AuditPort } from "./modules/audit/audit.service";
 import type { PricingPort } from "./modules/pricing/pricing.service";
@@ -57,6 +59,8 @@ import type { AdminBookingHandler } from "./modules/admin-booking/admin-booking.
 import type { RefundHandler } from "./modules/refund/refund.handler";
 import type { SupportService } from "./modules/support/support.service";
 import type { SupportHandler } from "./modules/support/support.handler";
+import type { UploadService } from "./modules/upload/upload.service";
+import type { UploadHandler } from "./modules/upload/upload.handler";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -76,6 +80,7 @@ export interface ServiceRegistry {
   adminBooking: AdminBookingService;
   refund: RefundService;
   support: SupportService;
+  upload: UploadService;
 }
 
 export interface HandlerRegistry {
@@ -95,6 +100,7 @@ export interface HandlerRegistry {
   payment: PaymentHandler;
   room: RoomHandler;
   support: SupportHandler;
+  upload: UploadHandler;
 }
 
 function createServices() {
@@ -171,13 +177,20 @@ function createServices() {
     audit: audit.service,
     notification: notification.service,
   });
-  const room = createRoomModule({ db });
+  const room = createRoomModule({
+    db,
+    bookingPort: booking.service,
+    notificationPort: notification.service,
+  });
 
   const payment = createPaymentModule({
     db,
     wallet: wallet.service,
+    provider: env.PAYMENT_PROVIDER,
     xenditConfig:
-      env.XENDIT_SECRET_KEY && env.XENDIT_WEBHOOK_TOKEN
+      env.PAYMENT_PROVIDER === "xendit" &&
+      env.XENDIT_SECRET_KEY &&
+      env.XENDIT_WEBHOOK_TOKEN
         ? {
             secretKey: env.XENDIT_SECRET_KEY!,
             webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
@@ -187,6 +200,7 @@ function createServices() {
           }
         : undefined,
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
+    notification: notification.service,
   });
 
   const refund = createRefundModule({
@@ -209,6 +223,17 @@ function createServices() {
     notification: notification.service,
   });
 
+  const upload = createUploadModule({
+    storage: createStorage({
+      R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
+      R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
+      R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
+      R2_BUCKET: env.R2_BUCKET,
+      R2_PUBLIC_URL: env.R2_PUBLIC_URL,
+      UPLOAD_DIR: env.UPLOAD_DIR,
+    }),
+  });
+
   const services: ServiceRegistry = {
     audit: audit.service,
     pricing: pricing.service,
@@ -227,6 +252,7 @@ function createServices() {
     adminBooking: adminBooking.service,
     refund: refund.service,
     support: support.service,
+    upload: upload.service,
   };
 
   const handlers: HandlerRegistry = {
@@ -246,6 +272,7 @@ function createServices() {
     payment: payment.handler,
     room: room.handler,
     support: support.handler,
+    upload: upload.handler,
   };
 
   return { services, handlers, redis };

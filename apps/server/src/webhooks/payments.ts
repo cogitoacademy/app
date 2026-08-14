@@ -2,16 +2,27 @@ import { Elysia, type Context as ElysiaContext } from "elysia";
 import { services } from "@cogito-app/api";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
 import { log } from "@cogito-app/api/lib/logger";
+import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
 import { env } from "@cogito-app/env/server";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
+const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
-export function ipAllowed(request: Request, allowlist: string[]): boolean {
+export function stubCheckoutEnabled(
+  nodeEnv: string,
+  provider: string,
+  allowed: boolean,
+): boolean {
+  return nodeEnv !== "production" && provider === "stub" && allowed === true;
+}
+
+export function ipAllowed(
+  request: Request,
+  allowlist: string[],
+  trustProxy: boolean,
+): boolean {
   if (allowlist.length === 0) return true;
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "";
+  const ip = getClientIp(request, trustProxy);
   return allowlist.some((entry) => entry === ip);
 }
 
@@ -33,20 +44,27 @@ function validateWebhookTimestamp(request: Request): void {
 export function paymentsWebhook(app: Elysia) {
   app.post(
     "/webhooks/payments/:provider",
-    async ({ request, body, params, set }: ElysiaContext) => {
+    async ({ request, params, set }: ElysiaContext) => {
       const provider = params.provider as string;
       const signature =
         provider === "xendit"
           ? (request.headers.get("x-callback-token") ?? "")
           : (request.headers.get("x-webhook-signature") ?? "");
-      const rawBody = typeof body === "string" ? body : JSON.stringify(body);
-      const idempotencyKey = `${provider}:${request.headers.get("x-event-id") ?? crypto.randomUUID()}`;
+
+      const { body: rawBody, tooLarge } = await readBodyWithLimit(
+        request,
+        MAX_WEBHOOK_BODY_BYTES,
+      );
+      if (tooLarge) {
+        set.status = 413;
+        return { error: "Request body too large" };
+      }
 
       const allowlist = (env.WEBHOOK_ALLOWED_IPS ?? "")
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (!ipAllowed(request, allowlist)) {
+      if (!ipAllowed(request, allowlist, env.TRUST_PROXY)) {
         set.status = 403;
         return { error: "Forbidden" };
       }
@@ -59,11 +77,6 @@ export function paymentsWebhook(app: Elysia) {
         hasSignature: !!signature,
       });
 
-      if (await webhookIdempotency.isProcessed(idempotencyKey)) {
-        set.status = 200;
-        return { ok: true, idempotent: true };
-      }
-
       try {
         const payload = await services.payment.provider.verifyWebhook(
           rawBody,
@@ -72,19 +85,30 @@ export function paymentsWebhook(app: Elysia) {
 
         validateWebhookTimestamp(request);
 
-        await services.payment.confirmFromWebhook({
-          provider: params.provider as string,
-          providerReference: payload.providerReference,
-          providerEventId: payload.providerEventId,
-          status: payload.status,
-          receiptUrl: payload.receiptUrl,
-          failureReason: payload.failureReason,
-        });
+        const idempotencyKey = `${provider}:${payload.providerEventId || "no-event-id"}`;
+        if (!(await webhookIdempotency.claim(idempotencyKey))) {
+          set.status = 200;
+          return { ok: true, idempotent: true };
+        }
 
-        await webhookIdempotency.markProcessed(idempotencyKey, { ok: true });
+        try {
+          await services.payment.confirmFromWebhook({
+            provider: params.provider as string,
+            providerReference: payload.providerReference,
+            providerEventId: payload.providerEventId,
+            status: payload.status,
+            receiptUrl: payload.receiptUrl,
+            failureReason: payload.failureReason,
+          });
 
-        set.status = 200;
-        return { ok: true };
+          await webhookIdempotency.markProcessed(idempotencyKey, { ok: true });
+
+          set.status = 200;
+          return { ok: true };
+        } catch (error) {
+          await webhookIdempotency.release(idempotencyKey);
+          throw error;
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
@@ -123,11 +147,17 @@ export function paymentsWebhook(app: Elysia) {
         return { error: "Webhook processing failed" };
       }
     },
-    { parse: "text" },
+    { parse: "none" },
   );
 
   app.get("/webhooks/payments/stub/checkout", async ({ query, set }) => {
-    if (env.NODE_ENV === "production" || env.PAYMENT_PROVIDER !== "stub") {
+    if (
+      !stubCheckoutEnabled(
+        env.NODE_ENV,
+        env.PAYMENT_PROVIDER,
+        env.STUB_WEBHOOK_ALLOWED,
+      )
+    ) {
       set.status = 404;
       return { error: "Not found" };
     }

@@ -293,20 +293,20 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-| Plan                                                              | Branch                             | Status                                                                             |
-| ----------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------- |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                                                               |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                                                               |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                                                               |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                                                               |
-| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                               |
-| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                               |
+| Plan                                                              | Branch                             | Status                                                                                |
+| ----------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                                                                  |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                                                                  |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                                                                  |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                                                                  |
+| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                                  |
+| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                                  |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending |
-| `docs/plans/active/PRD-GAPS-SPEC.md`                              | main (merged)                      | Merged to main (#36, #39–#43) — 13/18 done, G13–G15 partial                          |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Active — 4 closed, 3 partial, 10 open                                                |
-| `docs/plans/active/BACKEND-HARDENING-PHASE2.md`                   | main (targets 5 PRs)               | Planned — not implemented (5 PRs)                                                    |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                         |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                               |
+| `docs/plans/active/PRD-GAPS-SPEC.md`                              | main (merged)                      | Merged to main (#36, #39–#43) — 13/18 done, G13–G15 partial                           |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Active — 4 closed, 3 partial, 10 open                                                 |
+| `docs/plans/active/BACKEND-HARDENING-PHASE2.md`                   | main (targets 5 PRs)               | Planned — not implemented (5 PRs)                                                     |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                            |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                                  |
 
 ### Execution Order
 
@@ -453,13 +453,13 @@ Status: **Open** = not yet implemented (verified at git HEAD `9b7df5e`).
 
 > Note: these B-IDs are distinct from the B1–B6/N-series IDs in the production-readiness plan above (same letter, different findings).
 
-| ID  | Finding                                                                                                                                             | Severity | Status |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| ID  | Finding                                                                                                                                                                                           | Severity | Status |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
 | B3  | Group booking with 2 ≤ headcount < target EXPIRES at the 12h deadline instead of repricing + reconfirming (FR-16/TC-18) — `expireBookings` `booking.service.ts:2009-2048` has no headcount branch | High     | Open   |
-| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                | Medium   | Open   |
-| B6  | No payment/refund notifications at all (notification matrix rows unfulfilled) — `payment.service.ts` writes none                                     | Medium   | Open   |
-| B8  | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34) — `booking.service.ts:1881` | Medium   | Open   |
-| B9  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules) — `booking.service.ts:1134-1140`                                          | Low-Med  | Open   |
+| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                                                            | Medium   | Open   |
+| B6  | No payment/refund notifications at all (notification matrix rows unfulfilled) — `payment.service.ts` writes none                                                                                  | Medium   | Open   |
+| B8  | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34) — `booking.service.ts:1881`                                            | Medium   | Open   |
+| B9  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules) — `booking.service.ts:1134-1140`                                                                                      | Low-Med  | Open   |
 
 **Security open items (planned in BACKEND-HARDENING-PHASE2.md PRs 1 + 5):**
 

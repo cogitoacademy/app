@@ -21,7 +21,13 @@ import { evlog } from "evlog/elysia";
 
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
 import { enrichOpenAPISpec, openApiTags, scalarHtml } from "./openapi";
-import { generateRequestId } from "@cogito-app/api/lib/request-id";
+import {
+  generateRequestId,
+  getClientIp,
+  isValidUploadKey,
+  openApiAccessDenied,
+  readBodyWithLimit,
+} from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { healthCheck } from "@cogito-app/api/lib/db-health";
 
@@ -37,6 +43,18 @@ const paymentRateLimit = rateLimit({
   windowMs: 60_000,
   maxRequests: 5,
   keyPrefix: "payment",
+  redis,
+});
+const inviteRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 10,
+  keyPrefix: "invite",
+  redis,
+});
+const bookingRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "booking",
   redis,
 });
 
@@ -166,10 +184,7 @@ export function createServer() {
     .onRequest(async ({ request }) => {
       const url = new URL(request.url);
       const path = url.pathname;
-      const ip =
-        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        request.headers.get("x-real-ip") ??
-        "unknown";
+      const ip = getClientIp(request, env.TRUST_PROXY);
 
       if (
         path.startsWith("/api/auth/sign-in/") ||
@@ -199,6 +214,32 @@ export function createServer() {
           });
         }
       }
+
+      if (path.startsWith("/rpc/invite.verify")) {
+        const { allowed, retryAfterMs } = await inviteRateLimit(ip);
+        if (!allowed) {
+          return new Response(JSON.stringify({ error: "Too many requests" }), {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+            },
+          });
+        }
+      }
+
+      if (path.startsWith("/rpc/booking.")) {
+        const { allowed, retryAfterMs } = await bookingRateLimit(ip);
+        if (!allowed) {
+          return new Response(JSON.stringify({ error: "Too many requests" }), {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+            },
+          });
+        }
+      }
     })
     .all("/api/auth/*", async (context) => {
       const { request, status } = context;
@@ -210,13 +251,33 @@ export function createServer() {
     .all(
       "/rpc*",
       async (context) => {
+        const { body, tooLarge } = await readBodyWithLimit(
+          context.request,
+          MAX_BODY_BYTES,
+        );
+        if (tooLarge) {
+          return new Response(
+            JSON.stringify({ error: "Request body too large" }),
+            {
+              status: 413,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+        const request = body
+          ? new Request(context.request.url, {
+              method: context.request.method,
+              headers: context.request.headers,
+              body,
+            })
+          : context.request;
         const ctx = await createContext({ context });
         if (ctx.session) {
           identifyUserFromSession(context.log, ctx.session, {
             maskEmail: true,
           });
         }
-        const { response } = await rpcHandler.handle(context.request, {
+        const { response } = await rpcHandler.handle(request, {
           prefix: "/rpc",
           context: ctx,
         });
@@ -224,14 +285,37 @@ export function createServer() {
       },
       { parse: "none" },
     )
+    .get("/uploads/*", async ({ params, set }) => {
+      if (env.R2_PUBLIC_URL) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      const key = (params["*"] as string) ?? "";
+      if (!isValidUploadKey(key)) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      const file = Bun.file(`${env.UPLOAD_DIR}/${key}`);
+      if (!(await file.exists())) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      return new Response(file);
+    })
     .get("/openapi.json", async ({ request }) => {
-      if (env.NODE_ENV === "production")
-        return new Response("Not Found", { status: 404 });
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+      if (denied) return denied;
       return Response.json(await generateOpenAPISpec(request));
     })
-    .get("/api-reference", () => {
-      if (env.NODE_ENV === "production")
-        return new Response("Not Found", { status: 404 });
+    .get("/api-reference", async ({ request }) => {
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+      if (denied) return denied;
       return new Response(scalarHtml(), {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
@@ -239,6 +323,11 @@ export function createServer() {
     .all(
       "/api-reference*",
       async (context) => {
+        const session = await auth.api.getSession({
+          headers: context.request.headers,
+        });
+        const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+        if (denied) return denied;
         const ctx = await createContext({ context });
         if (ctx.session) {
           identifyUserFromSession(context.log, ctx.session, {

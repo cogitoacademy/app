@@ -1,4 +1,5 @@
 import type { DbOrTx } from "../../lib/tx";
+import type { DbType } from "../../lib/db";
 import type { NotificationRepo } from "./notification.repo";
 import { NotificationNotFoundError } from "./notification.errors";
 import {
@@ -98,17 +99,28 @@ const EMAIL_SUPPORTED_CATEGORIES: Set<string> = new Set([
 
 export type NotificationService = ReturnType<typeof createNotificationService>;
 
+export interface DispatchResult {
+  sent: number;
+  failed: number;
+}
+
+export type DispatchConsumer = (limit?: number) => Promise<DispatchResult>;
+
 /**
- * Creates the notification service for in-app and best-effort email notifications.
+ * Creates the notification service for in-app and outbox-based email notifications.
  *
  * @param repo - the notification repository
- * @param emailPort - optional email sender used for action/critical severity notifications
- * @returns an InAppNotificationPort with write/list/read-status methods
+ * @param emailPort - optional email sender used by the dispatch consumer
+ * @param opts - optional deps; `db` is required by the `dispatchQueuedEmails` consumer
+ * @returns an InAppNotificationPort with write/list/read-status methods plus the outbox consumer
  */
 export function createNotificationService(
   repo: NotificationRepo,
   emailPort?: NotificationEmailPort,
-): InAppNotificationPort {
+  opts?: { db?: DbType },
+): InAppNotificationPort & { dispatchQueuedEmails: DispatchConsumer } {
+  const db = opts?.db;
+
   async function writeInternal(params: NotificationWriteParams): Promise<void> {
     const conn = params.db;
 
@@ -139,44 +151,14 @@ export function createNotificationService(
     ) {
       const recipientEmail = await repo.findUserEmail(conn, params.userId);
 
-      if (
-        emailPort &&
-        recipientEmail &&
-        EMAIL_SUPPORTED_CATEGORIES.has(params.category)
-      ) {
+      if (recipientEmail && EMAIL_SUPPORTED_CATEGORIES.has(params.category)) {
         await repo.insertDispatch(conn, {
           notificationId: inserted.id,
           channel: "email",
           recipientEmail,
           status: "queued",
         });
-
-        await emailPort
-          .send({
-            to: recipientEmail,
-            subject: params.title,
-            html: params.body,
-            category: params.category as
-              | "booking"
-              | "payment"
-              | "refund"
-              | "schedule"
-              | "override",
-          })
-          .then(async () => {
-            await repo.updateDispatchStatus(conn, inserted.id, "sent");
-          })
-          .catch(async (error) => {
-            await repo.updateDispatchStatus(conn, inserted.id, "failed");
-            log({
-              level: "error",
-              action: "notification_email_dispatch_failed",
-              error: { message: String(error) },
-              notificationId: inserted.id,
-              userId: params.userId,
-            });
-          });
-      } else if (emailPort && recipientEmail) {
+      } else if (recipientEmail) {
         log({
           level: "debug",
           action: "notification_email_skipped_category",
@@ -216,6 +198,75 @@ export function createNotificationService(
         category: params.category,
       });
     });
+  }
+
+  /**
+   * Consumes queued email dispatch rows, sending each via the email port.
+   *
+   * Runs outside any DB transaction: each queued row is sent best-effort and its
+   * status is updated to sent/suppressed on success or failed (with an incremented
+   * attempt count) on error.
+   *
+   * @param limit - the maximum number of queued rows to process in one run
+   * @returns a summary of sent and failed dispatches
+   */
+  async function dispatchQueuedEmails(
+    limit = 50,
+  ): Promise<{ sent: number; failed: number }> {
+    if (!db) {
+      log({
+        level: "error",
+        action: "notification_email_dispatch_no_db",
+        message: "dispatchQueuedEmails requires a db connection",
+      });
+      return { sent: 0, failed: 0 };
+    }
+
+    const rows = await repo.listQueuedDispatches(db, limit);
+    let sent = 0;
+    let failed = 0;
+
+    for (const row of rows) {
+      if (!emailPort) {
+        failed++;
+        continue;
+      }
+      try {
+        const notif = await repo.findNotificationById(db, row.notificationId);
+        if (!notif) {
+          await repo.updateDispatchStatusById(db, row.id, "suppressed");
+          continue;
+        }
+        const res = await emailPort.send({
+          to: row.recipientEmail,
+          subject: notif.title,
+          html: notif.body,
+          category: notif.category as
+            | "booking"
+            | "payment"
+            | "refund"
+            | "schedule"
+            | "override",
+        });
+        if ("skipped" in res && res.skipped) {
+          await repo.updateDispatchStatusById(db, row.id, "suppressed");
+        } else {
+          await repo.updateDispatchStatusById(db, row.id, "sent");
+          sent++;
+        }
+      } catch (error) {
+        failed++;
+        await repo.incrementDispatchAttempts(db, row.id, String(error));
+        log({
+          level: "error",
+          action: "notification_email_dispatch_failed",
+          error: { message: String(error) },
+          dispatchId: row.id,
+        });
+      }
+    }
+
+    return { sent, failed };
   }
 
   /**
@@ -284,5 +335,6 @@ export function createNotificationService(
     getUnreadCount,
     markAsRead,
     markAllAsRead,
+    dispatchQueuedEmails,
   };
 }

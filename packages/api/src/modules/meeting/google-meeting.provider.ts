@@ -1,5 +1,5 @@
 import { google } from "googleapis";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { meetingEvent } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import type {
@@ -225,6 +225,191 @@ export function createGoogleMeetingProvider(
     );
   }
 
+  async function updateEventWithOauth(
+    accessToken: string,
+    eventId: string,
+    start: Date,
+    end: Date,
+    timeoutMs: number,
+  ): Promise<GoogleCalendarEvent> {
+    const calendarId = encodeURIComponent(config.calendarId);
+    const encodedEventId = encodeURIComponent(eventId);
+    const current = await getEventWithOauth(accessToken, eventId, timeoutMs);
+    return fetchJson<GoogleCalendarEvent>(
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
+      {
+        method: "PUT",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          ...current,
+          start: { dateTime: start.toISOString() },
+          end: { dateTime: end.toISOString() },
+        }),
+      },
+      timeoutMs,
+    );
+  }
+
+  async function deleteEventWithOauth(
+    accessToken: string,
+    eventId: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    const calendarId = encodeURIComponent(config.calendarId);
+    const encodedEventId = encodeURIComponent(eventId);
+    await fetchJson<unknown>(
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
+      {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${accessToken}` },
+      },
+      timeoutMs,
+    );
+  }
+
+  /**
+   * Finds the newest provider-created (google_meet) meeting event row for a
+   * booking. Rows that were never created (failed/manual fallback) or already
+   * cancelled have no live provider event to update/delete.
+   */
+  async function findLiveProviderEvent(bookingId: string) {
+    const [row] = await db
+      .select()
+      .from(meetingEvent)
+      .where(
+        and(
+          eq(meetingEvent.bookingId, bookingId),
+          eq(meetingEvent.provider, "google_meet"),
+        ),
+      )
+      .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
+      .limit(1);
+    if (!row || !row.externalEventId) return null;
+    if (row.status === "failed" || row.status === "cancelled") return null;
+    return row;
+  }
+
+  async function updateEvent(
+    bookingId: string,
+    changes: { startAt?: Date; endAt?: Date },
+  ): Promise<void> {
+    if (!changes.startAt && !changes.endAt) return;
+    const startedAt = Date.now();
+    const row = await findLiveProviderEvent(bookingId);
+    if (!row) return;
+
+    try {
+      await googleMeetBreaker.execute(async () => {
+        const TIMEOUT_MS = 30_000;
+        const oauthAccessToken =
+          config.authType === "oauth_refresh_token"
+            ? await refreshOAuthAccessToken(TIMEOUT_MS)
+            : null;
+        if (config.authType === "oauth_refresh_token") {
+          await updateEventWithOauth(
+            oauthAccessToken!,
+            row.externalEventId!,
+            changes.startAt ?? new Date(),
+            changes.endAt ?? new Date(),
+            TIMEOUT_MS,
+          );
+        } else {
+          await withTimeout(
+            Promise.resolve(
+              calendar!.events.update({
+                calendarId: config.calendarId,
+                eventId: row.externalEventId!,
+                requestBody: {
+                  start: {
+                    dateTime: (changes.startAt ?? new Date()).toISOString(),
+                  },
+                  end: {
+                    dateTime: (changes.endAt ?? new Date()).toISOString(),
+                  },
+                },
+              }),
+            ).then(() => undefined),
+            TIMEOUT_MS,
+            "Google Meet API timeout after 30s",
+          );
+        }
+      });
+      log({
+        level: "info",
+        action: "google_meet_event_updated",
+        bookingId,
+        eventId: row.externalEventId,
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      log({
+        level: "error",
+        action: "google_meet_update_failed",
+        bookingId,
+        durationMs: Date.now() - startedAt,
+        error: { message: String(error) },
+      });
+    }
+  }
+
+  async function cancelEvent(bookingId: string): Promise<void> {
+    const startedAt = Date.now();
+    const row = await findLiveProviderEvent(bookingId);
+    if (!row) return;
+
+    try {
+      await googleMeetBreaker.execute(async () => {
+        const TIMEOUT_MS = 30_000;
+        const oauthAccessToken =
+          config.authType === "oauth_refresh_token"
+            ? await refreshOAuthAccessToken(TIMEOUT_MS)
+            : null;
+        if (config.authType === "oauth_refresh_token") {
+          await deleteEventWithOauth(
+            oauthAccessToken!,
+            row.externalEventId!,
+            TIMEOUT_MS,
+          );
+        } else {
+          await withTimeout(
+            Promise.resolve(
+              calendar!.events.delete({
+                calendarId: config.calendarId,
+                eventId: row.externalEventId!,
+              }),
+            ).then(() => undefined),
+            TIMEOUT_MS,
+            "Google Meet API timeout after 30s",
+          );
+        }
+      });
+
+      await db
+        .update(meetingEvent)
+        .set({ status: "cancelled" })
+        .where(eq(meetingEvent.id, row.id));
+
+      log({
+        level: "info",
+        action: "google_meet_event_cancelled",
+        bookingId,
+        eventId: row.externalEventId,
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      log({
+        level: "error",
+        action: "google_meet_cancel_failed",
+        bookingId,
+        durationMs: Date.now() - startedAt,
+        error: { message: String(error) },
+      });
+    }
+  }
+
   async function waitForMeetUrl(
     eventId: string,
     accessToken?: string,
@@ -378,7 +563,7 @@ export function createGoogleMeetingProvider(
     }
   }
 
-  return { createEvent };
+  return { createEvent, updateEvent, cancelEvent };
 }
 
 export function createGoogleMeetingProviderWithFallback(
@@ -423,5 +608,9 @@ export function createGoogleMeetingProviderWithFallback(
     return result;
   }
 
-  return { createEvent };
+  return {
+    createEvent,
+    updateEvent: googleProvider.updateEvent,
+    cancelEvent: googleProvider.cancelEvent,
+  };
 }

@@ -96,6 +96,39 @@ export function createSupportService(deps: {
     });
   }
 
+  /**
+   * Auto-escalates open support tickets whose SLA deadline has passed.
+   *
+   * Called by the `escalate-support-tickets` scheduler job. Each overdue ticket
+   * is moved to `in_progress` and an audit entry records the escalation.
+   *
+   * @returns the number of tickets escalated
+   */
+  async function escalatePastSlaTickets(): Promise<{ escalated: number }> {
+    const overdue = await supportRepo.listPastSla(db);
+    let escalated = 0;
+
+    for (const ticket of overdue) {
+      await db.transaction(async (tx) => {
+        await supportRepo.markEscalated(tx, ticket.id);
+        await audit.record({
+          db: tx,
+          actorId: null,
+          actorType: ACTOR_TYPE.SYSTEM,
+          action: "support_ticket_escalated",
+          targetId: ticket.id,
+          targetType: "support_ticket",
+          beforeState: { status: ticket.status },
+          afterState: { status: "in_progress" },
+          details: { slaDeadline: ticket.slaDeadline.toISOString() },
+        });
+      });
+      escalated++;
+    }
+
+    return { escalated };
+  }
+
   async function adminResolveTicket(adminId: string, input: AdminResolveInput) {
     const existing = await supportRepo.findById(db, input.ticketId);
     if (!existing) throw new SupportTicketNotFoundError(input.ticketId);
@@ -138,7 +171,13 @@ export function createSupportService(deps: {
     });
   }
 
-  return { createTicket, listTickets, adminList, adminResolveTicket };
+  return {
+    createTicket,
+    listTickets,
+    adminList,
+    adminResolveTicket,
+    escalatePastSlaTickets,
+  };
 }
 
 export type SupportService = ReturnType<typeof createSupportService>;

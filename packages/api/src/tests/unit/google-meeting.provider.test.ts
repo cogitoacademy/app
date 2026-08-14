@@ -56,6 +56,14 @@ const mockCalendarEventsGet = mock(async () => ({
     },
   },
 }));
+const mockCalendarEventsUpdate = mock(async () => ({
+  data: {
+    id: "evt_123",
+    start: { dateTime: "2030-01-01T10:00:00.000Z" },
+    end: { dateTime: "2030-01-01T11:00:00.000Z" },
+  },
+}));
+const mockCalendarEventsDelete = mock(async () => ({ data: "" }));
 
 mock.module("googleapis", () => ({
   google: {
@@ -75,6 +83,8 @@ mock.module("googleapis", () => ({
       events: {
         insert: mockCalendarEventsInsert,
         get: mockCalendarEventsGet,
+        update: mockCalendarEventsUpdate,
+        delete: mockCalendarEventsDelete,
       },
     }),
   },
@@ -365,6 +375,124 @@ describe("createGoogleMeetingProviderWithFallback", () => {
     );
     expect(result.provider).toBe("manual");
     expect(result.status).toBe("manual");
+  });
+});
+
+describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
+  const config = {
+    authType: "service_account" as const,
+    clientEmail: "test@example.com",
+    privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+    calendarId: "primary",
+  };
+
+  function makeSelectDb(row: unknown) {
+    return {
+      select: mock(() => ({
+        from: mock(() => ({
+          where: mock(() => ({
+            orderBy: mock(() => ({
+              limit: mock(async () => (row ? [row] : [])),
+            })),
+          })),
+        })),
+      })),
+      update: mock(() => ({
+        set: mock(() => ({ where: mock(async () => []) })),
+      })),
+      insert: mock(() => ({
+        values: mock(() => ({ returning: mock(async () => []) })),
+      })),
+    } as any;
+  }
+
+  const liveRow = {
+    id: "me1",
+    bookingId: "b1",
+    provider: "google_meet",
+    externalEventId: "evt_123",
+    meetingUrl: "https://meet.google.com/abc",
+    status: "created",
+    errorReason: null,
+  };
+
+  beforeEach(() => {
+    mockCalendarEventsUpdate.mockClear();
+    mockCalendarEventsDelete.mockClear();
+  });
+
+  test("updateEvent moves the provider event start/end", async () => {
+    const db = makeSelectDb(liveRow);
+    const provider = createGoogleMeetingProvider(config, db);
+    const start = new Date("2030-02-01T08:00:00Z");
+    const end = new Date("2030-02-01T09:30:00Z");
+
+    await provider.updateEvent("b1", { startAt: start, endAt: end });
+
+    const call = mockCalendarEventsUpdate.mock.calls.at(-1)?.[0];
+    expect(call?.eventId).toBe("evt_123");
+    expect(call?.calendarId).toBe("primary");
+    expect(call?.requestBody?.start?.dateTime).toBe(start.toISOString());
+    expect(call?.requestBody?.end?.dateTime).toBe(end.toISOString());
+  });
+
+  test("updateEvent is a no-op without a live provider event", async () => {
+    const db = makeSelectDb(null);
+    const provider = createGoogleMeetingProvider(config, db);
+
+    await provider.updateEvent("b1", {
+      startAt: new Date("2030-02-01T08:00:00Z"),
+      endAt: new Date("2030-02-01T09:30:00Z"),
+    });
+
+    expect(mockCalendarEventsUpdate).not.toHaveBeenCalled();
+  });
+
+  test("cancelEvent deletes the provider event and marks the row cancelled", async () => {
+    const db = makeSelectDb(liveRow);
+    const provider = createGoogleMeetingProvider(config, db);
+
+    await provider.cancelEvent("b1");
+
+    expect(mockCalendarEventsDelete).toHaveBeenCalledTimes(1);
+    const call = mockCalendarEventsDelete.mock.calls[0]?.[0];
+    expect(call?.eventId).toBe("evt_123");
+    expect(db.update).toHaveBeenCalledTimes(1);
+    const setMock = db.update.mock.results[0]?.value?.set as ReturnType<
+      typeof mock
+    >;
+    expect(setMock).toHaveBeenCalledWith({ status: "cancelled" });
+  });
+
+  test("cancelEvent is a no-op without a live provider event", async () => {
+    const db = makeSelectDb(null);
+    const provider = createGoogleMeetingProvider(config, db);
+
+    await provider.cancelEvent("b1");
+
+    expect(mockCalendarEventsDelete).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  test("fallback provider update is a no-op; cancel marks the local row cancelled", async () => {
+    const db = makeSelectDb(liveRow);
+    const { createFallbackMeetingProvider } =
+      await import("../../modules/meeting/fallback.provider");
+    const provider = createFallbackMeetingProvider(db);
+
+    await provider.updateEvent("b1", {
+      startAt: new Date("2030-02-01T08:00:00Z"),
+      endAt: new Date("2030-02-01T09:30:00Z"),
+    });
+    await provider.cancelEvent("b1");
+
+    expect(mockCalendarEventsUpdate).not.toHaveBeenCalled();
+    expect(mockCalendarEventsDelete).not.toHaveBeenCalled();
+    expect(db.update).toHaveBeenCalledTimes(1);
+    const setMock = db.update.mock.results[0]?.value?.set as ReturnType<
+      typeof mock
+    >;
+    expect(setMock).toHaveBeenCalledWith({ status: "cancelled" });
   });
 });
 

@@ -1,4 +1,5 @@
 import { meetingEvent } from "@cogito-app/db/schema";
+import { eq } from "drizzle-orm";
 import type { DbOrTx } from "../../lib/tx";
 import type {
   MeetingAttendee,
@@ -37,5 +38,25 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
     return row as typeof meetingEvent.$inferSelect;
   }
 
-  return { createEvent };
+  // Manual links carry no provider-side event: a reschedule is a no-op (the
+  // admin re-assigns a link as needed). On cancellation we still reflect the
+  // terminal state locally so the booking GET stops surfacing the link.
+  async function updateEvent(): Promise<void> {}
+  async function cancelEvent(bookingId: string): Promise<void> {
+    try {
+      await db
+        .update(meetingEvent)
+        .set({ status: "cancelled" })
+        .where(eq(meetingEvent.bookingId, bookingId));
+    } catch (error) {
+      log({
+        level: "error",
+        action: "meeting_manual_cancel_failed",
+        bookingId,
+        error: { message: String(error) },
+      });
+    }
+  }
+
+  return { createEvent, updateEvent, cancelEvent };
 }

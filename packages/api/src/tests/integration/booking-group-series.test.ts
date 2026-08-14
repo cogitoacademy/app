@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   wallet,
+  bookingSession,
+  notification,
   tutorInvite,
   tutorProfile,
   availabilitySlot,
@@ -270,5 +272,183 @@ describe("Booking series flow", () => {
       bookingId,
     });
     expect(sessions.length).toBe(3);
+  });
+});
+
+describe("Booking group series flow (FR-20)", () => {
+  beforeAll(async () => {
+    await resetDatabase();
+  });
+
+  const ts = Date.now() + 9000;
+  const tutorEmail = `tutor.gs.${ts}@cogito.test`;
+  const proposerEmail = `proposer.gs.${ts}@cogito.test`;
+  const invitee1Email = `invitee1.gs.${ts}@cogito.test`;
+  const invitee2Email = `invitee2.gs.${ts}@cogito.test`;
+  let proposerClient: TestClient;
+  let invitee1Client: TestClient;
+  let invitee2Client: TestClient;
+  let tutorClient: TestClient;
+  let tutorId: string;
+  let slotId: string;
+  let proposerId: string;
+  let invitee1Id: string;
+  let invitee2Id: string;
+  let bookingId: string;
+
+  beforeAll(async () => {
+    const tutorData = await createPublishedTutor(tutorEmail, ts);
+    tutorId = tutorData.tutorId;
+    slotId = tutorData.slotId;
+    const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
+    tutorClient = createTestClient(await createTestContext(tutorCookie ?? ""));
+
+    const proposerRes = await signUpAndSignIn(
+      proposerEmail,
+      "Test1234!",
+      "Proposer GS",
+    );
+    proposerClient = createTestClient(
+      await createTestContext(proposerRes.cookie),
+    );
+    const proposerCtx = await createTestContext(proposerRes.cookie);
+    proposerId = proposerCtx.session?.user.id!;
+    await creditWallet(proposerId, 500);
+
+    const i1Res = await signUpAndSignIn(
+      invitee1Email,
+      "Test1234!",
+      "Invitee1 GS",
+    );
+    invitee1Client = createTestClient(await createTestContext(i1Res.cookie));
+    const i1Ctx = await createTestContext(i1Res.cookie);
+    invitee1Id = i1Ctx.session?.user.id!;
+    await creditWallet(invitee1Id, 500);
+
+    const i2Res = await signUpAndSignIn(
+      invitee2Email,
+      "Test1234!",
+      "Invitee2 GS",
+    );
+    invitee2Client = createTestClient(await createTestContext(i2Res.cookie));
+    const i2Ctx = await createTestContext(i2Res.cookie);
+    invitee2Id = i2Ctx.session?.user.id!;
+    await creditWallet(invitee2Id, 500);
+  });
+
+  test("proposer creates a 3-person, 3-session group series with upfront holds", async () => {
+    const sessions = [
+      {
+        scheduledStartAt: new Date(Date.now() + 72 * 3600_000).toISOString(),
+        scheduledEndAt: new Date(Date.now() + 73 * 3600_000).toISOString(),
+      },
+      {
+        scheduledStartAt: new Date(Date.now() + 96 * 3600_000).toISOString(),
+        scheduledEndAt: new Date(Date.now() + 97 * 3600_000).toISOString(),
+      },
+      {
+        scheduledStartAt: new Date(Date.now() + 120 * 3600_000).toISOString(),
+        scheduledEndAt: new Date(Date.now() + 121 * 3600_000).toISOString(),
+      },
+    ];
+
+    const b = await proposerClient.booking.createGroupSeries({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      targetGroupSize: 3,
+      inviteeUserIds: [invitee1Id, invitee2Id],
+      sessions,
+      timezone: "Asia/Jakarta",
+    });
+
+    bookingId = b.id;
+    expect(b.currentState).toBe("awaiting_participant_confirmation");
+    expect(b.type).toBe("series");
+    expect(b.targetGroupSize).toBe(3);
+    expect(b.confirmedHeadcount).toBe(1);
+    expect(b.disclaimer).toContain("Group series bookings");
+
+    // Proposer holds the full package up front: 40 marks × 3 sessions.
+    const [proposerWallet] = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, proposerId));
+    expect(proposerWallet!.heldBalance).toBe(120);
+    expect(proposerWallet!.totalBalance).toBe(500);
+
+    // Each session carries the per-participant per-session amount.
+    const sessionsRows = await db
+      .select()
+      .from(bookingSession)
+      .where(eq(bookingSession.seriesBookingId, bookingId));
+    expect(sessionsRows.length).toBe(3);
+    for (const s of sessionsRows) {
+      expect(s.holdAmount).toBe(40);
+    }
+
+    // Invitation notifications carry the G15 disclaimer per TC-25.
+    const inviteNotifs = await db
+      .select()
+      .from(notification)
+      .where(
+        eq(notification.eventKey, `booking.${bookingId}.invite.${invitee1Id}`),
+      );
+    expect(inviteNotifs.length).toBe(1);
+    expect(inviteNotifs[0]!.body).toContain("Group series bookings");
+  });
+
+  test("invitee confirms the full-series package (hold is the whole package)", async () => {
+    const result = await invitee1Client.booking.confirmInvite({ bookingId });
+    expect(result.confirmedHeadcount).toBe(2);
+
+    const [w] = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, invitee1Id));
+    expect(w!.heldBalance).toBe(120);
+    expect(w!.availableBalance).toBe(380);
+  });
+
+  test("all confirm → tutor accepts → each completed session deducts per participant (P1-8)", async () => {
+    const r = await invitee2Client.booking.confirmInvite({ bookingId });
+    expect(r.confirmedHeadcount).toBe(3);
+
+    const accepted = await tutorClient.tutorActions.acceptBooking({
+      bookingId,
+    });
+    expect(accepted.currentState).toBe("scheduled");
+
+    const sessions = await proposerClient.booking.listSessions({ bookingId });
+    expect(sessions.length).toBe(3);
+
+    // Backdate the sessions so the tutor can complete them.
+    for (const s of sessions) {
+      await db
+        .update(bookingSession)
+        .set({ scheduledStartAt: new Date(Date.now() - 3600_000) })
+        .where(eq(bookingSession.id, s.id));
+    }
+
+    for (const s of sessions) {
+      await tutorClient.tutorActions.completeSession({
+        bookingId,
+        sessionId: s.id,
+      });
+    }
+
+    for (const userId of [proposerId, invitee1Id, invitee2Id]) {
+      const [w] = await db
+        .select()
+        .from(wallet)
+        .where(eq(wallet.userId, userId));
+      // 3 sessions × 40 marks deducted per participant.
+      expect(w!.totalBalance).toBe(500 - 120);
+      expect(w!.heldBalance).toBe(0);
+    }
+
+    const finalBooking = await proposerClient.booking.get({ bookingId });
+    expect(finalBooking.currentState).toBe("completed");
+    expect(finalBooking.holdAmount).toBe(0);
   });
 });

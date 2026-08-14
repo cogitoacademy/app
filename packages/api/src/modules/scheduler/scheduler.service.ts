@@ -10,10 +10,8 @@ export interface SchedulerHandlers {
     autoCancelled: number;
     failed: number;
   }>;
-  onSendNotificationEmail: (data: {
-    notificationId: string;
-    userId: string;
-  }) => Promise<void>;
+  onSendNotificationEmail: () => Promise<{ sent: number; failed: number }>;
+  onEscalateSupportTickets: () => Promise<{ escalated: number }>;
 }
 
 export interface SchedulerService {
@@ -69,8 +67,23 @@ export function createSchedulerService(
           });
           return latenessResult;
         case "send-notification-email":
-          await handlers.onSendNotificationEmail(job.data);
-          break;
+          const sendResult = await handlers.onSendNotificationEmail();
+          log({
+            level: "info",
+            action: "send_notification_email_complete",
+            message: `Dispatched ${sendResult.sent} emails, ${sendResult.failed} failed`,
+            ...sendResult,
+          });
+          return sendResult;
+        case "escalate-support-tickets":
+          const escalateResult = await handlers.onEscalateSupportTickets();
+          log({
+            level: "info",
+            action: "escalate_support_tickets_complete",
+            message: `Escalated ${escalateResult.escalated} support tickets past SLA`,
+            ...escalateResult,
+          });
+          return escalateResult;
         default:
           log({
             level: "warn",

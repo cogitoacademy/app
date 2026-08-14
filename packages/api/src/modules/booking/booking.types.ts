@@ -63,8 +63,43 @@ export const createSeriesInput = z.object({
   timezone: z.string().max(50).default("Asia/Jakarta"),
 });
 
+export const createGroupSeriesInput = z.object({
+  tutorId: z.string().max(100),
+  availabilitySlotId: z.string().max(100),
+  modality: z.enum(["online", "offline"]),
+  targetGroupSize: z.number().int().min(2).max(6),
+  inviteeUserIds: z.array(z.string().max(100)).min(1).max(5),
+  sessions: z
+    .array(
+      z
+        .object({
+          scheduledStartAt: z.coerce
+            .date()
+            .refine((d) => d > new Date(), "Must be in the future"),
+          scheduledEndAt: z.coerce
+            .date()
+            .refine((d) => d > new Date(), "Must be in the future"),
+        })
+        .refine((d) => d.scheduledEndAt > d.scheduledStartAt, {
+          message: "scheduledEndAt must be after scheduledStartAt",
+          path: ["scheduledEndAt"],
+        }),
+    )
+    .min(2)
+    .max(4),
+  timezone: z.string().max(50).default("Asia/Jakarta"),
+});
+
 export const bookingActionInput = z.object({
   bookingId: z.string().max(100),
+});
+
+export const cancelBookingInput = bookingActionInput.extend({
+  cancellationReason: z.string().max(500).optional(),
+});
+
+export const declineBookingInput = bookingActionInput.extend({
+  reason: z.string().max(500).optional(),
 });
 
 export const confirmInviteInput = z.object({
@@ -143,6 +178,7 @@ export const listSessionsInput = z.object({
 export type CreateSoloInput = z.infer<typeof createSoloInput>;
 export type CreateGroupInput = z.infer<typeof createGroupInput>;
 export type CreateSeriesInput = z.infer<typeof createSeriesInput>;
+export type CreateGroupSeriesInput = z.infer<typeof createGroupSeriesInput>;
 export type BookingActionInput = z.infer<typeof bookingActionInput>;
 export type ConfirmInviteInput = z.infer<typeof confirmInviteInput>;
 export type DeclineInviteInput = z.infer<typeof declineInviteInput>;

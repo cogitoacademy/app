@@ -34,7 +34,6 @@ import {
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
   BookingCancelledError,
-  BookingCancellationDeadlinePassedError,
   BookingSessionNotFoundError,
   BookingSessionNotCancellableError,
   BookingSessionRequiredError,
@@ -43,7 +42,7 @@ import {
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
 } from "./booking.errors";
-import { sanitizeHtml } from "../../lib/sanitize";
+import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { log } from "../../lib/logger";
 import {
   BOOKING_STATE,
@@ -88,6 +87,16 @@ export interface CreateSeriesInput {
   timezone: string;
 }
 
+export interface CreateGroupSeriesInput {
+  tutorId: string;
+  availabilitySlotId: string;
+  modality: "online" | "offline";
+  targetGroupSize: number;
+  inviteeUserIds: string[];
+  sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
+  timezone: string;
+}
+
 export interface TutorPayoutResult {
   completedSessions: number;
   totalMarks: number;
@@ -120,7 +129,12 @@ function computeMeetingInfo(b: {
   meeting: { status: string; meetingUrl: string | null } | null;
 }): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
   const event = b.meeting;
-  if (!event || event.status === "pending" || event.status === "manual") {
+  if (
+    !event ||
+    event.status === "pending" ||
+    event.status === "manual" ||
+    event.status === "cancelled"
+  ) {
     return { meetingStatus: "pending", meetingUrl: null };
   }
   if (event.status === "failed") {
@@ -626,7 +640,7 @@ export function createBookingService(deps: {
     bookingId: string,
     cancellationReason?: string,
   ) {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
@@ -649,12 +663,39 @@ export function createBookingService(deps: {
         await repo.cancelAllSessions(tx, bookingId);
       }
 
-      await releaseAllParticipantHolds(
-        tx,
-        bookingId,
-        `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
-        ACTOR_TYPE.STUDENT,
-      );
+      if (isLate) {
+        // PRD penalty: cancelling after H-2 forfeits the held Marks instead of
+        // releasing them.
+        const participants = await repo.findConfirmedParticipants(
+          tx,
+          bookingId,
+        );
+        for (const p of participants) {
+          if (p.heldAmount <= 0) continue;
+          // eslint-disable-next-line no-await-in-loop
+          const w = await wallet.getByUserId(tx, p.userId);
+          if (!w) throw new BookingNotFoundError(p.userId);
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.deduct(tx, {
+            walletId: w.id,
+            amount: p.heldAmount,
+            eventKey: `booking.${bookingId}.late-cancel.${p.userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Late cancellation penalty",
+          });
+          // eslint-disable-next-line no-await-in-loop
+          await repo.updateParticipantState(tx, p.id, { heldAmount: 0 });
+        }
+      } else {
+        await releaseAllParticipantHolds(
+          tx,
+          bookingId,
+          `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
+          ACTOR_TYPE.STUDENT,
+        );
+      }
 
       await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
@@ -706,6 +747,12 @@ export function createBookingService(deps: {
 
       return updated;
     });
+
+    // Delete the provider-side meeting event once the booking is terminal
+    // (FR-21/OQ-05). Best-effort: a Google failure must not break cancellation.
+    await meeting.cancelEvent(bookingId);
+
+    return result;
   }
 
   async function tutorAccept(bookingId: string, tutorId: string) {
@@ -840,7 +887,7 @@ export function createBookingService(deps: {
     tutorId: string,
     reason?: string,
   ) {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
@@ -871,13 +918,19 @@ export function createBookingService(deps: {
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Booking declined",
-        body: `Tutor declined the booking. ${reason ?? ""}`,
+        body: `Tutor declined the booking. ${escapeHtml(reason ?? "")}`,
         eventKey: `booking.${bookingId}.declined`,
         emailRequired: true,
       });
 
       return updated;
     });
+
+    // Best-effort cleanup of the provider-side event (a declined booking may
+    // have a live meeting if it was previously scheduled).
+    await meeting.cancelEvent(bookingId);
+
+    return result;
   }
 
   async function completeSession(
@@ -1000,30 +1053,73 @@ export function createBookingService(deps: {
       throw new BookingSessionNotStartedError(sessionId);
     }
 
-    const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-    if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-    await wallet.deduct(tx, {
-      walletId: proposerWallet.id,
-      amount: session.holdAmount,
-      eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
-      sourceReference: bookingId,
-      bookingId,
-      actorType: ACTOR_TYPE.TUTOR,
-      reason: "Series session completed",
-    });
-
-    const participant = await repo.findParticipant(tx, bookingId, b.proposerId);
+    const isGroupSeries = b.targetGroupSize > 1;
+    let deductedHoldAmount = 0;
     let residualHeld = 0;
-    if (participant) {
-      residualHeld = Math.max(0, participant.heldAmount - session.holdAmount);
-      await repo.updateParticipantState(tx, participant.id, {
-        heldAmount: residualHeld,
+    let proposerWallet: Awaited<ReturnType<BookingWalletPort["getByUserId"]>> =
+      null;
+    let proposerParticipant: NonNullable<
+      Awaited<ReturnType<BookingRepo["findParticipant"]>>
+    > | null = null;
+
+    if (isGroupSeries) {
+      // P1-8: group-series holds live on each confirmed participant's wallet,
+      // so a completed session deducts each participant's per-session share.
+      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      for (const p of participants) {
+        if (p.heldAmount <= 0) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const w = await wallet.getByUserId(tx, p.userId);
+        if (!w) throw new BookingNotFoundError(p.userId);
+        // eslint-disable-next-line no-await-in-loop
+        await wallet.deduct(tx, {
+          walletId: w.id,
+          amount: session.holdAmount,
+          eventKey: `booking.${bookingId}.session.${session.id}.deduct.${p.userId}`,
+          sourceReference: bookingId,
+          bookingId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Group series session completed",
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await repo.updateParticipantState(tx, p.id, {
+          heldAmount: Math.max(0, p.heldAmount - session.holdAmount),
+        });
+        deductedHoldAmount += session.holdAmount;
+      }
+    } else {
+      proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+      if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+      await wallet.deduct(tx, {
+        walletId: proposerWallet.id,
+        amount: session.holdAmount,
+        eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
+        sourceReference: bookingId,
+        bookingId,
+        actorType: ACTOR_TYPE.TUTOR,
+        reason: "Series session completed",
       });
+
+      proposerParticipant = await repo.findParticipant(
+        tx,
+        bookingId,
+        b.proposerId,
+      );
+      if (proposerParticipant) {
+        residualHeld = Math.max(
+          0,
+          proposerParticipant.heldAmount - session.holdAmount,
+        );
+        await repo.updateParticipantState(tx, proposerParticipant.id, {
+          heldAmount: residualHeld,
+        });
+      }
+      deductedHoldAmount = session.holdAmount;
     }
     await repo.updateBookingHoldAmount(
       tx,
       bookingId,
-      Math.max(0, b.holdAmount - session.holdAmount),
+      Math.max(0, b.holdAmount - deductedHoldAmount),
     );
 
     await repo.completeSession(tx, session.id);
@@ -1059,9 +1155,31 @@ export function createBookingService(deps: {
       return refreshed;
     }
 
-    if (residualHeld > 0) {
+    if (isGroupSeries) {
+      // Release any residual hold each participant still carries (normally 0
+      // after per-session deducts, but guard rounding/edge states).
+      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      for (const p of participants) {
+        if (p.heldAmount <= 0) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const w = await wallet.getByUserId(tx, p.userId);
+        if (!w) throw new BookingNotFoundError(p.userId);
+        // eslint-disable-next-line no-await-in-loop
+        await wallet.release(tx, {
+          walletId: w.id,
+          amount: p.heldAmount,
+          eventKey: `booking.${bookingId}.series-release.${p.userId}`,
+          sourceReference: bookingId,
+          bookingId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Group series completed: released residual hold",
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await repo.updateParticipantState(tx, p.id, { heldAmount: 0 });
+      }
+    } else if (residualHeld > 0) {
       await wallet.release(tx, {
-        walletId: proposerWallet.id,
+        walletId: proposerWallet!.id,
         amount: residualHeld,
         eventKey: `booking.${bookingId}.series-release`,
         sourceReference: bookingId,
@@ -1069,7 +1187,9 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.TUTOR,
         reason: "Series completed: released residual hold",
       });
-      await repo.updateParticipantState(tx, participant!.id, { heldAmount: 0 });
+      await repo.updateParticipantState(tx, proposerParticipant!.id, {
+        heldAmount: 0,
+      });
     }
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
@@ -1135,23 +1255,35 @@ export function createBookingService(deps: {
       const h2 = new Date(
         session.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
-      if (now > h2) {
-        throw new BookingCancellationDeadlinePassedError(sessionId);
-      }
+      const isLate = now > h2;
 
       const participant = await repo.findParticipant(tx, b.id, userId);
       if (participant && participant.heldAmount > 0 && session.holdAmount > 0) {
         const w = await wallet.getByUserId(tx, participant.userId);
         if (!w) throw new BookingNotFoundError(participant.userId);
-        await wallet.release(tx, {
-          walletId: w.id,
-          amount: session.holdAmount,
-          eventKey: `booking.${b.id}.session.${session.id}.cancel`,
-          sourceReference: b.id,
-          bookingId: b.id,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: "Series session cancelled",
-        });
+        if (isLate) {
+          // PRD penalty (TC-30): cancelling after H-2 forfeits the session
+          // hold instead of releasing it.
+          await wallet.deduct(tx, {
+            walletId: w.id,
+            amount: session.holdAmount,
+            eventKey: `booking.${b.id}.session.${session.id}.forfeit`,
+            sourceReference: b.id,
+            bookingId: b.id,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Session cancelled after cancellation deadline (forfeit)",
+          });
+        } else {
+          await wallet.release(tx, {
+            walletId: w.id,
+            amount: session.holdAmount,
+            eventKey: `booking.${b.id}.session.${session.id}.cancel`,
+            sourceReference: b.id,
+            bookingId: b.id,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Series session cancelled",
+          });
+        }
         await repo.updateParticipantState(tx, participant.id, {
           heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
         });
@@ -1171,11 +1303,13 @@ export function createBookingService(deps: {
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.INFO,
         title: "Series session cancelled",
-        body: "A student cancelled one session of the series.",
+        body: isLate
+          ? "A student cancelled one session of the series after the cancellation deadline (hold forfeited)."
+          : "A student cancelled one session of the series.",
         eventKey: `booking.${b.id}.session.${session.id}.cancelled`,
       });
 
-      return { cancelled: true, sessionId };
+      return { cancelled: true, sessionId, forfeited: isLate };
     });
   }
 
@@ -1309,7 +1443,7 @@ export function createBookingService(deps: {
   }
 
   async function acceptReschedule(userId: string, bookingId: string) {
-    return db.transaction(async (tx) => {
+    const { proposal, updated } = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.proposerId !== userId)
@@ -1318,20 +1452,20 @@ export function createBookingService(deps: {
         throw new BookingRescheduleNotPendingError(bookingId);
       }
 
-      const proposal = await repo.findPendingRescheduleProposal(tx, bookingId);
-      if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
+      const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
+      if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
 
-      await repo.updateRescheduleProposal(tx, proposal.id, {
+      await repo.updateRescheduleProposal(tx, pending.id, {
         status: "accepted",
         decidedAt: new Date(),
       });
 
       await repo.updateBookingSchedule(tx, bookingId, {
-        scheduledStartAt: proposal.proposedStartAt,
-        scheduledEndAt: proposal.proposedEndAt,
+        scheduledStartAt: pending.proposedStartAt,
+        scheduledEndAt: pending.proposedEndAt,
       });
 
-      const updated = await transition(
+      const transitioned = await transition(
         tx,
         bookingId,
         BOOKING_STATE.AWAITING_RECONFIRMATION,
@@ -1340,8 +1474,8 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.STUDENT,
           reason: "Student accepted the reschedule proposal",
           metadata: {
-            proposedStartAt: proposal.proposedStartAt,
-            proposedEndAt: proposal.proposedEndAt,
+            proposedStartAt: pending.proposedStartAt,
+            proposedEndAt: pending.proposedEndAt,
           },
         },
       );
@@ -1364,8 +1498,17 @@ export function createBookingService(deps: {
         emailRequired: true,
       });
 
-      return updated;
+      return { proposal: pending, updated: transitioned };
     });
+
+    // Move the provider-side meeting event to the new time (FR-21/OQ-05).
+    // Best-effort: a Google failure must not roll back the accepted reschedule.
+    await meeting.updateEvent(bookingId, {
+      startAt: proposal.proposedStartAt,
+      endAt: proposal.proposedEndAt,
+    });
+
+    return updated;
   }
 
   async function rejectReschedule(userId: string, bookingId: string) {
@@ -1568,32 +1711,87 @@ export function createBookingService(deps: {
       const size = b.targetGroupSize;
       const pricePerStudent = (b.priceSnapshot?.perStudent ??
         DEFAULT_SOLO_PRICE) as number;
-      const holdAmount = pricePerStudent;
+
+      // A group-series invitee accepts the whole package up front: the hold is
+      // pricePerStudent per session × the number of sessions. The proposer of a
+      // group-series also holds their own package up front, so the proposer
+      // excess-release target matches the invitee hold.
+      const isGroupSeries =
+        b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1;
+      let inviteeHold = pricePerStudent;
+      let proposerHoldTarget = pricePerStudent;
+      if (isGroupSeries) {
+        const sessions = await repo.listSessionsBySeriesId(tx, bookingId);
+        const perSessionTotal = pricePerStudent * sessions.length;
+        inviteeHold = perSessionTotal;
+        proposerHoldTarget = perSessionTotal;
+      }
 
       const w = await wallet.getByUserId(tx, userId);
       if (!w) throw new BookingNotFoundError(userId);
-      if (w.availableBalance < holdAmount) {
-        throw new InsufficientMarksError(holdAmount, w.availableBalance);
+      if (w.availableBalance < inviteeHold) {
+        throw new InsufficientMarksError(inviteeHold, w.availableBalance);
       }
 
       await wallet.hold(tx, {
         walletId: w.id,
-        amount: holdAmount,
+        amount: inviteeHold,
         eventKey: `booking.${bookingId}.hold.${userId}`,
         sourceReference: bookingId,
         bookingId,
         actorType: ACTOR_TYPE.STUDENT,
-        reason: "Hold Marks for group booking (invitee)",
+        reason: isGroupSeries
+          ? "Hold Marks for group-series booking (invitee)"
+          : "Hold Marks for group booking (invitee)",
       });
 
       await repo.updateParticipantState(tx, participant.id, {
         confirmationState: CONFIRMATION_STATE.CONFIRMED,
-        heldAmount: holdAmount,
+        heldAmount: inviteeHold,
         confirmedAt: new Date(),
       });
 
       const newHeadcount = b.confirmedHeadcount + 1;
       await repo.updateBookingConfirmedHeadcount(tx, bookingId, newHeadcount);
+
+      // The proposer was held at the full target (size × perStudent) at
+      // creation. As invitees confirm, release the proposer's excess so they
+      // only ever hold their own share. The eventKey embeds newHeadcount so a
+      // re-confirm can never double-release.
+      const proposerParticipant = await repo.findParticipant(
+        tx,
+        bookingId,
+        b.proposerId,
+      );
+      if (
+        newHeadcount <= b.targetGroupSize &&
+        proposerParticipant &&
+        proposerParticipant.heldAmount > proposerHoldTarget
+      ) {
+        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+        if (proposerWallet) {
+          const excess = proposerParticipant.heldAmount - proposerHoldTarget;
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: proposerWallet.id,
+            amount: excess,
+            eventKey: `booking.${bookingId}.proposer.release.${newHeadcount}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Group: proposer excess hold released as invitees confirm",
+          });
+          await repo.updateParticipantState(tx, proposerParticipant.id, {
+            heldAmount: proposerHoldTarget,
+          });
+        }
+      }
+
+      await repo.updateBookingHoldAmount(
+        tx,
+        bookingId,
+        proposerHoldTarget * newHeadcount,
+      );
 
       if (newHeadcount >= b.targetGroupSize) {
         await transition(tx, bookingId, BOOKING_STATE.AWAITING_TUTOR_REVIEW, {
@@ -1723,15 +1921,28 @@ export function createBookingService(deps: {
       if (participant.heldAmount > 0) {
         const participantWallet = await wallet.getByUserId(tx, userId);
         if (!participantWallet) throw new BookingNotFoundError(userId);
-        await wallet.release(tx, {
-          walletId: participantWallet.id,
-          amount: participant.heldAmount,
-          eventKey: `booking.${bookingId}.withdraw.${userId}`,
-          sourceReference: bookingId,
-          bookingId,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: reason ?? "Withdrawal",
-        });
+        if (isLate) {
+          // PRD penalty: withdrawing after H-2 forfeits the held Marks.
+          await wallet.deduct(tx, {
+            walletId: participantWallet.id,
+            amount: participant.heldAmount,
+            eventKey: `booking.${bookingId}.withdraw-late.${userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Late withdrawal penalty",
+          });
+        } else {
+          await wallet.release(tx, {
+            walletId: participantWallet.id,
+            amount: participant.heldAmount,
+            eventKey: `booking.${bookingId}.withdraw.${userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: reason ?? "Withdrawal",
+          });
+        }
       }
 
       await repo.updateParticipantState(tx, participant.id, {
@@ -1936,6 +2147,176 @@ export function createBookingService(deps: {
     });
   }
 
+  async function createGroupSeries(
+    proposerId: string,
+    input: CreateGroupSeriesInput,
+  ) {
+    const profile = await repo.findTutorProfile(db, input.tutorId, {
+      publishedOnly: true,
+    });
+    if (!profile) throw new BookingNotFoundError(input.tutorId);
+
+    if (
+      input.sessions.length < MIN_SERIES_SESSIONS ||
+      input.sessions.length > MAX_SERIES_SESSIONS
+    ) {
+      throw new BookingSeriesSizeError(
+        "",
+        MIN_SERIES_SESSIONS,
+        MAX_SERIES_SESSIONS,
+      );
+    }
+
+    const slot = await repo.findAvailabilitySlot(
+      db,
+      input.availabilitySlotId,
+      input.tutorId,
+      { futureOnly: true },
+    );
+    if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
+
+    // Validate the invitees are registered users (FR-20).
+    const invitees = await repo.findUsersByIds(db, input.inviteeUserIds);
+    if (invitees.length !== input.inviteeUserIds.length) {
+      throw new BookingNotFoundError("invitee");
+    }
+
+    const size = input.targetGroupSize;
+    const pricePerStudent = (profile.prices?.[String(size)] ??
+      DEFAULT_SOLO_PRICE) as number;
+    const priceSnapshot = pricing.computeSplit(
+      input.modality,
+      pricePerStudent,
+      size as GroupSize,
+    );
+    const perSession = priceSnapshot.perStudent;
+    const packageTotal = perSession * input.sessions.length;
+
+    const w = await wallet.getByUserId(db, proposerId);
+    if (!w) throw new BookingNotFoundError(proposerId);
+    if (w.availableBalance < packageTotal) {
+      throw new InsufficientMarksError(packageTotal, w.availableBalance);
+    }
+
+    const bookingId = crypto.randomUUID();
+    const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
+
+    return db.transaction(async (tx) => {
+      for (const session of input.sessions) {
+        // eslint-disable-next-line no-await-in-loop
+        const overlapping = await repo.findOverlappingBookings(
+          tx,
+          input.tutorId,
+          session.scheduledStartAt,
+          session.scheduledEndAt,
+          { excludeStates: [...TERMINAL_STATES] },
+        );
+        if (overlapping.length > 0) {
+          throw new BookingConflictError(
+            input.tutorId,
+            session.scheduledStartAt.toISOString(),
+            session.scheduledEndAt.toISOString(),
+          );
+        }
+      }
+
+      await wallet.hold(tx, {
+        walletId: w.id,
+        amount: packageTotal,
+        eventKey: `booking.${bookingId}.hold`,
+        sourceReference: bookingId,
+        bookingId,
+        actorType: ACTOR_TYPE.STUDENT,
+        reason: "Hold Marks for group-series booking (proposer)",
+      });
+
+      const b = await repo.insertBooking(tx, {
+        id: bookingId,
+        type: BOOKING_TYPE.SERIES,
+        modality: input.modality,
+        tutorId: input.tutorId,
+        proposerId,
+        targetGroupSize: size,
+        minConfirmedHeadcount: MIN_GROUP_HEADCOUNT,
+        confirmedHeadcount: 1,
+        currentState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+        scheduledStartAt: input.sessions[0]!.scheduledStartAt,
+        scheduledEndAt:
+          input.sessions[input.sessions.length - 1]!.scheduledEndAt,
+        timezone: input.timezone,
+        priceSnapshot,
+        originalMarks: packageTotal,
+        holdAmount: packageTotal,
+        deadlineAt,
+      });
+
+      await repo.insertParticipant(tx, {
+        bookingId,
+        userId: proposerId,
+        role: "proposer",
+        confirmationState: CONFIRMATION_STATE.CONFIRMED,
+        heldAmount: packageTotal,
+      });
+
+      for (const inviteeId of input.inviteeUserIds) {
+        // eslint-disable-next-line no-await-in-loop
+        await repo.insertParticipant(tx, {
+          bookingId,
+          userId: inviteeId,
+          role: "invitee",
+          confirmationState: CONFIRMATION_STATE.PENDING,
+          heldAmount: 0,
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await notification.write({
+          db: tx,
+          userId: inviteeId,
+          bookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Group series invitation",
+          body: `You have been invited to a ${size}-person group series of ${input.sessions.length} sessions. Accepting holds the full package up front. ${GROUP_SERIES_DISCLAIMER}`,
+          eventKey: `booking.${bookingId}.invite.${inviteeId}`,
+          emailRequired: true,
+        });
+      }
+
+      for (const session of input.sessions) {
+        // eslint-disable-next-line no-await-in-loop
+        await repo.insertBookingSession(tx, {
+          seriesBookingId: bookingId,
+          scheduledStartAt: session.scheduledStartAt,
+          scheduledEndAt: session.scheduledEndAt,
+          currentState: BOOKING_STATE.SCHEDULED,
+          holdAmount: perSession,
+          priceSnapshot,
+        });
+      }
+
+      await recordTransition(tx, {
+        bookingId,
+        fromState: null,
+        toState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+        actorId: proposerId,
+        actorType: ACTOR_TYPE.STUDENT,
+      });
+
+      await notification.writeBestEffort({
+        db: tx,
+        userId: input.tutorId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "New group series request",
+        body: `A student requested a ${size}-person, ${input.sessions.length}-session group series with you.`,
+        eventKey: `booking.${bookingId}.tutor_request`,
+        emailRequired: true,
+      });
+
+      return { ...b, disclaimer: computeDisclaimer(b) };
+    });
+  }
+
   async function listSessions(bookingId: string, userId: string) {
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
@@ -2006,6 +2387,45 @@ export function createBookingService(deps: {
     };
   }
 
+  /**
+   * Transitions an offline booking awaiting admin room approval to SCHEDULED
+   * once a room has been assigned. Consumed by the room module via a
+   * consumer-driven port so an assigned offline booking can actually be
+   * completed (G14).
+   */
+  async function transitionBookingToScheduled(
+    tx: DbOrTx,
+    bookingId: string,
+    actorId: string,
+  ): Promise<void> {
+    const b = await repo.findBookingById(tx, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    if (b.currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) return;
+    await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+      actorId,
+      actorType: ACTOR_TYPE.ADMIN,
+      reason: "Room assigned",
+    });
+  }
+
+  /**
+   * Returns the recipients of offline-room lifecycle notifications: the tutor
+   * and every confirmed student participant. Consumed by the room module via a
+   * consumer-driven port (P1-3).
+   */
+  async function getBookingRecipients(
+    tx: DbOrTx,
+    bookingId: string,
+  ): Promise<{ tutorId: string; participantUserIds: string[] }> {
+    const b = await repo.findBookingById(tx, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    const participants = await repo.findConfirmedParticipants(tx, bookingId);
+    return {
+      tutorId: b.tutorId,
+      participantUserIds: participants.map((p) => p.userId),
+    };
+  }
+
   async function expireBookings() {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
@@ -2028,6 +2448,49 @@ export function createBookingService(deps: {
       try {
         // eslint-disable-next-line no-await-in-loop
         await db.transaction(async (tx) => {
+          // FR-16/TC-18: when a group deadline passes with a partial headcount
+          // (>= 2 but < target), reprice to the final per-student total and
+          // move the group to a fresh 12h reconfirmation window instead of
+          // expiring it. Only groups that never reached the minimum headcount
+          // expire and release all holds.
+          const confirmed = await repo.findConfirmedParticipants(tx, b.id);
+          if (
+            b.currentState ===
+              BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION &&
+            confirmed.length >= MIN_GROUP_HEADCOUNT &&
+            confirmed.length < b.targetGroupSize
+          ) {
+            await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.SYSTEM);
+
+            await repo.updateBookingDeadline(
+              tx,
+              b.id,
+              new Date(Date.now() + RESPONSE_WINDOW_MS),
+            );
+
+            await transition(tx, b.id, BOOKING_STATE.AWAITING_RECONFIRMATION, {
+              actorId: "system",
+              actorType: ACTOR_TYPE.SYSTEM,
+              reason: "Group deadline passed with partial headcount",
+            });
+
+            for (const p of confirmed) {
+              // eslint-disable-next-line no-await-in-loop
+              await notification.writeBestEffort({
+                db: tx,
+                userId: p.userId,
+                bookingId: b.id,
+                category: NOTIFICATION_CATEGORY.BOOKING,
+                severity: NOTIFICATION_SEVERITY.ACTION,
+                title: "Group deadline reached",
+                body: "Your group did not fill before the deadline. The per-student price was updated — please reconfirm within 12 hours.",
+                eventKey: `booking.${b.id}.deadline_reprice.${p.userId}`,
+                emailRequired: true,
+              });
+            }
+            return;
+          }
+
           await releaseAllParticipantHolds(
             tx,
             b.id,
@@ -2083,6 +2546,10 @@ export function createBookingService(deps: {
             emailRequired: noShow,
           });
         });
+        // Best-effort cleanup of the provider-side event once the booking is
+        // terminal (FR-21/OQ-05). No-op when no live event exists.
+        // eslint-disable-next-line no-await-in-loop
+        await meeting.cancelEvent(b.id);
         succeeded++;
       } catch (error) {
         failed++;
@@ -2216,6 +2683,9 @@ export function createBookingService(deps: {
             eventKey: `booking.${b.id}.tutor_no_show.tutor`,
           });
         });
+        // Best-effort cleanup of the provider-side event (NO_SHOW is terminal).
+        // eslint-disable-next-line no-await-in-loop
+        await meeting.cancelEvent(b.id);
         autoCancelled++;
       } catch (error) {
         failed++;
@@ -2237,6 +2707,7 @@ export function createBookingService(deps: {
     createSolo,
     createGroup,
     createSeries,
+    createGroupSeries,
     confirmInvite,
     declineInvite,
     reconfirm,
@@ -2259,5 +2730,7 @@ export function createBookingService(deps: {
     checkTutorLateness,
     transition,
     canTransition,
+    transitionBookingToScheduled,
+    getBookingRecipients,
   };
 }

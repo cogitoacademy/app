@@ -56,6 +56,11 @@ export interface BookingMeetingPort {
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent>;
+  updateEvent(
+    bookingId: string,
+    changes: { startAt?: Date; endAt?: Date },
+  ): Promise<void>;
+  cancelEvent(bookingId: string): Promise<void>;
 }
 
 export interface BookingPayoutPort {

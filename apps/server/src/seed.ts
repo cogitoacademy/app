@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { auth } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
+import { env } from "@cogito-app/env/server";
 import {
   user,
   tutorInvite,
@@ -16,6 +17,19 @@ import {
 
 const SEED_SUFFIX = "seed";
 const SEED_DISPLAY_TAG = "[seed]";
+
+export function seedAllowed(
+  nodeEnv: string,
+  allowFlag: string | undefined,
+): boolean {
+  if (nodeEnv !== "production") return true;
+  return allowFlag === "true";
+}
+
+export function seedAdminPassword(value: string | undefined): string | null {
+  if (!value || value.length < 12) return null;
+  return value;
+}
 
 const PACKAGES = [
   { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 430000 },
@@ -93,11 +107,23 @@ async function seedDemoStudent(email: string, password: string, name: string) {
 }
 
 async function seed() {
+  if (!seedAllowed(env.NODE_ENV, process.env.SEED_ALLOWED_IN_PROD)) {
+    throw new Error(
+      "Refusing to seed in production unless SEED_ALLOWED_IN_PROD=true",
+    );
+  }
+  const adminPassword = seedAdminPassword(process.env.SEED_ADMIN_PASSWORD);
+  if (!adminPassword) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD required (min 12 chars) in this environment",
+    );
+  }
+
   await seedPackages();
 
   const adminEmail = "admin@cogitoacademy.id";
 
-  const admin = await ensureUser(adminEmail, "admin123", "Admin User");
+  const admin = await ensureUser(adminEmail, adminPassword, "Admin User");
   await db
     .update(user)
     .set({ role: USER_ROLE.ADMIN })
@@ -199,7 +225,9 @@ async function seed() {
   ]);
 }
 
-seed().catch((err) => {
-  console.error("Seed failed:", err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  seed().catch((err) => {
+    console.error("Seed failed:", err);
+    process.exit(1);
+  });
+}
