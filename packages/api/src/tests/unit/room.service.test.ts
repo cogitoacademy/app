@@ -348,8 +348,8 @@ describe("room service notifications (P1-3)", () => {
     const calls = notificationPort.writeBestEffort.mock.calls.map(
       (c: any) => c[0],
     );
-    expect(calls.map((c: any) => c.userId).sort()).toEqual(
-      ["student1", "student2", "tutor1"].sort(),
+    expect(calls.map((c: any) => c.userId).toSorted()).toEqual(
+      ["student1", "student2", "tutor1"].toSorted(),
     );
     for (const call of calls) {
       expect(call.emailRequired).toBe(true);
