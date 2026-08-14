@@ -176,7 +176,7 @@ describe("Tutor payouts (G16)", () => {
     );
   });
 
-  test("solo booking flows to completed with snapshot 50/40/10", async () => {
+  test("solo booking flows to completed with G19 snapshot 50/37/13", async () => {
     const start = new Date(Date.now() + 48 * 3600_000).toISOString();
     const end = new Date(Date.now() + 49 * 3600_000).toISOString();
 
@@ -200,9 +200,10 @@ describe("Tutor payouts (G16)", () => {
       .from(bookingTable)
       .where(eq(bookingTable.id, b.id));
     expect(row!.priceSnapshot).toMatchObject({
-      baseline: 50,
-      tutorShare: 40,
-      cogitoTake: 10,
+      perStudent: 50,
+      baseline: 42,
+      tutorShare: 37,
+      cogitoTake: 13,
     });
   });
 
@@ -287,10 +288,10 @@ describe("Tutor payouts (G16)", () => {
 
     // solo (1) + group (1) + series (2 sessions) = 4 completed sessions
     expect(result.completedSessions).toBe(4);
-    expect(result.totalMarks).toBe(300);
-    expect(result.cogitoTake).toBe(60);
-    expect(result.tutorPayout).toBe(240);
-    expect(result.tutorPayoutIdr).toBe(240 * TUTOR_PAYOUT_RATE_IDR);
+    expect(result.totalMarks).toBe(292);
+    expect(result.cogitoTake).toBe(63);
+    expect(result.tutorPayout).toBe(237);
+    expect(result.tutorPayoutIdr).toBe(237 * TUTOR_PAYOUT_RATE_IDR);
   });
 
   test("admin.getTutorPayouts respects date range", async () => {
@@ -315,8 +316,8 @@ describe("Tutor payouts (G16)", () => {
   test("tutor.getMyPayouts returns own scoped summary", async () => {
     const result = await tutorClient.tutor.getMyPayouts({});
     expect(result.completedSessions).toBe(4);
-    expect(result.tutorPayout).toBe(240);
-    expect(result.cogitoTake).toBe(60);
+    expect(result.tutorPayout).toBe(237);
+    expect(result.cogitoTake).toBe(63);
   });
 
   test("tutor.getMyPayouts excludes other tutors' bookings", async () => {
