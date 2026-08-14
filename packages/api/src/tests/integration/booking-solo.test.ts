@@ -398,7 +398,9 @@ describe("Booking late-cancel penalty flow (TC-late)", () => {
       .where(eq(ledgerEntry.bookingId, bookingId));
     const penalty = deducts.find((d) => d.entryType === "deduct");
     expect(penalty).toBeDefined();
-    expect(penalty!.eventKey).toBe(`booking.${bookingId}.late-cancel.${b.proposerId}`);
+    expect(penalty!.eventKey).toBe(
+      `booking.${bookingId}.late-cancel.${b.proposerId}`,
+    );
 
     const releases = deducts.filter((d) => d.entryType === "release");
     expect(releases.length).toBe(0);
