@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import {
   RoomNotFoundError,
   RoomBookingConflictError,
@@ -6,8 +7,12 @@ import {
 } from "./room.errors";
 import type { RoomRepo } from "./room.repo";
 import type { CreateRoomInput } from "./room.types";
-import { ROOM_BOOKING_STATUS } from "../../shared/constants";
-import type { RoomBookingPort } from "./index";
+import {
+  NOTIFICATION_CATEGORY,
+  NOTIFICATION_SEVERITY,
+  ROOM_BOOKING_STATUS,
+} from "../../shared/constants";
+import type { RoomBookingPort, RoomNotificationPort } from "./index";
 
 export type RoomService = ReturnType<typeof createRoomService>;
 
@@ -15,7 +20,40 @@ export function createRoomService(
   repo: RoomRepo,
   db: DbType,
   bookingPort?: RoomBookingPort,
+  notificationPort?: RoomNotificationPort,
 ) {
+  /**
+   * Writes an in-app + email notification for the tutor and each confirmed
+   * student of the booking (P1-3 offline-room notification matrix).
+   */
+  async function notifyBookingRecipients(
+    tx: DbOrTx,
+    bookingId: string,
+    eventKey: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    if (!notificationPort) return;
+    const recipients = await bookingPort?.getBookingRecipients(tx, bookingId);
+    if (!recipients) return;
+
+    const userIds = [recipients.tutorId, ...recipients.participantUserIds];
+    for (const userId of new Set(userIds)) {
+      // eslint-disable-next-line no-await-in-loop
+      await notificationPort.writeBestEffort({
+        db: tx,
+        userId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title,
+        body,
+        eventKey: `${eventKey}.${userId}`,
+        emailRequired: true,
+      });
+    }
+  }
+
   async function listActive() {
     return repo.findActiveRooms(db);
   }
@@ -81,6 +119,14 @@ export function createRoomService(
         );
       }
 
+      await notifyBookingRecipients(
+        tx,
+        bookingId,
+        `room.${bookingId}.assigned`,
+        "Offline session confirmed",
+        `Your offline session was confirmed in room ${roomRow.name}.`,
+      );
+
       return inserted;
     });
   }
@@ -121,13 +167,23 @@ export function createRoomService(
         ROOM_BOOKING_STATUS.RELOCATED,
       );
 
-      return repo.insertRoomBooking(tx, {
+      const inserted = await repo.insertRoomBooking(tx, {
         roomId,
         bookingId,
         startAt,
         endAt,
         status: ROOM_BOOKING_STATUS.CONFIRMED,
       });
+
+      await notifyBookingRecipients(
+        tx,
+        bookingId,
+        `room.${bookingId}.relocated`,
+        "Offline session relocated",
+        `Your offline session was relocated to room ${roomRow.name}.`,
+      );
+
+      return inserted;
     });
   }
 
@@ -139,11 +195,21 @@ export function createRoomService(
       );
       if (!current) throw new RoomBookingNotFoundError(bookingId);
 
-      return repo.updateRoomBookingStatus(
+      const updated = await repo.updateRoomBookingStatus(
         tx,
         current.id,
         ROOM_BOOKING_STATUS.CANCELLED,
       );
+
+      await notifyBookingRecipients(
+        tx,
+        bookingId,
+        `room.${bookingId}.cancelled`,
+        "Offline room assignment cancelled",
+        "Your offline room assignment was cancelled by an admin.",
+      );
+
+      return updated;
     });
   }
 

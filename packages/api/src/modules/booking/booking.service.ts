@@ -2148,6 +2148,24 @@ export function createBookingService(deps: {
     });
   }
 
+  /**
+   * Returns the recipients of offline-room lifecycle notifications: the tutor
+   * and every confirmed student participant. Consumed by the room module via a
+   * consumer-driven port (P1-3).
+   */
+  async function getBookingRecipients(
+    tx: DbOrTx,
+    bookingId: string,
+  ): Promise<{ tutorId: string; participantUserIds: string[] }> {
+    const b = await repo.findBookingById(tx, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    const participants = await repo.findConfirmedParticipants(tx, bookingId);
+    return {
+      tutorId: b.tutorId,
+      participantUserIds: participants.map((p) => p.userId),
+    };
+  }
+
   async function expireBookings() {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
@@ -2409,5 +2427,6 @@ export function createBookingService(deps: {
     transition,
     canTransition,
     transitionBookingToScheduled,
+    getBookingRecipients,
   };
 }

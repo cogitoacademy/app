@@ -171,7 +171,11 @@ function createServices() {
     audit: audit.service,
     notification: notification.service,
   });
-  const room = createRoomModule({ db, bookingPort: booking.service });
+  const room = createRoomModule({
+    db,
+    bookingPort: booking.service,
+    notificationPort: notification.service,
+  });
 
   const payment = createPaymentModule({
     db,
