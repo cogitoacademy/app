@@ -1,10 +1,10 @@
-# Backend Security & PRD Correctness — Implementation Plan (5 PRs)
+# Backend Security & PRD Correctness — Implementation Plan (6 PRs)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix the remaining critical backend issues found in the final codebase review: webhook/payment security, group-booking money correctness, late-cancel penalty, dead offline-room flow, email outbox, package re-purchase, and add file/image upload.
+**Goal:** Fix the remaining critical backend issues found in the final codebase review: webhook/payment security, group-booking money correctness, late-cancel penalty, dead offline-room flow, email outbox, package re-purchase, file/image upload, and the follow-ups surfaced by the SDD-ledger scan (webhook IP spoofing, ticket SLA escalation, meeting-event lifecycle, stale override response, room email notifications).
 
-**Architecture:** 5 independent PRs, each backend-only and independently testable, all targeting `main` (currently at `9b7df5e`). Follows the existing 4-layer pattern (Router → Handler → Service → Repository), consumer-driven ports, `DomainError` + `withDomainMap`, bounded zod, `DbOrTx`, and real-DB integration tests (Postgres `localhost:6767/cogito-test`, Redis `localhost:6379`).
+**Architecture:** 6 independent PRs, each backend-only and independently testable, all targeting `main`. Follows the existing 4-layer pattern (Router → Handler → Service → Repository), consumer-driven ports, `DomainError` + `withDomainMap`, bounded zod, `DbOrTx`, and real-DB integration tests (Postgres `localhost:6767/cogito-test*`, Redis `localhost:6379`/`638x` for parallel worktrees).
 
 **Tech Stack:** Bun 1.3.14, Elysia, oRPC, Drizzle + postgres.js, BullMQ, better-auth, Resend, Xendit, Cloudflare R2 (for uploads), bun:test, oxlint/oxfmt.
 
@@ -1458,6 +1458,76 @@ git commit -m "fix(server): read-time body-size enforcement and auth-gated OpenA
 
 ---
 
+## PR 6 — Follow-ups from SDD Ledger Scan (2026-08-14)
+
+**Source:** concerns surfaced by scanning `.superpowers/sdd/BACKEND-HARDENING/progress.md` ("Outstanding deferred concerns") + Agent A's implementation report + the halted Agent B's partial state. All documented here BEFORE any out-of-scope change per the audit protocol.
+
+### Task 6.1: Webhook IP allowlist trusts first `x-forwarded-for` hop (spoofable)
+
+**PRD:** NFR authorization; security hardening.
+
+**Concern P1-6:** `ipAllowed` (`apps/server/src/webhooks/payments.ts:19-22`) still reads the first `x-forwarded-for` hop unconditionally — the same spoofing issue Task 1.3 fixed for rate-limit keys (routes.ts now uses `getClientIp(request, env.TRUST_PROXY)` from `packages/api/src/lib/request-id.ts`). When the server is reachable directly, an attacker sets `x-forwarded-for: <allowed-ip>` to defeat `WEBHOOK_ALLOWED_IPS`.
+
+**Fix:** change `ipAllowed(request, allowlist)` → `ipAllowed(request, allowlist, trustProxy)` and call it with `env.TRUST_PROXY` from the webhook handler. Use the existing `getClientIp` helper. Add a unit test: allowlist bypass fails when trustProxy=false and XFF header is spoofed; passes when the real IP (x-real-ip) is allowlisted.
+
+**Files:** `apps/server/src/webhooks/payments.ts`, new `apps/server/src/webhooks/ip-allowlist.test.ts`.
+
+### Task 6.2: Support-ticket SLA auto-escalation job
+
+**PRD:** OQ-04, G1 spec ("Ticket auto-escalates if SLA deadline passes without response").
+
+**Concern P1-1:** `support.createTicket` sets `slaDeadline` (12h) and the admin list sorts by SLA urgency, but no scheduler job scans tickets past `slaDeadline` — no escalation state, no WhatsApp escalation (WhatsApp itself is a separate out-of-scope integration, but the in-app escalation state + admin flag is in scope).
+
+**Fix:** new BullMQ repeatable job `escalate-support-tickets` (e.g. every 15 min) that marks tickets past `slaDeadline` with status `in_progress` + an `escalated` flag (or a new `escalated` boolean column via migration) and writes an audit entry. Wire in `apps/server/src/scheduler.ts` + `scheduler.service.ts` handlers. Integration test: ticket past SLA → escalated flag set.
+
+**Files:** `packages/api/src/modules/support/*` (service+repo), `packages/api/src/modules/scheduler/` (+ new job), `apps/server/src/scheduler.ts`, `packages/db/src/schema/support-ticket.ts` (migration if new column).
+
+### Task 6.3: Meeting event lifecycle — update on reschedule, delete on cancel
+
+**PRD:** FR-21, OQ-05, G12 spec items 2-3.
+
+**Concern P1-2:** `MeetingPort` exposes only `createEvent` (`meeting.types.ts:16-22`); the Google event is never updated when `acceptReschedule` moves the booking and never cancelled when the booking is cancelled/declined/expired. The old event leaks.
+
+**Fix:** add `updateEvent(bookingId, { startAt, endAt })` and `cancelEvent(bookingId)` to `MeetingPort` + google-meeting provider (events.update / events.delete via the existing OAuth + service-account paths); call `updateEvent` in `acceptReschedule` (after the schedule is committed) and `cancelEvent` in the booking terminal transitions (cancel/late-cancel/decline/expire paths, best-effort with circuit breaker). Manual links: no-op. Tests: provider update/delete mocks + booking integration test asserting provider called.
+
+**Files:** `packages/api/src/modules/meeting/*`, `packages/api/src/modules/booking/booking.service.ts`, tests.
+
+### Task 6.4: `applyOverride` returns stale holdAmount in response
+
+**Concern P1-5 (from phase-1 review):** `admin-booking.applyOverride` response reflects the pre-update `holdAmount` after a Marks action changed it.
+
+**Fix:** re-read the booking row after the override transaction and return the refreshed record (or explicitly return the projected holdAmount). Add regression test asserting the response holdAmount equals the post-override DB value.
+
+**Files:** `packages/api/src/modules/admin-booking/admin-booking.service.ts`, tests.
+
+### Task 6.5: Offline room confirmed/relocated/cancelled email notifications
+
+**PRD:** Notification matrix row "Offline room confirmed / relocated / cancelled — in-app + email (tutor + confirmed students)".
+
+**Concern P1-3 (part):** `room.assign/relocate/cancelBooking` write no notifications at all (room module has no notification port). In-app rows + email dispatch rows are both missing.
+
+**Fix:** add a consumer-driven `NotificationPort` to the room module; write notifications (emailRequired) on assign (confirmed), relocate (relocated), cancel (cancelled) to tutor + confirmed students. Tests: room-flow tests assert notification rows created.
+
+**Files:** `packages/api/src/modules/room/*` (index.ts port, room.service.ts calls), `packages/api/src/services.ts` (wire port — already wired for booking, extend for room), tests.
+
+### Task 6.6: `.env.example` missing new security flags
+
+**Concern P1-4 + v1.2 additions:** `WEBHOOK_ALLOWED_IPS`, `STUB_WEBHOOK_ALLOWED`, `TRUST_PROXY`, `SEED_ALLOWED_IN_PROD`, `SEED_ADMIN_PASSWORD`, `R2_*`, `UPLOAD_DIR` are not documented in `apps/server/.env.example`.
+
+**Fix:** add all of the above to `.env.example` with comments (document `REDIS_URL` too if missing).
+
+**Files:** `apps/server/.env.example`.
+
+### Parked (documented, no dispatch)
+
+- P1-3 part: signup "account created" email — tied to email verification (G2, deferred); parked.
+- P1-7: CONTEXT.md anchor drift (`admin-booking.repo.ts:31-33` line numbers) — doc nit, fixed during plan-sync.
+- P1-9: C2 rate-limit test is source-text based — test-quality nit; parked.
+- C3 (Agent A): `evlog` + `bun test` hang — pre-existing; workaround = test pure helpers from `packages/api/src/lib/request-id.ts`; parked.
+- C1 (Agent A): full-suite gate must use `--env-file apps/server/.env.test` (`.env` points at dev DB `cogito-app` which `resetDatabase()` blocks). All agents MUST use `.env.test`.
+
+---
+
 ## Roadmap (execution order)
 
 | Step | PR | Branch | Blocks | Concern addressed |
@@ -1467,14 +1537,16 @@ git commit -m "fix(server): read-time body-size enforcement and auth-gated OpenA
 | 3 | PR 3 | `fix/email-outbox` | — | Email-in-tx violation, dead scheduler job, re-purchase |
 | 4 | PR 4 | `feat/file-upload` | — | PRD "proof URL or file" gap |
 | 5 | PR 5 | `fix/correctness-followups` | — | deadline repricing, KB total balance, payment notifications, group series, per-session forfeit, env validation, email injection, body/OpenAPI hardening |
+| 6 | PR 6 | `fix/ledger-followups` | — | webhook IP allowlist spoof, ticket SLA escalation, meeting event lifecycle, stale override response, room email notifications, .env.example |
 
-**Sequencing rationale:** all five are independent (no shared files beyond `services.ts`/`routes.ts` which merge cleanly). Merge in the listed order to keep review surface small. PR 2's Task 2.2 touches `cancelAllSessions` (repo) — if PR 4 or PR 5 also touches `routes.ts`, the later PR rebases.
+**Sequencing rationale:** all six are independent (no shared files beyond `services.ts`/`routes.ts` which merge cleanly). Merge in the listed order to keep review surface small. PR 2's Task 2.2 touches `cancelAllSessions` (repo) — if PR 4, PR 5 or PR 6 also touches `routes.ts`, the later PR rebases. PR 6 branches off the merged PR 1-5 state (recommended: each PR branches from the previous merged PR's HEAD so merges are fast-forward).
 
-**Per-PR gates:** `bun run check-types`, `bun run lint`, full suite `REDIS_URL=redis://localhost:6379 bun test --env-file apps/server/.env packages/api/src/tests/ apps/server/src/openapi.test.ts` (0 fail), then open the PR against main. PR 5 uses the same gates.
+**Per-PR gates:** `bun run check-types`, `bun run lint`, full suite `REDIS_URL=redis://localhost:6379 bun test --env-file apps/server/.env.test packages/api/src/tests/ apps/server/src/openapi.test.ts` (0 fail), then open the PR against main. PR 5 and PR 6 use the same gates. NOTE: use `.env.test` (CI-matching), not `.env` — `.env` points at the dev DB (`cogito-app`) which `resetDatabase()` blocks.
 
 ---
 
 ### Version Notes
 
+- v1.2 (2026-08-14): Execution began on `fix/backend-hardening-phase2`. PR 1 (Tasks 1.1–1.4), Task 5.6 (env part), Task 5.8 (routes parts), and Task 4.1 (env vars + `/uploads/*` route) IMPLEMENTED by Agent A (commits `3732169`..`4cf0fb5`); Tasks 2.1–2.3 IMPLEMENTED by Agent B (commits `a492fbe`..`fc3be8f`, g4 test fix `b34f045`) — Agent B halted before 5.1/5.4/5.5/5.7. Added PR 6 (Follow-ups from SDD Ledger Scan) with Tasks 6.1–6.6 from `.superpowers/sdd/BACKEND-HARDENING/progress.md` outstanding concerns + Agent A report concerns; parked items documented. Noted the `.env.test` gate requirement (C1). Remaining un-landed work: PR 2 remainder (5.1, 5.4, 5.5, 5.7), PR 3 (3.1, 3.2), PR 4 (4.1 storage/module/wiring), PR 5 (5.2, 5.3, 5.6 payment-part, 5.7-part), PR 6 (6.1–6.6).
 - v1.1 (2026-08-14): Annotated all PR 1-4 tasks with verified-not-implemented status (HEAD `9b7df5e`); noted PR 3 Task 3.1 as partial (dispatch rows queued, but `emailPort.send` still inline — no consumer job). Added PR 5 (Correctness & Security Follow-ups) with findings B3/B4/B6/B8/B9 + M4/M5/L1-L3 from the 2026-08-14 audit: group deadline repricing, Knowledge Bank total-balance eligibility, payment/refund notifications, group-series creation, per-session post-H2 forfeit, conditional Xendit env validation, email HTML injection via reason, and body-size/OpenAPI hardening. Updated title/architecture to 5 PRs and roadmap with PR 5.
 - v1.0 (2026-08-14): Created from the final backend codebase review. 4 PRs: security hardening, PRD money correctness, email outbox + re-purchase, file upload (R2).
