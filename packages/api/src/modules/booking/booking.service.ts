@@ -2201,6 +2201,58 @@ export function createBookingService(deps: {
       try {
         // eslint-disable-next-line no-await-in-loop
         await db.transaction(async (tx) => {
+          // FR-16/TC-18: when a group deadline passes with a partial headcount
+          // (>= 2 but < target), reprice to the final per-student total and
+          // move the group to a fresh 12h reconfirmation window instead of
+          // expiring it. Only groups that never reached the minimum headcount
+          // expire and release all holds.
+          const confirmed = await repo.findConfirmedParticipants(tx, b.id);
+          if (
+            b.currentState === BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION &&
+            confirmed.length >= MIN_GROUP_HEADCOUNT &&
+            confirmed.length < b.targetGroupSize
+          ) {
+            await repriceGroupForHeadcount(
+              tx,
+              b,
+              confirmed,
+              ACTOR_TYPE.SYSTEM,
+            );
+
+            await repo.updateBookingDeadline(
+              tx,
+              b.id,
+              new Date(Date.now() + RESPONSE_WINDOW_MS),
+            );
+
+            await transition(
+              tx,
+              b.id,
+              BOOKING_STATE.AWAITING_RECONFIRMATION,
+              {
+                actorId: "system",
+                actorType: ACTOR_TYPE.SYSTEM,
+                reason: "Group deadline passed with partial headcount",
+              },
+            );
+
+            for (const p of confirmed) {
+              // eslint-disable-next-line no-await-in-loop
+              await notification.writeBestEffort({
+                db: tx,
+                userId: p.userId,
+                bookingId: b.id,
+                category: NOTIFICATION_CATEGORY.BOOKING,
+                severity: NOTIFICATION_SEVERITY.ACTION,
+                title: "Group deadline reached",
+                body: "Your group did not fill before the deadline. The per-student price was updated — please reconfirm within 12 hours.",
+                eventKey: `booking.${b.id}.deadline_reprice.${p.userId}`,
+                emailRequired: true,
+              });
+            }
+            return;
+          }
+
           await releaseAllParticipantHolds(
             tx,
             b.id,
