@@ -21,7 +21,11 @@ import { evlog } from "evlog/elysia";
 
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
 import { enrichOpenAPISpec, openApiTags, scalarHtml } from "./openapi";
-import { generateRequestId, getClientIp, isValidUploadKey } from "@cogito-app/api/lib/request-id";
+import {
+  generateRequestId,
+  getClientIp,
+  isValidUploadKey,
+} from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { healthCheck } from "@cogito-app/api/lib/db-health";
 

@@ -53,26 +53,24 @@ const serverShape = {
   UPLOAD_DIR: z.string().default("./uploads"),
 } as const;
 
-export const serverEnvSchema = z
-  .object(serverShape)
-  .superRefine((val, ctx) => {
-    if (val.PAYMENT_PROVIDER === "xendit") {
-      if (!val.XENDIT_SECRET_KEY) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["XENDIT_SECRET_KEY"],
-          message: "required when PAYMENT_PROVIDER=xendit",
-        });
-      }
-      if (!val.XENDIT_WEBHOOK_TOKEN) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["XENDIT_WEBHOOK_TOKEN"],
-          message: "required when PAYMENT_PROVIDER=xendit",
-        });
-      }
+export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
+  if (val.PAYMENT_PROVIDER === "xendit") {
+    if (!val.XENDIT_SECRET_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["XENDIT_SECRET_KEY"],
+        message: "required when PAYMENT_PROVIDER=xendit",
+      });
     }
-  });
+    if (!val.XENDIT_WEBHOOK_TOKEN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["XENDIT_WEBHOOK_TOKEN"],
+        message: "required when PAYMENT_PROVIDER=xendit",
+      });
+    }
+  }
+});
 
 export const env = createEnv({
   server: serverShape,
