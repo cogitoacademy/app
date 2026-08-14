@@ -10,10 +10,7 @@ export interface SchedulerHandlers {
     autoCancelled: number;
     failed: number;
   }>;
-  onSendNotificationEmail: (data: {
-    notificationId: string;
-    userId: string;
-  }) => Promise<void>;
+  onSendNotificationEmail: () => Promise<{ sent: number; failed: number }>;
 }
 
 export interface SchedulerService {
@@ -69,8 +66,14 @@ export function createSchedulerService(
           });
           return latenessResult;
         case "send-notification-email":
-          await handlers.onSendNotificationEmail(job.data);
-          break;
+          const sendResult = await handlers.onSendNotificationEmail();
+          log({
+            level: "info",
+            action: "send_notification_email_complete",
+            message: `Dispatched ${sendResult.sent} emails, ${sendResult.failed} failed`,
+            ...sendResult,
+          });
+          return sendResult;
         default:
           log({
             level: "warn",

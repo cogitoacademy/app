@@ -28,57 +28,7 @@ export async function initScheduler(): Promise<void> {
     onExpireBookings: () => services.booking.expireBookings(),
     onReleaseHolds: () => services.booking.releaseExpiredHolds(),
     onCheckTutorLateness: () => services.booking.checkTutorLateness(),
-    onSendNotificationEmail: async (data) => {
-      try {
-        const db = (await import("@cogito-app/db")).db;
-        const { notification: notificationTable, user: userTable } =
-          await import("@cogito-app/db/schema");
-        const { eq } = await import("drizzle-orm");
-        const [notifRow] = await db
-          .select()
-          .from(notificationTable)
-          .where(eq(notificationTable.id, data.notificationId))
-          .limit(1);
-        if (!notifRow) return;
-
-        const [userRow] = await db
-          .select({ email: userTable.email })
-          .from(userTable)
-          .where(eq(userTable.id, data.userId))
-          .limit(1);
-        if (!userRow?.email) return;
-
-        const emailCategory =
-          (notifRow.category as string) === "booking"
-            ? "booking"
-            : (notifRow.category as string) === "payment"
-              ? "payment"
-              : (notifRow.category as string) === "refund"
-                ? "refund"
-                : (notifRow.category as string) === "schedule"
-                  ? "schedule"
-                  : "override";
-
-        await services.email.send({
-          to: userRow.email,
-          subject: notifRow.title,
-          html: notifRow.body,
-          category: emailCategory as
-            | "booking"
-            | "payment"
-            | "refund"
-            | "schedule"
-            | "override",
-        });
-      } catch (error) {
-        log({
-          level: "error",
-          action: "scheduler_email_dispatch_failed",
-          error: { message: String(error) },
-          data,
-        });
-      }
-    },
+    onSendNotificationEmail: () => services.notification.dispatchQueuedEmails(50),
   });
 
   if (!scheduler) {
