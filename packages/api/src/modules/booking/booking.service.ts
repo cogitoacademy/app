@@ -1375,7 +1375,7 @@ export function createBookingService(deps: {
         scheduledEndAt: pending.proposedEndAt,
       });
 
-      const updated = await transition(
+      const transitioned = await transition(
         tx,
         bookingId,
         BOOKING_STATE.AWAITING_RECONFIRMATION,
@@ -1408,7 +1408,7 @@ export function createBookingService(deps: {
         emailRequired: true,
       });
 
-      return { proposal: pending, updated };
+      return { proposal: pending, updated: transitioned };
     });
 
     // Move the provider-side meeting event to the new time (FR-21/OQ-05).
