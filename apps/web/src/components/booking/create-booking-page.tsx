@@ -50,6 +50,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 
+import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
@@ -561,13 +562,14 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             </CardHeader>
             <CardBody>
               {availableSlots.length === 0 ? (
-                <div className="rounded-lg border border-item-border bg-item p-5 text-center">
-                  <Heading size="sm">No matching slots yet</Heading>
-                  <Text className="mt-2 text-muted">
-                    This tutor has no future {effectiveModality} availability.
-                    Try another modality or tutor.
-                  </Text>
-                </div>
+                <EmptyState
+                  icon={<IconCalendarEvent />}
+                  title="No matching slots yet"
+                  description={`This tutor has no future ${effectiveModality} availability. Try another modality or tutor.`}
+                  tone="secondary"
+                  size="compact"
+                  className="rounded-lg border border-item-border"
+                />
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {availableSlots.map((slot) => {

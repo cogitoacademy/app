@@ -30,6 +30,7 @@ import {
   getBookingStateVariant,
   getBookingTypeLabel,
 } from "@/components/booking/booking-ui";
+import { EmptyStateCard } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 const ACTIVE_STATES = ["awaiting_tutor_review", "scheduled"];
@@ -103,18 +104,12 @@ export function TutorBookingsPage() {
       </div>
 
       {bookings.length === 0 ? (
-        <Card>
-          <CardBody className="flex min-h-72 flex-col items-center justify-center text-center">
-            <IconBox variant="secondary-subtle" size="lg" className="mb-4">
-              <IconInbox />
-            </IconBox>
-            <Heading size="sm">No bookings assigned yet</Heading>
-            <Text className="mt-2 max-w-md text-muted">
-              New student requests will appear here as soon as they are ready
-              for your review.
-            </Text>
-          </CardBody>
-        </Card>
+        <EmptyStateCard
+          icon={<IconInbox />}
+          title="No bookings assigned yet"
+          description="New student requests will appear here as soon as they are ready for your review."
+          tone="secondary"
+        />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {bookings.map((booking) => {

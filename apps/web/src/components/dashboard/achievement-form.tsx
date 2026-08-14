@@ -14,6 +14,7 @@ import {
 } from "@cogito-app/ui/components/selia/dialog";
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
@@ -31,7 +32,7 @@ import {
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconPlus, IconX } from "@tabler/icons-react";
+import { IconPhoto, IconPlus, IconX } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -104,8 +105,17 @@ const achievementFormSchema = z.object({
   location: z.string().max(255),
   description: z.string().max(2000),
   subjects: z.array(z.string().max(255)).max(20),
-  imageUrl: z.string().max(2048),
+  imageUrl: z.string().trim().url("Enter a valid public image URL").max(2048),
 });
+
+function isValidImageUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 export function AchievementForm({
   mode,
@@ -251,7 +261,7 @@ export function AchievementForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup>
+      <DialogPopup className="max-w-lg">
         <DialogHeader className="flex-col items-start gap-1.5">
           <DialogTitle>
             {mode === "create" ? "Add Achievement" : "Edit Achievement"}
@@ -263,7 +273,7 @@ export function AchievementForm({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody>
+        <DialogBody className="min-h-0">
           {formError ? (
             <Text className="mb-4 text-danger">{formError}</Text>
           ) : null}
@@ -275,7 +285,7 @@ export function AchievementForm({
               void form.handleSubmit();
             }}
           >
-            <Stack direction="column" spacing="lg">
+            <Stack direction="column" spacing="md">
               <form.Field name="eventName">
                 {(field) => (
                   <Field>
@@ -343,6 +353,50 @@ export function AchievementForm({
                       onChange={(e) => field.handleChange(e.target.value)}
                       placeholder="e.g. Best Delegate, Juara 1"
                     />
+                    {field.state.meta.errors.map((error) => (
+                      <FieldError key={String(error)}>
+                        {String(error)}
+                      </FieldError>
+                    ))}
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="imageUrl">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>
+                      Achievement image <span className="text-danger">*</span>
+                    </FieldLabel>
+                    <FieldDescription>
+                      Add a public image of the certificate, medal, or event. It
+                      will appear on your achievement card after approval.
+                    </FieldDescription>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      type="url"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="https://..."
+                    />
+                    {isValidImageUrl(field.state.value) ? (
+                      <div className="mt-1 flex h-36 items-center justify-center overflow-hidden rounded-lg border border-item-border bg-accent">
+                        <img
+                          src={field.state.value}
+                          alt="Achievement evidence preview"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : field.state.value ? (
+                      <div className="mt-1 flex items-center gap-2 rounded-lg border border-item-border bg-accent p-3 text-muted">
+                        <IconPhoto className="size-4 shrink-0" />
+                        <Text className="text-sm">
+                          Preview appears after you enter a valid image URL.
+                        </Text>
+                      </div>
+                    ) : null}
                     {field.state.meta.errors.map((error) => (
                       <FieldError key={String(error)}>
                         {String(error)}
@@ -471,24 +525,6 @@ export function AchievementForm({
                         ))}
                       </div>
                     )}
-                  </Field>
-                )}
-              </form.Field>
-
-              <form.Field name="imageUrl">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>
-                      Certificate / Photo URL
-                    </FieldLabel>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="https://..."
-                    />
                   </Field>
                 )}
               </form.Field>

@@ -1,7 +1,9 @@
 "use client";
 
 import type { CogitoUser } from "@cogito-app/auth";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
@@ -14,15 +16,28 @@ import {
 import { Divider } from "@cogito-app/ui/components/selia/divider";
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
+import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconUser } from "@tabler/icons-react";
-import { useForm } from "@tanstack/react-form";
+import {
+  IconBook2,
+  IconMail,
+  IconSchool,
+  IconUser,
+  IconUsers,
+} from "@tabler/icons-react";
+import {
+  type FormAsyncValidateOrFn,
+  type FormValidateOrFn,
+  type ReactFormExtendedApi,
+  useForm,
+} from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { orpc } from "@/utils/orpc";
@@ -41,6 +56,23 @@ type ProfileRecord = Partial<
 >;
 
 type ProfileUser = Pick<CogitoUser, "name" | "email" | "role">;
+type ProfileSyncValidator = FormValidateOrFn<ProfileValues> | undefined;
+type ProfileAsyncValidator = FormAsyncValidateOrFn<ProfileValues> | undefined;
+
+type ProfileForm = ReactFormExtendedApi<
+  ProfileValues,
+  ProfileSyncValidator,
+  ProfileSyncValidator,
+  ProfileAsyncValidator,
+  ProfileSyncValidator,
+  ProfileAsyncValidator,
+  ProfileSyncValidator,
+  ProfileAsyncValidator,
+  ProfileSyncValidator,
+  ProfileAsyncValidator,
+  ProfileAsyncValidator,
+  unknown
+>;
 
 function getProfileValues(profile?: ProfileRecord): ProfileValues {
   return {
@@ -53,9 +85,55 @@ function getProfileValues(profile?: ProfileRecord): ProfileValues {
   };
 }
 
-function formatRole(role?: string | null) {
-  if (!role) return "Student";
-  return role.charAt(0).toUpperCase() + role.slice(1);
+function getInitials(name?: string) {
+  return (name ?? "Student")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function FieldBlock({
+  form,
+  name,
+  label,
+  description,
+  placeholder,
+  type = "text",
+}: {
+  form: ProfileForm;
+  name: keyof ProfileValues;
+  label: string;
+  description?: string;
+  placeholder: string;
+  type?: "email" | "tel" | "text";
+}) {
+  return (
+    <form.Field name={name}>
+      {(field) => (
+        <Field>
+          <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+          {description ? (
+            <FieldDescription>{description}</FieldDescription>
+          ) : null}
+          <Input
+            id={field.name}
+            name={field.name}
+            type={type}
+            value={field.state.value}
+            onBlur={field.handleBlur}
+            onChange={(event) => field.handleChange(event.target.value)}
+            placeholder={placeholder}
+          />
+          {field.state.meta.errors.map((error) => (
+            <FieldError key={String(error)}>{String(error)}</FieldError>
+          ))}
+        </Field>
+      )}
+    </form.Field>
+  );
 }
 
 export function ProfilePage({
@@ -68,6 +146,8 @@ export function ProfilePage({
   isLoading?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const profileValues = useMemo(() => getProfileValues(profile), [profile]);
+  const completedFields = Object.values(profileValues).filter(Boolean).length;
 
   const updateMutation = useMutation(
     orpc.auth.updateProfile.mutationOptions({
@@ -85,10 +165,13 @@ export function ProfilePage({
   );
 
   const form = useForm({
-    defaultValues: getProfileValues(profile),
+    defaultValues: profileValues,
     onSubmit: async ({ value }) => {
       const clean = Object.fromEntries(
-        Object.entries(value).map(([k, v]) => [k, v?.trim() || undefined]),
+        Object.entries(value).map(([key, fieldValue]) => [
+          key,
+          fieldValue.trim() || undefined,
+        ]),
       );
       await updateMutation.mutateAsync(clean);
       form.reset(value);
@@ -96,10 +179,8 @@ export function ProfilePage({
   });
 
   useEffect(() => {
-    if (!isLoading && !form.state.isDirty) {
-      form.reset(getProfileValues(profile));
-    }
-  }, [form, isLoading, profile]);
+    if (!isLoading && !form.state.isDirty) form.reset(profileValues);
+  }, [form, isLoading, profileValues]);
 
   if (isLoading) {
     return (
@@ -113,156 +194,126 @@ export function ProfilePage({
 
   return (
     <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      onSubmit={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
         void form.handleSubmit();
       }}
     >
       <Stack direction="column" spacing="lg">
+        <div>
+          <Heading size="md">My Profile</Heading>
+          <Text className="mt-1 text-muted">
+            Keep your learning details and parent contact information current.
+          </Text>
+        </div>
+
         <Card>
-          <CardHeader>
-            <IconUser className="size-5" />
-            <CardTitle>Account</CardTitle>
-            <CardDescription>
-              Your sign-in details and account role
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="grid gap-4 sm:grid-cols-3">
-            <ProfileSummary label="Name" value={user?.name ?? "—"} />
-            <ProfileSummary label="Email" value={user?.email ?? "—"} />
-            <ProfileSummary label="Role" value={formatRole(user?.role)} />
+          <CardBody className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <Avatar size="lg">
+                <AvatarFallback>{getInitials(user?.name)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <Heading size="sm" className="truncate">
+                  {user?.name ?? "Student"}
+                </Heading>
+                <div className="mt-1 flex items-center gap-1.5 text-muted">
+                  <IconMail className="size-4 shrink-0" />
+                  <Text className="truncate text-sm">{user?.email ?? "—"}</Text>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Badge variant="info">Student account</Badge>
+              <Text className="text-sm text-muted">
+                {completedFields}/6 details added
+              </Text>
+            </div>
           </CardBody>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Student Profile</CardTitle>
+            <IconUser className="size-5" />
+            <CardTitle>Contact details</CardTitle>
             <CardDescription>
-              Update your details and parent contact information
+              How tutors and the Cogito team can reach you.
             </CardDescription>
           </CardHeader>
-          <CardBody>
-            <Stack direction="column" spacing="lg">
-              <Stack direction="column" spacing="sm">
-                <form.Field name="phoneNumber">
-                  {(field) => (
-                    <Field>
-                      <FieldLabel htmlFor={field.name}>Phone Number</FieldLabel>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder="e.g. +62 812-3456-7890"
-                      />
-                      {field.state.meta.errors.map((error) => (
-                        <FieldError key={String(error)}>
-                          {String(error)}
-                        </FieldError>
-                      ))}
-                    </Field>
-                  )}
-                </form.Field>
-
-                <form.Field name="schoolName">
-                  {(field) => (
-                    <Field>
-                      <FieldLabel htmlFor={field.name}>School Name</FieldLabel>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder="e.g. SMA Negeri 1 Jakarta"
-                      />
-                    </Field>
-                  )}
-                </form.Field>
-
-                <form.Field name="gradeLevel">
-                  {(field) => (
-                    <Field>
-                      <FieldLabel htmlFor={field.name}>Grade Level</FieldLabel>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder="e.g. Grade 11"
-                      />
-                    </Field>
-                  )}
-                </form.Field>
-              </Stack>
-
-              <Divider />
-
-              <Stack direction="column" spacing="sm">
-                <Text className="text-sm text-muted">
-                  Parent contact is optional. Leave blank if not applicable.
-                </Text>
-
-                <form.Field name="parentName">
-                  {(field) => (
-                    <Field>
-                      <FieldLabel htmlFor={field.name}>Parent Name</FieldLabel>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder="e.g. John Doe"
-                      />
-                    </Field>
-                  )}
-                </form.Field>
-
-                <form.Field name="parentPhone">
-                  {(field) => (
-                    <Field>
-                      <FieldLabel htmlFor={field.name}>Parent Phone</FieldLabel>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder="e.g. +62 812-3456-7890"
-                      />
-                    </Field>
-                  )}
-                </form.Field>
-
-                <form.Field name="parentEmail">
-                  {(field) => (
-                    <Field>
-                      <FieldLabel htmlFor={field.name}>Parent Email</FieldLabel>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        type="email"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder="e.g. parent@example.com"
-                      />
-                      {field.state.meta.errors.map((error) => (
-                        <FieldError key={String(error)}>
-                          {String(error)}
-                        </FieldError>
-                      ))}
-                    </Field>
-                  )}
-                </form.Field>
-              </Stack>
-            </Stack>
+          <CardBody className="grid gap-5 sm:grid-cols-2">
+            <FieldBlock
+              form={form}
+              name="phoneNumber"
+              label="Phone number"
+              description="Use a WhatsApp number if possible."
+              type="tel"
+              placeholder="e.g. +62 812-3456-7890"
+            />
           </CardBody>
-          <CardFooter className="justify-end">
+
+          <Divider />
+
+          <CardHeader>
+            <IconSchool className="size-5" />
+            <CardTitle>School</CardTitle>
+            <CardDescription>
+              Helps tutors prepare sessions at the right level.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="grid gap-5 sm:grid-cols-2">
+            <FieldBlock
+              form={form}
+              name="schoolName"
+              label="School name"
+              placeholder="e.g. SMA Negeri 1 Jakarta"
+            />
+            <FieldBlock
+              form={form}
+              name="gradeLevel"
+              label="Grade level"
+              placeholder="e.g. Grade 11"
+            />
+          </CardBody>
+
+          <Divider />
+
+          <CardHeader>
+            <IconUsers className="size-5" />
+            <CardTitle>Parent or guardian</CardTitle>
+            <CardDescription>
+              Optional, but useful for coordination and important updates.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="grid gap-5 sm:grid-cols-2">
+            <FieldBlock
+              form={form}
+              name="parentName"
+              label="Parent / guardian name"
+              placeholder="e.g. Jane Doe"
+            />
+            <FieldBlock
+              form={form}
+              name="parentPhone"
+              label="Parent / guardian phone"
+              type="tel"
+              placeholder="e.g. +62 812-3456-7890"
+            />
+            <div className="sm:col-span-2">
+              <FieldBlock
+                form={form}
+                name="parentEmail"
+                label="Parent / guardian email"
+                type="email"
+                placeholder="e.g. parent@example.com"
+              />
+            </div>
+          </CardBody>
+          <CardFooter className="justify-between">
+            <div className="hidden items-center gap-2 text-sm text-muted sm:flex">
+              <IconBook2 className="size-4" />
+              Your details are only used for your Cogito learning experience.
+            </div>
             <form.Subscribe
               selector={(state) => ({
                 canSubmit: state.canSubmit,
@@ -276,7 +327,7 @@ export function ProfilePage({
                   disabled={!canSubmit || !isDirty || isSubmitting}
                   progress={isSubmitting}
                 >
-                  Save Profile
+                  Save changes
                 </Button>
               )}
             </form.Subscribe>
@@ -284,14 +335,5 @@ export function ProfilePage({
         </Card>
       </Stack>
     </form>
-  );
-}
-
-function ProfileSummary({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <Text className="text-sm text-muted">{label}</Text>
-      <Text className="font-medium">{value}</Text>
-    </div>
   );
 }

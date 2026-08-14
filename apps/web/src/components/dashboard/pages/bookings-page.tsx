@@ -32,6 +32,7 @@ import {
   getBookingStateVariant,
   getBookingTypeLabel,
 } from "@/components/booking/booking-ui";
+import { EmptyStateCard } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 const AWAITING_STATES = new Set([
@@ -151,28 +152,19 @@ export function BookingsPage() {
           </CardBody>
         </Card>
       ) : bookings.length === 0 ? (
-        <Card className="overflow-hidden">
-          <CardBody className="relative flex min-h-72 flex-col items-center justify-center text-center">
-            <div className="absolute inset-x-12 top-0 h-28 rounded-full bg-info/10 blur-3xl" />
-            <IconBox variant="info-subtle" size="lg" className="relative mb-4">
-              <IconCalendarEvent />
-            </IconBox>
-            <Heading size="sm" className="relative">
-              Your learning calendar starts here
-            </Heading>
-            <Text className="relative mt-2 max-w-md text-muted">
-              Browse verified tutors, choose the right modality, and your
-              session will appear here once booked.
-            </Text>
+        <EmptyStateCard
+          icon={<IconCalendarEvent />}
+          title="Your learning calendar starts here"
+          description="Browse verified tutors, choose the right modality, and your session will appear here once booked."
+          action={
             <Button
               render={<Link to="/tutors" aria-label="Browse tutors" />}
               nativeButton={false}
-              className="relative mt-5"
             >
               Browse tutors
             </Button>
-          </CardBody>
-        </Card>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {bookings.map((booking) => {

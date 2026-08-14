@@ -51,6 +51,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@cogito-app/ui/components/selia/item";
+import { EmptyStateCard } from "@/components/empty-state";
 import {
   Select,
   SelectItem,
@@ -199,19 +200,16 @@ export function AchievementModerationPage() {
       </div>
 
       {visibleAchievements.length === 0 ? (
-        <Card>
-          <CardBody className="flex min-h-64 flex-col items-center justify-center text-center">
-            <IconBox variant="secondary-subtle" size="lg" className="mb-4">
-              <IconInbox />
-            </IconBox>
-            <Heading size="sm">No matching submissions</Heading>
-            <Text className="mt-2 text-muted">
-              {statusFilter === "pending"
-                ? "The moderation queue is clear."
-                : "Try another status filter."}
-            </Text>
-          </CardBody>
-        </Card>
+        <EmptyStateCard
+          icon={<IconInbox />}
+          title="No matching submissions"
+          description={
+            statusFilter === "pending"
+              ? "The moderation queue is clear."
+              : "Try another status filter."
+          }
+          tone={statusFilter === "pending" ? "success" : "secondary"}
+        />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {visibleAchievements.map((achievement) => (

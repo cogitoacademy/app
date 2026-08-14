@@ -125,7 +125,7 @@ export function AppSidebar({
   return (
     <Sidebar
       size="default"
-      className="border-border bg-background max-lg:border-r xl:bg-transparent"
+      className="border-border bg-background max-xl:border-r xl:bg-transparent"
     >
       <SidebarHeader>
         <SidebarLogo>

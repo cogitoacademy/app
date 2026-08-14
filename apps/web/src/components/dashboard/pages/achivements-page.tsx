@@ -1,6 +1,6 @@
 "use client";
 
-import { IconPlus } from "@tabler/icons-react";
+import { IconFilterOff, IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -10,6 +10,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { EmptyStateCard } from "@/components/empty-state";
 import { AchievementBanner } from "../achievement-banner";
 import { AchievementCard } from "../achievement-card";
 import { AchievementEmptyState } from "../achievement-empty-state";
@@ -97,9 +98,13 @@ export function AchivementsPage() {
       {items.length === 0 ? (
         <AchievementEmptyState />
       ) : filtered.length === 0 ? (
-        <Text className="py-8 text-center text-muted">
-          No achievements match the selected filters.
-        </Text>
+        <EmptyStateCard
+          icon={<IconFilterOff />}
+          title="No matching achievements"
+          description="Try another category or status filter."
+          tone="secondary"
+          size="compact"
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((a) => (

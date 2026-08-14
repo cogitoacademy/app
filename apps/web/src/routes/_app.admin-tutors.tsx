@@ -24,7 +24,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { client, orpc } from "@/utils/orpc";
 import { TutorInviteForm } from "@/components/admin/tutor-invite-form";
 import { TutorReviewCard } from "@/components/admin/tutor-review-card";
-import { IconCopy, IconRefresh, IconTrash } from "@tabler/icons-react";
+import {
+  IconCopy,
+  IconInbox,
+  IconRefresh,
+  IconTrash,
+} from "@tabler/icons-react";
+import { EmptyState } from "@/components/empty-state";
 
 export const Route = createFileRoute("/_app/admin-tutors")({
   component: RouteComponent,
@@ -131,7 +137,14 @@ function RouteComponent() {
         </CardHeader>
         <CardBody>
           {invites.length === 0 ? (
-            <Text className="text-muted">No invitations found.</Text>
+            <EmptyState
+              icon={<IconInbox />}
+              title="No invitations found"
+              description="New tutor invitations will appear here."
+              tone="secondary"
+              size="compact"
+              className="rounded-lg"
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {invites.map(
@@ -248,7 +261,14 @@ function RouteComponent() {
         </CardHeader>
         <CardBody>
           {profiles.length === 0 ? (
-            <Text className="text-muted">No tutor profiles found.</Text>
+            <EmptyState
+              icon={<IconInbox />}
+              title="No tutor profiles found"
+              description="Tutor profiles matching this status will appear here."
+              tone="secondary"
+              size="compact"
+              className="rounded-lg"
+            />
           ) : (
             <div className="grid items-stretch gap-4 lg:grid-cols-2">
               {profiles.map(

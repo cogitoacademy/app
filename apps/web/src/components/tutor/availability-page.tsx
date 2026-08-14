@@ -43,6 +43,7 @@ import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { EmptyState } from "@/components/empty-state";
 import {
   formatBookingDate,
   formatBookingTimeRange,
@@ -567,20 +568,14 @@ export function AvailabilityPage() {
           </CardHeader>
           <CardBody>
             {slots.length === 0 ? (
-              <div className="rounded-lg border border-item-border bg-item p-8 text-center">
-                <IconBox
-                  variant="secondary-subtle"
-                  size="lg"
-                  className="mx-auto mb-4"
-                >
-                  <IconClock />
-                </IconBox>
-                <Heading size="sm">Your calendar is open</Heading>
-                <Text className="mt-2 text-muted">
-                  Add a time window and students will be able to choose it when
-                  booking a solo session.
-                </Text>
-              </div>
+              <EmptyState
+                icon={<IconClock />}
+                title="Your calendar is open"
+                description="Add a time window and students will be able to choose it when booking a solo session."
+                tone="secondary"
+                size="compact"
+                className="rounded-lg border border-item-border"
+              />
             ) : (
               <div className="flex flex-col gap-3">
                 {slots.map((slot) => (

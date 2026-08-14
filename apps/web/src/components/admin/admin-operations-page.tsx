@@ -55,6 +55,7 @@ import {
   TableHeader,
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
+import { EmptyState } from "@/components/empty-state";
 import {
   Tabs,
   TabsItem,
@@ -244,9 +245,13 @@ function BookingQueue() {
               </Table>
             </TableContainer>
             {queueQuery.data.items.length === 0 ? (
-              <Text className="py-8 text-center text-muted">
-                No bookings match these filters.
-              </Text>
+              <EmptyState
+                icon={<IconSearch />}
+                title="No matching bookings"
+                description="Try adjusting the booking state or search filters."
+                tone="secondary"
+                size="compact"
+              />
             ) : null}
           </CardBody>
         </Card>

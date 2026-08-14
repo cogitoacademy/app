@@ -1,18 +1,23 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import {
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
-} from "@cogito-app/ui/components/selia/card";
-import { Text } from "@cogito-app/ui/components/selia/text";
+  Item,
+  ItemAction,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemMeta,
+  ItemTitle,
+} from "@cogito-app/ui/components/selia/item";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -36,22 +41,80 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+export type TutorSummaryData = {
+  id: string;
+  displayName: string | null;
+  shortBio: string | null;
+  expertise: string[];
+  modality: string | null;
+  prices?: Record<string, number> | null;
+  user: { name: string | null; image: string | null } | null;
+};
+
 type TutorCardProps = {
-  tutor: {
-    id: string;
-    displayName: string | null;
-    shortBio: string | null;
-    expertise: string[];
-    modality: string | null;
-    publishedAt: Date | null;
-    user: { name: string | null; image: string | null } | null;
-  };
+  tutor: TutorSummaryData;
   onClick: () => void;
 };
 
-export function TutorCard({ tutor, onClick }: TutorCardProps) {
+export function TutorSummary({
+  tutor,
+  action,
+}: {
+  tutor: TutorSummaryData;
+  action?: ReactNode;
+}) {
   const tutorName = tutor.displayName ?? tutor.user?.name ?? "Tutor";
+  const startingPrice = tutor.prices
+    ? Math.min(...Object.values(tutor.prices))
+    : null;
 
+  return (
+    <Item className="items-center border-0 bg-transparent p-0!" size="lg">
+      <ItemMedia>
+        <Avatar size="md">
+          <AvatarImage src={tutor.user?.image ?? undefined} alt={tutorName} />
+          <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
+        </Avatar>
+      </ItemMedia>
+      <ItemContent className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <ItemTitle>{tutorName}</ItemTitle>
+          {tutor.modality && (
+            <Badge
+              variant={MODALITY_VARIANTS[tutor.modality] ?? "secondary"}
+              size="sm"
+            >
+              {MODALITY_LABELS[tutor.modality] ?? tutor.modality}
+            </Badge>
+          )}
+        </div>
+        <ItemDescription className="line-clamp-2">
+          {tutor.shortBio ?? "A verified Cogito tutor ready to help you learn."}
+        </ItemDescription>
+        <ItemMeta className="mt-2 flex flex-wrap gap-1.5">
+          {tutor.expertise.slice(0, 3).map((expertise) => (
+            <Badge key={expertise} variant="tertiary" size="sm">
+              {expertise}
+            </Badge>
+          ))}
+          {tutor.expertise.length > 3 && (
+            <Badge variant="secondary" size="sm">
+              +{tutor.expertise.length - 3}
+            </Badge>
+          )}
+          {startingPrice !== null && (
+            <span className="ml-1 self-center">From {startingPrice} Marks</span>
+          )}
+        </ItemMeta>
+      </ItemContent>
+      {action ? (
+        <ItemAction className="hidden sm:flex">{action}</ItemAction>
+      ) : null}
+    </Item>
+  );
+}
+
+export function TutorCard({ tutor, onClick }: TutorCardProps) {
   return (
     <Card
       className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
@@ -65,39 +128,8 @@ export function TutorCard({ tutor, onClick }: TutorCardProps) {
       role="button"
       tabIndex={0}
     >
-      <CardHeader className="grid-cols-[auto_1fr_auto]!">
-        <Avatar size="md">
-          <AvatarImage src={tutor.user?.image ?? undefined} alt={tutorName} />
-          <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
-        </Avatar>
-        <CardTitle>{tutorName}</CardTitle>
-        {tutor.modality && (
-          <Badge
-            variant={MODALITY_VARIANTS[tutor.modality] ?? "secondary"}
-            size="sm"
-          >
-            {MODALITY_LABELS[tutor.modality] ?? tutor.modality}
-          </Badge>
-        )}
-      </CardHeader>
-      <CardBody className="flex flex-col gap-2">
-        {tutor.shortBio && (
-          <Text className="text-dimmed line-clamp-2">{tutor.shortBio}</Text>
-        )}
-        {tutor.expertise && tutor.expertise.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {tutor.expertise.slice(0, 4).map((e) => (
-              <Badge key={e} variant="secondary" size="sm">
-                {e}
-              </Badge>
-            ))}
-            {tutor.expertise.length > 4 && (
-              <Badge variant="tertiary" size="sm">
-                +{tutor.expertise.length - 4}
-              </Badge>
-            )}
-          </div>
-        )}
+      <CardBody>
+        <TutorSummary tutor={tutor} />
       </CardBody>
     </Card>
   );
