@@ -17,7 +17,6 @@ import {
   InvalidTutorPricingError,
   OptimisticLockError,
   InvalidDateRangeError,
-
   WeeklyAvailabilityRangeError,
 } from "./tutor.errors";
 
@@ -252,8 +251,6 @@ export function createTutorService(deps: {
       endDate: end,
     });
   }
-
-
 
   async function createWeeklyAvailability(
     userId: string,

@@ -176,9 +176,6 @@ async function findUserEmails(
     .where(inArray(user.id, userIds));
 }
 
-
-
-
 /**
  * Lists participants whose confirmation state is RECONFIRMED for a booking.
  *
@@ -262,9 +259,6 @@ async function updateBookingPriceSnapshot(
       tutorShare: number;
       cogitoTake: number;
 
-
-
-
       baselineCogitoTake: number;
       baselineTutorShare: number;
       extraTotal: number;
@@ -276,9 +270,6 @@ async function updateBookingPriceSnapshot(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
-
-
-
 
 /**
  * Sets a booking's confirmed headcount.
@@ -403,9 +394,6 @@ async function updateRescheduleProposal(
     .where(eq(bookingRescheduleProposal.id, proposalId));
 }
 
-
-
-
 /**
  * Inserts a session for a series booking.
  *
@@ -493,9 +481,6 @@ async function listSessionNotes(conn: DbOrTx, bookingId: string) {
     .orderBy(desc(sessionNote.createdAt));
 }
 
-
-
-
 /**
  * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
  *
@@ -556,9 +541,6 @@ async function updateBookingSchedule(
 ) {
   await conn.update(booking).set(values).where(eq(booking.id, bookingId));
 }
-
-
-
 
 /**
  * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).
@@ -679,7 +661,6 @@ async function findCompletedBookingsByTutor(
     .from(booking)
     .where(and(...conditions));
 }
-
 
 /**
  * Updates a booking with optimistic concurrency via version, returning the new row and version.
