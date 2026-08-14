@@ -153,6 +153,8 @@ function makeMeeting() {
       status: "created",
       errorReason: null,
     })),
+    updateEvent: mock(async () => {}),
+    cancelEvent: mock(async () => {}),
   };
 }
 
@@ -932,6 +934,29 @@ describe("BookingService", () => {
 
       expect(wallet.release).not.toHaveBeenCalled();
     });
+
+    test("OQ-05: cancel deletes the provider-side meeting event (best-effort)", async () => {
+      const booking = makeBooking({
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const { service, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () => makeParticipant()),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "cancelled" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.cancel("student1", "b1");
+
+      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
+    });
   });
 
   describe("tutorAccept", () => {
@@ -1227,6 +1252,26 @@ describe("BookingService", () => {
       const body = notification.writeBestEffort.mock.calls[0][0].body as string;
       expect(body).not.toContain("<script>");
       expect(body).toContain("&lt;script&gt;");
+    });
+
+    test("OQ-05: tutorDecline cancels the provider-side meeting event (best-effort)", async () => {
+      const booking = makeBooking({ holdAmount: 42 });
+      const { service, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "declined" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.tutorDecline("b1", "tutor1", "schedule conflict");
+
+      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
     });
   });
 
@@ -2041,7 +2086,11 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.withdraw("student1", "b1", "late withdrawal");
+      const result = await service.withdraw(
+        "student1",
+        "b1",
+        "late withdrawal",
+      );
       expect(result).toEqual({ withdrawn: true, late: true });
 
       expect(wallet.release).not.toHaveBeenCalled();
@@ -2282,6 +2331,37 @@ describe("BookingService", () => {
         actorType: "system",
         reason: "Booking expired",
       });
+    });
+
+    test("OQ-05: expireBookings cancels the provider-side meeting event (best-effort)", async () => {
+      const expiringBooking = makeBooking({
+        currentState: "awaiting_tutor_review",
+        holdAmount: 42,
+        proposerId: "student1",
+      });
+
+      const { service, meeting } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
+          findBookingById: mock(async () => ({
+            ...expiringBooking,
+            currentState: "awaiting_tutor_review",
+            version: 1,
+          })),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...expiringBooking, currentState: "expired" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.expireBookings();
+
+      expect(result).toEqual({ expired: 1, failed: 0 });
+      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
     });
 
     test("writes expiry notifications to proposer and tutor", async () => {
@@ -3992,6 +4072,37 @@ describe("BookingService", () => {
       expect(notification.write.mock.calls[0][0]).toMatchObject({
         userId: "tutor1",
         title: "Reschedule accepted",
+      });
+    });
+
+    test("acceptReschedule moves the provider-side meeting event to the new time (OQ-05)", async () => {
+      const booking = makeRescheduleBooking();
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      await service.acceptReschedule("student1", "b1");
+
+      expect(meeting.updateEvent).toHaveBeenCalledWith("b1", {
+        startAt: proposal.proposedStartAt,
+        endAt: proposal.proposedEndAt,
       });
     });
 

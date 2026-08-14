@@ -120,7 +120,12 @@ function computeMeetingInfo(b: {
   meeting: { status: string; meetingUrl: string | null } | null;
 }): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
   const event = b.meeting;
-  if (!event || event.status === "pending" || event.status === "manual") {
+  if (
+    !event ||
+    event.status === "pending" ||
+    event.status === "manual" ||
+    event.status === "cancelled"
+  ) {
     return { meetingStatus: "pending", meetingUrl: null };
   }
   if (event.status === "failed") {
@@ -626,7 +631,7 @@ export function createBookingService(deps: {
     bookingId: string,
     cancellationReason?: string,
   ) {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
@@ -733,6 +738,12 @@ export function createBookingService(deps: {
 
       return updated;
     });
+
+    // Delete the provider-side meeting event once the booking is terminal
+    // (FR-21/OQ-05). Best-effort: a Google failure must not break cancellation.
+    await meeting.cancelEvent(bookingId);
+
+    return result;
   }
 
   async function tutorAccept(bookingId: string, tutorId: string) {
@@ -867,7 +878,7 @@ export function createBookingService(deps: {
     tutorId: string,
     reason?: string,
   ) {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
@@ -905,6 +916,12 @@ export function createBookingService(deps: {
 
       return updated;
     });
+
+    // Best-effort cleanup of the provider-side event (a declined booking may
+    // have a live meeting if it was previously scheduled).
+    await meeting.cancelEvent(bookingId);
+
+    return result;
   }
 
   async function completeSession(
@@ -1336,7 +1353,7 @@ export function createBookingService(deps: {
   }
 
   async function acceptReschedule(userId: string, bookingId: string) {
-    return db.transaction(async (tx) => {
+    const { proposal, updated } = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.proposerId !== userId)
@@ -1345,17 +1362,17 @@ export function createBookingService(deps: {
         throw new BookingRescheduleNotPendingError(bookingId);
       }
 
-      const proposal = await repo.findPendingRescheduleProposal(tx, bookingId);
-      if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
+      const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
+      if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
 
-      await repo.updateRescheduleProposal(tx, proposal.id, {
+      await repo.updateRescheduleProposal(tx, pending.id, {
         status: "accepted",
         decidedAt: new Date(),
       });
 
       await repo.updateBookingSchedule(tx, bookingId, {
-        scheduledStartAt: proposal.proposedStartAt,
-        scheduledEndAt: proposal.proposedEndAt,
+        scheduledStartAt: pending.proposedStartAt,
+        scheduledEndAt: pending.proposedEndAt,
       });
 
       const updated = await transition(
@@ -1367,8 +1384,8 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.STUDENT,
           reason: "Student accepted the reschedule proposal",
           metadata: {
-            proposedStartAt: proposal.proposedStartAt,
-            proposedEndAt: proposal.proposedEndAt,
+            proposedStartAt: pending.proposedStartAt,
+            proposedEndAt: pending.proposedEndAt,
           },
         },
       );
@@ -1391,8 +1408,17 @@ export function createBookingService(deps: {
         emailRequired: true,
       });
 
-      return updated;
+      return { proposal: pending, updated };
     });
+
+    // Move the provider-side meeting event to the new time (FR-21/OQ-05).
+    // Best-effort: a Google failure must not roll back the accepted reschedule.
+    await meeting.updateEvent(bookingId, {
+      startAt: proposal.proposedStartAt,
+      endAt: proposal.proposedEndAt,
+    });
+
+    return updated;
   }
 
   async function rejectReschedule(userId: string, bookingId: string) {
@@ -2199,6 +2225,10 @@ export function createBookingService(deps: {
             emailRequired: noShow,
           });
         });
+        // Best-effort cleanup of the provider-side event once the booking is
+        // terminal (FR-21/OQ-05). No-op when no live event exists.
+        // eslint-disable-next-line no-await-in-loop
+        await meeting.cancelEvent(b.id);
         succeeded++;
       } catch (error) {
         failed++;
@@ -2332,6 +2362,9 @@ export function createBookingService(deps: {
             eventKey: `booking.${b.id}.tutor_no_show.tutor`,
           });
         });
+        // Best-effort cleanup of the provider-side event (NO_SHOW is terminal).
+        // eslint-disable-next-line no-await-in-loop
+        await meeting.cancelEvent(b.id);
         autoCancelled++;
       } catch (error) {
         failed++;
