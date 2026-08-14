@@ -182,7 +182,7 @@ describe("G5: series session cancellation rules", () => {
     expect(wAfter.heldBalance).toBe(wBefore.heldBalance - 50);
   });
 
-  test("cancel another session inside H-2 → rejected", async () => {
+  test("TC-30: cancel a series session inside H-2 → forfeits the session hold", async () => {
     const sessions = await studentClient.booking.listSessions({ bookingId });
     const target = sessions.find((s) => s.currentState === "scheduled")!;
 
@@ -192,9 +192,23 @@ describe("G5: series session cancellation rules", () => {
       .set({ scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000) })
       .where(eq(bookingSession.id, target.id));
 
-    await expect(
-      studentClient.booking.cancelSession({ sessionId: target.id }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const wBefore = await studentClient.wallet.get({});
+    const result = await studentClient.booking.cancelSession({
+      sessionId: target.id,
+    });
+    expect(result.cancelled).toBe(true);
+    expect(result.forfeited).toBe(true);
+
+    const [row] = await db
+      .select()
+      .from(bookingSession)
+      .where(eq(bookingSession.id, target.id));
+    expect(row!.currentState).toBe("cancelled");
+
+    const wAfter = await studentClient.wallet.get({});
+    // Forfeiting a 50-mark session hold deducts from the total balance.
+    expect(wAfter.totalBalance).toBe(wBefore.totalBalance - 50);
+    expect(wAfter.heldBalance).toBe(wBefore.heldBalance - 50);
   });
 
   test("group series bookings cannot have individual sessions cancelled", async () => {

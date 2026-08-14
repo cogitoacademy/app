@@ -34,7 +34,6 @@ import {
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
   BookingCancelledError,
-  BookingCancellationDeadlinePassedError,
   BookingSessionNotFoundError,
   BookingSessionNotCancellableError,
   BookingSessionRequiredError,
@@ -1179,23 +1178,35 @@ export function createBookingService(deps: {
       const h2 = new Date(
         session.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
-      if (now > h2) {
-        throw new BookingCancellationDeadlinePassedError(sessionId);
-      }
+      const isLate = now > h2;
 
       const participant = await repo.findParticipant(tx, b.id, userId);
       if (participant && participant.heldAmount > 0 && session.holdAmount > 0) {
         const w = await wallet.getByUserId(tx, participant.userId);
         if (!w) throw new BookingNotFoundError(participant.userId);
-        await wallet.release(tx, {
-          walletId: w.id,
-          amount: session.holdAmount,
-          eventKey: `booking.${b.id}.session.${session.id}.cancel`,
-          sourceReference: b.id,
-          bookingId: b.id,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: "Series session cancelled",
-        });
+        if (isLate) {
+          // PRD penalty (TC-30): cancelling after H-2 forfeits the session
+          // hold instead of releasing it.
+          await wallet.deduct(tx, {
+            walletId: w.id,
+            amount: session.holdAmount,
+            eventKey: `booking.${b.id}.session.${session.id}.forfeit`,
+            sourceReference: b.id,
+            bookingId: b.id,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Session cancelled after cancellation deadline (forfeit)",
+          });
+        } else {
+          await wallet.release(tx, {
+            walletId: w.id,
+            amount: session.holdAmount,
+            eventKey: `booking.${b.id}.session.${session.id}.cancel`,
+            sourceReference: b.id,
+            bookingId: b.id,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Series session cancelled",
+          });
+        }
         await repo.updateParticipantState(tx, participant.id, {
           heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
         });
@@ -1215,11 +1226,13 @@ export function createBookingService(deps: {
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.INFO,
         title: "Series session cancelled",
-        body: "A student cancelled one session of the series.",
+        body: isLate
+          ? "A student cancelled one session of the series after the cancellation deadline (hold forfeited)."
+          : "A student cancelled one session of the series.",
         eventKey: `booking.${b.id}.session.${session.id}.cancelled`,
       });
 
-      return { cancelled: true, sessionId };
+      return { cancelled: true, sessionId, forfeited: isLate };
     });
   }
 

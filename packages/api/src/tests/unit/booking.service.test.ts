@@ -14,7 +14,6 @@ import {
   BookingParticipantNotFoundError,
   BookingParticipantAlreadyConfirmedError,
   BookingCancelledError,
-  BookingCancellationDeadlinePassedError,
   BookingSessionNotFoundError,
   BookingSessionNotCancellableError,
   BookingSessionRequiredError,
@@ -3887,7 +3886,11 @@ describe("BookingService", () => {
 
       const result = await service.cancelSession("student1", "s1");
 
-      expect(result).toEqual({ cancelled: true, sessionId: "s1" });
+      expect(result).toEqual({
+        cancelled: true,
+        sessionId: "s1",
+        forfeited: false,
+      });
       expect(wallet.release).toHaveBeenCalledTimes(1);
       expect(wallet.release.mock.calls[0][1]).toMatchObject({
         amount: 42,
@@ -3907,7 +3910,7 @@ describe("BookingService", () => {
       expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
     });
 
-    test("rejects cancellation within 2h of session start", async () => {
+    test("TC-30: cancelling a session within 2h of start forfeits the session hold", async () => {
       const booking = makeBooking({
         type: "series",
         targetGroupSize: 1,
@@ -3922,7 +3925,7 @@ describe("BookingService", () => {
         currentState: "scheduled",
         holdAmount: 42,
       };
-      const { service } = createService({
+      const { service, wallet, repo } = createService({
         repo: {
           findSessionById: mock(async () => session),
           findBookingById: mock(async () => booking),
@@ -3932,9 +3935,21 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
-        BookingCancellationDeadlinePassedError,
-      );
+      const result = await service.cancelSession("student1", "s1");
+
+      expect(result).toEqual({
+        cancelled: true,
+        sessionId: "s1",
+        forfeited: true,
+      });
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).toHaveBeenCalledTimes(1);
+      expect(wallet.deduct.mock.calls[0][1]).toMatchObject({
+        amount: 42,
+        eventKey: "booking.b1.session.s1.forfeit",
+        reason: "Session cancelled after cancellation deadline (forfeit)",
+      });
+      expect(repo.cancelSession).toHaveBeenCalledWith(expect.anything(), "s1");
     });
 
     test("rejects cancellation for group series bookings", async () => {
