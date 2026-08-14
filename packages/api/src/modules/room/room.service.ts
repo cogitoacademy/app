@@ -112,11 +112,7 @@ export function createRoomService(
       });
 
       if (bookingPort && actorId) {
-        await bookingPort.transitionBookingToScheduled(
-          tx,
-          bookingId,
-          actorId,
-        );
+        await bookingPort.transitionBookingToScheduled(tx, bookingId, actorId);
       }
 
       await notifyBookingRecipients(

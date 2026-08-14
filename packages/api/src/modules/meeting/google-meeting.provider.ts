@@ -323,8 +323,12 @@ export function createGoogleMeetingProvider(
                 calendarId: config.calendarId,
                 eventId: row.externalEventId!,
                 requestBody: {
-                  start: { dateTime: (changes.startAt ?? new Date()).toISOString() },
-                  end: { dateTime: (changes.endAt ?? new Date()).toISOString() },
+                  start: {
+                    dateTime: (changes.startAt ?? new Date()).toISOString(),
+                  },
+                  end: {
+                    dateTime: (changes.endAt ?? new Date()).toISOString(),
+                  },
                 },
               }),
             ).then(() => undefined),

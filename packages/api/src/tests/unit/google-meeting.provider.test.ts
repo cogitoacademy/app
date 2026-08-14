@@ -476,9 +476,8 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
 
   test("fallback provider update is a no-op; cancel marks the local row cancelled", async () => {
     const db = makeSelectDb(liveRow);
-    const { createFallbackMeetingProvider } = await import(
-      "../../modules/meeting/fallback.provider"
-    );
+    const { createFallbackMeetingProvider } =
+      await import("../../modules/meeting/fallback.provider");
     const provider = createFallbackMeetingProvider(db);
 
     await provider.updateEvent("b1", {

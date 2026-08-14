@@ -185,7 +185,10 @@ async function findUserEmails(
  */
 async function findUsersByIds(conn: DbOrTx, userIds: string[]) {
   if (userIds.length === 0) return [];
-  return conn.select({ id: user.id }).from(user).where(inArray(user.id, userIds));
+  return conn
+    .select({ id: user.id })
+    .from(user)
+    .where(inArray(user.id, userIds));
 }
 
 /**
