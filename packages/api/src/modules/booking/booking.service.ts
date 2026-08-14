@@ -43,7 +43,7 @@ import {
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
 } from "./booking.errors";
-import { sanitizeHtml } from "../../lib/sanitize";
+import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { log } from "../../lib/logger";
 import {
   BOOKING_STATE,
@@ -898,7 +898,7 @@ export function createBookingService(deps: {
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Booking declined",
-        body: `Tutor declined the booking. ${reason ?? ""}`,
+        body: `Tutor declined the booking. ${escapeHtml(reason ?? "")}`,
         eventKey: `booking.${bookingId}.declined`,
         emailRequired: true,
       });

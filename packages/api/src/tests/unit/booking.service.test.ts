@@ -1206,6 +1206,28 @@ describe("BookingService", () => {
 
       expect(wallet.release).not.toHaveBeenCalled();
     });
+
+    test("M5: user-supplied decline reason is HTML-escaped in the notification body", async () => {
+      const booking = makeBooking({ holdAmount: 42 });
+      const { service, notification } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "declined" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.tutorDecline("b1", "tutor1", "<script>alert(1)</script>");
+
+      const body = notification.writeBestEffort.mock.calls[0][0].body as string;
+      expect(body).not.toContain("<script>");
+      expect(body).toContain("&lt;script&gt;");
+    });
   });
 
   describe("completeSession", () => {

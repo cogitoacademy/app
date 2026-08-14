@@ -67,6 +67,14 @@ export const bookingActionInput = z.object({
   bookingId: z.string().max(100),
 });
 
+export const cancelBookingInput = bookingActionInput.extend({
+  cancellationReason: z.string().max(500).optional(),
+});
+
+export const declineBookingInput = bookingActionInput.extend({
+  reason: z.string().max(500).optional(),
+});
+
 export const confirmInviteInput = z.object({
   bookingId: z.string().max(100),
 });

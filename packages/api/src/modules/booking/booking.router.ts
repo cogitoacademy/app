@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import { protectedProcedure, tutorProcedure } from "../../procedures";
 import {
   createSoloInput,
@@ -9,6 +7,8 @@ import {
   listMineInput,
   listSessionsInput,
   bookingActionInput,
+  cancelBookingInput,
+  declineBookingInput,
   confirmInviteInput,
   declineInviteInput,
   reconfirmInput,
@@ -67,11 +67,7 @@ export function createBookingRouter(handler: BookingHandler) {
         summary: "Cancel booking",
         description: "Cancels a booking, releases held Marks if applicable",
       })
-      .input(
-        bookingActionInput.extend({
-          cancellationReason: z.string().optional(),
-        }),
-      )
+      .input(cancelBookingInput)
       .handler(handler.cancel),
 
     acceptReschedule: protectedProcedure
@@ -255,11 +251,7 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
         summary: "Decline booking",
         description: "Tutor declines a booking and releases held Marks",
       })
-      .input(
-        bookingActionInput.extend({
-          reason: z.string().optional(),
-        }),
-      )
+      .input(declineBookingInput)
       .handler(handler.declineBooking),
 
     completeSession: tutorProcedure
