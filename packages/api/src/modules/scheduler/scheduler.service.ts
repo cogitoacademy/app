@@ -11,6 +11,7 @@ export interface SchedulerHandlers {
     failed: number;
   }>;
   onSendNotificationEmail: () => Promise<{ sent: number; failed: number }>;
+  onEscalateSupportTickets: () => Promise<{ escalated: number }>;
 }
 
 export interface SchedulerService {
@@ -74,6 +75,15 @@ export function createSchedulerService(
             ...sendResult,
           });
           return sendResult;
+        case "escalate-support-tickets":
+          const escalateResult = await handlers.onEscalateSupportTickets();
+          log({
+            level: "info",
+            action: "escalate_support_tickets_complete",
+            message: `Escalated ${escalateResult.escalated} support tickets past SLA`,
+            ...escalateResult,
+          });
+          return escalateResult;
         default:
           log({
             level: "warn",

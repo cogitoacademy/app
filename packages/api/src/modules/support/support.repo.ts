@@ -1,4 +1,4 @@
-import { eq, and, asc, desc } from "drizzle-orm";
+import { eq, and, lt, asc, desc } from "drizzle-orm";
 import {
   supportTicket,
   booking,
@@ -134,6 +134,41 @@ async function findBookingForReporter(
   return participant.length > 0 ? b : null;
 }
 
+/**
+ * Lists open tickets whose SLA deadline has passed (candidates for escalation).
+ *
+ * @param conn - the database connection or active transaction
+ * @returns the overdue open tickets, oldest SLA deadline first
+ */
+async function listPastSla(conn: DbOrTx): Promise<SupportTicketRow[]> {
+  return conn
+    .select()
+    .from(supportTicket)
+    .where(
+      and(
+        eq(supportTicket.status, "open"),
+        lt(supportTicket.slaDeadline, new Date()),
+      ),
+    )
+    .orderBy(asc(supportTicket.slaDeadline));
+}
+
+/**
+ * Marks a ticket escalated by moving it to in_progress.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the support ticket id
+ */
+async function markEscalated(
+  conn: DbOrTx,
+  id: string,
+): Promise<void> {
+  await conn
+    .update(supportTicket)
+    .set({ status: "in_progress" })
+    .where(eq(supportTicket.id, id));
+}
+
 export function createSupportRepo() {
   return {
     insert,
@@ -142,6 +177,8 @@ export function createSupportRepo() {
     findById,
     updateResolution,
     findBookingForReporter,
+    listPastSla,
+    markEscalated,
   };
 }
 

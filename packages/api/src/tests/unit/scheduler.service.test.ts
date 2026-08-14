@@ -77,6 +77,7 @@ describe("createSchedulerService", () => {
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
     expect(result).toBeNull();
   });
@@ -87,6 +88,7 @@ describe("createSchedulerService", () => {
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
     expect(result).not.toBeNull();
     expect(result).toHaveProperty("queue");
@@ -99,6 +101,7 @@ describe("createSchedulerService", () => {
       onExpireBookings,
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedJobHandler).not.toBeNull();
@@ -116,6 +119,7 @@ describe("createSchedulerService", () => {
       onExpireBookings,
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedJobHandler).not.toBeNull();
@@ -138,6 +142,7 @@ describe("createSchedulerService", () => {
       onReleaseHolds,
       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedJobHandler).not.toBeNull();
@@ -159,6 +164,7 @@ describe("createSchedulerService", () => {
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onCheckTutorLateness,
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedJobHandler).not.toBeNull();
@@ -180,6 +186,7 @@ describe("createSchedulerService", () => {
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onCheckTutorLateness,
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedJobHandler).not.toBeNull();
@@ -205,6 +212,7 @@ describe("createSchedulerService", () => {
       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onSendNotificationEmail,
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedJobHandler).not.toBeNull();
@@ -221,12 +229,40 @@ describe("createSchedulerService", () => {
     expect(result).toEqual({ sent: 3, failed: 1 });
   });
 
+  test("handles escalate-support-tickets job", async () => {
+    const onEscalateSupportTickets = mock(async () => ({ escalated: 2 }));
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets,
+    });
+
+    expect(capturedJobHandler).not.toBeNull();
+
+    const job = {
+      id: "5",
+      name: "escalate-support-tickets",
+      data: {},
+    };
+    const result = await capturedJobHandler!(job);
+
+    expect(onEscalateSupportTickets).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ escalated: 2 });
+
+    const infoLogs = logCaptures.filter(
+      (l) => l.entry?.action === "escalate_support_tickets_complete",
+    );
+    expect(infoLogs.length).toBe(1);
+  });
+
   test("logs warning for unknown job", async () => {
     createSchedulerService("redis://localhost:6379", {
       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedJobHandler).not.toBeNull();
@@ -247,6 +283,7 @@ describe("createSchedulerService", () => {
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedFailedHandler).not.toBeNull();
@@ -267,6 +304,7 @@ describe("createSchedulerService", () => {
       onReleaseHolds: mock(async () => ({ released: 0 })),
       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
       onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
     });
 
     expect(capturedCompletedHandler).not.toBeNull();

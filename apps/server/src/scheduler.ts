@@ -5,6 +5,7 @@ import { scheduleBookingExpiryCheck } from "@cogito-app/api/modules/scheduler/jo
 import { scheduleHoldReleaseCheck } from "@cogito-app/api/modules/scheduler/jobs/release-holds.job";
 import { scheduleCheckTutorLateness } from "@cogito-app/api/modules/scheduler/jobs/check-tutor-lateness.job";
 import { scheduleSendNotificationEmail } from "@cogito-app/api/modules/scheduler/jobs/send-notification-email.job";
+import { scheduleEscalateSupportTickets } from "@cogito-app/api/modules/scheduler/jobs/escalate-support-tickets.job";
 import { services } from "@cogito-app/api";
 
 let scheduler: ReturnType<typeof createSchedulerService> = null;
@@ -30,6 +31,7 @@ export async function initScheduler(): Promise<void> {
     onCheckTutorLateness: () => services.booking.checkTutorLateness(),
     onSendNotificationEmail: () =>
       services.notification.dispatchQueuedEmails(50),
+    onEscalateSupportTickets: () => services.support.escalatePastSlaTickets(),
   });
 
   if (!scheduler) {
@@ -45,6 +47,7 @@ export async function initScheduler(): Promise<void> {
   await scheduleHoldReleaseCheck(scheduler.queue);
   await scheduleCheckTutorLateness(scheduler.queue);
   await scheduleSendNotificationEmail(scheduler.queue);
+  await scheduleEscalateSupportTickets(scheduler.queue);
 
   log({
     level: "info",
