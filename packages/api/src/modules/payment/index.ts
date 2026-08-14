@@ -23,6 +23,7 @@ export interface PaymentWalletPort {
 export function createPaymentModule(deps: {
   db: DbType;
   wallet: PaymentWalletPort;
+  provider: "xendit" | "stub";
   xenditConfig?: {
     secretKey: string;
     webhookToken: string;
@@ -33,7 +34,16 @@ export function createPaymentModule(deps: {
   webhookSecret: string;
   notification?: PaymentNotificationPort;
 }) {
-  const useXendit = !!deps.xenditConfig;
+  const useXendit = deps.provider === "xendit";
+  if (useXendit && !deps.xenditConfig) {
+    throw new Error(
+      "PAYMENT_PROVIDER=xendit but Xendit credentials are missing — refusing to silently fall back to the stub provider",
+    );
+  }
+  if (!useXendit && deps.provider !== "stub") {
+    throw new Error(`Unknown payment provider: ${deps.provider}`);
+  }
+
   const provider: PaymentProvider = useXendit
     ? createXenditPaymentProvider({
         secretKey: deps.xenditConfig!.secretKey,
