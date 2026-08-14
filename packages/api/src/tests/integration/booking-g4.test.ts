@@ -197,7 +197,8 @@ describe("G4: group repricing on headcount change", () => {
       .from(wallet)
       .where(eq(wallet.userId, proposerId));
     expect(proposerWallet!.heldBalance).toBe(28);
-    expect(proposerWallet!.totalBalance).toBe(200 - 28);
+    expect(proposerWallet!.totalBalance).toBe(200);
+    expect(proposerWallet!.availableBalance).toBe(200 - 28);
   });
 
   test("proposer withdraws → remaining 3 repriced to 35 marks/student", async () => {
