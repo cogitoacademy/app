@@ -187,6 +187,7 @@ function createServices() {
           }
         : undefined,
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
+    notification: notification.service,
   });
 
   const refund = createRefundModule({

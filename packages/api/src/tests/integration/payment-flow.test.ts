@@ -9,7 +9,12 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
-import { ledgerEntry, paymentRecord } from "@cogito-app/db/schema";
+import {
+  ledgerEntry,
+  paymentRecord,
+  notification,
+  notificationDispatch,
+} from "@cogito-app/db/schema";
 
 import { services } from "../../services";
 import { createTestUser } from "../helpers/factories";
@@ -169,6 +174,79 @@ describe("PaymentService", () => {
 
     const w = await services.wallet.getByUserId(db, user.id);
     expect(w!.totalBalance).toBe(50);
+  });
+
+  test("TC-notif: webhook credit writes a payment notification (in-app + email) for the payer", async () => {
+    const user = await createTestUser("paynotif@cogito.test");
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: "evt_paynotif",
+      status: "PAID",
+    });
+
+    const [notif] = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.eventKey, `payment.${intent.paymentId}.credited`));
+    expect(notif).toBeDefined();
+    expect(notif!.category).toBe("payment");
+    expect(notif!.userId).toBe(user.id);
+
+    const [dispatch] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.notificationId, notif!.id));
+    expect(dispatch).toBeDefined();
+    expect(dispatch!.status).toBe("queued");
+    expect(dispatch!.recipientEmail).toBe(user.email);
+  });
+
+  test("TC-notif: REFUNDED transition writes a refund notification for the payer", async () => {
+    const user = await createTestUser("refundnotif@cogito.test");
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: "evt_refundnotif1",
+      status: "PAID",
+    });
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: "evt_refundnotif2",
+      status: "REFUNDED",
+    });
+
+    const [notif] = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.eventKey, `payment.${intent.paymentId}.refunded`));
+    expect(notif).toBeDefined();
+    expect(notif!.category).toBe("refund");
+    expect(notif!.userId).toBe(user.id);
+
+    const [dispatch] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.notificationId, notif!.id));
+    expect(dispatch).toBeDefined();
+    expect(dispatch!.status).toBe("queued");
   });
 
   const xenditProvider = createXenditPaymentProvider({

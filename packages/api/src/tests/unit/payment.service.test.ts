@@ -708,6 +708,110 @@ describe("PaymentService", () => {
       expect(result.status).toBe(PAYMENT_STATUS.PAID);
       expect(wallet.credit).toHaveBeenCalledTimes(1);
     });
+
+    test("PAID credit writes a payment notification for the payer", async () => {
+      const wallet = makeWallet();
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PENDING,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+      });
+
+      await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_paid_notif",
+        status: PAYMENT_STATUS.PAID as PaymentStatus,
+      });
+
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort).toHaveBeenCalledWith(
+        expect.objectContaining({
+          db: tx,
+          userId: "user1",
+          category: "payment",
+          eventKey: "payment.pay1.credited",
+          emailRequired: true,
+        }),
+      );
+    });
+
+    test("REFUNDED webhook on a PAID payment writes a refund notification", async () => {
+      const wallet = makeWallet();
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_refunded_notif",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort).toHaveBeenCalledWith(
+        expect.objectContaining({
+          db: tx,
+          userId: "user1",
+          category: "refund",
+          eventKey: "payment.pay1.refunded",
+          emailRequired: true,
+        }),
+      );
+    });
   });
 
   describe("getPurchase", () => {

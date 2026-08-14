@@ -1,7 +1,10 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { CreditParams, WalletSnapshot } from "../wallet/wallet.service";
-import type { PaymentProvider } from "./payment.service";
+import type {
+  PaymentProvider,
+  PaymentNotificationPort,
+} from "./payment.service";
 import { createPaymentService } from "./payment.service";
 import { createPaymentHandler } from "./payment.handler";
 import { createPaymentRepo } from "./payment.repo";
@@ -28,6 +31,7 @@ export function createPaymentModule(deps: {
     defaultPaymentMethod?: string;
   };
   webhookSecret: string;
+  notification?: PaymentNotificationPort;
 }) {
   const useXendit = !!deps.xenditConfig;
   const provider: PaymentProvider = useXendit
@@ -52,6 +56,7 @@ export function createPaymentModule(deps: {
     repo,
     provider,
     providerName,
+    notification: deps.notification,
   });
   const handler = createPaymentHandler(service, deps.wallet);
   return { service, handler };
