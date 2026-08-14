@@ -17,9 +17,6 @@ import {
   GROUP_SERIES_DISCLAIMER,
   TUTOR_PAYOUT_RATE_IDR,
 } from "../../shared/constants";
-
-
-import type { GroupSize } from "../pricing/pricing.service";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -42,8 +39,6 @@ import {
   BookingSessionNotCancellableError,
   BookingSessionRequiredError,
   BookingSessionNotStartedError,
-
-
   BookingRescheduleNotFoundError,
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
@@ -139,9 +134,6 @@ export type BookingService = ReturnType<typeof createBookingService>;
 type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
 >;
-
-
-
 
 /**
  * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
@@ -303,12 +295,6 @@ export function createBookingService(deps: {
       type: string;
       tutorId: string;
 
-
-
-
-
-
-
       modality: string;
       priceSnapshot: { perStudent: number } | null;
     },
@@ -333,9 +319,6 @@ export function createBookingService(deps: {
     const pricePerStudent = (profile.prices?.[String(newSize)] ??
       DEFAULT_SOLO_PRICE) as number;
     const newSnapshot = pricing.computeSplit(
-
-
-      pricePerStudent * newSize,
       b.modality as Modality,
       pricePerStudent,
       newSize as GroupSize,
@@ -386,12 +369,6 @@ export function createBookingService(deps: {
         heldAmount: newPerStudent,
       });
 
-
-
-
-
-
-
       await repo.updateParticipantState(tx, p.id, {
         heldAmount: newPerStudent,
       });
@@ -399,9 +376,6 @@ export function createBookingService(deps: {
 
     await repo.updateBookingPriceSnapshot(tx, b.id, {
       priceSnapshot: newSnapshot,
-
-
-      holdAmount: newSnapshot.baseline,
       holdAmount: newPerStudent * newSize,
     });
 
@@ -436,12 +410,6 @@ export function createBookingService(deps: {
 
 
 
-  /**
-
-
-
-
-  /**
   /**
   /**
   /**
@@ -489,27 +457,6 @@ export function createBookingService(deps: {
     return { items, nextCursor };
   }
 
-
-
-
-
-  async function listForTutor(
-    tutorId: string,
-    opts: { cursor?: string; limit?: number; states?: string[] } = {},
-  ) {
-    const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
-    const rows = await repo.listBookingsByTutor(tutorId, {
-      states: opts.states,
-      limit,
-      cursor: opts.cursor,
-    });
-    const items = rows.slice(0, limit);
-    const nextCursor =
-      rows.length > limit
-        ? items[items.length - 1]!.scheduledStartAt.toISOString()
-        : null;
-    return { items, nextCursor };
-  }
   /**
    * Creates a solo booking, holds Marks, and notifies the tutor.
    *
@@ -718,14 +665,6 @@ export function createBookingService(deps: {
       });
 
       if (b.type === BOOKING_TYPE.GROUP || b.type === BOOKING_TYPE.SERIES) {
-
-
-
-
-      if (
-        b.type === BOOKING_TYPE.GROUP ||
-        b.type === BOOKING_TYPE.SERIES
-      ) {
         const participants = await repo.findConfirmedParticipants(
           tx,
           bookingId,
@@ -960,51 +899,6 @@ export function createBookingService(deps: {
       // After a group repricing the holds live on each remaining
       // participant's wallet (the proposer may have withdrawn and hold 0),
       // so deduct from each confirmed participant individually.
-      const participants = await repo.findConfirmedParticipants(
-        tx,
-        bookingId,
-      );
-      for (const p of participants) {
-        if (p.heldAmount <= 0) continue;
-        // eslint-disable-next-line no-await-in-loop
-        const w = await wallet.getByUserId(tx, p.userId);
-        if (!w) throw new BookingNotFoundError(p.userId);
-        // eslint-disable-next-line no-await-in-loop
-        await wallet.deduct(tx, {
-          walletId: w.id,
-          amount: p.heldAmount,
-          eventKey: `booking.${bookingId}.complete.${p.userId}`,
-          sourceReference: bookingId,
-          bookingId,
-          actorType: ACTOR_TYPE.TUTOR,
-          reason: "Session completed",
-        });
-      }
-
-      }
-
-      return completeSeriesSession(tx, b, bookingId, tutorId, sessionId);
-    });
-  }
-
-  async function completeSingleSession(
-    tx: DbOrTx,
-    b: BookingRow,
-    bookingId: string,
-    tutorId: string,
-  ) {
-    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
-      throw new BookingStateTransitionError(
-        b.currentState,
-        "complete",
-        BOOKING_STATE.COMPLETED,
-      );
-    }
-
-    if (b.type === BOOKING_TYPE.GROUP) {
-      // After a group repricing the holds live on each remaining
-      // participant's wallet (the proposer may have withdrawn and hold 0),
-      // so deduct from each confirmed participant individually.
       const participants = await repo.findConfirmedParticipants(tx, bookingId);
       for (const p of participants) {
         if (p.heldAmount <= 0) continue;
@@ -1016,38 +910,6 @@ export function createBookingService(deps: {
           walletId: w.id,
           amount: p.heldAmount,
           eventKey: `booking.${bookingId}.complete.${p.userId}`,
-
-      if (b.type === BOOKING_TYPE.GROUP) {
-        // After a group repricing the holds live on each remaining
-        // participant's wallet (the proposer may have withdrawn and hold 0),
-        // so deduct from each confirmed participant individually.
-        const participants = await repo.findConfirmedParticipants(
-          tx,
-          bookingId,
-        );
-        for (const p of participants) {
-          if (p.heldAmount <= 0) continue;
-          // eslint-disable-next-line no-await-in-loop
-          const w = await wallet.getByUserId(tx, p.userId);
-          if (!w) throw new BookingNotFoundError(p.userId);
-          // eslint-disable-next-line no-await-in-loop
-          await wallet.deduct(tx, {
-            walletId: w.id,
-            amount: p.heldAmount,
-            eventKey: `booking.${bookingId}.complete.${p.userId}`,
-            sourceReference: bookingId,
-            bookingId,
-            actorType: ACTOR_TYPE.TUTOR,
-            reason: "Session completed",
-          });
-        }
-      } else {
-        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-        await wallet.deduct(tx, {
-          walletId: proposerWallet.id,
-          amount: b.holdAmount,
-          eventKey: `booking.${bookingId}.deduct`,
           sourceReference: bookingId,
           bookingId,
           actorType: ACTOR_TYPE.TUTOR,
@@ -1146,125 +1008,6 @@ export function createBookingService(deps: {
       Math.max(0, b.holdAmount - session.holdAmount),
     );
 
-
-
-      if (b.type === BOOKING_TYPE.GROUP) {
-        // After a group repricing the holds live on each remaining
-        // participant's wallet (the proposer may have withdrawn and hold 0),
-        // so deduct from each confirmed participant individually.
-        const participants = await repo.findConfirmedParticipants(
-          tx,
-          bookingId,
-        );
-        for (const p of participants) {
-          if (p.heldAmount <= 0) continue;
-          // eslint-disable-next-line no-await-in-loop
-          const w = await wallet.getByUserId(tx, p.userId);
-          if (!w) throw new BookingNotFoundError(p.userId);
-          // eslint-disable-next-line no-await-in-loop
-          await wallet.deduct(tx, {
-            walletId: w.id,
-            amount: p.heldAmount,
-            eventKey: `booking.${bookingId}.complete.${p.userId}`,
-            sourceReference: bookingId,
-            bookingId,
-            actorType: ACTOR_TYPE.TUTOR,
-            reason: "Session completed",
-          });
-        }
-      } else {
-        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-        await wallet.deduct(tx, {
-          walletId: proposerWallet.id,
-          amount: b.holdAmount,
-          eventKey: `booking.${bookingId}.deduct`,
-          sourceReference: bookingId,
-          bookingId,
-          actorType: ACTOR_TYPE.TUTOR,
-          reason: "Session completed",
-        });
-      }
-
-
-
-    const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
-      actorId: tutorId,
-      actorType: ACTOR_TYPE.TUTOR,
-    });
-
-    await repo.updateBookingHoldAmount(tx, bookingId, 0);
-
-    await notification.writeBestEffort({
-      db: tx,
-      userId: b.proposerId,
-      bookingId,
-      category: NOTIFICATION_CATEGORY.BOOKING,
-      severity: NOTIFICATION_SEVERITY.INFO,
-      title: "Session completed",
-      body: "Tutor marked the session as completed. Marks deducted.",
-      eventKey: `booking.${bookingId}.completed`,
-    });
-
-    return updated;
-  }
-
-  async function completeSeriesSession(
-    tx: DbOrTx,
-    b: BookingRow,
-    bookingId: string,
-    tutorId: string,
-    sessionId?: string,
-  ) {
-    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
-      throw new BookingStateTransitionError(
-        b.currentState,
-        "complete",
-        BOOKING_STATE.COMPLETED,
-      );
-    }
-    if (!sessionId) throw new BookingSessionRequiredError(bookingId);
-
-    const session = await repo.findSessionById(tx, sessionId);
-    if (!session || session.seriesBookingId !== bookingId) {
-      throw new BookingSessionNotFoundError(sessionId);
-    }
-    if (session.currentState !== BOOKING_STATE.SCHEDULED) {
-      throw new BookingStateTransitionError(
-        session.currentState,
-        "completeSession",
-        BOOKING_STATE.COMPLETED,
-      );
-    }
-    if (session.scheduledStartAt.getTime() > Date.now()) {
-      throw new BookingSessionNotStartedError(sessionId);
-    }
-
-    const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-    if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
-    await wallet.deduct(tx, {
-      walletId: proposerWallet.id,
-      amount: session.holdAmount,
-      eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
-      sourceReference: bookingId,
-      bookingId,
-      actorType: ACTOR_TYPE.TUTOR,
-      reason: "Series session completed",
-    });
-
-    const participant = await repo.findParticipant(tx, bookingId, b.proposerId);
-    let residualHeld = 0;
-    if (participant) {
-      residualHeld = Math.max(0, participant.heldAmount - session.holdAmount);
-      await repo.updateParticipantState(tx, participant.id, {
-        heldAmount: residualHeld,
-      });
-    }
-    await repo.updateBookingHoldAmount(
-      tx,
-      bookingId,
-      Math.max(0, b.holdAmount - session.holdAmount),
-    );
     await repo.completeSession(tx, session.id);
 
     await notification.writeBestEffort({
@@ -1344,9 +1087,6 @@ export function createBookingService(deps: {
     return refreshed;
   }
 
-
-
-
   async function cancelSession(userId: string, sessionId: string) {
     return db.transaction(async (tx) => {
       const session = await repo.findSessionById(tx, sessionId);
@@ -1421,84 +1161,6 @@ export function createBookingService(deps: {
     });
   }
 
-
-
-
-
-
-  async function cancelSession(userId: string, sessionId: string) {
-    return db.transaction(async (tx) => {
-      const session = await repo.findSessionById(tx, sessionId);
-      if (!session) throw new BookingSessionNotFoundError(sessionId);
-      const b = await repo.findBookingById(tx, session.seriesBookingId);
-      if (!b) throw new BookingNotFoundError(session.seriesBookingId);
-      await assertBookingAccess(b, userId, tx, session.seriesBookingId);
-
-      if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
-        throw new BookingCancelledError(session.seriesBookingId);
-      }
-
-      if (b.type !== BOOKING_TYPE.SERIES) {
-        throw new BookingNotEditableError(session.seriesBookingId);
-      }
-      if (b.targetGroupSize > 1) {
-        throw new BookingSessionNotCancellableError(sessionId);
-      }
-      if (session.currentState !== BOOKING_STATE.SCHEDULED) {
-        throw new BookingStateTransitionError(
-          session.currentState,
-          "cancelSession",
-          BOOKING_STATE.CANCELLED,
-        );
-      }
-
-      const now = new Date();
-      const h2 = new Date(
-        session.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
-      );
-      if (now > h2) {
-        throw new BookingCancellationDeadlinePassedError(sessionId);
-      }
-
-      const participant = await repo.findParticipant(tx, b.id, userId);
-      if (participant && participant.heldAmount > 0 && session.holdAmount > 0) {
-        const w = await wallet.getByUserId(tx, participant.userId);
-        if (!w) throw new BookingNotFoundError(participant.userId);
-        await wallet.release(tx, {
-          walletId: w.id,
-          amount: session.holdAmount,
-          eventKey: `booking.${b.id}.session.${session.id}.cancel`,
-          sourceReference: b.id,
-          bookingId: b.id,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: "Series session cancelled",
-        });
-        await repo.updateParticipantState(tx, participant.id, {
-          heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
-        });
-      }
-
-      await repo.cancelSession(tx, session.id);
-      await repo.updateBookingHoldAmount(
-        tx,
-        b.id,
-        Math.max(0, b.holdAmount - session.holdAmount),
-      );
-
-      await notification.writeBestEffort({
-        db: tx,
-        userId: b.tutorId,
-        bookingId: b.id,
-        category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
-        title: "Series session cancelled",
-        body: "A student cancelled one session of the series.",
-        eventKey: `booking.${b.id}.session.${session.id}.cancelled`,
-      });
-
-      return { cancelled: true, sessionId };
-    });
-  }
   async function addSessionNote(
     userId: string,
     bookingId: string,
@@ -2295,7 +1957,6 @@ export function createBookingService(deps: {
       if (b.type === BOOKING_TYPE.SERIES) {
         // eslint-disable-next-line no-await-in-loop
 
-
         const sessions = await repo.listSessionsBySeriesId(db, b.id);
         const completed = sessions.filter(
           (s) => s.currentState === BOOKING_STATE.COMPLETED,
@@ -2554,7 +2215,6 @@ export function createBookingService(deps: {
   return {
     getById,
     listMine,
-    listForTutor,
     createSolo,
     createGroup,
     createSeries,
