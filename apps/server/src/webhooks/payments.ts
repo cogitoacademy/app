@@ -48,7 +48,6 @@ export function paymentsWebhook(app: Elysia) {
           ? (request.headers.get("x-callback-token") ?? "")
           : (request.headers.get("x-webhook-signature") ?? "");
       const rawBody = typeof body === "string" ? body : JSON.stringify(body);
-      const idempotencyKey = `${provider}:${request.headers.get("x-event-id") ?? crypto.randomUUID()}`;
 
       const allowlist = (env.WEBHOOK_ALLOWED_IPS ?? "")
         .split(",")
@@ -67,11 +66,6 @@ export function paymentsWebhook(app: Elysia) {
         hasSignature: !!signature,
       });
 
-      if (await webhookIdempotency.isProcessed(idempotencyKey)) {
-        set.status = 200;
-        return { ok: true, idempotent: true };
-      }
-
       try {
         const payload = await services.payment.provider.verifyWebhook(
           rawBody,
@@ -80,19 +74,30 @@ export function paymentsWebhook(app: Elysia) {
 
         validateWebhookTimestamp(request);
 
-        await services.payment.confirmFromWebhook({
-          provider: params.provider as string,
-          providerReference: payload.providerReference,
-          providerEventId: payload.providerEventId,
-          status: payload.status,
-          receiptUrl: payload.receiptUrl,
-          failureReason: payload.failureReason,
-        });
+        const idempotencyKey = `${provider}:${payload.providerEventId || "no-event-id"}`;
+        if (!(await webhookIdempotency.claim(idempotencyKey))) {
+          set.status = 200;
+          return { ok: true, idempotent: true };
+        }
 
-        await webhookIdempotency.markProcessed(idempotencyKey, { ok: true });
+        try {
+          await services.payment.confirmFromWebhook({
+            provider: params.provider as string,
+            providerReference: payload.providerReference,
+            providerEventId: payload.providerEventId,
+            status: payload.status,
+            receiptUrl: payload.receiptUrl,
+            failureReason: payload.failureReason,
+          });
 
-        set.status = 200;
-        return { ok: true };
+          await webhookIdempotency.markProcessed(idempotencyKey, { ok: true });
+
+          set.status = 200;
+          return { ok: true };
+        } catch (error) {
+          await webhookIdempotency.release(idempotencyKey);
+          throw error;
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
@@ -136,7 +141,11 @@ export function paymentsWebhook(app: Elysia) {
 
   app.get("/webhooks/payments/stub/checkout", async ({ query, set }) => {
     if (
-      !stubCheckoutEnabled(env.NODE_ENV, env.PAYMENT_PROVIDER, env.STUB_WEBHOOK_ALLOWED)
+      !stubCheckoutEnabled(
+        env.NODE_ENV,
+        env.PAYMENT_PROVIDER,
+        env.STUB_WEBHOOK_ALLOWED,
+      )
     ) {
       set.status = 404;
       return { error: "Not found" };

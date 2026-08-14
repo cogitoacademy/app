@@ -65,6 +65,44 @@ export class IdempotencyStore {
     this.store.set(key, { result, timestamp: Date.now() });
   }
 
+  async claim(key: string, ttlSeconds?: number): Promise<boolean> {
+    const redisKey = `${this.prefix}:${key}`;
+    const ttl = ttlSeconds ?? Math.ceil(this.maxAge / 1000);
+    if (this.redis) {
+      try {
+        const ok = await this.redis.set(
+          redisKey,
+          "pending",
+          { type: "NX" },
+          { type: "EX", value: ttl },
+        );
+        if (ok === "OK") return true;
+        const exists = await this.redis.exists(redisKey);
+        return !exists;
+      } catch {
+        // fall through to in-memory
+      }
+    }
+    this.maybeCleanup();
+    if (this.store.has(key)) return false;
+    this.evictOldest();
+    this.store.set(key, { result: "pending", timestamp: Date.now() });
+    return true;
+  }
+
+  async release(key: string): Promise<void> {
+    const redisKey = `${this.prefix}:${key}`;
+    if (this.redis) {
+      try {
+        await this.redis.del(redisKey);
+        return;
+      } catch {
+        // fall through
+      }
+    }
+    this.store.delete(key);
+  }
+
   async getResult(key: string): Promise<unknown> {
     const redisKey = `${this.prefix}:${key}`;
     if (this.redis) {
