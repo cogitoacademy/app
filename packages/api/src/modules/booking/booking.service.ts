@@ -1568,32 +1568,87 @@ export function createBookingService(deps: {
       const size = b.targetGroupSize;
       const pricePerStudent = (b.priceSnapshot?.perStudent ??
         DEFAULT_SOLO_PRICE) as number;
-      const holdAmount = pricePerStudent;
+
+      // A group-series invitee accepts the whole package up front: the hold is
+      // pricePerStudent per session × the number of sessions. The proposer of a
+      // group-series also holds their own package up front, so the proposer
+      // excess-release target matches the invitee hold.
+      const isGroupSeries =
+        b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1;
+      let inviteeHold = pricePerStudent;
+      let proposerHoldTarget = pricePerStudent;
+      if (isGroupSeries) {
+        const sessions = await repo.listSessionsBySeriesId(tx, bookingId);
+        const perSessionTotal = pricePerStudent * sessions.length;
+        inviteeHold = perSessionTotal;
+        proposerHoldTarget = perSessionTotal;
+      }
 
       const w = await wallet.getByUserId(tx, userId);
       if (!w) throw new BookingNotFoundError(userId);
-      if (w.availableBalance < holdAmount) {
-        throw new InsufficientMarksError(holdAmount, w.availableBalance);
+      if (w.availableBalance < inviteeHold) {
+        throw new InsufficientMarksError(inviteeHold, w.availableBalance);
       }
 
       await wallet.hold(tx, {
         walletId: w.id,
-        amount: holdAmount,
+        amount: inviteeHold,
         eventKey: `booking.${bookingId}.hold.${userId}`,
         sourceReference: bookingId,
         bookingId,
         actorType: ACTOR_TYPE.STUDENT,
-        reason: "Hold Marks for group booking (invitee)",
+        reason: isGroupSeries
+          ? "Hold Marks for group-series booking (invitee)"
+          : "Hold Marks for group booking (invitee)",
       });
 
       await repo.updateParticipantState(tx, participant.id, {
         confirmationState: CONFIRMATION_STATE.CONFIRMED,
-        heldAmount: holdAmount,
+        heldAmount: inviteeHold,
         confirmedAt: new Date(),
       });
 
       const newHeadcount = b.confirmedHeadcount + 1;
       await repo.updateBookingConfirmedHeadcount(tx, bookingId, newHeadcount);
+
+      // The proposer was held at the full target (size × perStudent) at
+      // creation. As invitees confirm, release the proposer's excess so they
+      // only ever hold their own share. The eventKey embeds newHeadcount so a
+      // re-confirm can never double-release.
+      const proposerParticipant = await repo.findParticipant(
+        tx,
+        bookingId,
+        b.proposerId,
+      );
+      if (
+        newHeadcount <= b.targetGroupSize &&
+        proposerParticipant &&
+        proposerParticipant.heldAmount > proposerHoldTarget
+      ) {
+        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+        if (proposerWallet) {
+          const excess = proposerParticipant.heldAmount - proposerHoldTarget;
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: proposerWallet.id,
+            amount: excess,
+            eventKey: `booking.${bookingId}.proposer.release.${newHeadcount}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Group: proposer excess hold released as invitees confirm",
+          });
+          await repo.updateParticipantState(tx, proposerParticipant.id, {
+            heldAmount: proposerHoldTarget,
+          });
+        }
+      }
+
+      await repo.updateBookingHoldAmount(
+        tx,
+        bookingId,
+        proposerHoldTarget * newHeadcount,
+      );
 
       if (newHeadcount >= b.targetGroupSize) {
         await transition(tx, bookingId, BOOKING_STATE.AWAITING_TUTOR_REVIEW, {

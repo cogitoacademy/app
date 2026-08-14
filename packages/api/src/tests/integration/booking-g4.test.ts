@@ -188,6 +188,18 @@ describe("G4: group repricing on headcount change", () => {
     expect(b.currentState).toBe("awaiting_tutor_review");
   });
 
+  test("group of 4: proposer is charged only perStudent once all invitees confirm", async () => {
+    const b = await proposerClient.booking.get({ bookingId });
+    expect(b.holdAmount).toBe(112);
+
+    const [proposerWallet] = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, proposerId));
+    expect(proposerWallet!.heldBalance).toBe(28);
+    expect(proposerWallet!.totalBalance).toBe(200 - 28);
+  });
+
   test("proposer withdraws → remaining 3 repriced to 35 marks/student", async () => {
     const result = await proposerClient.booking.withdraw({
       bookingId,
