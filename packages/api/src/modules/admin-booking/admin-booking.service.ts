@@ -233,7 +233,7 @@ export function createAdminBookingService(deps: {
   }
 
   async function applyOverride(adminId: string, input: OverrideInput) {
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const bookingRow = await repo.findBookingById(tx, input.bookingId);
       if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
 
@@ -335,11 +335,14 @@ export function createAdminBookingService(deps: {
           overrideMeta: plan.overrideMeta,
         },
       });
-
-      return updateResult.updated;
     });
 
-    return result;
+    // The override tx mutates holdAmount/state after the versioned update, so
+    // re-read the booking so the response reflects the post-override values
+    // (P1-5: the old response carried a stale pre-update holdAmount).
+    const refreshed = await repo.findBookingById(db, input.bookingId);
+    if (!refreshed) throw new BookingNotFoundError(input.bookingId);
+    return refreshed;
   }
 
   /** Returns the projected override outcome without persisting anything. */
