@@ -1,10 +1,7 @@
 import { z } from "zod";
 
-import { protectedProcedure, tutorProcedure } from "../../procedures";
-import { updateMyProfileInput, getMyPayoutsInput } from "./tutor.types";
-
 import { tutorProcedure } from "../../procedures";
-import { updateMyProfileInput } from "./tutor.types";
+import { updateMyProfileInput, getMyPayoutsInput } from "./tutor.types";
 import {
   upsertAvailabilityInput,
   createWeeklyAvailabilityInput,

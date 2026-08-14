@@ -457,6 +457,24 @@ export function createBookingService(deps: {
     return { items, nextCursor };
   }
 
+  async function listForTutor(
+    tutorId: string,
+    opts: { cursor?: string; limit?: number; states?: string[] } = {},
+  ) {
+    const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+    const rows = await repo.listBookingsByTutor(tutorId, {
+      states: opts.states,
+      limit,
+      cursor: opts.cursor,
+    });
+    const items = rows.slice(0, limit);
+    const nextCursor =
+      rows.length > limit
+        ? items[items.length - 1]!.scheduledStartAt.toISOString()
+        : null;
+    return { items, nextCursor };
+  }
+
   /**
    * Creates a solo booking, holds Marks, and notifies the tutor.
    *
@@ -2215,6 +2233,7 @@ export function createBookingService(deps: {
   return {
     getById,
     listMine,
+    listForTutor,
     createSolo,
     createGroup,
     createSeries,
