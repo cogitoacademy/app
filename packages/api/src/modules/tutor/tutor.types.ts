@@ -11,3 +11,8 @@ export const updateMyProfileInput = z.object({
   availabilitySummary: z.string().max(2000).optional(),
   proofUrls: z.array(z.string().url().max(2048)).max(10).optional(),
 });
+
+export const getMyPayoutsInput = z.object({
+  dateFrom: z.string().max(100).optional(),
+  dateTo: z.string().max(100).optional(),
+});

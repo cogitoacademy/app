@@ -58,6 +58,20 @@ export interface BookingMeetingPort {
   ): Promise<MeetingEvent>;
 }
 
+export interface BookingPayoutPort {
+  getTutorPayouts(input: {
+    tutorId: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<{
+    completedSessions: number;
+    totalMarks: number;
+    cogitoTake: number;
+    tutorPayout: number;
+    tutorPayoutIdr: number;
+  }>;
+}
+
 export function createBookingModule(deps: {
   db: DbType;
   wallet: BookingWalletPort;

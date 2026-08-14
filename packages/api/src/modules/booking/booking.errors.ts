@@ -229,6 +229,26 @@ export class BookingSessionNotFoundError extends DomainError {
   }
 }
 
+export class BookingSessionRequiredError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "BOOKING_SESSION_REQUIRED",
+      "A series session id is required to complete a series",
+      { id },
+    );
+  }
+}
+
+export class BookingSessionNotStartedError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super("BOOKING_SESSION_NOT_STARTED", "Series session has not started yet", {
+      id,
+    });
+  }
+}
+
 export class BookingSessionNotCancellableError extends DomainError {
   readonly domain = "booking";
   constructor(id: string) {
@@ -257,6 +277,10 @@ export function mapBookingError(
     return notFound(err.message, err);
   if (err instanceof BookingSessionNotFoundError)
     return notFound(err.message, err);
+  if (err instanceof BookingSessionRequiredError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingSessionNotStartedError)
+    return badRequest(err.message, err);
   if (err instanceof BookingTutorNotAssignedError)
     return notFound(err.message, err);
   if (err instanceof BookingNotOwnedError) return forbidden(err.message, err);

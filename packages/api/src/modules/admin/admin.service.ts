@@ -2,6 +2,7 @@ import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
 import type { AdminAuditPort, AdminWalletPort } from "./index";
+import type { BookingPayoutPort } from "../booking";
 import {
   UserNotFoundError,
   LastAdminError,
@@ -64,13 +65,20 @@ function assertValidDateFilter(value: string, field: string): Date {
   return parsed;
 }
 
+export interface GetTutorPayoutsInput {
+  tutorId: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
   db: DbType;
   wallet: AdminWalletPort;
+  payout: BookingPayoutPort;
 }) {
-  const { adminRepo, auditPort, db, wallet } = deps;
+  const { adminRepo, auditPort, db, wallet, payout } = deps;
 
   async function listUsers(
     input: ListUsersInput = {},
@@ -186,7 +194,23 @@ export function createAdminService(deps: {
     });
   }
 
-  return { listUsers, setRole, getWallet, listLedgerEntries };
+  async function getTutorPayouts(input: GetTutorPayoutsInput) {
+    if (input.dateFrom && Number.isNaN(Date.parse(input.dateFrom))) {
+      throw new InvalidLedgerFilterError(
+        "dateFrom must be a valid ISO datetime",
+      );
+    }
+    if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
+      throw new InvalidLedgerFilterError("dateTo must be a valid ISO datetime");
+    }
+    return payout.getTutorPayouts({
+      tutorId: input.tutorId,
+      dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+      dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+    });
+  }
+
+  return { listUsers, setRole, getWallet, listLedgerEntries, getTutorPayouts };
 }
 
 export type AdminService = ReturnType<typeof createAdminService>;

@@ -15,6 +15,7 @@ import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   GROUP_SERIES_DISCLAIMER,
+  TUTOR_PAYOUT_RATE_IDR,
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
@@ -36,6 +37,8 @@ import {
   BookingCancellationDeadlinePassedError,
   BookingSessionNotFoundError,
   BookingSessionNotCancellableError,
+  BookingSessionRequiredError,
+  BookingSessionNotStartedError,
   BookingRescheduleNotFoundError,
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
@@ -85,6 +88,14 @@ export interface CreateSeriesInput {
   timezone: string;
 }
 
+export interface TutorPayoutResult {
+  completedSessions: number;
+  totalMarks: number;
+  cogitoTake: number;
+  tutorPayout: number;
+  tutorPayoutIdr: number;
+}
+
 export interface BookingTransition {
   bookingId: string;
   fromState: BookingState | null;
@@ -119,6 +130,10 @@ function computeMeetingInfo(b: {
 }
 
 export type BookingService = ReturnType<typeof createBookingService>;
+
+type BookingRow = NonNullable<
+  Awaited<ReturnType<BookingRepo["findBookingById"]>>
+>;
 
 /**
  * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
@@ -371,10 +386,11 @@ export function createBookingService(deps: {
         userId: p.userId,
         bookingId: b.id,
         category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
+        severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Group price updated",
         body: `Your group's per-student price changed to ${newPerStudent} Marks because the headcount changed.`,
         eventKey: `booking.${b.id}.reprice.${p.userId}`,
+        emailRequired: true,
       });
     }
   }
@@ -392,6 +408,9 @@ export function createBookingService(deps: {
    * Derives the frontend-facing meeting status for a booking — see the
    * module-scope computeMeetingInfo.
 
+
+
+  /**
   /**
   /**
    * Gets a booking by id, enforcing that the requesting user has access.
@@ -586,6 +605,7 @@ export function createBookingService(deps: {
         title: "New booking request",
         body: "A student has requested a solo session with you.",
         eventKey: `booking.${bookingId}.tutor_request`,
+        emailRequired: true,
       });
 
       return b;
@@ -655,11 +675,34 @@ export function createBookingService(deps: {
         userId: b.tutorId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
+        severity: NOTIFICATION_SEVERITY.ACTION,
         title: `Booking ${toState}`,
         body: `A student has ${toState} the booking.`,
         eventKey: `booking.${bookingId}.${toState}`,
+        emailRequired: true,
       });
+
+      if (b.type === BOOKING_TYPE.GROUP || b.type === BOOKING_TYPE.SERIES) {
+        const participants = await repo.findConfirmedParticipants(
+          tx,
+          bookingId,
+          userId,
+        );
+        for (const p of participants) {
+          // eslint-disable-next-line no-await-in-loop
+          await notification.writeBestEffort({
+            db: tx,
+            userId: p.userId,
+            bookingId,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.ACTION,
+            title: `Booking ${toState}`,
+            body: `A participant ${toState} the booking.`,
+            eventKey: `booking.${bookingId}.${toState}.${p.userId}`,
+            emailRequired: true,
+          });
+        }
+      }
 
       return updated;
     });
@@ -719,6 +762,34 @@ export function createBookingService(deps: {
               bookingId,
               new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
             );
+
+            await notification.writeBestEffort({
+              db: tx,
+              userId: b.tutorId,
+              bookingId,
+              category: NOTIFICATION_CATEGORY.BOOKING,
+              severity: NOTIFICATION_SEVERITY.ACTION,
+              title: "Meeting link ready",
+              body: "The meeting link for the session is ready.",
+              eventKey: `booking.${bookingId}.scheduled.tutor`,
+              emailRequired: true,
+            });
+
+            for (const p of participants) {
+              if (p.userId === b.proposerId) continue;
+              // eslint-disable-next-line no-await-in-loop
+              await notification.writeBestEffort({
+                db: tx,
+                userId: p.userId,
+                bookingId,
+                category: NOTIFICATION_CATEGORY.BOOKING,
+                severity: NOTIFICATION_SEVERITY.ACTION,
+                title: "Meeting link ready",
+                body: "The meeting link for your group session is ready.",
+                eventKey: `booking.${bookingId}.scheduled.${p.userId}`,
+                emailRequired: true,
+              });
+            }
           }
         } catch {
           updated = await repo.findBookingById(tx, bookingId);
@@ -755,6 +826,7 @@ export function createBookingService(deps: {
           ? "Tutor accepted. Waiting for admin room approval."
           : "Tutor accepted. Session scheduled.",
         eventKey: `booking.${bookingId}.accepted`,
+        emailRequired: true,
       });
 
       return { updated, isOffline, b };
@@ -797,91 +869,240 @@ export function createBookingService(deps: {
         userId: b.proposerId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
+        severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Booking declined",
         body: `Tutor declined the booking. ${reason ?? ""}`,
         eventKey: `booking.${bookingId}.declined`,
+        emailRequired: true,
       });
 
       return updated;
     });
   }
 
-  async function completeSession(bookingId: string, tutorId: string) {
+  async function completeSession(
+    bookingId: string,
+    tutorId: string,
+    sessionId?: string,
+  ) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
         throw new BookingNotOwnedError(bookingId, tutorId);
-      if (b.type === BOOKING_TYPE.SERIES) {
-        throw new BookingNotEditableError(bookingId);
-      }
-      if (b.currentState !== BOOKING_STATE.SCHEDULED) {
-        throw new BookingStateTransitionError(
-          b.currentState,
-          "complete",
-          BOOKING_STATE.COMPLETED,
-        );
+
+      if (b.type !== BOOKING_TYPE.SERIES) {
+        return completeSingleSession(tx, b, bookingId, tutorId);
       }
 
-      if (b.type === BOOKING_TYPE.GROUP) {
-        // After a group repricing the holds live on each remaining
-        // participant's wallet (the proposer may have withdrawn and hold 0),
-        // so deduct from each confirmed participant individually.
-        const participants = await repo.findConfirmedParticipants(
-          tx,
-          bookingId,
-        );
-        for (const p of participants) {
-          if (p.heldAmount <= 0) continue;
-          // eslint-disable-next-line no-await-in-loop
-          const w = await wallet.getByUserId(tx, p.userId);
-          if (!w) throw new BookingNotFoundError(p.userId);
-          // eslint-disable-next-line no-await-in-loop
-          await wallet.deduct(tx, {
-            walletId: w.id,
-            amount: p.heldAmount,
-            eventKey: `booking.${bookingId}.complete.${p.userId}`,
-            sourceReference: bookingId,
-            bookingId,
-            actorType: ACTOR_TYPE.TUTOR,
-            reason: "Session completed",
-          });
-        }
-      } else {
-        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
-        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+      return completeSeriesSession(tx, b, bookingId, tutorId, sessionId);
+    });
+  }
+
+  async function completeSingleSession(
+    tx: DbOrTx,
+    b: BookingRow,
+    bookingId: string,
+    tutorId: string,
+  ) {
+    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
+      throw new BookingStateTransitionError(
+        b.currentState,
+        "complete",
+        BOOKING_STATE.COMPLETED,
+      );
+    }
+
+    if (b.type === BOOKING_TYPE.GROUP) {
+      // After a group repricing the holds live on each remaining
+      // participant's wallet (the proposer may have withdrawn and hold 0),
+      // so deduct from each confirmed participant individually.
+      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      for (const p of participants) {
+        if (p.heldAmount <= 0) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const w = await wallet.getByUserId(tx, p.userId);
+        if (!w) throw new BookingNotFoundError(p.userId);
+        // eslint-disable-next-line no-await-in-loop
         await wallet.deduct(tx, {
-          walletId: proposerWallet.id,
-          amount: b.holdAmount,
-          eventKey: `booking.${bookingId}.deduct`,
+          walletId: w.id,
+          amount: p.heldAmount,
+          eventKey: `booking.${bookingId}.complete.${p.userId}`,
           sourceReference: bookingId,
           bookingId,
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Session completed",
         });
       }
-
-      const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
-        actorId: tutorId,
-        actorType: ACTOR_TYPE.TUTOR,
-      });
-
-      await repo.updateBookingHoldAmount(tx, bookingId, 0);
-
-      await notification.writeBestEffort({
-        db: tx,
-        userId: b.proposerId,
+    } else {
+      const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+      if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+      await wallet.deduct(tx, {
+        walletId: proposerWallet.id,
+        amount: b.holdAmount,
+        eventKey: `booking.${bookingId}.deduct`,
+        sourceReference: bookingId,
         bookingId,
-        category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
-        title: "Session completed",
-        body: "Tutor marked the session as completed. Marks deducted.",
-        eventKey: `booking.${bookingId}.completed`,
+        actorType: ACTOR_TYPE.TUTOR,
+        reason: "Session completed",
       });
+    }
 
-      return updated;
+    const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
+      actorId: tutorId,
+      actorType: ACTOR_TYPE.TUTOR,
     });
+
+    await repo.updateBookingHoldAmount(tx, bookingId, 0);
+
+    await notification.writeBestEffort({
+      db: tx,
+      userId: b.proposerId,
+      bookingId,
+      category: NOTIFICATION_CATEGORY.BOOKING,
+      severity: NOTIFICATION_SEVERITY.INFO,
+      title: "Session completed",
+      body: "Tutor marked the session as completed. Marks deducted.",
+      eventKey: `booking.${bookingId}.completed`,
+    });
+
+    return updated;
+  }
+
+  async function completeSeriesSession(
+    tx: DbOrTx,
+    b: BookingRow,
+    bookingId: string,
+    tutorId: string,
+    sessionId?: string,
+  ) {
+    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
+      throw new BookingStateTransitionError(
+        b.currentState,
+        "complete",
+        BOOKING_STATE.COMPLETED,
+      );
+    }
+    if (!sessionId) throw new BookingSessionRequiredError(bookingId);
+
+    const session = await repo.findSessionById(tx, sessionId);
+    if (!session || session.seriesBookingId !== bookingId) {
+      throw new BookingSessionNotFoundError(sessionId);
+    }
+    if (session.currentState !== BOOKING_STATE.SCHEDULED) {
+      throw new BookingStateTransitionError(
+        session.currentState,
+        "completeSession",
+        BOOKING_STATE.COMPLETED,
+      );
+    }
+    if (session.scheduledStartAt.getTime() > Date.now()) {
+      throw new BookingSessionNotStartedError(sessionId);
+    }
+
+    const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+    if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+    await wallet.deduct(tx, {
+      walletId: proposerWallet.id,
+      amount: session.holdAmount,
+      eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
+      sourceReference: bookingId,
+      bookingId,
+      actorType: ACTOR_TYPE.TUTOR,
+      reason: "Series session completed",
+    });
+
+    const participant = await repo.findParticipant(tx, bookingId, b.proposerId);
+    let residualHeld = 0;
+    if (participant) {
+      residualHeld = Math.max(0, participant.heldAmount - session.holdAmount);
+      await repo.updateParticipantState(tx, participant.id, {
+        heldAmount: residualHeld,
+      });
+    }
+    await repo.updateBookingHoldAmount(
+      tx,
+      bookingId,
+      Math.max(0, b.holdAmount - session.holdAmount),
+    );
+
+    await repo.completeSession(tx, session.id);
+
+    await notification.writeBestEffort({
+      db: tx,
+      userId: b.proposerId,
+      bookingId,
+      category: NOTIFICATION_CATEGORY.BOOKING,
+      severity: NOTIFICATION_SEVERITY.INFO,
+      title: "Session completed",
+      body: "One session of your series was marked as completed.",
+      eventKey: `booking.${bookingId}.session.${session.id}.completed.student`,
+    });
+    await notification.writeBestEffort({
+      db: tx,
+      userId: b.tutorId,
+      bookingId,
+      category: NOTIFICATION_CATEGORY.BOOKING,
+      severity: NOTIFICATION_SEVERITY.INFO,
+      title: "Session completed",
+      body: "One session of the series was marked as completed.",
+      eventKey: `booking.${bookingId}.session.${session.id}.completed.tutor`,
+    });
+
+    const sessions = await repo.listSessionsBySeriesId(tx, bookingId);
+    const allCompleted = sessions.every(
+      (s) => s.currentState === BOOKING_STATE.COMPLETED,
+    );
+    if (!allCompleted) {
+      const refreshed = await repo.findBookingById(tx, bookingId);
+      if (!refreshed) throw new BookingNotFoundError(bookingId);
+      return refreshed;
+    }
+
+    if (residualHeld > 0) {
+      await wallet.release(tx, {
+        walletId: proposerWallet.id,
+        amount: residualHeld,
+        eventKey: `booking.${bookingId}.series-release`,
+        sourceReference: bookingId,
+        bookingId,
+        actorType: ACTOR_TYPE.TUTOR,
+        reason: "Series completed: released residual hold",
+      });
+      await repo.updateParticipantState(tx, participant!.id, { heldAmount: 0 });
+    }
+
+    await repo.updateBookingHoldAmount(tx, bookingId, 0);
+    await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
+      actorId: tutorId,
+      actorType: ACTOR_TYPE.TUTOR,
+      reason: "All series sessions completed",
+    });
+
+    await notification.writeBestEffort({
+      db: tx,
+      userId: b.proposerId,
+      bookingId,
+      category: NOTIFICATION_CATEGORY.BOOKING,
+      severity: NOTIFICATION_SEVERITY.INFO,
+      title: "Series completed",
+      body: "All sessions in your series are completed. Remaining holds released.",
+      eventKey: `booking.${bookingId}.series_completed.student`,
+    });
+    await notification.writeBestEffort({
+      db: tx,
+      userId: b.tutorId,
+      bookingId,
+      category: NOTIFICATION_CATEGORY.BOOKING,
+      severity: NOTIFICATION_SEVERITY.INFO,
+      title: "Series completed",
+      body: "All sessions in the series are completed.",
+      eventKey: `booking.${bookingId}.series_completed.tutor`,
+    });
+
+    const refreshed = await repo.findBookingById(tx, bookingId);
+    if (!refreshed) throw new BookingNotFoundError(bookingId);
+    return refreshed;
   }
 
   async function cancelSession(userId: string, sessionId: string) {
@@ -1080,6 +1301,7 @@ export function createBookingService(deps: {
         title: "Reschedule proposed",
         body: "Tutor proposed a new time for the booking.",
         eventKey: `booking.${bookingId}.reschedule_proposed`,
+        emailRequired: true,
       });
 
       return updated;
@@ -1139,6 +1361,7 @@ export function createBookingService(deps: {
         title: "Reschedule accepted",
         body: "The student accepted the proposed new time.",
         eventKey: `booking.${bookingId}.reschedule_accepted`,
+        emailRequired: true,
       });
 
       return updated;
@@ -1191,10 +1414,11 @@ export function createBookingService(deps: {
         userId: b.tutorId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.INFO,
+        severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Reschedule rejected",
         body: "The student declined the proposed new time.",
         eventKey: `booking.${bookingId}.reschedule_rejected`,
+        emailRequired: true,
       });
 
       return updated;
@@ -1306,6 +1530,7 @@ export function createBookingService(deps: {
           title: "Group booking invitation",
           body: "You have been invited to a group session. Confirm within 12 hours.",
           eventKey: `booking.${bookingId}.invite.${inviteeId}`,
+          emailRequired: true,
         });
       }
 
@@ -1385,6 +1610,7 @@ export function createBookingService(deps: {
           title: "Group booking ready",
           body: "All participants confirmed. Review the booking.",
           eventKey: `booking.${bookingId}.full_headcount`,
+          emailRequired: true,
         });
       }
 
@@ -1694,6 +1920,18 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.STUDENT,
       });
 
+      await notification.writeBestEffort({
+        db: tx,
+        userId: input.tutorId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "New series request",
+        body: `A student requested a ${input.sessions.length}-session series with you.`,
+        eventKey: `booking.${bookingId}.tutor_request`,
+        emailRequired: true,
+      });
+
       return { ...b, disclaimer: computeDisclaimer(b) };
     });
   }
@@ -1705,6 +1943,67 @@ export function createBookingService(deps: {
     if (b.type !== BOOKING_TYPE.SERIES)
       throw new BookingNotEditableError(bookingId);
     return repo.listSessionsBySeriesId(db, bookingId);
+  }
+
+  /**
+   * Aggregates tutor earnings from COMPLETED bookings in a date range.
+   *
+   * The stored per-booking `priceSnapshot` (G19-correct tutorShare/cogitoTake)
+   * is authoritative — no flat-rate recomputation. For series bookings the
+   * per-session snapshots are summed so a completed series pays out every
+   * session; a series completed without session rows falls back to its
+   * booking-level snapshot.
+   */
+  async function getTutorPayouts(input: {
+    tutorId: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<TutorPayoutResult> {
+    const bookings = await repo.findCompletedBookingsByTutor(
+      db,
+      input.tutorId,
+      input.dateFrom,
+      input.dateTo,
+    );
+
+    let completedSessions = 0;
+    let totalMarks = 0;
+    let cogitoTake = 0;
+    let tutorPayout = 0;
+
+    for (const b of bookings) {
+      if (b.type === BOOKING_TYPE.SERIES) {
+        // eslint-disable-next-line no-await-in-loop
+
+        const sessions = await repo.listSessionsBySeriesId(db, b.id);
+        const completed = sessions.filter(
+          (s) => s.currentState === BOOKING_STATE.COMPLETED,
+        );
+        if (completed.length > 0) {
+          for (const s of completed) {
+            completedSessions++;
+            const snap = s.priceSnapshot ?? b.priceSnapshot;
+            totalMarks += snap?.baseline ?? 0;
+            cogitoTake += snap?.cogitoTake ?? 0;
+            tutorPayout += snap?.tutorShare ?? 0;
+          }
+          continue;
+        }
+      }
+      completedSessions++;
+      const snap = b.priceSnapshot;
+      totalMarks += snap?.baseline ?? 0;
+      cogitoTake += snap?.cogitoTake ?? 0;
+      tutorPayout += snap?.tutorShare ?? 0;
+    }
+
+    return {
+      completedSessions,
+      totalMarks,
+      cogitoTake,
+      tutorPayout,
+      tutorPayoutIdr: Math.round(tutorPayout * TUTOR_PAYOUT_RATE_IDR),
+    };
   }
 
   async function expireBookings() {
@@ -1757,12 +2056,15 @@ export function createBookingService(deps: {
             userId: b.proposerId,
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
-            severity: NOTIFICATION_SEVERITY.INFO,
+            severity: noShow
+              ? NOTIFICATION_SEVERITY.ACTION
+              : NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
             body: noShow
               ? "The session was marked as no-show and held marks were released."
               : "The booking deadline passed and held marks were released.",
             eventKey: `booking.${b.id}.expired.student`,
+            emailRequired: noShow,
           });
 
           await notification.writeBestEffort({
@@ -1770,12 +2072,15 @@ export function createBookingService(deps: {
             userId: b.tutorId,
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
-            severity: NOTIFICATION_SEVERITY.INFO,
+            severity: noShow
+              ? NOTIFICATION_SEVERITY.ACTION
+              : NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
             body: noShow
               ? "The session was marked as no-show and held marks were released."
               : "The booking expired because its deadline passed.",
             eventKey: `booking.${b.id}.expired.tutor`,
+            emailRequired: noShow,
           });
         });
         succeeded++;
@@ -1897,6 +2202,7 @@ export function createBookingService(deps: {
             title: "Session auto-cancelled",
             body: "The tutor did not join within 15 minutes, so the session was auto-cancelled and held marks were released.",
             eventKey: `booking.${b.id}.tutor_no_show`,
+            emailRequired: true,
           });
 
           await notification.writeBestEffort({
@@ -1947,6 +2253,7 @@ export function createBookingService(deps: {
     addSessionNote,
     getSessionNotes,
     listSessions,
+    getTutorPayouts,
     expireBookings,
     releaseExpiredHolds,
     checkTutorLateness,

@@ -33,6 +33,7 @@ import {
   LATENESS_TOLERANCE_MS,
   MODALITY,
 } from "../../shared/constants";
+import { BOOKING_STATE } from "./booking-state.types";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
@@ -457,6 +458,13 @@ async function cancelSession(conn: DbOrTx, sessionId: string) {
     .where(eq(bookingSession.id, sessionId));
 }
 
+async function completeSession(conn: DbOrTx, sessionId: string) {
+  await conn
+    .update(bookingSession)
+    .set({ currentState: BOOKING_STATE.COMPLETED })
+    .where(eq(bookingSession.id, sessionId));
+}
+
 async function insertSessionNote(
   conn: DbOrTx,
   values: { bookingId: string; authorId: string; content: string },
@@ -632,6 +640,28 @@ async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
     .where(eq(bookingSession.seriesBookingId, bookingId));
 }
 
+async function findCompletedBookingsByTutor(
+  conn: DbOrTx,
+  tutorId: string,
+  dateFrom?: Date,
+  dateTo?: Date,
+): Promise<BookingRow[]> {
+  const conditions = [
+    eq(booking.tutorId, tutorId),
+    eq(booking.currentState, BOOKING_STATE.COMPLETED),
+  ];
+  if (dateFrom) {
+    conditions.push(gte(booking.scheduledStartAt, dateFrom));
+  }
+  if (dateTo) {
+    conditions.push(lte(booking.scheduledStartAt, dateTo));
+  }
+  return conn
+    .select()
+    .from(booking)
+    .where(and(...conditions));
+}
+
 /**
  * Updates a booking with optimistic concurrency via version, returning the new row and version.
  *
@@ -788,6 +818,7 @@ export function createBookingRepo(db: DbType) {
     insertBookingSession,
     findSessionById,
     cancelSession,
+    completeSession,
     insertSessionNote,
     listSessionNotes,
     listSessionsBySeriesId,
@@ -801,6 +832,7 @@ export function createBookingRepo(db: DbType) {
     updateBookingDeadline,
     decrementBookingConfirmedHeadcount,
     cancelAllSessions,
+    findCompletedBookingsByTutor,
   };
 }
 

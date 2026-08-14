@@ -142,21 +142,35 @@ function createServices() {
   // Core modules
   const wallet = createWalletModule({ db });
   const auth = createAuthModule({ db, wallet: wallet.service });
+  const notification = createNotificationModule({ db, email: email.service });
+  const booking = createBookingModule({
+    db,
+    wallet: wallet.service,
+    pricing: pricing.service,
+    audit: audit.service,
+    notification: notification.service,
+    meeting,
+  });
   const admin = createAdminModule({
     db,
     audit: audit.service,
     wallet: wallet.service,
+    payout: booking.service,
   });
   const adminTutor = createAdminTutorModule({ db, audit: audit.service });
   const tutor = createTutorModule({
     db,
     pricing: pricing.service,
     audit: audit.service,
+    payout: booking.service,
   });
   const discovery = createDiscoveryModule({ db });
   const invite = createInviteModule({ db, audit: audit.service });
-  const achievement = createAchievementModule({ db, audit: audit.service });
-  const notification = createNotificationModule({ db, email: email.service });
+  const achievement = createAchievementModule({
+    db,
+    audit: audit.service,
+    notification: notification.service,
+  });
   const room = createRoomModule({ db });
 
   const payment = createPaymentModule({
@@ -173,15 +187,6 @@ function createServices() {
           }
         : undefined,
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
-  });
-
-  const booking = createBookingModule({
-    db,
-    wallet: wallet.service,
-    pricing: pricing.service,
-    audit: audit.service,
-    notification: notification.service,
-    meeting,
   });
 
   const refund = createRefundModule({

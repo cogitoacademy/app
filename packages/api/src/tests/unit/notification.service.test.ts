@@ -117,6 +117,7 @@ describe("NotificationService (unit)", () => {
       title: "Booking Confirmed",
       body: "Your booking is confirmed",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -146,6 +147,7 @@ describe("NotificationService (unit)", () => {
       title: "Payment Required",
       body: "Payment is due",
       severity: "critical",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -173,6 +175,7 @@ describe("NotificationService (unit)", () => {
       title: "Booking Failed",
       body: "Email dispatch will fail",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -205,6 +208,7 @@ describe("NotificationService (unit)", () => {
       title: "No Email",
       body: "No email body",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -227,6 +231,7 @@ describe("NotificationService (unit)", () => {
       title: "No User",
       body: "No user row",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -249,6 +254,7 @@ describe("NotificationService (unit)", () => {
       title: "Achievement Unlocked",
       body: "You earned a badge!",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -276,6 +282,7 @@ describe("NotificationService (unit)", () => {
       title: "System Notice",
       body: "System notice body",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -304,6 +311,7 @@ describe("NotificationService (unit)", () => {
       body: "New booking body",
       severity: "action",
       eventKey: "booking.b1.new",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -385,6 +393,7 @@ describe("NotificationService (unit)", () => {
       title: "Info Notification",
       body: "Just info",
       severity: "info",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -405,6 +414,7 @@ describe("NotificationService (unit)", () => {
       title: "No email port",
       body: "No email port body",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(true).toBe(true);
@@ -588,6 +598,7 @@ describe("NotificationService (unit)", () => {
       title: "Refund Processed",
       body: "Your refund has been processed",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -610,6 +621,7 @@ describe("NotificationService (unit)", () => {
       title: "Schedule Changed",
       body: "Your schedule has been updated",
       severity: "critical",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -632,6 +644,7 @@ describe("NotificationService (unit)", () => {
       title: "Override Applied",
       body: "An override was applied",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -654,6 +667,7 @@ describe("NotificationService (unit)", () => {
       title: "Payment Received",
       body: "Your payment was received",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -676,6 +690,7 @@ describe("NotificationService (unit)", () => {
       title: "Achievement Unlocked",
       body: "You earned a badge!",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -703,6 +718,7 @@ describe("NotificationService (unit)", () => {
       title: "Booking Confirmed",
       body: "Your booking is confirmed",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(1);
@@ -792,5 +808,119 @@ describe("write vs writeBestEffort", () => {
     const repo = makeTestRepo();
     const service = createNotificationService(repo);
     await expect(service.writeBestEffort(baseParams)).resolves.toBeUndefined();
+  });
+});
+
+describe("NotificationService email routing decision (G17)", () => {
+  function makeRoutingRepo(
+    overrides: Partial<NotificationRepo> = {},
+  ): NotificationRepo {
+    return {
+      findNotificationByEventKey: mock(async () => null),
+      findNotificationByIdForUser: mock(async () => ({ id: "n1" })),
+      insertNotification: mock(async () => ({ id: "n_email" })),
+      findUserEmail: mock(async () => "user@example.com"),
+      insertDispatch: mock(async () => {}),
+      updateDispatchStatus: mock(async () => {}),
+      listNotifications: mock(async () => []),
+      countUnread: mock(async () => 0),
+      updateReadStatus: mock(async () => {}),
+      markAllRead: mock(async () => {}),
+      findDispatch: mock(async () => null),
+      ...overrides,
+    } as any;
+  }
+
+  const baseParams = {
+    db: {} as any,
+    userId: "user1",
+    category: "booking" as const,
+    title: "Test",
+    body: "Test body",
+    severity: "action" as const,
+    eventKey: "test.key",
+  };
+
+  test("emailRequired true + action severity + supported category → email dispatched and status sent", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({ ...baseParams, emailRequired: true });
+
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+    expect(repo.insertDispatch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        notificationId: "n_email",
+        channel: "email",
+        recipientEmail: "user@example.com",
+        status: "queued",
+      }),
+    );
+    expect(emailPort.send).toHaveBeenCalledTimes(1);
+    expect(repo.updateDispatchStatus).toHaveBeenCalledWith(
+      expect.anything(),
+      "n_email",
+      "sent",
+    );
+  });
+
+  test("emailRequired default false + action severity + supported category → no email", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({ ...baseParams });
+
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+
+  test("emailRequired true + info severity + supported category → no email (severity gate)", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({
+      ...baseParams,
+      severity: "info",
+      emailRequired: true,
+    });
+
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+
+  test("emailRequired true + achievement category → no email (category backstop), in-app row kept", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({
+      ...baseParams,
+      category: "achievement",
+      emailRequired: true,
+    });
+
+    expect(repo.insertNotification).toHaveBeenCalledTimes(1);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+
+  test("achievement in-app only: emailRequired false → notification row, no dispatch", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({
+      ...baseParams,
+      category: "achievement",
+      severity: "info",
+    });
+
+    expect(repo.insertNotification).toHaveBeenCalledTimes(1);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
   });
 });

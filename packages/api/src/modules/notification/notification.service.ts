@@ -38,6 +38,12 @@ export interface NotificationWriteParams {
   severity?: NotificationSeverity;
   eventKey: string;
   metadata?: Record<string, unknown>;
+  /**
+   * Opt-in per-event email flag (PRD notification matrix). Defaults to false —
+   * only call sites that explicitly require an email dispatch set this true.
+   * Email is still gated by severity >= action and the category backstop.
+   */
+  emailRequired?: boolean;
 }
 
 export interface NotificationListItem {
@@ -127,6 +133,7 @@ export function createNotificationService(
 
     if (
       inserted &&
+      params.emailRequired === true &&
       (params.severity === NOTIFICATION_SEVERITY.ACTION ||
         params.severity === NOTIFICATION_SEVERITY.CRITICAL)
     ) {
