@@ -328,7 +328,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     <Stack direction="column" spacing="lg">
       <div>
         <Button
-          variant="plain"
+          variant="underline"
           size="sm"
           nativeButton={false}
           render={<Link to="/tutors" aria-label="Back to tutors" />}

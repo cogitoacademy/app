@@ -52,6 +52,10 @@ export const buttonVariants = cva(
           "text-foreground hover:not-[[data-disabled]]:bg-accent data-popup-open:bg-accent active:not-[[data-disabled]]:bg-accent",
           "after:content-none outline-primary",
         ],
+        underline: [
+          "justify-start px-0! text-foreground underline-offset-4 hover:not-[[data-disabled]]:underline data-popup-open:underline",
+          "after:content-none outline-primary",
+        ],
       },
       size: {
         xs: "h-7 px-2 rounded-sm after:rounded-sm [&>svg:not([class*=size-])]:size-4 gap-1.5 before:-mr-6",
