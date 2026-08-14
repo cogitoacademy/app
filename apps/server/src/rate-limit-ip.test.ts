@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getClientIp } from "./routes";
+import { getClientIp } from "@cogito-app/api/lib/request-id";
 
 describe("getClientIp", () => {
   test("ignores x-forwarded-for when not trusting proxy", () => {

@@ -21,7 +21,7 @@ import { evlog } from "evlog/elysia";
 
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
 import { enrichOpenAPISpec, openApiTags, scalarHtml } from "./openapi";
-import { generateRequestId } from "@cogito-app/api/lib/request-id";
+import { generateRequestId, getClientIp, isValidUploadKey } from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { healthCheck } from "@cogito-app/api/lib/db-health";
 
@@ -54,17 +54,6 @@ const bookingRateLimit = rateLimit({
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
-
-export function getClientIp(request: Request, trustProxy: boolean): string {
-  if (trustProxy) {
-    return (
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
-      "unknown"
-    );
-  }
-  return request.headers.get("x-real-ip") ?? "unknown";
-}
 
 function logRpcError(error: unknown) {
   if (error instanceof ORPCError) {
@@ -270,6 +259,23 @@ export function createServer() {
       },
       { parse: "none" },
     )
+    .get("/uploads/*", async ({ params, set }) => {
+      if (env.R2_PUBLIC_URL) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      const key = (params["*"] as string) ?? "";
+      if (!isValidUploadKey(key)) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      const file = Bun.file(`${env.UPLOAD_DIR}/${key}`);
+      if (!(await file.exists())) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      return new Response(file);
+    })
     .get("/openapi.json", async ({ request }) => {
       if (env.NODE_ENV === "production")
         return new Response("Not Found", { status: 404 });

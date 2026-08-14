@@ -45,6 +45,12 @@ const serverShape = {
   EMAIL_FROM: z.string().default("noreply@cogitoacademy.id"),
   METRICS_TOKEN: z.string().optional(),
   DB_SSL_REJECT_UNAUTHORIZED: z.coerce.boolean().default(true),
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  R2_PUBLIC_URL: z.url().optional(),
+  UPLOAD_DIR: z.string().default("./uploads"),
 } as const;
 
 export const serverEnvSchema = z
