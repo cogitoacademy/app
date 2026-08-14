@@ -39,9 +39,32 @@ const paymentRateLimit = rateLimit({
   keyPrefix: "payment",
   redis,
 });
+const inviteRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 10,
+  keyPrefix: "invite",
+  redis,
+});
+const bookingRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "booking",
+  redis,
+});
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+
+export function getClientIp(request: Request, trustProxy: boolean): string {
+  if (trustProxy) {
+    return (
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("x-real-ip") ??
+      "unknown"
+    );
+  }
+  return request.headers.get("x-real-ip") ?? "unknown";
+}
 
 function logRpcError(error: unknown) {
   if (error instanceof ORPCError) {
@@ -166,10 +189,7 @@ export function createServer() {
     .onRequest(async ({ request }) => {
       const url = new URL(request.url);
       const path = url.pathname;
-      const ip =
-        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        request.headers.get("x-real-ip") ??
-        "unknown";
+      const ip = getClientIp(request, env.TRUST_PROXY);
 
       if (
         path.startsWith("/api/auth/sign-in/") ||
@@ -189,6 +209,32 @@ export function createServer() {
 
       if (path === "/rpc/payment.createPurchase") {
         const { allowed, retryAfterMs } = await paymentRateLimit(ip);
+        if (!allowed) {
+          return new Response(JSON.stringify({ error: "Too many requests" }), {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+            },
+          });
+        }
+      }
+
+      if (path.startsWith("/rpc/invite.verify")) {
+        const { allowed, retryAfterMs } = await inviteRateLimit(ip);
+        if (!allowed) {
+          return new Response(JSON.stringify({ error: "Too many requests" }), {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+            },
+          });
+        }
+      }
+
+      if (path.startsWith("/rpc/booking.")) {
+        const { allowed, retryAfterMs } = await bookingRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
             status: 429,

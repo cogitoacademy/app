@@ -30,6 +30,7 @@ export const env = createEnv({
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     PORT: z.coerce.number().default(3001),
+    TRUST_PROXY: z.coerce.boolean().default(false),
     SESSION_COOKIE_CACHE_MAX_AGE: z.coerce.number().default(60),
     REDIS_URL: z.string().url().optional(),
     SCHEDULER_ENABLED: z.coerce.boolean().default(false),
