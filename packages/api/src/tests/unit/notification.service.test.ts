@@ -1051,7 +1051,10 @@ describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
 
     await service.dispatchQueuedEmails(10);
 
-    expect(repo.listQueuedDispatches).toHaveBeenCalledWith(expect.anything(), 10);
+    expect(repo.listQueuedDispatches).toHaveBeenCalledWith(
+      expect.anything(),
+      10,
+    );
   });
 
   test("returns zeroes without a db connection", async () => {

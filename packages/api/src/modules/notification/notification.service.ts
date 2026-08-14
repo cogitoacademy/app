@@ -151,10 +151,7 @@ export function createNotificationService(
     ) {
       const recipientEmail = await repo.findUserEmail(conn, params.userId);
 
-      if (
-        recipientEmail &&
-        EMAIL_SUPPORTED_CATEGORIES.has(params.category)
-      ) {
+      if (recipientEmail && EMAIL_SUPPORTED_CATEGORIES.has(params.category)) {
         await repo.insertDispatch(conn, {
           notificationId: inserted.id,
           channel: "email",

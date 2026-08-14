@@ -28,7 +28,8 @@ export async function initScheduler(): Promise<void> {
     onExpireBookings: () => services.booking.expireBookings(),
     onReleaseHolds: () => services.booking.releaseExpiredHolds(),
     onCheckTutorLateness: () => services.booking.checkTutorLateness(),
-    onSendNotificationEmail: () => services.notification.dispatchQueuedEmails(50),
+    onSendNotificationEmail: () =>
+      services.notification.dispatchQueuedEmails(50),
   });
 
   if (!scheduler) {
