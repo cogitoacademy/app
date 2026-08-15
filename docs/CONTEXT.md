@@ -284,9 +284,10 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 
 ## CI/CD
 
-- **GitHub Actions** (`.github/workflows/ci.yml`): 4 parallel jobs (lint, typecheck, build, test+coverage)
+- **GitHub Actions** (`.github/workflows/ci.yml`): 4 parallel jobs (lint, typecheck, build, test+coverage). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/` + `apps/server/src/openapi.test.ts` in one process, and the remaining `apps/server/src/` tests in a **separate process** (the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`, which would otherwise shadow the real module for parallel API tests). Coverage gate: `packages/api` ≥ 90% lines, overall ≥ 80% (enforced by `.github/scripts/coverage-comment.ts`).
 - **CD** (after infrastructure branch): build → push to GHCR → Coolify auto-deploys
 - **Lefthook** pre-commit: oxlint + oxfmt. Pre-push: typecheck.
+- **Labeler** (`.github/workflows/labeler.yml`): labels PRs `server`/`web`/`infrastructure`/`docs` by changed paths (`.github/labeler.yml`); needs `pull-requests: write` permission.
 - **Dependabot**: weekly npm + GitHub Actions updates.
 - **Coverage**: 90% for `packages/api`, 80% overall (after foundation hardening)
 - **Health**: `GET /health` returns `{ status, checks: { database, redis }, timestamp }` — both DB `SELECT 1` and Redis `ping()` are checked

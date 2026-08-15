@@ -51,8 +51,8 @@ export function Checkbox({
     >
       <BaseCheckbox.Indicator
         className="data-[unchecked]:hidden flex"
-        render={(props, state) => (
-          <span {...props}>
+        render={(renderProps, state) => (
+          <span {...renderProps}>
             {state.indeterminate ? (
               <svg
                 xmlns="http://www.w3.org/2000/svg"

@@ -126,7 +126,7 @@ export function createRefundService(deps: {
   }
 
   async function createRefundRecord(
-    db: DbOrTx,
+    conn: DbOrTx,
     params: {
       paymentId: string | null;
       walletId: string;
@@ -136,7 +136,7 @@ export function createRefundService(deps: {
       actorId?: string;
     },
   ): Promise<void> {
-    await repo.insertRefundRecord(db, params);
+    await repo.insertRefundRecord(conn, params);
   }
 
   return { createCorrection, listCorrections, createRefundRecord };
