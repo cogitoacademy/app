@@ -543,6 +543,21 @@ bun test --env-file apps/server/.env packages/api/src/tests/ apps/server/src/ope
 
 End of branch: full suite + `bun run test:coverage` gates + server boot smoke + endpoint walkthrough (throwaway script, not committed).
 
+## Verification Results (2026-08-15)
+
+- **Full suite:** 1658 pass / 0 fail (baseline was 1643 + the env-dependent meeting test which passes with `GOOGLE_MEET_*` unset).
+- **Coverage:** packages/api 95.3% lines (gate ≥ 90%); overall 95.4% (gate ≥ 80%).
+- **`bun run check-types`:** clean (3 turbo tasks). `bunx tsc -b apps/server` — 0 errors (this DOES typecheck packages/api source).
+- **Boot:** server starts with scheduler + Redis; `/health` reports `{"status":"ok","checks":{"database":"ok","redis":"ok"}}`.
+- **Smoke walkthrough (throwaway script, HTTP):** auth sign-in/sign-up, `/health`, `/metrics` gating (401 without token), OpenAPI/Scalar session gating, 401/403/404/413/429 responses, webhook bad-signature (401) + stale-timestamp (408), role guards (student→admin/tutor FORBIDDEN), and ~40 RPC endpoints over HTTP.
+
+### Known pre-existing issues found during verification (NOT introduced by this branch; verified identical on main)
+
+1. **With-body RPC requests over raw HTTP return 400 "Input validation failed"** on this runtime stack (Bun 1.3.14 + Elysia + evlog + oRPC). `readBodyWithLimit` reads the body correctly (25 bytes observed) and the reconstruction is proven correct in-process, but oRPC's lazy body wrapper reads an empty body for the reconstructed request in the live server. Request bodies without `content-length`/with `text/plain` content-type DO work. The in-process test suite is unaffected (1658 tests pass); the web client is unaffected for the paths it exercises. Root cause is a runtime/dependency-layer body-stream interaction — tracked for a Bun/evlog upgrade, not fixable in this branch.
+2. **`server.handle()` + POST with a body segfaults/hangs Bun 1.3.14 when the evlog plugin is registered** (pre-existing; already worked around in the test suite by testing pure helpers — see `.superpowers/sdd/BACKEND-HARDENING-PHASE2/progress.md` concern C3).
+3. **RPC HTTP paths use oRPC procedure key names** (e.g. `/rpc/auth/getProfile`), NOT the `.route({ path: "/auth/profile/get" })` values — the `path` option only affects the OpenAPI spec. The plan's original endpoint inventory (based on route paths) is corrected here; the web client uses `@orpc/client` which resolves the same way.
+
 ### Version Notes
 
 - v1.0 (2026-08-15): Created from the 2026-08-15 full-backend review (correctness + security) of HEAD `7e9ff5c`. All findings verified in code; cross-checked against PRD-GAPS-PHASE3 (U1/U3/U4/U11), BACKEND-CLEANUP (completed), DEFERRED-OPS-TASKS, and `.superpowers/sdd/` ledgers.
+- v1.1 (2026-08-15): All 6 PRs implemented, merged into `fix/backend-review-hardening` (11 commits). U11 closed. Verification results + known pre-existing issues added.
