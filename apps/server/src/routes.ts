@@ -57,6 +57,12 @@ const bookingRateLimit = rateLimit({
   keyPrefix: "booking",
   redis,
 });
+const searchRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "search",
+  redis,
+});
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
@@ -240,35 +246,52 @@ export function createServer() {
           });
         }
       }
-    })
-    .all("/api/auth/*", async (context) => {
-      const { request, status } = context;
-      if (["POST", "GET"].includes(request.method)) {
-        if (request.method === "POST") {
-          const { body, tooLarge } = await readBodyWithLimit(
-            request,
-            MAX_BODY_BYTES,
-          );
-          if (tooLarge) {
-            return new Response(
-              JSON.stringify({ error: "Request body too large" }),
-              {
-                status: 413,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
-          }
-          const bounded = new Request(request.url, {
-            method: request.method,
-            headers: request.headers,
-            body,
+
+      if (path.startsWith("/rpc/auth.students/search")) {
+        const { allowed, retryAfterMs } = await searchRateLimit(ip);
+        if (!allowed) {
+          return new Response(JSON.stringify({ error: "Too many requests" }), {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+            },
           });
-          return auth.handler(bounded);
         }
-        return auth.handler(request);
       }
-      return status(405);
-    }, { parse: "none" })
+    })
+    .all(
+      "/api/auth/*",
+      async (context) => {
+        const { request, status } = context;
+        if (["POST", "GET"].includes(request.method)) {
+          if (request.method === "POST") {
+            const { body, tooLarge } = await readBodyWithLimit(
+              request,
+              MAX_BODY_BYTES,
+            );
+            if (tooLarge) {
+              return new Response(
+                JSON.stringify({ error: "Request body too large" }),
+                {
+                  status: 413,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            const bounded = new Request(request.url, {
+              method: request.method,
+              headers: request.headers,
+              body,
+            });
+            return auth.handler(bounded);
+          }
+          return auth.handler(request);
+        }
+        return status(405);
+      },
+      { parse: "none" },
+    )
     .all(
       "/rpc*",
       async (context) => {

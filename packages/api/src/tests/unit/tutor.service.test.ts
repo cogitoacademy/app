@@ -169,7 +169,7 @@ describe("Tutor Service", () => {
         auditPort: { record: mock(async () => {}) },
         db: {
           transaction: mock(async (fn: any) => {
-            const tx = {};
+            const tx = { execute: mock(async () => {}) };
             return fn(tx);
           }),
         },
@@ -396,6 +396,25 @@ describe("Tutor Service", () => {
         modality: "online",
       });
       expect(result.id).toBe("slot1");
+    });
+
+    test("upsertAvailability rejects updating another tutor's slot (H1)", async () => {
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listAvailability: mock(async () => []),
+          upsertAvailability: mock(async () => undefined),
+        },
+      });
+      const service = createTutorService(deps as any);
+      await expect(
+        service.upsertAvailability("u1", {
+          id: "foreign-slot",
+          startDate: new Date("2026-01-01T10:00:00Z"),
+          endDate: new Date("2026-01-01T11:00:00Z"),
+          modality: "online",
+        }),
+      ).rejects.toThrow(TutorProfileNotFoundError);
     });
 
     test("deleteAvailability throws TutorProfileNotFoundError when slot not found", async () => {

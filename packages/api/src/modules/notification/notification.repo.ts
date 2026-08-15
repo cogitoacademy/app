@@ -228,7 +228,17 @@ export async function listNotifications(
     conditions.push(eq(notification.isRead, false));
   }
   if (opts.cursor) {
-    conditions.push(lt(notification.createdAt, new Date(opts.cursor)));
+    // Composite (createdAt, id) cursor: equal timestamps cannot skip or
+    // duplicate rows across pages (L3). Cursor format: `{iso}|{id}`.
+    const [ts, id] = opts.cursor.split("|");
+    if (!ts || !id) {
+      throw new Error("Invalid notification cursor");
+    }
+    conditions.push(
+      sql`(${notification.createdAt}, ${notification.id}) < (
+        SELECT created_at, id FROM notification WHERE id = ${id}
+      )`,
+    );
   }
 
   const rows = await conn

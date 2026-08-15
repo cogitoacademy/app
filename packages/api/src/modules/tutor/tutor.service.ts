@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import { lockTutorForBooking } from "../../lib/locks";
 import {
   ONBOARDING_STATUS,
   MODALITY,
@@ -234,21 +235,34 @@ export function createTutorService(deps: {
     const start = input.startDate;
     const end = input.endDate;
 
-    const existing = await tutorRepo.listAvailability(db, userId, {
-      from: new Date(),
-    });
-    const overlapping = existing.find((slot) => {
-      if (input.id && slot.id === input.id) return false;
-      return start < slot.endDate && end > slot.startDate;
-    });
-    if (overlapping) {
-      throw new AvailabilitySlotOverlapError(userId);
-    }
+    return db.transaction(async (tx) => {
+      // Serialize overlap checks per tutor so concurrent upserts cannot create
+      // overlapping slots (L6).
+      await lockTutorForBooking(tx, userId);
 
-    return tutorRepo.upsertAvailability(db, userId, {
-      ...input,
-      startDate: start,
-      endDate: end,
+      const existing = await tutorRepo.listAvailability(tx, userId, {
+        from: new Date(),
+      });
+      const overlapping = existing.find((slot) => {
+        if (input.id && slot.id === input.id) return false;
+        return start < slot.endDate && end > slot.startDate;
+      });
+      if (overlapping) {
+        throw new AvailabilitySlotOverlapError(userId);
+      }
+
+      const updated = await tutorRepo.upsertAvailability(tx, userId, {
+        ...input,
+        startDate: start,
+        endDate: end,
+      });
+      // Ownership is enforced in the repo UPDATE via the tutorId predicate;
+      // an update that matched no row means the slot does not belong to this
+      // tutor (H1).
+      if (input.id && !updated) {
+        throw new TutorProfileNotFoundError(userId);
+      }
+      return updated;
     });
   }
 
@@ -280,6 +294,7 @@ export function createTutorService(deps: {
     }
 
     return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, userId);
       const existing = await tutorRepo.listAvailability(tx, userId);
       const overlaps = occurrences.some((occurrence, occurrenceIndex) => {
         const overlapsExisting = existing.some(

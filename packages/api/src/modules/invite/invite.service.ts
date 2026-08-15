@@ -1,5 +1,6 @@
 import type { tutorInvite, tutorProfile } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
+import { hashInviteToken } from "../../lib/tokens";
 import { INVITE_STATUS, USER_ROLE, ACTOR_TYPE } from "../../shared/constants";
 import type { InviteRepo } from "./invite.repo";
 import type { InviteAuditPort } from "./index";
@@ -39,7 +40,10 @@ export function createInviteService(deps: {
   const { inviteRepo, auditPort, db } = deps;
 
   async function verify(token: string) {
-    const invite = await inviteRepo.findInviteByToken(db, token);
+    const invite = await inviteRepo.findInviteByToken(
+      db,
+      hashInviteToken(token),
+    );
     if (!invite) {
       throw new InviteNotFoundError(token);
     }
@@ -51,7 +55,10 @@ export function createInviteService(deps: {
   }
 
   async function claim(userId: string, userEmail: string, token: string) {
-    const invite = await inviteRepo.findInviteByToken(db, token);
+    const invite = await inviteRepo.findInviteByToken(
+      db,
+      hashInviteToken(token),
+    );
     const existingProfile = await inviteRepo.findTutorProfileByUserId(
       db,
       userId,

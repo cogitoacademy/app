@@ -218,6 +218,19 @@ describe("AdminTutor Service", () => {
       expect(deps.adminTutorRepo.insertInvite).toHaveBeenCalled();
     });
 
+    test("createInvite stores a digest and returns the plaintext once (M10)", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.createInvite("admin1", {
+        email: "hash@example.com",
+        displayName: "Hash Tutor",
+      });
+      const inserted = (deps.adminTutorRepo.insertInvite as any).mock
+        .calls[0][1];
+      expect(inserted.token).toMatch(/^[0-9a-f]{64}$/);
+      expect(inserted.token).not.toBe(result.token);
+    });
+
     test("listInvites defaults limit and offset", async () => {
       const deps = makeDeps();
       const service = createAdminTutorService(deps as any);
@@ -227,11 +240,12 @@ describe("AdminTutor Service", () => {
         id: "inv1",
         email: "tutor@example.com",
         displayName: "Tutor",
-        token: "tok1",
         status: "invited",
         invitedBy: "admin1",
         internalNotes: null,
       });
+      // Stored digests are never surfaced in list responses (M10).
+      expect(result[0].token).toBeUndefined();
     });
 
     test("listInvites passes status filter", async () => {
@@ -243,11 +257,11 @@ describe("AdminTutor Service", () => {
         id: "inv1",
         email: "tutor@example.com",
         displayName: "Tutor",
-        token: "tok1",
         status: "invited",
         invitedBy: "admin1",
         internalNotes: null,
       });
+      expect(result[0].token).toBeUndefined();
     });
 
     test("resendInvite throws InviteNotFoundError for missing invite", async () => {

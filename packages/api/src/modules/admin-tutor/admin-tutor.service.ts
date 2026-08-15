@@ -6,6 +6,7 @@ import {
   DuplicateInviteError,
 } from "./admin-tutor.errors";
 import type { DbType } from "../../lib/db";
+import { hashInviteToken } from "../../lib/tokens";
 import {
   INVITE_EXPIRY_DAYS,
   INVITE_STATUS,
@@ -123,7 +124,9 @@ export function createAdminTutorService(deps: {
         invite = await adminTutorRepo.insertInvite(tx, {
           email: input.email,
           displayName: input.displayName,
-          token,
+          // Only the digest is stored at rest (M10); the plaintext is returned
+          // once in the response so the admin can share the invite link.
+          token: hashInviteToken(token),
           status: INVITE_STATUS.INVITED,
           invitedBy: adminId,
           internalNotes: input.internalNotes ?? null,
@@ -146,7 +149,7 @@ export function createAdminTutorService(deps: {
         details: { email: input.email, displayName: input.displayName },
       });
 
-      return invite;
+      return { ...invite, token };
     });
   }
 
@@ -158,11 +161,14 @@ export function createAdminTutorService(deps: {
       limit = ADMIN_DEFAULT_PAGE_LIMIT,
       offset = 0,
     } = input ?? {};
-    return adminTutorRepo.listInvites(db, {
+    const rows = await adminTutorRepo.listInvites(db, {
       status,
       limit,
       offset,
     });
+    // Stored tokens are digests, not shareable links — never surface them in
+    // list responses (M10); plaintext is returned once at create/resend.
+    return rows.map((row) => ({ ...row, token: undefined }));
   }
 
   async function resendInvite(
@@ -181,7 +187,7 @@ export function createAdminTutorService(deps: {
       expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
 
       const updated = await adminTutorRepo.updateInvite(tx, inviteId, {
-        token: newToken,
+        token: hashInviteToken(newToken),
         expiresAt,
       });
 
@@ -194,7 +200,7 @@ export function createAdminTutorService(deps: {
         targetType: "tutor_invite",
       });
 
-      return updated;
+      return { ...updated, token: newToken };
     });
   }
 

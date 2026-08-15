@@ -120,6 +120,13 @@
       "when": 1786758120544,
       "tag": "0016_smart_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786831000000,
+      "tag": "0017_invite_token_hash",
+      "breakpoints": true
     }
   ]
 }

@@ -28,6 +28,15 @@ export function TutorInviteForm() {
           title: `Invitation sent to ${data.email}`,
           type: "success",
         });
+        if (data.token) {
+          const url = `${window.location.origin}/invite?token=${data.token}`;
+          void navigator.clipboard.writeText(url).then(() =>
+            toastManager.add({
+              title: "Invite link copied to clipboard",
+              type: "success",
+            }),
+          );
+        }
         void queryClient.invalidateQueries({
           queryKey: orpc.adminTutor.listInvites.key(),
         });

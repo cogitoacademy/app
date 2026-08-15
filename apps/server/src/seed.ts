@@ -14,6 +14,7 @@ import {
   INVITE_EXPIRY_DAYS,
   USER_ROLE,
 } from "@cogito-app/api/shared/constants";
+import { hashInviteToken } from "@cogito-app/api/lib/tokens";
 
 const SEED_SUFFIX = "seed";
 const SEED_DISPLAY_TAG = "[seed]";
@@ -31,13 +32,12 @@ export function seedAdminPassword(value: string | undefined): string | null {
   return value;
 }
 
-function demoPassword(
-  envValue: string | undefined,
-  fallback: string,
-): string {
+function demoPassword(envValue: string | undefined, fallback: string): string {
   if (!envValue) return fallback;
   if (envValue.length < 8) {
-    throw new Error("SEED_TUTOR_PASSWORD / SEED_STUDENT_PASSWORD must be at least 8 characters");
+    throw new Error(
+      "SEED_TUTOR_PASSWORD / SEED_STUDENT_PASSWORD must be at least 8 characters",
+    );
   }
   return envValue;
 }
@@ -168,7 +168,7 @@ async function seed() {
       .values({
         email: tutorEmail,
         displayName: `${SEED_DISPLAY_TAG} Tutor`,
-        token: crypto.randomUUID(),
+        token: hashInviteToken(crypto.randomUUID()),
         status: "accepted",
         invitedBy: admin.id,
         expiresAt: new Date(

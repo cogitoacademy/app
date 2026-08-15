@@ -290,7 +290,7 @@ export function createNotificationService(
     const items = rows.slice(0, limit) as NotificationListItem[];
     const nextCursor =
       rows.length > limit
-        ? items[items.length - 1]!.createdAt.toISOString()
+        ? `${items[items.length - 1]!.createdAt.toISOString()}|${items[items.length - 1]!.id}`
         : null;
 
     return { items, nextCursor };
