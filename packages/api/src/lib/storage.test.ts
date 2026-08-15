@@ -35,14 +35,15 @@ describe("createLocalStorage", () => {
     expect(url).toBe("/uploads/u1/f.png");
   });
 
-  test("getSignedUploadUrl returns a direct PUT url for the key", async () => {
+  test("getSignedUploadUrl returns a POST url for the key", async () => {
     const s = createLocalStorage({ dir });
-    const { url, method } = await s.getSignedUploadUrl(
+    const { url, method, fields } = await s.getSignedUploadUrl(
       "user-1/uuid-avatar.png",
       "image/png",
     );
-    expect(method).toBe("PUT");
+    expect(method).toBe("POST");
     expect(url).toBe("/uploads/user-1/uuid-avatar.png");
+    expect(fields).toEqual({});
   });
 
   test("resolvePublicUrl returns the served URL for a key", () => {
@@ -90,14 +91,25 @@ describe("createR2Storage", () => {
     );
   });
 
-  test("getSignedUploadUrl produces a PUT url containing the R2 host", async () => {
-    const { url, method } = await s.getSignedUploadUrl(
+  test("getSignedUploadUrl produces a POST url with a bounded policy (M9)", async () => {
+    const { url, method, fields } = await s.getSignedUploadUrl(
       "user-1/uuid-avatar.png",
       "image/png",
     );
-    expect(method).toBe("PUT");
-    expect(url).toContain("r2.cloudflarestorage.com");
-    expect(url).toContain("X-Amz-Signature");
+    expect(method).toBe("POST");
+    expect(url).toBe("https://acct.r2.cloudflarestorage.com/bucket");
+    expect(fields["x-amz-algorithm"]).toBe("AWS4-HMAC-SHA256");
+    expect(fields.policy).toBeTruthy();
+    expect(fields["x-amz-signature"]).toBeTruthy();
+
+    const policy = JSON.parse(
+      Buffer.from(fields.policy, "base64").toString("utf-8"),
+    ) as { conditions: unknown[] };
+    const sizeCondition = policy.conditions.find(
+      (c) => Array.isArray(c) && c[0] === "content-length-range",
+    ) as [string, number, number];
+    expect(sizeCondition).toBeTruthy();
+    expect(sizeCondition[2]).toBe(5 * 1024 * 1024);
   });
 });
 
@@ -108,7 +120,7 @@ describe("createStorage", () => {
       "user-1/uuid-avatar.png",
       "image/png",
     );
-    expect(method).toBe("PUT");
+    expect(method).toBe("POST");
     expect(url).toBe("/uploads/user-1/uuid-avatar.png");
   });
 

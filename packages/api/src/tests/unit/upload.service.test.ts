@@ -16,7 +16,8 @@ function makeStorage(overrides: Partial<StoragePort> = {}): StoragePort {
     put: async (key) => ({ key, url: `/uploads/${key}` }),
     getSignedUploadUrl: async (key) => ({
       url: `/uploads/${key}`,
-      method: "PUT" as const,
+      method: "POST" as const,
+      fields: {},
     }),
     resolvePublicUrl: (key) => `/uploads/${key}`,
     ...overrides,
@@ -52,7 +53,7 @@ describe("upload service createUploadUrl", () => {
 
     expect(res.maxBytes).toBe(MAX_UPLOAD_BYTES);
     expect(res.contentType).toBe("image/png");
-    expect(res.method).toBe("PUT");
+    expect(res.method).toBe("POST");
     expect(res.key).toMatch(/^user-1\/[0-9a-f-]{36}-avatar\.png$/);
     expect(res.publicUrl).toBe(`/uploads/${res.key}`);
     expect(res.uploadUrl).toBe(`/uploads/${res.key}`);
@@ -102,7 +103,8 @@ describe("upload service createUploadUrl", () => {
         signedKey = key;
         return {
           url: `https://signed.example/${key}?sig=abc`,
-          method: "PUT" as const,
+          method: "POST" as const,
+          fields: {},
         };
       },
       resolvePublicUrl: (key) => `https://cdn.example/${key}`,

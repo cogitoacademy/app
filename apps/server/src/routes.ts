@@ -4,6 +4,7 @@ import { appRouter } from "@cogito-app/api/routers";
 import { rateLimit } from "@cogito-app/api/lib/rate-limit";
 import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
+import { MAX_UPLOAD_BYTES } from "@cogito-app/api/modules/upload/upload.types";
 import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth } from "@cogito-app/auth";
 import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
@@ -346,6 +347,46 @@ export function createServer() {
       }
       return new Response(file);
     })
+    .post(
+      "/uploads/*",
+      async ({ params, set, request }) => {
+        // Local-mode upload sink (dev only, when R2 is not configured). The
+        // browser uploads to this authenticated, size-bounded route instead of a
+        // presigned URL. Requires a session so uploads cannot be abused (M9).
+        if (env.R2_PUBLIC_URL) {
+          set.status = 404;
+          return { error: "Not found" };
+        }
+        const key = (params["*"] as string) ?? "";
+        if (!isValidUploadKey(key)) {
+          set.status = 404;
+          return { error: "Not found" };
+        }
+        const session = await auth.api.getSession({
+          headers: request.headers,
+        });
+        if (!session?.user) {
+          set.status = 401;
+          return { error: "Unauthorized" };
+        }
+        if (!key.startsWith(`${session.user.id}/`)) {
+          set.status = 403;
+          return { error: "Forbidden" };
+        }
+        const { body, tooLarge } = await readBodyWithLimit(
+          request,
+          MAX_UPLOAD_BYTES,
+        );
+        if (tooLarge) {
+          set.status = 413;
+          return { error: "Request body too large" };
+        }
+        const filePath = `${env.UPLOAD_DIR}/${key}`;
+        await Bun.write(filePath, body);
+        return { ok: true, key };
+      },
+      { parse: "none" },
+    )
     .get("/openapi.json", async ({ request }) => {
       const session = await auth.api.getSession({
         headers: request.headers,

@@ -26,3 +26,25 @@ describe("GET /uploads/*", () => {
     }
   });
 });
+
+describe("POST /uploads/* (local-mode sink, M9)", () => {
+  test("rejects unauthenticated uploads with 401", async () => {
+    const res = await createServer().handle(
+      new Request("http://localhost/uploads/user-1/x.png", {
+        method: "POST",
+        body: "data",
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  test("rejects traversal keys", async () => {
+    const res = await createServer().handle(
+      new Request("http://localhost/uploads/../evil.png", {
+        method: "POST",
+        body: "data",
+      }),
+    );
+    expect(res.status).toBe(404);
+  });
+});
