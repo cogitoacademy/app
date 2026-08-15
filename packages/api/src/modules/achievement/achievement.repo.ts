@@ -173,19 +173,6 @@ async function deleteWithVersion(
 }
 
 /**
- * Deletes an achievement scoped to the owning user.
- *
- * @param conn - the database connection or active transaction
- * @param id - the achievement id
- * @param userId - the owning user
- */
-async function deleteRow(conn: DbOrTx, id: string, userId: string) {
-  return conn
-    .delete(achievement)
-    .where(and(eq(achievement.id, id), eq(achievement.userId, userId)));
-}
-
-/**
  * Lists achievements for admin review with pagination and optional status filter.
  *
  * @param conn - the database connection or active transaction
@@ -258,7 +245,6 @@ export function createAchievementRepo() {
     findByIdForUser,
     update,
     updateWithVersion,
-    deleteRow,
     deleteWithVersion,
     adminList,
     getById,

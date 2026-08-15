@@ -113,6 +113,13 @@
       "when": 1786531636044,
       "tag": "0015_purple_random",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786758120544,
+      "tag": "0016_smart_magneto",
+      "breakpoints": true
     }
   ]
 }

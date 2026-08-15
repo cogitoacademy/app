@@ -48,7 +48,7 @@ function makeRepo(overrides: Partial<NotificationRepo> = {}): NotificationRepo {
     insertDispatch: mock(async () => {}),
     updateDispatchStatus: mock(async () => {}),
     updateDispatchStatusById: mock(async () => {}),
-    listQueuedDispatches: mock(async () => []),
+    listPendingDispatches: mock(async () => []),
     incrementDispatchAttempts: mock(async () => {}),
     findNotificationById: mock(async () => null),
     listNotifications: mock(async () => []),
@@ -163,7 +163,7 @@ describe("NotificationService (unit)", () => {
 
   test("dispatchQueuedEmails marks the dispatch row failed and increments attempts when email send fails", async () => {
     const repo = makeRepo({
-      listQueuedDispatches: mock(async () => [
+      listPendingDispatches: mock(async () => [
         {
           id: "d1",
           notificationId: "n_fail",
@@ -760,7 +760,7 @@ describe("write vs writeBestEffort", () => {
     insertDispatch: mock(async () => {}),
     updateDispatchStatus: mock(async () => {}),
     updateDispatchStatusById: mock(async () => {}),
-    listQueuedDispatches: mock(async () => []),
+    listPendingDispatches: mock(async () => []),
     incrementDispatchAttempts: mock(async () => {}),
     findNotificationById: mock(async () => null),
     listNotifications: mock(async () => []),
@@ -848,7 +848,7 @@ describe("NotificationService email routing decision (G17)", () => {
       insertDispatch: mock(async () => {}),
       updateDispatchStatus: mock(async () => {}),
       updateDispatchStatusById: mock(async () => {}),
-      listQueuedDispatches: mock(async () => []),
+      listPendingDispatches: mock(async () => []),
       incrementDispatchAttempts: mock(async () => {}),
       findNotificationById: mock(async () => null),
       listNotifications: mock(async () => []),
@@ -963,7 +963,7 @@ describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
 
   test("sends queued rows and marks them sent", async () => {
     const repo = makeRepo({
-      listQueuedDispatches: mock(async () => [queuedRow()]),
+      listPendingDispatches: mock(async () => [queuedRow()]),
       findNotificationById: mock(async () => ({
         id: "n1",
         title: "Booking Confirmed",
@@ -995,7 +995,7 @@ describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
 
   test("marks skipped sends as suppressed", async () => {
     const repo = makeRepo({
-      listQueuedDispatches: mock(async () => [queuedRow()]),
+      listPendingDispatches: mock(async () => [queuedRow()]),
       findNotificationById: mock(async () => ({
         id: "n1",
         title: "Title",
@@ -1021,7 +1021,7 @@ describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
 
   test("suppresses rows whose notification no longer exists", async () => {
     const repo = makeRepo({
-      listQueuedDispatches: mock(async () => [queuedRow()]),
+      listPendingDispatches: mock(async () => [queuedRow()]),
       findNotificationById: mock(async () => null),
     });
     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
@@ -1051,7 +1051,7 @@ describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
 
     await service.dispatchQueuedEmails(10);
 
-    expect(repo.listQueuedDispatches).toHaveBeenCalledWith(
+    expect(repo.listPendingDispatches).toHaveBeenCalledWith(
       expect.anything(),
       10,
     );
@@ -1066,6 +1066,6 @@ describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
     const result = await service.dispatchQueuedEmails();
 
     expect(result).toEqual({ sent: 0, failed: 0 });
-    expect(repo.listQueuedDispatches).toHaveBeenCalledTimes(0);
+    expect(repo.listPendingDispatches).toHaveBeenCalledTimes(0);
   });
 });

@@ -12,13 +12,11 @@ export const MAX_SERIES_SESSIONS = 4;
 export const GROUP_SERIES_DISCLAIMER =
   "Group series bookings require attendance at all sessions. Individual sessions cannot be cancelled.";
 export const DEFAULT_SOLO_PRICE = 42;
-export const SESSION_DURATION_MINUTES = 90;
 
 export const DEFAULT_PAGE_LIMIT = 20;
 export const MAX_PAGE_LIMIT = 100;
 export const ADMIN_DEFAULT_PAGE_LIMIT = 50;
 
-export const COGITO_TAKE_RATE = 0.2;
 export const TUTOR_PAYOUT_RATE_IDR = 7000;
 export const EXTRA_TAKE_DIVISOR = 5;
 
@@ -166,21 +164,6 @@ export const ROOM_BOOKING_STATUS = {
 } as const;
 export type RoomBookingStatus =
   (typeof ROOM_BOOKING_STATUS)[keyof typeof ROOM_BOOKING_STATUS];
-
-export const PAYMENT_PROVIDER_NAME = {
-  STUB: "stub",
-  XENDIT: "xendit",
-} as const;
-export type PaymentProviderName =
-  (typeof PAYMENT_PROVIDER_NAME)[keyof typeof PAYMENT_PROVIDER_NAME];
-
-export const MEETING_PROVIDER = {
-  GOOGLE_MEET: "google_meet",
-  MANUAL: "manual",
-  PENDING: "pending",
-} as const;
-export type MeetingProvider =
-  (typeof MEETING_PROVIDER)[keyof typeof MEETING_PROVIDER];
 
 export const ACTOR_TYPE = {
   ADMIN: "admin",

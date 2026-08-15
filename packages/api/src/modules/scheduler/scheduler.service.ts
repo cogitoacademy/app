@@ -12,6 +12,7 @@ export interface SchedulerHandlers {
   }>;
   onSendNotificationEmail: () => Promise<{ sent: number; failed: number }>;
   onEscalateSupportTickets: () => Promise<{ escalated: number }>;
+  onRetryFailedMeetings: () => Promise<{ succeeded: number; failed: number }>;
 }
 
 export interface SchedulerService {
@@ -75,6 +76,15 @@ export function createSchedulerService(
             ...sendResult,
           });
           return sendResult;
+        case "retry-failed-meetings":
+          const meetingResult = await handlers.onRetryFailedMeetings();
+          log({
+            level: meetingResult.failed > 0 ? "warn" : "info",
+            action: "retry_failed_meetings_complete",
+            message: `Scheduled ${meetingResult.succeeded} bookings after meeting retry, ${meetingResult.failed} still failing`,
+            ...meetingResult,
+          });
+          return meetingResult;
         case "escalate-support-tickets":
           const escalateResult = await handlers.onEscalateSupportTickets();
           log({

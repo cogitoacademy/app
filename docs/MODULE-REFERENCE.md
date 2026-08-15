@@ -215,7 +215,8 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `listForTutor(tutorId, opts)` — Paginated list of bookings assigned to a tutor
 - `createSolo(proposerId, input)` — Creates solo booking with wallet hold, overlap check, and notification
 - `createGroup(proposerId, input)` — Creates group booking with invitees
-- `createSeries(proposerId, input)` — Creates series booking with sessions (2-4 sessions, each checked for overlaps)
+- `createSeries(proposerId, input)` — Creates a solo series booking with sessions (2-4 sessions, each checked for overlaps)
+- `createGroupSeries(proposerId, input)` — Creates a group series (targetGroupSize 2-6, inviteeUserIds) with upfront per-participant holds for all sessions (FR-20, landed #46)
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
 - `declineInvite(userId, bookingId, reason?)` — Invitee declines
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing
@@ -236,6 +237,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Releases holds on bookings past deadline
 - `checkTutorLateness()` — Auto-cancels bookings where the tutor never marked attendance past the 15-min lateness tolerance
+- `retryFailedMeetings()` — Re-creates Google Meet for CONFIRMED online bookings with a failed meetingEvent (up to 3 attempts, driven by the `retry-failed-meetings` job); prevents the CONFIRMED-without-meeting-link dead state
 
 **Dependencies:** `BookingRepo`, `BookingWalletPort`, `BookingPricingPort`, `BookingAuditPort`, `BookingNotificationPort`, `BookingMeetingPort`
 
@@ -251,7 +253,9 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - Wallet holds are released on cancel, decline, and expiry
 - Overlap detection prevents double-booking tutor slots
 - Optimistic locking via `version` field prevents concurrent state changes
-- Known open findings: B3 (group with 2 ≤ headcount < target expires instead of repricing, `booking.service.ts:2009-2048`), B8 (group-series unreachable — `createSeries` hardcodes `targetGroupSize:1`, `:1881`), B9 (`cancelSession` after H-2 throws instead of forfeiting, `:1134-1140`) — see BACKEND-HARDENING-PHASE2.md PR 5
+- Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
+- Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
+- Follow-ups (reconfirmation-deadline reprice, group-series full withdrawal block, per-participant no-show, admin per-session cancel, per-session reschedule) tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U3–U7)
 
 ---
 
@@ -273,7 +277,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 - Circuit breaker on Resend: 3 failures → open for 120s
 - 30-second timeout per email send request
-- Emails are dispatched synchronously today (from `notification.writeBestEffort` and the scheduler handler); a queued outbox is planned in BACKEND-HARDENING-PHASE2.md PR 3
+- Emails are dispatched via the **outbox**: `notification.write` only queues `notificationDispatch` rows (`status='queued'`) inside the DB transaction; the `send-notification-email` scheduler job (60s) calls `notification.dispatchQueuedEmails()` to send and mark rows `sent`/`failed`/`suppressed` (landed #46)
 
 ---
 
@@ -318,6 +322,8 @@ The `packages/api` package implements business logic using a 4-layer architectur
 **Service Methods:**
 
 - `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?)` — Creates Google Calendar event with Meet conference; falls back to manual link on failure
+- `updateEvent(bookingId, scheduledStartAt, scheduledEndAt)` — Updates the Google event when a reschedule is accepted (OQ-05, #46)
+- `cancelEvent(bookingId)` — Cancels the Google event on terminal booking states (cancel/late-cancel/decline/expire; best-effort via circuit breaker) (#46)
 - Falls back to manual link URL format when circuit breaker is open
 
 **Business Rules:**
@@ -344,21 +350,22 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 **Service Methods:**
 
-- `write(params)` — Creates notification and dispatches email; throws on failure
-- `writeBestEffort(params)` — Creates notification and dispatches email; swallows errors
+- `write(params)` — Creates notification + queues email dispatch row; throws on failure
+- `writeBestEffort(params)` — Creates notification + queues email dispatch row; swallows errors
+- `dispatchQueuedEmails(limit = 50)` — Outbox consumer: sends queued dispatch rows via `EmailPort`, marks `sent`/`failed`/`suppressed` (called by the `send-notification-email` scheduler job)
 - `list(userId, opts)` — Paginated list with `unreadOnly` filter
 - `getUnreadCount(userId)` — Returns the number of unread notifications
 - `markAsRead(id, userId)` — Marks single notification as read
 - `markAllAsRead(userId)` — Marks all unread notifications as read
 
-**Dependencies:** `NotificationRepo`, `EmailPort`
+**Dependencies:** `NotificationRepo`, `EmailPort` (+ `db` for the outbox consumer)
 
 **Business Rules:**
 
 - Every notification has a unique `eventKey` for idempotency
 - `write` throws — used for critical notifications
 - `writeBestEffort` swallows errors — used for non-critical notifications
-- Email dispatch is synchronous today; the `send-notification-email` scheduler job exists but is never enqueued
+- Email dispatch is outbox-based: rows are queued inside the DB transaction and sent by the scheduler job; no email I/O inside open transactions (#46)
 
 ---
 
@@ -380,19 +387,19 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 **Service Methods:**
 
-- `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reuses an existing PENDING intent for the same provider+user+package; returns `{ paymentId, providerReference, checkoutUrl }`
-- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE
+- `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reuses an existing PENDING intent for the same provider+user+package; resets FAILED/EXPIRED payments to PENDING and re-creates the intent (re-purchase, #46); returns `{ paymentId, providerReference, checkoutUrl }`
+- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE; writes `payment.{id}.credited` notification (B6, #46)
 - `getPurchase(paymentId, userId)` — Returns the payment record if owned by the user
 
-**Dependencies:** `PaymentRepo`, `PaymentWalletPort`, `PaymentProvider`
+**Dependencies:** `PaymentRepo`, `PaymentWalletPort`, `PaymentProvider`, `NotificationPort`
 
 **Business Rules:**
 
-- Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min) + IP allowlist
-- Webhook idempotency prevents double-processing (non-atomic check-then-mark today; DB UNIQUE on provider event mitigates)
+- Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min) + IP allowlist (honors `TRUST_PROXY`)
+- Webhook idempotency is atomic — `IdempotencyStore.claim` keyed on the verified payload event id, released on processing failure (#46)
 - Circuit breaker prevents cascading failures to the provider
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
-- Known finding B6: no payment/refund notifications are written (see BACKEND-HARDENING-PHASE2.md PR 5)
+- Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials (no silent stub fallback)
 
 ---
 
@@ -466,23 +473,24 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 - `listActive()` — Returns active rooms
 - `createRoom({ name, location, capacity })` — Creates a room
-- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check
+- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` and notifies tutor + confirmed students (#46, G14)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
-- `relocateRoom(bookingId, roomId, startAt, endAt)` — Moves a booking to a different room, freeing the previous one
-- `cancelRoomBooking(bookingId)` — Cancels the booking's room assignment (booking continues without a room)
+- `relocateRoom(bookingId, roomId, startAt, endAt)` — Moves a booking to a different room, freeing the previous one; notifies tutor + confirmed students (#46)
+- `cancelRoomBooking(bookingId)` — Cancels the booking's room assignment (booking continues without a room); notifies tutor + confirmed students (#46)
 
-**Dependencies:** `RoomRepo`
+**Dependencies:** `RoomRepo`, `RoomNotificationPort`, `RoomBookingPort` (transition to scheduled)
 
 **Business Rules:**
 
 - Room bookings have status `requested`/`confirmed`/`relocated`/`cancelled`
-- Known gaps: G13 (`checkAvailability` not integrated into booking creation), G14 (`assignRoom` doesn't transition the booking to `scheduled`; no student notification) — see BACKEND-HARDENING-PHASE2.md
+- G14 (assign → scheduled + notifications) fixed in #46
+- Remaining gap G13: `checkAvailability` is not yet integrated into booking creation — tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`
 
 ---
 
 ## Scheduler Module
 
-**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness auto-cancel, and notification email dispatch.
+**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness auto-cancel, email outbox dispatch, and support-ticket SLA escalation.
 
 **Files:**
 
@@ -490,8 +498,10 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `jobs/expire-bookings.job.ts` — repeatable job (5 min)
 - `jobs/release-holds.job.ts` — repeatable job (10 min)
 - `jobs/check-tutor-lateness.job.ts` — repeatable job (5 min)
-- `jobs/send-notification-email.job.ts` — repeatable job (60 s)
-- Wiring: `apps/server/src/scheduler.ts` — `initScheduler()` gates on `SCHEDULER_ENABLED=true` + `REDIS_URL`; repeatable jobs registered at `scheduler.ts:93-96`
+- `jobs/send-notification-email.job.ts` — repeatable job (60 s) — consumes the email outbox (queued + failed-with-retries-left rows, max 3 attempts per dispatch)
+- `jobs/escalate-support-tickets.job.ts` — repeatable job (15 min) — SLA escalation
+- `jobs/retry-failed-meetings.job.ts` — repeatable job (5 min) — re-creates Google Meet for CONFIRMED online bookings whose meeting creation failed (max 3 attempts; afterwards left for admin manual link, U1)
+- Wiring: `apps/server/src/scheduler.ts` — `initScheduler()` gates on `SCHEDULER_ENABLED=true` + `REDIS_URL`
 
 **Service Methods:**
 
@@ -500,14 +510,16 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `onExpireBookings()` — Calls `bookingService.expireBookings()`
 - `onReleaseHolds()` — Calls `bookingService.releaseExpiredHolds()`
 - `onCheckTutorLateness()` — Calls `bookingService.checkTutorLateness()` (15-min lateness auto-cancel, G3)
-- `onSendNotificationEmail(data)` — Looks up a queued notification + user email and calls `emailService.send()`; **never enqueued today** — emails are dispatched synchronously
+- `onSendNotificationEmail()` — Calls `notificationService.dispatchQueuedEmails(50)` (outbox consumer; #46; failed rows retried up to 3 attempts)
+- `onEscalateSupportTickets()` — Calls `supportService.escalatePastSlaTickets()` (marks overdue tickets in_progress + escalated + audit; #46)
+- `onRetryFailedMeetings()` — Calls `bookingService.retryFailedMeetings()` (re-schedules CONFIRMED online bookings with a failed meeting)
 
-**Dependencies:** `BookingService`, `EmailService`, BullMQ queue
+**Dependencies:** `BookingService`, `NotificationService`, `SupportService`, BullMQ queue
 
 **Business Rules:**
 
-- Expiry job runs every 5 minutes; hold-release job every 10 minutes; tutor-lateness job every 5 minutes; email job every 60 seconds
-- Jobs use retry with exponential backoff (3 attempts)
+- Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min
+- Jobs use retry with exponential backoff (3 attempts; no DLQ yet)
 - Circuit breaker state persisted in Redis (when available)
 
 ---
@@ -531,13 +543,14 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `listTickets(userId, { status?, limit? })` — The user's own tickets
 - `adminList({ status?, limit?, offset? })` — All tickets sorted by SLA urgency (earliest deadline first)
 - `adminResolveTicket(adminId, { ticketId, resolution })` — Sets `resolved` + assignee, notifies the reporter, records an audit log; throws `SupportTicketAlreadyResolvedError` if already resolved/closed
+- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated and records an audit log (#46)
 
 **Dependencies:** `SupportRepo`, `SupportNotificationPort`, `SupportAuditPort`
 
 **Business Rules:**
 
 - Tickets start `open`; statuses `open`/`in_progress`/`resolved`/`closed`
-- SLA deadline is `created + 12 hours`; no SLA auto-escalation job yet (G1 sub-gap)
+- SLA deadline is `created + 12 hours`; auto-escalation job landed in #46 (OQ-04 in-app part). Business-hours SLA windows (30 min / 4 h) + WhatsApp escalation remain open — tracked U9 in `docs/plans/active/PRD-GAPS-PHASE3.md`
 - Lateness reports are time-gated (15 min after scheduled start)
 
 ---
@@ -600,6 +613,32 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 ---
 
+## Upload Module
+
+**Purpose:** Secure file uploads for achievement proofs and avatars — signed PUT URLs via Cloudflare R2 (production) or local-disk fallback (dev).
+
+**Files:**
+
+- `upload.types.ts` — `createUploadUrlInput` (filename sanitized + bounded, `contentType` allowlist: png/jpeg/webp/gif/pdf); `MAX_UPLOAD_BYTES` = 5 MB
+- `upload.errors.ts` — `InvalidContentTypeError`, `InvalidFilenameError`
+- `upload.service.ts` — `createUploadUrl`, `resolvePublicUrl`
+- `upload.handler.ts` — `createUploadUrl`
+- `upload.router.ts` — `protectedProcedure`, path `/upload/create-url`
+- `index.ts` — `createUploadModule({ storage })`
+- Storage abstraction: `packages/api/src/lib/storage.ts` — `StoragePort` (`put`, `getSignedUploadUrl`), `createR2Storage` (`@aws-sdk/client-s3` + presigner), `createLocalStorage` (writes `UPLOAD_DIR`), `createStorage(envLike)` factory
+
+**Service Methods:**
+
+- `createUploadUrl(userId, { filename, contentType })` — Returns `{ uploadUrl, key, publicUrl, contentType, maxBytes }`; key = `{userId}/{uuid}-{sanitizedFilename}`
+- `resolvePublicUrl(key)` — Key → public URL helper (currently unused — candidate for removal, see BACKEND-CLEANUP)
+
+**Business Rules:**
+
+- When all `R2_*` vars are set → R2 signed-URL uploads; otherwise local storage served via `GET /uploads/*` (with path-traversal guard) when `R2_PUBLIC_URL` is unset
+- Content types restricted to the allowlist; 5 MB size cap; filenames sanitized (no `..`, no leading `/`)
+
+---
+
 ## Wallet Module
 
 **Purpose:** Marks (currency) management — balances, holds, ledger entries, and package purchases.
@@ -622,7 +661,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `credit(db, params)` — Atomically credits available balance (payment received)
 - `compensate(db, params)` — Compensation operation (positive or negative)
 - `listLedger(walletId, opts)` — Paginated ledger with `bookingId` and `eventKey` filters
-- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; **known bug B4** — uses `availableBalance` instead of total balance (`wallet.service.ts:431`)
+- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; **known bug B4** — uses `availableBalance` instead of total balance (`wallet.service.ts:431`); tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`
 - `listActivePackages()` — Returns active mark packages
 
 **Dependencies:** `WalletRepo`

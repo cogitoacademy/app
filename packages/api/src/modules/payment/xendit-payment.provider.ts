@@ -98,7 +98,10 @@ export function createXenditPaymentProvider(opts: {
           }),
         {
           maxAttempts: 3,
-          retryable: (err) => err instanceof TypeError,
+          retryable: (err) =>
+            err instanceof TypeError ||
+            (err instanceof Error &&
+              (err.name === "AbortError" || err.name === "TimeoutError")),
         },
       ),
     );

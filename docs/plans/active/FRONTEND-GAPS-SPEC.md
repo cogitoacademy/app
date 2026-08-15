@@ -11,7 +11,7 @@
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
-The backend spec is `docs/plans/active/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
+The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
 ---
 

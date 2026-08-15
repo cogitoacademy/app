@@ -201,13 +201,13 @@ export function createNotificationService(
   }
 
   /**
-   * Consumes queued email dispatch rows, sending each via the email port.
+   * Consumes pending email dispatch rows (queued or failed with retries left), sending each via the email port.
    *
    * Runs outside any DB transaction: each queued row is sent best-effort and its
    * status is updated to sent/suppressed on success or failed (with an incremented
    * attempt count) on error.
    *
-   * @param limit - the maximum number of queued rows to process in one run
+   * @param limit - the maximum number of pending rows to process in one run
    * @returns a summary of sent and failed dispatches
    */
   async function dispatchQueuedEmails(
@@ -222,7 +222,7 @@ export function createNotificationService(
       return { sent: 0, failed: 0 };
     }
 
-    const rows = await repo.listQueuedDispatches(db, limit);
+    const rows = await repo.listPendingDispatches(db, limit);
     let sent = 0;
     let failed = 0;
 

@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, lt, count, sql } from "drizzle-orm";
+import { eq, and, asc, desc, lt, count, or, sql } from "drizzle-orm";
 import {
   notification,
   notificationDispatch,
@@ -125,24 +125,6 @@ export async function insertDispatch(
 }
 
 /**
- * Updates a notification dispatch status.
- *
- * @param conn - the database connection or active transaction
- * @param notificationId - the notification id
- * @param status - the new dispatch status
- */
-export async function updateDispatchStatus(
-  conn: DbOrTx,
-  notificationId: string,
-  status: string,
-) {
-  await conn
-    .update(notificationDispatch)
-    .set({ status })
-    .where(eq(notificationDispatch.notificationId, notificationId));
-}
-
-/**
  * Updates a dispatch row's status by its own id (used by the outbox consumer).
  *
  * @param conn - the database connection or active transaction
@@ -160,18 +142,33 @@ export async function updateDispatchStatusById(
     .where(eq(notificationDispatch.id, id));
 }
 
+const MAX_DISPATCH_ATTEMPTS = 3;
+
 /**
- * Lists queued dispatch rows for the email outbox consumer, oldest first.
+ * Lists dispatch rows pending delivery for the email outbox consumer, oldest first.
+ *
+ * Includes rows that have never been sent (`queued`) and rows that failed a
+ * previous attempt but still have retries left (`failed` with attempts < 3),
+ * so a transient provider error is retried across scheduler runs instead of
+ * losing the email permanently.
  *
  * @param conn - the database connection or active transaction
  * @param limit - the maximum number of rows to return
- * @returns the queued dispatch rows
+ * @returns the dispatch rows pending delivery
  */
-export async function listQueuedDispatches(conn: DbOrTx, limit = 50) {
+export async function listPendingDispatches(conn: DbOrTx, limit = 50) {
   return conn
     .select()
     .from(notificationDispatch)
-    .where(eq(notificationDispatch.status, "queued"))
+    .where(
+      or(
+        eq(notificationDispatch.status, "queued"),
+        and(
+          eq(notificationDispatch.status, "failed"),
+          lt(notificationDispatch.attempts, MAX_DISPATCH_ATTEMPTS),
+        ),
+      ),
+    )
     .orderBy(asc(notificationDispatch.createdAt))
     .limit(limit);
 }
@@ -296,22 +293,6 @@ export async function markAllRead(conn: DbOrTx, userId: string) {
     );
 }
 
-/**
- * Finds the dispatch row for a notification.
- *
- * @param conn - the database connection or active transaction
- * @param notificationId - the notification id
- * @returns the dispatch row, or null
- */
-export async function findDispatch(conn: DbOrTx, notificationId: string) {
-  const [row] = await conn
-    .select()
-    .from(notificationDispatch)
-    .where(eq(notificationDispatch.notificationId, notificationId))
-    .limit(1);
-  return row ?? null;
-}
-
 export function createNotificationRepo(db: DbType) {
   return {
     findNotificationByEventKey,
@@ -320,9 +301,8 @@ export function createNotificationRepo(db: DbType) {
     insertNotification,
     findUserEmail,
     insertDispatch,
-    updateDispatchStatus,
     updateDispatchStatusById,
-    listQueuedDispatches,
+    listPendingDispatches,
     incrementDispatchAttempts,
     findNotificationById,
     listNotifications: (
@@ -333,6 +313,5 @@ export function createNotificationRepo(db: DbType) {
     updateReadStatus: (id: string, userId: string, read: boolean) =>
       updateReadStatus(db, id, userId, read),
     markAllRead: (userId: string) => markAllRead(db, userId),
-    findDispatch: (notificationId: string) => findDispatch(db, notificationId),
   };
 }

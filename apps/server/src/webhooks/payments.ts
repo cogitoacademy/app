@@ -26,7 +26,7 @@ export function ipAllowed(
   return allowlist.some((entry) => entry === ip);
 }
 
-function validateWebhookTimestamp(request: Request): void {
+export function validateWebhookTimestamp(request: Request): void {
   const timestamp =
     request.headers.get("x-timestamp") ?? request.headers.get("date");
   if (!timestamp) {

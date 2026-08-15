@@ -1,5 +1,7 @@
 # Backend Security & PRD Correctness — Implementation Plan (6 PRs)
 
+> **STATUS: COMPLETED — all 6 PRs landed on main via PR #46 (squash commit `ec8b16c`, 2026-08-14).** This file is retained as a historical reference for task specs and acceptance criteria. The per-task `Status (verified ...)` annotations below reflect the state at HEAD `9b7df5e` (before implementation) and are superseded by the implementation ledger in `.superpowers/sdd/BACKEND-HARDENING-PHASE2/progress.md`. Every task below was implemented; see the [Implementation Summary](#implementation-summary) for commit evidence. Follow-ups discovered after merge are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` and `docs/plans/active/BACKEND-CLEANUP.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix the remaining critical backend issues found in the final codebase review: webhook/payment security, group-booking money correctness, late-cancel penalty, dead offline-room flow, email outbox, package re-purchase, file/image upload, and the follow-ups surfaced by the SDD-ledger scan (webhook IP spoofing, ticket SLA escalation, meeting-event lifecycle, stale override response, room email notifications).
@@ -18,6 +20,39 @@
 - Local test DB is `postgresql://postgres:password@localhost:6767/cogito-test` (`.env` already points there). Redis at `localhost:6379`. Colima/docker up.
 - Backend only. No frontend (`apps/web`, `packages/ui`).
 - CI gates: packages/api ≥90% lines, overall ≥80% coverage.
+
+## Implementation Summary
+
+All tasks below were implemented and merged to main via **PR #46** (squash commit `ec8b16c`, 2026-08-14). Full wave ledger: `.superpowers/sdd/BACKEND-HARDENING-PHASE2/progress.md`.
+
+| Task                                 | Implementation (merged in #46)                                                                                                                                   |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.1 Stub checkout flag               | `STUB_WEBHOOK_ALLOWED` env + `stubCheckoutEnabled()` gate (`apps/server/src/webhooks/payments.ts`, `packages/env/src/server.ts`)                                 |
+| 1.2 Atomic webhook idempotency       | `IdempotencyStore.claim`/`release` (`packages/api/src/lib/idempotency.ts:68,93`), webhook claims on verified payload event id                                    |
+| 1.3 Trusted-proxy rate limits        | `TRUST_PROXY` env + `getClientIp` (`packages/api/src/lib/request-id.ts`), invite (10/min) + booking (30/min) limits                                              |
+| 1.4 Seed prod guard                  | `seedAllowed()` + `seedAdminPassword()` (`apps/server/src/seed.ts`), `SEED_ALLOWED_IN_PROD`/`SEED_ADMIN_PASSWORD`                                                |
+| 2.1 Proposer excess hold release     | `confirmInvite` settles proposer hold at `perStudent × confirmedHeadcount`                                                                                       |
+| 2.2 Late-cancel penalty              | `cancel`/`withdraw` post-H2 paths call `wallet.deduct` (penalty) instead of `release`; `cancelAllSessions` gated to `scheduled` sessions                         |
+| 2.3 Offline room → scheduled         | `transitionBookingToScheduled` on `room.assign` (`booking.service.ts:2396-2409`)                                                                                 |
+| 3.1 Email outbox                     | `writeInternal` queues dispatch rows only; `dispatchQueuedEmails(limit)` consumer wired to the `send-notification-email` job (`notification.service.ts:213-270`) |
+| 3.2 Re-purchase after FAILED/EXPIRED | `createIntent` resets FAILED/EXPIRED to PENDING and re-creates the intent (`payment.service.ts:123-142`)                                                         |
+| 4.1 Upload (R2)                      | `packages/api/src/lib/storage.ts` + `modules/upload/` (4-layer), `upload.createUploadUrl`, `/uploads/*` serve-through, R2 signed URLs                            |
+| 5.1 Group deadline repricing         | `expireBookings` headcount branch: `confirmed ≥ 2 && < target` → reprice + `AWAITING_RECONFIRMATION` + 12h deadline + notify (`booking.service.ts:2456-2492`)    |
+| 5.2 KB total-balance                 | **NOT implemented** — B4 still open (`wallet.service.ts:431` uses `availableBalance`); tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U13)                   |
+| 5.3 Payment/refund notifications     | `payment.{id}.credited`/`.refunded` notifications incl. admin refund payer notify (`payment.service.ts:258-292`)                                                 |
+| 5.4 Group-series creation            | `createGroupSeries` with upfront per-session holds, `createGroupSeriesInput` (`booking.service.ts:2150-2318`, `booking.types.ts:66`)                             |
+| 5.5 Per-session post-H2 forfeit      | `cancelSession` deducts session hold after H-2 instead of throwing (`booking.service.ts:1264-1275`)                                                              |
+| 5.6 Xendit env validation            | `superRefine` requires `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` when `PAYMENT_PROVIDER=xendit`; no silent stub fallback                                        |
+| 5.7 Email HTML injection             | `cancellationReason`/decline `reason` bounded (`.max(500)`) + `escapeHtml` on email bodies                                                                       |
+| 5.8 Body-size + OpenAPI              | Read-time body-size enforcement (413) + auth-gated `/openapi.json`/`/api-reference` in non-production                                                            |
+| 6.1 Webhook IP allowlist spoof       | `ipAllowed(request, allowlist, trustProxy)` uses `getClientIp` (`apps/server/src/webhooks/payments.ts:19-27`)                                                    |
+| 6.2 Ticket SLA escalation            | `escalate-support-tickets` BullMQ job (15 min) → `support.escalatePastSlaTickets` (`support.service.ts:107-130`)                                                 |
+| 6.3 Meeting event lifecycle          | `MeetingPort.updateEvent`/`cancelEvent` (`google-meeting.provider.ts:295,358`), called on reschedule accept + terminal states (OQ-05)                            |
+| 6.4 Stale override response          | `applyOverride` re-reads the booking after the override transaction (P1-5)                                                                                       |
+| 6.5 Room notifications               | `room.{bookingId}.{assigned\|relocated\|cancelled}.{userId}` in-app + email to tutor + confirmed students (P1-3)                                                 |
+| 6.6 `.env.example`                   | `WEBHOOK_ALLOWED_IPS`, `STUB_WEBHOOK_ALLOWED`, `TRUST_PROXY`, `SEED_*`, `R2_*`, `UPLOAD_DIR`, `GOOGLE_MEET_*` documented                                         |
+
+**Verification at merge:** full suite 1643 pass / 1 known-failing pre-existing test → 0 fail after fixes; `check-types` clean; oxlint 0 errors; CI green on main.
 
 ---
 
@@ -1766,6 +1801,7 @@ git commit -m "fix(server): read-time body-size enforcement and auth-gated OpenA
 
 ### Version Notes
 
+- v2.0 (2026-08-14): Marked COMPLETED — all 6 PRs merged to main via PR #46 (squash `ec8b16c`). Added the Implementation Summary table with commit evidence. File moved from `docs/plans/active/` to `docs/plans/completed/`. Per-task status annotations retained as historical record of the pre-implementation state. Only remaining open item from this plan: Task 5.2 (B4 — Knowledge Bank `availableBalance`), re-tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U13).
 - v1.2 (2026-08-14): Execution began on `fix/backend-hardening-phase2`. PR 1 (Tasks 1.1–1.4), Task 5.6 (env part), Task 5.8 (routes parts), and Task 4.1 (env vars + `/uploads/*` route) IMPLEMENTED by Agent A (commits `3732169`..`4cf0fb5`); Tasks 2.1–2.3 IMPLEMENTED by Agent B (commits `a492fbe`..`fc3be8f`, g4 test fix `b34f045`) — Agent B halted before 5.1/5.4/5.5/5.7. Added PR 6 (Follow-ups from SDD Ledger Scan) with Tasks 6.1–6.6 from `.superpowers/sdd/BACKEND-HARDENING/progress.md` outstanding concerns + Agent A report concerns; parked items documented. Noted the `.env.test` gate requirement (C1). Remaining un-landed work: PR 2 remainder (5.1, 5.4, 5.5, 5.7), PR 3 (3.1, 3.2), PR 4 (4.1 storage/module/wiring), PR 5 (5.2, 5.3, 5.6 payment-part, 5.7-part), PR 6 (6.1–6.6).
 - v1.1 (2026-08-14): Annotated all PR 1-4 tasks with verified-not-implemented status (HEAD `9b7df5e`); noted PR 3 Task 3.1 as partial (dispatch rows queued, but `emailPort.send` still inline — no consumer job). Added PR 5 (Correctness & Security Follow-ups) with findings B3/B4/B6/B8/B9 + M4/M5/L1-L3 from the 2026-08-14 audit: group deadline repricing, Knowledge Bank total-balance eligibility, payment/refund notifications, group-series creation, per-session post-H2 forfeit, conditional Xendit env validation, email HTML injection via reason, and body-size/OpenAPI hardening. Updated title/architecture to 5 PRs and roadmap with PR 5.
 - v1.0 (2026-08-14): Created from the final backend codebase review. 4 PRs: security hardening, PRD money correctness, email outbox + re-purchase, file upload (R2).

@@ -1049,7 +1049,7 @@ git commit -m "test: add room, refund, achievement, and admin-override happy-pat
 
 **Files:**
 
-- Modify: `docs/plans/active/PRD-GAPS-SPEC.md`
+- Modify: `docs/plans/completed/PRD-GAPS-SPEC.md`
 
 **Interfaces:**
 
@@ -1070,7 +1070,7 @@ git commit -m "test: add room, refund, achievement, and admin-override happy-pat
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docs/plans/active/PRD-GAPS-SPEC.md
+git add docs/plans/completed/PRD-GAPS-SPEC.md
 git commit -m "docs(plans): sync PRD-GAPS-SPEC with verified code state; add G20 scheduler boot"
 ```
 

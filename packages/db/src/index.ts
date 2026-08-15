@@ -10,6 +10,27 @@ if (env.NODE_ENV === "production" && !env.DB_SSL_REJECT_UNAUTHORIZED) {
   );
 }
 
+const SENSITIVE_PARAM = /(password|secret|token|authorization|cookie|bearer)/i;
+const SECRET_SHAPED = /^(sk_|whsec_|xox[baprs]-|eyJ[a-zA-Z0-9_-]+\.)/i;
+
+/**
+ * Redacts values that may contain credentials before they are logged.
+ *
+ * Masks email-like values (`@`), bulk payloads (> 100 chars), and secret-shaped
+ * strings (provider keys, webhook tokens, JWTs). Short plain values (uuids,
+ * names) are kept so dev logs stay readable.
+ *
+ * @param value - the raw query parameter value
+ * @returns the redacted value, or the original when clearly not sensitive
+ */
+function redactParam(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  if (value.includes("@") || value.length > 100) return "[REDACTED]";
+  if (value.length > 8 && SECRET_SHAPED.test(value)) return "[REDACTED]";
+  if (SENSITIVE_PARAM.test(value)) return "[REDACTED]";
+  return value;
+}
+
 export function createDb(connectionString?: string) {
   const url = connectionString ?? env.DATABASE_URL;
   const client = postgres(url, {
@@ -24,11 +45,7 @@ export function createDb(connectionString?: string) {
     }),
     ...(env.NODE_ENV === "development" && {
       onquery: (query: { sql: string; params: unknown[] }) => {
-        const redactedParams = query.params.map((p) =>
-          typeof p === "string" && (p.includes("@") || p.length > 100)
-            ? "[REDACTED]"
-            : p,
-        );
+        const redactedParams = query.params.map((p) => redactParam(p));
         console.log(`[DB] ${query.sql} | ${JSON.stringify(redactedParams)}`);
       },
     }),

@@ -11,6 +11,7 @@ import {
   sql,
   getTableColumns,
   notExists,
+  exists,
 } from "drizzle-orm";
 import {
   booking,
@@ -607,6 +608,58 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
     .limit(500);
 }
 
+const MAX_MEETING_RETRY_ATTEMPTS = 3;
+
+/**
+ * Finds confirmed online bookings whose Google Meet creation failed, for the
+ * `retry-failed-meetings` scheduler job. Each failed create attempt inserts a
+ * `meetingEvent` row with status `failed`, so the retry budget is derived from
+ * the count of failed rows — bookings stop being retried after
+ * `MAX_MEETING_RETRY_ATTEMPTS` failures and are left for manual intervention
+ * (admin meeting-link entry, see PRD-GAPS-PHASE3 U1).
+ *
+ * @param conn - the database connection or active transaction
+ * @param limit - the maximum number of bookings to return
+ * @returns the confirmed online bookings with a failed meeting and retries left
+ */
+async function findConfirmedMeetingsPendingRetry(
+  conn: DbOrTx,
+  limit = 50,
+): Promise<BookingRow[]> {
+  const failedAttempts = conn
+    .select({ count: sql<number>`count(*)::int` })
+    .from(meetingEvent)
+    .where(
+      and(
+        eq(meetingEvent.bookingId, booking.id),
+        eq(meetingEvent.provider, "google_meet"),
+        eq(meetingEvent.status, "failed"),
+      ),
+    );
+  const hasFailedAttempt = conn
+    .select({ id: meetingEvent.id })
+    .from(meetingEvent)
+    .where(
+      and(
+        eq(meetingEvent.bookingId, booking.id),
+        eq(meetingEvent.provider, "google_meet"),
+        eq(meetingEvent.status, "failed"),
+      ),
+    );
+  return conn
+    .select({ ...getTableColumns(booking) })
+    .from(booking)
+    .where(
+      and(
+        eq(booking.currentState, BOOKING_STATE.CONFIRMED),
+        eq(booking.modality, MODALITY.ONLINE),
+        exists(hasFailedAttempt),
+        lt(failedAttempts, MAX_MEETING_RETRY_ATTEMPTS),
+      ),
+    )
+    .limit(limit);
+}
+
 async function findTutorParticipant(
   conn: DbOrTx,
   bookingId: string,
@@ -850,6 +903,7 @@ export function createBookingRepo(db: DbType) {
     updateBookingSchedule,
     findBookingsExpiringByDeadline,
     findBookingsWithTutorLateness,
+    findConfirmedMeetingsPendingRetry,
     findTutorParticipant,
     findOverlappingBookings,
     updateBookingVersioned,

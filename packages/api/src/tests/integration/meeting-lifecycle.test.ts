@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
+  booking,
   wallet,
   tutorInvite,
   tutorProfile,
@@ -163,5 +164,58 @@ describe("OQ-05: meeting event lifecycle follows the booking state", () => {
     expect(fetched.currentState).toBe("cancelled");
     expect(fetched.meetingStatus).toBe("pending");
     expect(fetched.meetingUrl).toBeNull();
+  });
+
+  test("retryFailedMeetings recovers a confirmed booking whose meeting creation failed", async () => {
+    const start = new Date(Date.now() + 72 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 73 * 3600_000).toISOString();
+
+    const b = await studentClient.booking.createSolo({
+      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+
+    // Simulate the failure path: booking accepted but meeting creation failed
+    // (booking stuck in CONFIRMED + a failed meetingEvent row, as recorded by
+    // the google-meeting provider when createEvent fails).
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+    expect(await getMeetingStatus(b.id)).toBe("manual");
+
+    await db
+      .update(booking)
+      .set({ currentState: "confirmed" })
+      .where(eq(booking.id, b.id));
+    await db
+      .insert(meetingEvent)
+      .values({
+        bookingId: b.id,
+        provider: "google_meet",
+        status: "failed",
+        errorReason: "simulated provider failure",
+      })
+      .execute();
+
+    const { services } = await import("@cogito-app/api/services");
+    const result = await services.booking.retryFailedMeetings();
+    expect(result.succeeded).toBe(1);
+    expect(result.failed).toBe(0);
+
+    // The booking is SCHEDULED again with a fresh (manual-provider) meeting row.
+    const fetched = await studentClient.booking.get({ bookingId: b.id });
+    expect(fetched.currentState).toBe("scheduled");
+
+    const rows = await db
+      .select()
+      .from(meetingEvent)
+      .where(eq(meetingEvent.bookingId, b.id));
+    expect(rows.some((r) => r.status !== "failed")).toBe(true);
+
+    // A second run finds nothing left to retry (booking no longer CONFIRMED).
+    const second = await services.booking.retryFailedMeetings();
+    expect(second.succeeded + second.failed).toBe(0);
   });
 });
