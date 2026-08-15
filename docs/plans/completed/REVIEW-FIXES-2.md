@@ -1,6 +1,6 @@
 # Backend Review Fixes 2 — Implementation Plan
 
-> **STATUS: ACTIVE — execution in progress on branch `fix/review-fixes-2` (worktree `wt-review-fixes2`).** PR A (R1), PR B (R2/R3), PR C (R4/R5), PR D (R6–R10), PR E (coverage hardening — 9 files ≥ 90%), and PR F (U13, U4) landed. Wave-2 findings from the 2026-08-15 codebase review (post-#48): 10 code findings (R1–R10), 9 files below the 90% coverage target, and 2 small PRD gaps pulled in (U13, U4). Verified at git HEAD `30f805e` (merge of #48).
+> **STATUS: COMPLETED — all PRs merged to main (#50–#57).** PR A (R1), PR B (R2/R3), PR C (R4/R5), PR D (R6–R10), CI hardening (#54), PR E (coverage hardening — 9 files ≥ 90%), and PR F (U13, U4) all landed. Wave-2 findings from the 2026-08-15 codebase review (post-#48): 10 code findings (R1–R10), 9 files below the 90% coverage target, and 2 small PRD gaps pulled in (U13, U4). Verified at git HEAD `30f805e` (merge of #48).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
