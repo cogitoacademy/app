@@ -314,7 +314,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ eligible, balance, threshold }`
-- **Description:** Checks Knowledge Bank gating (min balance threshold); **known bug B4** — checks `availableBalance` instead of total balance (tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
+- **Description:** Checks Knowledge Bank gating (min balance threshold); eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, per PRD DL-16 / U13). No Marks are deducted.
 
 ### `wallet.competitionCalendarLink`
 
@@ -469,7 +469,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Protected (participant)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ withdrawn: true, late: boolean }`
-- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels
+- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels. Group-series bookings (`type: "series"` with `targetGroupSize > 1`) are rejected with `CONFLICT` (`BOOKING_SERIES_NO_OPT_OUT`) — no opt-out from the series (U4)
 
 ### `booking.listSessions`
 

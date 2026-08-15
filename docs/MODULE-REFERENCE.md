@@ -220,7 +220,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
 - `declineInvite(userId, bookingId, reason?)` — Invitee declines
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing
-- `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum
+- `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum; group-series (`type === "series" && targetGroupSize > 1`) is rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule)
 - `cancel(userId, bookingId, reason?)` — Cancels booking; releases all holds; late cancel becomes `late_cancelled`
 - `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; creates meeting for online; sets room approval for offline
 - `tutorDecline(bookingId, tutorId, reason?)` — Tutor declines; releases all holds
@@ -255,7 +255,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - Optimistic locking via `version` field prevents concurrent state changes
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
-- Follow-ups (reconfirmation-deadline reprice, group-series full withdrawal block, per-participant no-show, admin per-session cancel, per-session reschedule) tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U3–U7)
+- Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U3, U5–U7); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)
 
 ---
 
@@ -661,7 +661,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `credit(db, params)` — Atomically credits available balance (payment received)
 - `compensate(db, params)` — Compensation operation (positive or negative)
 - `listLedger(walletId, opts)` — Paginated ledger with `bookingId` and `eventKey` filters
-- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; **known bug B4** — uses `availableBalance` instead of total balance (`wallet.service.ts:431`); tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`
+- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, PRD DL-16 / U13)
 - `listActivePackages()` — Returns active mark packages
 
 **Dependencies:** `WalletRepo`

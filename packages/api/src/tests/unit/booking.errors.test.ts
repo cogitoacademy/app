@@ -25,6 +25,7 @@ import {
   BookingExpiredError,
   BookingNoShowError,
   BookingCancelledError,
+  BookingSeriesNoOptOutError,
   mapBookingError,
 } from "../../modules/booking/booking.errors";
 
@@ -205,6 +206,13 @@ describe("booking.errors", () => {
       args: ["bk_1"],
       details: { id: "bk_1" },
     },
+    {
+      cls: BookingSeriesNoOptOutError,
+      code: "BOOKING_SERIES_NO_OPT_OUT",
+      msg: "Group series participants cannot withdraw from the series",
+      args: ["bk_1"],
+      details: { id: "bk_1" },
+    },
   ] as const;
 
   for (const { cls, code, msg, args, details } of errorClasses) {
@@ -236,6 +244,7 @@ describe("booking.errors", () => {
       BookingAlreadyConfirmedError,
       BookingDuplicateHoldError,
       BookingStateTransitionError,
+      BookingSeriesNoOptOutError,
     ];
     const badRequestErrors = [
       BookingNotEditableError,

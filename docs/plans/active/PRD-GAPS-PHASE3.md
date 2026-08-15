@@ -20,7 +20,7 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 | U1  | Admin manual meeting-link entry                                             | FR-21, TC-36              | Medium   | meeting       | Not implemented                                                                          |
 | U2  | Student self-service reschedule before H-2                                  | FR-14, TC-15              | Medium   | booking       | Not implemented                                                                          |
 | U3  | Reconfirmation-deadline repricing for still-valid partial headcount         | FR-16, TC-18              | High     | booking       | Not implemented                                                                          |
-| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | Not implemented                                                                          |
+| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | **Implemented (REVIEW-FIXES-2 PR F)**                                                    |
 | U5  | Per-participant no-show marking for series sessions                         | FR-20, TC-30              | Medium   | booking       | Not implemented                                                                          |
 | U6  | Admin per-session series cancel with Marks-return choice                    | FR-20, TC-31              | Medium   | admin-booking | Not implemented                                                                          |
 | U7  | Per-session tutor reschedule within a series                                | FR-20, TC-33              | Low      | booking       | Not implemented                                                                          |
@@ -29,7 +29,7 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 | U10 | Achievement submission fields match PRD (issuer, visibility, enum category) | FR-18 (prd.tex:1004-1014) | Low      | achievement   | Not implemented                                                                          |
 | U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | **Closed** — implemented by BACKEND-REVIEW-HARDENING M4 (`fix/backend-review-hardening`) |
 | U12 | Offline room approval deadline rule (12h window)                            | DL-25 (prd.tex:853)       | Low      | booking       | Deviation (deadline = session start)                                                     |
-| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | Not implemented (carried from phase-2 Task 5.2)                                          |
+| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | **Implemented (REVIEW-FIXES-2 PR F)**                                                    |
 | U14 | Offline room availability integrated into booking creation (G13)            | FR-22, TC-20              | Low      | room/booking  | Not implemented                                                                          |
 
 ---
@@ -94,9 +94,11 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U4: Group-series full-series withdrawal not blocked (FR-20 / TC-24)
 
+**Status: IMPLEMENTED** (REVIEW-FIXES-2 PR F) — `withdraw` (`booking.service.ts:1949`) rejects `type === SERIES && targetGroupSize > 1` with `BOOKING_SERIES_NO_OPT_OUT` before any wallet movement; solo-series (`targetGroupSize: 1`) withdraw is unchanged. Spec below retained as reference.
+
 **PRD (prd.tex:890):** group-series participants "cannot withdraw from the series as a whole."
 
-**Current state:** `cancelSession` blocks per-session cancellation for group series (`booking.service.ts:1243-1245`), but `withdraw` (`booking.service.ts:1902`) has **no `type === SERIES && targetGroupSize > 1` guard** — a confirmed group-series participant can still call `withdraw` to leave the whole series (deducting/releasing their hold), contradicting the no-opt-out rule.
+**Current state (at the time of writing):** `cancelSession` blocks per-session cancellation for group series (`booking.service.ts:1243-1245`), but `withdraw` (`booking.service.ts:1902`) has **no `type === SERIES && targetGroupSize > 1` guard** — a confirmed group-series participant can still call `withdraw` to leave the whole series (deducting/releasing their hold), contradicting the no-opt-out rule.
 
 **Required:**
 
@@ -265,9 +267,11 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U13: Knowledge Bank eligibility uses total balance (B4, from BACKEND-HARDENING-PHASE2 Task 5.2)
 
+**Status: IMPLEMENTED** (REVIEW-FIXES-2 PR F) — `knowledgeBankEligible` (`wallet.service.ts:421-435`) now compares and returns `totalBalance`; held Marks count toward the 35-Mark threshold. Spec below retained as reference.
+
 **PRD DL-16 / FR-12:** KB eligibility = login + **≥ 35 total Marks** (total balance, not available).
 
-**Current state:** `knowledgeBankEligible` (`wallet.service.ts:421-435`) compares `availableBalance`. Held Marks (committed to bookings) should count toward the 35-Mark threshold.
+**Current state (at the time of writing):** `knowledgeBankEligible` (`wallet.service.ts:421-435`) compares `availableBalance`. Held Marks (committed to bookings) should count toward the 35-Mark threshold.
 
 **Required:**
 

@@ -41,6 +41,7 @@ import {
   BookingRescheduleNotFoundError,
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
+  BookingSeriesNoOptOutError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { lockTutorForBooking } from "../../lib/locks";
@@ -1949,6 +1950,13 @@ export function createBookingService(deps: {
     let cancelMeeting = false;
     const result = await db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
+      // PRD (prd.tex:890): once confirmed, group-series participants cannot
+      // opt out of the series as a whole (U4). Per-session cancellation is
+      // already blocked in cancelSession; this guards the full-series path
+      // before any wallet movement.
+      if (b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1) {
+        throw new BookingSeriesNoOptOutError(bookingId);
+      }
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingCancelledError(bookingId);
       }
