@@ -1,10 +1,8 @@
 import { initLogger } from "evlog";
 
-import { createServer } from "./routes";
 import { env } from "@cogito-app/env/server";
 import { log } from "@cogito-app/api/lib/logger";
 import { sql } from "drizzle-orm";
-import { initScheduler, shutdownScheduler } from "./scheduler";
 
 initLogger({
   env: { service: "cogito-app-server" },
@@ -54,10 +52,18 @@ async function waitForDb(maxAttempts = 10, delayMs = 2000): Promise<void> {
   }
 }
 
+await waitForDb();
+
+// IMPORTANT: @cogito-app/db (the drizzle schema graph) must be imported BEFORE
+// ./routes, which loads evlog's Elysia plugin. Evaluating the schema modules
+// while evlog/elysia is already loaded segfaults Bun 1.3.14 (engine bug —
+// "panic: Segmentation fault", see bun.report on the server boot crash).
+// Keep this import order; do not hoist ./routes or ./scheduler back to the top.
+const { createServer } = await import("./routes");
+const { initScheduler, shutdownScheduler } = await import("./scheduler");
+
 const app = createServer();
 const port = env.PORT;
-
-await waitForDb();
 
 const server = app.listen(port, () => {
   log({ level: "info", action: "server_started", url: env.BETTER_AUTH_URL });
