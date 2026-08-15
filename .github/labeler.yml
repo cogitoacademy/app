@@ -1,20 +1,24 @@
 server:
-  - apps/server/**/*
-  - packages/api/**/*
-  - packages/auth/**/*
-  - packages/db/**/*
-  - packages/env/**/*
+  - any:
+      - apps/server/**/*
+      - packages/api/**/*
+      - packages/auth/**/*
+      - packages/db/**/*
+      - packages/env/**/*
 
 web:
-  - apps/web/**/*
-  - packages/ui/**/*
+  - any:
+      - apps/web/**/*
+      - packages/ui/**/*
 
 infrastructure:
-  - infra/**/*
-  - .github/workflows/**/*
-  - apps/server/Dockerfile
-  - apps/web/Dockerfile
+  - any:
+      - infra/**/*
+      - .github/workflows/**/*
+      - apps/server/Dockerfile
+      - apps/web/Dockerfile
 
 docs:
-  - docs/**/*
-  - "*.md"
+  - any:
+      - docs/**/*
+      - "*.md"
