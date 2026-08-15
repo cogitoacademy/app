@@ -299,6 +299,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 
 | Plan                                                              | Branch                             | Status                                                                                                       |
 | ----------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `docs/plans/active/BACKEND-REVIEW-HARDENING.md`                   | `fix/backend-review-hardening`     | Active — 2026-08-15 review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                                |
 | `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
 | `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
 | `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                                                                                         |

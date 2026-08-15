@@ -27,7 +27,7 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 | U8  | Payment-error refund reconciliation guard (no blind full refund)            | TC-39, Refund Policy      | High     | admin-booking | Not implemented                                 |
 | U9  | Support SLA business-hours windows (30 min / 4 h) + WhatsApp escalation     | OQ-04                     | Medium   | support       | Partial (in-app escalation job exists, #46)     |
 | U10 | Achievement submission fields match PRD (issuer, visibility, enum category) | FR-18 (prd.tex:1004-1014) | Low      | achievement   | Not implemented                                 |
-| U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | Not implemented (FK-only)                       |
+| U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | **Closed** — implemented by BACKEND-REVIEW-HARDENING M4 (`fix/backend-review-hardening`) |
 | U12 | Offline room approval deadline rule (12h window)                            | DL-25 (prd.tex:853)       | Low      | booking       | Deviation (deadline = session start)            |
 | U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | Not implemented (carried from phase-2 Task 5.2) |
 | U14 | Offline room availability integrated into booking creation (G13)            | FR-22, TC-20              | Low      | room/booking  | Not implemented                                 |
@@ -231,6 +231,8 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 ---
 
 ## U11: Group (non-series) invitee "registered user" validation (DL-19)
+
+> **STATUS: CLOSED** — implemented by `BACKEND-REVIEW-HARDENING.md` Task 2.9 (M4) on branch `fix/backend-review-hardening`: `createGroup` now validates invitees (dedupe, self-invite rejection, headcount bound, registered-user lookup with clean `USER_NOT_FOUND` errors). Acceptance tests below were covered there.
 
 **PRD:** group invitees must be registered users (Phase 0 only invites registered users).
 
