@@ -36,7 +36,7 @@ function hmac(key: string | Buffer, data: string): Buffer {
   return createHmac("sha256", key as Parameters<typeof createHmac>[0])
     .update(data)
     .digest();
-}/**
+} /**
  * Builds an S3-compatible presigned POST (R2 supports S3 POST policies).
  * The policy binds an exact object key, the content type, and a
  * `content-length-range` so an authenticated client cannot upload an

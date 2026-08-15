@@ -65,7 +65,9 @@ export function paymentsWebhook(app: Elysia) {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (!ipAllowed(request, allowlist, env.TRUST_PROXY, server ?? undefined)) {
+      if (
+        !ipAllowed(request, allowlist, env.TRUST_PROXY, server ?? undefined)
+      ) {
         set.status = 403;
         return { error: "Forbidden" };
       }

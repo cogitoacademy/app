@@ -16,6 +16,7 @@ import {
 } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+import { escapeHtml } from "../../lib/sanitize";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
 import type {
@@ -364,7 +365,7 @@ export function createAdminBookingService(deps: {
             severity: NOTIFICATION_SEVERITY.ACTION,
             title: "Your booking was updated by an admin",
             body: `Your booking was updated (${input.category})${
-              input.userNote ? `: ${input.userNote}` : ""
+              input.userNote ? `: ${escapeHtml(input.userNote)}` : ""
             }.`,
             eventKey: `override.applied.${input.bookingId}.${userId}`,
             emailRequired: true,
