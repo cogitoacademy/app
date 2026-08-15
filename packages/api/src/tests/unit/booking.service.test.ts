@@ -29,6 +29,7 @@ function makeDb() {
       const tx = { ...makeDb(), ...mockRepo() };
       return fn(tx);
     }),
+    execute: mock(async () => {}),
   } as any;
 }
 
@@ -47,6 +48,9 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateBookingHoldAmount: mock(async () => {}),
     updateBookingCancellationReason: mock(async () => {}),
     updateBookingConfirmedHeadcount: mock(async () => {}),
+    incrementBookingConfirmedHeadcount: mock(async () => ({
+      confirmedHeadcount: 1,
+    })),
     updateParticipantState: mock(async () => {}),
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
@@ -670,6 +674,10 @@ describe("BookingService", () => {
           findTutorProfile: mock(async () => makeTutorProfile()),
           findAvailabilitySlot: mock(async () => makeSlot()),
           findOverlappingBookings: mock(async () => []),
+          findUsersByIds: mock(async () => [
+            { id: "student2" },
+            { id: "student3" },
+          ]),
           insertBooking: mock(async () => booking),
         },
       });
@@ -688,6 +696,10 @@ describe("BookingService", () => {
           findTutorProfile: mock(async () => makeTutorProfile()),
           findAvailabilitySlot: mock(async () => makeSlot()),
           findOverlappingBookings: mock(async () => []),
+          findUsersByIds: mock(async () => [
+            { id: "student2" },
+            { id: "student3" },
+          ]),
         },
         wallet: {
           ...makeWallet(),
@@ -702,6 +714,69 @@ describe("BookingService", () => {
 
       await expect(service.createGroup("student1", groupInput)).rejects.toThrow(
         InsufficientMarksError,
+      );
+    });
+
+    test("rejects duplicate invitees (M4)", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+      });
+
+      await expect(
+        service.createGroup("student1", {
+          ...groupInput,
+          inviteeUserIds: ["student2", "student2"],
+        }),
+      ).rejects.toThrow(BookingNotEditableError);
+    });
+
+    test("rejects the proposer inviting themselves (M4)", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+      });
+
+      await expect(
+        service.createGroup("student1", {
+          ...groupInput,
+          inviteeUserIds: ["student1", "student2"],
+        }),
+      ).rejects.toThrow(BookingNotEditableError);
+    });
+
+    test("rejects invitees that exceed the target group size (M4)", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
+      });
+
+      await expect(
+        service.createGroup("student1", {
+          ...groupInput,
+          targetGroupSize: 2,
+          inviteeUserIds: ["student2", "student3", "student4"],
+        }),
+      ).rejects.toThrow(BookingNotEditableError);
+    });
+
+    test("rejects unknown invitees with a clean error (U11)", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+          findUsersByIds: mock(async () => [{ id: "student2" }]),
+        },
+      });
+
+      await expect(service.createGroup("student1", groupInput)).rejects.toThrow(
+        BookingNotFoundError,
       );
     });
   });
@@ -759,6 +834,34 @@ describe("BookingService", () => {
           })),
         }),
       ).rejects.toThrow(BookingSeriesSizeError);
+    });
+
+    test("rejects overlapping sessions within the same series (M3)", async () => {
+      const { service } = createService({
+        repo: { findTutorProfile: mock(async () => makeTutorProfile()) },
+      });
+
+      await expect(
+        service.createSeries("student1", {
+          ...seriesInput,
+          sessions: [
+            {
+              scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+              scheduledEndAt: new Date(
+                Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000,
+              ),
+            },
+            {
+              scheduledStartAt: new Date(
+                Date.now() + 48 * 60 * 60 * 1000 + 30 * 60 * 1000,
+              ),
+              scheduledEndAt: new Date(
+                Date.now() + 48 * 60 * 60 * 1000 + 120 * 60 * 1000,
+              ),
+            },
+          ],
+        }),
+      ).rejects.toThrow(BookingConflictError);
     });
 
     test("creates series booking with sessions", async () => {
@@ -1912,6 +2015,10 @@ describe("BookingService", () => {
               heldAmount: 0,
             }),
           ),
+          incrementBookingConfirmedHeadcount: mock(async () => ({
+            ...booking,
+            confirmedHeadcount: 2,
+          })),
           updateBookingVersioned: mock(async () => ({
             updated: { ...booking, confirmedHeadcount: 2 },
             newVersion: 2,
@@ -1926,10 +2033,9 @@ describe("BookingService", () => {
         "Hold Marks for group booking (invitee)",
       );
       expect(repo.updateParticipantState).toHaveBeenCalledTimes(1);
-      expect(repo.updateBookingConfirmedHeadcount).toHaveBeenCalledWith(
+      expect(repo.incrementBookingConfirmedHeadcount).toHaveBeenCalledWith(
         expect.anything(),
         "b1",
-        2,
       );
     });
 
@@ -1960,6 +2066,10 @@ describe("BookingService", () => {
               heldAmount: 0,
             }),
           ),
+          incrementBookingConfirmedHeadcount: mock(async () => ({
+            ...booking,
+            confirmedHeadcount: 2,
+          })),
           updateBookingVersioned: mock(async () => ({
             updated: {
               ...booking,
@@ -2087,6 +2197,61 @@ describe("BookingService", () => {
         expect.anything(),
         "p1",
         expect.objectContaining({ confirmationState: "declined" }),
+      );
+    });
+
+    test("releases the declining participant's hold and reprices (H5)", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 3,
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      });
+      const participant = makeParticipant({
+        confirmationState: "reconfirmed",
+        heldAmount: 42,
+      });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          decrementBookingConfirmedHeadcount: mock(async () => {}),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2" }),
+            makeParticipant({ id: "p3", userId: "student3" }),
+          ]),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w1",
+            totalBalance: 100,
+            heldBalance: 42,
+            availableBalance: 58,
+          })),
+        },
+      });
+
+      const result = await service.reconfirm("student1", "b1", false);
+      expect(result).toEqual({ reconfirmed: false });
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release.mock.calls[0][1].amount).toBe(42);
+      expect(repo.decrementBookingConfirmedHeadcount).toHaveBeenCalledTimes(1);
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({ heldAmount: 0 }),
       );
     });
   });
@@ -2237,6 +2402,100 @@ describe("BookingService", () => {
 
       await service.withdraw("student1", "b1");
       expect(wallet.release).not.toHaveBeenCalled();
+    });
+
+    test("confirmed group withdraw reprices + reconfirms instead of cancelling (C1)", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "confirmed",
+        targetGroupSize: 3,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, wallet, repo, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+          ]),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "awaiting_reconfirmation" },
+            newVersion: 2,
+          })),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w1",
+            totalBalance: 100,
+            heldBalance: 42,
+            availableBalance: 58,
+          })),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "awaiting_reconfirmation" }),
+      );
+      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
+    });
+
+    test("group withdraw in a non-regressable state does not cancel (C1)", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "reschedule_proposed",
+        targetGroupSize: 3,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: booking,
+            newVersion: 2,
+          })),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w1",
+            totalBalance: 100,
+            heldBalance: 42,
+            availableBalance: 58,
+          })),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
     });
   });
 

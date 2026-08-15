@@ -288,21 +288,28 @@ async function updateBookingPriceSnapshot(
 }
 
 /**
- * Sets a booking's confirmed headcount.
+ * Atomically increments a booking's confirmed headcount by 1 and returns the
+ * fresh booking row. The increment happens in SQL so concurrent confirms can
+ * never lose updates.
  *
  * @param conn - the database connection or active transaction
  * @param bookingId - the booking id
- * @param confirmedHeadcount - the new headcount
+ * @returns the updated booking row
  */
-async function updateBookingConfirmedHeadcount(
+async function incrementBookingConfirmedHeadcount(
   conn: DbOrTx,
   bookingId: string,
-  confirmedHeadcount: number,
 ) {
-  await conn
+  const [row] = await conn
     .update(booking)
-    .set({ confirmedHeadcount })
-    .where(eq(booking.id, bookingId));
+    .set({
+      confirmedHeadcount: sql`${booking.confirmedHeadcount} + 1`,
+    })
+    .where(eq(booking.id, bookingId))
+    .returning();
+  if (!row)
+    throw new Error(`Booking ${bookingId} not found for headcount increment`);
+  return row;
 }
 
 /**
@@ -563,7 +570,7 @@ async function updateBookingSchedule(
  *
  * @param conn - the database connection or active transaction
  * @param states - states eligible for expiry
- * @returns up to 500 matching booking rows
+ * @returns up to 100 matching booking rows (per scheduler run)
  */
 async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
   return conn
@@ -575,7 +582,7 @@ async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
         inArray(booking.currentState, states),
       ),
     )
-    .limit(500);
+    .limit(100);
 }
 
 async function findBookingsWithTutorLateness(conn: DbOrTx) {
@@ -605,7 +612,7 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
         notExists(tutorAttended),
       ),
     )
-    .limit(500);
+    .limit(100);
 }
 
 const MAX_MEETING_RETRY_ATTEMPTS = 3;
@@ -885,7 +892,7 @@ export function createBookingRepo(db: DbType) {
     insertBooking,
     updateBookingCancellationReason,
     updateBookingHoldAmount,
-    updateBookingConfirmedHeadcount,
+    incrementBookingConfirmedHeadcount,
     insertParticipant,
     updateParticipantState,
     insertStateHistory,
