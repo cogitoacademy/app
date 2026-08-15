@@ -289,10 +289,7 @@ export function createNotificationService(
     userId: string,
     options: NotificationListInput = {},
   ): Promise<NotificationListResult> {
-    const limit = Math.min(
-      options.limit ?? DEFAULT_PAGE_LIMIT,
-      MAX_PAGE_LIMIT,
-    );
+    const limit = Math.min(options.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
     const rows = await repo.listNotifications(userId, {
       unreadOnly: options.unreadOnly,
       cursor: options.cursor,
