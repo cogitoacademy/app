@@ -98,22 +98,20 @@ export function createAdminService(deps: {
     adminId: string,
     input: SetRoleInput,
   ): Promise<UserRow> {
-    const target = await adminRepo.getById(db, input.userId);
-
-    const needsAdminCount =
-      target !== null &&
-      target.role === USER_ROLE.ADMIN &&
-      input.role !== USER_ROLE.ADMIN;
-    const adminCount = needsAdminCount ? await adminRepo.countAdmins(db) : 0;
-
-    const { previousRole } = validateRoleChange(
-      target,
-      input.role,
-      adminCount,
-      input.userId,
-    );
-
     return db.transaction(async (tx) => {
+      const target = await adminRepo.getById(tx, input.userId);
+      if (!target) throw new UserNotFoundError(input.userId);
+      const previousRole = target.role;
+
+      // The last-admin guard must be evaluated inside the transaction after
+      // locking the admin rows: a stale pre-transaction count would let two
+      // concurrent demotions of the last two admins both succeed (H6).
+      if (previousRole === USER_ROLE.ADMIN && input.role !== USER_ROLE.ADMIN) {
+        await adminRepo.lockAdminRows(tx);
+        const adminCount = await adminRepo.countAdmins(tx);
+        if (adminCount <= 1) throw new LastAdminError(input.userId);
+      }
+
       const rows = await adminRepo.updateRoleWithExpected(
         tx,
         input.userId,

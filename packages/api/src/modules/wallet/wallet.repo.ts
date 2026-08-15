@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, lte } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, inArray } from "drizzle-orm";
 import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -263,7 +263,7 @@ export async function findLedgerEntries(
     cursor?: string;
     bookingId?: string;
     eventKey?: string;
-    entryType?: string;
+    entryType?: string | string[];
     dateFrom?: string;
     dateTo?: string;
   },
@@ -283,7 +283,10 @@ export async function findLedgerEntries(
     conditions.push(eq(ledgerEntry.eventKey, opts.eventKey));
   }
   if (opts.entryType) {
-    conditions.push(eq(ledgerEntry.entryType, opts.entryType));
+    const types = Array.isArray(opts.entryType)
+      ? opts.entryType
+      : [opts.entryType];
+    conditions.push(inArray(ledgerEntry.entryType, types));
   }
   if (opts.dateFrom) {
     conditions.push(gte(ledgerEntry.createdAt, new Date(opts.dateFrom)));

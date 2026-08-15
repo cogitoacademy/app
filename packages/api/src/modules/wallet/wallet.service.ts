@@ -79,7 +79,7 @@ export interface LedgerQueryOptions {
   limit?: number;
   bookingId?: string;
   eventKey?: string;
-  entryType?: string;
+  entryType?: string | string[];
   dateFrom?: string;
   dateTo?: string;
 }
@@ -274,7 +274,7 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
         params.amount,
       );
       if (!result.success)
-        throw new InsufficientBalanceError(w.availableBalance, params.amount);
+        throw new InsufficientBalanceError(w.heldBalance, params.amount);
       const updated = result.wallet;
       await repo.insertLedger(tx, {
         walletId: params.walletId,

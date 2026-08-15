@@ -1,5 +1,6 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+import { createHash } from "node:crypto";
 import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
@@ -39,10 +40,26 @@ export function createRefundService(deps: {
         availableBalance: walletSnapshot.availableBalance,
       };
 
+      // Deterministic event key derived from the correction payload so a
+      // retried request can never apply the same correction twice (M7). The
+      // ledger unique index (wallet_id, event_key, source_reference) guards
+      // the write, so sourceReference is populated too (NULLs are distinct in
+      // Postgres unique indexes and would bypass the guard).
+      const payloadKey = JSON.stringify({
+        type: input.type,
+        walletId: input.walletId,
+        amount: input.amount,
+        reason: input.reason,
+        bookingId: input.bookingId ?? null,
+      });
+      const eventKey = `correction.${input.type}.${input.walletId}.${createHash("sha256").update(payloadKey).digest("hex").slice(0, 32)}`;
+      const sourceReference = `correction:${input.walletId}:${createHash("sha256").update(payloadKey).digest("hex").slice(0, 32)}`;
+
       const walletResult = await wallet.compensate(tx, {
         walletId: input.walletId,
         amount: input.amount,
-        eventKey: `correction.${input.type}.${input.walletId}.${crypto.randomUUID()}`,
+        eventKey,
+        sourceReference,
         actorType: ACTOR_TYPE.ADMIN,
         reason: input.reason,
         type: input.type,
@@ -94,19 +111,16 @@ export function createRefundService(deps: {
     cursor?: string;
   }) {
     const limit = Math.min(input.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+    // Filter in SQL so the cursor is derived from the filtered result set —
+    // in-memory filtering could skip corrections across page boundaries (M15).
     const result = await wallet.listLedger(input.walletId, {
       limit: limit + 1,
       cursor: input.cursor,
+      entryType: ["compensate_credit", "compensate_deduct"],
     });
 
-    const items = (result.items as { entryType: string }[]).filter(
-      (entry) =>
-        entry.entryType === "compensate_credit" ||
-        entry.entryType === "compensate_deduct",
-    );
-
     return {
-      items: items.slice(0, limit),
+      items: result.items,
       nextCursor: result.nextCursor,
     };
   }
