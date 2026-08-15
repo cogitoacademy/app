@@ -1,10 +1,10 @@
 # Cogito API Reference
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ## Overview
 
-All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}.{method}`.
+All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`.
 
 ### Auth Levels
 
@@ -700,6 +700,6 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 - **Auth:** Protected
 - **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
-- **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes }` (`maxBytes` 5 MB)
+- **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
-- **Description:** Returns a signed PUT URL (Cloudflare R2) or a direct local URL (dev) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. achievement `imageUrl`, user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
+- **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. achievement `imageUrl`, user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset

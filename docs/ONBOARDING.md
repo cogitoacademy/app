@@ -32,16 +32,16 @@ cp apps/server/.env.test.example apps/server/.env.test
 # BETTER_AUTH_URL=http://localhost:3001
 # CORS_ORIGIN=http://localhost:3000
 # PAYMENT_WEBHOOK_SECRET=<generate with: openssl rand -hex 32>
-# REDIS_URL=redis://localhost:6379 (optional - falls back to in-memory)
+# REDIS_URL=redis://localhost:6379 (required — Redis is mandatory)
 ```
 
 ## Start Development
 
 ```bash
-# Start PostgreSQL
+# Start PostgreSQL + Redis (db:start brings up both)
 bun run db:start
 
-# Optional: start isolated PostgreSQL for tests
+# Optional: start isolated PostgreSQL + Redis for tests
 bun run db:test
 
 # Run migrations
