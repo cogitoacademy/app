@@ -260,7 +260,7 @@ describe("createGoogleMeetingProvider", () => {
   });
 
   test("createEvent creates event with OAuth refresh token flow", async () => {
-    const config = {
+    const oauthConfig = {
       authType: "oauth_refresh_token" as const,
       clientId: "oauth-client-id",
       clientSecret: "oauth-client-secret",
@@ -316,7 +316,7 @@ describe("createGoogleMeetingProvider", () => {
     const insert = mock(() => ({ values }));
     const db = { insert } as any;
 
-    const provider = createGoogleMeetingProvider(config, db);
+    const provider = createGoogleMeetingProvider(oauthConfig, db);
     const result = await provider.createEvent("b1");
 
     expect(result.bookingId).toBe("b1");

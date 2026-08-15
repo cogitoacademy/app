@@ -287,12 +287,12 @@ export function createNotificationService(
    */
   async function list(
     userId: string,
-    opts: NotificationListInput = {},
+    options: NotificationListInput = {},
   ): Promise<NotificationListResult> {
-    const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+    const limit = Math.min(options.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
     const rows = await repo.listNotifications(userId, {
-      unreadOnly: opts.unreadOnly,
-      cursor: opts.cursor,
+      unreadOnly: options.unreadOnly,
+      cursor: options.cursor,
       limit,
     });
 

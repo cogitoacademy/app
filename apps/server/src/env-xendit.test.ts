@@ -3,6 +3,7 @@ import { serverEnvSchema } from "@cogito-app/env/server";
 
 const validEnv = {
   DATABASE_URL: "postgresql://postgres:password@localhost:6767/cogito-test",
+  REDIS_URL: "redis://localhost:6379",
   BETTER_AUTH_SECRET: "a-secret-that-is-at-least-32-characters-long",
   BETTER_AUTH_URL: "http://localhost:3001",
   CORS_ORIGIN: "http://localhost:3000",

@@ -105,10 +105,6 @@ describe("Metrics", () => {
 
     test("cleans up orphaned lastAccess entries", () => {
       _resetForTest();
-      const realDateNow = Date.now;
-      let now = 1_000_000;
-      Date.now = () => now;
-
       for (let i = 0; i < 5; i++) {
         recordRequest(`/api/orphan-${i}`, i);
       }
@@ -120,8 +116,6 @@ describe("Metrics", () => {
       for (let i = 0; i < 5; i++) {
         expect(metrics[`/api/orphan-${i}`]).toBeUndefined();
       }
-
-      Date.now = realDateNow;
     });
   });
 });

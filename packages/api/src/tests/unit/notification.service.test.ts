@@ -807,13 +807,13 @@ describe("write vs writeBestEffort", () => {
       }),
     });
 
-    const logCaptures: any[] = [];
+    const localCaptures: any[] = [];
     const origError = console.error;
     console.error = (...args: unknown[]) => {
       try {
-        logCaptures.push(JSON.parse(args[0] as string));
+        localCaptures.push(JSON.parse(args[0] as string));
       } catch {
-        logCaptures.push(args);
+        localCaptures.push(args);
       }
     };
 
@@ -822,7 +822,7 @@ describe("write vs writeBestEffort", () => {
 
     console.error = origError;
 
-    const errorLog = logCaptures.find(
+    const errorLog = localCaptures.find(
       (e: any) => e.action === "notification_write_failed",
     );
     expect(errorLog).toBeDefined();

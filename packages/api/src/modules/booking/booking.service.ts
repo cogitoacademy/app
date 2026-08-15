@@ -419,7 +419,7 @@ export function createBookingService(deps: {
   function assertNoIntraSeriesOverlap(
     sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[],
   ): void {
-    const sorted = [...sessions].sort(
+    const sorted = [...sessions].toSorted(
       (a, b) => a.scheduledStartAt.getTime() - b.scheduledStartAt.getTime(),
     );
     for (let i = 1; i < sorted.length; i++) {
@@ -2028,17 +2028,17 @@ export function createBookingService(deps: {
         });
       } else if (!isLate) {
         const currentState = b.currentState as BookingState;
-        const regressableStates: BookingState[] = [
+        const regressableStates: ReadonlySet<BookingState> = new Set([
           BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
           BOOKING_STATE.AWAITING_TUTOR_REVIEW,
           BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
           BOOKING_STATE.CONFIRMED,
           BOOKING_STATE.SCHEDULED,
-        ];
+        ]);
 
         if (
           b.type === BOOKING_TYPE.GROUP &&
-          regressableStates.includes(currentState)
+          regressableStates.has(currentState)
         ) {
           // PRD DL-13: a confirmed group participant withdrawing before H-2
           // triggers repricing + reconfirmation — the booking is NOT cancelled.
@@ -2084,7 +2084,7 @@ export function createBookingService(deps: {
             actorType: ACTOR_TYPE.STUDENT,
             reason: "Participant withdrew",
           });
-        } else if (regressableStates.includes(currentState)) {
+        } else if (regressableStates.has(currentState)) {
           await transition(
             tx,
             bookingId,

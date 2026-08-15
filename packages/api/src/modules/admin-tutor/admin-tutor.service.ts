@@ -168,7 +168,10 @@ export function createAdminTutorService(deps: {
     });
     // Stored tokens are digests, not shareable links — never surface them in
     // list responses (M10); plaintext is returned once at create/resend.
-    return rows.map((row) => ({ ...row, token: undefined }));
+    return rows.map((row) => ({
+      ...row,
+      token: undefined,
+    }));
   }
 
   async function resendInvite(
