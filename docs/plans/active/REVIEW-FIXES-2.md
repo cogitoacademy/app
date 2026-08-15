@@ -551,7 +551,7 @@ if (
 
 Verify `PaymentWalletPort` in `modules/payment/index.ts` exposes `deduct` (the wallet service does). If it does not, add `deduct(db, params)` to the port and wire it in `services.ts`.
 
- - [x] **Step 4: Run payment + xendit tests + commit**
+- [x] **Step 4: Run payment + xendit tests + commit**
 
 `fix(payment): reverse credited marks on REFUNDED webhook and map Xendit status (R5)`
 
