@@ -3,6 +3,7 @@
 Skills are designed to be installed under `.opencode/skills/<skill-id>/SKILL.md`.
 
 Included:
+
 - engineering-core
 - feature-workflow
 - code-review

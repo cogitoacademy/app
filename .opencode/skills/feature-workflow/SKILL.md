@@ -30,6 +30,7 @@ If the task is ambiguous in a way that affects correctness or architecture, ask 
 Create a concise internal implementation plan.
 
 Include:
+
 - files/components likely affected;
 - behavior to change;
 - tests required;
@@ -45,6 +46,7 @@ Do not over-plan trivial changes.
 Implement the smallest complete solution.
 
 Rules:
+
 - follow existing project conventions;
 - do not invent dependencies unnecessarily;
 - preserve backward compatibility unless explicitly changing it;
@@ -61,6 +63,7 @@ If you discover an architectural improvement outside the task, do not silently e
 Run the most targeted tests first, then the broader suite.
 
 At minimum:
+
 - new/changed behavior has tests;
 - regression cases are covered;
 - failure paths are covered where relevant.
@@ -82,6 +85,7 @@ Lint errors must be fixed unless explicitly justified.
 Run the project's type checker or compiler.
 
 Examples:
+
 - TypeScript: project typecheck command / `tsc --noEmit`
 - Go: `go test`, `go vet`, or project-specific checks as appropriate
 - Rust: `cargo check`
@@ -152,6 +156,7 @@ Examples:
 The scope should identify the affected subsystem/package/domain.
 
 Commit message requirements:
+
 - concise;
 - descriptive;
 - explains intent, not implementation trivia;
@@ -165,6 +170,7 @@ Do not commit unrelated changes.
 Create a PR after local verification and commit.
 
 PR must include:
+
 - summary;
 - why the change is needed;
 - implementation overview;

@@ -36,6 +36,7 @@ Before commit:
 - verify no secrets are included.
 
 Never commit:
+
 - `.env` secrets;
 - private keys;
 - credentials;
@@ -88,24 +89,31 @@ PR title should follow the project's convention; otherwise use a concise Convent
 PR body:
 
 ### Summary
+
 What changed.
 
 ### Why
+
 Problem and motivation.
 
 ### Implementation
+
 Important technical decisions.
 
 ### Testing
+
 Exact checks/tests performed.
 
 ### Risks
+
 Known risks and tradeoffs.
 
 ### Rollback
+
 How to revert or recover, especially for migrations/infrastructure.
 
 ### Notes
+
 Operational/configuration/deployment considerations.
 
 ## CI

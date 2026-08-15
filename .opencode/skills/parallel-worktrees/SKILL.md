@@ -20,6 +20,7 @@ Use:
 `git worktree add <path> -b <branch> <base>`
 
 Each agent receives:
+
 - its own worktree;
 - its own branch;
 - a clearly scoped task;
@@ -50,6 +51,7 @@ Avoid ambiguous names.
 ## Isolation
 
 Each agent must:
+
 - operate only in its assigned worktree;
 - commit its changes independently;
 - not reset or clean another worktree;
@@ -76,6 +78,7 @@ If changes are independent and the repository workflow supports multiple PRs, pr
 Worktrees isolate files, not external resources.
 
 Avoid parallel agents simultaneously modifying:
+
 - the same database;
 - the same generated artifacts;
 - shared deployment environments;
@@ -99,6 +102,7 @@ Do not remove a worktree containing unmerged work.
 ## Failure
 
 If an agent becomes stuck:
+
 - preserve its branch/worktree;
 - inspect its changes;
 - do not destroy its work to unblock another agent;
