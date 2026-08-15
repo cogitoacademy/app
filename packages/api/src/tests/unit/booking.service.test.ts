@@ -4421,9 +4421,7 @@ describe("retryFailedMeetings", () => {
   test("schedules the booking and notifies when meeting creation succeeds", async () => {
     const { service, repo, notification, meeting } = createService({
       repo: {
-        findConfirmedMeetingsPendingRetry: mock(async () => [
-          confirmedBooking,
-        ]),
+        findConfirmedMeetingsPendingRetry: mock(async () => [confirmedBooking]),
         findBookingById: mock(async () => confirmedBooking),
         findConfirmedParticipants: mock(async () => [
           {

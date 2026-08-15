@@ -775,8 +775,8 @@ export function createBookingService(deps: {
         });
 
         try {
-          const result = await finalizeMeetingSchedule(tx, b, tutorId);
-          updated = result.booking;
+          const finalize = await finalizeMeetingSchedule(tx, b, tutorId);
+          updated = finalize.booking;
         } catch (error) {
           log({
             level: "error",
@@ -2419,16 +2419,11 @@ export function createBookingService(deps: {
         };
       }
 
-      const updated = await transition(
-        tx,
-        bookingId,
-        BOOKING_STATE.SCHEDULED,
-        {
-          actorId: tutorId,
-          actorType: ACTOR_TYPE.TUTOR,
-          reason: "Meeting created automatically",
-        },
-      );
+      const updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+        actorId: tutorId,
+        actorType: ACTOR_TYPE.TUTOR,
+        reason: "Meeting created automatically",
+      });
 
       await repo.updateBookingDeadline(
         tx,

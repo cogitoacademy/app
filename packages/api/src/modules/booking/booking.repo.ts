@@ -660,7 +660,8 @@ async function findConfirmedMeetingsPendingRetry(
     .limit(limit);
 }
 
-async function findTutorParticipant(  conn: DbOrTx,
+async function findTutorParticipant(
+  conn: DbOrTx,
   bookingId: string,
 ): Promise<typeof bookingParticipant.$inferSelect | null> {
   const [participant] = await conn

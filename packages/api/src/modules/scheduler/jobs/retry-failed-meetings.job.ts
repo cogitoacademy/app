@@ -9,9 +9,7 @@ const REPEAT_INTERVAL_MS = 5 * 60 * 1000;
  *
  * @param queue - the BullMQ queue to register the repeatable job on
  */
-export async function scheduleRetryFailedMeetings(
-  queue: Queue,
-): Promise<void> {
+export async function scheduleRetryFailedMeetings(queue: Queue): Promise<void> {
   await queue.upsertJobScheduler(
     JOB_NAME,
     { every: REPEAT_INTERVAL_MS },
