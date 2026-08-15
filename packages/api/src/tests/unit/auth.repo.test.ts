@@ -23,6 +23,38 @@ function makeInsertConn(returned: any[] = [{}]) {
   return { insert, values, returning };
 }
 
+function makeSearchConn(rows: any[] = []) {
+  const limit = mock(async () => rows);
+  const where = mock(() => ({ limit }));
+  const from = mock(() => ({ where }));
+  const select = mock(() => ({ from }));
+  return { select, from, where, limit };
+}
+
+function collectSqlStrings(node: unknown): string[] {
+  const out: string[] = [];
+  const seen = new Set<object>();
+  const walk = (value: unknown) => {
+    if (value == null || typeof value === "function") return;
+    if (typeof value === "string") {
+      out.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+    if (typeof value === "object") {
+      if (seen.has(value)) return;
+      seen.add(value);
+      for (const key of Object.keys(value))
+        walk((value as Record<string, unknown>)[key]);
+    }
+  };
+  walk(node);
+  return out;
+}
+
 const repo = createAuthRepo();
 
 describe("getStudentProfile", () => {
@@ -111,6 +143,56 @@ describe("createProfile", () => {
       userId: "u3",
       schoolName: "HS",
     });
+  });
+});
+
+describe("searchStudents", () => {
+  test("returns matching rows and passes query, exclusion and limit", async () => {
+    const rows = [
+      { id: "s1", name: "Alice", email: "alice@x.com" },
+      { id: "s2", name: "Bob", email: "bob@x.com" },
+    ];
+    const conn = makeSearchConn(rows) as any;
+
+    const result = await repo.searchStudents(conn, "al", "me", 5);
+
+    expect(result).toEqual(rows);
+    expect(conn.select).toHaveBeenCalledTimes(1);
+    expect(conn.from).toHaveBeenCalledTimes(1);
+    expect(conn.where).toHaveBeenCalledTimes(1);
+    expect(conn.limit).toHaveBeenCalledWith(5);
+  });
+
+  test("filters by name or email, student role, and excludes the requester", async () => {
+    const conn = makeSearchConn() as any;
+
+    await repo.searchStudents(conn, "ada", "u1", 3);
+
+    const whereArg = conn.where.mock.calls[0][0];
+    const sql = collectSqlStrings(
+      (whereArg as { queryChunks?: unknown[] }).queryChunks,
+    ).join(" ");
+    expect(sql).toContain("name");
+    expect(sql).toContain("email");
+    expect(sql).toContain("%ada%");
+    expect(sql).toContain("student");
+    expect(sql).toContain("u1");
+  });
+
+  test("passes a wildcard-heavy query through without escaping it away", async () => {
+    const conn = makeSearchConn([
+      { id: "s1", name: "A", email: "a@x.com" },
+    ]) as any;
+
+    const result = await repo.searchStudents(conn, "%", "u1", 10);
+
+    expect(result).toHaveLength(1);
+    const whereArg = conn.where.mock.calls[0][0];
+    const sql = collectSqlStrings(
+      (whereArg as { queryChunks?: unknown[] }).queryChunks,
+    ).join(" ");
+    expect(sql).toContain("%");
+    expect(conn.limit).toHaveBeenCalledWith(10);
   });
 });
 
