@@ -7,6 +7,7 @@ import {
   insertDispatch,
   updateDispatchStatusById,
   listPendingDispatches,
+  claimPendingDispatches,
   incrementDispatchAttempts,
   findNotificationById,
   listNotifications,
@@ -164,6 +165,24 @@ describe("listPendingDispatches", () => {
     expect(where).toHaveBeenCalledTimes(1);
     expect(orderBy).toHaveBeenCalledTimes(1);
     expect(limit).toHaveBeenCalledWith(25);
+  });
+});
+
+describe("claimPendingDispatches", () => {
+  test("conditionally claims rows by setting status to sending (M14)", async () => {
+    const claimed = [{ id: "d1", status: "sending" }];
+    const returning = mock(async () => claimed);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const updateFn = mock(() => ({ set }));
+    const conn = { update: updateFn } as any;
+
+    const result = await claimPendingDispatches(conn, 10);
+
+    expect(result).toEqual(claimed);
+    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith({ status: "sending" });
+    expect(where).toHaveBeenCalledTimes(1);
   });
 });
 

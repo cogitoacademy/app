@@ -33,6 +33,7 @@ import {
   ONBOARDING_STATUS,
   LATENESS_TOLERANCE_MS,
   MODALITY,
+  MAX_MEETING_RETRY_ATTEMPTS,
 } from "../../shared/constants";
 import { BOOKING_STATE } from "./booking-state.types";
 
@@ -614,8 +615,6 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
     )
     .limit(100);
 }
-
-const MAX_MEETING_RETRY_ATTEMPTS = 3;
 
 /**
  * Finds confirmed online bookings whose Google Meet creation failed, for the

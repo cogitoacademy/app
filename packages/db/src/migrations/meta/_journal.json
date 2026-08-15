@@ -127,6 +127,13 @@
       "when": 1786831000000,
       "tag": "0017_invite_token_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786832000000,
+      "tag": "0018_dispatch_sending_state",
+      "breakpoints": true
     }
   ]
 }

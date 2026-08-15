@@ -174,6 +174,31 @@ export async function listPendingDispatches(conn: DbOrTx, limit = 50) {
 }
 
 /**
+ * Atomically claims dispatch rows for delivery: moves queued/failed rows to
+ * `sending` so a concurrent consumer can never process the same row (M14).
+ * Stale `sending` rows (crashed workers) older than 10 minutes are reclaimed.
+ *
+ * @param conn - the database connection or active transaction
+ * @param limit - the maximum number of rows to claim
+ * @returns the claimed dispatch rows
+ */
+export async function claimPendingDispatches(conn: DbOrTx, limit = 50) {
+  return conn
+    .update(notificationDispatch)
+    .set({ status: "sending" })
+    .where(
+      sql`${notificationDispatch.id} IN (
+        SELECT id FROM notification_dispatch
+        WHERE status IN ('queued', 'failed') AND attempts < ${MAX_DISPATCH_ATTEMPTS}
+           OR (status = 'sending' AND created_at < now() - interval '10 minutes')
+        ORDER BY created_at
+        LIMIT ${limit}
+      )`,
+    )
+    .returning();
+}
+
+/**
  * Increments a dispatch row's attempt counter and records the last error.
  *
  * @param conn - the database connection or active transaction
@@ -313,6 +338,7 @@ export function createNotificationRepo(db: DbType) {
     insertDispatch,
     updateDispatchStatusById,
     listPendingDispatches,
+    claimPendingDispatches,
     incrementDispatchAttempts,
     findNotificationById,
     listNotifications: (

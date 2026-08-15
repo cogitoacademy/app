@@ -71,7 +71,7 @@ export const notificationDispatch = pgTable(
     check("dispatch_channel_check", sql`${table.channel} IN ('email')`),
     check(
       "dispatch_status_check",
-      sql`${table.status} IN ('queued','sent','failed','suppressed')`,
+      sql`${table.status} IN ('queued','sending','sent','failed','suppressed')`,
     ),
     index("dispatch_notificationId_idx").on(table.notificationId),
     index("dispatch_status_idx").on(table.status),

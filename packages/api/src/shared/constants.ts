@@ -1,5 +1,7 @@
 export const INVITE_EXPIRY_DAYS = 7;
 
+export const MAX_MEETING_RETRY_ATTEMPTS = 3;
+
 export const KNOWLEDGE_BANK_THRESHOLD = 35;
 
 export const RESPONSE_WINDOW_MS = 12 * 60 * 60 * 1000;
