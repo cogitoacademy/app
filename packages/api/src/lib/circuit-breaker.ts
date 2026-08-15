@@ -1,5 +1,6 @@
 import { serviceUnavailable } from "./errors";
 import { COGITO_NS } from "./redis";
+import { logRedisFallback } from "./redis";
 import type { RedisClient } from "./redis";
 
 export type CircuitState = "closed" | "open" | "half-open";
@@ -61,8 +62,8 @@ export class CircuitBreaker {
         this.lastFailureTime = parseInt(data.lastFailureTime ?? "0", 10);
         this.halfOpenAttempts = parseInt(data.halfOpenAttempts ?? "0", 10);
       }
-    } catch {
-      // use in-memory state
+    } catch (error) {
+      logRedisFallback("circuit-breaker.loadState", error);
     }
   }
 
@@ -80,8 +81,8 @@ export class CircuitBreaker {
         this.redisKey,
         Math.ceil(this.options.resetTimeoutMs / 1000) * 2,
       );
-    } catch {
-      // best effort
+    } catch (error) {
+      logRedisFallback("circuit-breaker.saveState", error);
     }
   }
 

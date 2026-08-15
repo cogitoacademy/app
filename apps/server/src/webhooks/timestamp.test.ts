@@ -1,33 +1,8 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-
-const originalEnv = process.env.NODE_ENV;
+import { describe, test, expect } from "bun:test";
+import { validateWebhookTimestamp } from "./payments";
 
 describe("validateWebhookTimestamp", () => {
-  beforeEach(() => {
-    process.env.NODE_ENV = "test";
-  });
-
-  afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  function validateWebhookTimestamp(request: Request): void {
-    const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
-    const timestamp =
-      request.headers.get("x-timestamp") ?? request.headers.get("date");
-    if (!timestamp) {
-      throw new Error("Webhook timestamp header is required");
-    }
-    const webhookTime = new Date(timestamp).getTime();
-    if (Number.isNaN(webhookTime)) {
-      throw new Error("Invalid webhook timestamp");
-    }
-    if (Math.abs(Date.now() - webhookTime) > MAX_WEBHOOK_AGE_MS) {
-      throw new Error("Webhook timestamp too old or too far in the future");
-    }
-  }
-
-  test("throws when timestamp header is missing in test env", () => {
+  test("throws when timestamp header is missing", () => {
     const request = new Request(
       "https://example.com/webhooks/payments/xendit",
       {
@@ -39,7 +14,7 @@ describe("validateWebhookTimestamp", () => {
     );
   });
 
-  test("throws when timestamp is invalid in test env", () => {
+  test("throws when timestamp is invalid", () => {
     const request = new Request(
       "https://example.com/webhooks/payments/xendit",
       {
@@ -52,7 +27,7 @@ describe("validateWebhookTimestamp", () => {
     );
   });
 
-  test("throws when timestamp is stale in test env", () => {
+  test("throws when timestamp is stale", () => {
     const staleTime = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const request = new Request(
       "https://example.com/webhooks/payments/xendit",
@@ -66,7 +41,7 @@ describe("validateWebhookTimestamp", () => {
     );
   });
 
-  test("accepts a valid recent timestamp in test env", () => {
+  test("accepts a valid recent timestamp", () => {
     const recentTime = new Date().toISOString();
     const request = new Request(
       "https://example.com/webhooks/payments/xendit",

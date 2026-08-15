@@ -86,6 +86,15 @@ export class OptimisticLockError extends DomainError {
   }
 }
 
+export class InvalidDateRangeError extends DomainError {
+  readonly domain = "tutor";
+  constructor(field: string) {
+    super("INVALID_DATE_RANGE", `${field} must be a valid ISO datetime`, {
+      field,
+    });
+  }
+}
+
 export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof TutorProfileNotFoundError)
     return notFound(err.message, err);
@@ -101,5 +110,6 @@ export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof InvalidTutorPricingError)
     return badRequest(err.message, err);
   if (err instanceof OptimisticLockError) return conflict(err.message, err);
+  if (err instanceof InvalidDateRangeError) return badRequest(err.message, err);
   return internalServerError(err.message, err);
 }

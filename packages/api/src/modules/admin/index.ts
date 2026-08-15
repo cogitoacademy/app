@@ -11,6 +11,7 @@ import { createAdminService } from "./admin.service";
 import { createAdminHandler } from "./admin.handler";
 import type { AdminService } from "./admin.service";
 import type { AdminHandler } from "./admin.handler";
+import type { BookingPayoutPort } from "../booking";
 
 export type AdminModule = ReturnType<typeof createAdminModule>;
 
@@ -30,6 +31,7 @@ export function createAdminModule(deps: {
   db: DbType;
   audit: AdminAuditPort;
   wallet: AdminWalletPort;
+  payout: BookingPayoutPort;
 }) {
   const repo = createAdminRepo();
   const service = createAdminService({
@@ -37,6 +39,7 @@ export function createAdminModule(deps: {
     auditPort: deps.audit,
     db: deps.db,
     wallet: deps.wallet,
+    payout: deps.payout,
   });
   const handler = createAdminHandler(service);
   return { service, handler };

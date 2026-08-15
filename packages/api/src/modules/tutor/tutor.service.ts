@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import { lockTutorForBooking } from "../../lib/locks";
 import {
   ONBOARDING_STATUS,
   MODALITY,
@@ -7,6 +8,7 @@ import {
 import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
 import type { TutorAuditPort, TutorPricingPort } from "./index";
+import type { BookingPayoutPort } from "../booking";
 import {
   TutorProfileNotFoundError,
   TutorProfileNotEditableError,
@@ -15,6 +17,7 @@ import {
   TutorProfileIncompleteError,
   InvalidTutorPricingError,
   OptimisticLockError,
+  InvalidDateRangeError,
   WeeklyAvailabilityRangeError,
 } from "./tutor.errors";
 
@@ -127,8 +130,9 @@ export function createTutorService(deps: {
   pricingPort: TutorPricingPort;
   auditPort: TutorAuditPort;
   db: DbType;
+  payout: BookingPayoutPort;
 }) {
-  const { tutorRepo, pricingPort, auditPort, db } = deps;
+  const { tutorRepo, pricingPort, auditPort, db, payout } = deps;
 
   /**
    * Fetches the tutor profile for the requesting user.
@@ -231,21 +235,34 @@ export function createTutorService(deps: {
     const start = input.startDate;
     const end = input.endDate;
 
-    const existing = await tutorRepo.listAvailability(db, userId, {
-      from: new Date(),
-    });
-    const overlapping = existing.find((slot) => {
-      if (input.id && slot.id === input.id) return false;
-      return start < slot.endDate && end > slot.startDate;
-    });
-    if (overlapping) {
-      throw new AvailabilitySlotOverlapError(userId);
-    }
+    return db.transaction(async (tx) => {
+      // Serialize overlap checks per tutor so concurrent upserts cannot create
+      // overlapping slots (L6).
+      await lockTutorForBooking(tx, userId);
 
-    return tutorRepo.upsertAvailability(db, userId, {
-      ...input,
-      startDate: start,
-      endDate: end,
+      const existing = await tutorRepo.listAvailability(tx, userId, {
+        from: new Date(),
+      });
+      const overlapping = existing.find((slot) => {
+        if (input.id && slot.id === input.id) return false;
+        return start < slot.endDate && end > slot.startDate;
+      });
+      if (overlapping) {
+        throw new AvailabilitySlotOverlapError(userId);
+      }
+
+      const updated = await tutorRepo.upsertAvailability(tx, userId, {
+        ...input,
+        startDate: start,
+        endDate: end,
+      });
+      // Ownership is enforced in the repo UPDATE via the tutorId predicate;
+      // an update that matched no row means the slot does not belong to this
+      // tutor (H1).
+      if (input.id && !updated) {
+        throw new TutorProfileNotFoundError(userId);
+      }
+      return updated;
     });
   }
 
@@ -277,6 +294,7 @@ export function createTutorService(deps: {
     }
 
     return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, userId);
       const existing = await tutorRepo.listAvailability(tx, userId);
       const overlaps = occurrences.some((occurrence, occurrenceIndex) => {
         const overlapsExisting = existing.some(
@@ -309,7 +327,6 @@ export function createTutorService(deps: {
       );
     });
   }
-
   /**
    * Deactivates an availability slot (soft delete) if it belongs to the tutor.
    *
@@ -326,6 +343,23 @@ export function createTutorService(deps: {
     await tutorRepo.deleteAvailability(db, slotId);
   }
 
+  async function getMyPayouts(
+    userId: string,
+    input: { dateFrom?: string; dateTo?: string },
+  ) {
+    if (input.dateFrom && Number.isNaN(Date.parse(input.dateFrom))) {
+      throw new InvalidDateRangeError("dateFrom");
+    }
+    if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
+      throw new InvalidDateRangeError("dateTo");
+    }
+    return payout.getTutorPayouts({
+      tutorId: userId,
+      dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+      dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+    });
+  }
+
   return {
     getMyProfile,
     updateMyProfile,
@@ -334,6 +368,7 @@ export function createTutorService(deps: {
     upsertAvailability,
     createWeeklyAvailability,
     deleteAvailability,
+    getMyPayouts,
   };
 }
 

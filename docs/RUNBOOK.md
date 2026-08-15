@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-12
+Last updated: 2026-08-14
 
 ## Starting the Server
 
@@ -26,9 +26,11 @@ The server runs on port 3001 by default (configurable via `PORT` env var).
 ### Start PostgreSQL (Docker)
 
 ```bash
-bun run db:start         # Starts PostgreSQL on port 6767
-bun run db:start:test    # Starts isolated test PostgreSQL on port 6768
+bun run db:start         # Starts PostgreSQL (dev DB cogito-app) on port 6767
+bun run db:test          # Starts isolated test PostgreSQL + Redis (docker-compose.test.yml) on port 6767
 ```
+
+> Note: the dev and test PostgreSQL containers both map host port 6767 — do not run `db:start` and `db:test` simultaneously. `db:test` uses `docker-compose.test.yml` (repo root) and the test harness targets `cogito-test` via `apps/server/.env.test(.example)`.
 
 ### Run Migrations
 
@@ -43,10 +45,10 @@ using `apps/server/.env.test` or `apps/server/.env.test.example`.
 ### Seed the Database
 
 ```bash
-bun run db:seed          # Seeds mark packages and test data
+bun run seed-packages          # Seeds mark packages and test data
 ```
 
-Production guard: `NODE_ENV=production bun run db:seed` will exit with error.
+Production guard: `NODE_ENV=production bun run seed-packages` will exit with error.
 
 ### Reset the Database
 
@@ -55,14 +57,14 @@ Production guard: `NODE_ENV=production bun run db:seed` will exit with error.
 docker compose down -v
 bun run db:start
 bun run db:migrate
-bun run db:seed
+bun run seed-packages
 ```
 
 Test database reset:
 
 ```bash
-bun run db:down:test
-bun run db:start:test
+docker compose -f docker-compose.test.yml down -v
+bun run db:test
 ```
 
 ### Drizzle Studio (Database GUI)
@@ -84,15 +86,10 @@ redis-cli info server    # Server info
 
 ```bash
 curl http://localhost:3001/health
-# Returns: { "status": "ok", "db": "ok", "redis": "ok" }
+# Returns: { "status": "ok", "checks": { "database": "ok", "redis": "ok" }, "timestamp": "..." }
 ```
 
-If Redis is unavailable, the app degrades gracefully:
-
-- Sessions fall back to database lookup
-- Rate limiting uses in-memory store
-- Circuit breaker state resets on restart
-- BullMQ jobs error but app starts
+Redis is **mandatory** (`REDIS_URL` is required — the server won't boot without it). The in-memory stores are defensive fallbacks only when a configured Redis call fails at runtime; they are per-process and degrade cross-instance guarantees.
 
 ### Clear Rate Limit Keys
 
@@ -151,7 +148,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 ### Database Connection Errors
 
 - `ECONNREFUSED` — PostgreSQL not running. Run `bun run db:start`.
-- `ECONNREFUSED` during tests — Start the isolated test DB with `bun run db:start:test`.
+- `ECONNREFUSED` during tests — Start the isolated test DB with `bun run db:test`.
 - `connection timeout` — Check `DATABASE_URL` in `.env`.
 
 ### Test Safety Guard
@@ -161,45 +158,40 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ### Redis Connection Errors
 
-- `ECONNREFUSED` — Redis not running. Start Redis or set `REDIS_URL` to empty for in-memory fallback.
-- App starts without Redis but with degraded features (see above).
+- `ECONNREFUSED` — Redis not running. Start it (`bun run db:start` brings up postgres + redis). Redis is required; the server fails fast on env validation if `REDIS_URL` is missing.
 
 ## Rollback a Deployment
 
-1. SSH into the server
-2. Find the current deployment: `docker ps | grep cogito`
-3. Roll back to previous image:
-   ```bash
-   docker tag cogito-app:previous cogito-app:rollback
-   docker stop cogito-app-container
-   docker run -d --name cogito-app-container cogito-app:rollback
-   ```
-4. Verify health: `curl http://localhost:3001/health`
-5. If database migration was part of the deployment, check migration status:
+Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/app/{server,web}`). Rollback is done in Coolify:
+
+1. Open the Coolify dashboard → the service (server / web)
+2. Use **Rollback to previous release** (Coolify keeps the previous image/version)
+3. Verify health: `curl https://cogitoacademy.id/health`
+4. If a database migration was part of the deployment, check migration status:
    ```bash
    bun run db:studio  # Check migration table
    ```
-6. Roll back migrations if needed (rare — coordinate with DBA)
+5. Roll back migrations if needed (rare — coordinate with DBA)
 
 ## Environment Variables
 
 Key environment variables (see `.env.example` for full list):
 
-| Variable                 | Required | Description                             |
-| ------------------------ | -------- | --------------------------------------- |
-| `DATABASE_URL`           | Yes      | PostgreSQL connection string            |
-| `BETTER_AUTH_SECRET`     | Yes      | Auth secret key                         |
-| `BETTER_AUTH_URL`        | Yes      | Base URL for auth cookies               |
-| `CORS_ORIGIN`            | Yes      | Allowed CORS origin                     |
-| `PAYMENT_WEBHOOK_SECRET` | Yes      | Xendit webhook verification token       |
-| `REDIS_URL`              | No       | Redis URL (falls back to in-memory)     |
-| `GOOGLE_CLIENT_EMAIL`    | No       | Google service account email            |
-| `GOOGLE_PRIVATE_KEY`     | No       | Google service account private key      |
-| `GOOGLE_CALENDAR_ID`     | No       | Google Calendar ID for meeting creation |
-| `RESEND_API_KEY`         | No       | Resend API key for email delivery       |
-| `RESEND_FROM_EMAIL`      | No       | Sender email address                    |
-| `XENDIT_SECRET_KEY`      | No       | Xendit API secret key                   |
-| `XENDIT_WEBHOOK_TOKEN`   | No       | Xendit webhook verification token       |
+| Variable                 | Required | Description                                         |
+| ------------------------ | -------- | --------------------------------------------------- |
+| `DATABASE_URL`           | Yes      | PostgreSQL connection string                        |
+| `BETTER_AUTH_SECRET`     | Yes      | Auth secret key                                     |
+| `BETTER_AUTH_URL`        | Yes      | Base URL for auth cookies                           |
+| `CORS_ORIGIN`            | Yes      | Allowed CORS origin                                 |
+| `PAYMENT_WEBHOOK_SECRET` | Yes      | Xendit webhook verification token                   |
+| `REDIS_URL`              | Yes      | Redis URL (required since #48 — mandatory for boot) |
+| `GOOGLE_CLIENT_EMAIL`    | No       | Google service account email                        |
+| `GOOGLE_PRIVATE_KEY`     | No       | Google service account private key                  |
+| `GOOGLE_CALENDAR_ID`     | No       | Google Calendar ID for meeting creation             |
+| `RESEND_API_KEY`         | No       | Resend API key for email delivery                   |
+| `RESEND_FROM_EMAIL`      | No       | Sender email address                                |
+| `XENDIT_SECRET_KEY`      | No       | Xendit API secret key                               |
+| `XENDIT_WEBHOOK_TOKEN`   | No       | Xendit webhook verification token                   |
 
 ## Test Environment
 
@@ -219,4 +211,19 @@ Default local test ports:
 
 - Web: `3100`
 - Server: `3101`
-- PostgreSQL: `6768`
+- PostgreSQL: `6767` (test container; shared with dev container — see note above)
+
+## GHCR / Docker Deploy (CD)
+
+The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
+
+If a push fails with `denied: installation not allowed to Create organization package`:
+
+1. **Workflow permission (code, already fixed):** the job must declare `permissions: { contents: read, packages: write }` so the `GITHUB_TOKEN` can write to GHCR.
+2. **Org-level (requires an org admin):** the `cogitoacademy` org must allow GitHub Actions to create packages. Either enable it in **Org Settings → Actions → General → Workflow permissions → "Read and write permissions"** (with "Allow GitHub Actions to create and approve pull requests" as needed), or initialize the packages once by pushing any image under `ghcr.io/cogitoacademy/app/{server,web}` with an org member account:
+   ```bash
+   docker pull oven/bun:1.3.14
+   docker tag oven/bun:1.3.14 ghcr.io/cogitoacademy/app/server:init
+   docker push ghcr.io/cogitoacademy/app/server:init   # repeat for /web
+   ```
+   After the packages exist, the workflows push without org changes.

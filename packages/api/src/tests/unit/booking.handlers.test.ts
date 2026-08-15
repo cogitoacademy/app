@@ -494,18 +494,18 @@ describe("tutorActionsHandler", () => {
   });
 
   describe("completeSession", () => {
-    test("calls booking.completeSession with bookingId and session user id", async () => {
+    test("calls booking.completeSession with bookingId, session user id, and optional sessionId", async () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
       const context = makeContext("t1");
-      const input = { bookingId: "b1", sessionNote: "Great session" };
+      const input = { bookingId: "b1", sessionId: "s1" };
 
       const result = await handler.completeSession({
         context: context as any,
         input: input as any,
       });
 
-      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1");
+      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1", "s1");
       expect(result).toEqual({ id: "b1", currentState: "completed" });
     });
   });

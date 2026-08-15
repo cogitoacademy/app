@@ -2,12 +2,15 @@ import { timingSafeEqual } from "crypto";
 import { createContext } from "@cogito-app/api/context";
 import { appRouter } from "@cogito-app/api/routers";
 import { rateLimit } from "@cogito-app/api/lib/rate-limit";
+import type { RateLimitResult } from "@cogito-app/api/lib/rate-limit";
 import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
+import { MAX_UPLOAD_BYTES } from "@cogito-app/api/modules/upload/upload.types";
 import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth } from "@cogito-app/auth";
 import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
+import { matchAuthPath, matchRateLimitPath } from "./rate-limit-paths";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
@@ -21,7 +24,13 @@ import { evlog } from "evlog/elysia";
 
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
 import { enrichOpenAPISpec, openApiTags, scalarHtml } from "./openapi";
-import { generateRequestId } from "@cogito-app/api/lib/request-id";
+import {
+  generateRequestId,
+  getClientIp,
+  isValidUploadKey,
+  openApiAccessDenied,
+  readBodyWithLimit,
+} from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { healthCheck } from "@cogito-app/api/lib/db-health";
 
@@ -37,6 +46,24 @@ const paymentRateLimit = rateLimit({
   windowMs: 60_000,
   maxRequests: 5,
   keyPrefix: "payment",
+  redis,
+});
+const inviteRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 10,
+  keyPrefix: "invite",
+  redis,
+});
+const bookingRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "booking",
+  redis,
+});
+const searchRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "search",
   redis,
 });
 
@@ -163,18 +190,12 @@ export function createServer() {
         );
       }
     })
-    .onRequest(async ({ request }) => {
+    .onRequest(async ({ request, server }) => {
       const url = new URL(request.url);
       const path = url.pathname;
-      const ip =
-        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        request.headers.get("x-real-ip") ??
-        "unknown";
+      const ip = getClientIp(request, env.TRUST_PROXY, server ?? undefined);
 
-      if (
-        path.startsWith("/api/auth/sign-in/") ||
-        path.startsWith("/api/auth/sign-up/")
-      ) {
+      if (matchAuthPath(path)) {
         const { allowed, retryAfterMs } = await authRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
@@ -187,8 +208,15 @@ export function createServer() {
         }
       }
 
-      if (path === "/rpc/payment.createPurchase") {
-        const { allowed, retryAfterMs } = await paymentRateLimit(ip);
+      const rateLimitKind = matchRateLimitPath(path);
+      let limiter: ((ip: string) => Promise<RateLimitResult>) | null = null;
+      if (rateLimitKind === "payment") limiter = paymentRateLimit;
+      else if (rateLimitKind === "invite") limiter = inviteRateLimit;
+      else if (rateLimitKind === "booking") limiter = bookingRateLimit;
+      else if (rateLimitKind === "search") limiter = searchRateLimit;
+
+      if (limiter) {
+        const { allowed, retryAfterMs } = await limiter(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
             status: 429,
@@ -200,23 +228,68 @@ export function createServer() {
         }
       }
     })
-    .all("/api/auth/*", async (context) => {
-      const { request, status } = context;
-      if (["POST", "GET"].includes(request.method)) {
-        return auth.handler(request);
-      }
-      return status(405);
-    })
+    .all(
+      "/api/auth/*",
+      async (context) => {
+        const { request, status } = context;
+        if (["POST", "GET"].includes(request.method)) {
+          if (request.method === "POST") {
+            const { body, tooLarge } = await readBodyWithLimit(
+              request,
+              MAX_BODY_BYTES,
+            );
+            if (tooLarge) {
+              return new Response(
+                JSON.stringify({ error: "Request body too large" }),
+                {
+                  status: 413,
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+            }
+            const bounded = new Request(request.url, {
+              method: request.method,
+              headers: request.headers,
+              body,
+            });
+            return auth.handler(bounded);
+          }
+          return auth.handler(request);
+        }
+        return status(405);
+      },
+      { parse: "none" },
+    )
     .all(
       "/rpc*",
       async (context) => {
+        const { body, tooLarge } = await readBodyWithLimit(
+          context.request,
+          MAX_BODY_BYTES,
+        );
+        if (tooLarge) {
+          return new Response(
+            JSON.stringify({ error: "Request body too large" }),
+            {
+              status: 413,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+        const request = body
+          ? new Request(context.request.url, {
+              method: context.request.method,
+              headers: context.request.headers,
+              body,
+            })
+          : context.request;
         const ctx = await createContext({ context });
         if (ctx.session) {
           identifyUserFromSession(context.log, ctx.session, {
             maskEmail: true,
           });
         }
-        const { response } = await rpcHandler.handle(context.request, {
+        const { response } = await rpcHandler.handle(request, {
           prefix: "/rpc",
           context: ctx,
         });
@@ -224,14 +297,77 @@ export function createServer() {
       },
       { parse: "none" },
     )
+    .get("/uploads/*", async ({ params, set }) => {
+      if (env.R2_PUBLIC_URL) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      const key = (params["*"] as string) ?? "";
+      if (!isValidUploadKey(key)) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      const file = Bun.file(`${env.UPLOAD_DIR}/${key}`);
+      if (!(await file.exists())) {
+        set.status = 404;
+        return { error: "Not found" };
+      }
+      return new Response(file);
+    })
+    .post(
+      "/uploads/*",
+      async ({ params, set, request }) => {
+        // Local-mode upload sink (dev only, when R2 is not configured). The
+        // browser uploads to this authenticated, size-bounded route instead of a
+        // presigned URL. Requires a session so uploads cannot be abused (M9).
+        if (env.R2_PUBLIC_URL) {
+          set.status = 404;
+          return { error: "Not found" };
+        }
+        const key = (params["*"] as string) ?? "";
+        if (!isValidUploadKey(key)) {
+          set.status = 404;
+          return { error: "Not found" };
+        }
+        const session = await auth.api.getSession({
+          headers: request.headers,
+        });
+        if (!session?.user) {
+          set.status = 401;
+          return { error: "Unauthorized" };
+        }
+        if (!key.startsWith(`${session.user.id}/`)) {
+          set.status = 403;
+          return { error: "Forbidden" };
+        }
+        const { body, tooLarge } = await readBodyWithLimit(
+          request,
+          MAX_UPLOAD_BYTES,
+        );
+        if (tooLarge) {
+          set.status = 413;
+          return { error: "Request body too large" };
+        }
+        const filePath = `${env.UPLOAD_DIR}/${key}`;
+        await Bun.write(filePath, body);
+        return { ok: true, key };
+      },
+      { parse: "none" },
+    )
     .get("/openapi.json", async ({ request }) => {
-      if (env.NODE_ENV === "production")
-        return new Response("Not Found", { status: 404 });
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+      if (denied) return denied;
       return Response.json(await generateOpenAPISpec(request));
     })
-    .get("/api-reference", () => {
-      if (env.NODE_ENV === "production")
-        return new Response("Not Found", { status: 404 });
+    .get("/api-reference", async ({ request }) => {
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+      if (denied) return denied;
       return new Response(scalarHtml(), {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
@@ -239,6 +375,11 @@ export function createServer() {
     .all(
       "/api-reference*",
       async (context) => {
+        const session = await auth.api.getSession({
+          headers: context.request.headers,
+        });
+        const denied = openApiAccessDenied(env.NODE_ENV, !!session);
+        if (denied) return denied;
         const ctx = await createContext({ context });
         if (ctx.session) {
           identifyUserFromSession(context.log, ctx.session, {

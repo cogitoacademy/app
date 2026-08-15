@@ -1,5 +1,6 @@
 import { COGITO_NS } from "./redis";
 import type { RedisClient } from "./redis";
+import { logRedisFallback } from "./redis";
 
 export interface IdempotencyStoreOptions {
   prefix?: string;
@@ -32,8 +33,8 @@ export class IdempotencyStore {
       try {
         const exists = await this.redis.exists(redisKey);
         if (exists) return true;
-      } catch {
-        // fall through to in-memory
+      } catch (error) {
+        logRedisFallback("idempotency.isProcessed", error);
       }
     }
     this.maybeCleanup();
@@ -57,12 +58,50 @@ export class IdempotencyStore {
           value: ttlSeconds,
         });
         return;
-      } catch {
-        // fall through to in-memory
+      } catch (error) {
+        logRedisFallback("idempotency.markProcessed", error);
       }
     }
     this.evictOldest();
     this.store.set(key, { result, timestamp: Date.now() });
+  }
+
+  async claim(key: string, ttlSeconds?: number): Promise<boolean> {
+    const redisKey = `${this.prefix}:${key}`;
+    const ttl = ttlSeconds ?? Math.ceil(this.maxAge / 1000);
+    if (this.redis) {
+      try {
+        const ok = await this.redis.set(
+          redisKey,
+          "pending",
+          { type: "NX" },
+          { type: "EX", value: ttl },
+        );
+        if (ok === "OK") return true;
+        const exists = await this.redis.exists(redisKey);
+        return !exists;
+      } catch (error) {
+        logRedisFallback("idempotency.claim", error);
+      }
+    }
+    this.maybeCleanup();
+    if (this.store.has(key)) return false;
+    this.evictOldest();
+    this.store.set(key, { result: "pending", timestamp: Date.now() });
+    return true;
+  }
+
+  async release(key: string): Promise<void> {
+    const redisKey = `${this.prefix}:${key}`;
+    if (this.redis) {
+      try {
+        await this.redis.del(redisKey);
+        return;
+      } catch (error) {
+        logRedisFallback("idempotency.release", error);
+      }
+    }
+    this.store.delete(key);
   }
 
   async getResult(key: string): Promise<unknown> {

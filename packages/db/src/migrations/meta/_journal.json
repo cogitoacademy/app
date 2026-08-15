@@ -113,6 +113,27 @@
       "when": 1786531636044,
       "tag": "0015_purple_random",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786758120544,
+      "tag": "0016_smart_magneto",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786831000000,
+      "tag": "0017_invite_token_hash",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786832000000,
+      "tag": "0018_dispatch_sending_state",
+      "breakpoints": true
     }
   ]
 }

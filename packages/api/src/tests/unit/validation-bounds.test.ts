@@ -4,6 +4,8 @@ import {
   createGroupInput,
   createSeriesInput,
   bookingActionInput,
+  cancelBookingInput,
+  declineBookingInput,
   declineInviteInput,
   proposeRescheduleInput,
   listMineInput,
@@ -139,6 +141,30 @@ describe("Validation bounds — string .max()", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0].message).toMatch(/<=2000/i);
+    }
+  });
+
+  test("M5: cancellationReason rejects >500 chars", () => {
+    const longReason = "a".repeat(501);
+    const result = cancelBookingInput.safeParse({
+      bookingId: "b1",
+      cancellationReason: longReason,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/<=500/i);
+    }
+  });
+
+  test("M5: tutor decline reason rejects >500 chars", () => {
+    const longReason = "a".repeat(501);
+    const result = declineBookingInput.safeParse({
+      bookingId: "b1",
+      reason: longReason,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/<=500/i);
     }
   });
 

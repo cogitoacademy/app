@@ -34,6 +34,9 @@ export function createResendEmailProvider(
           headers: {
             authorization: `Bearer ${apiKey}`,
             "content-type": "application/json",
+            ...(message.idempotencyKey
+              ? { "Idempotency-Key": `dispatch-${message.idempotencyKey}` }
+              : {}),
           },
           body: JSON.stringify({
             from: fromEmail,

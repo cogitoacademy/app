@@ -1,14 +1,15 @@
-import { z } from "zod";
-
 import { protectedProcedure, tutorProcedure } from "../../procedures";
 import {
   createSoloInput,
   createGroupInput,
   createSeriesInput,
+  createGroupSeriesInput,
   getBookingInput,
   listMineInput,
   listSessionsInput,
   bookingActionInput,
+  cancelBookingInput,
+  declineBookingInput,
   confirmInviteInput,
   declineInviteInput,
   reconfirmInput,
@@ -67,11 +68,7 @@ export function createBookingRouter(handler: BookingHandler) {
         summary: "Cancel booking",
         description: "Cancels a booking, releases held Marks if applicable",
       })
-      .input(
-        bookingActionInput.extend({
-          cancellationReason: z.string().optional(),
-        }),
-      )
+      .input(cancelBookingInput)
       .handler(handler.cancel),
 
     acceptReschedule: protectedProcedure
@@ -153,6 +150,18 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(createSeriesInput)
       .handler(handler.createSeries),
+
+    createGroupSeries: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/group-series/create",
+        tags: ["Bookings"],
+        summary: "Create a group series booking",
+        description:
+          "Creates a multi-session group series (FR-20): the proposer holds the full package up front and invitees accept the whole series",
+      })
+      .input(createGroupSeriesInput)
+      .handler(handler.createGroupSeries),
 
     confirmInvite: protectedProcedure
       .route({
@@ -255,11 +264,7 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
         summary: "Decline booking",
         description: "Tutor declines a booking and releases held Marks",
       })
-      .input(
-        bookingActionInput.extend({
-          reason: z.string().optional(),
-        }),
-      )
+      .input(declineBookingInput)
       .handler(handler.declineBooking),
 
     completeSession: tutorProcedure

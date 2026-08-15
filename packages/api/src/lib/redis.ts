@@ -193,6 +193,26 @@ export class InMemoryRedis implements RedisClient {
 
 let redisClient: RedisClient | null = null;
 
+/**
+ * Logs a Redis operation failure that fell back to the in-memory store.
+ *
+ * Emits a warn only when a real Redis client is configured (the in-memory
+ * fallback is the expected dev/CI path when REDIS_URL is unset). In
+ * multi-instance deployments this surfaces degraded cross-instance semantics
+ * (duplicate webhook processing, per-instance rate limits).
+ *
+ * @param service - the stateful service that fell back (e.g. "rate-limit")
+ * @param error - the Redis error that triggered the fallback
+ */
+export function logRedisFallback(service: string, error: unknown): void {
+  log({
+    level: "warn",
+    action: "redis_fallback",
+    message: `${service} fell back to in-memory store after a Redis error`,
+    error: { message: String(error) },
+  });
+}
+
 export function getRedisClient(): RedisClient {
   if (redisClient) return redisClient;
   redisClient = new InMemoryRedis();

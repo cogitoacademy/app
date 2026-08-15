@@ -8,6 +8,11 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Required so the GITHUB_TOKEN can push images to GHCR (the org must also
+    # allow Actions package creation).
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

@@ -67,6 +67,7 @@ describe("roomHandler", () => {
         "r1",
         startAt,
         endAt,
+        "u1",
       );
       expect(result).toEqual({
         id: "rb1",

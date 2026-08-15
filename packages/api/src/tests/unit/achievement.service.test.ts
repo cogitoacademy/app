@@ -1,12 +1,19 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, mock } from "bun:test";
 import {
   validateUpdate,
   validateDelete,
+  createAchievementService,
 } from "../../modules/achievement/achievement.service";
 import { AchievementNotEditableError } from "../../modules/achievement/achievement.errors";
 
 function makeAchievement(overrides: Partial<{ status: string }> = {}) {
   return { id: "a1", status: "pending", ...overrides } as any;
+}
+
+function makeDb() {
+  return {
+    transaction: mock(async (fn: any) => fn({})),
+  } as any;
 }
 
 describe("Achievement Service", () => {
@@ -53,6 +60,72 @@ describe("Achievement Service", () => {
       expect(() =>
         validateDelete(makeAchievement({ status: "approved" })),
       ).toThrow(AchievementNotEditableError);
+    });
+  });
+
+  describe("adminReview", () => {
+    test("escapes eventName in the notification body (R9)", async () => {
+      const notificationPort = {
+        writeBestEffort: mock(async () => {}),
+      };
+      const auditPort = { record: mock(async () => {}) };
+      const achievementRepo = {
+        getById: mock(async () => ({
+          id: "a1",
+          userId: "u1",
+          eventName: '<script>alert("xss")</script>',
+          status: "pending",
+        })),
+        updateStatus: mock(async () => ({ id: "a1" })),
+      };
+      const service = createAchievementService({
+        achievementRepo: achievementRepo as any,
+        auditPort: auditPort as any,
+        notificationPort: notificationPort as any,
+        db: makeDb() as any,
+      });
+
+      await service.adminReview("admin1", {
+        achievementId: "a1",
+        status: "approved",
+      });
+
+      expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(1);
+      const body = notificationPort.writeBestEffort.mock.calls[0][0].body;
+      expect(body).toContain("&lt;script&gt;");
+      expect(body).not.toContain("<script>");
+    });
+
+    test("escapes adminNote in the rejection body (R9)", async () => {
+      const notificationPort = {
+        writeBestEffort: mock(async () => {}),
+      };
+      const auditPort = { record: mock(async () => {}) };
+      const achievementRepo = {
+        getById: mock(async () => ({
+          id: "a1",
+          userId: "u1",
+          eventName: "Safe name",
+          status: "pending",
+        })),
+        updateStatus: mock(async () => ({ id: "a1" })),
+      };
+      const service = createAchievementService({
+        achievementRepo: achievementRepo as any,
+        auditPort: auditPort as any,
+        notificationPort: notificationPort as any,
+        db: makeDb() as any,
+      });
+
+      await service.adminReview("admin1", {
+        achievementId: "a1",
+        status: "rejected",
+        adminNote: "<img src=x onerror=alert(1)>",
+      });
+
+      const body = notificationPort.writeBestEffort.mock.calls[0][0].body;
+      expect(body).toContain("&lt;img");
+      expect(body).not.toContain("<img");
     });
   });
 });

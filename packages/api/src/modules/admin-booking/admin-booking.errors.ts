@@ -35,11 +35,20 @@ export class InvalidRefundStateError extends DomainError {
   }
 }
 
+export class BookingOverrideConflictError extends DomainError {
+  readonly domain = "admin-booking";
+  constructor(id: string) {
+    super("BOOKING_OVERRIDE_CONFLICT", "Booking changed concurrently", { id });
+  }
+}
+
 export function mapAdminBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
   if (err instanceof BookingNotFoundError) return notFound(err.message, err);
   if (err instanceof TerminalStateOverrideError)
+    return conflict(err.message, err);
+  if (err instanceof BookingOverrideConflictError)
     return conflict(err.message, err);
   if (err instanceof InvalidRefundStateError)
     return badRequest(err.message, err);

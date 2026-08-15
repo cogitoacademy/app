@@ -7,6 +7,7 @@ import type {
   createSoloInput,
   createGroupInput,
   createSeriesInput,
+  createGroupSeriesInput,
   getBookingInput,
   listMineInput,
   listSessionsInput,
@@ -26,6 +27,7 @@ import type { BookingService } from "./booking.service";
 type CreateSoloInput = z.infer<typeof createSoloInput>;
 type CreateGroupInput = z.infer<typeof createGroupInput>;
 type CreateSeriesInput = z.infer<typeof createSeriesInput>;
+type CreateGroupSeriesInput = z.infer<typeof createGroupSeriesInput>;
 type GetBookingInput = z.infer<typeof getBookingInput>;
 type ListMineInput = z.infer<typeof listMineInput>;
 type ListSessionsInput = z.infer<typeof listSessionsInput>;
@@ -241,6 +243,35 @@ export function createBookingHandler(booking: BookingService) {
       );
     },
 
+    createGroupSeries: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: CreateGroupSeriesInput;
+    }) => {
+      const headerKey = context.headers.get("idempotency-key");
+      const sessionsKey = input.sessions
+        .map((s) => s.scheduledStartAt.toISOString())
+        .join(",");
+      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${sessionsKey}:${input.inviteeUserIds.join(",")}:${headerKey ?? ""}`;
+      return bookingIdempotency.getOrSet(idempotencyKey, () =>
+        withDomainMap(
+          () =>
+            booking.createGroupSeries(context.session!.user.id, {
+              tutorId: input.tutorId,
+              availabilitySlotId: input.availabilitySlotId,
+              modality: input.modality,
+              targetGroupSize: input.targetGroupSize,
+              inviteeUserIds: input.inviteeUserIds,
+              sessions: input.sessions,
+              timezone: input.timezone,
+            }),
+          mapBookingError,
+        ),
+      );
+    },
+
     confirmInvite: async ({
       context,
       input,
@@ -398,7 +429,11 @@ export function createTutorActionsHandler(booking: BookingService) {
     }) => {
       return withDomainMap(
         () =>
-          booking.completeSession(input.bookingId, context.session!.user.id),
+          booking.completeSession(
+            input.bookingId,
+            context.session!.user.id,
+            input.sessionId,
+          ),
         mapBookingError,
       );
     },

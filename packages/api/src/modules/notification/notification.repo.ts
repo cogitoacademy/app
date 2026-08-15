@@ -1,4 +1,4 @@
-import { eq, and, desc, lt, count } from "drizzle-orm";
+import { eq, and, asc, desc, lt, count, or, sql } from "drizzle-orm";
 import {
   notification,
   notificationDispatch,
@@ -125,21 +125,115 @@ export async function insertDispatch(
 }
 
 /**
- * Updates a notification dispatch status.
+ * Updates a dispatch row's status by its own id (used by the outbox consumer).
  *
  * @param conn - the database connection or active transaction
- * @param notificationId - the notification id
+ * @param id - the dispatch row id
  * @param status - the new dispatch status
  */
-export async function updateDispatchStatus(
+export async function updateDispatchStatusById(
   conn: DbOrTx,
-  notificationId: string,
+  id: string,
   status: string,
 ) {
   await conn
     .update(notificationDispatch)
     .set({ status })
-    .where(eq(notificationDispatch.notificationId, notificationId));
+    .where(eq(notificationDispatch.id, id));
+}
+
+const MAX_DISPATCH_ATTEMPTS = 3;
+
+/**
+ * Lists dispatch rows pending delivery for the email outbox consumer, oldest first.
+ *
+ * Includes rows that have never been sent (`queued`) and rows that failed a
+ * previous attempt but still have retries left (`failed` with attempts < 3),
+ * so a transient provider error is retried across scheduler runs instead of
+ * losing the email permanently.
+ *
+ * @param conn - the database connection or active transaction
+ * @param limit - the maximum number of rows to return
+ * @returns the dispatch rows pending delivery
+ */
+export async function listPendingDispatches(conn: DbOrTx, limit = 50) {
+  return conn
+    .select()
+    .from(notificationDispatch)
+    .where(
+      or(
+        eq(notificationDispatch.status, "queued"),
+        and(
+          eq(notificationDispatch.status, "failed"),
+          lt(notificationDispatch.attempts, MAX_DISPATCH_ATTEMPTS),
+        ),
+      ),
+    )
+    .orderBy(asc(notificationDispatch.createdAt))
+    .limit(limit);
+}
+
+/**
+ * Atomically claims dispatch rows for delivery: moves queued/failed rows to
+ * `sending` so a concurrent consumer can never process the same row (M14).
+ * Stale `sending` rows (crashed workers) older than 10 minutes are reclaimed.
+ *
+ * @param conn - the database connection or active transaction
+ * @param limit - the maximum number of rows to claim
+ * @returns the claimed dispatch rows
+ */
+export async function claimPendingDispatches(conn: DbOrTx, limit = 50) {
+  return conn
+    .update(notificationDispatch)
+    .set({ status: "sending" })
+    .where(
+      sql`${notificationDispatch.id} IN (
+        SELECT id FROM notification_dispatch
+        WHERE status IN ('queued', 'failed') AND attempts < ${MAX_DISPATCH_ATTEMPTS}
+           OR (status = 'sending' AND attempts < ${MAX_DISPATCH_ATTEMPTS}
+               AND created_at < now() - interval '10 minutes')
+        ORDER BY created_at
+        LIMIT ${limit}
+      )`,
+    )
+    .returning();
+}
+
+/**
+ * Increments a dispatch row's attempt counter and records the last error.
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the dispatch row id
+ * @param lastError - the error message from the last failed send, or null
+ */
+export async function incrementDispatchAttempts(
+  conn: DbOrTx,
+  id: string,
+  lastError?: string | null,
+) {
+  await conn
+    .update(notificationDispatch)
+    .set({
+      attempts: sql`${notificationDispatch.attempts} + 1`,
+      lastError: lastError ?? null,
+    })
+    .where(eq(notificationDispatch.id, id));
+}
+
+/**
+ * Finds a notification by id (used by the email outbox consumer).
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the notification id
+ * @returns the full notification row, or null
+ */
+export async function findNotificationById(conn: DbOrTx, id: string) {
+  const [row] = await conn
+    .select()
+    .from(notification)
+    .where(eq(notification.id, id))
+    .limit(1);
+  return row ?? null;
 }
 
 /**
@@ -160,7 +254,17 @@ export async function listNotifications(
     conditions.push(eq(notification.isRead, false));
   }
   if (opts.cursor) {
-    conditions.push(lt(notification.createdAt, new Date(opts.cursor)));
+    // Composite (createdAt, id) cursor: equal timestamps cannot skip or
+    // duplicate rows across pages (L3). Cursor format: `{iso}|{id}`.
+    const [ts, id] = opts.cursor.split("|");
+    if (!ts || !id) {
+      throw new Error("Invalid notification cursor");
+    }
+    conditions.push(
+      sql`(${notification.createdAt}, ${notification.id}) < (
+        SELECT created_at, id FROM notification WHERE id = ${id}
+      )`,
+    );
   }
 
   const rows = await conn
@@ -225,22 +329,6 @@ export async function markAllRead(conn: DbOrTx, userId: string) {
     );
 }
 
-/**
- * Finds the dispatch row for a notification.
- *
- * @param conn - the database connection or active transaction
- * @param notificationId - the notification id
- * @returns the dispatch row, or null
- */
-export async function findDispatch(conn: DbOrTx, notificationId: string) {
-  const [row] = await conn
-    .select()
-    .from(notificationDispatch)
-    .where(eq(notificationDispatch.notificationId, notificationId))
-    .limit(1);
-  return row ?? null;
-}
-
 export function createNotificationRepo(db: DbType) {
   return {
     findNotificationByEventKey,
@@ -249,7 +337,11 @@ export function createNotificationRepo(db: DbType) {
     insertNotification,
     findUserEmail,
     insertDispatch,
-    updateDispatchStatus,
+    updateDispatchStatusById,
+    listPendingDispatches,
+    claimPendingDispatches,
+    incrementDispatchAttempts,
+    findNotificationById,
     listNotifications: (
       userId: string,
       opts: { unreadOnly?: boolean; cursor?: string; limit: number },
@@ -258,6 +350,5 @@ export function createNotificationRepo(db: DbType) {
     updateReadStatus: (id: string, userId: string, read: boolean) =>
       updateReadStatus(db, id, userId, read),
     markAllRead: (userId: string) => markAllRead(db, userId),
-    findDispatch: (notificationId: string) => findDispatch(db, notificationId),
   };
 }

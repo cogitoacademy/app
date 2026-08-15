@@ -2,8 +2,6 @@ import { describe, test, expect, mock } from "bun:test";
 import {
   getById,
   getByUserId,
-  insert,
-  updateBalances,
   atomicHold,
   atomicRelease,
   atomicDeduct,
@@ -90,53 +88,6 @@ describe("getByUserId", () => {
     const result = await getByUserId(conn, "missing");
 
     expect(result).toBeNull();
-  });
-});
-
-describe("insert", () => {
-  test("inserts wallet and returns created row", async () => {
-    const created = { id: "w1", userId: "u1", totalBalance: 0 };
-    const returning = mock(() => Promise.resolve([created]));
-    const values = mock(() => ({ returning }));
-    const insertFn = mock(() => ({ values }));
-    const conn: any = { insert: insertFn };
-
-    const result = await insert(conn, {
-      userId: "u1",
-      totalBalance: 0,
-      heldBalance: 0,
-      availableBalance: 0,
-    });
-
-    expect(result).toEqual(created);
-    expect(insertFn).toHaveBeenCalledTimes(1);
-    expect(values).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("updateBalances", () => {
-  test("updates balances and returns updated row", async () => {
-    const updated = {
-      id: "w1",
-      totalBalance: 200,
-      heldBalance: 0,
-      availableBalance: 200,
-    };
-    const updateConn = makeUpdateConn([updated]);
-    const conn: any = { ...updateConn };
-
-    const result = await updateBalances(conn, "w1", {
-      totalBalance: 200,
-      heldBalance: 0,
-      availableBalance: 200,
-    });
-
-    expect(result).toEqual(updated);
-    expect(updateConn.set).toHaveBeenCalledWith({
-      totalBalance: 200,
-      heldBalance: 0,
-      availableBalance: 200,
-    });
   });
 });
 
@@ -326,6 +277,20 @@ describe("findLedgerEntries", () => {
 
     expect(result).toHaveLength(5);
   });
+
+  test("filters by an array of entry types", async () => {
+    const rows = [{ id: "l1", walletId: "w1" }];
+    const { select, chain } = makeSelectConn(rows);
+    const conn: any = { select };
+
+    const result = await findLedgerEntries(conn, "w1", {
+      limit: 20,
+      entryType: ["compensate_credit", "compensate_deduct"],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("listActivePackages", () => {
@@ -391,8 +356,6 @@ describe("createWalletRepo", () => {
     expect(repo).toHaveProperty("getById");
     expect(repo).toHaveProperty("getByUserId");
     expect(repo).toHaveProperty("upsert");
-    expect(repo).toHaveProperty("insert");
-    expect(repo).toHaveProperty("updateBalances");
     expect(repo).toHaveProperty("atomicHold");
     expect(repo).toHaveProperty("atomicRelease");
     expect(repo).toHaveProperty("atomicDeduct");

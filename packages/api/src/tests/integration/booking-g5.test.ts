@@ -17,6 +17,7 @@ import {
   resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
+import { GROUP_SERIES_DISCLAIMER } from "../../shared/constants";
 
 async function creditWallet(userId: string, amount: number) {
   const { services } = await import("@cogito-app/api/services");
@@ -181,7 +182,7 @@ describe("G5: series session cancellation rules", () => {
     expect(wAfter.heldBalance).toBe(wBefore.heldBalance - 50);
   });
 
-  test("cancel another session inside H-2 → rejected", async () => {
+  test("TC-30: cancel a series session inside H-2 → forfeits the session hold", async () => {
     const sessions = await studentClient.booking.listSessions({ bookingId });
     const target = sessions.find((s) => s.currentState === "scheduled")!;
 
@@ -191,9 +192,23 @@ describe("G5: series session cancellation rules", () => {
       .set({ scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000) })
       .where(eq(bookingSession.id, target.id));
 
-    await expect(
-      studentClient.booking.cancelSession({ sessionId: target.id }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const wBefore = await studentClient.wallet.get({});
+    const result = await studentClient.booking.cancelSession({
+      sessionId: target.id,
+    });
+    expect(result.cancelled).toBe(true);
+    expect(result.forfeited).toBe(true);
+
+    const [row] = await db
+      .select()
+      .from(bookingSession)
+      .where(eq(bookingSession.id, target.id));
+    expect(row!.currentState).toBe("cancelled");
+
+    const wAfter = await studentClient.wallet.get({});
+    // Forfeiting a 50-mark session hold deducts from the total balance.
+    expect(wAfter.totalBalance).toBe(wBefore.totalBalance - 50);
+    expect(wAfter.heldBalance).toBe(wBefore.heldBalance - 50);
   });
 
   test("group series bookings cannot have individual sessions cancelled", async () => {
@@ -249,5 +264,43 @@ describe("G5: series session cancellation rules", () => {
     await expect(
       studentClient.booking.cancelSession({ sessionId: session!.id }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  test("group series get response includes the disclaimer (G15)", async () => {
+    const { booking: bookingTable } = await import("@cogito-app/db/schema");
+    const start = new Date(Date.now() + 48 * 3600_000);
+    const priceSnapshot = {
+      perStudent: 40,
+      baseline: 120,
+      tutorShare: 96,
+      cogitoTake: 24,
+    };
+
+    const [groupSeries] = await db
+      .insert(bookingTable)
+      .values({
+        id: crypto.randomUUID(),
+        type: "series",
+        modality: "online",
+        tutorId,
+        proposerId: studentId,
+        targetGroupSize: 3,
+        minConfirmedHeadcount: 2,
+        confirmedHeadcount: 3,
+        currentState: "scheduled",
+        scheduledStartAt: start,
+        scheduledEndAt: new Date(start.getTime() + 3600_000),
+        timezone: "Asia/Jakarta",
+        priceSnapshot,
+        originalMarks: 120,
+        holdAmount: 120,
+        deadlineAt: new Date(Date.now() + 86400000),
+      })
+      .returning();
+
+    const b = await studentClient.booking.get({
+      bookingId: groupSeries!.id,
+    });
+    expect(b.disclaimer).toBe(GROUP_SERIES_DISCLAIMER);
   });
 });

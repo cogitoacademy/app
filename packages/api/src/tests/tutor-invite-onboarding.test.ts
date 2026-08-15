@@ -146,7 +146,7 @@ describe("Tutor Invite & Onboarding", () => {
     });
   });
 
-  describe.skip("TC-09: Email mismatch rejection", () => {
+  describe("TC-09: Email mismatch rejection", () => {
     test("wrong-email user cannot claim invite", async () => {
       const createRes = await adminClient.adminTutor.createInvite({
         email: `nomatch.${Date.now()}@cogito.test`,

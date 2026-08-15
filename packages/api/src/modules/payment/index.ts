@@ -1,7 +1,14 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import type { CreditParams, WalletSnapshot } from "../wallet/wallet.service";
-import type { PaymentProvider } from "./payment.service";
+import type {
+  CompensateParams,
+  CreditParams,
+  WalletSnapshot,
+} from "../wallet/wallet.service";
+import type {
+  PaymentProvider,
+  PaymentNotificationPort,
+} from "./payment.service";
 import { createPaymentService } from "./payment.service";
 import { createPaymentHandler } from "./payment.handler";
 import { createPaymentRepo } from "./payment.repo";
@@ -15,11 +22,13 @@ export type PaymentModule = ReturnType<typeof createPaymentModule>;
 export interface PaymentWalletPort {
   getOrCreate(userId: string): Promise<WalletSnapshot>;
   credit(db: DbOrTx, params: CreditParams): Promise<WalletSnapshot>;
+  compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
 }
 
 export function createPaymentModule(deps: {
   db: DbType;
   wallet: PaymentWalletPort;
+  provider: "xendit" | "stub";
   xenditConfig?: {
     secretKey: string;
     webhookToken: string;
@@ -28,8 +37,18 @@ export function createPaymentModule(deps: {
     defaultPaymentMethod?: string;
   };
   webhookSecret: string;
+  notification?: PaymentNotificationPort;
 }) {
-  const useXendit = !!deps.xenditConfig;
+  const useXendit = deps.provider === "xendit";
+  if (useXendit && !deps.xenditConfig) {
+    throw new Error(
+      "PAYMENT_PROVIDER=xendit but Xendit credentials are missing — refusing to silently fall back to the stub provider",
+    );
+  }
+  if (!useXendit && deps.provider !== "stub") {
+    throw new Error(`Unknown payment provider: ${deps.provider}`);
+  }
+
   const provider: PaymentProvider = useXendit
     ? createXenditPaymentProvider({
         secretKey: deps.xenditConfig!.secretKey,
@@ -52,6 +71,7 @@ export function createPaymentModule(deps: {
     repo,
     provider,
     providerName,
+    notification: deps.notification,
   });
   const handler = createPaymentHandler(service, deps.wallet);
   return { service, handler };

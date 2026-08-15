@@ -7,6 +7,7 @@ import {
   tutorProfile,
   availabilitySlot,
   roomBooking,
+  notification,
 } from "@cogito-app/db/schema";
 
 import {
@@ -116,6 +117,7 @@ describe("G14 admin room relocate and cancel", () => {
   let tutor2Client: TestClient;
   let tutor1Id: string;
   let tutor2Id: string;
+  let student1Id: string;
   let slot1Id: string;
   let slot2Id: string;
   let roomAId: string;
@@ -145,17 +147,20 @@ describe("G14 admin room relocate and cancel", () => {
       if (ctx.session?.user) {
         await creditWallet(ctx.session.user.id, 200);
       }
-      return client;
+      return { client, userId: ctx.session?.user.id! };
     }
 
-    student1Client = await setupStudent(
+    const s1 = await setupStudent(
       `student1.g14.${ts}@cogito.test`,
       "Student G14 One",
     );
-    student2Client = await setupStudent(
+    student1Client = s1.client;
+    student1Id = s1.userId;
+    const s2 = await setupStudent(
       `student2.g14.${ts}@cogito.test`,
       "Student G14 Two",
     );
+    student2Client = s2.client;
 
     const t1 = await createPublishedTutor(
       `tutor1.g14.${ts}@cogito.test`,
@@ -226,7 +231,7 @@ describe("G14 admin room relocate and cancel", () => {
     expect(accepted2.currentState).toBe("awaiting_admin_room_approval");
   });
 
-  test("admin assigns room A to booking1 → confirmed", async () => {
+  test("admin assigns room A to booking1 → confirmed and booking moves to scheduled", async () => {
     const rb = await adminClient.room.assign({
       bookingId: booking1Id,
       roomId: roomAId,
@@ -239,9 +244,13 @@ describe("G14 admin room relocate and cancel", () => {
     expect(rows.length).toBe(1);
     expect(rows[0]!.roomId).toBe(roomAId);
     expect(rows[0]!.status).toBe("confirmed");
+
+    const booking = await student1Client.booking.get({ bookingId: booking1Id });
+    expect(booking.currentState).toBe("scheduled");
+    expect(booking.scheduledEndAt.toISOString()).toBe(endISO);
   });
 
-  test("admin assigns room B to booking2 → confirmed", async () => {
+  test("admin assigns room B to booking2 → confirmed and booking moves to scheduled", async () => {
     const rb = await adminClient.room.assign({
       bookingId: booking2Id,
       roomId: roomBId,
@@ -249,6 +258,9 @@ describe("G14 admin room relocate and cancel", () => {
       endAt: endISO,
     });
     expect(rb.status).toBe("confirmed");
+
+    const booking = await student2Client.booking.get({ bookingId: booking2Id });
+    expect(booking.currentState).toBe("scheduled");
   });
 
   test("relocate booking2 into occupied room A is rejected", async () => {
@@ -285,6 +297,23 @@ describe("G14 admin room relocate and cancel", () => {
     expect(newRow!.status).toBe("confirmed");
   });
 
+  test("offline room assign/relocate write in-app+email notifications to tutor and student (P1-3)", async () => {
+    const notifs = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.bookingId, booking1Id));
+    const titles = notifs.map((n) => n.title);
+    expect(titles).toContain("Offline session confirmed");
+    expect(titles).toContain("Offline session relocated");
+
+    const recipients = [...new Set(notifs.map((n) => n.userId))];
+    expect(recipients).toContain(tutor1Id);
+    expect(recipients).toContain(student1Id);
+
+    const dispatchEligible = notifs.filter((n) => n.severity === "action");
+    expect(dispatchEligible.length).toBeGreaterThan(0);
+  });
+
   test("admin cancels booking2 room → booking continues without room", async () => {
     const rb = await adminClient.room.cancelBooking({ bookingId: booking2Id });
     expect(rb.status).toBe("cancelled");
@@ -294,7 +323,7 @@ describe("G14 admin room relocate and cancel", () => {
     expect(active).toBeUndefined();
 
     const booking = await student2Client.booking.get({ bookingId: booking2Id });
-    expect(booking.currentState).toBe("awaiting_admin_room_approval");
+    expect(booking.currentState).toBe("scheduled");
   });
 
   test("G14 regression: cancel after relocate leaves no active row; second cancel and relocate are rejected", async () => {

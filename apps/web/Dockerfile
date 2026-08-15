@@ -1,14 +1,16 @@
-FROM oven/bun:1 AS deps
+FROM oven/bun:1.3.14 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/web/package.json apps/web/
+COPY apps/server/package.json apps/server/
 COPY packages/ui/package.json packages/ui/
 COPY packages/config/package.json packages/config/
 COPY packages/env/package.json packages/env/
 COPY packages/api/package.json packages/api/
 COPY packages/auth/package.json packages/auth/
 COPY packages/db/package.json packages/db/
-RUN bun install --frozen-lockfile
+COPY packages/e2e/package.json packages/e2e/
+RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 COPY . .

@@ -4,6 +4,7 @@ import {
   setRoleInput,
   adminGetWalletInput,
   adminListLedgerEntriesInput,
+  adminGetTutorPayoutsInput,
 } from "./admin.types";
 import type { AdminHandler } from "./admin.handler";
 
@@ -54,5 +55,17 @@ export function createAdminRouter(handler: AdminHandler) {
       })
       .input(adminListLedgerEntriesInput)
       .handler(handler.listLedgerEntries),
+
+    getTutorPayouts: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor",
+        tags: ["Admin"],
+        summary: "Get tutor payout summary",
+        description:
+          "Returns a tutor's payout summary from completed bookings in a date range",
+      })
+      .input(adminGetTutorPayoutsInput)
+      .handler(handler.getTutorPayouts),
   };
 }

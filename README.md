@@ -10,7 +10,7 @@ Monorepo for the Cogito tutoring platform. Backend (Elysia + oRPC + PostgreSQL) 
 - **oRPC** — end-to-end type-safe API (POST convention, OpenAPI integration)
 - **Drizzle ORM** + **PostgreSQL 16** — database (Docker, port 6767)
 - **Better Auth 1.6.11** — email/password + optional Google OAuth
-- **React 19** + **TanStack Router/Query/Form** — frontend (Vite, port 5173)
+- **React 19** + **TanStack Router/Query/Form** — frontend (Vite, port 3000)
 - **Selia UI** — component library on TailwindCSS v4 + @base-ui/react (see `AGENTS.md`)
 - **Turborepo** — monorepo build orchestration
 - **Oxlint + Oxfmt** — linting and formatting
@@ -21,7 +21,7 @@ Monorepo for the Cogito tutoring platform. Backend (Elysia + oRPC + PostgreSQL) 
 ### Prerequisites
 
 - [Bun](https://bun.sh) (runtime)
-- [Docker Desktop](https://docker.com) (for PostgreSQL)
+- [Docker Desktop](https://docker.com) (for PostgreSQL + Redis)
 
 ### Setup
 
@@ -29,7 +29,7 @@ Monorepo for the Cogito tutoring platform. Backend (Elysia + oRPC + PostgreSQL) 
 # 1. Install dependencies
 bun install
 
-# 2. Start PostgreSQL (Docker, port 6767)
+# 2. Start PostgreSQL + Redis (Docker; PostgreSQL on 6767, Redis on 6379 — Redis is mandatory)
 bun run db:start
 
 # 3. Apply migrations
@@ -48,12 +48,12 @@ bun run seed-packages
 ### Run
 
 ```bash
-bun run dev            # web (5173) + server (3001)
+bun run dev            # web (3000) + server (3001)
 bun run dev:web        # web only
 bun run dev:server     # server only
 ```
 
-Open [http://localhost:5173](http://localhost:5173) for the web app.
+Open [http://localhost:3000](http://localhost:3000) for the web app.
 The API is at [http://localhost:3001](http://localhost:3001).
 API docs (dev only) at [http://localhost:3001/api-reference](http://localhost:3001/api-reference).
 
@@ -89,7 +89,7 @@ bun run db:studio      # Drizzle Studio UI
 cogito-app/
 ├── apps/
 │   ├── server/        # Elysia HTTP server (port 3001)
-│   └── web/           # Vite + React 19 + TanStack Router (port 5173)
+│   └── web/           # Vite + React 19 + TanStack Router (port 3000)
 ├── packages/
 │   ├── api/           # Business logic (4-layer: Router → Handler → Service → Repo)
 │   ├── auth/          # Better Auth config

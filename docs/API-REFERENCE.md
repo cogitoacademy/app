@@ -1,10 +1,10 @@
 # Cogito API Reference
 
-Last updated: 2026-07-28
+Last updated: 2026-08-15
 
 ## Overview
 
-All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}.{method}`.
+All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`.
 
 ### Auth Levels
 
@@ -47,9 +47,16 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `auth.updateProfile`
 
 - **Auth:** Protected
-- **Input:** `{ name?, email? }`
+- **Input:** `{ phoneNumber?, schoolName?, gradeLevel?, parentName?, parentPhone?, parentEmail? }`
 - **Output:** `{ user, profile }`
-- **Description:** Updates user profile fields
+- **Description:** Creates or updates the authenticated user's student profile fields
+
+### `auth.searchStudents`
+
+- **Auth:** Protected
+- **Input:** `{ query, limit? }` (`query` 2–100 chars, `limit` 1–10 default 5)
+- **Output:** `[{ id, name, email }]` — up to 10 students matching a name or email, excluding the requester
+- **Description:** Debounced student lookup used by the group-booking invite UI
 
 ---
 
@@ -58,17 +65,41 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `admin.listUsers`
 
 - **Auth:** Admin
-- **Input:** `{ cursor?, limit?, role? }`
-- **Output:** `{ items: User[], nextCursor }`
-- **Description:** Paginated user list with optional role filter
+- **Input:** `{ limit?, offset? }` (`limit` default 50)
+- **Output:** `{ users: User[], total, limit, offset }`
+- **Description:** Paginated user list
 
 ### `admin.setRole`
 
 - **Auth:** Admin
-- **Input:** `{ userId, role }`
+- **Input:** `{ userId, role, expectedRole }`
 - **Output:** `{ user }`
 - **Errors:** `USER_NOT_FOUND` (404), `LAST_ADMIN` (409), `OPTIMISTIC_LOCK` (409)
-- **Description:** Changes user role; prevents removing last admin
+- **Description:** Changes user role; prevents removing last admin; optimistic lock via `expectedRole`
+
+### `admin.getWallet`
+
+- **Auth:** Admin
+- **Input:** `{ userId }`
+- **Output:** `{ id, totalBalance, heldBalance, availableBalance }`
+- **Errors:** `WALLET_NOT_FOUND` (404)
+- **Description:** Returns any user's Marks wallet (G9)
+
+### `admin.listLedgerEntries`
+
+- **Auth:** Admin
+- **Input:** `{ walletId?|userId?, limit?, cursor?, bookingId?, entryType?, dateFrom?, dateTo? }` (`entryType` one of credit/hold/release/deduct/compensate_credit/compensate_deduct)
+- **Output:** `{ items: LedgerEntry[], nextCursor }`
+- **Errors:** `INVALID_LEDGER_FILTER` (400) — walletId and userId are mutually exclusive; exactly one required
+- **Description:** Paginated ledger for any wallet, filterable by type, date range, or booking
+
+### `admin.getTutorPayouts`
+
+- **Auth:** Admin
+- **Input:** `{ tutorId, dateFrom?, dateTo? }`
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` at 7,000 IDR/Mark)
+- **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
+- **Description:** Tutor payout summary from completed bookings in a date range
 
 ---
 
@@ -77,38 +108,39 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `adminTutor.createInvite`
 
 - **Auth:** Admin
-- **Input:** `{ email }`
+- **Input:** `{ email, displayName, internalNotes? }`
 - **Output:** `{ invite }`
 - **Description:** Creates tutor invite with unique token
 
 ### `adminTutor.listInvites`
 
 - **Auth:** Admin
-- **Input:** `{ cursor?, limit?, status? }`
-- **Output:** `{ items: Invite[], nextCursor }`
+- **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
+- **Output:** `{ items: Invite[], total, limit, offset }`
 
 ### `adminTutor.resendInvite`
 
 - **Auth:** Admin
 - **Input:** `{ inviteId }`
 - **Output:** `{ invite }`
+- **Description:** Regenerates token and expiry (invalidates the previous token)
 
 ### `adminTutor.revokeInvite`
 
 - **Auth:** Admin
-- **Input:** `{ inviteId, reason? }`
+- **Input:** `{ inviteId }`
 - **Output:** `{ invite }`
 
 ### `adminTutor.listTutorProfiles`
 
 - **Auth:** Admin
-- **Input:** `{ cursor?, limit?, onboardingStatus? }`
-- **Output:** `{ items: TutorProfile[], nextCursor }`
+- **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
+- **Output:** `{ items: TutorProfile[], total, limit, offset }`
 
 ### `adminTutor.reviewTutorProfile`
 
 - **Auth:** Admin
-- **Input:** `{ profileId, status, adminNote? }`
+- **Input:** `{ tutorProfileId, action, adminNote? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend)
 - **Output:** `{ profile }`
 
 ---
@@ -117,22 +149,63 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `tutor.getMyProfile`
 
-- **Auth:** Protected (tutor)
+- **Auth:** Tutor
 - **Input:** None
-- **Output:** `{ profile, availability }`
+- **Output:** `{ profile }`
+- **Description:** Returns the authenticated tutor's profile
 
 ### `tutor.updateMyProfile`
 
-- **Auth:** Protected (tutor)
-- **Input:** `{ bio?, subjects?, prices?, modality?, availability?: SlotInput[] }`
+- **Auth:** Tutor
+- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, expertise?, modality?, prices?, availabilitySummary?, proofUrls? }`
 - **Output:** `{ profile }`
+- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation
+- **Description:** Updates the draft tutor profile; optimistic lock via `version`
 
 ### `tutor.submitForReview`
 
-- **Auth:** Protected (tutor)
+- **Auth:** Tutor
 - **Input:** None
 - **Output:** `{ profile }`
-- **Description:** Changes onboarding status to `submitted_for_review`
+- **Description:** Submits a draft profile for admin review
+
+### `tutor.listAvailability`
+
+- **Auth:** Tutor
+- **Input:** None
+- **Output:** `{ items: AvailabilitySlot[] }`
+- **Description:** Lists the tutor's active future availability slots
+
+### `tutor.upsertAvailability`
+
+- **Auth:** Tutor
+- **Input:** `{ id?, startDate, endDate, modality, isRecurring?, recurrenceRule?, isActive? }`
+- **Output:** `{ slot }`
+- **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409)
+- **Description:** Creates or updates a single availability window
+
+### `tutor.createWeeklyAvailability`
+
+- **Auth:** Tutor
+- **Input:** `{ startDate, endDate, repeatUntil, modality }`
+- **Output:** `{ slots: AvailabilitySlot[] }`
+- **Errors:** `WEEKLY_AVAILABILITY_RANGE` (400) if > 53 occurrences, `AVAILABILITY_SLOT_OVERLAP` (409)
+- **Description:** Materializes weekly windows from `startDate` through `repeatUntil`
+
+### `tutor.deleteAvailability`
+
+- **Auth:** Tutor
+- **Input:** `{ id }`
+- **Output:** None (void)
+- **Description:** Deactivates (soft-deletes) an availability slot
+
+### `tutor.getMyPayouts`
+
+- **Auth:** Tutor
+- **Input:** `{ dateFrom?, dateTo? }`
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`
+- **Errors:** `INVALID_DATE_RANGE` (400)
+- **Description:** The authenticated tutor's payout summary from completed bookings
 
 ---
 
@@ -141,13 +214,13 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `tutors.listPublished`
 
 - **Auth:** Protected
-- **Input:** `{ cursor?, limit?, subjects?, modality? }`
-- **Output:** `{ items: TutorProfile[], nextCursor }`
+- **Input:** `{ search?, expertise?, modality?, limit?, offset? }` (`limit` default 20, max 50)
+- **Output:** `{ items: TutorProfile[], total, limit, offset }`
 
 ### `tutors.getProfile`
 
 - **Auth:** Protected
-- **Input:** `{ userId }`
+- **Input:** `{ tutorId }`
 - **Output:** `{ profile }`
 
 ---
@@ -164,9 +237,10 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `invite.claim`
 
 - **Auth:** Protected
-- **Input:** `{ token, email }`
+- **Input:** `{ token }`
 - **Output:** `{ profile }`
 - **Errors:** `INVITE_NOT_FOUND` (404), `INVITE_EMAIL_MISMATCH` (400), `PROFILE_ALREADY_EXISTS` (409)
+- **Description:** Claims the invite using the signed-in user's email and creates a tutor profile in `onboarding` status
 
 ---
 
@@ -183,72 +257,44 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Protected
 - **Input:** `{ eventName, category, award, level, eventDate?, location?, description?, subjects?, imageUrl? }`
 - **Output:** `{ achievement }`
+- **Description:** Submits a new achievement in `pending` status
 
 ### `achievement.update`
 
 - **Auth:** Protected
-- **Input:** `{ id, expectedVersion, ...updateFields }`
+- **Input:** `{ id, version, data: { ...achievementFields } }`
 - **Output:** `{ achievement }`
-- **Description:** Optimistic locking via `expectedVersion`
+- **Description:** Updates a pending achievement; optimistic locking via `version`
 
-### `achievement.remove`
+### `achievement.delete`
 
 - **Auth:** Protected
-- **Input:** `{ id, expectedVersion }`
+- **Input:** `{ id, version }`
 - **Output:** `{ deleted }`
+- **Description:** Deletes a pending achievement; optimistic locking via `version`
 
 ### `achievement.adminList`
 
 - **Auth:** Admin
-- **Input:** `{ status?, limit, offset }`
-- **Output:** `{ items: Achievement[] }`
+- **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
+- **Output:** `{ items: Achievement[], total, limit, offset }`
 
 ### `achievement.adminReview`
 
 - **Auth:** Admin
-- **Input:** `{ id, status, adminNote? }`
+- **Input:** `{ achievementId, status, adminNote? }` (`status` one of `approved`/`rejected`)
 - **Output:** `{ achievement }`
 
 ---
 
 ## Wallet (`wallet.*`)
 
-### `wallet.getOrCreate`
+### `wallet.get`
 
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ id, totalBalance, heldBalance, availableBalance }`
-
-### `wallet.hold`
-
-- **Auth:** Protected
-- **Input:** `{ walletId, amount, eventKey, sourceReference?, bookingId?, actorType, reason }`
-- **Output:** `WalletSnapshot`
-- **Errors:** `WALLET_NOT_FOUND` (404), `INSUFFICIENT_BALANCE` (400)
-
-### `wallet.release`
-
-- **Auth:** Protected
-- **Input:** `{ walletId, amount, eventKey, sourceReference?, bookingId?, actorType, reason }`
-- **Output:** `WalletSnapshot`
-
-### `wallet.deduct`
-
-- **Auth:** Protected
-- **Input:** `{ walletId, amount, eventKey, sourceReference?, bookingId?, actorType, reason }`
-- **Output:** `WalletSnapshot`
-
-### `wallet.credit`
-
-- **Auth:** Protected
-- **Input:** `{ walletId, amount, eventKey, sourceReference?, bookingId?, actorType, reason }`
-- **Output:** `WalletSnapshot`
-
-### `wallet.compensate`
-
-- **Auth:** Protected
-- **Input:** `{ walletId, amount, eventKey, sourceReference?, bookingId?, actorType, reason }`
-- **Output:** `WalletSnapshot`
+- **Description:** Returns the authenticated user's wallet (lazily created)
 
 ### `wallet.listLedger`
 
@@ -256,115 +302,174 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Input:** `{ cursor?, limit?, bookingId?, eventKey? }`
 - **Output:** `{ items: LedgerEntry[], nextCursor }`
 
-### `wallet.knowledgeBankEligible`
-
-- **Auth:** Protected
-- **Input:** None
-- **Output:** `{ eligible: boolean }`
-
 ### `wallet.listPackages`
 
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ packages: MarkPackage[] }`
+- **Description:** Returns active purchasable mark packages
+
+### `wallet.knowledgeBankEligible`
+
+- **Auth:** Protected
+- **Input:** None
+- **Output:** `{ eligible, balance, threshold }`
+- **Description:** Checks Knowledge Bank gating (min balance threshold); **known bug B4** — checks `availableBalance` instead of total balance (tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
+
+### `wallet.competitionCalendarLink`
+
+- **Auth:** Protected
+- **Input:** None
+- **Output:** `{ url }`
+- **Description:** Returns the external competition-calendar link
+
+> Note: `hold`/`release`/`deduct`/`credit`/`compensate` are service-layer methods only — they are not exposed over RPC; other modules call them via consumer-driven ports.
 
 ---
 
 ## Payment (`payment.*`)
 
-### `payment.createCheckout`
+### `payment.createPurchase`
 
 - **Auth:** Protected
 - **Input:** `{ packageCode }`
-- **Output:** `{ checkoutUrl, paymentId }`
-- **Description:** Creates Xendit payment request and returns checkout URL
+- **Output:** `{ paymentId, providerReference, checkoutUrl }`
+- **Errors:** `PACKAGE_NOT_FOUND` (404), `PACKAGE_ALREADY_PURCHASED` (409), `PAYMENT_PROVIDER_ERROR` (502)
+- **Description:** Creates a purchase intent with the payment provider (reuses a pending intent; resets FAILED/EXPIRED payments to PENDING and re-creates the checkout — re-purchase, #46); on success the webhook credits the wallet
 
-### `payment.handleWebhook`
+### `payment.getPurchase`
 
-- **Auth:** Public
-- **Input:** Raw body + Xendit webhook token header
-- **Output:** `{ status: "ok" }`
-- **Description:** Xendit webhook handler; idempotent; updates payment status and credits wallet
+- **Auth:** Protected
+- **Input:** `{ paymentId }`
+- **Output:** `{ id, status, provider, providerReference, amountIdr, marks, receiptUrl, failureReason, createdAt }`
+- **Errors:** `PAYMENT_NOT_FOUND` (404)
+- **Description:** Returns the payment record if owned by the requesting user
+
+### `POST /webhooks/payments/:provider` (external)
+
+- **Auth:** Public (non-oRPC route)
+- **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature`, `x-event-id`, `x-timestamp`
+- **Output:** `{ ok: true }`
+- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min), 403 IP not allowlisted, 500 processing failure
+- **Description:** Provider webhook; verifies signature, validates timestamp, then atomically claims the idempotency key (keyed on the verified payload's event id — released on processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46)
 
 ---
 
 ## Booking (`booking.*`)
 
-### `booking.create`
+### `booking.createSolo`
 
 - **Auth:** Protected
-- **Input:** Solo: `{ tutorId, availabilitySlotId, modality, scheduledStartAt, scheduledEndAt, timezone }`
+- **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, scheduledEndAt, timezone? }` (times in the future; `timezone` default `Asia/Jakarta`)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
+- **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
 
-### `booking.createGroup`
-
-- **Auth:** Protected
-- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, scheduledEndAt, timezone }`
-- **Output:** `{ booking }`
-
-### `booking.createSeries`
+### `booking.get`
 
 - **Auth:** Protected
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ scheduledStartAt, scheduledEndAt }], timezone }`
-- **Output:** `{ booking }`
-- **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
-
-### `booking.confirm`
-
-- **Auth:** Protected (tutor)
 - **Input:** `{ bookingId }`
-- **Output:** `{ booking }`
-- **Description:** Tutor accepts booking; creates meeting for online bookings
+- **Output:** `{ booking, participants, history }` — ownership-checked
+- **Errors:** `BOOKING_NOT_FOUND` (404)
 
-### `booking.withdraw`
+### `booking.listMine`
 
 - **Auth:** Protected
-- **Input:** `{ bookingId, reason? }`
-- **Output:** `{ withdrawn: true, late: boolean }`
+- **Input:** `{ cursor?, limit?, states? }`
+- **Output:** `{ items: Booking[], nextCursor }`
+- **Description:** Returns bookings where the user is proposer
 
 ### `booking.cancel`
 
 - **Auth:** Protected
 - **Input:** `{ bookingId, cancellationReason? }`
 - **Output:** `{ booking }`
-- **Description:** Cancels booking; late cancel within H-2 becomes `late_cancelled`
+- **Description:** Cancels booking and releases held Marks; late cancel within H-2 becomes `late_cancelled`
+
+### `booking.acceptReschedule`
+
+- **Auth:** Protected (student proposer)
+- **Input:** `{ bookingId }`
+- **Output:** `{ booking }`
+- **Description:** Student accepts the tutor's reschedule proposal
+
+### `booking.rejectReschedule`
+
+- **Auth:** Protected (student proposer)
+- **Input:** `{ bookingId }`
+- **Output:** `{ booking }`
+- **Description:** Student rejects the tutor's reschedule proposal
+
+### `booking.cancelSession`
+
+- **Auth:** Protected (student proposer)
+- **Input:** `{ sessionId }`
+- **Output:** `{ booking }`
+- **Description:** Student cancels an individual series session; pre-H-2 releases the session hold, post-H-2 forfeits it (per-session penalty, #46). Group-series sessions cannot be cancelled (no opt-out)
+
+### `booking.addSessionNote`
+
+- **Auth:** Protected (tutor or student party)
+- **Input:** `{ bookingId, content }` (`content` max 10,000 chars, sanitized)
+- **Output:** `{ note }`
+- **Description:** Adds a note to a completed session
+
+### `booking.getSessionNotes`
+
+- **Auth:** Protected (tutor or student party)
+- **Input:** `{ bookingId }`
+- **Output:** `{ items: SessionNote[] }`
+- **Description:** Lists notes for a completed session
+
+### `booking.createGroup`
+
+- **Auth:** Protected
+- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, scheduledEndAt, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5)
+- **Output:** `{ booking }`
+- **Description:** Creates a group booking, holds proposer Marks, invites participants; idempotency via `idempotency-key` header
+
+### `booking.createSeries`
+
+- **Auth:** Protected
+- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ scheduledStartAt, scheduledEndAt }], timezone? }` (2–4 sessions)
+- **Output:** `{ booking }`
+- **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
+- **Description:** Creates a multi-session solo series booking
+
+### `booking.createGroupSeries`
+
+- **Auth:** Protected
+- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
+- **Output:** `{ booking }`
+- **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
+- **Description:** Creates a group series with upfront per-participant holds for all sessions (FR-20, #46); invitees accept/decline the full-series package via `booking.confirmInvite`/`booking.declineInvite`
 
 ### `booking.confirmInvite`
 
-- **Auth:** Protected
+- **Auth:** Protected (invitee)
 - **Input:** `{ bookingId }`
 - **Output:** `{ confirmedHeadcount, targetGroupSize }`
+- **Description:** Invitee confirms participation and holds Marks
 
 ### `booking.declineInvite`
 
-- **Auth:** Protected
+- **Auth:** Protected (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
 
 ### `booking.reconfirm`
 
-- **Auth:** Protected
+- **Auth:** Protected (participant)
 - **Input:** `{ bookingId, accept }`
 - **Output:** `{ reconfirmed: boolean }`
+- **Description:** Participant accepts or rejects the repriced offer
 
-### `booking.withdrawGroup`
+### `booking.withdraw`
 
-- **Auth:** Protected
+- **Auth:** Protected (participant)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ withdrawn: true, late: boolean }`
-
-### `booking.completeSession`
-
-- **Auth:** Protected (tutor)
-- **Input:** `{ bookingId, sessionNote? }`
-- **Output:** `{ booking }`
-
-### `booking.proposeReschedule`
-
-- **Auth:** Protected
-- **Input:** `{ bookingId, proposedStartAt, proposedEndAt, reason? }`
-- **Output:** `{ booking }`
+- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels
 
 ### `booking.listSessions`
 
@@ -377,64 +482,92 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ## Tutor Actions (`tutorActions.*`)
 
-### `tutorActions.accept`
+### `tutorActions.listBookings`
 
-- **Auth:** Protected (tutor)
+- **Auth:** Tutor
+- **Input:** `{ cursor?, limit?, states? }`
+- **Output:** `{ items: Booking[], nextCursor }`
+- **Description:** Returns bookings assigned to the signed-in tutor
+
+### `tutorActions.proposeReschedule`
+
+- **Auth:** Tutor
+- **Input:** `{ bookingId, proposedStartAt, proposedEndAt, reason? }`
+- **Output:** `{ booking }`
+- **Description:** Tutor proposes a new slot; requires student acceptance via `booking.acceptReschedule`
+
+### `tutorActions.acceptBooking`
+
+- **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
-- **Description:** Tutor accepts booking; same as `booking.confirm`
+- **Description:** Tutor accepts a solo booking; online goes `scheduled` (creates meeting), offline goes `awaiting_admin_room_approval`
 
-### `tutorActions.decline`
+### `tutorActions.declineBooking`
 
-- **Auth:** Protected (tutor)
+- **Auth:** Tutor
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ booking }`
+- **Description:** Tutor declines a booking and releases held Marks
+
+### `tutorActions.completeSession`
+
+- **Auth:** Tutor
+- **Input:** `{ bookingId, sessionId? }` (`sessionId` required for series child sessions)
+- **Output:** `{ booking }`
+- **Description:** Marks a scheduled session completed and deducts held Marks
+
+### `tutorActions.markAttendance`
+
+- **Auth:** Tutor
+- **Input:** `{ bookingId, attendance }` (`attendance` one of `present`/`late`)
+- **Output:** `{ booking }`
+- **Description:** Marks tutor attendance so the lateness auto-cancel job skips the booking
 
 ---
 
 ## Room (`room.*`)
 
+### `room.list`
+
+- **Auth:** Protected
+- **Input:** None
+- **Output:** `{ items: Room[] }` — active rooms
+- **Description:** Lists active rooms for offline scheduling
+
 ### `room.create`
 
 - **Auth:** Admin
-- **Input:** `{ name, capacity?, description? }`
+- **Input:** `{ name, location, capacity }`
 - **Output:** `{ room }`
 
-### `room.list`
+### `room.assign`
 
 - **Auth:** Admin
-- **Input:** `{ cursor?, limit? }`
-- **Output:** `{ items: Room[], nextCursor }`
-
-### `room.get`
-
-- **Auth:** Admin
-- **Input:** `{ roomId }`
-- **Output:** `{ room }`
-
-### `room.update`
-
-- **Auth:** Admin
-- **Input:** `{ roomId, ...updateFields }`
-- **Output:** `{ room }`
-
-### `room.delete`
-
-- **Auth:** Admin
-- **Input:** `{ roomId }`
-- **Output:** `{ deleted: true }`
-
-### `room.book`
-
-- **Auth:** Admin
-- **Input:** `{ roomId, bookingId, scheduledStartAt, scheduledEndAt }`
+- **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; notifies tutor + confirmed students (G14, #46)
 
-### `room.release`
+### `room.checkAvailability`
+
+- **Auth:** Protected
+- **Input:** `{ roomId, startAt, endAt }`
+- **Output:** `{ available: boolean }`
+- **Description:** Returns whether a room is free for a time slot; **known gap G13** — not yet integrated into booking creation (tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
+
+### `room.relocate`
+
+- **Auth:** Admin
+- **Input:** `{ bookingId, roomId, startAt, endAt }`
+- **Output:** `{ roomBooking }`
+- **Description:** Moves a booking to a different room, freeing the previous one
+
+### `room.cancelBooking`
 
 - **Auth:** Admin
 - **Input:** `{ bookingId }`
-- **Output:** `{ released: true }`
+- **Output:** `{ cancelled: true }`
+- **Description:** Cancels a booking's room assignment; the booking continues without a room
 
 ---
 
@@ -443,16 +576,23 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `notification.list`
 
 - **Auth:** Protected
-- **Input:** `{ cursor?, limit?, includeRead? }`
+- **Input:** `{ unreadOnly?, limit?, cursor? }`
 - **Output:** `{ items: Notification[], nextCursor }`
 
-### `notification.markRead`
+### `notification.getUnreadCount`
+
+- **Auth:** Protected
+- **Input:** None
+- **Output:** `{ count }`
+- **Description:** Returns the number of unread notifications for the user
+
+### `notification.markAsRead`
 
 - **Auth:** Protected
 - **Input:** `{ id }`
 - **Output:** `{ notification }`
 
-### `notification.markAllRead`
+### `notification.markAllAsRead`
 
 - **Auth:** Protected
 - **Input:** None
@@ -462,37 +602,104 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ## Admin Booking (`adminBooking.*`)
 
+### `adminBooking.applyOverride`
+
+- **Auth:** Admin
+- **Input:** `{ bookingId, category, reason, affectedParticipants?, marksAction?, userNote?, internalNote? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel; `marksAction` one of release_holds/compensate_credit/compensate_deduct)
+- **Output:** `{ booking }` — the updated booking
+- **Errors:** `BOOKING_NOT_FOUND` (404), terminal-state override rejected
+- **Description:** Force state transition bypassing the state machine; optionally adjusts held Marks per participant; records audit log + state history + participant notification
+
+### `adminBooking.previewOverride`
+
+- **Auth:** Admin
+- **Input:** Same as `applyOverride`
+- **Output:** `{ bookingId, currentState, projectedState, affectedParticipants, marksAction, perParticipantImpact }` — no persistence
+- **Description:** Returns the projected booking state and per-participant wallet impact before applying
+
 ### `adminBooking.listBookings`
 
 - **Auth:** Admin
-- **Input:** `{ cursor?, limit?, states? }`
+- **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }`
 - **Output:** `{ items: Booking[], nextCursor }`
+- **Description:** Paginated booking list sorted by urgency
 
-### `adminBooking.getBookingDetails`
+### `adminBooking.getBookingStateHistory`
 
 - **Auth:** Admin
 - **Input:** `{ bookingId }`
-- **Output:** `{ booking, participants, stateHistory, payment? }`
+- **Output:** `{ items: BookingStateHistory[] }`
+- **Description:** Returns full state transition history for a booking
 
-### `adminBooking.overrideBooking`
+### `adminBooking.adminRefund`
 
 - **Auth:** Admin
-- **Input:** `{ bookingId, newState, reason, overrideMeta? }`
-- **Output:** `{ previousState, updated }`
-- **Description:** Force state transition bypassing state machine
+- **Input:** `{ paymentId, reason }`
+- **Output:** `{ correction }`
+- **Description:** Issues a compensating ledger entry for a payment error
 
 ---
 
 ## Refund (`refund.*`)
 
-### `refund.processRefund`
+### `refund.createCorrection`
+
+- **Auth:** Admin
+- **Input:** `{ walletId, amount, type, reason, bookingId? }` (`type` one of `compensate_credit`/`compensate_deduct`, `amount` > 0)
+- **Output:** `{ walletId, type, amount }`
+- **Errors:** `WALLET_NOT_FOUND` (404)
+- **Description:** Admin-only: creates a compensating ledger entry for wallet corrections; records a `refund_record` + audit log
+
+### `refund.listCorrections`
+
+- **Auth:** Admin
+- **Input:** `{ walletId, limit?, cursor? }`
+- **Output:** `{ items: LedgerEntry[], nextCursor }` — only `compensate_credit`/`compensate_deduct` entries
+
+---
+
+## Support (`support.*`)
+
+### `support.createTicket`
 
 - **Auth:** Protected
-- **Input:** `{ bookingId, refundReason }`
-- **Output:** `{ refund }`
+- **Input:** `{ category, bookingId?, description }` (`category` one of tutor_late/tutor_no_show/technical/payment/other; `description` max 2,000 chars)
+- **Output:** `{ ticket }`
+- **Errors:** `SUPPORT_BOOKING_ACCESS` (400) — lateness categories require the reporter to be a participant; `LATENESS_REPORT_TOO_EARLY` (400) — booking must have started > 15 min ago
+- **Description:** Reports a tutoring lateness/no-show or another issue; lateness/no-show categories require an associated booking started > 15 minutes ago
 
-### `refund.processCorrection`
+### `support.listTickets`
 
 - **Auth:** Protected
-- **Input:** `{ paymentId, amount, reason }`
-- **Output:** `{ correction }`
+- **Input:** `{ status?, limit? }`
+- **Output:** `{ items: Ticket[] }`
+- **Description:** Returns the authenticated user's support tickets
+
+### `support.adminListTickets`
+
+- **Auth:** Admin
+- **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
+- **Output:** `{ items: Ticket[], total, limit, offset }`
+- **Description:** Returns all support tickets sorted by SLA urgency (earliest deadline first)
+
+### `support.adminResolveTicket`
+
+- **Auth:** Admin
+- **Input:** `{ ticketId, resolution }` (`resolution` max 2,000 chars)
+- **Output:** `{ ticket }`
+- **Errors:** `SUPPORT_TICKET_NOT_FOUND` (404), `SUPPORT_TICKET_ALREADY_RESOLVED` (409)
+- **Description:** Resolves a ticket, assigns the admin, notifies the reporter, and records an audit log
+
+> SLA auto-escalation: the `escalate-support-tickets` scheduler job (15 min) marks open tickets past `slaDeadline` as `in_progress` + escalated (OQ-04 in-app part, #46). Business-hours SLA windows (30 min / 4 h) + WhatsApp escalation tracked U9 in `PRD-GAPS-PHASE3.md`.
+
+---
+
+## Upload (`upload.*`)
+
+### `upload.createUploadUrl`
+
+- **Auth:** Protected
+- **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
+- **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
+- **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
+- **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. achievement `imageUrl`, user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset

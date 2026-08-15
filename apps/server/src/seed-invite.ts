@@ -5,6 +5,7 @@ import {
   INVITE_EXPIRY_DAYS,
   USER_ROLE,
 } from "@cogito-app/api/shared/constants";
+import { hashInviteToken } from "@cogito-app/api/lib/tokens";
 import { env } from "@cogito-app/env/server";
 
 const email = process.argv[2];
@@ -27,9 +28,15 @@ async function main() {
   const active = invites.find((i) => i.status === "invited");
 
   if (active) {
+    // R10: tokens are stored as SHA-256 hashes — printing the stored value
+    // would expose a useless hash as if it were the invite token.
     console.log(`\nActive invite already exists for ${inviteEmail}`);
-    console.log(`Token:    ${active.token}`);
-    console.log(`Link:     ${env.CORS_ORIGIN}/invite?token=${active.token}`);
+    console.log(
+      "Invite tokens are stored hashed, so the plaintext token cannot be recovered.",
+    );
+    console.log(
+      `Create a fresh invite with: bun run seed-invite ${inviteEmail}`,
+    );
     console.log(`Expires:  ${active.expiresAt.toISOString()}\n`);
     return;
   }
@@ -54,7 +61,7 @@ async function main() {
     .values({
       email: inviteEmail,
       displayName: inviteDisplayName,
-      token,
+      token: hashInviteToken(token),
       status: "invited",
       invitedBy: admin.id,
       expiresAt,
@@ -63,8 +70,8 @@ async function main() {
 
   const invite = result[0];
   console.log(`\nInvite created for ${inviteEmail}`);
-  console.log(`Token:    ${invite!.token}`);
-  console.log(`Link:     ${env.CORS_ORIGIN}/invite?token=${invite!.token}`);
+  console.log(`Token:    ${token}`);
+  console.log(`Link:     ${env.CORS_ORIGIN}/invite?token=${token}`);
   console.log(`Expires:  ${invite!.expiresAt.toISOString()}\n`);
 }
 

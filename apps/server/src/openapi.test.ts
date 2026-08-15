@@ -1,12 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { enrichOpenAPISpec } from "./openapi";
-
-function openapiGuard(nodeEnv: string) {
-  if (nodeEnv === "production")
-    return new Response("Not Found", { status: 404 });
-  return null;
-}
+import { openApiAccessDenied } from "@cogito-app/api/lib/request-id";
 
 describe("enrichOpenAPISpec", () => {
   test("adds global tags and sorts paths alphabetically", () => {
@@ -44,16 +39,23 @@ describe("enrichOpenAPISpec", () => {
   });
 });
 
-describe("OpenAPI production guard", () => {
-  test("production guard logic returns 404 when NODE_ENV is production", () => {
-    const result = openapiGuard("production");
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe(404);
+describe("OpenAPI access gate", () => {
+  test("returns 404 in production regardless of session", () => {
+    const prodAuthed = openApiAccessDenied("production", true);
+    expect(prodAuthed).not.toBeNull();
+    expect(prodAuthed!.status).toBe(404);
 
-    const devResult = openapiGuard("development");
-    expect(devResult).toBeNull();
+    const prodAnon = openApiAccessDenied("production", false);
+    expect(prodAnon).not.toBeNull();
+    expect(prodAnon!.status).toBe(404);
+  });
 
-    const testResult = openapiGuard("test");
-    expect(testResult).toBeNull();
+  test("requires an authenticated session outside production", () => {
+    const anon = openApiAccessDenied("development", false);
+    expect(anon).not.toBeNull();
+    expect(anon!.status).toBe(401);
+
+    expect(openApiAccessDenied("development", true)).toBeNull();
+    expect(openApiAccessDenied("test", true)).toBeNull();
   });
 });

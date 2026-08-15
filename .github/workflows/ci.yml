@@ -13,16 +13,27 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx oxlint --format=github
-      - run: bunx oxfmt --check
+      - name: Apply auto-fixable lint and format fixes
+        run: |
+          bunx oxlint --fix || true
+          bunx oxfmt --write || true
+      - name: Commit auto-fixes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: apply automated lint and format fixes"
+          commit_options: "--no-verify"
+      - name: Verify lint
+        run: bunx oxlint --format=github
+      - name: Verify formatting
+        run: bunx oxfmt --check
 
   typecheck:
     name: Type Check
@@ -121,6 +132,8 @@ jobs:
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
       - run: bun test packages/api/src/tests/ apps/server/src/openapi.test.ts
+      - name: "Server unit tests (separate process: webhook test uses mock.module)"
+        run: bun test apps/server/src/
       - name: Test with coverage
         run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts
         continue-on-error: true

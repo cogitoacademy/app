@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+const dateRangeFields = {
+  startAt: z.coerce.date(),
+  endAt: z.coerce.date(),
+};
+
+const endAfterStart = (d: { startAt: Date; endAt: Date }) =>
+  d.endAt.getTime() > d.startAt.getTime();
+
 export const listRoomsInput = z.void();
 
 export const createRoomInput = z.object({
@@ -8,25 +16,37 @@ export const createRoomInput = z.object({
   capacity: z.number().int().min(1),
 });
 
-export const assignRoomInput = z.object({
-  bookingId: z.string().min(1).max(100),
-  roomId: z.string().min(1).max(100),
-  startAt: z.coerce.date(),
-  endAt: z.coerce.date(),
-});
+export const assignRoomInput = z
+  .object({
+    bookingId: z.string().min(1).max(100),
+    roomId: z.string().min(1).max(100),
+    ...dateRangeFields,
+  })
+  .refine(endAfterStart, {
+    message: "endAt must be after startAt",
+    path: ["endAt"],
+  });
 
-export const checkAvailabilityInput = z.object({
-  roomId: z.string().min(1).max(100),
-  startAt: z.coerce.date(),
-  endAt: z.coerce.date(),
-});
+export const checkAvailabilityInput = z
+  .object({
+    roomId: z.string().min(1).max(100),
+    ...dateRangeFields,
+  })
+  .refine(endAfterStart, {
+    message: "endAt must be after startAt",
+    path: ["endAt"],
+  });
 
-export const relocateRoomInput = z.object({
-  bookingId: z.string().min(1).max(100),
-  roomId: z.string().min(1).max(100),
-  startAt: z.coerce.date(),
-  endAt: z.coerce.date(),
-});
+export const relocateRoomInput = z
+  .object({
+    bookingId: z.string().min(1).max(100),
+    roomId: z.string().min(1).max(100),
+    ...dateRangeFields,
+  })
+  .refine(endAfterStart, {
+    message: "endAt must be after startAt",
+    path: ["endAt"],
+  });
 
 export const cancelRoomInput = z.object({
   bookingId: z.string().min(1).max(100),

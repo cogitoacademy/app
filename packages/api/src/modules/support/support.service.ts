@@ -52,14 +52,21 @@ export function createSupportService(deps: {
   const { supportRepo, notification, audit, db } = deps;
 
   async function createTicket(userId: string, input: CreateTicketInput) {
-    let bookingId = input.bookingId ?? null;
+    const bookingId = input.bookingId ?? null;
+
+    let booking: Awaited<
+      ReturnType<typeof supportRepo.findBookingForReporter>
+    > = null;
+    if (bookingId) {
+      // A ticket may only reference a booking the reporter is part of (L2).
+      booking = await supportRepo.findBookingForReporter(db, bookingId, userId);
+      if (!booking) throw new SupportBookingAccessError(bookingId);
+    }
 
     if (LATENESS_CATEGORIES.has(input.category)) {
-      if (!bookingId) throw new SupportBookingAccessError("none");
-      const b = await supportRepo.findBookingForReporter(db, bookingId, userId);
-      if (!b) throw new SupportBookingAccessError(bookingId);
+      if (!booking || !bookingId) throw new SupportBookingAccessError("none");
       const reportableAt = new Date(
-        b.scheduledStartAt.getTime() + LATENESS_TOLERANCE_MS,
+        booking.scheduledStartAt.getTime() + LATENESS_TOLERANCE_MS,
       );
       if (new Date() < reportableAt) {
         throw new LatenessReportTooEarlyError(bookingId);
@@ -94,6 +101,39 @@ export function createSupportService(deps: {
       limit,
       offset: input.offset ?? 0,
     });
+  }
+
+  /**
+   * Auto-escalates open support tickets whose SLA deadline has passed.
+   *
+   * Called by the `escalate-support-tickets` scheduler job. Each overdue ticket
+   * is moved to `in_progress` and an audit entry records the escalation.
+   *
+   * @returns the number of tickets escalated
+   */
+  async function escalatePastSlaTickets(): Promise<{ escalated: number }> {
+    const overdue = await supportRepo.listPastSla(db);
+    let escalated = 0;
+
+    for (const ticket of overdue) {
+      await db.transaction(async (tx) => {
+        await supportRepo.markEscalated(tx, ticket.id);
+        await audit.record({
+          db: tx,
+          actorId: null,
+          actorType: ACTOR_TYPE.SYSTEM,
+          action: "support_ticket_escalated",
+          targetId: ticket.id,
+          targetType: "support_ticket",
+          beforeState: { status: ticket.status },
+          afterState: { status: "in_progress" },
+          details: { slaDeadline: ticket.slaDeadline.toISOString() },
+        });
+      });
+      escalated++;
+    }
+
+    return { escalated };
   }
 
   async function adminResolveTicket(adminId: string, input: AdminResolveInput) {
@@ -138,7 +178,13 @@ export function createSupportService(deps: {
     });
   }
 
-  return { createTicket, listTickets, adminList, adminResolveTicket };
+  return {
+    createTicket,
+    listTickets,
+    adminList,
+    adminResolveTicket,
+    escalatePastSlaTickets,
+  };
 }
 
 export type SupportService = ReturnType<typeof createSupportService>;

@@ -11,6 +11,7 @@ import {
   sql,
   getTableColumns,
   notExists,
+  exists,
 } from "drizzle-orm";
 import {
   booking,
@@ -32,7 +33,9 @@ import {
   ONBOARDING_STATUS,
   LATENESS_TOLERANCE_MS,
   MODALITY,
+  MAX_MEETING_RETRY_ATTEMPTS,
 } from "../../shared/constants";
+import { BOOKING_STATE } from "./booking-state.types";
 
 type BookingRow = typeof bookingTable.$inferSelect;
 
@@ -176,6 +179,21 @@ async function findUserEmails(
 }
 
 /**
+ * Resolves registered users by id (used to validate group-series invitees).
+ *
+ * @param conn - the database connection or active transaction
+ * @param userIds - the user ids to look up
+ * @returns the matching user rows
+ */
+async function findUsersByIds(conn: DbOrTx, userIds: string[]) {
+  if (userIds.length === 0) return [];
+  return conn
+    .select({ id: user.id })
+    .from(user)
+    .where(inArray(user.id, userIds));
+}
+
+/**
  * Lists participants whose confirmation state is RECONFIRMED for a booking.
  *
  * @param conn - the database connection or active transaction
@@ -271,21 +289,28 @@ async function updateBookingPriceSnapshot(
 }
 
 /**
- * Sets a booking's confirmed headcount.
+ * Atomically increments a booking's confirmed headcount by 1 and returns the
+ * fresh booking row. The increment happens in SQL so concurrent confirms can
+ * never lose updates.
  *
  * @param conn - the database connection or active transaction
  * @param bookingId - the booking id
- * @param confirmedHeadcount - the new headcount
+ * @returns the updated booking row
  */
-async function updateBookingConfirmedHeadcount(
+async function incrementBookingConfirmedHeadcount(
   conn: DbOrTx,
   bookingId: string,
-  confirmedHeadcount: number,
 ) {
-  await conn
+  const [row] = await conn
     .update(booking)
-    .set({ confirmedHeadcount })
-    .where(eq(booking.id, bookingId));
+    .set({
+      confirmedHeadcount: sql`${booking.confirmedHeadcount} + 1`,
+    })
+    .where(eq(booking.id, bookingId))
+    .returning();
+  if (!row)
+    throw new Error(`Booking ${bookingId} not found for headcount increment`);
+  return row;
 }
 
 /**
@@ -457,6 +482,13 @@ async function cancelSession(conn: DbOrTx, sessionId: string) {
     .where(eq(bookingSession.id, sessionId));
 }
 
+async function completeSession(conn: DbOrTx, sessionId: string) {
+  await conn
+    .update(bookingSession)
+    .set({ currentState: BOOKING_STATE.COMPLETED })
+    .where(eq(bookingSession.id, sessionId));
+}
+
 async function insertSessionNote(
   conn: DbOrTx,
   values: { bookingId: string; authorId: string; content: string },
@@ -539,7 +571,7 @@ async function updateBookingSchedule(
  *
  * @param conn - the database connection or active transaction
  * @param states - states eligible for expiry
- * @returns up to 500 matching booking rows
+ * @returns up to 100 matching booking rows (per scheduler run)
  */
 async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
   return conn
@@ -551,7 +583,7 @@ async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
         inArray(booking.currentState, states),
       ),
     )
-    .limit(500);
+    .limit(100);
 }
 
 async function findBookingsWithTutorLateness(conn: DbOrTx) {
@@ -581,7 +613,57 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
         notExists(tutorAttended),
       ),
     )
-    .limit(500);
+    .limit(100);
+}
+
+/**
+ * Finds confirmed online bookings whose Google Meet creation failed, for the
+ * `retry-failed-meetings` scheduler job. Each failed create attempt inserts a
+ * `meetingEvent` row with status `failed`, so the retry budget is derived from
+ * the count of failed rows — bookings stop being retried after
+ * `MAX_MEETING_RETRY_ATTEMPTS` failures and are left for manual intervention
+ * (admin meeting-link entry, see PRD-GAPS-PHASE3 U1).
+ *
+ * @param conn - the database connection or active transaction
+ * @param limit - the maximum number of bookings to return
+ * @returns the confirmed online bookings with a failed meeting and retries left
+ */
+async function findConfirmedMeetingsPendingRetry(
+  conn: DbOrTx,
+  limit = 50,
+): Promise<BookingRow[]> {
+  const failedAttempts = conn
+    .select({ count: sql<number>`count(*)::int` })
+    .from(meetingEvent)
+    .where(
+      and(
+        eq(meetingEvent.bookingId, booking.id),
+        eq(meetingEvent.provider, "google_meet"),
+        eq(meetingEvent.status, "failed"),
+      ),
+    );
+  const hasFailedAttempt = conn
+    .select({ id: meetingEvent.id })
+    .from(meetingEvent)
+    .where(
+      and(
+        eq(meetingEvent.bookingId, booking.id),
+        eq(meetingEvent.provider, "google_meet"),
+        eq(meetingEvent.status, "failed"),
+      ),
+    );
+  return conn
+    .select({ ...getTableColumns(booking) })
+    .from(booking)
+    .where(
+      and(
+        eq(booking.currentState, BOOKING_STATE.CONFIRMED),
+        eq(booking.modality, MODALITY.ONLINE),
+        exists(hasFailedAttempt),
+        lt(failedAttempts, MAX_MEETING_RETRY_ATTEMPTS),
+      ),
+    )
+    .limit(limit);
 }
 
 async function findTutorParticipant(
@@ -620,7 +702,10 @@ async function decrementBookingConfirmedHeadcount(
 }
 
 /**
- * Marks all sessions of a series booking as cancelled.
+ * Marks all non-completed sessions of a series booking as cancelled.
+ *
+ * Completed sessions are never clobbered (TC-30): only `scheduled` sessions
+ * transition to `cancelled`.
  *
  * @param conn - the database connection or active transaction
  * @param bookingId - the series booking id
@@ -629,7 +714,34 @@ async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
   await conn
     .update(bookingSession)
     .set({ currentState: "cancelled" })
-    .where(eq(bookingSession.seriesBookingId, bookingId));
+    .where(
+      and(
+        eq(bookingSession.seriesBookingId, bookingId),
+        eq(bookingSession.currentState, BOOKING_STATE.SCHEDULED),
+      ),
+    );
+}
+
+async function findCompletedBookingsByTutor(
+  conn: DbOrTx,
+  tutorId: string,
+  dateFrom?: Date,
+  dateTo?: Date,
+): Promise<BookingRow[]> {
+  const conditions = [
+    eq(booking.tutorId, tutorId),
+    eq(booking.currentState, BOOKING_STATE.COMPLETED),
+  ];
+  if (dateFrom) {
+    conditions.push(gte(booking.scheduledStartAt, dateFrom));
+  }
+  if (dateTo) {
+    conditions.push(lte(booking.scheduledStartAt, dateTo));
+  }
+  return conn
+    .select()
+    .from(booking)
+    .where(and(...conditions));
 }
 
 /**
@@ -774,11 +886,12 @@ export function createBookingRepo(db: DbType) {
     findParticipant,
     findConfirmedParticipants,
     findUserEmails,
+    findUsersByIds,
     findReconfirmedParticipants,
     insertBooking,
     updateBookingCancellationReason,
     updateBookingHoldAmount,
-    updateBookingConfirmedHeadcount,
+    incrementBookingConfirmedHeadcount,
     insertParticipant,
     updateParticipantState,
     insertStateHistory,
@@ -788,6 +901,7 @@ export function createBookingRepo(db: DbType) {
     insertBookingSession,
     findSessionById,
     cancelSession,
+    completeSession,
     insertSessionNote,
     listSessionNotes,
     listSessionsBySeriesId,
@@ -795,12 +909,14 @@ export function createBookingRepo(db: DbType) {
     updateBookingSchedule,
     findBookingsExpiringByDeadline,
     findBookingsWithTutorLateness,
+    findConfirmedMeetingsPendingRetry,
     findTutorParticipant,
     findOverlappingBookings,
     updateBookingVersioned,
     updateBookingDeadline,
     decrementBookingConfirmedHeadcount,
     cancelAllSessions,
+    findCompletedBookingsByTutor,
   };
 }
 

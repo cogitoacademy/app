@@ -294,3 +294,133 @@ describe("createRoomService", () => {
     });
   });
 });
+
+describe("room service notifications (P1-3)", () => {
+  const roomBookingRow = {
+    id: "rb1",
+    roomId: "room1",
+    bookingId: "b1",
+    startAt: new Date("2024-01-01T10:00:00Z"),
+    endAt: new Date("2024-01-01T11:00:00Z"),
+    status: "confirmed",
+  };
+
+  function makePorts() {
+    const notificationPort = { writeBestEffort: mock(async () => {}) };
+    const bookingPort = {
+      transitionBookingToScheduled: mock(async () => {}),
+      getBookingRecipients: mock(async () => ({
+        tutorId: "tutor1",
+        participantUserIds: ["student1", "student2"],
+      })),
+    };
+    return { notificationPort, bookingPort };
+  }
+
+  test("assignRoom notifies tutor and each confirmed student (emailRequired)", async () => {
+    const repo = makeRepo({
+      findRoomById: mock(async () => makeRoom()),
+      findRoomBookingsForUpdate: mock(async () => []),
+      insertRoomBooking: mock(async () => roomBookingRow),
+    });
+    const { notificationPort, bookingPort } = makePorts();
+
+    const service = createRoomService(
+      repo,
+      makeDb(),
+      bookingPort,
+      notificationPort,
+    );
+    await service.assignRoom(
+      "b1",
+      "room1",
+      new Date("2024-01-01T10:00:00Z"),
+      new Date("2024-01-01T11:00:00Z"),
+      "admin1",
+    );
+
+    expect(bookingPort.transitionBookingToScheduled).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      "admin1",
+    );
+    expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(3);
+    const calls = notificationPort.writeBestEffort.mock.calls.map(
+      (c: any) => c[0],
+    );
+    expect(calls.map((c: any) => c.userId).toSorted()).toEqual(
+      ["student1", "student2", "tutor1"].toSorted(),
+    );
+    for (const call of calls) {
+      expect(call.emailRequired).toBe(true);
+      expect(call.category).toBe("booking");
+    }
+    expect(calls[0].eventKey).toContain("room.b1.assigned");
+  });
+
+  test("relocateRoom notifies tutor and confirmed students", async () => {
+    const repo = makeRepo({
+      findRoomById: mock(async () => makeRoom()),
+      findActiveRoomBookingByBookingId: mock(async () => ({
+        id: "rb_old",
+        roomId: "room_old",
+        status: "confirmed",
+      })),
+      findRoomBookingsForUpdate: mock(async () => []),
+      updateRoomBookingStatus: mock(async () => ({
+        id: "rb_old",
+        status: "relocated",
+      })),
+      insertRoomBooking: mock(async () => roomBookingRow),
+    });
+    const { notificationPort, bookingPort } = makePorts();
+
+    const service = createRoomService(
+      repo,
+      makeDb(),
+      bookingPort,
+      notificationPort,
+    );
+    await service.relocateRoom(
+      "b1",
+      "room1",
+      new Date("2024-01-01T10:00:00Z"),
+      new Date("2024-01-01T11:00:00Z"),
+    );
+
+    expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(3);
+    const calls = notificationPort.writeBestEffort.mock.calls.map(
+      (c: any) => c[0],
+    );
+    expect(calls[0].eventKey).toContain("room.b1.relocated");
+  });
+
+  test("cancelRoomBooking notifies tutor and confirmed students", async () => {
+    const repo = makeRepo({
+      findActiveRoomBookingByBookingId: mock(async () => ({
+        id: "rb1",
+        roomId: "room1",
+        status: "confirmed",
+      })),
+      updateRoomBookingStatus: mock(async () => ({
+        id: "rb1",
+        status: "cancelled",
+      })),
+    });
+    const { notificationPort, bookingPort } = makePorts();
+
+    const service = createRoomService(
+      repo,
+      makeDb(),
+      bookingPort,
+      notificationPort,
+    );
+    await service.cancelRoomBooking("b1");
+
+    expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(3);
+    const calls = notificationPort.writeBestEffort.mock.calls.map(
+      (c: any) => c[0],
+    );
+    expect(calls[0].eventKey).toContain("room.b1.cancelled");
+  });
+});
