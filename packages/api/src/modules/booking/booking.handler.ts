@@ -32,6 +32,7 @@ type GetBookingInput = z.infer<typeof getBookingInput>;
 type ListMineInput = z.infer<typeof listMineInput>;
 type ListSessionsInput = z.infer<typeof listSessionsInput>;
 type BookingActionInput = z.infer<typeof bookingActionInput>;
+type RescheduleDecisionInput = BookingActionInput & { proposalId?: string };
 type ConfirmInviteInput = z.infer<typeof confirmInviteInput>;
 type DeclineInviteInput = z.infer<typeof declineInviteInput>;
 type ReconfirmInput = z.infer<typeof reconfirmInput>;
@@ -143,11 +144,15 @@ export function createBookingHandler(booking: BookingService) {
       input,
     }: {
       context: Context;
-      input: BookingActionInput;
+      input: RescheduleDecisionInput;
     }) => {
       return withDomainMap(
         () =>
-          booking.acceptReschedule(context.session!.user.id, input.bookingId),
+          booking.acceptReschedule(
+            context.session!.user.id,
+            input.bookingId,
+            input.proposalId,
+          ),
         mapBookingError,
       );
     },
@@ -157,11 +162,15 @@ export function createBookingHandler(booking: BookingService) {
       input,
     }: {
       context: Context;
-      input: BookingActionInput;
+      input: RescheduleDecisionInput;
     }) => {
       return withDomainMap(
         () =>
-          booking.rejectReschedule(context.session!.user.id, input.bookingId),
+          booking.rejectReschedule(
+            context.session!.user.id,
+            input.bookingId,
+            input.proposalId,
+          ),
         mapBookingError,
       );
     },

@@ -75,24 +75,24 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(cancelBookingInput)
       .handler(handler.cancel),
 
-    acceptReschedule: studentProcedure
+    acceptReschedule: protectedProcedure
       .route({
         method: "POST",
         path: "/booking/reschedule/accept",
         tags: ["Bookings"],
         summary: "Accept reschedule",
-        description: "Student accepts the tutor's reschedule proposal",
+        description: "A required tutor or student accepts the active proposal",
       })
       .input(acceptRescheduleInput)
       .handler(handler.acceptReschedule),
 
-    rejectReschedule: studentProcedure
+    rejectReschedule: protectedProcedure
       .route({
         method: "POST",
         path: "/booking/reschedule/reject",
         tags: ["Bookings"],
         summary: "Reject reschedule",
-        description: "Student rejects the tutor's reschedule proposal",
+        description: "A required tutor or student rejects the active proposal",
       })
       .input(rejectRescheduleInput)
       .handler(handler.rejectReschedule),

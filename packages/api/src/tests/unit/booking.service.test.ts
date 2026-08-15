@@ -2697,7 +2697,7 @@ describe("BookingService", () => {
       expect(notification.write.mock.calls[0][0]).toMatchObject({
         userId: "student1",
         title: "Reschedule proposed",
-        body: "Tutor proposed a new time for the booking.",
+        body: "A new time was proposed for the booking.",
       });
     });
 
@@ -3820,15 +3820,16 @@ describe("BookingService", () => {
 
   describe("Story 2: State Machine Completeness", () => {
     describe("RESCHEDULE_PROPOSED expiry", () => {
-      test("expires reschedule_proposed booking to EXPIRED and releases holds", async () => {
+      test("expires only the proposal, retaining the original booking and hold", async () => {
         const expiringBooking = makeBooking({
           currentState: "reschedule_proposed",
+          previousState: "scheduled",
           holdAmount: 42,
           proposerId: "student1",
         });
-        const p1 = makeParticipant({ heldAmount: 42 });
+        const proposal = { id: "r1", bookingId: "b1", status: "pending" };
 
-        const { service, wallet, repo } = createService({
+        const { service, wallet, repo, meeting } = createService({
           repo: {
             findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
             findBookingById: mock(async () => ({
@@ -3836,9 +3837,9 @@ describe("BookingService", () => {
               currentState: "reschedule_proposed",
               version: 1,
             })),
-            findConfirmedParticipants: mock(async () => [p1]),
+            findPendingRescheduleProposal: mock(async () => proposal),
             updateBookingVersioned: mock(async () => ({
-              updated: { ...expiringBooking, currentState: "expired" },
+              updated: { ...expiringBooking, currentState: "scheduled" },
               newVersion: 2,
             })),
           },
@@ -3847,17 +3848,14 @@ describe("BookingService", () => {
         const result = await service.expireBookings();
 
         expect(result).toEqual({ expired: 1, failed: 0 });
-        expect(wallet.release).toHaveBeenCalledTimes(1);
-        expect(wallet.release.mock.calls[0][1]).toMatchObject({
-          amount: 42,
-          actorType: "system",
-          reason: "Booking expired",
-        });
-        expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect(repo.updateRescheduleProposal).toHaveBeenCalledWith(
           expect.anything(),
-          "b1",
-          0,
+          "r1",
+          expect.objectContaining({ status: "expired" }),
         );
+        expect(wallet.release).not.toHaveBeenCalled();
+        expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+        expect(meeting.cancelEvent).not.toHaveBeenCalled();
       });
     });
 
@@ -4552,7 +4550,7 @@ describe("BookingService", () => {
 
       const result = await service.acceptReschedule("student1", "b1");
 
-      expect(result.currentState).toBe("awaiting_reconfirmation");
+      expect(result.currentState).toBe("awaiting_tutor_review");
       expect(repo.updateRescheduleProposal).toHaveBeenCalledWith(
         expect.anything(),
         "r1",
@@ -4603,6 +4601,88 @@ describe("BookingService", () => {
         startAt: proposal.proposedStartAt,
         endAt: proposal.proposedEndAt,
       });
+    });
+
+    test("partial acceptance records the decision without changing the schedule", async () => {
+      const booking = makeRescheduleBooking({ previousState: "scheduled" });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "student1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 5400_000),
+        decisions: {
+          student1: "accepted" as const,
+          tutor1: "pending" as const,
+          student2: "pending" as const,
+        },
+        status: "pending",
+      };
+      const { service, repo, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          findParticipant: mock(async () => ({ id: "p2", userId: "student2" })),
+        },
+      });
+
+      const result = await service.acceptReschedule("student2", "b1", "r1");
+
+      expect(result.currentState).toBe("reschedule_proposed");
+      expect(repo.updateRescheduleProposal).toHaveBeenCalledWith(
+        expect.anything(),
+        "r1",
+        expect.objectContaining({
+          status: "pending",
+          decisions: {
+            student1: "accepted",
+            tutor1: "pending",
+            student2: "accepted",
+          },
+        }),
+      );
+      expect(repo.updateBookingSchedule).not.toHaveBeenCalled();
+      expect(meeting.updateEvent).not.toHaveBeenCalled();
+    });
+
+    test("tutor can provide the final acceptance and restore scheduled state", async () => {
+      const booking = makeRescheduleBooking({ previousState: "scheduled" });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "student1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 5400_000),
+        decisions: {
+          student1: "accepted" as const,
+          tutor1: "pending" as const,
+        },
+        status: "pending",
+      };
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      const result = await service.acceptReschedule("tutor1", "b1", "r1");
+
+      expect(result.currentState).toBe("scheduled");
+      expect(repo.updateBookingSchedule).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({
+          scheduledStartAt: proposal.proposedStartAt,
+          scheduledEndAt: proposal.proposedEndAt,
+        }),
+      );
     });
 
     test("acceptReschedule throws when caller is not the proposer", async () => {

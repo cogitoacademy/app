@@ -45,21 +45,16 @@ import {
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
-import { formatBookingDate } from "./booking-ui";
+import { formatBookingDate, formatBookingTimeRange } from "./booking-ui";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
-const BOOKING_TIMEZONE = "Asia/Jakarta";
 const TEXTAREA_CLASS =
   "min-h-28 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none transition-colors placeholder:text-dimmed focus:border-input-accent-border";
 
 type DialogKind = "report" | "decline-invite" | null;
 type SupportCategory =
-  | "tutor_late"
-  | "tutor_no_show"
-  | "technical"
-  | "payment"
-  | "other";
+  "tutor_late" | "tutor_no_show" | "technical" | "payment" | "other";
 
 export function BookingLifecycleActions({
   bookingId,
@@ -73,6 +68,9 @@ export function BookingLifecycleActions({
   perStudentMarks,
   proposedStartAt,
   proposedEndAt,
+  activeProposalId,
+  viewerRescheduleDecision,
+  rescheduleReason,
   onBookingChanged,
 }: {
   bookingId: string;
@@ -86,6 +84,9 @@ export function BookingLifecycleActions({
   perStudentMarks?: number;
   proposedStartAt?: string | Date;
   proposedEndAt?: string | Date;
+  activeProposalId?: string;
+  viewerRescheduleDecision?: "pending" | "accepted" | "rejected";
+  rescheduleReason?: string;
   onBookingChanged: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -96,14 +97,14 @@ export function BookingLifecycleActions({
   const [inviteDeclineReason, setInviteDeclineReason] = useState("");
   const [note, setNote] = useState("");
 
-  const isTutor = viewerRole === "tutor";
   const isStudent = viewerRole === "student";
   const isCompleted = currentState === "completed";
   const canDecideReschedule =
     currentState === "reschedule_proposed" &&
-    (isTutor ||
-      (isStudent &&
-        ["confirmed", "reconfirmed"].includes(participantState ?? "")));
+    Boolean(activeProposalId) &&
+    viewerRescheduleDecision === "pending";
+  const hasPendingReschedule =
+    currentState === "reschedule_proposed" && Boolean(activeProposalId);
   const canReportLateness =
     isStudent &&
     ["scheduled", "no_show"].includes(currentState) &&
@@ -226,7 +227,7 @@ export function BookingLifecycleActions({
   );
 
   const hasActions =
-    canDecideReschedule ||
+    hasPendingReschedule ||
     canReportLateness ||
     canRespondToInvite ||
     canReconfirm;
@@ -246,25 +247,39 @@ export function BookingLifecycleActions({
               Manage schedule changes or report an issue with this session.
             </CardDescription>
           </CardHeader>
-          {canDecideReschedule ? (
+          {hasPendingReschedule ? (
             <CardBody className="space-y-3">
-              <Text className="font-medium">
-                Your tutor proposed a new time
-              </Text>
+              <Text className="font-medium">A new time was proposed</Text>
               {proposedStartAt && proposedEndAt ? (
                 <Text className="text-muted">
-                  {formatBookingDate(proposedStartAt, timezone)} until{" "}
-                  {new Intl.DateTimeFormat("en-GB", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    timeZone: timezone ?? BOOKING_TIMEZONE,
-                  }).format(new Date(proposedEndAt))}
+                  {formatBookingDate(proposedStartAt, timezone)} ·{" "}
+                  {formatBookingTimeRange(
+                    proposedStartAt,
+                    proposedEndAt,
+                    timezone,
+                  )}
                 </Text>
               ) : (
                 <Text className="text-muted">
                   Review the proposed schedule and choose whether to continue.
                 </Text>
               )}
+              {rescheduleReason ? (
+                <Text className="text-sm text-muted">
+                  Reason: {rescheduleReason}
+                </Text>
+              ) : null}
+              {viewerRescheduleDecision === "accepted" ? (
+                <Text className="text-sm text-success">
+                  You accepted. Waiting for the remaining participants.
+                </Text>
+              ) : null}
+              {viewerRescheduleDecision === "pending" ? (
+                <Text className="text-xs text-muted">
+                  Accepting records your vote. The booking time changes only
+                  after every required party accepts.
+                </Text>
+              ) : null}
             </CardBody>
           ) : null}
           {canRespondToInvite ? (
@@ -302,7 +317,9 @@ export function BookingLifecycleActions({
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={() => reject.mutate({ bookingId })}
+                  onClick={() =>
+                    reject.mutate({ bookingId, proposalId: activeProposalId })
+                  }
                   progress={reject.isPending}
                   disabled={decisionPending}
                 >
@@ -310,7 +327,9 @@ export function BookingLifecycleActions({
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => accept.mutate({ bookingId })}
+                  onClick={() =>
+                    accept.mutate({ bookingId, proposalId: activeProposalId })
+                  }
                   progress={accept.isPending}
                   disabled={decisionPending}
                 >

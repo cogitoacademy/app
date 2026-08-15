@@ -168,7 +168,11 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.acceptReschedule).toHaveBeenCalledWith("u1", "b1");
+      expect(booking.acceptReschedule).toHaveBeenCalledWith(
+        "u1",
+        "b1",
+        undefined,
+      );
       expect(result).toEqual({
         id: "b1",
         currentState: "awaiting_reconfirmation",
@@ -188,7 +192,11 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.rejectReschedule).toHaveBeenCalledWith("u1", "b1");
+      expect(booking.rejectReschedule).toHaveBeenCalledWith(
+        "u1",
+        "b1",
+        undefined,
+      );
       expect(result).toEqual({
         id: "b1",
         currentState: "awaiting_tutor_review",

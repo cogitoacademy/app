@@ -199,17 +199,12 @@ export function BookingDetailPage({
   const history = booking.stateHistory.toSorted(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
-  const rescheduleEntry = history.find(
-    (entry) => entry.toState === "reschedule_proposed",
+  const activeRescheduleProposal = booking.rescheduleProposals.find(
+    (proposal) => proposal.status === "pending",
   );
-  const proposedStartAt = getMetadataDate(
-    rescheduleEntry?.metadata,
-    "proposedStartAt",
-  );
-  const proposedEndAt = getMetadataDate(
-    rescheduleEntry?.metadata,
-    "proposedEndAt",
-  );
+  const viewerRescheduleDecision = activeRescheduleProposal?.decisions?.[
+    viewerId
+  ] as "pending" | "accepted" | "rejected" | undefined;
   const canReview = isTutor && booking.currentState === "awaiting_tutor_review";
   const canComplete = isTutor && booking.currentState === "scheduled";
   const sessionHasEnded =
@@ -475,8 +470,11 @@ export function BookingDetailPage({
         participantRole={viewerParticipant?.role}
         participantState={viewerParticipant?.confirmationState}
         perStudentMarks={booking.priceSnapshot?.perStudent}
-        proposedStartAt={proposedStartAt}
-        proposedEndAt={proposedEndAt}
+        activeProposalId={activeRescheduleProposal?.id}
+        viewerRescheduleDecision={viewerRescheduleDecision}
+        proposedStartAt={activeRescheduleProposal?.proposedStartAt}
+        proposedEndAt={activeRescheduleProposal?.proposedEndAt}
+        rescheduleReason={activeRescheduleProposal?.reason ?? undefined}
         onBookingChanged={refreshBookingQueries}
       />
 
@@ -662,12 +660,4 @@ function BookingDetailSkeleton() {
       <Card className="min-h-80 bg-accent/40" />
     </div>
   );
-}
-
-function getMetadataDate(
-  metadata: Record<string, unknown> | null | undefined,
-  key: string,
-) {
-  const value = metadata?.[key];
-  return typeof value === "string" || value instanceof Date ? value : undefined;
 }

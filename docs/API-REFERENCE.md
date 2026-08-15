@@ -404,17 +404,17 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.acceptReschedule`
 
-- **Auth:** Student participant
-- **Input:** `{ bookingId, sessionId? }`
+- **Auth:** Protected; required tutor or active student voter
+- **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Records this participant's decision; the proposed session time is applied only after the tutor and every active student accept
+- **Description:** Records one acceptance on the active proposal. Partial acceptance does not change the schedule; unanimous tutor + active-student acceptance applies the proposed 90-minute time and restores the booking state that was active before the proposal.
 
 ### `booking.rejectReschedule`
 
-- **Auth:** Student participant
-- **Input:** `{ bookingId, sessionId? }`
+- **Auth:** Protected; required tutor or active student voter
+- **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Rejects the active proposal while preserving the original schedule
+- **Description:** Rejects the active proposal, preserves the original schedule, and restores the booking state that was active before the proposal
 
 ### `booking.proposeReschedule`
 

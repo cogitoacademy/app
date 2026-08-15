@@ -232,7 +232,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
 - `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason?)` — Tutor or booking proposer proposes a fixed 90-minute replacement for one session
-- `decideReschedule(actorId, actorRole, bookingId, sessionId, decision)` — Records tutor/student acceptance or rejection; applies the schedule only on unanimous acceptance
+- `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state.
 - `addSessionNote(userId, bookingId, content)` — Adds a sanitized note to a completed session
 - `getSessionNotes(userId, bookingId)` — Lists notes for a completed session
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late so the lateness job skips the booking
@@ -257,7 +257,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - Wallet holds are released on cancel, decline, and expiry
 - Overlap detection prevents double-booking tutor slots
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
-- Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. Only the tutor may propose outside the original availability window.
+- Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. Only the tutor may propose outside the original availability window.
 - Optimistic locking via `version` field prevents concurrent state changes
 - Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run.
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)

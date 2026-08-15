@@ -1482,7 +1482,11 @@ export function createBookingService(deps: {
             });
 
       const participants = await repo.findConfirmedParticipants(tx, bookingId);
-      const voters = new Set([b.tutorId, ...participants.map((p) => p.userId)]);
+      const voters = new Set([
+        b.tutorId,
+        b.proposerId,
+        ...participants.map((p) => p.userId),
+      ]);
       const decisions = Object.fromEntries(
         [...voters].map((id) => [id, id === userId ? "accepted" : "pending"]),
       ) as Record<string, "pending" | "accepted" | "rejected">;
@@ -1505,107 +1509,126 @@ export function createBookingService(deps: {
         new Date(Date.now() + 24 * 60 * 60 * 1000),
       );
 
-      await notification.write({
-        db: tx,
-        userId: b.proposerId,
-        bookingId,
-        category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.ACTION,
-        title: "Reschedule proposed",
-        body: "Tutor proposed a new time for the booking.",
-        eventKey: `booking.${bookingId}.reschedule_proposed`,
-        emailRequired: true,
-      });
+      for (const recipientId of [...voters].filter((id) => id !== userId)) {
+        await notification.write({
+          db: tx,
+          userId: recipientId,
+          bookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Reschedule proposed",
+          body: "A new time was proposed for the booking.",
+          eventKey: `booking.${bookingId}.reschedule_proposed`,
+          emailRequired: true,
+        });
+      }
 
       return updated;
     });
   }
 
-  async function acceptReschedule(userId: string, bookingId: string) {
-    const { proposal, updated } = await db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
-      if (!b) throw new BookingNotFoundError(bookingId);
-      await assertBookingAccess(b, userId, tx, bookingId);
-      if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
-        throw new BookingRescheduleNotPendingError(bookingId);
-      }
+  async function acceptReschedule(
+    userId: string,
+    bookingId: string,
+    proposalId?: string,
+  ) {
+    const { proposal, updated, finalized } = await db.transaction(
+      async (tx) => {
+        const b = await repo.findBookingById(tx, bookingId);
+        if (!b) throw new BookingNotFoundError(bookingId);
+        await assertBookingAccess(b, userId, tx, bookingId);
+        if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
+          throw new BookingRescheduleNotPendingError(bookingId);
+        }
 
-      const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
-      if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
+        const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
+        if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
+        if (proposalId && pending.id !== proposalId) {
+          throw new BookingRescheduleNotFoundError(bookingId);
+        }
 
-      const currentDecisions = pending.decisions ?? {
-        [b.tutorId]: "accepted",
-        [b.proposerId]: "pending",
-      };
-      if (!(userId in currentDecisions)) {
-        throw new BookingNotOwnedError(bookingId, userId);
-      }
-      const decisions = { ...currentDecisions, [userId]: "accepted" as const };
-      const allAccepted = Object.values(decisions).every(
-        (decision) => decision === "accepted",
-      );
+        const currentDecisions = pending.decisions ?? {
+          [b.tutorId]: "accepted",
+          [b.proposerId]: "pending",
+        };
+        if (!(userId in currentDecisions)) {
+          throw new BookingNotOwnedError(bookingId, userId);
+        }
+        const decisions = {
+          ...currentDecisions,
+          [userId]: "accepted" as const,
+        };
+        const allAccepted = Object.values(decisions).every(
+          (decision) => decision === "accepted",
+        );
 
-      await repo.updateRescheduleProposal(tx, pending.id, {
-        decisions,
-        status: allAccepted ? "accepted" : "pending",
-        decidedAt: allAccepted ? new Date() : undefined,
-      });
-
-      if (!allAccepted) {
-        return { proposal: pending, updated: b, finalized: false };
-      }
-
-      if (pending.sessionId) {
-        await repo.updateSessionSchedule(tx, pending.sessionId, {
-          scheduledStartAt: pending.proposedStartAt,
-          scheduledEndAt: pending.proposedEndAt,
+        await repo.updateRescheduleProposal(tx, pending.id, {
+          decisions,
+          status: allAccepted ? "accepted" : "pending",
+          decidedAt: allAccepted ? new Date() : undefined,
         });
-      } else {
-        await repo.updateBookingSchedule(tx, bookingId, {
-          scheduledStartAt: pending.proposedStartAt,
-          scheduledEndAt: pending.proposedEndAt,
-        });
-      }
 
-      const transitioned = await transition(
-        tx,
-        bookingId,
-        BOOKING_STATE.AWAITING_RECONFIRMATION,
-        {
+        if (!allAccepted) {
+          return { proposal: pending, updated: b, finalized: false };
+        }
+
+        if (pending.sessionId) {
+          await repo.updateSessionSchedule(tx, pending.sessionId, {
+            scheduledStartAt: pending.proposedStartAt,
+            scheduledEndAt: pending.proposedEndAt,
+          });
+        } else {
+          await repo.updateBookingSchedule(tx, bookingId, {
+            scheduledStartAt: pending.proposedStartAt,
+            scheduledEndAt: pending.proposedEndAt,
+          });
+        }
+
+        const targetState =
+          (b.previousState as BookingState | null) ??
+          BOOKING_STATE.AWAITING_TUTOR_REVIEW;
+        const transitioned = await transition(tx, bookingId, targetState, {
           actorId: userId,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: "Student accepted the reschedule proposal",
+          actorType:
+            userId === b.tutorId ? ACTOR_TYPE.TUTOR : ACTOR_TYPE.STUDENT,
+          reason: "All required parties accepted the reschedule proposal",
           metadata: {
             proposedStartAt: pending.proposedStartAt,
             proposedEndAt: pending.proposedEndAt,
           },
-        },
-      );
+        });
 
-      await repo.updateBookingDeadline(
-        tx,
-        bookingId,
-        new Date(Date.now() + RESPONSE_WINDOW_MS),
-      );
+        if (targetState === BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(Date.now() + RESPONSE_WINDOW_MS),
+          );
+        }
 
-      await notification.write({
-        db: tx,
-        userId: b.tutorId,
-        bookingId,
-        category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.ACTION,
-        title: "Reschedule accepted",
-        body: "The student accepted the proposed new time.",
-        eventKey: `booking.${bookingId}.reschedule_accepted`,
-        emailRequired: true,
-      });
+        for (const recipientId of Object.keys(decisions).filter(
+          (id) => id !== userId,
+        )) {
+          await notification.write({
+            db: tx,
+            userId: recipientId,
+            bookingId,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.ACTION,
+            title: "Reschedule accepted",
+            body: "Every required party accepted the proposed new time.",
+            eventKey: `booking.${bookingId}.reschedule_accepted`,
+            emailRequired: true,
+          });
+        }
 
-      return { proposal: pending, updated: transitioned, finalized: true };
-    });
+        return { proposal: pending, updated: transitioned, finalized: true };
+      },
+    );
 
     // Move the provider-side meeting event to the new time (FR-21/OQ-05).
     // Best-effort: a Google failure must not roll back the accepted reschedule.
-    if (updated.currentState === BOOKING_STATE.AWAITING_RECONFIRMATION) {
+    if (finalized) {
       await meeting.updateEvent(bookingId, {
         startAt: proposal.proposedStartAt,
         endAt: proposal.proposedEndAt,
@@ -1615,7 +1638,11 @@ export function createBookingService(deps: {
     return updated;
   }
 
-  async function rejectReschedule(userId: string, bookingId: string) {
+  async function rejectReschedule(
+    userId: string,
+    bookingId: string,
+    proposalId?: string,
+  ) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
@@ -1626,6 +1653,9 @@ export function createBookingService(deps: {
 
       const proposal = await repo.findPendingRescheduleProposal(tx, bookingId);
       if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
+      if (proposalId && proposal.id !== proposalId) {
+        throw new BookingRescheduleNotFoundError(bookingId);
+      }
 
       const currentDecisions = proposal.decisions ?? {
         [b.tutorId]: "accepted",
@@ -1660,21 +1690,25 @@ export function createBookingService(deps: {
 
       const updated = await transition(tx, bookingId, revertTarget, {
         actorId: userId,
-        actorType: ACTOR_TYPE.STUDENT,
-        reason: "Student rejected the reschedule proposal",
+        actorType: userId === b.tutorId ? ACTOR_TYPE.TUTOR : ACTOR_TYPE.STUDENT,
+        reason: "A required party rejected the reschedule proposal",
       });
 
-      await notification.write({
-        db: tx,
-        userId: b.tutorId,
-        bookingId,
-        category: NOTIFICATION_CATEGORY.BOOKING,
-        severity: NOTIFICATION_SEVERITY.ACTION,
-        title: "Reschedule rejected",
-        body: "The student declined the proposed new time.",
-        eventKey: `booking.${bookingId}.reschedule_rejected`,
-        emailRequired: true,
-      });
+      for (const recipientId of Object.keys(currentDecisions).filter(
+        (id) => id !== userId,
+      )) {
+        await notification.write({
+          db: tx,
+          userId: recipientId,
+          bookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Reschedule rejected",
+          body: "A required party declined the proposed new time.",
+          eventKey: `booking.${bookingId}.reschedule_rejected`,
+          emailRequired: true,
+        });
+      }
 
       return updated;
     });
@@ -2877,7 +2911,34 @@ export function createBookingService(deps: {
 
     const outcomes = await mapLimit(candidates, 5, async (b) => {
       try {
+        let shouldCancelMeeting = true;
         await db.transaction(async (tx) => {
+          if (b.currentState === BOOKING_STATE.RESCHEDULE_PROPOSED) {
+            shouldCancelMeeting = false;
+            const proposal = await repo.findPendingRescheduleProposal(tx, b.id);
+            if (proposal) {
+              await repo.updateRescheduleProposal(tx, proposal.id, {
+                status: "expired",
+                decidedAt: new Date(),
+              });
+            }
+            const targetState =
+              (b.previousState as BookingState | null) ??
+              BOOKING_STATE.AWAITING_TUTOR_REVIEW;
+            await transition(tx, b.id, targetState, {
+              actorId: "system",
+              actorType: ACTOR_TYPE.SYSTEM,
+              reason: "Reschedule proposal expired; original time retained",
+            });
+            await repo.updateBookingDeadline(
+              tx,
+              b.id,
+              targetState === BOOKING_STATE.AWAITING_TUTOR_REVIEW
+                ? new Date(Date.now() + RESPONSE_WINDOW_MS)
+                : new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+            );
+            return;
+          }
           // FR-16/TC-18: when a group deadline passes with a partial headcount
           // (>= 2 but < target), reprice to the final per-student total and
           // move the group to a fresh 12h reconfirmation window instead of
@@ -2978,7 +3039,7 @@ export function createBookingService(deps: {
         });
         // Best-effort cleanup of the provider-side event once the booking is
         // terminal (FR-21/OQ-05). No-op when no live event exists.
-        await meeting.cancelEvent(b.id);
+        if (shouldCancelMeeting) await meeting.cancelEvent(b.id);
         return { ok: true };
       } catch (error) {
         log({
