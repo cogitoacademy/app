@@ -538,11 +538,29 @@ export function createGoogleMeetingProvider(
 
       const externalEventId = event.id ?? null;
       const immediateMeetingUrl = getMeetUrl(event);
-      const meetingUrl =
-        immediateMeetingUrl ??
-        (externalEventId
-          ? await waitForMeetUrl(externalEventId, oauthAccessToken ?? undefined)
-          : null);
+      let meetingUrl: string | null = null;
+      if (immediateMeetingUrl) {
+        meetingUrl = immediateMeetingUrl;
+      } else if (externalEventId) {
+        // R8: the Google event was already created — a failure to poll for
+        // the Meet URL must NOT discard the created event (a `failed` row
+        // would cause a duplicate Google event on retry). Log and continue
+        // with meetingUrl null instead.
+        try {
+          meetingUrl = await waitForMeetUrl(
+            externalEventId,
+            oauthAccessToken ?? undefined,
+          );
+        } catch (error) {
+          log({
+            level: "warn",
+            action: "google_meet_url_poll_failed",
+            bookingId,
+            eventId: externalEventId,
+            error: { message: String(error) },
+          });
+        }
+      }
 
       const [row] = await db
         .insert(meetingEvent)

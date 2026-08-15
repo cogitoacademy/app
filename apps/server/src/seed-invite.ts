@@ -28,9 +28,15 @@ async function main() {
   const active = invites.find((i) => i.status === "invited");
 
   if (active) {
+    // R10: tokens are stored as SHA-256 hashes — printing the stored value
+    // would expose a useless hash as if it were the invite token.
     console.log(`\nActive invite already exists for ${inviteEmail}`);
-    console.log(`Token:    ${active.token}`);
-    console.log(`Link:     ${env.CORS_ORIGIN}/invite?token=${active.token}`);
+    console.log(
+      "Invite tokens are stored hashed, so the plaintext token cannot be recovered.",
+    );
+    console.log(
+      `Create a fresh invite with: bun run seed-invite ${inviteEmail}`,
+    );
     console.log(`Expires:  ${active.expiresAt.toISOString()}\n`);
     return;
   }

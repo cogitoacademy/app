@@ -38,6 +38,7 @@ function makeAchievementRepo(overrides: Record<string, unknown> = {}) {
     adminList: mock(async () => []),
     getById: mock(async () => ({
       id: "a1",
+      eventName: "Olympiad",
       status: ACHIEVEMENT_STATUS.PENDING_REVIEW,
     })),
     updateStatus: mock(async () => ({
@@ -526,7 +527,11 @@ describe("AchievementService", () => {
     });
 
     test("updates status and records audit in transaction", async () => {
-      const existing = { id: "a1", status: ACHIEVEMENT_STATUS.PENDING_REVIEW };
+      const existing = {
+        id: "a1",
+        eventName: "Olympiad",
+        status: ACHIEVEMENT_STATUS.PENDING_REVIEW,
+      };
       const updated = { id: "a1", status: "approved" };
       const repo = makeAchievementRepo({
         getById: mock(async () => existing),
@@ -557,7 +562,11 @@ describe("AchievementService", () => {
     });
 
     test("records audit with rejection action", async () => {
-      const existing = { id: "a1", status: ACHIEVEMENT_STATUS.PENDING_REVIEW };
+      const existing = {
+        id: "a1",
+        eventName: "Olympiad",
+        status: ACHIEVEMENT_STATUS.PENDING_REVIEW,
+      };
       const updated = { id: "a1", status: "rejected" };
       const repo = makeAchievementRepo({
         getById: mock(async () => existing),

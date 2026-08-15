@@ -149,8 +149,8 @@ export function createAchievementService(deps: {
             : "Achievement rejected",
         body:
           input.status === "approved"
-            ? `Your achievement "${existing.eventName}" was approved.`
-            : `Your achievement "${existing.eventName}" was rejected.${
+            ? `Your achievement "${escapeHtml(existing.eventName)}" was approved.`
+            : `Your achievement "${escapeHtml(existing.eventName)}" was rejected.${
                 input.adminNote ? ` ${escapeHtml(input.adminNote)}` : ""
               }`,
         eventKey: `achievement.${input.achievementId}.reviewed`,
