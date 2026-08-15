@@ -278,6 +278,26 @@ export function createPaymentService(deps: {
           tx,
         );
 
+        // R5: a REFUNDED webhook reverses the marks credited on PAID/SETTLED
+        // (only if the record actually went through a credit). Uses the
+        // compensate_deduct primitive — it removes the marks from the
+        // available balance, unlike `deduct` which only releases holds.
+        if (
+          input.status === PAYMENT_STATUS.REFUNDED &&
+          (record.status === PAYMENT_STATUS.PAID ||
+            record.status === PAYMENT_STATUS.SETTLED)
+        ) {
+          await wallet.compensate(tx, {
+            walletId: record.walletId,
+            amount: record.marks,
+            eventKey: `refund.${record.id}.reverse`,
+            sourceReference: record.id,
+            actorType: "system",
+            reason: "Refund: reversed credited marks",
+            type: "compensate_deduct",
+          });
+        }
+
         if (notification && input.status === PAYMENT_STATUS.REFUNDED) {
           await notification.writeBestEffort({
             db: tx,

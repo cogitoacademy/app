@@ -111,6 +111,31 @@ describe("createR2Storage", () => {
     expect(sizeCondition).toBeTruthy();
     expect(sizeCondition[2]).toBe(5 * 1024 * 1024);
   });
+
+  test("presigned POST policy covers every x-amz form field (R4)", async () => {
+    const { fields } = await s.getSignedUploadUrl(
+      "user-1/uuid-avatar.png",
+      "image/png",
+    );
+    const policy = JSON.parse(
+      Buffer.from(fields.policy, "base64").toString("utf-8"),
+    ) as {
+      conditions: unknown[];
+    };
+    const alg = policy.conditions.find(
+      (c) => Array.isArray(c) && c[0] === "eq" && c[1] === "$x-amz-algorithm",
+    ) as [string, string, string];
+    expect(alg).toBeTruthy();
+    expect(alg[2]).toBe("AWS4-HMAC-SHA256");
+    const cred = policy.conditions.find(
+      (c) => Array.isArray(c) && c[0] === "eq" && c[1] === "$x-amz-credential",
+    ) as [string, string, string];
+    expect(cred[2]).toBe(fields["x-amz-credential"]);
+    const date = policy.conditions.find(
+      (c) => Array.isArray(c) && c[0] === "eq" && c[1] === "$x-amz-date",
+    ) as [string, string, string];
+    expect(date[2]).toBe(fields["x-amz-date"]);
+  });
 });
 
 describe("createStorage", () => {

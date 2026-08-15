@@ -440,7 +440,7 @@ Run the booking unit tests + `booking-g4.test.ts` integration (group withdraw fl
 - Modify: `packages/api/src/lib/storage.ts:65-73`
 - Test: `packages/api/src/lib/storage.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `storage.test.ts`'s `createR2Storage` describe, extend the POST-policy test:
 
@@ -471,11 +471,11 @@ test("presigned POST policy covers every x-amz form field (R4)", async () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Expected: FAIL — the conditions are absent.
 
-- [ ] **Step 3: Fix `createPresignedPost`**
+- [x] **Step 3: Fix `createPresignedPost`**
 
 In `packages/api/src/lib/storage.ts`, extend the policy conditions:
 
@@ -494,7 +494,7 @@ const policy = {
 };
 ```
 
-- [ ] **Step 4: Run tests + commit**
+- [x] **Step 4: Run tests + commit**
 
 `bun test --env-file apps/server/.env packages/api/src/lib/storage.test.ts` → PASS.
 Commit: `fix(upload): bind x-amz fields in the presigned POST policy (R4)`
@@ -513,17 +513,17 @@ Commit: `fix(upload): bind x-amz fields in the presigned POST policy (R4)`
 - Consumes: `PaymentWalletPort` (hold/release/deduct/credit/compensate).
 - Produces: on a REFUNDED webhook for a PAID/SETTLED payment, the wallet credits are reversed (deduct the credited marks from available balance) with a deterministic ledger key `refund.{payment.id}.reverse`, `sourceReference: payment.id`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Unit test: `payment.service.ts` — confirm REFUNDED with a previously PAID payment calls `wallet.deduct` with the credited marks and writes the payment REFUNDED.
 
 Unit test: `xendit-payment.provider.ts` — `mapXenditStatus("REFUNDED")` returns `"REFUNDED"`.
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Expected: FAIL — no deduct on REFUNDED; `mapXenditStatus` throws for "REFUNDED".
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `xendit-payment.provider.ts`, add `REFUNDED: "REFUNDED"` to the status map.
 
@@ -551,9 +551,11 @@ if (
 
 Verify `PaymentWalletPort` in `modules/payment/index.ts` exposes `deduct` (the wallet service does). If it does not, add `deduct(db, params)` to the port and wire it in `services.ts`.
 
-- [ ] **Step 4: Run payment + xendit tests + commit**
+ - [x] **Step 4: Run payment + xendit tests + commit**
 
 `fix(payment): reverse credited marks on REFUNDED webhook and map Xendit status (R5)`
+
+> **Execution note (PR C):** Task C.2's suggested `wallet.deduct` was replaced by `wallet.compensate` with `type: "compensate_deduct"` — `deduct` only releases holds (`heldBalance >= amount`), so it can never reverse a purchase credit; `compensate_deduct` removes the marks from the available balance (the same primitive the admin refund/correction flow uses). The `PaymentWalletPort` gained `compensate` instead of `deduct`.
 
 ---
 
@@ -566,9 +568,9 @@ Verify `PaymentWalletPort` in `modules/payment/index.ts` exposes `deduct` (the w
 - Modify: `packages/api/src/modules/notification/notification.repo.ts:190-196`
 - Test: `packages/api/src/tests/unit/notification.repo.test.ts`
 
-- [ ] **Step 1:** Extend the `claimPendingDispatches` unit test with a case asserting the reclaim branch excludes rows with `attempts >= MAX_DISPATCH_ATTEMPTS` (inspect the WHERE SQL node or add an integration test: insert a row with `status='sending'`, `attempts=3`, `created_at < now()-11min`, run `dispatchQueuedEmails`, assert the row is NOT claimed).
-- [ ] **Step 2:** Change the SQL so the stale branch is `OR (status = 'sending' AND attempts < ${MAX_DISPATCH_ATTEMPTS} AND created_at < now() - interval '10 minutes')`.
-- [ ] **Step 3:** Tests pass; commit `fix(notification): cap stale-sending reclaim by attempts (R6)`
+- [x] **Step 1:** Extend the `claimPendingDispatches` unit test with a case asserting the reclaim branch excludes rows with `attempts >= MAX_DISPATCH_ATTEMPTS` (inspect the WHERE SQL node or add an integration test: insert a row with `status='sending'`, `attempts=3`, `created_at < now()-11min`, run `dispatchQueuedEmails`, assert the row is NOT claimed).
+- [x] **Step 2:** Change the SQL so the stale branch is `OR (status = 'sending' AND attempts < ${MAX_DISPATCH_ATTEMPTS} AND created_at < now() - interval '10 minutes')`.
+- [x] **Step 3:** Tests pass; commit `fix(notification): cap stale-sending reclaim by attempts (R6)`
 
 ### Task D.2: Short webhook idempotency claim TTL (R7)
 
@@ -577,9 +579,9 @@ Verify `PaymentWalletPort` in `modules/payment/index.ts` exposes `deduct` (the w
 - Modify: `apps/server/src/webhooks/payments.ts:88-92`
 - Test: `apps/server/src/webhooks/stub-checkout.test.ts`
 
-- [ ] **Step 1:** Write a test asserting `webhookIdempotency.claim(key, 120)` is invoked with the 120s TTL (or refactor `claim` to accept and assert the TTL on the Redis client mock).
-- [ ] **Step 2:** Change the claim call to `webhookIdempotency.claim(idempotencyKey, 120)` (2-minute claim window; `markProcessed` still stores the 24h processed record).
-- [ ] **Step 3:** Commit `fix(webhooks): short idempotency claim TTL so crashes don't lock the key for 24h (R7)`
+- [x] **Step 1:** Write a test asserting `webhookIdempotency.claim(key, 120)` is invoked with the 120s TTL (or refactor `claim` to accept and assert the TTL on the Redis client mock).
+- [x] **Step 2:** Change the claim call to `webhookIdempotency.claim(idempotencyKey, 120)` (2-minute claim window; `markProcessed` still stores the 24h processed record).
+- [x] **Step 3:** Commit `fix(webhooks): short idempotency claim TTL so crashes don't lock the key for 24h (R7)`
 
 ### Task D.3: `waitForMeetUrl` failure keeps the event created (R8)
 
@@ -588,9 +590,9 @@ Verify `PaymentWalletPort` in `modules/payment/index.ts` exposes `deduct` (the w
 - Modify: `packages/api/src/modules/meeting/google-meeting.provider.ts:542-598`
 - Test: `packages/api/src/tests/unit/google-meeting.provider.test.ts`
 
-- [ ] **Step 1:** Write a unit test: Google insert succeeds, the URL poll (service-account `calendar.events.get`) throws → `createEvent` returns a row with `status: "created"` and `meetingUrl: null` (NOT a `failed` row), and the retry job no longer re-creates the event.
-- [ ] **Step 2:** Wrap the `waitForMeetUrl(...)` call in try/catch: on error, log a warning and continue with `meetingUrl: null`; only the insert/calendar-create failure path produces a `failed` row.
-- [ ] **Step 3:** Commit `fix(meeting): keep created events on URL-poll failure to avoid duplicates (R8)`
+- [x] **Step 1:** Write a unit test: Google insert succeeds, the URL poll (service-account `calendar.events.get`) throws → `createEvent` returns a row with `status: "created"` and `meetingUrl: null` (NOT a `failed` row), and the retry job no longer re-creates the event.
+- [x] **Step 2:** Wrap the `waitForMeetUrl(...)` call in try/catch: on error, log a warning and continue with `meetingUrl: null`; only the insert/calendar-create failure path produces a `failed` row.
+- [x] **Step 3:** Commit `fix(meeting): keep created events on URL-poll failure to avoid duplicates (R8)`
 
 ### Task D.4: Escape eventName in admin review + seed-invite hash print (R9, R10)
 
@@ -600,9 +602,9 @@ Verify `PaymentWalletPort` in `modules/payment/index.ts` exposes `deduct` (the w
 - Modify: `apps/server/src/seed-invite.ts`
 - Test: `packages/api/src/tests/unit/achievement.service.test.ts`
 
-- [ ] **Step 1:** Wrap `existing.eventName` in `escapeHtml` in the adminReview notification body; add a unit test (adminNote already tested; add `<script>` eventName case).
-- [ ] **Step 2:** In `seed-invite.ts`, when an active invite is found, print that invite tokens are stored hashed and instruct the user to create a fresh invite (`bun run seed-invite <email>` creates a new one); never print the stored hash.
-- [ ] **Step 3:** Commit `fix(achievement/seed): escape eventName in review email; don't print hashed invite tokens (R9/R10)`
+- [x] **Step 1:** Wrap `existing.eventName` in `escapeHtml` in the adminReview notification body; add a unit test (adminNote already tested; add `<script>` eventName case).
+- [x] **Step 2:** In `seed-invite.ts`, when an active invite is found, print that invite tokens are stored hashed and instruct the user to create a fresh invite (`bun run seed-invite <email>` creates a new one); never print the stored hash.
+- [x] **Step 3:** Commit `fix(achievement/seed): escape eventName in review email; don't print hashed invite tokens (R9/R10)`
 
 ---
 
@@ -644,9 +646,9 @@ Commit per file group: `test(api): raise <module> coverage above 90%`
 - Modify: `packages/api/src/modules/wallet/wallet.service.ts:421-435`
 - Modify: `packages/api/src/tests/unit/wallet.service.test.ts`, `wallet.handler.test.ts`
 
-- [ ] **Step 1:** Add the failing case: wallet with `availableBalance: 30`, `heldBalance: 10` (`totalBalance: 40`) → `knowledgeBankEligible` returns `eligible: true`.
-- [ ] **Step 2:** Change `knowledgeBankEligible` to compare and return `totalBalance` (both `eligible` and `balance` fields).
-- [ ] **Step 3:** Commit `fix(wallet): Knowledge Bank eligibility uses total balance (U13)`
+- [x] **Step 1:** Add the failing case: wallet with `availableBalance: 30`, `heldBalance: 10` (`totalBalance: 40`) → `knowledgeBankEligible` returns `eligible: true`.
+- [x] **Step 2:** Change `knowledgeBankEligible` to compare and return `totalBalance` (both `eligible` and `balance` fields).
+- [x] **Step 3:** Commit `fix(wallet): Knowledge Bank eligibility uses total balance (U13)`
 
 ### Task F.2: Group-series withdraw guard (U4)
 
@@ -657,9 +659,9 @@ Commit per file group: `test(api): raise <module> coverage above 90%`
 - Modify: `packages/api/src/modules/booking/booking.router.ts` + `booking.handler.ts` (map the error via `mapBookingError` — check the handler's error mapper)
 - Test: `packages/api/src/tests/unit/booking.service.test.ts` + integration
 
-- [ ] **Step 1:** Failing test: confirmed group-series participant calls `withdraw` → rejected with the new error; solo-series withdraw still works.
-- [ ] **Step 2:** Implement the guard at the top of `withdraw` (before any wallet movement): `if (b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1) throw new BookingSeriesNoOptOutError(bookingId);`
-- [ ] **Step 3:** Commit `fix(booking): block group-series full-series withdrawal (U4)`
+- [x] **Step 1:** Failing test: confirmed group-series participant calls `withdraw` → rejected with the new error; solo-series withdraw still works.
+- [x] **Step 2:** Implement the guard at the top of `withdraw` (before any wallet movement): `if (b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1) throw new BookingSeriesNoOptOutError(bookingId);`
+- [x] **Step 3:** Commit `fix(booking): block group-series full-series withdrawal (U4)`
 
 ---
 
