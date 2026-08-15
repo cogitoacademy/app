@@ -11,20 +11,22 @@ Dead code, silent failure modes, and test-quality issues found during the 2026-0
 
 > **Rule:** every removal must be verified unused first (`rg` for the symbol across `packages/api/src`, `apps/server/src`; test files may keep using helpers — in that case keep the helper or update the test).
 
+> **Status:** all 11 items implemented and merged to main (2026-08-15). Retained as reference. Two new recovery mechanisms were added beyond this list: `retry-failed-meetings` scheduler job (re-covers CONFIRMED online bookings with failed meetings) and email-outbox retry (failed dispatch rows retried up to 3 attempts).
+
 ## Summary
 
 | #   | Item                                                                                  | Severity | Type          |
 | --- | ------------------------------------------------------------------------------------- | -------- | ------------- |
-| C1  | `booking.service.ts:841` silent catch swallows meeting-creation/transition failures   | High     | Silent failure |
-| C2  | Dead DB columns + index + relations                                                   | Medium   | Dead code     |
-| C3  | Dead repo/service exports                                                             | Low      | Dead code     |
-| C4  | Silent Redis→in-memory fallbacks emit no logs                                          | Medium   | Observability |
-| C5  | Xendit retry never retries timeout (AbortError) errors                                 | Medium   | Bug           |
-| C6  | `achievement.service.ts:153` adminNote interpolated raw into email HTML                | Medium   | XSS/HTML      |
-| C7  | `webhook-timestamp.test.ts` tests a stale local copy, not the real function           | Low      | Test quality  |
-| C8  | `tutor-invite-onboarding.test.ts:149` `describe.skip("TC-09")` with no rationale       | Low      | Test quality  |
-| C9  | Dead re-exports (`handlers`, `redis`) from `@cogito-app/api`                           | Low      | Dead code     |
-| C10 | Dev DB SQL logging redaction misses short secrets                                     | Medium   | Security      |
+| C1  | `booking.service.ts:841` silent catch swallows meeting-creation/transition failures   | High     | **DONE** — error logged (`tutor_accept_meeting_failed`); recovery loop added via `retry-failed-meetings` job |
+| C2  | Dead DB columns + index + relations                                                   | Medium   | **DONE** — migration 0016 drops 8 dead columns/index/relations; `refundedAmount` kept (frontend displays it) |
+| C3  | Dead repo/service exports                                                             | Low      | **DONE** — removed; `resolvePublicUrl`, `initStructuredLogger`, `ENTRY_TYPE`, `transition`/`canTransition` kept (used by code or tests) |
+| C4  | Silent Redis→in-memory fallbacks emit no logs                                          | Medium   | **DONE** — `logRedisFallback` warn on configured-Redis failures |
+| C5  | Xendit retry never retries timeout (AbortError) errors                                 | Medium   | **DONE** — default retryable + provider predicate cover AbortError/TimeoutError |
+| C6  | `achievement.service.ts:153` adminNote interpolated raw into email HTML                | Medium   | **DONE** — `escapeHtml` on adminNote |
+| C7  | `webhook-timestamp.test.ts` tests a stale local copy, not the real function           | Low      | **DONE** — moved to `apps/server/src/webhooks/timestamp.test.ts`, imports the real function |
+| C8  | `tutor-invite-onboarding.test.ts:149` `describe.skip("TC-09")` with no rationale       | Low      | **DONE** — enabled, passes against the test DB |
+| C9  | Dead re-exports (`handlers`, `redis`) from `@cogito-app/api`                           | Low      | **DONE** — `services` only |
+| C10 | Dev DB SQL logging redaction misses short secrets                                     | Medium   | **DONE** — secret-shaped params redacted |
 | C11 | `webhook-timestamp.test.ts` + docs refer to `.env.example`-undocumented env vars       | Low      | Docs          |
 
 ---

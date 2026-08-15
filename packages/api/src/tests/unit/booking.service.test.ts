@@ -4381,3 +4381,94 @@ describe("BookingService", () => {
     });
   });
 });
+
+describe("retryFailedMeetings", () => {
+  const confirmedBooking = makeBooking({
+    id: "b-meet",
+    currentState: "confirmed",
+    modality: "online",
+    scheduledStartAt: new Date(Date.now() + 86400_000),
+    scheduledEndAt: new Date(Date.now() + 86400_000 + 90 * 60_000),
+  });
+
+  test("leaves the booking CONFIRMED when meeting creation still fails", async () => {
+    const { service } = createService({
+      repo: {
+        findConfirmedMeetingsPendingRetry: mock(async () => [confirmedBooking]),
+        findBookingById: mock(async () => ({
+          ...confirmedBooking,
+          currentState: "confirmed",
+        })),
+      },
+      meeting: {
+        createEvent: mock(async () => ({
+          id: "m1",
+          bookingId: "b-meet",
+          provider: "google_meet",
+          externalEventId: null,
+          meetingUrl: null,
+          status: "failed",
+          errorReason: "provider down",
+        })),
+      },
+    });
+
+    const result = await service.retryFailedMeetings();
+    expect(result.succeeded).toBe(0);
+    expect(result.failed).toBe(1);
+  });
+
+  test("schedules the booking and notifies when meeting creation succeeds", async () => {
+    const { service, repo, notification, meeting } = createService({
+      repo: {
+        findConfirmedMeetingsPendingRetry: mock(async () => [
+          confirmedBooking,
+        ]),
+        findBookingById: mock(async () => confirmedBooking),
+        findConfirmedParticipants: mock(async () => [
+          {
+            id: "p1",
+            bookingId: "b-meet",
+            userId: "student1",
+            role: "proposer",
+            confirmationState: "confirmed",
+            heldAmount: 42,
+          },
+        ]),
+        findUserEmails: mock(async () => [
+          { email: "tutor@cogito.test", name: "Tutor" },
+          { email: "student@cogito.test", name: "Student" },
+        ]),
+      },
+      meeting: {
+        createEvent: mock(async () => ({
+          id: "m1",
+          bookingId: "b-meet",
+          provider: "google_meet",
+          externalEventId: "ext1",
+          meetingUrl: "https://meet.google.com/abc",
+          status: "created",
+          errorReason: null,
+        })),
+      },
+    });
+
+    const result = await service.retryFailedMeetings();
+    expect(result.succeeded).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(repo.updateBookingVersioned).toHaveBeenCalled();
+    expect(notification.writeBestEffort).toHaveBeenCalled();
+    expect(meeting.createEvent).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns zeroes when no bookings need retry", async () => {
+    const { service } = createService({
+      repo: {
+        findConfirmedMeetingsPendingRetry: mock(async () => []),
+      },
+    });
+
+    const result = await service.retryFailedMeetings();
+    expect(result).toEqual({ succeeded: 0, failed: 0 });
+  });
+});

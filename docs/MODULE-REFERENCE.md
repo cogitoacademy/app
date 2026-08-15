@@ -237,6 +237,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Releases holds on bookings past deadline
 - `checkTutorLateness()` — Auto-cancels bookings where the tutor never marked attendance past the 15-min lateness tolerance
+- `retryFailedMeetings()` — Re-creates Google Meet for CONFIRMED online bookings with a failed meetingEvent (up to 3 attempts, driven by the `retry-failed-meetings` job); prevents the CONFIRMED-without-meeting-link dead state
 
 **Dependencies:** `BookingRepo`, `BookingWalletPort`, `BookingPricingPort`, `BookingAuditPort`, `BookingNotificationPort`, `BookingMeetingPort`
 
@@ -497,8 +498,9 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `jobs/expire-bookings.job.ts` — repeatable job (5 min)
 - `jobs/release-holds.job.ts` — repeatable job (10 min)
 - `jobs/check-tutor-lateness.job.ts` — repeatable job (5 min)
-- `jobs/send-notification-email.job.ts` — repeatable job (60 s) — consumes the email outbox
+- `jobs/send-notification-email.job.ts` — repeatable job (60 s) — consumes the email outbox (queued + failed-with-retries-left rows, max 3 attempts per dispatch)
 - `jobs/escalate-support-tickets.job.ts` — repeatable job (15 min) — SLA escalation
+- `jobs/retry-failed-meetings.job.ts` — repeatable job (5 min) — re-creates Google Meet for CONFIRMED online bookings whose meeting creation failed (max 3 attempts; afterwards left for admin manual link, U1)
 - Wiring: `apps/server/src/scheduler.ts` — `initScheduler()` gates on `SCHEDULER_ENABLED=true` + `REDIS_URL`
 
 **Service Methods:**
@@ -508,8 +510,9 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `onExpireBookings()` — Calls `bookingService.expireBookings()`
 - `onReleaseHolds()` — Calls `bookingService.releaseExpiredHolds()`
 - `onCheckTutorLateness()` — Calls `bookingService.checkTutorLateness()` (15-min lateness auto-cancel, G3)
-- `onSendNotificationEmail()` — Calls `notificationService.dispatchQueuedEmails(50)` (outbox consumer; #46)
+- `onSendNotificationEmail()` — Calls `notificationService.dispatchQueuedEmails(50)` (outbox consumer; #46; failed rows retried up to 3 attempts)
 - `onEscalateSupportTickets()` — Calls `supportService.escalatePastSlaTickets()` (marks overdue tickets in_progress + escalated + audit; #46)
+- `onRetryFailedMeetings()` — Calls `bookingService.retryFailedMeetings()` (re-schedules CONFIRMED online bookings with a failed meeting)
 
 **Dependencies:** `BookingService`, `NotificationService`, `SupportService`, BullMQ queue
 

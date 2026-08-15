@@ -775,69 +775,8 @@ export function createBookingService(deps: {
         });
 
         try {
-          const participants = await repo.findConfirmedParticipants(
-            tx,
-            bookingId,
-          );
-          const users = await repo.findUserEmails(tx, [
-            b.tutorId,
-            ...participants.map((p) => p.userId),
-          ]);
-          const attendees = users.map((u) => ({
-            email: u.email,
-            name: u.name,
-          }));
-
-          const meetingResult = await meeting.createEvent(
-            bookingId,
-            b.scheduledStartAt,
-            b.scheduledEndAt,
-            attendees,
-          );
-
-          if (meetingResult.status === "failed") {
-            updated = await repo.findBookingById(tx, bookingId);
-          } else {
-            updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
-              actorId: tutorId,
-              actorType: ACTOR_TYPE.TUTOR,
-              reason: "Meeting created automatically",
-            });
-
-            await repo.updateBookingDeadline(
-              tx,
-              bookingId,
-              new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
-            );
-
-            await notification.writeBestEffort({
-              db: tx,
-              userId: b.tutorId,
-              bookingId,
-              category: NOTIFICATION_CATEGORY.BOOKING,
-              severity: NOTIFICATION_SEVERITY.ACTION,
-              title: "Meeting link ready",
-              body: "The meeting link for the session is ready.",
-              eventKey: `booking.${bookingId}.scheduled.tutor`,
-              emailRequired: true,
-            });
-
-            for (const p of participants) {
-              if (p.userId === b.proposerId) continue;
-              // eslint-disable-next-line no-await-in-loop
-              await notification.writeBestEffort({
-                db: tx,
-                userId: p.userId,
-                bookingId,
-                category: NOTIFICATION_CATEGORY.BOOKING,
-                severity: NOTIFICATION_SEVERITY.ACTION,
-                title: "Meeting link ready",
-                body: "The meeting link for your group session is ready.",
-                eventKey: `booking.${bookingId}.scheduled.${p.userId}`,
-                emailRequired: true,
-              });
-            }
-          }
+          const result = await finalizeMeetingSchedule(tx, b, tutorId);
+          updated = result.booking;
         } catch (error) {
           log({
             level: "error",
@@ -2435,6 +2374,154 @@ export function createBookingService(deps: {
     };
   }
 
+  /**
+   * Creates the Google Meet event for a confirmed online booking and, on
+   * success, transitions it to SCHEDULED with meeting-ready notifications.
+   *
+   * On failure the booking stays CONFIRMED and the failure is surfaced through
+   * the meetingEvent row (status `failed`) so the `retry-failed-meetings`
+   * scheduler job can retry it. The transaction is not aborted — the booking
+   * remains recoverable either by retry or by the admin manual-link flow.
+   *
+   * @param tx - the active transaction
+   * @param b - the booking row (must be CONFIRMED and online modality)
+   * @param tutorId - the assigned tutor acting as the transition actor
+   * @returns whether the booking was scheduled, plus the refreshed booking row
+   */
+  async function finalizeMeetingSchedule(
+    tx: DbOrTx,
+    b: BookingRow,
+    tutorId: string,
+  ): Promise<{ scheduled: boolean; booking: BookingRow }> {
+    const bookingId = b.id;
+    try {
+      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      const users = await repo.findUserEmails(tx, [
+        b.tutorId,
+        ...participants.map((p) => p.userId),
+      ]);
+      const attendees = users.map((u) => ({
+        email: u.email,
+        name: u.name,
+      }));
+
+      const meetingResult = await meeting.createEvent(
+        bookingId,
+        b.scheduledStartAt,
+        b.scheduledEndAt,
+        attendees,
+      );
+
+      if (meetingResult.status === "failed") {
+        return {
+          scheduled: false,
+          booking: (await repo.findBookingById(tx, bookingId)) ?? b,
+        };
+      }
+
+      const updated = await transition(
+        tx,
+        bookingId,
+        BOOKING_STATE.SCHEDULED,
+        {
+          actorId: tutorId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Meeting created automatically",
+        },
+      );
+
+      await repo.updateBookingDeadline(
+        tx,
+        bookingId,
+        new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+      );
+
+      await notification.writeBestEffort({
+        db: tx,
+        userId: b.tutorId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Meeting link ready",
+        body: "The meeting link for the session is ready.",
+        eventKey: `booking.${bookingId}.scheduled.tutor`,
+        emailRequired: true,
+      });
+
+      for (const p of participants) {
+        if (p.userId === b.proposerId) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await notification.writeBestEffort({
+          db: tx,
+          userId: p.userId,
+          bookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Meeting link ready",
+          body: "The meeting link for your group session is ready.",
+          eventKey: `booking.${bookingId}.scheduled.${p.userId}`,
+          emailRequired: true,
+        });
+      }
+
+      return { scheduled: true, booking: updated };
+    } catch (error) {
+      log({
+        level: "error",
+        action: "meeting_finalize_failed",
+        message:
+          "Meeting creation or scheduled transition failed; booking left CONFIRMED and will be retried by the scheduler",
+        error: { message: String(error) },
+        bookingId,
+        tutorId,
+      });
+      return {
+        scheduled: false,
+        booking: (await repo.findBookingById(tx, bookingId)) ?? b,
+      };
+    }
+  }
+
+  /**
+   * Retries Google Meet creation for confirmed online bookings whose previous
+   * attempt failed. Runs from the `retry-failed-meetings` scheduler job (5 min).
+   *
+   * Each booking is retried at most 3 times (counted via failed `meetingEvent`
+   * rows); afterwards it stays CONFIRMED for manual intervention (admin
+   * meeting-link entry, PRD-GAPS-PHASE3 U1).
+   *
+   * @returns the number of bookings scheduled and the number still failing
+   */
+  async function retryFailedMeetings(): Promise<{
+    succeeded: number;
+    failed: number;
+  }> {
+    const candidates = await repo.findConfirmedMeetingsPendingRetry(db);
+
+    let succeeded = 0;
+    let failed = 0;
+    for (const b of candidates) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await db.transaction(async (tx) => {
+          const { scheduled } = await finalizeMeetingSchedule(tx, b, b.tutorId);
+          return scheduled;
+        });
+        if (result) succeeded++;
+        else failed++;
+      } catch (error) {
+        failed++;
+        log({
+          level: "error",
+          action: "retry_meeting_failed",
+          bookingId: b.id,
+          error: { message: String(error) },
+        });
+      }
+    }
+    return { succeeded, failed };
+  }
+
   async function expireBookings() {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
@@ -2737,6 +2824,7 @@ export function createBookingService(deps: {
     expireBookings,
     releaseExpiredHolds,
     checkTutorLateness,
+    retryFailedMeetings,
     transition,
     canTransition,
     transitionBookingToScheduled,

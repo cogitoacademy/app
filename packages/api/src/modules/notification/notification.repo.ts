@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, lt, count, sql } from "drizzle-orm";
+import { eq, and, asc, desc, lt, count, or, sql } from "drizzle-orm";
 import {
   notification,
   notificationDispatch,
@@ -142,18 +142,33 @@ export async function updateDispatchStatusById(
     .where(eq(notificationDispatch.id, id));
 }
 
+const MAX_DISPATCH_ATTEMPTS = 3;
+
 /**
- * Lists queued dispatch rows for the email outbox consumer, oldest first.
+ * Lists dispatch rows pending delivery for the email outbox consumer, oldest first.
+ *
+ * Includes rows that have never been sent (`queued`) and rows that failed a
+ * previous attempt but still have retries left (`failed` with attempts < 3),
+ * so a transient provider error is retried across scheduler runs instead of
+ * losing the email permanently.
  *
  * @param conn - the database connection or active transaction
  * @param limit - the maximum number of rows to return
- * @returns the queued dispatch rows
+ * @returns the dispatch rows pending delivery
  */
-export async function listQueuedDispatches(conn: DbOrTx, limit = 50) {
+export async function listPendingDispatches(conn: DbOrTx, limit = 50) {
   return conn
     .select()
     .from(notificationDispatch)
-    .where(eq(notificationDispatch.status, "queued"))
+    .where(
+      or(
+        eq(notificationDispatch.status, "queued"),
+        and(
+          eq(notificationDispatch.status, "failed"),
+          lt(notificationDispatch.attempts, MAX_DISPATCH_ATTEMPTS),
+        ),
+      ),
+    )
     .orderBy(asc(notificationDispatch.createdAt))
     .limit(limit);
 }
@@ -287,7 +302,7 @@ export function createNotificationRepo(db: DbType) {
     findUserEmail,
     insertDispatch,
     updateDispatchStatusById,
-    listQueuedDispatches,
+    listPendingDispatches,
     incrementDispatchAttempts,
     findNotificationById,
     listNotifications: (

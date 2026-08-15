@@ -6,7 +6,7 @@ import {
   findUserEmail,
   insertDispatch,
   updateDispatchStatusById,
-  listQueuedDispatches,
+  listPendingDispatches,
   incrementDispatchAttempts,
   findNotificationById,
   listNotifications,
@@ -149,8 +149,8 @@ describe("updateDispatchStatusById", () => {
   });
 });
 
-describe("listQueuedDispatches", () => {
-  test("returns queued rows ordered oldest first with a limit", async () => {
+describe("listPendingDispatches", () => {
+  test("returns pending rows (queued or failed with retries left) oldest first with a limit", async () => {
     const rows = [{ id: "d1" }, { id: "d2" }];
     const limit = mock(async () => rows);
     const orderBy = mock(() => ({ limit }));
@@ -159,7 +159,7 @@ describe("listQueuedDispatches", () => {
     const select = mock(() => ({ from }));
     const conn = { select } as any;
 
-    const result = await listQueuedDispatches(conn, 25);
+    const result = await listPendingDispatches(conn, 25);
     expect(result).toEqual(rows);
     expect(where).toHaveBeenCalledTimes(1);
     expect(orderBy).toHaveBeenCalledTimes(1);
