@@ -181,10 +181,10 @@ export function createServer() {
         );
       }
     })
-    .onRequest(async ({ request }) => {
+    .onRequest(async ({ request, server }) => {
       const url = new URL(request.url);
       const path = url.pathname;
-      const ip = getClientIp(request, env.TRUST_PROXY);
+      const ip = getClientIp(request, env.TRUST_PROXY, server ?? undefined);
 
       if (
         path.startsWith("/api/auth/sign-in/") ||

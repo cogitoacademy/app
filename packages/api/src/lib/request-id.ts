@@ -2,15 +2,21 @@ export function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
-export function getClientIp(request: Request, trustProxy: boolean): string {
+export function getClientIp(
+  request: Request,
+  trustProxy: boolean,
+  server?: { requestIP(request: Request): { address: string } | null },
+): string {
   if (trustProxy) {
     return (
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
+      server?.requestIP(request)?.address ??
       "unknown"
     );
   }
-  return request.headers.get("x-real-ip") ?? "unknown";
+  // Client-controlled headers (x-real-ip, x-forwarded-for) are never trusted
+  // unless TRUST_PROXY is set; fall back to the socket address instead.
+  return server?.requestIP(request)?.address ?? "unknown";
 }
 
 export function isValidUploadKey(key: string): boolean {
