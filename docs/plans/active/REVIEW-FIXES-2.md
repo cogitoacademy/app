@@ -194,7 +194,7 @@ git commit -m "fix(security): match RPC rate-limit paths to real slash-key URLs 
 - Consumes: `transition`, `repo.updateBookingHoldAmount`, `meeting.cancelEvent`, `BOOKING_STATE`.
 - Produces: a solo booking withdrawn from `CONFIRMED`/`SCHEDULED`/`AWAITING_ADMIN_ROOM_APPROVAL` transitions to `CANCELLED`, zeroes `holdAmount`, and cancels the meeting link.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In the `withdraw` describe of `packages/api/src/tests/unit/booking.service.test.ts`, add:
 
@@ -235,12 +235,12 @@ test("solo withdraw from a confirmed booking transitions to cancelled, zeroes ho
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test --env-file apps/server/.env packages/api/src/tests/unit/booking.service.test.ts`
 Expected: FAIL — the current code transitions to `awaiting_reconfirmation` and never zeroes `holdAmount`.
 
-- [ ] **Step 3: Fix the withdraw branch**
+- [x] **Step 3: Fix the withdraw branch**
 
 In `booking.service.ts`, the `else if (!isLate)` block currently is (approx. lines 2029-2095):
 
@@ -304,12 +304,12 @@ Restructure so solo bookings in post-confirmation states cancel (and group-serie
 
 Then add a `meetingCancelled` flag outside the transaction (see Task B.2) so `meeting.cancelEvent` runs after the tx commits.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `bun test --env-file apps/server/.env packages/api/src/tests/unit/booking.service.test.ts`
 Expected: PASS (existing + new). Also run `packages/api/src/tests/integration/booking-solo.test.ts` with the `GOOGLE_MEET_*` unset override.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/api/src/modules/booking/booking.service.ts packages/api/src/tests/unit/booking.service.test.ts
@@ -327,7 +327,7 @@ git commit -m "fix(booking): solo withdraw cancels instead of regressing to reco
 
 - Produces: `withdraw` calls `meeting.cancelEvent(bookingId)` only AFTER the transaction commits (all paths: group regress, solo cancel).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to the withdraw describe:
 
@@ -395,11 +395,11 @@ test("meeting cancellation happens after the transaction commits, not inside it 
 
 > If the ordering assertion above is too weak for your taste, wrap `db.transaction` to push `"tx"` into `order` on completion and assert `order` ends with `["tx", "cancel"]`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Expected: FAIL — `cancelEvent` is currently called inside the transaction.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Restructure `withdraw` so the provider call happens after `db.transaction` resolves:
 
@@ -421,11 +421,11 @@ async function withdraw(userId: string, bookingId: string, reason?: string) {
 
 Remove the `await meeting.cancelEvent(bookingId)` call from inside the group-regress branch (Task B.1) and set `cancelMeeting = true` there instead.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run the booking unit tests + `booking-g4.test.ts` integration (group withdraw flow). Expected: PASS.
 
-- [ ] **Step 5: Update docs + commit**
+- [x] **Step 5: Update docs + commit**
 
 `docs/CONTEXT.md` R2/R3 rows → Fixed. Commit: `git commit -m "fix(booking): cancel provider meetings after the withdraw transaction commits (R3)"`
 
