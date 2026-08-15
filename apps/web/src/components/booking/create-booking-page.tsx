@@ -52,6 +52,7 @@ import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 import {
   addMinutesToTime,
+  isTimeWithinRange,
   isValidMinuteTime,
   MinuteTimeInput,
 } from "@/components/booking/minute-time-input";
@@ -309,6 +310,20 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
   const hasEnoughMarks = availableBalance >= price;
   const tutorName = profile.displayName ?? profile.user?.name ?? "Cogito tutor";
+  const hasInvalidStartTime = selectedSlots.some((slot) => {
+    const value = startTimes[slot.id] ?? formatTimeValue(slot.startDate);
+    const latestStart = new Date(
+      new Date(slot.endDate).getTime() - 90 * 60_000,
+    );
+    return (
+      !isValidMinuteTime(value) ||
+      !isTimeWithinRange(
+        value,
+        formatTimeValue(slot.startDate),
+        formatTimeValue(latestStart),
+      )
+    );
+  });
 
   function submitBooking(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -318,15 +333,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       const time = startTimes[slot.id] ?? formatTimeValue(slot.startDate);
       return new Date(`${formatDateValue(slot.startDate)}T${time}:00+07:00`);
     };
-    if (
-      selectedSlots.some(
-        (slot) =>
-          !isValidMinuteTime(
-            startTimes[slot.id] ?? formatTimeValue(slot.startDate),
-          ),
-      )
-    )
-      return;
+    if (hasInvalidStartTime) return;
 
     const baseInput = {
       tutorId: profile.userId,
@@ -678,6 +685,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                     [slot.id]: value,
                                   }))
                                 }
+                                minTime={formatTimeValue(slot.startDate)}
+                                maxTime={formatTimeValue(
+                                  new Date(
+                                    new Date(slot.endDate).getTime() -
+                                      90 * 60_000,
+                                  ),
+                                )}
                               />
                               <FieldDescription>
                                 Fixed 90 minutes · ends at{" "}
@@ -686,8 +700,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                     formatTimeValue(slot.startDate),
                                   90,
                                 )}{" "}
-                                WIB · must fit within{" "}
-                                {formatSlotTime(slot.startDate, slot.endDate)}
+                                WIB · valid starts{" "}
+                                {formatTimeValue(slot.startDate)}–
+                                {formatTimeValue(
+                                  new Date(
+                                    new Date(slot.endDate).getTime() -
+                                      90 * 60_000,
+                                  ),
+                                )}{" "}
+                                WIB
                               </FieldDescription>
                             </Field>
                           </div>
@@ -796,6 +817,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 }
                 disabled={
                   !selectedSlot ||
+                  hasInvalidStartTime ||
                   createBooking.isPending ||
                   createGroup.isPending ||
                   createSeries.isPending ||

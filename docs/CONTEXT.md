@@ -253,13 +253,17 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Booking Module (student mutations + shared authenticated reads)
 
+Tutor availability is modeled as free-time windows rather than pre-sized sessions. The booking UI uses the shared Selia calendar and a cross-browser 24-hour autocomplete time field; students can enter any exact minute, but a start must leave room for the server-fixed 90-minute session inside the selected window. A one-session selection is one-time and multiple selections form a series automatically.
+
 - `createSolo`, `get`, `listMine`, `cancel`
-- `acceptReschedule`, `rejectReschedule`, `cancelSession`
+- `proposeReschedule`, `acceptReschedule`, `rejectReschedule`, `cancelSession`
 - `addSessionNote`, `getSessionNotes`
 - `createGroup`, `createSeries`, `createGroupSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
 - `listSessions`
 
 Tutor discovery and every student-owned booking mutation are guarded by `studentProcedure`. Tutor/admin accounts cannot browse the student tutor catalog or create/cancel/confirm/reconfirm/withdraw bookings; tutor fulfillment remains under `tutorActions.*`.
+
+After submission, the tutor or booking proposer can propose a replacement time from the booking-detail action panel. Rescheduling is session-scoped; each proposal requires tutor and all active-student approval, and the original schedule remains active until unanimous acceptance.
 
 ### TutorActions Module (tutor)
 

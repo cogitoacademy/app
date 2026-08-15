@@ -2,7 +2,7 @@
 
 | Field      | Value                                         |
 | ---------- | --------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-12)     |
+| Status     | Living gap inventory (updated 2026-08-16)     |
 | Branch     | `feature/frontend-gaps` (future)              |
 | Created    | 2026-07-29                                    |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed |
@@ -198,14 +198,14 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** Implemented for tutors on eligible booking-detail states.
+**Current state:** Implemented for tutors and booking proposers on eligible booking-detail states, including immediately after a solo booking reaches tutor review. The form uses the shared Selia calendar and cross-browser 24-hour autocomplete time input.
 
 **Required (after G6 backend fix):**
 
-1. On tutor booking detail (`_app.tutor-bookings`), add "Propose reschedule" action for bookings in `confirmed`/`scheduled` state
-2. Form: new date/time picker, reason (optional)
-3. Calls `booking.proposeReschedule` (tutor role, after G6 fix)
-4. Shows pending status after submission
+1. On booking detail, show "Propose reschedule" to the tutor or booking proposer in eligible lifecycle states
+2. Form: shared calendar, 24-hour minute-level time autocomplete, reason (optional)
+3. Calls the role-appropriate `proposeReschedule` procedure with an optional series `sessionId`
+4. Shows the pending proposal and collects tutor plus active-student decisions
 
 **Acceptance:**
 

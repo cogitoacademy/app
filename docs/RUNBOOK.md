@@ -135,6 +135,10 @@ Student's `availableBalance` is less than the required hold amount. Check wallet
 
 Invalid state machine transition. Check `booking-transitions.ts` for valid transitions.
 
+### `BOOKING_NOT_EDITABLE` while creating a booking (400)
+
+Confirm the chosen start is inside the selected tutor availability window and leaves the full server-fixed 90 minutes before the window ends. The web form shows the valid start range and blocks invalid submissions. Also verify the availability is active and that no non-terminal booking overlaps the requested session; declined, cancelled, and expired bookings should not keep the time blocked.
+
 ### `LAST_ADMIN` (409)
 
 Attempted to remove the last admin role. Promote another user to admin first.

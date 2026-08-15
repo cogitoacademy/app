@@ -376,7 +376,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `booking.createSolo`
 
 - **Auth:** Student
-- **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, scheduledEndAt, timezone? }` (times in the future; `timezone` default `Asia/Jakarta`)
+- **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`scheduledStartAt` must leave room for the server-fixed 90-minute session inside the availability window; `timezone` default `Asia/Jakarta`)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
 - **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
@@ -404,17 +404,24 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.acceptReschedule`
 
-- **Auth:** Student (proposer)
-- **Input:** `{ bookingId }`
+- **Auth:** Student participant
+- **Input:** `{ bookingId, sessionId? }`
 - **Output:** `{ booking }`
-- **Description:** Student accepts the tutor's reschedule proposal
+- **Description:** Records this participant's decision; the proposed session time is applied only after the tutor and every active student accept
 
 ### `booking.rejectReschedule`
 
-- **Auth:** Student (proposer)
-- **Input:** `{ bookingId }`
+- **Auth:** Student participant
+- **Input:** `{ bookingId, sessionId? }`
 - **Output:** `{ booking }`
-- **Description:** Student rejects the tutor's reschedule proposal
+- **Description:** Rejects the active proposal while preserving the original schedule
+
+### `booking.proposeReschedule`
+
+- **Auth:** Student (booking proposer)
+- **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
+- **Output:** `{ booking }`
+- **Description:** Proposes a new fixed 90-minute time for one booking session; proposals expire after 24 hours and require tutor plus all active-student approval
 
 ### `booking.cancelSession`
 
@@ -440,14 +447,14 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `booking.createGroup`
 
 - **Auth:** Student
-- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, scheduledEndAt, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5)
+- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is server-fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Description:** Creates a group booking, holds proposer Marks, invites participants; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
 - **Auth:** Student
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ scheduledStartAt, scheduledEndAt }], timezone? }` (2–4 sessions)
+- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (2–4 sessions; each session is fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
@@ -508,9 +515,9 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `tutorActions.proposeReschedule`
 
 - **Auth:** Tutor
-- **Input:** `{ bookingId, proposedStartAt, proposedEndAt, reason? }`
+- **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
 - **Output:** `{ booking }`
-- **Description:** Tutor proposes a new slot; requires student acceptance via `booking.acceptReschedule`
+- **Description:** Tutor proposes a new fixed 90-minute time for one session; tutor proposals may be outside the original availability window and require every active student's acceptance
 
 ### `tutorActions.acceptBooking`
 

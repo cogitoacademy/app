@@ -33,7 +33,7 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
-import { Input } from "@cogito-app/ui/components/selia/input";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import {
   getSelectItemValue,
   Select,
@@ -111,7 +111,13 @@ export function BookingLifecycleActions({
   const isCompleted = currentState === "completed";
   const canProposeReschedule =
     (isTutor || isProposer) &&
-    ["confirmed", "scheduled", "reschedule_proposed"].includes(currentState);
+    [
+      "awaiting_tutor_review",
+      "confirmed",
+      "scheduled",
+      "awaiting_admin_room_approval",
+      "reschedule_proposed",
+    ].includes(currentState);
   const canDecideReschedule =
     currentState === "reschedule_proposed" &&
     (isTutor ||
@@ -652,11 +658,12 @@ export function BookingLifecycleActions({
           <DialogBody className="space-y-4">
             <Field>
               <FieldLabel htmlFor="reschedule-date">New date</FieldLabel>
-              <Input
+              <DatePicker
                 id="reschedule-date"
-                type="date"
                 value={newDate}
-                onChange={(event) => setNewDate(event.target.value)}
+                minDate={new Date().toISOString().slice(0, 10)}
+                placeholder="Pick the proposed date"
+                onChange={setNewDate}
               />
             </Field>
             <Field>

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconCalendarEvent,
+  IconChevronLeft,
+  IconChevronRight,
   IconClock,
   IconDeviceLaptop,
   IconMapPin,
@@ -28,7 +30,7 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
-import { Input } from "@cogito-app/ui/components/selia/input";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import {
   getSelectItemValue,
   Select,
@@ -60,6 +62,7 @@ const MODALITY_LABELS = {
 
 type Modality = keyof typeof MODALITY_LABELS;
 type ScheduleMode = "weekly" | "custom";
+type AvailabilityView = "calendar" | "list";
 
 type AvailabilityForm = {
   mode: ScheduleMode;
@@ -127,6 +130,33 @@ function parseDateTimeLocalValue(value: string) {
 
 function parseDateInputValue(value: string) {
   return new Date(`${value}T23:59:59+07:00`);
+}
+
+function toWibDateKey(value: string | Date | number) {
+  return toDateInputValue(value);
+}
+
+function dateKeyToUtcDate(value: string) {
+  return new Date(`${value}T00:00:00Z`);
+}
+
+function addCalendarDays(value: string, days: number) {
+  const date = dateKeyToUtcDate(value);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfCalendarWeek(value: string) {
+  const date = dateKeyToUtcDate(value);
+  const daysSinceMonday = (date.getUTCDay() + 6) % 7;
+  return addCalendarDays(value, -daysSinceMonday);
+}
+
+function formatCalendarDay(value: string, options: Intl.DateTimeFormatOptions) {
+  return new Intl.DateTimeFormat("en-US", {
+    ...options,
+    timeZone: "UTC",
+  }).format(dateKeyToUtcDate(value));
 }
 
 function getAvailabilityErrorMessage(error: unknown) {
@@ -469,14 +499,18 @@ export function AvailabilityPage() {
                   <FieldLabel htmlFor="availability-repeat-until">
                     Repeat until
                   </FieldLabel>
-                  <Input
+                  <DatePicker
                     id="availability-repeat-until"
-                    type="date"
-                    min={form.startDate.slice(0, 10)}
                     value={form.repeatUntil}
-                    onChange={(event) =>
-                      updateForm("repeatUntil", event.target.value)
+                    minDate={
+                      form.startDate.slice(0, 10) ||
+                      toDateInputValue(Date.now())
                     }
+                    maxDate={toDateInputValue(
+                      Date.now() + 52 * 7 * 24 * 60 * 60 * 1000,
+                    )}
+                    placeholder="Pick the final recurrence date"
+                    onChange={(value) => updateForm("repeatUntil", value)}
                   />
                   <FieldDescription>
                     The first session&apos;s weekday and time repeat every week.
@@ -572,26 +606,192 @@ export function AvailabilityPage() {
                 className="rounded-lg border border-item-border"
               />
             ) : (
-              <div className="flex flex-col gap-3">
-                {slots.map((slot) => (
-                  <AvailabilitySlotCard
-                    key={slot.id}
-                    slot={slot}
-                    isEditing={editingSlotId === slot.id}
-                    isDeleting={
-                      deleteMutation.isPending &&
-                      deleteMutation.variables?.id === slot.id
-                    }
-                    onEdit={() => editSlot(slot)}
-                    onRemove={() => removeSlot(slot)}
-                  />
-                ))}
-              </div>
+              <AvailabilitySchedule
+                slots={slots}
+                editingSlotId={editingSlotId}
+                deletingSlotId={
+                  deleteMutation.isPending
+                    ? deleteMutation.variables?.id
+                    : undefined
+                }
+                onEdit={editSlot}
+                onRemove={removeSlot}
+              />
             )}
           </CardBody>
         </Card>
       </div>
     </Stack>
+  );
+}
+
+function AvailabilitySchedule({
+  slots,
+  editingSlotId,
+  deletingSlotId,
+  onEdit,
+  onRemove,
+}: {
+  slots: AvailabilitySlot[];
+  editingSlotId: string | null;
+  deletingSlotId?: string;
+  onEdit: (slot: AvailabilitySlot) => void;
+  onRemove: (slot: AvailabilitySlot) => void;
+}) {
+  const [view, setView] = useState<AvailabilityView>("calendar");
+  const [weekStart, setWeekStart] = useState(() =>
+    startOfCalendarWeek(toWibDateKey(Date.now())),
+  );
+  const weekDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) =>
+        addCalendarDays(weekStart, index),
+      ),
+    [weekStart],
+  );
+  const slotsByDay = useMemo(() => {
+    const grouped = new Map<string, AvailabilitySlot[]>();
+    for (const slot of slots) {
+      const key = toWibDateKey(slot.startDate);
+      const daySlots = grouped.get(key);
+      if (daySlots) daySlots.push(slot);
+      else grouped.set(key, [slot]);
+    }
+    return grouped;
+  }, [slots]);
+  const weekEnd = weekDays[6]!;
+  const weekTitle = `${formatCalendarDay(weekStart, { month: "short", day: "numeric" })} – ${formatCalendarDay(weekEnd, { month: "short", day: "numeric", year: "numeric" })}`;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Tabs
+          value={view}
+          onValueChange={(value) => {
+            if (value === "calendar" || value === "list") setView(value);
+          }}
+          className="sm:w-64"
+        >
+          <TabsList>
+            <TabsItem value="calendar">Week</TabsItem>
+            <TabsItem value="list">List</TabsItem>
+          </TabsList>
+        </Tabs>
+
+        {view === "calendar" ? (
+          <div className="flex items-center justify-between gap-1 sm:justify-end">
+            <Button
+              variant="plain"
+              size="sm-icon"
+              aria-label="Previous week"
+              onClick={() =>
+                setWeekStart((current) => addCalendarDays(current, -7))
+              }
+            >
+              <IconChevronLeft />
+            </Button>
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={() =>
+                setWeekStart(startOfCalendarWeek(toWibDateKey(Date.now())))
+              }
+            >
+              Today
+            </Button>
+            <Text className="min-w-36 text-center text-sm font-medium">
+              {weekTitle}
+            </Text>
+            <Button
+              variant="plain"
+              size="sm-icon"
+              aria-label="Next week"
+              onClick={() =>
+                setWeekStart((current) => addCalendarDays(current, 7))
+              }
+            >
+              <IconChevronRight />
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {view === "calendar" ? (
+        <div className="overflow-x-auto rounded-lg border border-item-border">
+          <div className="grid min-w-4xl grid-cols-7 divide-x divide-item-border">
+            {weekDays.map((day) => {
+              const daySlots = slotsByDay.get(day) ?? [];
+              const isToday = day === toWibDateKey(Date.now());
+              return (
+                <div key={day} className="min-h-72 bg-item">
+                  <div
+                    className={`border-b border-item-border px-2 py-3 text-center ${isToday ? "bg-primary/10" : "bg-accent/40"}`}
+                  >
+                    <Text className="text-xs uppercase text-muted">
+                      {formatCalendarDay(day, { weekday: "short" })}
+                    </Text>
+                    <Text
+                      className={`mt-1 font-medium ${isToday ? "text-primary" : ""}`}
+                    >
+                      {formatCalendarDay(day, { day: "numeric" })}
+                    </Text>
+                  </div>
+                  <div className="flex flex-col gap-2 p-2">
+                    {daySlots.length === 0 ? (
+                      <Text className="py-4 text-center text-xs text-dimmed">
+                        —
+                      </Text>
+                    ) : (
+                      daySlots.map((slot) => (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          className={`w-full rounded border p-2 text-left outline-none transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-primary ${
+                            editingSlotId === slot.id
+                              ? "border-primary-border bg-primary/10"
+                              : "border-item-border bg-background"
+                          }`}
+                          onClick={() => onEdit(slot)}
+                        >
+                          <Text className="text-xs font-medium">
+                            {formatBookingTimeRange(
+                              slot.startDate,
+                              slot.endDate,
+                              BOOKING_TIMEZONE,
+                            )}
+                          </Text>
+                          <Text className="mt-1 text-xs text-muted">
+                            {MODALITY_LABELS[slot.modality]}
+                          </Text>
+                          {slot.isRecurring ? (
+                            <Badge variant="info" pill className="mt-2">
+                              Weekly
+                            </Badge>
+                          ) : null}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {slots.map((slot) => (
+            <AvailabilitySlotCard
+              key={slot.id}
+              slot={slot}
+              isEditing={editingSlotId === slot.id}
+              isDeleting={deletingSlotId === slot.id}
+              onEdit={() => onEdit(slot)}
+              onRemove={() => onRemove(slot)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
