@@ -40,6 +40,8 @@ describe("routes.ts uses the slash-key patterns", () => {
     expect(routes).not.toContain('path === "/rpc/payment.createPurchase"');
     expect(routes).not.toContain('path.startsWith("/rpc/invite.verify")');
     expect(routes).not.toContain('path.startsWith("/rpc/booking.")');
-    expect(routes).not.toContain('path.startsWith("/rpc/auth.students/search")');
+    expect(routes).not.toContain(
+      'path.startsWith("/rpc/auth.students/search")',
+    );
   });
 });

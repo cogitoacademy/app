@@ -18,7 +18,10 @@ describe("invite and booking rate limit paths", () => {
       new URL("./rate-limit-paths.ts", import.meta.url),
       "utf-8",
     );
-    const routes = readFileSync(new URL("./routes.ts", import.meta.url), "utf-8");
+    const routes = readFileSync(
+      new URL("./routes.ts", import.meta.url),
+      "utf-8",
+    );
     expect(paths).toContain('"/rpc/invite/verify"');
     expect(paths).toContain('"/rpc/booking/"');
     expect(routes).toContain('keyPrefix: "invite"');
