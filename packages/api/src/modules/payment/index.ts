@@ -1,6 +1,10 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import type { CreditParams, WalletSnapshot } from "../wallet/wallet.service";
+import type {
+  CompensateParams,
+  CreditParams,
+  WalletSnapshot,
+} from "../wallet/wallet.service";
 import type {
   PaymentProvider,
   PaymentNotificationPort,
@@ -18,6 +22,7 @@ export type PaymentModule = ReturnType<typeof createPaymentModule>;
 export interface PaymentWalletPort {
   getOrCreate(userId: string): Promise<WalletSnapshot>;
   credit(db: DbOrTx, params: CreditParams): Promise<WalletSnapshot>;
+  compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
 }
 
 export function createPaymentModule(deps: {

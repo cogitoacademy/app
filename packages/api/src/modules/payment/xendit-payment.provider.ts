@@ -39,6 +39,7 @@ export function mapXenditStatus(status: string): PaymentStatus {
     SETTLED: "SETTLED",
     FAILED: "FAILED",
     EXPIRED: "EXPIRED",
+    REFUNDED: "REFUNDED",
   };
   const mapped = map[status];
   if (!mapped) throw internalServerError("Unknown payment status: " + status);

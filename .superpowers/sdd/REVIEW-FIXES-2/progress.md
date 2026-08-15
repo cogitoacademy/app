@@ -16,8 +16,8 @@ Wave plan (dispatched by a fresh agent with zero context — this ledger tracks 
 
 ## PR C — Uploads & payment
 
-- Task C.1 presigned POST policy conditions (R4) — status:
-- Task C.2 REFUNDED webhook reversal + Xendit status (R5) — status:
+- Task C.1 presigned POST policy conditions (R4) — DONE (policy binds x-amz-algorithm/credential/date; unit test asserts conditions match form fields)
+- Task C.2 REFUNDED webhook reversal + Xendit status (R5) — DONE (mapXenditStatus REFUNDED; reversal via wallet.compensate compensate_deduct with key refund.{id}.reverse; PaymentWalletPort gained compensate — plan's deduct suggestion replaced: deduct only releases holds, cannot reverse a credit; integration payment-flow + refund-flow green)
 
 ## PR D — Reliability
 

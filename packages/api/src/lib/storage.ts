@@ -68,6 +68,9 @@ export function createPresignedPost(opts: {
       { bucket: opts.bucket },
       { key: opts.key },
       ["eq", "$Content-Type", opts.contentType],
+      ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"],
+      ["eq", "$x-amz-credential", credential],
+      ["eq", "$x-amz-date", amzDate],
       ["content-length-range", 1, opts.maxBytes],
     ],
   };
