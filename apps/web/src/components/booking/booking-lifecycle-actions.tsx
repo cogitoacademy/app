@@ -61,11 +61,7 @@ const TEXTAREA_CLASS =
 
 type DialogKind = "report" | "reschedule" | "decline-invite" | null;
 type SupportCategory =
-  | "tutor_late"
-  | "tutor_no_show"
-  | "technical"
-  | "payment"
-  | "other";
+  "tutor_late" | "tutor_no_show" | "technical" | "payment" | "other";
 
 export function BookingLifecycleActions({
   bookingId,
@@ -75,6 +71,7 @@ export function BookingLifecycleActions({
   scheduledStartAt,
   timezone,
   participantRole,
+  isBookingProposer,
   participantState,
   perStudentMarks,
   proposedStartAt,
@@ -88,6 +85,7 @@ export function BookingLifecycleActions({
   scheduledStartAt: string | Date;
   timezone?: string;
   participantRole?: string;
+  isBookingProposer?: boolean;
   participantState?: string;
   perStudentMarks?: number;
   proposedStartAt?: string | Date;
@@ -107,7 +105,7 @@ export function BookingLifecycleActions({
 
   const isTutor = viewerRole === "tutor";
   const isStudent = viewerRole === "student";
-  const isProposer = participantRole === "proposer";
+  const isProposer = isBookingProposer || participantRole === "proposer";
   const isCompleted = currentState === "completed";
   const canProposeReschedule =
     (isTutor || isProposer) &&

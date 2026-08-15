@@ -64,9 +64,10 @@ export function Calendar({
         week: "flex w-full gap-1",
         day: "size-8 flex-1 text-center text-sm text-foreground p-0",
         day_button:
-          "size-8 rounded grid place-items-center cursor-pointer transition-colors hover:bg-accent w-full",
-        selected: "bg-primary text-primary-foreground hover:bg-primary!",
-        today: "ring-1 ring-primary",
+          "size-8 w-full rounded grid place-items-center cursor-pointer transition-[background-color,color,box-shadow,transform] hover:bg-accent active:scale-95",
+        selected:
+          "[&>button]:rounded [&>button]:bg-primary [&>button]:text-primary-foreground [&>button]:hover:bg-primary!",
+        today: "[&>button]:rounded [&>button]:ring-1 [&>button]:ring-primary",
         outside: "text-muted opacity-50",
         disabled: "opacity-30 cursor-not-allowed",
         ...classNames,

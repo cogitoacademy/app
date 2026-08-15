@@ -449,6 +449,7 @@ export function BookingDetailPage({
         scheduledStartAt={booking.scheduledStartAt}
         timezone={booking.timezone}
         participantRole={viewerParticipant?.role}
+        isBookingProposer={booking.proposerId === viewerId}
         participantState={viewerParticipant?.confirmationState}
         perStudentMarks={booking.priceSnapshot?.perStudent}
         proposedStartAt={proposedStartAt}
