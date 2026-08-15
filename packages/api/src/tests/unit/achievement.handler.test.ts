@@ -221,7 +221,7 @@ describe("AchievementService", () => {
   describe("create", () => {
     test("passes input with userId to repo.insert", async () => {
       const repo = makeAchievementRepo({
-        insert: mock(async (params: any) => ({ id: "a1", ...params })),
+        insert: mock(async (_db: any, params: any) => ({ id: "a1", ...params })),
       });
       const service = createAchievementService({
         achievementRepo: repo as any,
@@ -246,7 +246,7 @@ describe("AchievementService", () => {
 
     test("writes an in-app notification without email on submit (G17)", async () => {
       const repo = makeAchievementRepo({
-        insert: mock(async (params: any) => ({ id: "a1", ...params })),
+        insert: mock(async (_db: any, params: any) => ({ id: "a1", ...params })),
       });
       const notificationPort = makeNotificationPort();
       const service = createAchievementService({
