@@ -33,7 +33,6 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
-import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import {
   getSelectItemValue,
   Select,
@@ -49,23 +48,14 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { formatBookingDate } from "./booking-ui";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
-import {
-  addMinutesToTime,
-  isValidMinuteTime,
-  MinuteTimeInput,
-} from "./minute-time-input";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
 const TEXTAREA_CLASS =
   "min-h-28 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none transition-colors placeholder:text-dimmed focus:border-input-accent-border";
 
-type DialogKind = "report" | "reschedule" | "decline-invite" | null;
+type DialogKind = "report" | "decline-invite" | null;
 type SupportCategory =
-  | "tutor_late"
-  | "tutor_no_show"
-  | "technical"
-  | "payment"
-  | "other";
+  "tutor_late" | "tutor_no_show" | "technical" | "payment" | "other";
 
 export function BookingLifecycleActions({
   bookingId,
@@ -75,7 +65,6 @@ export function BookingLifecycleActions({
   scheduledStartAt,
   timezone,
   participantRole,
-  isBookingProposer,
   participantState,
   perStudentMarks,
   proposedStartAt,
@@ -89,7 +78,6 @@ export function BookingLifecycleActions({
   scheduledStartAt: string | Date;
   timezone?: string;
   participantRole?: string;
-  isBookingProposer?: boolean;
   participantState?: string;
   perStudentMarks?: number;
   proposedStartAt?: string | Date;
@@ -102,24 +90,11 @@ export function BookingLifecycleActions({
     useState<SupportCategory>("tutor_late");
   const [description, setDescription] = useState("");
   const [inviteDeclineReason, setInviteDeclineReason] = useState("");
-  const [newDate, setNewDate] = useState("");
-  const [newTime, setNewTime] = useState("");
-  const [rescheduleReason, setRescheduleReason] = useState("");
   const [note, setNote] = useState("");
 
   const isTutor = viewerRole === "tutor";
   const isStudent = viewerRole === "student";
-  const isProposer = isBookingProposer || participantRole === "proposer";
   const isCompleted = currentState === "completed";
-  const canProposeReschedule =
-    (isTutor || isProposer) &&
-    [
-      "awaiting_tutor_review",
-      "confirmed",
-      "scheduled",
-      "awaiting_admin_room_approval",
-      "reschedule_proposed",
-    ].includes(currentState);
   const canDecideReschedule =
     currentState === "reschedule_proposed" &&
     (isTutor ||
@@ -171,20 +146,6 @@ export function BookingLifecycleActions({
       },
       onError: (error: Error) =>
         showMutationError("Report could not be submitted", error),
-    }),
-  );
-  const propose = useMutation(
-    orpc.booking.proposeReschedule.mutationOptions({
-      onSuccess: () => {
-        setDialog(null);
-        setNewDate("");
-        setNewTime("");
-        setRescheduleReason("");
-        toastManager.add({ title: "Reschedule proposed", type: "success" });
-        onBookingChanged();
-      },
-      onError: (error: Error) =>
-        showMutationError("Reschedule could not be proposed", error),
     }),
   );
   const accept = useMutation(
@@ -261,7 +222,6 @@ export function BookingLifecycleActions({
   );
 
   const hasActions =
-    canProposeReschedule ||
     canDecideReschedule ||
     canReportLateness ||
     canRespondToInvite ||
@@ -331,15 +291,6 @@ export function BookingLifecycleActions({
                 onClick={() => setDialog("report")}
               >
                 <IconAlertTriangle /> Report tutor issue
-              </Button>
-            ) : null}
-            {canProposeReschedule ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setDialog("reschedule")}
-              >
-                <IconCalendarEvent /> Propose new time
               </Button>
             ) : null}
             {canDecideReschedule ? (
@@ -644,89 +595,8 @@ export function BookingLifecycleActions({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-
-      <Dialog
-        open={dialog === "reschedule"}
-        onOpenChange={(open) => !open && setDialog(null)}
-      >
-        <DialogPopup>
-          <DialogHeader className="flex-col items-start gap-1.5">
-            <DialogTitle>Propose a new time</DialogTitle>
-            <DialogDescription>
-              The original schedule stays active until the tutor and every
-              active student accept.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody className="space-y-4">
-            <Field>
-              <FieldLabel htmlFor="reschedule-date">New date</FieldLabel>
-              <DatePicker
-                id="reschedule-date"
-                value={newDate}
-                minDate={new Date().toISOString().slice(0, 10)}
-                placeholder="Pick the proposed date"
-                onChange={setNewDate}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="reschedule-time">New start time</FieldLabel>
-              <MinuteTimeInput
-                id="reschedule-time"
-                value={newTime}
-                onChange={setNewTime}
-              />
-              <FieldDescription>
-                Fixed 90 minutes · ends at {addMinutesToTime(newTime, 90)} WIB
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="reschedule-reason">
-                Reason (optional)
-              </FieldLabel>
-              <textarea
-                id="reschedule-reason"
-                className={TEXTAREA_CLASS}
-                value={rescheduleReason}
-                maxLength={2_000}
-                onChange={(event) => setRescheduleReason(event.target.value)}
-                placeholder="Explain why this session needs a new time."
-              />
-            </Field>
-          </DialogBody>
-          <DialogFooter>
-            <Button
-              variant="secondary"
-              onClick={() => setDialog(null)}
-              disabled={propose.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() =>
-                propose.mutate({
-                  bookingId,
-                  proposedStartAt: parseJakartaDateTime(
-                    `${newDate}T${newTime}`,
-                  ),
-                  reason: rescheduleReason.trim() || undefined,
-                })
-              }
-              progress={propose.isPending}
-              disabled={
-                !newDate || !isValidMinuteTime(newTime) || propose.isPending
-              }
-            >
-              Send proposal
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
     </>
   );
-}
-
-function parseJakartaDateTime(value: string) {
-  return new Date(`${value}:00+07:00`);
 }
 
 function showMutationError(title: string, error: Error) {

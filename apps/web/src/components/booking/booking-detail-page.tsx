@@ -57,6 +57,10 @@ import {
   getBookingTypeLabel,
 } from "./booking-ui";
 import { BookingLifecycleActions } from "./booking-lifecycle-actions";
+import {
+  BookingRescheduleAction,
+  canProposeBookingReschedule,
+} from "./booking-reschedule-action";
 import { orpc } from "@/utils/orpc";
 
 export function BookingDetailPage({
@@ -212,6 +216,17 @@ export function BookingDetailPage({
     new Date(booking.scheduledEndAt).getTime() <= Date.now();
   const tutorActionPending =
     accept.isPending || decline.isPending || complete.isPending;
+  const canProposeReschedule = canProposeBookingReschedule({
+    viewerRole,
+    isBookingProposer: booking.proposerId === viewerId,
+    currentState: booking.currentState,
+  });
+  const rescheduleAction = canProposeReschedule ? (
+    <BookingRescheduleAction
+      bookingId={bookingId}
+      onBookingChanged={refreshBookingQueries}
+    />
+  ) : null;
 
   function requestCancellation() {
     const confirmed = window.confirm(
@@ -309,7 +324,8 @@ export function BookingDetailPage({
             />
           </CardBody>
           {!isTutor && canCancelBooking(booking.currentState) ? (
-            <CardFooter className="justify-end">
+            <CardFooter className="flex-wrap justify-end gap-2">
+              {rescheduleAction}
               <Button
                 variant="danger"
                 size="sm"
@@ -322,6 +338,7 @@ export function BookingDetailPage({
             </CardFooter>
           ) : canReview ? (
             <CardFooter className="justify-end gap-2">
+              {rescheduleAction}
               <Button
                 variant="danger"
                 size="sm"
@@ -347,14 +364,21 @@ export function BookingDetailPage({
                   ? "Confirm completion to settle the held Marks."
                   : "Completion becomes available after the scheduled end time."}
               </Text>
-              <Button
-                size="sm"
-                onClick={completeSession}
-                progress={complete.isPending}
-                disabled={!sessionHasEnded || tutorActionPending}
-              >
-                Complete session
-              </Button>
+              <div className="flex flex-wrap justify-end gap-2">
+                {rescheduleAction}
+                <Button
+                  size="sm"
+                  onClick={completeSession}
+                  progress={complete.isPending}
+                  disabled={!sessionHasEnded || tutorActionPending}
+                >
+                  Complete session
+                </Button>
+              </div>
+            </CardFooter>
+          ) : canProposeReschedule ? (
+            <CardFooter className="flex-wrap justify-end gap-2">
+              {rescheduleAction}
             </CardFooter>
           ) : null}
         </Card>
@@ -449,7 +473,6 @@ export function BookingDetailPage({
         scheduledStartAt={booking.scheduledStartAt}
         timezone={booking.timezone}
         participantRole={viewerParticipant?.role}
-        isBookingProposer={booking.proposerId === viewerId}
         participantState={viewerParticipant?.confirmationState}
         perStudentMarks={booking.priceSnapshot?.perStudent}
         proposedStartAt={proposedStartAt}
