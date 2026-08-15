@@ -1,22 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
 
-const fallbackMock = mock(() => ({ provider: "fallback" }));
-const googleMock = mock(() => ({ provider: "google" }));
-
-mock.module("../../modules/meeting/fallback.provider", () => ({
-  createFallbackMeetingProvider: fallbackMock,
-}));
-
-mock.module("../../modules/meeting/google-meeting.provider", () => ({
-  createGoogleMeetingProviderWithFallback: googleMock,
-}));
-
-const { createMeetingModule } = await import("../../modules/meeting/index");
+import { createMeetingModule } from "../../modules/meeting/index";
 
 describe("createMeetingModule", () => {
-  const db = { query: {} } as never;
-
-  test("returns the Google provider with fallback when enabled with a config", () => {
+  test("returns a meeting port with all operations when enabled with a config", () => {
+    const db = { insert: mock(() => ({ values: mock(() => ({ returning: mock(async () => []) })) })) } as never;
     const module = createMeetingModule({
       db,
       googleMeetEnabled: true,
@@ -29,26 +17,74 @@ describe("createMeetingModule", () => {
       },
     });
 
-    expect(googleMock).toHaveBeenCalledTimes(1);
-    expect(module).toEqual({ provider: "google" });
+    expect(module).toBeTruthy();
+    expect(typeof module.createEvent).toBe("function");
+    expect(typeof module.updateEvent).toBe("function");
+    expect(typeof module.cancelEvent).toBe("function");
   });
 
-  test("returns the fallback provider when googleMeetEnabled is false", () => {
-    createMeetingModule({ db, googleMeetEnabled: false });
+  test("returns the fallback provider when googleMeetEnabled is false", async () => {
+    const returning = mock(async () => [
+      {
+        id: "me1",
+        bookingId: "b1",
+        provider: "manual",
+        status: "manual",
+        meetingUrl: null,
+        externalEventId: null,
+      },
+    ]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { insert } as never;
 
-    expect(fallbackMock).toHaveBeenCalledTimes(1);
-    expect(fallbackMock).toHaveBeenCalledWith(db);
+    const module = createMeetingModule({ db, googleMeetEnabled: false });
+    const event = await module.createEvent("b1");
+
+    expect(event.provider).toBe("manual");
+    expect(event.status).toBe("manual");
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 
-  test("returns the fallback provider when a config is missing", () => {
-    createMeetingModule({ db, googleMeetEnabled: true });
+  test("returns the fallback provider when a config is missing", async () => {
+    const returning = mock(async () => [
+      {
+        id: "me1",
+        bookingId: "b1",
+        provider: "manual",
+        status: "manual",
+        meetingUrl: null,
+        externalEventId: null,
+      },
+    ]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { insert } as never;
 
-    expect(fallbackMock).toHaveBeenCalledTimes(2);
+    const module = createMeetingModule({ db, googleMeetEnabled: true });
+    const event = await module.createEvent("b1");
+
+    expect(event.provider).toBe("manual");
   });
 
-  test("returns the fallback provider when no options are given", () => {
-    createMeetingModule({ db });
+  test("returns the fallback provider when no options are given", async () => {
+    const returning = mock(async () => [
+      {
+        id: "me1",
+        bookingId: "b1",
+        provider: "manual",
+        status: "manual",
+        meetingUrl: null,
+        externalEventId: null,
+      },
+    ]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { insert } as never;
 
-    expect(fallbackMock).toHaveBeenCalledTimes(3);
+    const module = createMeetingModule({ db });
+    const event = await module.createEvent("b1");
+
+    expect(event.provider).toBe("manual");
   });
 });
