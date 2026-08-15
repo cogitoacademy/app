@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-08-11
+Last updated: 2026-08-15
 
 ## Architecture
 
@@ -118,6 +118,11 @@ export interface ServiceRegistry {
 ```
 
 Routers access handlers via `context.services.{module}.{method}`. Other modules access services via DI through their consumer-driven ports.
+
+## Domain & Policy References
+
+- [`marks-economy-architecture.md`](marks-economy-architecture.md) — canonical reference for the closed-loop Marks economy, package pricing, tutor honorarium/take-rate formulas, regulatory assumptions, Knowledge Bank gating, and related engineering changes.
+- The Marks blueprint is a reference architecture, not a substitute for Indonesian legal, regulatory, accounting, or payment-provider review before production launch.
 
 ## Infrastructure
 
