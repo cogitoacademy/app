@@ -29,6 +29,7 @@ function makeAdminRepo(overrides: Record<string, unknown> = {}) {
       role: "student",
     })),
     countAdmins: mock(async () => 2),
+    lockAdminRows: mock(async () => {}),
     updateRole: mock(async () => ({
       id: "u1",
       role: "tutor",

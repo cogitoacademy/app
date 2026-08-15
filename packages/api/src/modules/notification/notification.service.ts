@@ -15,6 +15,7 @@ interface NotificationEmailPort {
     subject: string;
     html: string;
     category: "booking" | "payment" | "refund" | "schedule" | "override";
+    idempotencyKey?: string;
   }): Promise<{ messageId: string } | { skipped: true }>;
 }
 

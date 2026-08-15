@@ -148,7 +148,8 @@ export function createGoogleMeetingProvider(
   let cachedAccessToken: { token: string; expiresAt: number } | null = null;
 
   async function refreshOAuthAccessToken(timeoutMs: number): Promise<string> {
-    if (!config.clientId || !config.clientSecret || !config.refreshToken) {
+    const { clientId, clientSecret, refreshToken } = config;
+    if (!clientId || !clientSecret || !refreshToken) {
       throw new Error("Missing Google Meet OAuth configuration");
     }
 
@@ -165,9 +166,9 @@ export function createGoogleMeetingProvider(
     // instead of bypassing its protection (M13).
     return googleMeetBreaker.execute(async () => {
       const body = new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        refresh_token: config.refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
         grant_type: "refresh_token",
       });
 

@@ -155,7 +155,7 @@ export function createAdminTutorService(deps: {
 
   async function listInvites(
     input?: ListInvitesInput,
-  ): Promise<TutorInviteRow[]> {
+  ): Promise<Array<Omit<TutorInviteRow, "token">>> {
     const {
       status,
       limit = ADMIN_DEFAULT_PAGE_LIMIT,
