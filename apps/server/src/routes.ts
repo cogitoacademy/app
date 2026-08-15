@@ -244,10 +244,31 @@ export function createServer() {
     .all("/api/auth/*", async (context) => {
       const { request, status } = context;
       if (["POST", "GET"].includes(request.method)) {
+        if (request.method === "POST") {
+          const { body, tooLarge } = await readBodyWithLimit(
+            request,
+            MAX_BODY_BYTES,
+          );
+          if (tooLarge) {
+            return new Response(
+              JSON.stringify({ error: "Request body too large" }),
+              {
+                status: 413,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          }
+          const bounded = new Request(request.url, {
+            method: request.method,
+            headers: request.headers,
+            body,
+          });
+          return auth.handler(bounded);
+        }
         return auth.handler(request);
       }
       return status(405);
-    })
+    }, { parse: "none" })
     .all(
       "/rpc*",
       async (context) => {
