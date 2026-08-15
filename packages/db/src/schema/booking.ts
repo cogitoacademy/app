@@ -80,6 +80,7 @@ export const booking = pgTable(
     refundedAmount: integer("refunded_amount").notNull().default(0),
     version: integer("version").default(1).notNull(),
     cancellationReason: text("cancellation_reason"),
+    learningGoal: text("learning_goal").notNull().default(""),
     overrideMeta: jsonb("override_meta"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -223,6 +224,13 @@ export const bookingRescheduleProposal = pgTable(
     proposedEndAt: timestamp("proposed_end_at", {
       withTimezone: true,
     }).notNull(),
+    sessionId: text("session_id"),
+    reason: text("reason"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    decisions: jsonb("decisions")
+      .$type<Record<string, "pending" | "accepted" | "rejected">>()
+      .notNull()
+      .default({}),
     status: text("status").notNull().default("pending"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
@@ -230,9 +238,10 @@ export const bookingRescheduleProposal = pgTable(
   (table) => [
     check(
       "reschedule_status_check",
-      sql`${table.status} IN ('pending','accepted','rejected','expired')`,
+      sql`${table.status} IN ('pending','accepted','rejected','expired','superseded')`,
     ),
     index("reschedule_bookingId_idx").on(table.bookingId),
+    index("reschedule_sessionId_idx").on(table.sessionId),
   ],
 );
 

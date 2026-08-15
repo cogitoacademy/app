@@ -1,6 +1,8 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
+
+Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16).
 
 ## Architecture
 

@@ -49,6 +49,11 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { formatBookingDate } from "./booking-ui";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
+import {
+  addMinutesToTime,
+  isValidMinuteTime,
+  MinuteTimeInput,
+} from "./minute-time-input";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
 const TEXTAREA_CLASS =
@@ -95,18 +100,23 @@ export function BookingLifecycleActions({
     useState<SupportCategory>("tutor_late");
   const [description, setDescription] = useState("");
   const [inviteDeclineReason, setInviteDeclineReason] = useState("");
-  const [newStartAt, setNewStartAt] = useState("");
-  const [newEndAt, setNewEndAt] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
   const [rescheduleReason, setRescheduleReason] = useState("");
   const [note, setNote] = useState("");
 
   const isTutor = viewerRole === "tutor";
   const isStudent = viewerRole === "student";
+  const isProposer = participantRole === "proposer";
   const isCompleted = currentState === "completed";
   const canProposeReschedule =
-    isTutor && ["confirmed", "scheduled"].includes(currentState);
+    (isTutor || isProposer) &&
+    ["confirmed", "scheduled", "reschedule_proposed"].includes(currentState);
   const canDecideReschedule =
-    isStudent && currentState === "reschedule_proposed";
+    currentState === "reschedule_proposed" &&
+    (isTutor ||
+      (isStudent &&
+        ["confirmed", "reconfirmed"].includes(participantState ?? "")));
   const canReportLateness =
     isStudent &&
     ["scheduled", "no_show"].includes(currentState) &&
@@ -156,11 +166,11 @@ export function BookingLifecycleActions({
     }),
   );
   const propose = useMutation(
-    orpc.tutorActions.proposeReschedule.mutationOptions({
+    orpc.booking.proposeReschedule.mutationOptions({
       onSuccess: () => {
         setDialog(null);
-        setNewStartAt("");
-        setNewEndAt("");
+        setNewDate("");
+        setNewTime("");
         setRescheduleReason("");
         toastManager.add({ title: "Reschedule proposed", type: "success" });
         onBookingChanged();
@@ -635,27 +645,30 @@ export function BookingLifecycleActions({
           <DialogHeader className="flex-col items-start gap-1.5">
             <DialogTitle>Propose a new time</DialogTitle>
             <DialogDescription>
-              The student must accept this proposal before the schedule changes.
+              The original schedule stays active until the tutor and every
+              active student accept.
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
             <Field>
-              <FieldLabel htmlFor="reschedule-start">New start</FieldLabel>
+              <FieldLabel htmlFor="reschedule-date">New date</FieldLabel>
               <Input
-                id="reschedule-start"
-                type="datetime-local"
-                value={newStartAt}
-                onChange={(event) => setNewStartAt(event.target.value)}
+                id="reschedule-date"
+                type="date"
+                value={newDate}
+                onChange={(event) => setNewDate(event.target.value)}
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="reschedule-end">New end</FieldLabel>
-              <Input
-                id="reschedule-end"
-                type="datetime-local"
-                value={newEndAt}
-                onChange={(event) => setNewEndAt(event.target.value)}
+              <FieldLabel htmlFor="reschedule-time">New start time</FieldLabel>
+              <MinuteTimeInput
+                id="reschedule-time"
+                value={newTime}
+                onChange={setNewTime}
               />
+              <FieldDescription>
+                Fixed 90 minutes · ends at {addMinutesToTime(newTime, 90)} WIB
+              </FieldDescription>
             </Field>
             <Field>
               <FieldLabel htmlFor="reschedule-reason">
@@ -683,14 +696,15 @@ export function BookingLifecycleActions({
               onClick={() =>
                 propose.mutate({
                   bookingId,
-                  proposedStartAt: parseJakartaDateTime(newStartAt),
-                  proposedEndAt: parseJakartaDateTime(newEndAt),
+                  proposedStartAt: parseJakartaDateTime(
+                    `${newDate}T${newTime}`,
+                  ),
                   reason: rescheduleReason.trim() || undefined,
                 })
               }
               progress={propose.isPending}
               disabled={
-                !isValidSchedule(newStartAt, newEndAt) || propose.isPending
+                !newDate || !isValidMinuteTime(newTime) || propose.isPending
               }
             >
               Send proposal
@@ -704,13 +718,6 @@ export function BookingLifecycleActions({
 
 function parseJakartaDateTime(value: string) {
   return new Date(`${value}:00+07:00`);
-}
-
-function isValidSchedule(start: string, end: string) {
-  if (!start || !end) return false;
-  const startDate = parseJakartaDateTime(start);
-  const endDate = parseJakartaDateTime(end);
-  return startDate.getTime() > Date.now() && endDate > startDate;
 }
 
 function showMutationError(title: string, error: Error) {

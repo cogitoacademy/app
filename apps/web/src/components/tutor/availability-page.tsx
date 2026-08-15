@@ -49,6 +49,7 @@ import {
   formatBookingTimeRange,
 } from "@/components/booking/booking-ui";
 import { orpc } from "@/utils/orpc";
+import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
 const MODALITY_LABELS = {
@@ -439,14 +440,11 @@ export function AvailabilityPage() {
 
               <Field>
                 <FieldLabel htmlFor="availability-start">Start time</FieldLabel>
-                <Input
+                <CrossBrowserDateTimeInput
                   id="availability-start"
-                  type="datetime-local"
                   min={minDateTime}
                   value={form.startDate}
-                  onChange={(event) =>
-                    updateForm("startDate", event.target.value)
-                  }
+                  onChange={(value) => updateForm("startDate", value)}
                 />
                 {errors.startDate ? (
                   <FieldError>{errors.startDate}</FieldError>
@@ -455,14 +453,11 @@ export function AvailabilityPage() {
 
               <Field>
                 <FieldLabel htmlFor="availability-end">End time</FieldLabel>
-                <Input
+                <CrossBrowserDateTimeInput
                   id="availability-end"
-                  type="datetime-local"
                   min={form.startDate || minDateTime}
                   value={form.endDate}
-                  onChange={(event) =>
-                    updateForm("endDate", event.target.value)
-                  }
+                  onChange={(value) => updateForm("endDate", value)}
                 />
                 {errors.endDate ? (
                   <FieldError>{errors.endDate}</FieldError>

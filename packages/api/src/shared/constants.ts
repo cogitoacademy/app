@@ -11,6 +11,8 @@ export const SUPPORT_SLA_MS = 12 * 60 * 60 * 1000;
 export const MIN_GROUP_HEADCOUNT = 2;
 export const MIN_SERIES_SESSIONS = 2;
 export const MAX_SERIES_SESSIONS = 4;
+export const SESSION_DURATION_MINUTES = 90;
+export const SESSION_DURATION_MS = SESSION_DURATION_MINUTES * 60 * 1000;
 export const GROUP_SERIES_DISCLAIMER =
   "Group series bookings require attendance at all sessions. Individual sessions cannot be cancelled.";
 export const DEFAULT_SOLO_PRICE = 42;

@@ -16,6 +16,7 @@ import {
   MAX_PAGE_LIMIT,
   GROUP_SERIES_DISCLAIMER,
   TUTOR_PAYOUT_RATE_IDR,
+  SESSION_DURATION_MS,
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
@@ -66,8 +67,9 @@ export interface CreateSoloInput {
   availabilitySlotId: string;
   modality: "online" | "offline";
   scheduledStartAt: Date;
-  scheduledEndAt: Date;
+  scheduledEndAt?: Date;
   timezone: string;
+  learningGoal?: string;
 }
 
 export interface CreateGroupInput {
@@ -77,16 +79,22 @@ export interface CreateGroupInput {
   targetGroupSize: number;
   inviteeUserIds: string[];
   scheduledStartAt: Date;
-  scheduledEndAt: Date;
+  scheduledEndAt?: Date;
   timezone: string;
+  learningGoal?: string;
 }
 
 export interface CreateSeriesInput {
   tutorId: string;
   availabilitySlotId: string;
   modality: "online" | "offline";
-  sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
+  sessions: {
+    availabilitySlotId?: string;
+    scheduledStartAt: Date;
+    scheduledEndAt?: Date;
+  }[];
   timezone: string;
+  learningGoal?: string;
 }
 
 export interface CreateGroupSeriesInput {
@@ -95,8 +103,13 @@ export interface CreateGroupSeriesInput {
   modality: "online" | "offline";
   targetGroupSize: number;
   inviteeUserIds: string[];
-  sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
+  sessions: {
+    availabilitySlotId?: string;
+    scheduledStartAt: Date;
+    scheduledEndAt?: Date;
+  }[];
   timezone: string;
+  learningGoal?: string;
 }
 
 export interface TutorPayoutResult {
@@ -416,6 +429,31 @@ export function createBookingService(deps: {
     return null;
   }
 
+  function normalizeSession(startAt: Date) {
+    return {
+      scheduledStartAt: startAt,
+      scheduledEndAt: new Date(startAt.getTime() + SESSION_DURATION_MS),
+    };
+  }
+
+  function assertSessionFitsAvailability(
+    slot: { startDate: Date; endDate: Date; modality: string },
+    session: { scheduledStartAt: Date; scheduledEndAt: Date },
+    modality: "online" | "offline",
+  ) {
+    const supportsModality =
+      slot.modality === "both" || slot.modality === modality;
+    if (
+      !supportsModality ||
+      session.scheduledStartAt < slot.startDate ||
+      session.scheduledEndAt > slot.endDate
+    ) {
+      throw new BookingNotEditableError(
+        "The 90-minute session must fit inside the tutor availability window",
+      );
+    }
+  }
+
   function assertNoIntraSeriesOverlap(
     sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[],
   ): void {
@@ -530,6 +568,9 @@ export function createBookingService(deps: {
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
+    const session = normalizeSession(input.scheduledStartAt);
+    assertSessionFitsAvailability(slot, session, input.modality);
+
     const modality = input.modality;
     if (modality === MODALITY.OFFLINE && profile.modality === MODALITY.ONLINE) {
       throw new BookingNotEditableError(input.tutorId);
@@ -559,15 +600,15 @@ export function createBookingService(deps: {
       const overlapping = await repo.findOverlappingBookings(
         tx,
         input.tutorId,
-        input.scheduledStartAt,
-        input.scheduledEndAt,
+        session.scheduledStartAt,
+        session.scheduledEndAt,
         { excludeStates: [...TERMINAL_STATES] },
       );
       if (overlapping.length > 0) {
         throw new BookingConflictError(
           input.tutorId,
-          input.scheduledStartAt.toISOString(),
-          input.scheduledEndAt.toISOString(),
+          session.scheduledStartAt.toISOString(),
+          session.scheduledEndAt.toISOString(),
         );
       }
 
@@ -591,9 +632,10 @@ export function createBookingService(deps: {
         minConfirmedHeadcount: 1,
         confirmedHeadcount: 1,
         currentState: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
-        scheduledStartAt: input.scheduledStartAt,
-        scheduledEndAt: input.scheduledEndAt,
+        scheduledStartAt: session.scheduledStartAt,
+        scheduledEndAt: session.scheduledEndAt,
         timezone: input.timezone,
+        learningGoal: input.learningGoal ?? "",
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -1364,10 +1406,12 @@ export function createBookingService(deps: {
     proposedStartAt: Date,
     proposedEndAt: Date,
     reason?: string,
+    availabilitySlotId?: string,
+    sessionId?: string,
   ) {
     return db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
-      if (b.tutorId !== userId)
+      if (b.tutorId !== userId && b.proposerId !== userId)
         throw new BookingNotOwnedError(bookingId, userId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
@@ -1377,23 +1421,81 @@ export function createBookingService(deps: {
         );
       }
 
-      const updated = await transition(
+      const session = normalizeSession(proposedStartAt);
+      if (userId !== b.tutorId) {
+        const slot = availabilitySlotId
+          ? await repo.findAvailabilitySlot(tx, availabilitySlotId, b.tutorId)
+          : await repo.findAvailabilityWindowContaining(
+              tx,
+              b.tutorId,
+              session.scheduledStartAt,
+              session.scheduledEndAt,
+            );
+        if (!slot)
+          throw new BookingNotEditableError(
+            "No tutor availability covers this session",
+          );
+        assertSessionFitsAvailability(
+          slot,
+          session,
+          b.modality as "online" | "offline",
+        );
+      }
+      if (sessionId) {
+        const existingSession = await repo.findSessionById(tx, sessionId);
+        if (!existingSession || existingSession.seriesBookingId !== bookingId) {
+          throw new BookingSessionNotFoundError(sessionId);
+        }
+      }
+      const overlapping = await repo.findOverlappingBookings(
         tx,
-        bookingId,
-        BOOKING_STATE.RESCHEDULE_PROPOSED,
-        {
-          actorId: userId,
-          actorType: ACTOR_TYPE.TUTOR,
-          reason,
-          metadata: { proposedStartAt, proposedEndAt },
-        },
+        b.tutorId,
+        session.scheduledStartAt,
+        session.scheduledEndAt,
+        { excludeBookingId: bookingId, excludeStates: [...TERMINAL_STATES] },
       );
+      if (overlapping.length) {
+        throw new BookingConflictError(
+          b.tutorId,
+          session.scheduledStartAt.toISOString(),
+          session.scheduledEndAt.toISOString(),
+        );
+      }
+
+      const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
+      if (pending) {
+        await repo.updateRescheduleProposal(tx, pending.id, {
+          status: "superseded",
+          decidedAt: new Date(),
+        });
+      }
+
+      const updated =
+        b.currentState === BOOKING_STATE.RESCHEDULE_PROPOSED
+          ? b
+          : await transition(tx, bookingId, BOOKING_STATE.RESCHEDULE_PROPOSED, {
+              actorId: userId,
+              actorType:
+                userId === b.tutorId ? ACTOR_TYPE.TUTOR : ACTOR_TYPE.STUDENT,
+              reason,
+              metadata: { proposedStartAt: session.scheduledStartAt },
+            });
+
+      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      const voters = new Set([b.tutorId, ...participants.map((p) => p.userId)]);
+      const decisions = Object.fromEntries(
+        [...voters].map((id) => [id, id === userId ? "accepted" : "pending"]),
+      ) as Record<string, "pending" | "accepted" | "rejected">;
 
       await repo.insertRescheduleProposal(tx, {
         bookingId,
+        sessionId,
         proposedBy: userId,
-        proposedStartAt,
-        proposedEndAt,
+        proposedStartAt: session.scheduledStartAt,
+        proposedEndAt: session.scheduledEndAt,
+        reason,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        decisions,
         status: CONFIRMATION_STATE.PENDING,
       });
 
@@ -1423,8 +1525,7 @@ export function createBookingService(deps: {
     const { proposal, updated } = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
-      if (b.proposerId !== userId)
-        throw new BookingNotOwnedError(bookingId, userId);
+      await assertBookingAccess(b, userId, tx, bookingId);
       if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
         throw new BookingRescheduleNotPendingError(bookingId);
       }
@@ -1432,15 +1533,39 @@ export function createBookingService(deps: {
       const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
       if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
 
+      const currentDecisions = pending.decisions ?? {
+        [b.tutorId]: "accepted",
+        [b.proposerId]: "pending",
+      };
+      if (!(userId in currentDecisions)) {
+        throw new BookingNotOwnedError(bookingId, userId);
+      }
+      const decisions = { ...currentDecisions, [userId]: "accepted" as const };
+      const allAccepted = Object.values(decisions).every(
+        (decision) => decision === "accepted",
+      );
+
       await repo.updateRescheduleProposal(tx, pending.id, {
-        status: "accepted",
-        decidedAt: new Date(),
+        decisions,
+        status: allAccepted ? "accepted" : "pending",
+        decidedAt: allAccepted ? new Date() : undefined,
       });
 
-      await repo.updateBookingSchedule(tx, bookingId, {
-        scheduledStartAt: pending.proposedStartAt,
-        scheduledEndAt: pending.proposedEndAt,
-      });
+      if (!allAccepted) {
+        return { proposal: pending, updated: b, finalized: false };
+      }
+
+      if (pending.sessionId) {
+        await repo.updateSessionSchedule(tx, pending.sessionId, {
+          scheduledStartAt: pending.proposedStartAt,
+          scheduledEndAt: pending.proposedEndAt,
+        });
+      } else {
+        await repo.updateBookingSchedule(tx, bookingId, {
+          scheduledStartAt: pending.proposedStartAt,
+          scheduledEndAt: pending.proposedEndAt,
+        });
+      }
 
       const transitioned = await transition(
         tx,
@@ -1475,15 +1600,17 @@ export function createBookingService(deps: {
         emailRequired: true,
       });
 
-      return { proposal: pending, updated: transitioned };
+      return { proposal: pending, updated: transitioned, finalized: true };
     });
 
     // Move the provider-side meeting event to the new time (FR-21/OQ-05).
     // Best-effort: a Google failure must not roll back the accepted reschedule.
-    await meeting.updateEvent(bookingId, {
-      startAt: proposal.proposedStartAt,
-      endAt: proposal.proposedEndAt,
-    });
+    if (updated.currentState === BOOKING_STATE.AWAITING_RECONFIRMATION) {
+      await meeting.updateEvent(bookingId, {
+        startAt: proposal.proposedStartAt,
+        endAt: proposal.proposedEndAt,
+      });
+    }
 
     return updated;
   }
@@ -1492,8 +1619,7 @@ export function createBookingService(deps: {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
-      if (b.proposerId !== userId)
-        throw new BookingNotOwnedError(bookingId, userId);
+      await assertBookingAccess(b, userId, tx, bookingId);
       if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
         throw new BookingRescheduleNotPendingError(bookingId);
       }
@@ -1501,9 +1627,18 @@ export function createBookingService(deps: {
       const proposal = await repo.findPendingRescheduleProposal(tx, bookingId);
       if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
 
+      const currentDecisions = proposal.decisions ?? {
+        [b.tutorId]: "accepted",
+        [b.proposerId]: "pending",
+      };
+      if (!(userId in currentDecisions)) {
+        throw new BookingNotOwnedError(bookingId, userId);
+      }
+
       await repo.updateRescheduleProposal(tx, proposal.id, {
         status: "rejected",
         decidedAt: new Date(),
+        decisions: { ...currentDecisions, [userId]: "rejected" },
       });
 
       // The only legal states a booking can enter reschedule_proposed from are
@@ -1578,6 +1713,9 @@ export function createBookingService(deps: {
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
+    const session = normalizeSession(input.scheduledStartAt);
+    assertSessionFitsAvailability(slot, session, input.modality);
+
     const size = input.targetGroupSize;
     const pricePerStudent = (profile.prices?.[String(size)] ??
       DEFAULT_SOLO_PRICE) as number;
@@ -1602,15 +1740,15 @@ export function createBookingService(deps: {
       const overlapping = await repo.findOverlappingBookings(
         tx,
         input.tutorId,
-        input.scheduledStartAt,
-        input.scheduledEndAt,
+        session.scheduledStartAt,
+        session.scheduledEndAt,
         { excludeStates: [...TERMINAL_STATES] },
       );
       if (overlapping.length > 0) {
         throw new BookingConflictError(
           input.tutorId,
-          input.scheduledStartAt.toISOString(),
-          input.scheduledEndAt.toISOString(),
+          session.scheduledStartAt.toISOString(),
+          session.scheduledEndAt.toISOString(),
         );
       }
 
@@ -1634,9 +1772,10 @@ export function createBookingService(deps: {
         minConfirmedHeadcount: MIN_GROUP_HEADCOUNT,
         confirmedHeadcount: 1,
         currentState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
-        scheduledStartAt: input.scheduledStartAt,
-        scheduledEndAt: input.scheduledEndAt,
+        scheduledStartAt: session.scheduledStartAt,
+        scheduledEndAt: session.scheduledEndAt,
         timezone: input.timezone,
+        learningGoal: input.learningGoal ?? "",
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -2138,15 +2277,24 @@ export function createBookingService(deps: {
       );
     }
 
-    assertNoIntraSeriesOverlap(input.sessions);
-
-    const slot = await repo.findAvailabilitySlot(
-      db,
-      input.availabilitySlotId,
-      input.tutorId,
-      { futureOnly: true },
+    const sessions = await Promise.all(
+      input.sessions.map(async (candidate) => {
+        const session = normalizeSession(candidate.scheduledStartAt);
+        const slotId = candidate.availabilitySlotId ?? input.availabilitySlotId;
+        const slot = await repo.findAvailabilitySlot(
+          db,
+          slotId,
+          input.tutorId,
+          {
+            futureOnly: true,
+          },
+        );
+        if (!slot) throw new BookingNotEditableError(slotId);
+        assertSessionFitsAvailability(slot, session, input.modality);
+        return session;
+      }),
     );
-    if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
+    assertNoIntraSeriesOverlap(sessions);
 
     const pricePerStudent = (profile.prices?.["1"] ??
       DEFAULT_SOLO_PRICE) as number;
@@ -2169,7 +2317,7 @@ export function createBookingService(deps: {
 
     return db.transaction(async (tx) => {
       await lockTutorForBooking(tx, input.tutorId);
-      for (const session of input.sessions) {
+      for (const session of sessions) {
         // eslint-disable-next-line no-await-in-loop
         const overlapping = await repo.findOverlappingBookings(
           tx,
@@ -2207,10 +2355,10 @@ export function createBookingService(deps: {
         minConfirmedHeadcount: 1,
         confirmedHeadcount: 1,
         currentState: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
-        scheduledStartAt: input.sessions[0]!.scheduledStartAt,
-        scheduledEndAt:
-          input.sessions[input.sessions.length - 1]!.scheduledEndAt,
+        scheduledStartAt: sessions[0]!.scheduledStartAt,
+        scheduledEndAt: sessions[sessions.length - 1]!.scheduledEndAt,
         timezone: input.timezone,
+        learningGoal: input.learningGoal ?? "",
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -2225,7 +2373,7 @@ export function createBookingService(deps: {
         heldAmount: totalMarks,
       });
 
-      for (const session of input.sessions) {
+      for (const session of sessions) {
         // eslint-disable-next-line no-await-in-loop
         await repo.insertBookingSession(tx, {
           seriesBookingId: bookingId,
@@ -2281,15 +2429,24 @@ export function createBookingService(deps: {
       );
     }
 
-    assertNoIntraSeriesOverlap(input.sessions);
-
-    const slot = await repo.findAvailabilitySlot(
-      db,
-      input.availabilitySlotId,
-      input.tutorId,
-      { futureOnly: true },
+    const sessions = await Promise.all(
+      input.sessions.map(async (candidate) => {
+        const session = normalizeSession(candidate.scheduledStartAt);
+        const slotId = candidate.availabilitySlotId ?? input.availabilitySlotId;
+        const slot = await repo.findAvailabilitySlot(
+          db,
+          slotId,
+          input.tutorId,
+          {
+            futureOnly: true,
+          },
+        );
+        if (!slot) throw new BookingNotEditableError(slotId);
+        assertSessionFitsAvailability(slot, session, input.modality);
+        return session;
+      }),
     );
-    if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
+    assertNoIntraSeriesOverlap(sessions);
 
     // Validate the invitees are registered users (FR-20), with no duplicates
     // or self-invites, and the total headcount must fit the target size.
@@ -2332,7 +2489,7 @@ export function createBookingService(deps: {
 
     return db.transaction(async (tx) => {
       await lockTutorForBooking(tx, input.tutorId);
-      for (const session of input.sessions) {
+      for (const session of sessions) {
         // eslint-disable-next-line no-await-in-loop
         const overlapping = await repo.findOverlappingBookings(
           tx,
@@ -2370,10 +2527,10 @@ export function createBookingService(deps: {
         minConfirmedHeadcount: MIN_GROUP_HEADCOUNT,
         confirmedHeadcount: 1,
         currentState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
-        scheduledStartAt: input.sessions[0]!.scheduledStartAt,
-        scheduledEndAt:
-          input.sessions[input.sessions.length - 1]!.scheduledEndAt,
+        scheduledStartAt: sessions[0]!.scheduledStartAt,
+        scheduledEndAt: sessions[sessions.length - 1]!.scheduledEndAt,
         timezone: input.timezone,
+        learningGoal: input.learningGoal ?? "",
         priceSnapshot,
         originalMarks: packageTotal,
         holdAmount: packageTotal,
@@ -2411,7 +2568,7 @@ export function createBookingService(deps: {
         });
       }
 
-      for (const session of input.sessions) {
+      for (const session of sessions) {
         // eslint-disable-next-line no-await-in-loop
         await repo.insertBookingSession(tx, {
           seriesBookingId: bookingId,

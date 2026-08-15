@@ -52,12 +52,17 @@ import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 
 import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
+import {
+  addMinutesToTime,
+  isValidMinuteTime,
+  MinuteTimeInput,
+} from "@/components/booking/minute-time-input";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_SOLO_PRICE = 42;
 
 type Modality = "online" | "offline";
-type BookingMode = "solo" | "group" | "series";
+type BookingMode = "solo" | "group";
 type StudentMatch = { id: string; name: string; email: string };
 
 function getBookingErrorMessage(error: Error) {
@@ -88,12 +93,32 @@ function formatSlotTime(start: Date | string, end: Date | string) {
   return `${formatter.format(new Date(start))} - ${formatter.format(new Date(end))} WIB`;
 }
 
+function formatDateValue(value: Date | string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: BOOKING_TIMEZONE,
+  }).format(new Date(value));
+}
+
+function formatTimeValue(value: Date | string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: BOOKING_TIMEZONE,
+  }).format(new Date(value));
+}
+
 export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [bookingMode, setBookingMode] = useState<BookingMode>("solo");
   const [selectedModality, setSelectedModality] = useState<Modality>("online");
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
+  const [startTimes, setStartTimes] = useState<Record<string, string>>({});
+  const [learningGoal, setLearningGoal] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [debouncedStudentSearch, setDebouncedStudentSearch] = useState("");
   const [invitees, setInvitees] = useState<StudentMatch[]>([]);
@@ -178,6 +203,12 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       onError: (error: Error) => showBookingError(error),
     }),
   );
+  const createGroupSeries = useMutation(
+    orpc.booking.createGroupSeries.mutationOptions({
+      onSuccess: (booking) => handleCreatedBooking(booking),
+      onError: (error: Error) => showBookingError(error),
+    }),
+  );
 
   function refreshAfterCreate() {
     return Promise.all([
@@ -201,7 +232,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     void refreshAfterCreate();
     toastManager.add({
       title:
-        bookingMode === "series"
+        selectedSlotIds.length > 1
           ? "Series request sent"
           : "Booking request sent",
       description: "Your tutor can now review the request.",
@@ -274,14 +305,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     );
   const selectedSlot = selectedSlots[0] ?? null;
   const perSessionPrice = Number(profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE);
-  const price =
-    bookingMode === "series"
-      ? perSessionPrice * selectedSlots.length
-      : bookingMode === "group"
-        ? Number(
-            profile.prices?.[String(invitees.length + 1)] ?? perSessionPrice,
-          )
-        : perSessionPrice;
+  const baseSessionPrice =
+    bookingMode === "group"
+      ? Number(profile.prices?.[String(invitees.length + 1)] ?? perSessionPrice)
+      : perSessionPrice;
+  const price = baseSessionPrice * Math.max(selectedSlots.length, 1);
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
   const hasEnoughMarks = availableBalance >= price;
   const tutorName = profile.displayName ?? profile.user?.name ?? "Cogito tutor";
@@ -290,38 +318,62 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     event.preventDefault();
     if (!selectedSlot) return;
 
+    const toSessionStart = (slot: (typeof availableSlots)[number]) => {
+      const time = startTimes[slot.id] ?? formatTimeValue(slot.startDate);
+      return new Date(`${formatDateValue(slot.startDate)}T${time}:00+07:00`);
+    };
+    if (
+      selectedSlots.some(
+        (slot) =>
+          !isValidMinuteTime(
+            startTimes[slot.id] ?? formatTimeValue(slot.startDate),
+          ),
+      )
+    )
+      return;
+
     const baseInput = {
       tutorId: profile.userId,
       availabilitySlotId: selectedSlot.id,
       modality: effectiveModality,
       timezone: BOOKING_TIMEZONE,
+      learningGoal: learningGoal.trim(),
     };
     if (bookingMode === "group") {
       if (invitees.length < 1 || invitees.length > 5) return;
+      if (selectedSlots.length > 1) {
+        createGroupSeries.mutate({
+          ...baseInput,
+          targetGroupSize: invitees.length + 1,
+          inviteeUserIds: invitees.map((student) => student.id),
+          sessions: selectedSlots.map((slot) => ({
+            availabilitySlotId: slot.id,
+            scheduledStartAt: toSessionStart(slot),
+          })),
+        });
+        return;
+      }
       createGroup.mutate({
         ...baseInput,
         targetGroupSize: invitees.length + 1,
         inviteeUserIds: invitees.map((student) => student.id),
-        scheduledStartAt: new Date(selectedSlot.startDate),
-        scheduledEndAt: new Date(selectedSlot.endDate),
+        scheduledStartAt: toSessionStart(selectedSlot),
       });
       return;
     }
-    if (bookingMode === "series") {
-      if (selectedSlots.length < 2 || selectedSlots.length > 4) return;
+    if (selectedSlots.length > 1) {
       createSeries.mutate({
         ...baseInput,
         sessions: selectedSlots.map((slot) => ({
-          scheduledStartAt: new Date(slot.startDate),
-          scheduledEndAt: new Date(slot.endDate),
+          availabilitySlotId: slot.id,
+          scheduledStartAt: toSessionStart(slot),
         })),
       });
       return;
     }
     createBooking.mutate({
       ...baseInput,
-      scheduledStartAt: new Date(selectedSlot.startDate),
-      scheduledEndAt: new Date(selectedSlot.endDate),
+      scheduledStartAt: toSessionStart(selectedSlot),
     });
   }
 
@@ -340,7 +392,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Badge variant="info" pill>
-              {bookingMode === "series"
+              {selectedSlots.length > 1
                 ? "Session series"
                 : bookingMode === "group"
                   ? "Group session"
@@ -350,7 +402,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               Book {tutorName}
             </Heading>
             <Text className="mt-1 text-muted">
-              {bookingMode === "series"
+              {selectedSlots.length > 1
                 ? "Choose 2–4 available times for a recurring learning plan."
                 : bookingMode === "group"
                   ? "Invite friends, choose one time, and review each student's Marks price."
@@ -382,12 +434,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               <Tabs
                 value={bookingMode}
                 onValueChange={(value) => {
-                  if (
-                    value !== "solo" &&
-                    value !== "group" &&
-                    value !== "series"
-                  )
-                    return;
+                  if (value !== "solo" && value !== "group") return;
                   setBookingMode(value);
                   setSelectedSlotIds([]);
                   setInvitees([]);
@@ -400,9 +447,39 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <TabsList>
                   <TabsItem value="solo">Solo session</TabsItem>
                   <TabsItem value="group">Group</TabsItem>
-                  <TabsItem value="series">Series (2–4 sessions)</TabsItem>
                 </TabsList>
               </Tabs>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <IconBox variant="info-subtle">
+                <IconSchool />
+              </IconBox>
+              <CardTitle>Learning goal</CardTitle>
+              <CardDescription>
+                Help the tutor prepare for your session.
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              <Field>
+                <FieldLabel htmlFor="learning-goal">
+                  What do you want to learn?
+                </FieldLabel>
+                <textarea
+                  id="learning-goal"
+                  value={learningGoal}
+                  maxLength={2_000}
+                  required
+                  onChange={(event) => setLearningGoal(event.target.value)}
+                  placeholder="Topics, current level, questions, or an outcome you want from the session."
+                  className="min-h-28 w-full resize-y rounded border border-input-border bg-background px-3 py-2 text-base outline-none focus:border-input-accent-border focus:ring-2 focus:ring-primary"
+                />
+                <FieldDescription>
+                  {learningGoal.length}/2,000 characters
+                </FieldDescription>
+              </Field>
             </CardBody>
           </Card>
 
@@ -575,37 +652,69 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   {availableSlots.map((slot) => {
                     const selected = selectedSlotIds.includes(slot.id);
                     return (
-                      <Button
-                        key={slot.id}
-                        type="button"
-                        variant={selected ? "primary" : "outline"}
-                        aria-pressed={selected}
-                        className="h-auto min-h-20 justify-start px-4 py-3 text-left"
-                        onClick={() => {
-                          setSelectedSlotIds((current) => {
-                            if (bookingMode !== "series") return [slot.id];
-                            if (current.includes(slot.id)) {
-                              return current.filter((id) => id !== slot.id);
-                            }
-                            return current.length < 4
-                              ? [...current, slot.id]
-                              : current;
-                          });
-                          createBooking.reset();
-                          createSeries.reset();
-                        }}
-                      >
-                        <span className="flex min-w-0 flex-col items-start gap-1">
-                          <span className="font-medium">
-                            {formatSlotDate(slot.startDate)}
+                      <div key={slot.id} className="contents">
+                        <Button
+                          type="button"
+                          variant={selected ? "primary" : "outline"}
+                          aria-pressed={selected}
+                          className="h-auto min-h-20 justify-start px-4 py-3 text-left"
+                          onClick={() => {
+                            setSelectedSlotIds((current) => {
+                              if (current.includes(slot.id)) {
+                                return current.filter((id) => id !== slot.id);
+                              }
+                              return current.length < 4
+                                ? [...current, slot.id]
+                                : current;
+                            });
+                            createBooking.reset();
+                            createSeries.reset();
+                          }}
+                        >
+                          <span className="flex min-w-0 flex-col items-start gap-1">
+                            <span className="font-medium">
+                              {formatSlotDate(slot.startDate)}
+                            </span>
+                            <span className="flex items-center gap-1.5 text-sm opacity-80">
+                              <IconClock className="size-4" />
+                              {formatSlotTime(slot.startDate, slot.endDate)}
+                            </span>
                           </span>
-                          <span className="flex items-center gap-1.5 text-sm opacity-80">
-                            <IconClock className="size-4" />
-                            {formatSlotTime(slot.startDate, slot.endDate)}
-                          </span>
-                        </span>
-                        {selected ? <IconCheck className="ml-auto" /> : null}
-                      </Button>
+                          {selected ? <IconCheck className="ml-auto" /> : null}
+                        </Button>
+                        {selected ? (
+                          <div className="rounded-lg border border-item-border bg-item p-3 sm:col-span-2">
+                            <Field>
+                              <FieldLabel htmlFor={`start-${slot.id}`}>
+                                Session start
+                              </FieldLabel>
+                              <MinuteTimeInput
+                                id={`start-${slot.id}`}
+                                value={
+                                  startTimes[slot.id] ??
+                                  formatTimeValue(slot.startDate)
+                                }
+                                onChange={(value) =>
+                                  setStartTimes((current) => ({
+                                    ...current,
+                                    [slot.id]: value,
+                                  }))
+                                }
+                              />
+                              <FieldDescription>
+                                Fixed 90 minutes · ends at{" "}
+                                {addMinutesToTime(
+                                  startTimes[slot.id] ??
+                                    formatTimeValue(slot.startDate),
+                                  90,
+                                )}{" "}
+                                WIB · must fit within{" "}
+                                {formatSlotTime(slot.startDate, slot.endDate)}
+                              </FieldDescription>
+                            </Field>
+                          </div>
+                        ) : null}
+                      </div>
                     );
                   })}
                 </div>
@@ -636,9 +745,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               }
             />
             <SummaryRow
-              label={bookingMode === "series" ? "Schedule" : "Schedule"}
+              label="Schedule"
               value={
-                bookingMode === "series"
+                selectedSlots.length > 1
                   ? selectedSlots.length > 0
                     ? `${selectedSlots.length} of 2–4 sessions selected`
                     : "Choose 2–4 times"
@@ -651,16 +760,16 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <Text className="text-sm text-muted">
-                    {bookingMode === "series"
+                    {selectedSlots.length > 1
                       ? "Series total"
                       : bookingMode === "group"
                         ? "Price per student"
                         : "Session price"}
                   </Text>
                   <Text className="text-xl font-semibold">{price} Marks</Text>
-                  {bookingMode === "series" ? (
+                  {selectedSlots.length > 1 ? (
                     <Text className="text-xs text-muted">
-                      {perSessionPrice} Marks per session
+                      {baseSessionPrice} Marks per session
                     </Text>
                   ) : null}
                 </div>
@@ -704,18 +813,20 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 progress={
                   createBooking.isPending ||
                   createGroup.isPending ||
-                  createSeries.isPending
+                  createSeries.isPending ||
+                  createGroupSeries.isPending
                 }
                 disabled={
                   !selectedSlot ||
                   createBooking.isPending ||
                   createGroup.isPending ||
                   createSeries.isPending ||
-                  (bookingMode === "group" && invitees.length < 1) ||
-                  (bookingMode === "series" && selectedSlots.length < 2)
+                  createGroupSeries.isPending ||
+                  !learningGoal.trim() ||
+                  (bookingMode === "group" && invitees.length < 1)
                 }
               >
-                {bookingMode === "series"
+                {selectedSlots.length > 1
                   ? `Send series request (${selectedSlots.length})`
                   : bookingMode === "group"
                     ? `Invite ${invitees.length} ${invitees.length === 1 ? "student" : "students"}`

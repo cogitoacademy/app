@@ -134,6 +134,13 @@
       "when": 1786832000000,
       "tag": "0018_dispatch_sending_state",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786833000000,
+      "tag": "0019_booking_scheduling_windows",
+      "breakpoints": true
     }
   ]
 }

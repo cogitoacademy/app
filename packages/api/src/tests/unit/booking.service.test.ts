@@ -40,6 +40,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     listBookingsByProposer: mock(async () => []),
     findTutorProfile: mock(async () => null),
     findAvailabilitySlot: mock(async () => null),
+    findAvailabilityWindowContaining: mock(async () => null),
     findOverlappingBookings: mock(async () => []),
     insertBooking: mock(async () => ({})),
     insertParticipant: mock(async () => {}),
@@ -72,6 +73,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateBookingPriceSnapshot: mock(async () => {}),
     updateBookingSchedule: mock(async () => {}),
     findSessionById: mock(async () => null),
+    updateSessionSchedule: mock(async () => {}),
     cancelSession: mock(async () => {}),
     insertSessionNote: mock(async () => ({})),
     listSessionNotes: mock(async () => []),
@@ -211,8 +213,9 @@ function makeSlot(overrides: Record<string, unknown> = {}) {
   return {
     id: "slot1",
     tutorId: "tutor1",
-    startDate: new Date(Date.now() + 48 * 60 * 60 * 1000),
-    endDate: new Date(Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000),
+    startDate: new Date(Date.now() + 47 * 60 * 60 * 1000),
+    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    modality: "both",
     isActive: true,
     ...overrides,
   };
@@ -805,7 +808,10 @@ describe("BookingService", () => {
 
     test("throws BookingSeriesSizeError when session count is below minimum", async () => {
       const { service } = createService({
-        repo: { findTutorProfile: mock(async () => makeTutorProfile()) },
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
       });
 
       await expect(
@@ -838,7 +844,10 @@ describe("BookingService", () => {
 
     test("rejects overlapping sessions within the same series (M3)", async () => {
       const { service } = createService({
-        repo: { findTutorProfile: mock(async () => makeTutorProfile()) },
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
       });
 
       await expect(
@@ -2692,24 +2701,24 @@ describe("BookingService", () => {
       });
     });
 
-    test("throws BookingNotOwnedError when a student tries to propose a reschedule", async () => {
+    test("allows the booking proposer to propose inside tutor availability", async () => {
       const booking = makeBooking({
         currentState: "awaiting_tutor_review",
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
       });
-      const { service } = createService({
+      const { service, repo } = createService({
         repo: {
           findBookingById: mock(async () => ({ ...booking, version: 1 })),
           findParticipant: mock(async () => makeParticipant()),
+          findAvailabilityWindowContaining: mock(async () => makeSlot()),
         },
       });
 
       const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
       const end = new Date(start.getTime() + 90 * 60 * 1000);
 
-      await expect(
-        service.proposeReschedule("student1", "b1", start, end),
-      ).rejects.toThrow(BookingNotOwnedError);
+      await service.proposeReschedule("student1", "b1", start, end);
+      expect(repo.insertRescheduleProposal).toHaveBeenCalledTimes(1);
     });
   });
 

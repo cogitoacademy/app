@@ -218,6 +218,18 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(listSessionsInput)
       .handler(handler.listSessions),
+
+    proposeReschedule: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/reschedule/propose",
+        tags: ["Bookings"],
+        summary: "Propose a new booking time",
+        description:
+          "Tutor or booking proposer creates or counters a reschedule proposal",
+      })
+      .input(proposeRescheduleInput)
+      .handler(handler.proposeReschedule),
   };
 }
 
