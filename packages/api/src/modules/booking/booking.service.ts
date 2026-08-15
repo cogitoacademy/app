@@ -1946,7 +1946,8 @@ export function createBookingService(deps: {
   }
 
   async function withdraw(userId: string, bookingId: string, reason?: string) {
-    return db.transaction(async (tx) => {
+    let cancelMeeting = false;
+    const result = await db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingCancelledError(bookingId);
@@ -2042,11 +2043,12 @@ export function createBookingService(deps: {
           // PRD DL-13: a confirmed group participant withdrawing before H-2
           // triggers repricing + reconfirmation — the booking is NOT cancelled.
           // Any live meeting link is cancelled until the group re-confirms.
+          // The provider call happens AFTER the transaction commits (R3).
           if (
             currentState === BOOKING_STATE.SCHEDULED ||
             currentState === BOOKING_STATE.CONFIRMED
           ) {
-            await meeting.cancelEvent(bookingId);
+            cancelMeeting = true;
           }
 
           await transition(
@@ -2066,6 +2068,22 @@ export function createBookingService(deps: {
           // the withdrawer; their hold was released above and nothing is
           // stranded (the old code cancelled the whole booking here).
           void currentState;
+        } else if (
+          b.type === BOOKING_TYPE.SOLO &&
+          (currentState === BOOKING_STATE.CONFIRMED ||
+            currentState === BOOKING_STATE.SCHEDULED ||
+            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL)
+        ) {
+          // R2: the proposer is the only participant, so cancelling the whole
+          // booking is correct — a solo booking must never regress to
+          // AWAITING_RECONFIRMATION (no one left to reconfirm, hold stranded).
+          await repo.updateBookingHoldAmount(tx, bookingId, 0);
+          cancelMeeting = true;
+          await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
+            actorId: userId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Participant withdrew",
+          });
         } else if (regressableStates.includes(currentState)) {
           await transition(
             tx,
@@ -2092,6 +2110,15 @@ export function createBookingService(deps: {
 
       return { withdrawn: true, late: isLate };
     });
+
+    // R3: provider-side calls (e.g. Google Calendar event deletion) must not
+    // be inside the DB transaction — a later in-tx failure would have rolled
+    // the booking back while the meeting was already cancelled.
+    if (cancelMeeting) {
+      await meeting.cancelEvent(bookingId);
+    }
+
+    return result;
   }
 
   async function createSeries(proposerId: string, input: CreateSeriesInput) {

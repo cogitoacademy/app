@@ -2497,6 +2497,141 @@ describe("BookingService", () => {
       expect(wallet.release).toHaveBeenCalledTimes(1);
       expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
     });
+
+    test("solo withdraw from a confirmed booking transitions to cancelled, zeroes hold, cancels the meeting (R2)", async () => {
+      const booking = makeBooking({
+        type: "solo",
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, repo, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "cancelled" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "cancelled" }),
+      );
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
+      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
+    });
+
+    test("solo withdraw from a scheduled booking cancels and zeroes hold (R2)", async () => {
+      const booking = makeBooking({
+        type: "solo",
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "cancelled" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "cancelled" }),
+      );
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
+    });
+
+    test("meeting cancellation happens after the transaction commits, not inside it (R3)", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "confirmed",
+        targetGroupSize: 3,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const order: string[] = [];
+      const { service, db, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+          ]),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "awaiting_reconfirmation" },
+            newVersion: 2,
+          })),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w1",
+            totalBalance: 100,
+            heldBalance: 42,
+            availableBalance: 58,
+          })),
+        },
+        meeting: {
+          ...makeMeeting(),
+          cancelEvent: mock(async () => {
+            order.push("cancel");
+          }),
+        },
+      });
+
+      const origTransaction = db.transaction;
+      db.transaction = mock(async (fn: any) => {
+        order.push("tx-start");
+        const result = await origTransaction(fn);
+        order.push("tx-end");
+        return result;
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(meeting.cancelEvent).toHaveBeenCalledTimes(1);
+      expect(order[order.length - 1]).toBe("cancel");
+      expect(order[order.length - 2]).toBe("tx-end");
+    });
   });
 
   describe("proposeReschedule", () => {

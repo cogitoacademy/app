@@ -11,8 +11,8 @@ Wave plan (dispatched by a fresh agent with zero context — this ledger tracks 
 
 ## PR B — Booking withdraw fixes
 
-- Task B.1 solo withdraw cancels (R2) — status:
-- Task B.2 meeting cancel outside tx (R3) — status:
+- Task B.1 solo withdraw cancels (R2) — DONE (solo CONFIRMED/SCHEDULED/AWAITING_ADMIN_ROOM_APPROVAL → CANCELLED + hold zeroed + meeting cancelled; unit tests)
+- Task B.2 meeting cancel outside tx (R3) — DONE (cancelMeeting flag; provider call after db.transaction resolves; ordering assertion in unit test)
 
 ## PR C — Uploads & payment
 
