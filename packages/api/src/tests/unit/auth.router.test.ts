@@ -3,6 +3,8 @@ import { describe, test, expect, mock } from "bun:test";
 const { createAuthRouter } = await import("../../modules/auth/auth.router");
 import { updateProfileInput } from "../../modules/auth/auth.types";
 import { createAuthHandler } from "../../modules/auth/auth.handler";
+import { USER_ROLE } from "../../shared/constants";
+import { ORPCError } from "@orpc/server";
 
 describe("authRouter", () => {
   test("exports expected route keys", () => {
@@ -105,6 +107,58 @@ describe("authHandler", () => {
 
       expect(updateProfile).toHaveBeenCalledWith("u1", input);
       expect(result).toEqual({ id: "p1", userId: "u1" });
+    });
+  });
+
+  describe("searchStudents", () => {
+    test("allows students and calls authService.searchStudents", async () => {
+      const searchStudents = mock(async () => [
+        { id: "s1", name: "A", email: "a@x.com" },
+      ]);
+      const handler = createAuthHandler({ searchStudents } as any);
+      const context = {
+        session: { user: { id: "u1", role: USER_ROLE.STUDENT } },
+      };
+
+      const result = await handler.searchStudents({
+        context,
+        input: { query: "alex", limit: 5 },
+      } as any);
+
+      expect(searchStudents).toHaveBeenCalledWith("u1", "alex", 5);
+      expect(result).toEqual([{ id: "s1", name: "A", email: "a@x.com" }]);
+    });
+
+    test("rejects tutors with a FORBIDDEN error", async () => {
+      const searchStudents = mock();
+      const handler = createAuthHandler({ searchStudents } as any);
+      const context = {
+        session: { user: { id: "t1", role: USER_ROLE.TUTOR } },
+      };
+
+      await expect(
+        handler.searchStudents({
+          context,
+          input: { query: "alex", limit: 5 },
+        } as any),
+      ).rejects.toBeInstanceOf(ORPCError);
+      expect(searchStudents).not.toHaveBeenCalled();
+    });
+
+    test("rejects admins with a FORBIDDEN error", async () => {
+      const searchStudents = mock();
+      const handler = createAuthHandler({ searchStudents } as any);
+      const context = {
+        session: { user: { id: "a1", role: USER_ROLE.ADMIN } },
+      };
+
+      await expect(
+        handler.searchStudents({
+          context,
+          input: { query: "alex", limit: 5 },
+        } as any),
+      ).rejects.toBeInstanceOf(ORPCError);
+      expect(searchStudents).not.toHaveBeenCalled();
     });
   });
 });
