@@ -1,5 +1,6 @@
 import type { achievement } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
+import { escapeHtml } from "../../lib/sanitize";
 import {
   AchievementNotFoundError,
   AchievementNotEditableError,
@@ -150,7 +151,7 @@ export function createAchievementService(deps: {
           input.status === "approved"
             ? `Your achievement "${existing.eventName}" was approved.`
             : `Your achievement "${existing.eventName}" was rejected.${
-                input.adminNote ? ` ${input.adminNote}` : ""
+                input.adminNote ? ` ${escapeHtml(input.adminNote)}` : ""
               }`,
         eventKey: `achievement.${input.achievementId}.reviewed`,
       });

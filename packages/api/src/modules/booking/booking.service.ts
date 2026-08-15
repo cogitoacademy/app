@@ -838,7 +838,16 @@ export function createBookingService(deps: {
               });
             }
           }
-        } catch {
+        } catch (error) {
+          log({
+            level: "error",
+            action: "tutor_accept_meeting_failed",
+            message:
+              "Meeting creation or scheduled transition failed after tutor accept; booking left CONFIRMED without a meeting link",
+            error: { message: String(error) },
+            bookingId,
+            tutorId,
+          });
           updated = await repo.findBookingById(tx, bookingId);
         }
       } else {

@@ -62,12 +62,10 @@ export const notificationDispatch = pgTable(
       .references(() => notification.id, { onDelete: "cascade" }),
     channel: text("channel").notNull(),
     recipientEmail: text("recipient_email").notNull(),
-    providerMessageId: text("provider_message_id"),
     status: text("status").notNull().default("queued"),
     attempts: integer("attempts").default(0).notNull(),
     lastError: text("last_error"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
-    sentAt: timestamp("sent_at", { withTimezone: true }),
   },
   (table) => [
     check("dispatch_channel_check", sql`${table.channel} IN ('email')`),

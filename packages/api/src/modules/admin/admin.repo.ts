@@ -72,27 +72,6 @@ export async function countAdmins(conn: DbOrTx): Promise<number> {
 }
 
 /**
- * Updates a user's role.
- *
- * @param conn - the database connection or active transaction
- * @param userId - the user id
- * @param role - the new role
- * @returns the updated user row
- */
-export async function updateRole(
-  conn: DbOrTx,
-  userId: string,
-  role: UserRole,
-): Promise<UserRow> {
-  const [row] = await conn
-    .update(user)
-    .set({ role })
-    .where(eq(user.id, userId))
-    .returning();
-  return row!;
-}
-
-/**
  * Updates a user's role only when the current role matches expectedRole (optimistic).
  *
  * @param conn - the database connection or active transaction
@@ -120,7 +99,6 @@ export function createAdminRepo() {
     countUsers,
     getById,
     countAdmins,
-    updateRole,
     updateRoleWithExpected,
   };
 }

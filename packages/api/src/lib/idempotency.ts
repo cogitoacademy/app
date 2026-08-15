@@ -1,5 +1,6 @@
 import { COGITO_NS } from "./redis";
 import type { RedisClient } from "./redis";
+import { logRedisFallback } from "./redis";
 
 export interface IdempotencyStoreOptions {
   prefix?: string;
@@ -32,8 +33,8 @@ export class IdempotencyStore {
       try {
         const exists = await this.redis.exists(redisKey);
         if (exists) return true;
-      } catch {
-        // fall through to in-memory
+      } catch (error) {
+        logRedisFallback("idempotency.isProcessed", error);
       }
     }
     this.maybeCleanup();
@@ -57,8 +58,8 @@ export class IdempotencyStore {
           value: ttlSeconds,
         });
         return;
-      } catch {
-        // fall through to in-memory
+      } catch (error) {
+        logRedisFallback("idempotency.markProcessed", error);
       }
     }
     this.evictOldest();
@@ -79,8 +80,8 @@ export class IdempotencyStore {
         if (ok === "OK") return true;
         const exists = await this.redis.exists(redisKey);
         return !exists;
-      } catch {
-        // fall through to in-memory
+      } catch (error) {
+        logRedisFallback("idempotency.claim", error);
       }
     }
     this.maybeCleanup();
@@ -96,8 +97,8 @@ export class IdempotencyStore {
       try {
         await this.redis.del(redisKey);
         return;
-      } catch {
-        // fall through
+      } catch (error) {
+        logRedisFallback("idempotency.release", error);
       }
     }
     this.store.delete(key);

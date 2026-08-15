@@ -59,63 +59,6 @@ export async function getByUserId(
 }
 
 /**
- * Inserts a new wallet row.
- *
- * @param conn - the database connection or active transaction
- * @param params - the initial balance values
- * @returns the created wallet snapshot
- */
-export async function insert(
-  conn: DbOrTx,
-  params: {
-    userId: string;
-    totalBalance: number;
-    heldBalance: number;
-    availableBalance: number;
-  },
-): Promise<WalletSnapshot> {
-  const [created] = await conn
-    .insert(wallet)
-    .values({
-      userId: params.userId,
-      totalBalance: params.totalBalance,
-      heldBalance: params.heldBalance,
-      availableBalance: params.availableBalance,
-    })
-    .returning();
-  return created as WalletSnapshot;
-}
-
-/**
- * Directly sets a wallet's balances.
- *
- * @param conn - the database connection or active transaction
- * @param walletId - the wallet id
- * @param balances - the new balance values
- * @returns the updated wallet snapshot
- */
-export async function updateBalances(
-  conn: DbOrTx,
-  walletId: string,
-  balances: {
-    totalBalance: number;
-    heldBalance: number;
-    availableBalance: number;
-  },
-): Promise<WalletSnapshot> {
-  const [updated] = await conn
-    .update(wallet)
-    .set({
-      totalBalance: balances.totalBalance,
-      heldBalance: balances.heldBalance,
-      availableBalance: balances.availableBalance,
-    })
-    .where(eq(wallet.id, walletId))
-    .returning();
-  return updated as WalletSnapshot;
-}
-
-/**
  * Atomically moves Marks from available to held, guarded by sufficient available balance.
  *
  * @param conn - the database connection or active transaction
@@ -395,8 +338,6 @@ export function createWalletRepo() {
     getById,
     getByUserId,
     upsert,
-    insert,
-    updateBalances,
     atomicHold,
     atomicRelease,
     atomicDeduct,

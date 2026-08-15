@@ -125,24 +125,6 @@ export async function insertDispatch(
 }
 
 /**
- * Updates a notification dispatch status.
- *
- * @param conn - the database connection or active transaction
- * @param notificationId - the notification id
- * @param status - the new dispatch status
- */
-export async function updateDispatchStatus(
-  conn: DbOrTx,
-  notificationId: string,
-  status: string,
-) {
-  await conn
-    .update(notificationDispatch)
-    .set({ status })
-    .where(eq(notificationDispatch.notificationId, notificationId));
-}
-
-/**
  * Updates a dispatch row's status by its own id (used by the outbox consumer).
  *
  * @param conn - the database connection or active transaction
@@ -296,22 +278,6 @@ export async function markAllRead(conn: DbOrTx, userId: string) {
     );
 }
 
-/**
- * Finds the dispatch row for a notification.
- *
- * @param conn - the database connection or active transaction
- * @param notificationId - the notification id
- * @returns the dispatch row, or null
- */
-export async function findDispatch(conn: DbOrTx, notificationId: string) {
-  const [row] = await conn
-    .select()
-    .from(notificationDispatch)
-    .where(eq(notificationDispatch.notificationId, notificationId))
-    .limit(1);
-  return row ?? null;
-}
-
 export function createNotificationRepo(db: DbType) {
   return {
     findNotificationByEventKey,
@@ -320,7 +286,6 @@ export function createNotificationRepo(db: DbType) {
     insertNotification,
     findUserEmail,
     insertDispatch,
-    updateDispatchStatus,
     updateDispatchStatusById,
     listQueuedDispatches,
     incrementDispatchAttempts,
@@ -333,6 +298,5 @@ export function createNotificationRepo(db: DbType) {
     updateReadStatus: (id: string, userId: string, read: boolean) =>
       updateReadStatus(db, id, userId, read),
     markAllRead: (userId: string) => markAllRead(db, userId),
-    findDispatch: (notificationId: string) => findDispatch(db, notificationId),
   };
 }

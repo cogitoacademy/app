@@ -14,6 +14,11 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
   retryable: (error: unknown) => {
     if (error instanceof TypeError && error.message.includes("fetch"))
       return true;
+    if (
+      error instanceof Error &&
+      (error.name === "AbortError" || error.name === "TimeoutError")
+    )
+      return true;
     return false;
   },
 };

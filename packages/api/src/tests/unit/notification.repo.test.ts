@@ -5,7 +5,6 @@ import {
   insertNotification,
   findUserEmail,
   insertDispatch,
-  updateDispatchStatus,
   updateDispatchStatusById,
   listQueuedDispatches,
   incrementDispatchAttempts,
@@ -14,7 +13,6 @@ import {
   countUnread,
   updateReadStatus,
   markAllRead,
-  findDispatch,
   createNotificationRepo,
 } from "../../modules/notification/notification.repo";
 
@@ -133,21 +131,6 @@ describe("insertDispatch", () => {
 
     expect(insertFn).toHaveBeenCalledTimes(1);
     expect(values).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("updateDispatchStatus", () => {
-  test("updates dispatch status", async () => {
-    const where = mock(async () => {});
-    const set = mock(() => ({ where }));
-    const updateFn = mock(() => ({ set }));
-    const conn = { update: updateFn } as any;
-
-    await updateDispatchStatus(conn, "n1", "sent");
-
-    expect(updateFn).toHaveBeenCalledTimes(1);
-    expect(set).toHaveBeenCalledTimes(1);
-    expect(where).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -300,31 +283,6 @@ describe("markAllRead", () => {
   });
 });
 
-describe("findDispatch", () => {
-  test("returns dispatch when found", async () => {
-    const dispatch = { id: "d1", notificationId: "n1", status: "sent" };
-    const limit = mock(async () => [dispatch]);
-    const where = mock(() => ({ limit }));
-    const from = mock(() => ({ where }));
-    const select = mock(() => ({ from }));
-    const conn = { select } as any;
-
-    const result = await findDispatch(conn, "n1");
-    expect(result).toEqual(dispatch);
-  });
-
-  test("returns null when not found", async () => {
-    const limit = mock(async () => []);
-    const where = mock(() => ({ limit }));
-    const from = mock(() => ({ where }));
-    const select = mock(() => ({ from }));
-    const conn = { select } as any;
-
-    const result = await findDispatch(conn, "nonexistent");
-    expect(result).toBeNull();
-  });
-});
-
 describe("createNotificationRepo", () => {
   test("returns object with all repo methods", () => {
     const db = {} as any;
@@ -334,12 +292,10 @@ describe("createNotificationRepo", () => {
     expect(typeof repo.insertNotification).toBe("function");
     expect(typeof repo.findUserEmail).toBe("function");
     expect(typeof repo.insertDispatch).toBe("function");
-    expect(typeof repo.updateDispatchStatus).toBe("function");
     expect(typeof repo.listNotifications).toBe("function");
     expect(typeof repo.countUnread).toBe("function");
     expect(typeof repo.updateReadStatus).toBe("function");
     expect(typeof repo.markAllRead).toBe("function");
-    expect(typeof repo.findDispatch).toBe("function");
     expect(typeof repo.findNotificationByIdForUser).toBe("function");
   });
 
@@ -400,18 +356,5 @@ describe("createNotificationRepo", () => {
     const repo = createNotificationRepo(db);
     await repo.markAllRead("u1");
     expect(update).toHaveBeenCalledTimes(1);
-  });
-
-  test("findDispatch delegates to standalone function", async () => {
-    const dispatch = { id: "d1", notificationId: "n1", status: "sent" };
-    const limit = mock(async () => [dispatch]);
-    const where = mock(() => ({ limit }));
-    const from = mock(() => ({ where }));
-    const select = mock(() => ({ from }));
-    const db = { select } as any;
-
-    const repo = createNotificationRepo(db);
-    const result = await repo.findDispatch("n1");
-    expect(result).toEqual(dispatch);
   });
 });

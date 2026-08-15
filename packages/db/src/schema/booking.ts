@@ -13,7 +13,6 @@ import {
 import { sql } from "drizzle-orm";
 
 import { uuidPrimaryKey, user } from "./auth";
-import { wallet } from "./wallet";
 
 export const BOOKING_STATES = [
   "awaiting_tutor_review",
@@ -81,11 +80,7 @@ export const booking = pgTable(
     refundedAmount: integer("refunded_amount").notNull().default(0),
     version: integer("version").default(1).notNull(),
     cancellationReason: text("cancellation_reason"),
-    rescheduleMeta: jsonb("reschedule_meta"),
     overrideMeta: jsonb("override_meta"),
-    notificationFlags:
-      jsonb("notification_flags").$type<Record<string, boolean>>(),
-    seriesParentId: text("series_parent_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -130,7 +125,6 @@ export const booking = pgTable(
       table.currentState,
       table.deadlineAt,
     ),
-    index("booking_seriesParentId_idx").on(table.seriesParentId),
     index("booking_scheduledStartAt_idx").on(table.scheduledStartAt),
   ],
 );
@@ -148,9 +142,6 @@ export const bookingParticipant = pgTable(
     role: text("role").notNull(),
     confirmationState: text("confirmation_state").notNull().default("pending"),
     heldAmount: integer("held_amount").notNull().default(0),
-    heldLedgerId: text("held_ledger_id").references(() => wallet.id, {
-      onDelete: "set null",
-    }),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     declinedAt: timestamp("declined_at", { withTimezone: true }),
     reconfirmedAt: timestamp("reconfirmed_at", { withTimezone: true }),
@@ -370,9 +361,6 @@ export const meetingEvent = pgTable(
     attendeeEmails: jsonb("attendee_emails").$type<string[]>(),
     status: text("status").notNull().default("pending"),
     errorReason: text("error_reason"),
-    createdBy: text("created_by").references(() => user.id, {
-      onDelete: "set null",
-    }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -408,14 +396,6 @@ export const bookingRelations = relations(booking, ({ one, many }) => ({
   meeting: one(meetingEvent, {
     fields: [booking.id],
     references: [meetingEvent.bookingId],
-  }),
-  seriesParent: one(booking, {
-    fields: [booking.seriesParentId],
-    references: [booking.id],
-    relationName: "seriesParent",
-  }),
-  seriesChildren: many(booking, {
-    relationName: "seriesParent",
   }),
   sessions: many(bookingSession),
   sessionNotes: many(sessionNote),
@@ -482,10 +462,6 @@ export const meetingEventRelations = relations(meetingEvent, ({ one }) => ({
   booking: one(booking, {
     fields: [meetingEvent.bookingId],
     references: [booking.id],
-  }),
-  createdBy: one(user, {
-    fields: [meetingEvent.createdBy],
-    references: [user.id],
   }),
 }));
 

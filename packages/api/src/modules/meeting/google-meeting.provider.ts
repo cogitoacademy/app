@@ -126,7 +126,9 @@ export function createGoogleMeetingProvider(
       return body as T;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        throw new Error("Google Meet API timeout after 30s");
+        throw new Error("Google Meet API timeout after 30s", {
+          cause: error,
+        });
       }
       throw error;
     } finally {
