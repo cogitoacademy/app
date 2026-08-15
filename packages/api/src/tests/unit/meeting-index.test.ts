@@ -4,7 +4,11 @@ import { createMeetingModule } from "../../modules/meeting/index";
 
 describe("createMeetingModule", () => {
   test("returns a meeting port with all operations when enabled with a config", () => {
-    const db = { insert: mock(() => ({ values: mock(() => ({ returning: mock(async () => []) })) })) } as never;
+    const db = {
+      insert: mock(() => ({
+        values: mock(() => ({ returning: mock(async () => []) })),
+      })),
+    } as never;
     const module = createMeetingModule({
       db,
       googleMeetEnabled: true,
