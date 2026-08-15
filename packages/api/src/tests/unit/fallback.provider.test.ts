@@ -122,4 +122,43 @@ describe("createFallbackMeetingProvider", () => {
       "student@example.com",
     ]);
   });
+
+  test("updateEvent is a no-op (manual links carry no provider event)", async () => {
+    const db = { insert: mock(() => ({})) } as any;
+    const provider = createFallbackMeetingProvider(db);
+    await expect(provider.updateEvent()).resolves.toBeUndefined();
+  });
+
+  test("cancelEvent marks local rows cancelled for the booking", async () => {
+    const where = mock(async () => {});
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const db = { update } as any;
+
+    const provider = createFallbackMeetingProvider(db);
+    await provider.cancelEvent("b1");
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith({ status: "cancelled" });
+    expect(where).toHaveBeenCalledTimes(1);
+  });
+
+  test("cancelEvent logs an error when the update throws", async () => {
+    const where = mock(async () => {
+      throw new Error("db down");
+    });
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const db = { update } as any;
+
+    logCaptures = [];
+    const provider = createFallbackMeetingProvider(db);
+    await expect(provider.cancelEvent("b1")).resolves.toBeUndefined();
+
+    const errorLog = logCaptures.find(
+      (e) => e.action === "meeting_manual_cancel_failed",
+    );
+    expect(errorLog).toBeDefined();
+    expect(errorLog.bookingId).toBe("b1");
+  });
 });
