@@ -469,7 +469,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Protected (participant)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ withdrawn: true, late: boolean }`
-- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels
+- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels. Group-series bookings (`type: "series"` with `targetGroupSize > 1`) are rejected with `CONFLICT` (`BOOKING_SERIES_NO_OPT_OUT`) — no opt-out from the series (U4)
 
 ### `booking.listSessions`
 

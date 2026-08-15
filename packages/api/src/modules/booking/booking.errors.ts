@@ -267,6 +267,17 @@ export class BookingNotCompletedError extends DomainError {
   }
 }
 
+export class BookingSeriesNoOptOutError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "BOOKING_SERIES_NO_OPT_OUT",
+      "Group series participants cannot withdraw from the series",
+      { id },
+    );
+  }
+}
+
 export function mapBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -323,5 +334,7 @@ export function mapBookingError(
   if (err instanceof BookingExpiredError) return badRequest(err.message, err);
   if (err instanceof BookingNoShowError) return badRequest(err.message, err);
   if (err instanceof BookingCancelledError) return badRequest(err.message, err);
+  if (err instanceof BookingSeriesNoOptOutError)
+    return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

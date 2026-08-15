@@ -20,7 +20,7 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 | U1  | Admin manual meeting-link entry                                             | FR-21, TC-36              | Medium   | meeting       | Not implemented                                                                          |
 | U2  | Student self-service reschedule before H-2                                  | FR-14, TC-15              | Medium   | booking       | Not implemented                                                                          |
 | U3  | Reconfirmation-deadline repricing for still-valid partial headcount         | FR-16, TC-18              | High     | booking       | Not implemented                                                                          |
-| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | Not implemented                                                                          |
+| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | **Implemented (REVIEW-FIXES-2 PR F)**                                                                                             |
 | U5  | Per-participant no-show marking for series sessions                         | FR-20, TC-30              | Medium   | booking       | Not implemented                                                                          |
 | U6  | Admin per-session series cancel with Marks-return choice                    | FR-20, TC-31              | Medium   | admin-booking | Not implemented                                                                          |
 | U7  | Per-session tutor reschedule within a series                                | FR-20, TC-33              | Low      | booking       | Not implemented                                                                          |
@@ -94,9 +94,11 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U4: Group-series full-series withdrawal not blocked (FR-20 / TC-24)
 
+**Status: IMPLEMENTED** (REVIEW-FIXES-2 PR F) — `withdraw` (`booking.service.ts:1949`) rejects `type === SERIES && targetGroupSize > 1` with `BOOKING_SERIES_NO_OPT_OUT` before any wallet movement; solo-series (`targetGroupSize: 1`) withdraw is unchanged. Spec below retained as reference.
+
 **PRD (prd.tex:890):** group-series participants "cannot withdraw from the series as a whole."
 
-**Current state:** `cancelSession` blocks per-session cancellation for group series (`booking.service.ts:1243-1245`), but `withdraw` (`booking.service.ts:1902`) has **no `type === SERIES && targetGroupSize > 1` guard** — a confirmed group-series participant can still call `withdraw` to leave the whole series (deducting/releasing their hold), contradicting the no-opt-out rule.
+**Current state (at the time of writing):** `cancelSession` blocks per-session cancellation for group series (`booking.service.ts:1243-1245`), but `withdraw` (`booking.service.ts:1902`) has **no `type === SERIES && targetGroupSize > 1` guard** — a confirmed group-series participant can still call `withdraw` to leave the whole series (deducting/releasing their hold), contradicting the no-opt-out rule.
 
 **Required:**
 

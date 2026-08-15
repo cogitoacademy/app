@@ -21,6 +21,7 @@ import {
   BookingRescheduleNotFoundError,
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
+  BookingSeriesNoOptOutError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -2283,6 +2284,52 @@ describe("BookingService", () => {
       await expect(service.withdraw("student1", "b1")).rejects.toThrow(
         BookingCancelledError,
       );
+    });
+
+    test("throws BookingSeriesNoOptOutError when withdrawing from a group series (U4)", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+        },
+      });
+
+      await expect(service.withdraw("student1", "b1")).rejects.toThrow(
+        BookingSeriesNoOptOutError,
+      );
+
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(repo.updateParticipantState).not.toHaveBeenCalled();
+    });
+
+    test("solo-series withdraw still works (targetGroupSize 1 is not a group series) (U4)", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 1,
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+        },
+      });
+
+      const result = await service.withdraw("student1", "b1");
+      expect(result.withdrawn).toBe(true);
+      expect(wallet.release).toHaveBeenCalledTimes(1);
     });
 
     test("withdraws and releases held marks for participant", async () => {

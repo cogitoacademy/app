@@ -41,4 +41,4 @@ Wave plan (dispatched by a fresh agent with zero context — this ledger tracks 
 ## PR F — Small PRD gaps
 
 - Task F.1 KB total balance (U13) — DONE (knowledgeBankEligible compares/returns totalBalance; held marks count toward the 35 threshold; unit + handler + integration green)
-- Task F.2 group-series withdraw guard (U4) — status:
+- Task F.2 group-series withdraw guard (U4) — DONE (withdraw rejects type SERIES && targetGroupSize > 1 with BookingSeriesNoOptOutError / BOOKING_SERIES_NO_OPT_OUT mapped to CONFLICT before any wallet movement; solo-series withdraw unaffected; unit + errors + group-series integration green)

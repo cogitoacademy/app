@@ -419,6 +419,15 @@ describe("Booking group series flow (FR-20)", () => {
     });
     expect(accepted.currentState).toBe("scheduled");
 
+    // U4: a confirmed group-series participant cannot withdraw from the
+    // series as a whole (PRD no-opt-out rule, prd.tex:890).
+    await expect(
+      proposerClient.booking.withdraw({ bookingId }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      invitee1Client.booking.withdraw({ bookingId }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
     const sessions = await proposerClient.booking.listSessions({ bookingId });
     expect(sessions.length).toBe(3);
 
