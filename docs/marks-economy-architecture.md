@@ -10,9 +10,9 @@ This document is the readable Markdown version of the source blueprint. It descr
 
 ## Document Control
 
-| Version | Date | Change |
-| --- | --- | --- |
-| 1.0.0 | 2026-08-15 | Converted the source DOCX to Markdown; replaced LaTeX-like expressions with readable text/Unicode and preserved code as fenced blocks. |
+| Version | Date       | Change                                                                                                                                 |
+| ------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0.0   | 2026-08-15 | Converted the source DOCX to Markdown; replaced LaTeX-like expressions with readable text/Unicode and preserved code as fenced blocks. |
 
 ## 1. Marks Economy & Package Architecture
 
@@ -27,12 +27,12 @@ The Cogito digital platform uses a closed-loop internal currency called **Marks*
 
 ### 1.2 Student Purchase Packages
 
-| Package | Marks | Price per Mark | Total price | Platform spread margin |
-| --- | ---: | ---: | ---: | ---: |
-| Starter Pack | 50 | IDR 6,250 | IDR 312,500 | IDR 62,500 (20.0%) |
-| Learner Pack | 120 | IDR 5,750 | IDR 690,000 | IDR 90,000 (13.0%) |
-| Explorer Pack | 200 | IDR 5,350 | IDR 1,070,000 | IDR 70,000 (6.5%) |
-| Pioneer Pack | 400 | IDR 5,000 | IDR 2,000,000 | IDR 0 (volume baseline) |
+| Package       | Marks | Price per Mark |   Total price |  Platform spread margin |
+| ------------- | ----: | -------------: | ------------: | ----------------------: |
+| Starter Pack  |    50 |      IDR 6,250 |   IDR 312,500 |      IDR 62,500 (20.0%) |
+| Learner Pack  |   120 |      IDR 5,750 |   IDR 690,000 |      IDR 90,000 (13.0%) |
+| Explorer Pack |   200 |      IDR 5,350 | IDR 1,070,000 |       IDR 70,000 (6.5%) |
+| Pioneer Pack  |   400 |      IDR 5,000 | IDR 2,000,000 | IDR 0 (volume baseline) |
 
 ## 2. Take Rates, Tutor Compensation & Scenario Analysis
 
@@ -72,27 +72,27 @@ Marks/student  = ceiling(Total Marks ÷ N)
 
 Tutor baseline: **IDR 175,000**, increasing by **IDR 30,000 per additional student**.
 
-| Class size | Tutor honorarium | Cogito fee | Total IDR | Total Marks | Marks per student | Actual Marks pooled |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | IDR 175,000 | IDR 50,000 | IDR 225,000 | 45 | 45 | 45 |
-| 2 | IDR 205,000 | IDR 70,000 | IDR 275,000 | 55 | 28 | 56 |
-| 3 | IDR 235,000 | IDR 90,000 | IDR 325,000 | 65 | 22 | 66 |
-| 4 | IDR 265,000 | IDR 110,000 | IDR 375,000 | 75 | 19 | 76 |
-| 5 | IDR 295,000 | IDR 130,000 | IDR 425,000 | 85 | 17 | 85 |
-| 6 | IDR 325,000 | IDR 150,000 | IDR 475,000 | 95 | 16 | 96 |
+| Class size | Tutor honorarium |  Cogito fee |   Total IDR | Total Marks | Marks per student | Actual Marks pooled |
+| ---------: | ---------------: | ----------: | ----------: | ----------: | ----------------: | ------------------: |
+|          1 |      IDR 175,000 |  IDR 50,000 | IDR 225,000 |          45 |                45 |                  45 |
+|          2 |      IDR 205,000 |  IDR 70,000 | IDR 275,000 |          55 |                28 |                  56 |
+|          3 |      IDR 235,000 |  IDR 90,000 | IDR 325,000 |          65 |                22 |                  66 |
+|          4 |      IDR 265,000 | IDR 110,000 | IDR 375,000 |          75 |                19 |                  76 |
+|          5 |      IDR 295,000 | IDR 130,000 | IDR 425,000 |          85 |                17 |                  85 |
+|          6 |      IDR 325,000 | IDR 150,000 | IDR 475,000 |          95 |                16 |                  96 |
 
 ### 2.3 Baseline Offline Class at Cogito Campus
 
 Tutor baseline: **IDR 225,000**, increasing by **IDR 40,000 per additional student**.
 
-| Class size | Tutor honorarium | Cogito fee | Total IDR | Total Marks | Marks per student | Actual Marks pooled |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | IDR 225,000 | IDR 90,000 | IDR 315,000 | 63 | 63 | 63 |
-| 2 | IDR 265,000 | IDR 130,000 | IDR 395,000 | 79 | 40 | 80 |
-| 3 | IDR 305,000 | IDR 170,000 | IDR 475,000 | 95 | 32 | 96 |
-| 4 | IDR 345,000 | IDR 210,000 | IDR 555,000 | 111 | 28 | 112 |
-| 5 | IDR 385,000 | IDR 250,000 | IDR 635,000 | 127 | 26 | 130 |
-| 6 | IDR 425,000 | IDR 290,000 | IDR 715,000 | 143 | 24 | 144 |
+| Class size | Tutor honorarium |  Cogito fee |   Total IDR | Total Marks | Marks per student | Actual Marks pooled |
+| ---------: | ---------------: | ----------: | ----------: | ----------: | ----------------: | ------------------: |
+|          1 |      IDR 225,000 |  IDR 90,000 | IDR 315,000 |          63 |                63 |                  63 |
+|          2 |      IDR 265,000 | IDR 130,000 | IDR 395,000 |          79 |                40 |                  80 |
+|          3 |      IDR 305,000 | IDR 170,000 | IDR 475,000 |          95 |                32 |                  96 |
+|          4 |      IDR 345,000 | IDR 210,000 | IDR 555,000 |         111 |                28 |                 112 |
+|          5 |      IDR 385,000 | IDR 250,000 | IDR 635,000 |         127 |                26 |                 130 |
+|          6 |      IDR 425,000 | IDR 290,000 | IDR 715,000 |         143 |                24 |                 144 |
 
 ### 2.4 Extreme Price-Point Scenarios
 
@@ -133,7 +133,7 @@ The following changes implement the economic and regulatory transition.
 - **Use an IDR-denominated base input:** Replace the old Marks-based pricing form with an IDR input constrained to IDR 5,000 increments.
 
 ```html
-<input type="number" step="5000" min="50000">
+<input type="number" step="5000" min="50000" />
 ```
 
 - **Show the dynamic honorarium breakdown:** Render exact tutor earnings for class sizes 1–6.
@@ -151,8 +151,8 @@ When a student selects a class size and tutor, the backend calculates the fees a
 
 ```ts
 const cogitoTakeRate = isOffline
-  ? 90000 + ((N - 1) * 40000)
-  : 50000 + ((N - 1) * 20000);
+  ? 90000 + (N - 1) * 40000
+  : 50000 + (N - 1) * 20000;
 
 const totalIDR = tutorBaseRate + tutorIncrement + cogitoTakeRate;
 const totalMarks = Math.ceil(totalIDR / 5000);
@@ -164,7 +164,7 @@ Students should see only the final **Marks per Student** required to join the se
 Knowledge Bank gating:
 
 ```ts
-student.wallet.marks >= 35
+student.wallet.marks >= 35;
 ```
 
 The UI should state:
@@ -173,8 +173,8 @@ The UI should state:
 
 ### 4.3 System Architecture Summary
 
-| Domain | Old implementation | New mandated implementation |
-| --- | --- | --- |
-| Tutor dashboard | Tutor sets price in Marks with IDR 7,000 cash-out. | Tutor sets price in IDR in IDR 5,000 increments and receives an IDR honorarium. |
-| Student dashboard | Students purchase Marks at variable high tiers (IDR 8,500–7,250). | Students purchase closed-loop Marks at IDR 6,250–5,000 and spend them on bookings. |
-| Financial flow | Peer-to-peer coin transfer, creating potential e-money licensing exposure. | Closed-loop voucher redemption plus direct contractor disbursement. |
+| Domain            | Old implementation                                                         | New mandated implementation                                                        |
+| ----------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Tutor dashboard   | Tutor sets price in Marks with IDR 7,000 cash-out.                         | Tutor sets price in IDR in IDR 5,000 increments and receives an IDR honorarium.    |
+| Student dashboard | Students purchase Marks at variable high tiers (IDR 8,500–7,250).          | Students purchase closed-loop Marks at IDR 6,250–5,000 and spend them on bookings. |
+| Financial flow    | Peer-to-peer coin transfer, creating potential e-money licensing exposure. | Closed-loop voucher redemption plus direct contractor disbursement.                |
