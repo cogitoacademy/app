@@ -55,7 +55,11 @@ const TEXTAREA_CLASS =
 
 type DialogKind = "report" | "decline-invite" | null;
 type SupportCategory =
-  "tutor_late" | "tutor_no_show" | "technical" | "payment" | "other";
+  | "tutor_late"
+  | "tutor_no_show"
+  | "technical"
+  | "payment"
+  | "other";
 
 export function BookingLifecycleActions({
   bookingId,
