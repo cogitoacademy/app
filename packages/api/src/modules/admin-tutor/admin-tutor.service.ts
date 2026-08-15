@@ -18,6 +18,7 @@ import type {
   AdminTutorRepo,
   TutorInviteRow,
   TutorProfileRow,
+  TutorProfileUpdates,
 } from "./admin-tutor.repo";
 import {
   createInviteInput,
@@ -25,10 +26,19 @@ import {
   listTutorProfilesInput,
   reviewTutorProfileInput,
   type ReviewAction,
+  inspectInviteeInput,
 } from "./admin-tutor.types";
 import type { AdminTutorAuditPort } from "./index";
+import type { EmailPort } from "../email/email.service";
+import { escapeHtml } from "../../lib/sanitize";
+import { log } from "../../lib/logger";
 
 export type { ReviewAction };
+
+export type InviteEmailDelivery = "sent" | "skipped" | "failed";
+export type TutorInviteDeliveryRow = TutorInviteRow & {
+  emailDelivery: InviteEmailDelivery;
+};
 
 function isUniqueViolation(err: unknown): boolean {
   if (err && typeof err === "object" && "code" in err) {
@@ -41,10 +51,13 @@ type CreateInviteInput = z.infer<typeof createInviteInput>;
 type ListInvitesInput = z.infer<typeof listInvitesInput>;
 type ListTutorProfilesInput = z.infer<typeof listTutorProfilesInput>;
 type ReviewTutorProfileInput = z.infer<typeof reviewTutorProfileInput>;
+type InspectInviteeInput = z.infer<typeof inspectInviteeInput>;
 export interface TutorProfileSnapshot {
   id: string;
   onboardingStatus: string;
   publishedAt: Date | null;
+  pendingProfileChanges?: Record<string, unknown> | null;
+  profileEditStatus?: string;
 }
 
 export interface ReviewUpdates {
@@ -59,6 +72,8 @@ const STATUS_MAP: Record<ReviewAction, string> = {
   publish: ONBOARDING_STATUS.PUBLISHED,
   unpublish: ONBOARDING_STATUS.APPROVED_UNPUBLISHED,
   suspend: ONBOARDING_STATUS.SUSPENDED,
+  approve_edits: ONBOARDING_STATUS.PUBLISHED,
+  request_edit_changes: ONBOARDING_STATUS.PUBLISHED,
 };
 
 export function validateReviewAction(
@@ -98,15 +113,71 @@ export type AdminTutorService = ReturnType<typeof createAdminTutorService>;
 export function createAdminTutorService(deps: {
   adminTutorRepo: AdminTutorRepo;
   auditPort: AdminTutorAuditPort;
+  emailPort: EmailPort;
+  appBaseUrl: string;
   db: DbType;
 }) {
-  const { adminTutorRepo, auditPort, db } = deps;
+  const { adminTutorRepo, auditPort, emailPort, appBaseUrl, db } = deps;
+
+  async function inspectInvitee(input: InspectInviteeInput) {
+    const existing = await adminTutorRepo.findUserAccountsByEmail(
+      db,
+      input.email,
+    );
+    if (!existing) {
+      return {
+        exists: false as const,
+        email: input.email,
+        name: null,
+        role: null,
+        providers: [] as string[],
+        hasGoogle: false,
+        hasPassword: false,
+      };
+    }
+    const providers = [
+      ...new Set(existing.accounts.map((item) => item.providerId)),
+    ];
+    return {
+      exists: true as const,
+      email: existing.email,
+      name: existing.name,
+      role: existing.role,
+      providers,
+      hasGoogle: providers.includes("google"),
+      hasPassword: providers.includes("credential"),
+    };
+  }
+
+  async function deliverInviteEmail(
+    invite: TutorInviteRow,
+  ): Promise<InviteEmailDelivery> {
+    const inviteUrl = `${appBaseUrl.replace(/\/$/, "")}/invite?token=${encodeURIComponent(invite.token)}`;
+    try {
+      const result = await emailPort.send({
+        to: invite.email,
+        subject: "Your Cogito tutor invitation",
+        category: "invite",
+        idempotencyKey: `tutor-invite-${invite.id}-${hashInviteToken(invite.token)}`,
+        html: `<p>Hello ${escapeHtml(invite.displayName)},</p><p>You have been invited to join Cogito as a tutor.</p><p><a href="${escapeHtml(inviteUrl)}">Accept tutor invitation</a></p><p>This link expires on ${escapeHtml(invite.expiresAt.toISOString())}. Sign in or create an account using <strong>${escapeHtml(invite.email)}</strong>.</p>`,
+      });
+      return "skipped" in result ? "skipped" : "sent";
+    } catch (error) {
+      log({
+        level: "error",
+        action: "tutor_invite_email_failed",
+        inviteId: invite.id,
+        error: { message: String(error) },
+      });
+      return "failed";
+    }
+  }
 
   async function createInvite(
     adminId: string,
     input: CreateInviteInput,
-  ): Promise<TutorInviteRow> {
-    return db.transaction(async (tx) => {
+  ): Promise<TutorInviteDeliveryRow> {
+    const result = await db.transaction(async (tx) => {
       const existing = await adminTutorRepo.findActiveInviteByEmail(
         tx,
         input.email,
@@ -151,6 +222,8 @@ export function createAdminTutorService(deps: {
 
       return { ...invite, token };
     });
+    const emailDelivery = await deliverInviteEmail(result);
+    return { ...result, emailDelivery };
   }
 
   async function listInvites(
@@ -178,7 +251,7 @@ export function createAdminTutorService(deps: {
     adminId: string,
     inviteId: string,
   ): Promise<TutorInviteRow> {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const invite = await adminTutorRepo.getInviteById(tx, inviteId);
       if (!invite) throw new InviteNotFoundError(inviteId);
       if (invite.status !== INVITE_STATUS.INVITED) {
@@ -205,6 +278,16 @@ export function createAdminTutorService(deps: {
 
       return { ...updated, token: newToken };
     });
+    return result;
+  }
+
+  async function sendInviteAgain(
+    adminId: string,
+    inviteId: string,
+  ): Promise<TutorInviteDeliveryRow> {
+    const result = await resendInvite(adminId, inviteId);
+    const emailDelivery = await deliverInviteEmail(result);
+    return { ...result, emailDelivery };
   }
 
   async function revokeInvite(
@@ -262,10 +345,42 @@ export function createAdminTutorService(deps: {
 
       const { profile: existing } = validateReviewAction(input.action, profile);
 
-      const { updates, newStatus } = buildReviewUpdates(
-        input.action,
-        input.adminNote,
-      );
+      let updates: TutorProfileUpdates;
+      let newStatus: string;
+      if (input.action === "approve_edits") {
+        if (!existing.pendingProfileChanges) {
+          throw new InvalidInviteActionError(
+            input.tutorProfileId,
+            input.action,
+          );
+        }
+        updates = {
+          ...existing.pendingProfileChanges,
+          onboardingStatus: ONBOARDING_STATUS.PUBLISHED,
+          pendingProfileChanges: null,
+          profileEditStatus: "none",
+          profileEditAdminNote: null,
+        };
+        newStatus = ONBOARDING_STATUS.PUBLISHED;
+      } else if (input.action === "request_edit_changes") {
+        if (!existing.pendingProfileChanges) {
+          throw new InvalidInviteActionError(
+            input.tutorProfileId,
+            input.action,
+          );
+        }
+        updates = {
+          onboardingStatus: ONBOARDING_STATUS.PUBLISHED,
+          profileEditStatus: "changes_requested",
+          profileEditAdminNote: input.adminNote ?? null,
+        };
+        newStatus = ONBOARDING_STATUS.PUBLISHED;
+      } else {
+        ({ updates, newStatus } = buildReviewUpdates(
+          input.action,
+          input.adminNote,
+        ));
+      }
 
       const row = await adminTutorRepo.updateTutorProfile(
         tx,
@@ -286,7 +401,10 @@ export function createAdminTutorService(deps: {
         },
         afterState: {
           onboardingStatus: newStatus,
-          publishedAt: updates.publishedAt ?? null,
+          publishedAt:
+            updates.publishedAt === undefined
+              ? existing.publishedAt
+              : updates.publishedAt,
         },
         details: {
           adminNote: input.adminNote,
@@ -300,9 +418,11 @@ export function createAdminTutorService(deps: {
   }
 
   return {
+    inspectInvitee,
     createInvite,
     listInvites,
     resendInvite,
+    sendInviteAgain,
     revokeInvite,
     listTutorProfiles,
     reviewTutorProfile,

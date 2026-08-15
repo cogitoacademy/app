@@ -18,25 +18,30 @@ The backend spec is `docs/plans/active/PRD-GAPS-SPEC.md` (backend-only). This is
 
 ### Existing routes (`apps/web/src/routes/`)
 
-| Route                       | Component                       | Status                                |
-| --------------------------- | ------------------------------- | ------------------------------------- |
-| `/` (index)                 | Landing redirect                | Exists                                |
-| `/login`                    | sign-in-form.tsx                | Exists                                |
-| `/auth/callback`            | auth callback                   | Exists                                |
-| `/invite`                   | invite-claim-page.tsx           | Exists                                |
-| `/_app`                     | App layout + sidebar            | Exists                                |
-| `/_app/dashboard`           | dashboard/page.tsx              | Exists (stats only)                   |
-| `/_app/balance`             | balance-page.tsx                | Exists (wallet + Knowledge Bank card) |
-| `/_app/bookings`            | bookings-page.tsx               | Exists (list + cancel only)           |
-| `/_app/tutors`              | tutors-page-content.tsx         | Exists (discovery list)               |
-| `/_app/achievements`        | achivements-page.tsx            | Exists (submission + list)            |
-| `/_app/profile`             | profile-page.tsx                | Exists (incl. parent contact fields)  |
-| `/_app/onboarding`          | onboarding-form.tsx             | Exists (tutor onboarding)             |
-| `/_app/tutor-bookings`      | tutor-bookings-page.tsx         | Exists (incoming list + review link)  |
-| `/_app/availability`        | availability-page.tsx           | Exists (weekly + one-time slots)      |
-| `/_app/bookings/$bookingId` | booking-detail-page.tsx         | Exists (student/tutor detail actions) |
-| `/_app/admin-tutors`        | admin tutor invite + review     | Exists                                |
-| `/_app/admin-achievements`  | achievement-moderation-page.tsx | Exists (moderation UI)                |
+The tutor booking form now exposes optional student invitations at all times.
+Booking type is derived from invitees (none = solo, one or more = group), so
+students no longer need to select a separate solo/group mode before searching
+for classmates.
+
+| Route                       | Component                       | Status                                                                        |
+| --------------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| `/` (index)                 | Landing redirect                | Exists                                                                        |
+| `/login`                    | sign-in-form.tsx                | Exists                                                                        |
+| `/auth/callback`            | auth callback                   | Exists                                                                        |
+| `/invite`                   | invite-claim-page.tsx           | Exists                                                                        |
+| `/_app`                     | App layout + sidebar            | Exists                                                                        |
+| `/_app/dashboard`           | dashboard/page.tsx              | Exists (stats only)                                                           |
+| `/_app/balance`             | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                         |
+| `/_app/bookings`            | bookings-page.tsx               | Exists (list + cancel only)                                                   |
+| `/_app/tutors`              | tutors-page-content.tsx         | Exists (discovery list)                                                       |
+| `/_app/achievements`        | achivements-page.tsx            | Exists (submission + list)                                                    |
+| `/_app/profile`             | profile-page.tsx                | Complete — student account name/photo plus learning and parent contact fields |
+| `/_app/onboarding`          | onboarding-form.tsx             | Exists (tutor onboarding)                                                     |
+| `/_app/tutor-bookings`      | tutor-bookings-page.tsx         | Exists (incoming list + review link)                                          |
+| `/_app/availability`        | availability-page.tsx           | Exists (weekly + one-time slots)                                              |
+| `/_app/bookings/$bookingId` | booking-detail-page.tsx         | Exists (student/tutor detail actions)                                         |
+| `/_app/admin-tutors`        | admin tutor invite + review     | Exists                                                                        |
+| `/_app/admin-achievements`  | achievement-moderation-page.tsx | Exists (moderation UI)                                                        |
 
 ### Remaining gaps (no complete surface yet)
 
@@ -442,6 +447,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 - Clicking a booking in list → opens detail
 - All role-appropriate actions visible
+- Role boundary complete: only students see tutor discovery/booking surfaces; tutor/admin direct route access redirects, and backend student procedures reject non-student booking mutations.
 - Meeting link gated by confirmation state
 - State history visible
 

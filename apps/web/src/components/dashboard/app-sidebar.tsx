@@ -61,7 +61,6 @@ const tutorNavItems = [
   { to: "/onboarding", label: "My Profile", icon: IconUser },
   { to: "/availability", label: "Availability", icon: IconCalendarEvent },
   { to: "/tutor-bookings", label: "Bookings", icon: IconCalendarEvent },
-  { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
 
 const adminNavItems = [
@@ -73,7 +72,6 @@ const adminNavItems = [
     label: "Review Achievements",
     icon: IconCertificate,
   },
-  { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
 
 const resourceItems = [

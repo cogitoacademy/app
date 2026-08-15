@@ -72,6 +72,16 @@ interface OnboardingFormProps {
     proofUrls: string[];
     onboardingStatus: string;
     adminReviewNote: string | null;
+    pendingProfileChanges: Partial<{
+      displayName: string;
+      credentialsSummary: string;
+      expertise: string[];
+      modality: Modality;
+      prices: Record<string, number>;
+      proofUrls: string[];
+    }> | null;
+    profileEditStatus: string;
+    profileEditAdminNote: string | null;
     version: number;
   };
 }
@@ -84,15 +94,17 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     name: accountUser.name,
     image: accountUser.image ?? "",
   });
+  const pending = profile.pendingProfileChanges ?? {};
   const [form, setForm] = useState({
-    displayName: profile.displayName ?? "",
+    displayName: pending.displayName ?? profile.displayName ?? "",
     shortBio: profile.shortBio ?? "",
-    credentialsSummary: profile.credentialsSummary ?? "",
-    expertise: profile.expertise ?? [],
-    modality: (profile.modality ?? "") as Modality | "",
-    prices: (profile.prices as Record<string, number>) ?? {},
+    credentialsSummary:
+      pending.credentialsSummary ?? profile.credentialsSummary ?? "",
+    expertise: pending.expertise ?? profile.expertise ?? [],
+    modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
+    prices: pending.prices ?? (profile.prices as Record<string, number>) ?? {},
     availabilitySummary: profile.availabilitySummary ?? "",
-    proofUrls: profile.proofUrls ?? [],
+    proofUrls: pending.proofUrls ?? profile.proofUrls ?? [],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [newProofUrl, setNewProofUrl] = useState("");
@@ -135,7 +147,17 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const updateMutation = useMutation(
     orpc.tutor.updateMyProfile.mutationOptions({
       onSuccess: () => {
-        toastManager.add({ title: "Progress saved", type: "success" });
+        toastManager.add({
+          title:
+            profile.onboardingStatus === "published"
+              ? "Profile changes saved"
+              : "Progress saved",
+          description:
+            profile.onboardingStatus === "published"
+              ? "Public details were updated. Verified details are waiting for admin review."
+              : undefined,
+          type: "success",
+        });
         void queryClient.invalidateQueries({
           queryKey: orpc.tutor.getMyProfile.key(),
         });
@@ -258,6 +280,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const isDraft =
     profile.onboardingStatus === "draft" ||
     profile.onboardingStatus === "changes_requested";
+  const isEditable = isDraft || profile.onboardingStatus === "published";
 
   const statusMessages: Record<string, string> = {
     pending_review:
@@ -265,7 +288,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     approved_unpublished:
       "Your profile has been approved and is awaiting publication by admin.",
     published:
-      "Your tutor profile is live! Students can now discover and book sessions with you.",
+      profile.profileEditStatus === "pending_review"
+        ? "Your profile is live. Important changes are waiting for admin review; students still see the approved version."
+        : profile.profileEditStatus === "changes_requested"
+          ? "Your profile is live, but the admin requested revisions to your proposed changes."
+          : "Your tutor profile is live! You can update it anytime; important changes will be reviewed before going live.",
     suspended:
       "Your tutor profile has been suspended. Please contact admin for details.",
   };
@@ -365,7 +392,19 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         </Card>
       )}
 
-      {isDraft && (
+      {profile.profileEditAdminNote &&
+        profile.profileEditStatus === "changes_requested" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Feedback on profile changes</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <Text>{profile.profileEditAdminNote}</Text>
+            </CardBody>
+          </Card>
+        )}
+
+      {isEditable && (
         <>
           <Card>
             <CardHeader>
@@ -451,7 +490,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   disabled={updateMutation.isPending}
                   onClick={() => updateMutation.mutate(getSavePayload())}
                 >
-                  Save Progress
+                  {profile.onboardingStatus === "published"
+                    ? "Save changes"
+                    : "Save Progress"}
                 </Button>
               </div>
             </CardBody>
@@ -576,15 +617,19 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               disabled={updateMutation.isPending}
               onClick={() => updateMutation.mutate(getSavePayload())}
             >
-              Save Draft
+              {profile.onboardingStatus === "published"
+                ? "Save profile changes"
+                : "Save Draft"}
             </Button>
-            <Button
-              progress={submitMutation.isPending}
-              disabled={submitMutation.isPending}
-              onClick={handleSubmitForReview}
-            >
-              Submit for Review
-            </Button>
+            {isDraft ? (
+              <Button
+                progress={submitMutation.isPending}
+                disabled={submitMutation.isPending}
+                onClick={handleSubmitForReview}
+              >
+                Submit for Review
+              </Button>
+            ) : null}
           </div>
         </>
       )}

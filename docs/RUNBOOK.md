@@ -1,6 +1,10 @@
 # Cogito Runbook
 
-Last updated: 2026-08-14
+Last updated: 2026-08-16
+
+For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
+
+**Generate & copy link** never sends email. Use the separate **Send again** action when an admin intentionally wants Resend to deliver a replacement link.
 
 ## Starting the Server
 
@@ -156,6 +160,10 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 - `Refusing to run tests against a non-test database` — The test harness detected a `DATABASE_URL` whose database name does not include `test`.
 - `resetDatabase() is blocked outside a dedicated test database` — An integration test tried to truncate tables while pointed at a non-test database.
 
+### Role-boundary errors
+
+- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use `tutorActions.*` for tutor fulfillment and `adminTutor.*` for admin review.
+
 ### Redis Connection Errors
 
 - `ECONNREFUSED` — Redis not running. Start it (`bun run db:start` brings up postgres + redis). Redis is required; the server fails fast on env validation if `REDIS_URL` is missing.
@@ -174,6 +182,8 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
 5. Roll back migrations if needed (rare — coordinate with DBA)
 
 ## Environment Variables
+
+Student account name/image editing uses the existing Better Auth session and requires no additional environment variables or database migration.
 
 Key environment variables (see `.env.example` for full list):
 

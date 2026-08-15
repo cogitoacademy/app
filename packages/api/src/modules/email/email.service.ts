@@ -2,7 +2,13 @@ export interface EmailMessage {
   to: string;
   subject: string;
   html: string;
-  category: "booking" | "payment" | "refund" | "schedule" | "override";
+  category:
+    | "booking"
+    | "payment"
+    | "refund"
+    | "schedule"
+    | "override"
+    | "invite";
   idempotencyKey?: string;
 }
 

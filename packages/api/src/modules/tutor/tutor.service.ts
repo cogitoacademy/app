@@ -11,7 +11,6 @@ import type { TutorAuditPort, TutorPricingPort } from "./index";
 import type { BookingPayoutPort } from "../booking";
 import {
   TutorProfileNotFoundError,
-  TutorProfileNotEditableError,
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
   TutorProfileIncompleteError,
@@ -40,13 +39,6 @@ export function validateUpdateInput(
 ): void {
   if (!profile) {
     throw new TutorProfileNotFoundError("unknown");
-  }
-
-  if (profile.onboardingStatus === ONBOARDING_STATUS.PUBLISHED) {
-    throw new TutorProfileNotEditableError(
-      profile.id,
-      profile.onboardingStatus,
-    );
   }
 
   if (input.prices) {
@@ -159,11 +151,46 @@ export function createTutorService(deps: {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateUpdateInput(profile, input, pricingPort);
     const { version, ...data } = input;
+    const isPublished =
+      profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
+    const protectedFields = [
+      "displayName",
+      "credentialsSummary",
+      "expertise",
+      "modality",
+      "prices",
+      "proofUrls",
+    ] as const;
+    const directData: Omit<UpdateProfileInput, "version"> & {
+      pendingProfileChanges?: Record<string, unknown>;
+      profileEditStatus?: string;
+      profileEditAdminNote?: null;
+    } = { ...data };
+
+    if (isPublished) {
+      const pendingProfileChanges = {
+        ...(profile!.pendingProfileChanges as Record<string, unknown> | null),
+      };
+      for (const field of protectedFields) {
+        if (
+          data[field] !== undefined &&
+          JSON.stringify(data[field]) !== JSON.stringify(profile![field])
+        ) {
+          pendingProfileChanges[field] = data[field];
+        }
+        delete directData[field];
+      }
+      if (Object.keys(pendingProfileChanges).length > 0) {
+        directData.pendingProfileChanges = pendingProfileChanges;
+        directData.profileEditStatus = "pending_review";
+        directData.profileEditAdminNote = null;
+      }
+    }
     const rows = await tutorRepo.updateProfileWithVersion(
       db,
       userId,
       version,
-      data,
+      directData,
     );
     if (rows.length === 0) throw new OptimisticLockError(profile!.id, version);
     return rows[0];

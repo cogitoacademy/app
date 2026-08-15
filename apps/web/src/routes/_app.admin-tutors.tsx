@@ -18,6 +18,7 @@ import {
 } from "@cogito-app/ui/components/selia/select";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Input } from "@cogito-app/ui/components/selia/input";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import type { CogitoUser } from "@cogito-app/auth";
@@ -45,6 +46,9 @@ export const Route = createFileRoute("/_app/admin-tutors")({
 function RouteComponent() {
   const [profileFilter, setProfileFilter] = useState("");
   const [inviteFilter, setInviteFilter] = useState("");
+  const [latestInviteLinks, setLatestInviteLinks] = useState<
+    Record<string, string>
+  >({});
 
   const { data: profiles = [], refetch: refetchProfiles } = useQuery({
     queryKey: ["adminTutorProfiles", profileFilter],
@@ -78,13 +82,53 @@ function RouteComponent() {
 
   const resendInvite = useMutation(
     orpc.adminTutor.resendInvite.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (data) => {
         void refetchInvites();
-        toastManager.add({ title: "Invitation renewed", type: "success" });
+        const url = `${window.location.origin}/invite?token=${data.token}`;
+        setLatestInviteLinks((current) => ({
+          ...current,
+          [data.id]: url,
+        }));
+        void navigator.clipboard.writeText(url);
+        toastManager.add({
+          title: "New invite link copied",
+          description: "The previous invite link is no longer valid.",
+          type: "success",
+        });
       },
       onError: (error: Error) =>
         toastManager.add({
           title: "Invitation could not be renewed",
+          description: error.message,
+          type: "error",
+        }),
+    }),
+  );
+
+  const sendInviteAgain = useMutation(
+    orpc.adminTutor.sendInviteAgain.mutationOptions({
+      onSuccess: (data) => {
+        void refetchInvites();
+        const url = `${window.location.origin}/invite?token=${data.token}`;
+        setLatestInviteLinks((current) => ({
+          ...current,
+          [data.id]: url,
+        }));
+        toastManager.add({
+          title:
+            data.emailDelivery === "sent"
+              ? "Invitation sent again"
+              : "Email was not delivered",
+          description:
+            data.emailDelivery === "sent"
+              ? "A new link was emailed; the previous link is invalid."
+              : "Use Generate & copy link for manual delivery.",
+          type: data.emailDelivery === "sent" ? "success" : "warning",
+        });
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Invitation could not be sent",
           description: error.message,
           type: "error",
         }),
@@ -154,6 +198,7 @@ function RouteComponent() {
                   email: string;
                   status: string;
                   token?: string;
+                  updatedAt: Date;
                 }) => (
                   <div
                     key={invite.id}
@@ -162,6 +207,29 @@ function RouteComponent() {
                     <div className="flex flex-col">
                       <Text className="font-medium">{invite.displayName}</Text>
                       <Text className="text-sm text-muted">{invite.email}</Text>
+                      <Text className="text-xs text-dimmed">
+                        Last updated{" "}
+                        {new Date(invite.updatedAt).toLocaleString()}
+                      </Text>
+                      {latestInviteLinks[invite.id] ? (
+                        <div className="mt-2 flex max-w-xl gap-2">
+                          <Input
+                            value={latestInviteLinks[invite.id]}
+                            readOnly
+                          />
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(
+                                latestInviteLinks[invite.id]!,
+                              );
+                            }}
+                          >
+                            <IconCopy /> Copy
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -198,10 +266,30 @@ function RouteComponent() {
                               resendInvite.variables?.inviteId === invite.id
                             }
                             disabled={
-                              resendInvite.isPending || revokeInvite.isPending
+                              resendInvite.isPending ||
+                              sendInviteAgain.isPending ||
+                              revokeInvite.isPending
                             }
                           >
-                            <IconRefresh /> Renew
+                            <IconRefresh /> Generate &amp; copy link
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              sendInviteAgain.mutate({ inviteId: invite.id })
+                            }
+                            progress={
+                              sendInviteAgain.isPending &&
+                              sendInviteAgain.variables?.inviteId === invite.id
+                            }
+                            disabled={
+                              resendInvite.isPending ||
+                              sendInviteAgain.isPending ||
+                              revokeInvite.isPending
+                            }
+                          >
+                            Send again
                           </Button>
                           <Button
                             size="sm"

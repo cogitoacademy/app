@@ -91,6 +91,9 @@ interface TutorReviewCardProps {
     availabilitySummary: string | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
+    pendingProfileChanges: Record<string, unknown> | null;
+    profileEditStatus: string;
+    profileEditAdminNote: string | null;
     user?: { name: string; email: string } | null;
   };
   onAction?: () => void;
@@ -109,7 +112,7 @@ function getInitials(name?: string | null) {
 export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
   const queryClient = useQueryClient();
   const [noteAction, setNoteAction] = useState<
-    "request_changes" | "suspend" | null
+    "request_changes" | "request_edit_changes" | "suspend" | null
   >(null);
   const [adminNote, setAdminNote] = useState("");
   const reviewMutation = useMutation(
@@ -139,7 +142,9 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
       | "approve_unpublished"
       | "publish"
       | "unpublish"
-      | "suspend",
+      | "suspend"
+      | "approve_edits"
+      | "request_edit_changes",
     note?: string,
   ) {
     reviewMutation.mutate({
@@ -154,10 +159,13 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
     if (noteAction && note) handleAction(noteAction, note);
   }
 
-  const badge = STATUS_BADGE[profile.onboardingStatus] ?? {
-    label: profile.onboardingStatus,
-    variant: "secondary" as const,
-  };
+  const badge =
+    profile.profileEditStatus === "pending_review"
+      ? ({ label: "Edit review", variant: "warning" } as const)
+      : (STATUS_BADGE[profile.onboardingStatus] ?? {
+          label: profile.onboardingStatus,
+          variant: "secondary" as const,
+        });
   const floorPrices =
     profile.modality === "offline" ? FLOOR_OFFLINE : FLOOR_ONLINE;
   const priceEntries = Object.entries(profile.prices ?? {}).toSorted(
@@ -315,10 +323,61 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
                 <Text className="mt-1 text-sm">{profile.adminReviewNote}</Text>
               </div>
             ) : null}
+            {profile.pendingProfileChanges ? (
+              <section className="rounded-lg border border-warning-border bg-warning/10 p-3">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
+                  Proposed profile changes
+                </Text>
+                <Stack spacing="sm" className="mt-2">
+                  {Object.entries(profile.pendingProfileChanges).map(
+                    ([field, value]) => (
+                      <div key={field}>
+                        <Text className="text-xs capitalize text-muted">
+                          {field.replace(/([A-Z])/g, " $1")}
+                        </Text>
+                        <Text className="text-sm font-medium">
+                          {Array.isArray(value)
+                            ? value.join(", ")
+                            : typeof value === "object"
+                              ? JSON.stringify(value)
+                              : String(value)}
+                        </Text>
+                      </div>
+                    ),
+                  )}
+                </Stack>
+                {profile.profileEditAdminNote ? (
+                  <Text className="mt-2 text-sm">
+                    {profile.profileEditAdminNote}
+                  </Text>
+                ) : null}
+              </section>
+            ) : null}
           </Stack>
         </CardBody>
 
         <CardFooter className="flex-wrap gap-2">
+          {profile.onboardingStatus === "published" &&
+          profile.profileEditStatus === "pending_review" ? (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setNoteAction("request_edit_changes")}
+                disabled={isPending}
+              >
+                Request revision
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handleAction("approve_edits")}
+                progress={isPending && reviewAction === "approve_edits"}
+                disabled={isPending}
+              >
+                Approve changes
+              </Button>
+            </>
+          ) : null}
           {profile.onboardingStatus === "pending_review" ? (
             <>
               <Button
@@ -361,7 +420,8 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
             </>
           ) : null}
 
-          {profile.onboardingStatus === "published" ? (
+          {profile.onboardingStatus === "published" &&
+          profile.profileEditStatus !== "pending_review" ? (
             <>
               <Button
                 size="sm"
@@ -399,7 +459,9 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
             <DialogTitle>
               {noteAction === "suspend"
                 ? "Suspend tutor?"
-                : "Request profile changes?"}
+                : noteAction === "request_edit_changes"
+                  ? "Request revisions?"
+                  : "Request profile changes?"}
             </DialogTitle>
             <DialogDescription>
               {noteAction === "suspend"

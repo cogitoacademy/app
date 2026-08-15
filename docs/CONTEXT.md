@@ -2,7 +2,15 @@
 
 Last updated: 2026-08-16
 
+Invitation history keeps metadata but never stores plaintext invite secrets. The latest generated link remains visible and repeatedly copyable during the current admin page session. For any pending history entry, **Generate & copy link** rotates the token, invalidates the previous link, and records the existing resend audit action.
+
+Before submission, the admin tutor invite form checks whether the normalized email is registered and displays the user's current role and linked Better Auth methods (Google, email/password, or both). This preflight is admin-only and resets whenever the email input changes.
+
 Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16).
+
+## Tutor invite flow
+
+Admin create/resend produces a single-use plaintext token, stores only its SHA-256 digest, and attempts delivery through the shared Resend provider. Delivery status is returned to the admin UI; failed/stubbed delivery keeps the invite usable and exposes the one-time clipboard fallback. Claim requires an authenticated account with the same email (case-insensitive), consumes the invite and creates the tutor profile transactionally, and permits only student/tutor roles—admin cannot be silently demoted. Email/password and Google accounts share this claim path; OAuth preserves the `/invite?token=...` return URL.
 
 ## Architecture
 
@@ -123,6 +131,15 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ## Domain & Policy References
 
+### Booking creation UX
+
+- The student booking form does not ask users to choose solo versus group up
+  front. `Invite students (optional)` is always available; zero invitees uses
+  the solo/solo-series RPC, while one or more invitees automatically uses the
+  group/group-series RPC and updates participant count and pricing.
+- Removing the final invitee automatically returns the request to solo without
+  clearing the selected schedule or learning goal.
+
 - [`marks-economy-architecture.md`](marks-economy-architecture.md) — canonical reference for the closed-loop Marks economy, package pricing, tutor honorarium/take-rate formulas, regulatory assumptions, Knowledge Bank gating, and related engineering changes.
 - The Marks blueprint is a reference architecture, not a substitute for Indonesian legal, regulatory, accounting, or payment-provider review before production launch.
 
@@ -147,13 +164,13 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ### `studentProfile` (student-profile.ts) — uuid PK
 
-### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status
+### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status + profile_edit_status; keeps approved public values separate from pending reviewed edits
 
 ### `availabilitySlot` (availability-slot.ts) — tutor availability windows (one-time + weekly-generated)
 
 ### `tutorInvite` (tutor-invite.ts) — CHECK status, revoked_by/at fields
 
-### `achievement` (achievement.ts) — CHECK status
+### `achievement` (achievement.ts) — CHECK status; private `evidence_url`, optional public `documentation_url`, `awarding_date`
 
 ### `auditLog` (audit-log.ts) — CHECK actor_type, before/after state jsonb
 
@@ -222,6 +239,8 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 - `list`, `create`, `update`, `delete`
 - `adminList`, `adminReview`
+- Verification evidence is owner/admin-only; optional activity documentation is the public-safe image. No public achievement endpoint exists yet.
+- The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell.
 
 ### Wallet Module (protected)
 
@@ -232,13 +251,15 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 - `calculateSoloPrice`, `calculateGroupPrice`, `calculateSeriesPrice`, `validateFloorPrice`
 
-### Booking Module (protected)
+### Booking Module (student mutations + shared authenticated reads)
 
 - `createSolo`, `get`, `listMine`, `cancel`
 - `acceptReschedule`, `rejectReschedule`, `cancelSession`
 - `addSessionNote`, `getSessionNotes`
 - `createGroup`, `createSeries`, `createGroupSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
 - `listSessions`
+
+Tutor discovery and every student-owned booking mutation are guarded by `studentProcedure`. Tutor/admin accounts cannot browse the student tutor catalog or create/cancel/confirm/reconfirm/withdraw bookings; tutor fulfillment remains under `tutorActions.*`.
 
 ### TutorActions Module (tutor)
 
@@ -350,6 +371,8 @@ Use this section as the current role-readiness baseline. Re-audit only after the
 
 ### Student
 
+The student My Profile surface supports self-service account name and profile-image updates through Better Auth, alongside learning/contact fields. The sign-in email remains read-only on this page. Student identity edits do not require admin review.
+
 **Primary promotion flow is ready:** email/password auth -> tutor discovery -> solo booking -> Marks hold -> booking list/detail -> cancellation. Profile, balance/top-up, basic achievements, notification bell, calendar export, and WhatsApp contact surfaces are also present.
 
 **Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject UI (F7), lateness/no-show reporting UI (F3), public achievements (F16), email verification, and session-expiry UX remain open. Backend support for reschedule accept/reject and lateness/no-show reporting (G1/G6) has landed. The notification center and Knowledge Bank gating UX are now implemented.
@@ -357,6 +380,8 @@ Use this section as the current role-readiness baseline. Re-audit only after the
 ### Tutor
 
 The tutor workspace now has the primary management surfaces: tutor-only onboarding, a weekly-first availability page, an incoming booking list, and booking detail actions for accept, decline, and complete. Weekly availability is materialized into concrete future slots through the selected end date (up to 52 weeks); one-time custom slots remain available for exceptions or force majeure. The incoming list uses the tutor-owned booking query rather than proposer-only `booking.listMine`.
+
+Published tutor profiles remain editable. Bio and availability-summary edits publish immediately; trust-sensitive edits are held in `pendingProfileChanges` with a separate edit-review status, so discovery continues serving the last approved profile until an admin approves the proposal or requests revisions.
 
 The primary Tutor E2E flow has been manually verified with seeded accounts, including availability, incoming booking review, Google Meet link creation, student notification/state, and completion. Tutor reschedule, session notes, payout, and individual series completion are now backend-ready (G6/G7/G16/G18); their UI is tracked in FRONTEND-GAPS-SPEC (F6/F7/F9/F13/F8). Lateness/no-show support is backend-ready via `support.createTicket` (G1) with the report UI still pending (F3).
 

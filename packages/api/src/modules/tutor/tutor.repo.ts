@@ -14,6 +14,15 @@ export interface UpdateProfileInput {
   proofUrls?: string[];
 }
 
+export interface PersistedProfileUpdate extends Omit<
+  UpdateProfileInput,
+  "version"
+> {
+  pendingProfileChanges?: Record<string, unknown>;
+  profileEditStatus?: string;
+  profileEditAdminNote?: string | null;
+}
+
 export interface UpsertAvailabilityInput {
   id?: string;
   startDate: Date;
@@ -50,7 +59,7 @@ export async function updateProfileWithVersion(
   conn: DbOrTx,
   userId: string,
   expectedVersion: number,
-  input: Omit<UpdateProfileInput, "version">,
+  input: PersistedProfileUpdate,
 ) {
   const rows = await conn
     .update(tutorProfile)

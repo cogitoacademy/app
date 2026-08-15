@@ -2,6 +2,10 @@
 
 Last updated: 2026-08-14
 
+Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
+
+The invite form performs an admin-only account preflight by exact normalized email. Provider facts come from Better Auth `account.providerId` rows (`google`, `credential`, or both); admin-role accounts are shown as ineligible and cannot be submitted from the UI.
+
 ## Overview
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
@@ -182,6 +186,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `me(userId)` — Returns user + profile + tutorProfile + wallet (creates wallet if missing)
 - `getProfile(userId)` — Returns user with profile and tutor profile
 - `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts)
+- Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`.
 - `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 results
 
 **Dependencies:** `AuthRepo`, `WalletPort` (for lazy wallet creation)
@@ -206,7 +211,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
-- `booking.router.ts` — `booking.*` protected routes + `tutorActions.*` tutor-guarded routes
+- `booking.router.ts` — Student-owned booking mutations use `studentProcedure`; shared party reads/notes stay protected; `tutorActions.*` uses `tutorProcedure`
 
 **Service Methods:**
 
@@ -253,6 +258,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - Wallet holds are released on cancel, decline, and expiry
 - Overlap detection prevents double-booking tutor slots
 - Optimistic locking via `version` field prevents concurrent state changes
+- Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run.
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
 - Follow-ups (reconfirmation-deadline reprice, group-series full withdrawal block, per-participant no-show, admin per-session cancel, per-session reschedule) tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U3–U7)
@@ -593,7 +599,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 ## Tutor Discovery Module
 
-**Purpose:** Public-facing tutor search and profile viewing.
+**Purpose:** Student-only tutor search and profile viewing.
 
 **Files:**
 
@@ -602,7 +608,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `discovery.repo.ts` — `listPublished`, `findByUserId`
 - `discovery.service.ts` — `listPublished(filters)`, `getProfile(userId)`
 - `discovery.handler.ts` — Maps handler context/input
-- `discovery.router.ts` — Protected routes
+- `discovery.router.ts` — Student-only routes (`studentProcedure`)
 
 **Service Methods:**
 

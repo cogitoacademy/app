@@ -8,12 +8,13 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### Auth Levels
 
-| Level       | Description                                         |
-| ----------- | --------------------------------------------------- |
-| `public`    | No auth required                                    |
-| `protected` | Requires authenticated session                      |
-| `admin`     | Requires authenticated session with `role: "admin"` |
-| `tutor`     | Requires authenticated session with `role: "tutor"` |
+| Level       | Description                                           |
+| ----------- | ----------------------------------------------------- |
+| `public`    | No auth required                                      |
+| `protected` | Requires authenticated session                        |
+| `student`   | Requires authenticated session with `role: "student"` |
+| `admin`     | Requires authenticated session with `role: "admin"`   |
+| `tutor`     | Requires authenticated session with `role: "tutor"`   |
 
 ---
 
@@ -50,6 +51,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Input:** `{ phoneNumber?, schoolName?, gradeLevel?, parentName?, parentPhone?, parentEmail? }`
 - **Output:** `{ user, profile }`
 - **Description:** Creates or updates the authenticated user's student profile fields
+- **Account identity:** The student profile page also uses Better Auth `updateUser` to update the signed-in user's `name` and optional `image`; email remains read-only on this surface.
 
 ### `auth.searchStudents`
 
@@ -105,6 +107,13 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ## Admin Tutor (`adminTutor.*`)
 
+### `adminTutor.inspectInvitee`
+
+- **Auth:** Admin
+- **Input:** `{ email }`
+- **Output:** `{ exists, email, name, role, providers, hasGoogle, hasPassword }`
+- **Description:** Checks whether an invite email already belongs to a Better Auth user and reports linked authentication providers for clear admin guidance
+
 ### `adminTutor.createInvite`
 
 - **Auth:** Admin
@@ -123,7 +132,14 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Admin
 - **Input:** `{ inviteId }`
 - **Output:** `{ invite }`
-- **Description:** Regenerates token and expiry (invalidates the previous token)
+- **Description:** Regenerates token and expiry for manual copy (invalidates the previous token); does not send email
+
+### `adminTutor.sendInviteAgain`
+
+- **Auth:** Admin
+- **Input:** `{ inviteId }`
+- **Output:** Invite row with a new one-time plaintext token and `emailDelivery` (`sent`/`skipped`/`failed`)
+- **Description:** Explicitly rotates the invite link and sends the replacement through Resend
 
 ### `adminTutor.revokeInvite`
 
@@ -213,13 +229,13 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `tutors.listPublished`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ search?, expertise?, modality?, limit?, offset? }` (`limit` default 20, max 50)
 - **Output:** `{ items: TutorProfile[], total, limit, offset }`
 
 ### `tutors.getProfile`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ tutorId }`
 - **Output:** `{ profile }`
 
@@ -359,7 +375,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.createSolo`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, scheduledEndAt, timezone? }` (times in the future; `timezone` default `Asia/Jakarta`)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
@@ -374,35 +390,35 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.listMine`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
 - **Description:** Returns bookings where the user is proposer
 
 ### `booking.cancel`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ bookingId, cancellationReason? }`
 - **Output:** `{ booking }`
 - **Description:** Cancels booking and releases held Marks; late cancel within H-2 becomes `late_cancelled`
 
 ### `booking.acceptReschedule`
 
-- **Auth:** Protected (student proposer)
+- **Auth:** Student (proposer)
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking }`
 - **Description:** Student accepts the tutor's reschedule proposal
 
 ### `booking.rejectReschedule`
 
-- **Auth:** Protected (student proposer)
+- **Auth:** Student (proposer)
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking }`
 - **Description:** Student rejects the tutor's reschedule proposal
 
 ### `booking.cancelSession`
 
-- **Auth:** Protected (student proposer)
+- **Auth:** Student (proposer)
 - **Input:** `{ sessionId }`
 - **Output:** `{ booking }`
 - **Description:** Student cancels an individual series session; pre-H-2 releases the session hold, post-H-2 forfeits it (per-session penalty, #46). Group-series sessions cannot be cancelled (no opt-out)
@@ -423,14 +439,14 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.createGroup`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, scheduledEndAt, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5)
 - **Output:** `{ booking }`
 - **Description:** Creates a group booking, holds proposer Marks, invites participants; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ scheduledStartAt, scheduledEndAt }], timezone? }` (2–4 sessions)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
@@ -438,7 +454,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.createGroupSeries`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
@@ -446,27 +462,27 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.confirmInvite`
 
-- **Auth:** Protected (invitee)
+- **Auth:** Student (invitee)
 - **Input:** `{ bookingId }`
 - **Output:** `{ confirmedHeadcount, targetGroupSize }`
 - **Description:** Invitee confirms participation and holds Marks
 
 ### `booking.declineInvite`
 
-- **Auth:** Protected (invitee)
+- **Auth:** Student (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
 
 ### `booking.reconfirm`
 
-- **Auth:** Protected (participant)
+- **Auth:** Student (participant)
 - **Input:** `{ bookingId, accept }`
 - **Output:** `{ reconfirmed: boolean }`
 - **Description:** Participant accepts or rejects the repriced offer
 
 ### `booking.withdraw`
 
-- **Auth:** Protected (participant)
+- **Auth:** Student (participant)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ withdrawn: true, late: boolean }`
 - **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels

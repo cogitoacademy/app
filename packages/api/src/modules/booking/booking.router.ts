@@ -1,4 +1,8 @@
-import { protectedProcedure, tutorProcedure } from "../../procedures";
+import {
+  protectedProcedure,
+  studentProcedure,
+  tutorProcedure,
+} from "../../procedures";
 import {
   createSoloInput,
   createGroupInput,
@@ -27,7 +31,7 @@ import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
 export function createBookingRouter(handler: BookingHandler) {
   return {
-    createSolo: protectedProcedure
+    createSolo: studentProcedure
       .route({
         method: "POST",
         path: "/booking/solo/create",
@@ -49,7 +53,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(getBookingInput)
       .handler(handler.get),
 
-    listMine: protectedProcedure
+    listMine: studentProcedure
       .route({
         method: "POST",
         path: "/booking/list-mine",
@@ -60,7 +64,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(listMineInput)
       .handler(handler.listMine),
 
-    cancel: protectedProcedure
+    cancel: studentProcedure
       .route({
         method: "POST",
         path: "/booking/cancel",
@@ -71,7 +75,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(cancelBookingInput)
       .handler(handler.cancel),
 
-    acceptReschedule: protectedProcedure
+    acceptReschedule: studentProcedure
       .route({
         method: "POST",
         path: "/booking/reschedule/accept",
@@ -82,7 +86,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(acceptRescheduleInput)
       .handler(handler.acceptReschedule),
 
-    rejectReschedule: protectedProcedure
+    rejectReschedule: studentProcedure
       .route({
         method: "POST",
         path: "/booking/reschedule/reject",
@@ -93,7 +97,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(rejectRescheduleInput)
       .handler(handler.rejectReschedule),
 
-    cancelSession: protectedProcedure
+    cancelSession: studentProcedure
       .route({
         method: "POST",
         path: "/booking/session/cancel",
@@ -128,7 +132,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(getSessionNotesInput)
       .handler(handler.getSessionNotes),
 
-    createGroup: protectedProcedure
+    createGroup: studentProcedure
       .route({
         method: "POST",
         path: "/booking/group/create",
@@ -140,7 +144,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(createGroupInput)
       .handler(handler.createGroup),
 
-    createSeries: protectedProcedure
+    createSeries: studentProcedure
       .route({
         method: "POST",
         path: "/booking/series/create",
@@ -151,7 +155,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(createSeriesInput)
       .handler(handler.createSeries),
 
-    createGroupSeries: protectedProcedure
+    createGroupSeries: studentProcedure
       .route({
         method: "POST",
         path: "/booking/group-series/create",
@@ -163,7 +167,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(createGroupSeriesInput)
       .handler(handler.createGroupSeries),
 
-    confirmInvite: protectedProcedure
+    confirmInvite: studentProcedure
       .route({
         method: "POST",
         path: "/booking/invite/confirm",
@@ -174,7 +178,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(confirmInviteInput)
       .handler(handler.confirmInvite),
 
-    declineInvite: protectedProcedure
+    declineInvite: studentProcedure
       .route({
         method: "POST",
         path: "/booking/invite/decline",
@@ -185,7 +189,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(declineInviteInput)
       .handler(handler.declineInvite),
 
-    reconfirm: protectedProcedure
+    reconfirm: studentProcedure
       .route({
         method: "POST",
         path: "/booking/reconfirm",
@@ -196,7 +200,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(reconfirmInput)
       .handler(handler.reconfirm),
 
-    withdraw: protectedProcedure
+    withdraw: studentProcedure
       .route({
         method: "POST",
         path: "/booking/withdraw",
@@ -219,7 +223,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(listSessionsInput)
       .handler(handler.listSessions),
 
-    proposeReschedule: protectedProcedure
+    proposeReschedule: studentProcedure
       .route({
         method: "POST",
         path: "/booking/reschedule/propose",

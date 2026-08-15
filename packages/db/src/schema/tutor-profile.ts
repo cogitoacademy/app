@@ -34,6 +34,18 @@ export const tutorProfile = pgTable(
     proofUrls: jsonb("proof_urls").$type<string[]>().default([]),
     onboardingStatus: text("onboarding_status").notNull().default("draft"),
     adminReviewNote: text("admin_review_note"),
+    pendingProfileChanges: jsonb("pending_profile_changes").$type<
+      Partial<{
+        displayName: string;
+        credentialsSummary: string;
+        expertise: string[];
+        modality: "online" | "offline" | "both";
+        prices: Record<string, number>;
+        proofUrls: string[];
+      }>
+    >(),
+    profileEditStatus: text("profile_edit_status").notNull().default("none"),
+    profileEditAdminNote: text("profile_edit_admin_note"),
     publishedAt: timestamp("published_at"),
     version: integer("version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -50,6 +62,10 @@ export const tutorProfile = pgTable(
     check(
       "tutor_profile_onboarding_status_check",
       sql`${table.onboardingStatus} IN ('draft', 'pending_review', 'changes_requested', 'approved_unpublished', 'published', 'suspended')`,
+    ),
+    check(
+      "tutor_profile_edit_status_check",
+      sql`${table.profileEditStatus} IN ('none', 'pending_review', 'changes_requested')`,
     ),
     index("tutor_profile_userId_idx").on(table.userId),
     index("tutor_profile_onboardingStatus_idx").on(table.onboardingStatus),

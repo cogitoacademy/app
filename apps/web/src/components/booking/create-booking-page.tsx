@@ -13,7 +13,6 @@ import {
   IconMapPin,
   IconSchool,
   IconWallet,
-  IconRepeat,
   IconUsersGroup,
   IconUserPlus,
 } from "@tabler/icons-react";
@@ -48,7 +47,6 @@ import {
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 
 import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
@@ -62,7 +60,6 @@ const BOOKING_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_SOLO_PRICE = 42;
 
 type Modality = "online" | "offline";
-type BookingMode = "solo" | "group";
 type StudentMatch = { id: string; name: string; email: string };
 
 function getBookingErrorMessage(error: Error) {
@@ -114,7 +111,6 @@ function formatTimeValue(value: Date | string) {
 export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [bookingMode, setBookingMode] = useState<BookingMode>("solo");
   const [selectedModality, setSelectedModality] = useState<Modality>("online");
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
   const [startTimes, setStartTimes] = useState<Record<string, string>>({});
@@ -139,12 +135,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     ...orpc.auth.searchStudents.queryOptions({
       input: { query: debouncedStudentSearch || "--", limit: 5 },
     }),
-    enabled: bookingMode === "group" && debouncedStudentSearch.length >= 2,
+    enabled: debouncedStudentSearch.length >= 2,
     retry: 1,
   });
   const availableStudents = (studentSearchQuery.data ?? []).filter(
     (student) => !invitees.some((invitee) => invitee.id === student.id),
   );
+  const isGroupBooking = invitees.length > 0;
 
   const createBooking = useMutation(
     orpc.booking.createSolo.mutationOptions({
@@ -305,10 +302,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     );
   const selectedSlot = selectedSlots[0] ?? null;
   const perSessionPrice = Number(profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE);
-  const baseSessionPrice =
-    bookingMode === "group"
-      ? Number(profile.prices?.[String(invitees.length + 1)] ?? perSessionPrice)
-      : perSessionPrice;
+  const baseSessionPrice = isGroupBooking
+    ? Number(profile.prices?.[String(invitees.length + 1)] ?? perSessionPrice)
+    : perSessionPrice;
   const price = baseSessionPrice * Math.max(selectedSlots.length, 1);
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
   const hasEnoughMarks = availableBalance >= price;
@@ -339,8 +335,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       timezone: BOOKING_TIMEZONE,
       learningGoal: learningGoal.trim(),
     };
-    if (bookingMode === "group") {
-      if (invitees.length < 1 || invitees.length > 5) return;
+    if (isGroupBooking) {
+      if (invitees.length > 5) return;
       if (selectedSlots.length > 1) {
         createGroupSeries.mutate({
           ...baseInput,
@@ -394,7 +390,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             <Badge variant="info" pill>
               {selectedSlots.length > 1
                 ? "Session series"
-                : bookingMode === "group"
+                : isGroupBooking
                   ? "Group session"
                   : "Solo session"}
             </Badge>
@@ -404,7 +400,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             <Text className="mt-1 text-muted">
               {selectedSlots.length > 1
                 ? "Choose 2–4 available times for a recurring learning plan."
-                : bookingMode === "group"
+                : isGroupBooking
                   ? "Invite friends, choose one time, and review each student's Marks price."
                   : "Choose an available slot and review the Marks hold before sending your request."}
             </Text>
@@ -420,38 +416,6 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:items-start"
       >
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <IconBox variant="primary-subtle">
-                <IconRepeat />
-              </IconBox>
-              <CardTitle>Booking type</CardTitle>
-              <CardDescription>
-                Choose one session or a short series
-              </CardDescription>
-            </CardHeader>
-            <CardBody>
-              <Tabs
-                value={bookingMode}
-                onValueChange={(value) => {
-                  if (value !== "solo" && value !== "group") return;
-                  setBookingMode(value);
-                  setSelectedSlotIds([]);
-                  setInvitees([]);
-                  setStudentSearch("");
-                  createBooking.reset();
-                  createGroup.reset();
-                  createSeries.reset();
-                }}
-              >
-                <TabsList>
-                  <TabsItem value="solo">Solo session</TabsItem>
-                  <TabsItem value="group">Group</TabsItem>
-                </TabsList>
-              </Tabs>
-            </CardBody>
-          </Card>
-
           <Card>
             <CardHeader>
               <IconBox variant="info-subtle">
@@ -483,103 +447,117 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             </CardBody>
           </Card>
 
-          {bookingMode === "group" ? (
-            <Card>
-              <CardHeader>
-                <IconBox variant="info-subtle">
-                  <IconUsersGroup />
-                </IconBox>
-                <CardTitle>Invite students</CardTitle>
-                <CardDescription>
-                  Search by name or email and add up to five friends
-                </CardDescription>
-              </CardHeader>
-              <CardBody className="space-y-3">
-                {invitees.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {invitees.map((student) => (
-                      <Chip key={student.id}>
-                        {student.name}
-                        <ChipButton
-                          aria-label={`Remove ${student.name}`}
-                          onClick={() =>
-                            setInvitees((current) =>
-                              current.filter((item) => item.id !== student.id),
-                            )
-                          }
-                        >
-                          ×
-                        </ChipButton>
-                      </Chip>
-                    ))}
-                  </div>
-                ) : null}
-                <Field>
-                  <FieldLabel>Find a student</FieldLabel>
-                  <Input
-                    value={studentSearch}
-                    onChange={(event) => setStudentSearch(event.target.value)}
-                    placeholder="Type a name or email"
-                    disabled={invitees.length >= 5}
-                  />
-                  <FieldDescription>
-                    Search updates after you pause typing. Group size:{" "}
-                    {invitees.length + 1}/6.
-                  </FieldDescription>
-                </Field>
-                {studentSearchQuery.isFetching ? (
-                  <Text className="text-sm text-muted">
-                    Searching students...
+          <Card>
+            <CardHeader>
+              <IconBox variant="info-subtle">
+                <IconUsersGroup />
+              </IconBox>
+              <CardTitle>Invite students (optional)</CardTitle>
+              <CardDescription>
+                Add up to five friends. Adding someone automatically makes this
+                a group booking.
+              </CardDescription>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-item-border bg-item p-3">
+                <div>
+                  <Text className="font-medium">
+                    {isGroupBooking ? "Group booking" : "Solo booking"}
                   </Text>
-                ) : studentSearchQuery.isError ? (
-                  <div className="flex items-center justify-between gap-3 rounded border border-danger-border bg-danger-subtle p-3">
-                    <Text className="text-sm">
-                      Student search is temporarily unavailable.
-                    </Text>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void studentSearchQuery.refetch()}
-                    >
-                      Try again
-                    </Button>
-                  </div>
-                ) : debouncedStudentSearch.length >= 2 ? (
-                  <div className="space-y-2">
-                    {availableStudents.map((student) => (
-                      <Button
-                        key={student.id}
+                  <Text className="text-sm text-muted">
+                    {isGroupBooking
+                      ? `${invitees.length + 1} participants including you`
+                      : "Invite a student below to switch automatically."}
+                  </Text>
+                </div>
+                <Badge variant={isGroupBooking ? "info" : "secondary"} pill>
+                  {invitees.length + 1}/6
+                </Badge>
+              </div>
+              {invitees.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {invitees.map((student) => (
+                    <Chip key={student.id}>
+                      {student.name}
+                      <ChipButton
                         type="button"
-                        variant="outline"
-                        className="h-auto w-full justify-start py-2.5"
-                        onClick={() => {
-                          setInvitees((current) => [...current, student]);
-                          setStudentSearch("");
-                          setDebouncedStudentSearch("");
-                        }}
+                        aria-label={`Remove ${student.name}`}
+                        onClick={() =>
+                          setInvitees((current) =>
+                            current.filter((item) => item.id !== student.id),
+                          )
+                        }
                       >
-                        <IconUserPlus />
-                        <span className="min-w-0 text-left">
-                          <span className="block font-medium">
-                            {student.name}
-                          </span>
-                          <span className="block truncate text-xs opacity-70">
-                            {student.email}
-                          </span>
+                        ×
+                      </ChipButton>
+                    </Chip>
+                  ))}
+                </div>
+              ) : null}
+              <Field>
+                <FieldLabel>Find a student</FieldLabel>
+                <Input
+                  value={studentSearch}
+                  onChange={(event) => setStudentSearch(event.target.value)}
+                  placeholder="Type a name or email"
+                  disabled={invitees.length >= 5}
+                />
+                <FieldDescription>
+                  Search updates after you pause typing.
+                </FieldDescription>
+              </Field>
+              {studentSearchQuery.isFetching ? (
+                <Text className="text-sm text-muted">
+                  Searching students...
+                </Text>
+              ) : studentSearchQuery.isError ? (
+                <div className="flex items-center justify-between gap-3 rounded border border-danger-border bg-danger-subtle p-3">
+                  <Text className="text-sm">
+                    Student search is temporarily unavailable.
+                  </Text>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void studentSearchQuery.refetch()}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : debouncedStudentSearch.length >= 2 ? (
+                <div className="space-y-2">
+                  {availableStudents.map((student) => (
+                    <Button
+                      key={student.id}
+                      type="button"
+                      variant="outline"
+                      className="h-auto w-full justify-start py-2.5"
+                      onClick={() => {
+                        setInvitees((current) => [...current, student]);
+                        setStudentSearch("");
+                        setDebouncedStudentSearch("");
+                      }}
+                    >
+                      <IconUserPlus />
+                      <span className="min-w-0 text-left">
+                        <span className="block font-medium">
+                          {student.name}
                         </span>
-                      </Button>
-                    ))}
-                    {availableStudents.length === 0 ? (
-                      <Text className="text-sm text-muted">
-                        No matching students found.
-                      </Text>
-                    ) : null}
-                  </div>
-                ) : null}
-              </CardBody>
-            </Card>
-          ) : null}
+                        <span className="block truncate text-xs opacity-70">
+                          {student.email}
+                        </span>
+                      </span>
+                    </Button>
+                  ))}
+                  {availableStudents.length === 0 ? (
+                    <Text className="text-sm text-muted">
+                      No matching students found.
+                    </Text>
+                  ) : null}
+                </div>
+              ) : null}
+            </CardBody>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -762,7 +740,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   <Text className="text-sm text-muted">
                     {selectedSlots.length > 1
                       ? "Series total"
-                      : bookingMode === "group"
+                      : isGroupBooking
                         ? "Price per student"
                         : "Session price"}
                   </Text>
@@ -823,13 +801,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   createSeries.isPending ||
                   createGroupSeries.isPending ||
                   !learningGoal.trim() ||
-                  (bookingMode === "group" && invitees.length < 1)
+                  invitees.length > 5
                 }
               >
                 {selectedSlots.length > 1
                   ? `Send series request (${selectedSlots.length})`
-                  : bookingMode === "group"
-                    ? `Invite ${invitees.length} ${invitees.length === 1 ? "student" : "students"}`
+                  : isGroupBooking
+                    ? "Send group booking request"
                     : "Send booking request"}
               </Button>
             ) : (
@@ -844,13 +822,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             )}
             {createBooking.isError ||
             createGroup.isError ||
-            createSeries.isError ? (
+            createSeries.isError ||
+            createGroupSeries.isError ? (
               <div className="w-full rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="text-center text-sm text-danger">
                   {getBookingErrorMessage(
                     (createBooking.error ??
                       createGroup.error ??
-                      createSeries.error) as Error,
+                      createSeries.error ??
+                      createGroupSeries.error) as Error,
                   )}
                 </Text>
               </div>

@@ -1,8 +1,12 @@
 "use client";
 
 import type { CogitoUser } from "@cogito-app/auth";
-import { useEffect, useMemo } from "react";
-import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -22,12 +26,14 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconBook2,
   IconMail,
+  IconPhoto,
   IconSchool,
   IconUser,
   IconUsers,
@@ -41,6 +47,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { orpc } from "@/utils/orpc";
+import { authClient } from "@/lib/auth-client";
 
 type ProfileValues = {
   phoneNumber: string;
@@ -55,7 +62,7 @@ type ProfileRecord = Partial<
   Record<keyof ProfileValues, string | null | undefined>
 >;
 
-type ProfileUser = Pick<CogitoUser, "name" | "email" | "role">;
+type ProfileUser = Pick<CogitoUser, "name" | "email" | "image" | "role">;
 type ProfileSyncValidator = FormValidateOrFn<ProfileValues> | undefined;
 type ProfileAsyncValidator = FormAsyncValidateOrFn<ProfileValues> | undefined;
 
@@ -148,6 +155,33 @@ export function ProfilePage({
   const queryClient = useQueryClient();
   const profileValues = useMemo(() => getProfileValues(profile), [profile]);
   const completedFields = Object.values(profileValues).filter(Boolean).length;
+  const [accountForm, setAccountForm] = useState(() => ({
+    name: user?.name ?? "",
+    image: user?.image ?? "",
+  }));
+
+  const accountMutation = useMutation({
+    mutationFn: async () => {
+      const name = accountForm.name.trim();
+      if (!name) throw new Error("Name is required");
+      const result = await authClient.updateUser({
+        name,
+        image: accountForm.image.trim() || null,
+      });
+      if (result.error) throw new Error(result.error.message);
+      return result.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
+      toastManager.add({ title: "Account identity saved", type: "success" });
+    },
+    onError: (error: Error) =>
+      toastManager.add({
+        title: "Account identity could not be saved",
+        description: error.message,
+        type: "error",
+      }),
+  });
 
   const updateMutation = useMutation(
     orpc.auth.updateProfile.mutationOptions({
@@ -209,33 +243,97 @@ export function ProfilePage({
         </div>
 
         <Card>
-          <CardBody className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-center gap-4">
-              <Avatar size="lg">
-                <AvatarFallback>{getInitials(user?.name)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <Heading size="sm" className="truncate">
-                  {user?.name ?? "Student"}
-                </Heading>
-                <div className="mt-1 flex items-center gap-1.5 text-muted">
-                  <IconMail className="size-4 shrink-0" />
-                  <Text className="truncate text-sm">{user?.email ?? "—"}</Text>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
+          <CardHeader>
+            <Avatar size="lg">
+              <AvatarImage
+                src={accountForm.image || undefined}
+                alt={accountForm.name || "Student profile"}
+              />
+              <AvatarFallback>{getInitials(accountForm.name)}</AvatarFallback>
+            </Avatar>
+            <CardTitle>Account Identity</CardTitle>
+            <CardDescription>
+              Update the name and photo used across your Cogito account.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="grid gap-5 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="student-account-name">
+                <IconUser aria-hidden="true" /> Account name
+              </FieldLabel>
+              <Input
+                id="student-account-name"
+                name="accountName"
+                autoComplete="name"
+                value={accountForm.name}
+                onChange={(event) =>
+                  setAccountForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Your full name"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="student-profile-image">
+                <IconPhoto aria-hidden="true" /> Profile image URL
+              </FieldLabel>
+              <Input
+                id="student-profile-image"
+                name="profileImageUrl"
+                type="url"
+                autoComplete="url"
+                value={accountForm.image}
+                onChange={(event) =>
+                  setAccountForm((current) => ({
+                    ...current,
+                    image: event.target.value,
+                  }))
+                }
+                placeholder="https://example.com/photo.jpg"
+              />
+            </Field>
+            <Field className="sm:col-span-2">
+              <FieldLabel htmlFor="student-account-email">
+                <IconMail aria-hidden="true" /> Sign-in email
+              </FieldLabel>
+              <Input
+                id="student-account-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={user?.email ?? ""}
+                disabled
+              />
+              <FieldDescription>
+                Your sign-in email cannot be changed from this page.
+              </FieldDescription>
+            </Field>
+          </CardBody>
+          <CardFooter className="flex-wrap justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Badge variant="info">Student account</Badge>
               <Text className="text-sm text-muted">
                 {completedFields}/6 details added
               </Text>
             </div>
-          </CardBody>
+            <Button
+              type="button"
+              progress={accountMutation.isPending}
+              disabled={accountMutation.isPending || !accountForm.name.trim()}
+              onClick={() => accountMutation.mutate()}
+            >
+              Save Account Identity
+            </Button>
+          </CardFooter>
         </Card>
 
         <Card>
           <CardHeader>
-            <IconUser className="size-5" />
+            <IconBox variant="info-subtle">
+              <IconUser aria-hidden="true" />
+            </IconBox>
             <CardTitle>Contact details</CardTitle>
             <CardDescription>
               How tutors and the Cogito team can reach you.
@@ -255,7 +353,9 @@ export function ProfilePage({
           <Divider />
 
           <CardHeader>
-            <IconSchool className="size-5" />
+            <IconBox variant="secondary-subtle">
+              <IconSchool aria-hidden="true" />
+            </IconBox>
             <CardTitle>School</CardTitle>
             <CardDescription>
               Helps tutors prepare sessions at the right level.
@@ -279,7 +379,9 @@ export function ProfilePage({
           <Divider />
 
           <CardHeader>
-            <IconUsers className="size-5" />
+            <IconBox variant="tertiary-subtle">
+              <IconUsers aria-hidden="true" />
+            </IconBox>
             <CardTitle>Parent or guardian</CardTitle>
             <CardDescription>
               Optional, but useful for coordination and important updates.
