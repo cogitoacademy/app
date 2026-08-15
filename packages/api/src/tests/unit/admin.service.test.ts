@@ -229,4 +229,73 @@ describe("Admin Service", () => {
       }
     });
   });
+
+  describe("setRole", () => {
+    function makeSetRoleService(overrides: Record<string, unknown> = {}) {
+      const tx = {} as any;
+      const db = { transaction: mock(async (fn: any) => fn(tx)) };
+      const adminRepo = {
+        getById: mock(async () => makeTarget({ role: "admin" })),
+        lockAdminRows: mock(async () => {}),
+        countAdmins: mock(async () => 2),
+        updateRoleWithExpected: mock(async () => [
+          { id: "u1", role: "student" },
+        ]),
+        ...overrides,
+      };
+      const auditPort = { record: mock(async () => {}) };
+      const service = createAdminService({
+        adminRepo,
+        auditPort,
+        db,
+        wallet: {} as any,
+        payout: {} as any,
+      });
+      return { service, adminRepo, auditPort, tx };
+    }
+
+    test("locks admin rows and validates the count inside the transaction (H6)", async () => {
+      const { service, adminRepo } = makeSetRoleService();
+
+      await service.setRole("admin1", {
+        userId: "u1",
+        role: "student",
+        expectedRole: "admin",
+      });
+
+      expect(adminRepo.lockAdminRows).toHaveBeenCalledTimes(1);
+      expect(adminRepo.countAdmins).toHaveBeenCalledTimes(1);
+      expect(adminRepo.updateRoleWithExpected).toHaveBeenCalledTimes(1);
+    });
+
+    test("throws LastAdminError when the in-transaction count is 1", async () => {
+      const { service, adminRepo } = makeSetRoleService({
+        countAdmins: mock(async () => 1),
+      });
+
+      await expect(
+        service.setRole("admin1", {
+          userId: "u1",
+          role: "student",
+          expectedRole: "admin",
+        }),
+      ).rejects.toThrow(LastAdminError);
+      expect(adminRepo.updateRoleWithExpected).not.toHaveBeenCalled();
+    });
+
+    test("skips the admin lock for non-admin targets", async () => {
+      const { service, adminRepo } = makeSetRoleService({
+        getById: mock(async () => makeTarget({ role: "tutor" })),
+      });
+
+      await service.setRole("admin1", {
+        userId: "u1",
+        role: "student",
+        expectedRole: "tutor",
+      });
+
+      expect(adminRepo.lockAdminRows).not.toHaveBeenCalled();
+      expect(adminRepo.countAdmins).not.toHaveBeenCalled();
+    });
+  });
 });

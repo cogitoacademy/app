@@ -72,6 +72,21 @@ export async function countAdmins(conn: DbOrTx): Promise<number> {
 }
 
 /**
+ * Locks all admin rows for the remainder of the transaction. Concurrent
+ * demotions of the last admins serialize on these rows, so the
+ * count-and-check inside a transaction can never observe a stale snapshot.
+ *
+ * @param conn - the database connection or active transaction
+ */
+export async function lockAdminRows(conn: DbOrTx): Promise<void> {
+  await conn
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.role, USER_ROLE.ADMIN))
+    .for("update");
+}
+
+/**
  * Updates a user's role only when the current role matches expectedRole (optimistic).
  *
  * @param conn - the database connection or active transaction
@@ -99,6 +114,7 @@ export function createAdminRepo() {
     countUsers,
     getById,
     countAdmins,
+    lockAdminRows,
     updateRoleWithExpected,
   };
 }

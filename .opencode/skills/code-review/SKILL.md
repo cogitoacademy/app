@@ -28,6 +28,7 @@ Review the system, not just the changed lines.
 ## Correctness
 
 Check:
+
 - invariants;
 - edge cases;
 - null/empty values;
@@ -41,6 +42,7 @@ Check:
 ## Error and Failure Review
 
 For each external operation:
+
 - timeout?
 - error propagation?
 - retry policy?
@@ -51,6 +53,7 @@ For each external operation:
 - resource cleanup?
 
 Check process-level failures:
+
 - panic/crash;
 - OOM;
 - graceful shutdown;
@@ -58,6 +61,7 @@ Check process-level failures:
 - file descriptor exhaustion.
 
 Check infrastructure-level assumptions:
+
 - what if the host dies?
 - what if DNS fails?
 - what if a dependency is unavailable?
@@ -66,6 +70,7 @@ Check infrastructure-level assumptions:
 ## Database
 
 Check:
+
 - transaction boundary;
 - atomicity;
 - isolation requirements;
@@ -86,6 +91,7 @@ For destructive migrations, require a clear recovery strategy.
 ## Security
 
 Check:
+
 - authentication;
 - authorization;
 - tenant/resource isolation;
@@ -106,6 +112,7 @@ Never assume authenticated means authorized.
 ## Observability
 
 Determine whether the change needs:
+
 - structured logs;
 - metrics;
 - traces;
@@ -118,6 +125,7 @@ A normal client error should generally not page an engineer. Repeated infrastruc
 ## Concurrency
 
 Look for:
+
 - shared mutable state;
 - race conditions;
 - duplicate workers;
@@ -130,6 +138,7 @@ Look for:
 ## Maintainability
 
 Check:
+
 - cohesion;
 - coupling;
 - naming;
@@ -147,6 +156,7 @@ Prefer a simple correct abstraction over a generic framework.
 Look for concrete issues, not hypothetical micro-optimizations.
 
 Pay attention to:
+
 - N+1;
 - O(n²) accidental behavior;
 - unbounded memory;
@@ -159,6 +169,7 @@ Pay attention to:
 ## Testing
 
 Require tests for:
+
 - new behavior;
 - important failure paths;
 - regression cases;
@@ -179,6 +190,7 @@ Report findings by severity:
 - NOTE: optional observation.
 
 Every finding should include:
+
 - location;
 - problem;
 - why it matters;

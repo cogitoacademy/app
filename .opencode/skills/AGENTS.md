@@ -3,6 +3,7 @@
 This repository uses OpenCode skills for engineering behavior.
 
 Before non-trivial coding, review/load the relevant skills:
+
 - `engineering-core` for engineering principles, architecture, failure handling, security, testing, and observability.
 - `feature-workflow` for the deterministic implementation workflow.
 - `code-review` when reviewing code/diffs/PRs.

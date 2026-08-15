@@ -277,6 +277,20 @@ describe("findLedgerEntries", () => {
 
     expect(result).toHaveLength(5);
   });
+
+  test("filters by an array of entry types", async () => {
+    const rows = [{ id: "l1", walletId: "w1" }];
+    const { select, chain } = makeSelectConn(rows);
+    const conn: any = { select };
+
+    const result = await findLedgerEntries(conn, "w1", {
+      limit: 20,
+      entryType: ["compensate_credit", "compensate_deduct"],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("listActivePackages", () => {

@@ -3,6 +3,7 @@ export interface EmailMessage {
   subject: string;
   html: string;
   category: "booking" | "payment" | "refund" | "schedule" | "override";
+  idempotencyKey?: string;
 }
 
 export interface EmailPort {

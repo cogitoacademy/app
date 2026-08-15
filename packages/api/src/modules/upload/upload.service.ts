@@ -31,18 +31,19 @@ export function createUploadService(deps: { storage: StoragePort }) {
 
     const filename = sanitizeFilename(input.filename);
     const key = `${userId}/${crypto.randomUUID()}-${filename}`;
-    const { url, method } = await deps.storage.getSignedUploadUrl(
+    const signed = await deps.storage.getSignedUploadUrl(
       key,
       input.contentType,
     );
 
     return {
-      uploadUrl: url,
+      uploadUrl: signed.url,
       key,
       publicUrl: deps.storage.resolvePublicUrl(key),
       contentType: input.contentType,
       maxBytes: MAX_UPLOAD_BYTES,
-      method,
+      method: signed.method,
+      fields: signed.fields,
     };
   }
 

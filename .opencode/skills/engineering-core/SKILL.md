@@ -101,6 +101,7 @@ For every non-trivial operation, explicitly reason about:
 Network calls must have deliberate timeouts. Retries must use bounded attempts and appropriate backoff when retrying is safe. Never blindly retry non-idempotent operations.
 
 Distinguish:
+
 - validation failures;
 - expected domain/business failures;
 - dependency failures;
@@ -223,6 +224,7 @@ Prefer the testing pyramid:
 - end-to-end tests for critical user journeys.
 
 Test:
+
 - success;
 - expected failures;
 - boundary conditions;
@@ -234,6 +236,7 @@ Test:
 ### TDD vs code-first
 
 Use TDD when:
+
 - requirements are behaviorally precise;
 - domain/business logic is deterministic;
 - regression risk is high;
@@ -241,6 +244,7 @@ Use TDD when:
 - fixing a bug where the desired behavior can be expressed as a regression test.
 
 Code-first is reasonable when:
+
 - discovering an unfamiliar API/framework;
 - doing exploratory/prototype work;
 - implementing thin CRUD/glue code;
@@ -256,6 +260,7 @@ Do not write tests that merely mirror implementation details.
 Always improve touched code when the improvement is local, low-risk, and directly increases clarity.
 
 Examples:
+
 - remove duplication;
 - improve naming;
 - extract an obviously cohesive function;
@@ -264,6 +269,7 @@ Examples:
 - correct poor error propagation.
 
 Ask the user before:
+
 - large architectural rewrites;
 - broad module/package moves;
 - changing public APIs;
@@ -279,6 +285,7 @@ Do not mix an unrelated large refactor into a feature PR.
 Before adding code, search for equivalent behavior.
 
 If duplication exists:
+
 - reuse existing code when semantics match;
 - extract a shared abstraction when duplication is meaningful and stable;
 - do not create generic helpers merely because two snippets look superficially similar.
@@ -314,6 +321,7 @@ Do not interrupt for information that can be inferred from code, configuration, 
 Ask only when ambiguity materially affects correctness, security, architecture, data integrity, compatibility, or user intent.
 
 When asking:
+
 - state what you discovered;
 - state the concrete ambiguity;
 - present the smallest number of meaningful options;

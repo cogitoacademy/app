@@ -5,6 +5,7 @@ import {
   INVITE_EXPIRY_DAYS,
   USER_ROLE,
 } from "@cogito-app/api/shared/constants";
+import { hashInviteToken } from "@cogito-app/api/lib/tokens";
 import { env } from "@cogito-app/env/server";
 
 const email = process.argv[2];
@@ -54,7 +55,7 @@ async function main() {
     .values({
       email: inviteEmail,
       displayName: inviteDisplayName,
-      token,
+      token: hashInviteToken(token),
       status: "invited",
       invitedBy: admin.id,
       expiresAt,
@@ -63,8 +64,8 @@ async function main() {
 
   const invite = result[0];
   console.log(`\nInvite created for ${inviteEmail}`);
-  console.log(`Token:    ${invite!.token}`);
-  console.log(`Link:     ${env.CORS_ORIGIN}/invite?token=${invite!.token}`);
+  console.log(`Token:    ${token}`);
+  console.log(`Link:     ${env.CORS_ORIGIN}/invite?token=${token}`);
   console.log(`Expires:  ${invite!.expiresAt.toISOString()}\n`);
 }
 

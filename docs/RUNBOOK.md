@@ -222,3 +222,18 @@ Default local test ports:
 - Web: `3100`
 - Server: `3101`
 - PostgreSQL: `6767` (test container; shared with dev container — see note above)
+
+## GHCR / Docker Deploy (CD)
+
+The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
+
+If a push fails with `denied: installation not allowed to Create organization package`:
+
+1. **Workflow permission (code, already fixed):** the job must declare `permissions: { contents: read, packages: write }` so the `GITHUB_TOKEN` can write to GHCR.
+2. **Org-level (requires an org admin):** the `cogitoacademy` org must allow GitHub Actions to create packages. Either enable it in **Org Settings → Actions → General → Workflow permissions → "Read and write permissions"** (with "Allow GitHub Actions to create and approve pull requests" as needed), or initialize the packages once by pushing any image under `ghcr.io/cogitoacademy/app/{server,web}` with an org member account:
+   ```bash
+   docker pull oven/bun:1.3.14
+   docker tag oven/bun:1.3.14 ghcr.io/cogitoacademy/app/server:init
+   docker push ghcr.io/cogitoacademy/app/server:init   # repeat for /web
+   ```
+   After the packages exist, the workflows push without org changes.

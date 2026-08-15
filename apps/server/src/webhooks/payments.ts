@@ -20,9 +20,10 @@ export function ipAllowed(
   request: Request,
   allowlist: string[],
   trustProxy: boolean,
+  server?: { requestIP(request: Request): { address: string } | null },
 ): boolean {
   if (allowlist.length === 0) return true;
-  const ip = getClientIp(request, trustProxy);
+  const ip = getClientIp(request, trustProxy, server);
   return allowlist.some((entry) => entry === ip);
 }
 
@@ -44,7 +45,7 @@ export function validateWebhookTimestamp(request: Request): void {
 export function paymentsWebhook(app: Elysia) {
   app.post(
     "/webhooks/payments/:provider",
-    async ({ request, params, set }: ElysiaContext) => {
+    async ({ request, params, set, server }: ElysiaContext) => {
       const provider = params.provider as string;
       const signature =
         provider === "xendit"
@@ -64,7 +65,9 @@ export function paymentsWebhook(app: Elysia) {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (!ipAllowed(request, allowlist, env.TRUST_PROXY)) {
+      if (
+        !ipAllowed(request, allowlist, env.TRUST_PROXY, server ?? undefined)
+      ) {
         set.status = 403;
         return { error: "Forbidden" };
       }

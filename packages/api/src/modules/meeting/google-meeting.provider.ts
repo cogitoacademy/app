@@ -1,5 +1,5 @@
 import { google } from "googleapis";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { meetingEvent } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import type {
@@ -8,6 +8,7 @@ import type {
   MeetingPort,
 } from "./meeting.types";
 import { log } from "../../lib/logger";
+import { MAX_MEETING_RETRY_ATTEMPTS } from "../../shared/constants";
 import { CircuitBreaker } from "../../lib/circuit-breaker";
 import type { RedisClient } from "../../lib/redis";
 
@@ -37,6 +38,7 @@ interface GoogleOAuthTokenResponse {
   access_token?: string;
   error?: string;
   error_description?: string;
+  expires_in?: number;
 }
 
 export function createGoogleMeetingProvider(
@@ -91,12 +93,19 @@ export function createGoogleMeetingProvider(
     timeoutMs: number,
     timeoutMessage: string,
   ): Promise<T> {
-    return Promise.race([
-      promise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs),
-      ),
-    ]);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(timeoutMessage)),
+        timeoutMs,
+      );
+    });
+    try {
+      return await Promise.race([promise, timeout]);
+    } finally {
+      // Never leave the timer alive holding the process open (L1).
+      clearTimeout(timeoutId);
+    }
   }
 
   async function fetchJson<T>(
@@ -136,37 +145,58 @@ export function createGoogleMeetingProvider(
     }
   }
 
+  let cachedAccessToken: { token: string; expiresAt: number } | null = null;
+
   async function refreshOAuthAccessToken(timeoutMs: number): Promise<string> {
-    if (!config.clientId || !config.clientSecret || !config.refreshToken) {
+    const { clientId, clientSecret, refreshToken } = config;
+    if (!clientId || !clientSecret || !refreshToken) {
       throw new Error("Missing Google Meet OAuth configuration");
     }
 
-    const body = new URLSearchParams({
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      refresh_token: config.refreshToken,
-      grant_type: "refresh_token",
-    });
-
-    const tokenResponse = await fetchJson<GoogleOAuthTokenResponse>(
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body,
-      },
-      timeoutMs,
-    );
-
-    if (!tokenResponse.access_token) {
-      throw new Error(
-        tokenResponse.error_description ??
-          tokenResponse.error ??
-          "Google OAuth token refresh failed",
-      );
+    // Reuse a cached token until 60s before expiry (M13): avoids a token
+    // endpoint round-trip on every calendar call.
+    if (
+      cachedAccessToken &&
+      Date.now() < cachedAccessToken.expiresAt - 60_000
+    ) {
+      return cachedAccessToken.token;
     }
 
-    return tokenResponse.access_token;
+    // Refresh inside the circuit breaker so a token-endpoint outage trips it
+    // instead of bypassing its protection (M13).
+    return googleMeetBreaker.execute(async () => {
+      const body = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      });
+
+      const tokenResponse = await fetchJson<GoogleOAuthTokenResponse>(
+        "https://oauth2.googleapis.com/token",
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body,
+        },
+        timeoutMs,
+      );
+
+      if (!tokenResponse.access_token) {
+        throw new Error(
+          tokenResponse.error_description ??
+            tokenResponse.error ??
+            "Google OAuth token refresh failed",
+        );
+      }
+
+      const expiresInSeconds = tokenResponse.expires_in ?? 3600;
+      cachedAccessToken = {
+        token: tokenResponse.access_token,
+        expiresAt: Date.now() + expiresInSeconds * 1000,
+      };
+      return tokenResponse.access_token;
+    });
   }
 
   async function insertEventWithOauth(
@@ -425,12 +455,16 @@ export function createGoogleMeetingProvider(
       const event =
         config.authType === "oauth_refresh_token"
           ? await getEventWithOauth(accessToken!, eventId, 10_000)
-          : (
-              await calendar!.events.get({
-                calendarId: config.calendarId,
-                eventId,
-              })
-            ).data;
+          : await withTimeout(
+              Promise.resolve(
+                calendar!.events.get({
+                  calendarId: config.calendarId,
+                  eventId,
+                }),
+              ).then((response) => response.data),
+              10_000,
+              "Google Meet API timeout after 10s (waitForMeetUrl)",
+            );
       const meetingUrl = getMeetUrl(event);
       if (meetingUrl) {
         return meetingUrl;
@@ -587,25 +621,54 @@ export function createGoogleMeetingProviderWithFallback(
       attendees,
     );
     if (result.status === "failed") {
-      const [row] = await db
-        .update(meetingEvent)
-        .set({
-          provider: "manual",
-          status: "manual",
-          errorReason: null,
-        })
-        .where(eq(meetingEvent.id, result.id))
-        .returning();
+      // Count this booking's failed google_meet attempts. The retry budget is
+      // derived from the number of failed meetingEvent rows (the scheduler
+      // retry job stops at MAX_MEETING_RETRY_ATTEMPTS), so the failed row must
+      // be left intact for the job to find — only then fall back to manual
+      // (M12). Previously the row was rewritten to manual immediately, which
+      // made the retry job dead code and left bookings SCHEDULED without a
+      // link.
+      const [countRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(meetingEvent)
+        .where(
+          and(
+            eq(meetingEvent.bookingId, bookingId),
+            eq(meetingEvent.provider, "google_meet"),
+            eq(meetingEvent.status, "failed"),
+          ),
+        );
+      const attempts = countRow?.count ?? 0;
+
+      if (attempts >= MAX_MEETING_RETRY_ATTEMPTS) {
+        const [row] = await db
+          .update(meetingEvent)
+          .set({
+            provider: "manual",
+            status: "manual",
+            errorReason: null,
+          })
+          .where(eq(meetingEvent.id, result.id))
+          .returning();
+
+        log({
+          level: "warn",
+          action: "meeting_manual_fallback",
+          message: `Google Meet creation failed ${attempts} times; falling back to manual link`,
+          bookingId,
+        });
+
+        return row as typeof meetingEvent.$inferSelect;
+      }
 
       log({
         level: "warn",
-        action: "meeting_manual_created",
-        message:
-          "Meeting created with manual provider - admin needs to assign a meeting link",
+        action: "meeting_failed_attempt",
+        message: `Google Meet creation failed (attempt ${attempts}); will be retried by the scheduler`,
         bookingId,
       });
 
-      return row as typeof meetingEvent.$inferSelect;
+      return result;
     }
     return result;
   }

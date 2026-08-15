@@ -31,7 +31,7 @@ const serverShape = {
   PORT: z.coerce.number().default(3001),
   TRUST_PROXY: z.coerce.boolean().default(false),
   SESSION_COOKIE_CACHE_MAX_AGE: z.coerce.number().default(60),
-  REDIS_URL: z.string().url().optional(),
+  REDIS_URL: z.string().url(),
   SCHEDULER_ENABLED: z.coerce.boolean().default(false),
   GOOGLE_CLIENT_EMAIL: z.string().email().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),

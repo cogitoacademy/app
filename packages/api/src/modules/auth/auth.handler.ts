@@ -1,9 +1,10 @@
 import type { Context } from "../../context";
 import { withDomainMap } from "../../lib/handler-utils";
 import { z } from "zod";
-import { mapAuthError } from "./auth.errors";
+import { mapAuthError, StudentSearchForbiddenError } from "./auth.errors";
 import type { updateProfileInput, searchStudentsInput } from "./auth.types";
 import type { AuthService, MeResult } from "./auth.service";
+import { USER_ROLE } from "../../shared/constants";
 
 type UpdateProfileInput = z.infer<typeof updateProfileInput>;
 type SearchStudentsInput = z.infer<typeof searchStudentsInput>;
@@ -53,15 +54,19 @@ export function createAuthHandler(authService: AuthService) {
       context: Context;
       input: SearchStudentsInput;
     }) => {
-      return withDomainMap(
-        () =>
-          authService.searchStudents(
-            context.session!.user.id,
-            input.query,
-            input.limit,
-          ),
-        mapAuthError,
-      );
+      return withDomainMap(async () => {
+        // Group-booking invites are created by students; tutors/admins have
+        // their own surfaces and must not harvest student emails (M8).
+        const role = (context.session!.user as { role?: string }).role;
+        if (role !== USER_ROLE.STUDENT) {
+          throw new StudentSearchForbiddenError(context.session!.user.id);
+        }
+        return authService.searchStudents(
+          context.session!.user.id,
+          input.query,
+          input.limit,
+        );
+      }, mapAuthError);
     },
   };
 }

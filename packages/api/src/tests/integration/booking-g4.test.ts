@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   wallet,
@@ -250,7 +250,9 @@ describe("G4: group repricing on headcount change", () => {
       const notifs = await db
         .select()
         .from(notification)
-        .where(eq(notification.eventKey, `booking.${bookingId}.reprice.${id}`));
+        .where(
+          like(notification.eventKey, `booking.${bookingId}.reprice.${id}.%`),
+        );
       expect(notifs.length).toBe(1);
       expect(notifs[0]!.title).toBe("Group price updated");
     }

@@ -43,6 +43,8 @@ import {
   BookingNotCompletedError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
+import { lockTutorForBooking } from "../../lib/locks";
+import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
 import {
   BOOKING_STATE,
@@ -360,7 +362,7 @@ export function createBookingService(deps: {
         await wallet.hold(tx, {
           walletId: w.id,
           amount: delta,
-          eventKey: `booking.${b.id}.reprice.increase.${p.userId}`,
+          eventKey: `booking.${b.id}.reprice.increase.${p.userId}.${newPerStudent}`,
           sourceReference: b.id,
           bookingId: b.id,
           actorType,
@@ -371,7 +373,7 @@ export function createBookingService(deps: {
         await wallet.release(tx, {
           walletId: w.id,
           amount: p.heldAmount - newPerStudent,
-          eventKey: `booking.${b.id}.reprice.release.${p.userId}`,
+          eventKey: `booking.${b.id}.reprice.release.${p.userId}.${newPerStudent}`,
           sourceReference: b.id,
           bookingId: b.id,
           actorType,
@@ -379,10 +381,6 @@ export function createBookingService(deps: {
         });
       }
       // eslint-disable-next-line no-await-in-loop
-      await repo.updateParticipantState(tx, p.id, {
-        heldAmount: newPerStudent,
-      });
-
       await repo.updateParticipantState(tx, p.id, {
         heldAmount: newPerStudent,
       });
@@ -403,7 +401,7 @@ export function createBookingService(deps: {
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Group price updated",
         body: `Your group's per-student price changed to ${newPerStudent} Marks because the headcount changed.`,
-        eventKey: `booking.${b.id}.reprice.${p.userId}`,
+        eventKey: `booking.${b.id}.reprice.${p.userId}.${newPerStudent}`,
         emailRequired: true,
       });
     }
@@ -416,6 +414,25 @@ export function createBookingService(deps: {
     if (b.type !== BOOKING_TYPE.SERIES) return null;
     if (b.targetGroupSize > 1) return GROUP_SERIES_DISCLAIMER;
     return null;
+  }
+
+  function assertNoIntraSeriesOverlap(
+    sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[],
+  ): void {
+    const sorted = [...sessions].sort(
+      (a, b) => a.scheduledStartAt.getTime() - b.scheduledStartAt.getTime(),
+    );
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1]!;
+      const curr = sorted[i]!;
+      if (curr.scheduledStartAt.getTime() < prev.scheduledEndAt.getTime()) {
+        throw new BookingConflictError(
+          "series",
+          prev.scheduledEndAt.toISOString(),
+          curr.scheduledStartAt.toISOString(),
+        );
+      }
+    }
   }
 
   /**
@@ -538,6 +555,7 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, input.tutorId);
       const overlapping = await repo.findOverlappingBookings(
         tx,
         input.tutorId,
@@ -642,6 +660,12 @@ export function createBookingService(deps: {
   ) {
     const result = await db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
+      // PRD permissions matrix (prd.tex:350): only the student who created the
+      // booking may cancel it. Participants must withdraw; tutors use
+      // accept/decline and admin uses overrides.
+      if (b.proposerId !== userId) {
+        throw new BookingNotOwnedError(bookingId, userId);
+      }
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingStateTransitionError(
           b.currentState,
@@ -1180,6 +1204,11 @@ export function createBookingService(deps: {
       const b = await repo.findBookingById(tx, session.seriesBookingId);
       if (!b) throw new BookingNotFoundError(session.seriesBookingId);
       await assertBookingAccess(b, userId, tx, session.seriesBookingId);
+      // PRD (prd.tex:887): only the student may cancel an individual future
+      // series session; a tutor cannot skip the wallet release path.
+      if (b.proposerId !== userId) {
+        throw new BookingNotOwnedError(session.seriesBookingId, userId);
+      }
 
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingCancelledError(session.seriesBookingId);
@@ -1522,6 +1551,25 @@ export function createBookingService(deps: {
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
 
+    // Validate invitees: registered users (DL-19), no duplicates, no self-
+    // invite, and the total headcount must fit the target group size.
+    const inviteeSet = new Set(input.inviteeUserIds);
+    if (inviteeSet.size !== input.inviteeUserIds.length) {
+      throw new BookingNotEditableError("duplicate invitees");
+    }
+    if (inviteeSet.has(proposerId)) {
+      throw new BookingNotEditableError("proposer cannot invite themselves");
+    }
+    if (input.inviteeUserIds.length + 1 > input.targetGroupSize) {
+      throw new BookingNotEditableError(
+        `invitees exceed target group size ${input.targetGroupSize}`,
+      );
+    }
+    const invitees = await repo.findUsersByIds(db, input.inviteeUserIds);
+    if (invitees.length !== input.inviteeUserIds.length) {
+      throw new BookingNotFoundError("invitee");
+    }
+
     const slot = await repo.findAvailabilitySlot(
       db,
       input.availabilitySlotId,
@@ -1550,6 +1598,7 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, input.tutorId);
       const overlapping = await repo.findOverlappingBookings(
         tx,
         input.tutorId,
@@ -1699,8 +1748,11 @@ export function createBookingService(deps: {
         confirmedAt: new Date(),
       });
 
-      const newHeadcount = b.confirmedHeadcount + 1;
-      await repo.updateBookingConfirmedHeadcount(tx, bookingId, newHeadcount);
+      const updatedBooking = await repo.incrementBookingConfirmedHeadcount(
+        tx,
+        bookingId,
+      );
+      const newHeadcount = updatedBooking.confirmedHeadcount;
 
       // The proposer was held at the full target (size × perStudent) at
       // creation. As invitees confirm, release the proposer's excess so they
@@ -1838,10 +1890,56 @@ export function createBookingService(deps: {
         }
         return { reconfirmed: true };
       } else {
+        // PRD: declining the repriced rate is treated like a pre-H-2
+        // withdrawal — the participant's hold is released, the headcount is
+        // decremented, and the group is repriced for the remaining headcount
+        // (or cancelled when too few participants remain).
+        if (participant.heldAmount > 0) {
+          const declinedWallet = await wallet.getByUserId(tx, userId);
+          if (!declinedWallet) throw new BookingNotFoundError(userId);
+          await wallet.release(tx, {
+            walletId: declinedWallet.id,
+            amount: participant.heldAmount,
+            eventKey: `booking.${bookingId}.reconfirm-decline.${userId}`,
+            sourceReference: bookingId,
+            bookingId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Declined repriced group rate",
+          });
+        }
+
         await repo.updateParticipantState(tx, participant.id, {
           confirmationState: CONFIRMATION_STATE.DECLINED,
           declinedAt: new Date(),
+          heldAmount: 0,
         });
+
+        await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
+
+        const remaining = await repo.findConfirmedParticipants(
+          tx,
+          bookingId,
+          userId,
+        );
+
+        if (remaining.length < MIN_GROUP_HEADCOUNT) {
+          await releaseAllParticipantHolds(
+            tx,
+            bookingId,
+            "Group cancelled: not enough participants after reconfirmation decline",
+            ACTOR_TYPE.STUDENT,
+            userId,
+          );
+          await repo.updateBookingHoldAmount(tx, bookingId, 0);
+          await transition(tx, bookingId, BOOKING_STATE.EXPIRED, {
+            actorId: userId,
+            actorType: ACTOR_TYPE.STUDENT,
+            reason: "Not enough participants after reconfirmation decline",
+          });
+        } else {
+          await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
+        }
+
         return { reconfirmed: false };
       }
     });
@@ -1929,10 +2027,46 @@ export function createBookingService(deps: {
         });
       } else if (!isLate) {
         const currentState = b.currentState as BookingState;
+        const regressableStates: BookingState[] = [
+          BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+          BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+          BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+          BOOKING_STATE.CONFIRMED,
+          BOOKING_STATE.SCHEDULED,
+        ];
+
         if (
-          currentState === BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION ||
-          currentState === BOOKING_STATE.AWAITING_TUTOR_REVIEW
+          b.type === BOOKING_TYPE.GROUP &&
+          regressableStates.includes(currentState)
         ) {
+          // PRD DL-13: a confirmed group participant withdrawing before H-2
+          // triggers repricing + reconfirmation — the booking is NOT cancelled.
+          // Any live meeting link is cancelled until the group re-confirms.
+          if (
+            currentState === BOOKING_STATE.SCHEDULED ||
+            currentState === BOOKING_STATE.CONFIRMED
+          ) {
+            await meeting.cancelEvent(bookingId);
+          }
+
+          await transition(
+            tx,
+            bookingId,
+            BOOKING_STATE.AWAITING_RECONFIRMATION,
+            {
+              actorId: userId,
+              actorType: ACTOR_TYPE.STUDENT,
+              reason: "Participant withdrew before H-2",
+            },
+          );
+
+          await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
+        } else if (b.type === BOOKING_TYPE.GROUP) {
+          // A group in a non-regressable non-terminal state continues without
+          // the withdrawer; their hold was released above and nothing is
+          // stranded (the old code cancelled the whole booking here).
+          void currentState;
+        } else if (regressableStates.includes(currentState)) {
           await transition(
             tx,
             bookingId,
@@ -1946,6 +2080,8 @@ export function createBookingService(deps: {
 
           await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
         } else {
+          // Solo / solo-series: the proposer is the only participant, so
+          // cancelling the whole booking is correct.
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
@@ -1975,6 +2111,8 @@ export function createBookingService(deps: {
       );
     }
 
+    assertNoIntraSeriesOverlap(input.sessions);
+
     const slot = await repo.findAvailabilitySlot(
       db,
       input.availabilitySlotId,
@@ -2003,6 +2141,7 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, input.tutorId);
       for (const session of input.sessions) {
         // eslint-disable-next-line no-await-in-loop
         const overlapping = await repo.findOverlappingBookings(
@@ -2115,6 +2254,8 @@ export function createBookingService(deps: {
       );
     }
 
+    assertNoIntraSeriesOverlap(input.sessions);
+
     const slot = await repo.findAvailabilitySlot(
       db,
       input.availabilitySlotId,
@@ -2123,7 +2264,20 @@ export function createBookingService(deps: {
     );
     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
 
-    // Validate the invitees are registered users (FR-20).
+    // Validate the invitees are registered users (FR-20), with no duplicates
+    // or self-invites, and the total headcount must fit the target size.
+    const inviteeSet = new Set(input.inviteeUserIds);
+    if (inviteeSet.size !== input.inviteeUserIds.length) {
+      throw new BookingNotEditableError("duplicate invitees");
+    }
+    if (inviteeSet.has(proposerId)) {
+      throw new BookingNotEditableError("proposer cannot invite themselves");
+    }
+    if (input.inviteeUserIds.length + 1 > input.targetGroupSize) {
+      throw new BookingNotEditableError(
+        `invitees exceed target group size ${input.targetGroupSize}`,
+      );
+    }
     const invitees = await repo.findUsersByIds(db, input.inviteeUserIds);
     if (invitees.length !== input.inviteeUserIds.length) {
       throw new BookingNotFoundError("invitee");
@@ -2150,6 +2304,7 @@ export function createBookingService(deps: {
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, input.tutorId);
       for (const session of input.sessions) {
         // eslint-disable-next-line no-await-in-loop
         const overlapping = await repo.findOverlappingBookings(
@@ -2493,26 +2648,29 @@ export function createBookingService(deps: {
   }> {
     const candidates = await repo.findConfirmedMeetingsPendingRetry(db);
 
-    let succeeded = 0;
-    let failed = 0;
-    for (const b of candidates) {
+    const outcomes = await mapLimit(candidates, 5, async (b) => {
       try {
-        // eslint-disable-next-line no-await-in-loop
-        const result = await db.transaction(async (tx) => {
-          const { scheduled } = await finalizeMeetingSchedule(tx, b, b.tutorId);
-          return scheduled;
+        const scheduled = await db.transaction(async (tx) => {
+          const result = await finalizeMeetingSchedule(tx, b, b.tutorId);
+          return result.scheduled;
         });
-        if (result) succeeded++;
-        else failed++;
+        return { ok: true, scheduled };
       } catch (error) {
-        failed++;
         log({
           level: "error",
           action: "retry_meeting_failed",
           bookingId: b.id,
           error: { message: String(error) },
         });
+        return { ok: false, scheduled: false };
       }
+    });
+
+    let succeeded = 0;
+    let failed = 0;
+    for (const outcome of outcomes) {
+      if (outcome.scheduled) succeeded++;
+      else failed++;
     }
     return { succeeded, failed };
   }
@@ -2533,11 +2691,8 @@ export function createBookingService(deps: {
       [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
     };
 
-    let succeeded = 0;
-    let failed = 0;
-    for (const b of candidates) {
+    const outcomes = await mapLimit(candidates, 5, async (b) => {
       try {
-        // eslint-disable-next-line no-await-in-loop
         await db.transaction(async (tx) => {
           // FR-16/TC-18: when a group deadline passes with a partial headcount
           // (>= 2 but < target), reprice to the final per-student total and
@@ -2639,18 +2794,24 @@ export function createBookingService(deps: {
         });
         // Best-effort cleanup of the provider-side event once the booking is
         // terminal (FR-21/OQ-05). No-op when no live event exists.
-        // eslint-disable-next-line no-await-in-loop
         await meeting.cancelEvent(b.id);
-        succeeded++;
+        return { ok: true };
       } catch (error) {
-        failed++;
         log({
           level: "error",
           action: "expire_booking_failed",
           bookingId: b.id,
           error: { message: String(error) },
         });
+        return { ok: false };
       }
+    });
+
+    let succeeded = 0;
+    let failed = 0;
+    for (const outcome of outcomes) {
+      if (outcome.ok) succeeded++;
+      else failed++;
     }
     return { expired: succeeded, failed };
   }
@@ -2665,11 +2826,9 @@ export function createBookingService(deps: {
       BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
     ]);
 
-    let released = 0;
-    for (const b of candidates) {
-      if (b.holdAmount <= 0) continue;
+    const outcomes = await mapLimit(candidates, 5, async (b) => {
+      if (b.holdAmount <= 0) return { ok: true, released: false };
       try {
-        // eslint-disable-next-line no-await-in-loop
         await db.transaction(async (tx) => {
           await releaseAllParticipantHolds(
             tx,
@@ -2690,7 +2849,7 @@ export function createBookingService(deps: {
             eventKey: `booking.${b.id}.hold_released_expiry`,
           });
         });
-        released++;
+        return { ok: true, released: true };
       } catch (error) {
         log({
           level: "error",
@@ -2698,7 +2857,13 @@ export function createBookingService(deps: {
           bookingId: b.id,
           error: { message: String(error) },
         });
+        return { ok: false, released: false };
       }
+    });
+
+    let released = 0;
+    for (const outcome of outcomes) {
+      if (outcome.released) released++;
     }
     return { released };
   }
@@ -2709,11 +2874,8 @@ export function createBookingService(deps: {
   }> {
     const candidates = await repo.findBookingsWithTutorLateness(db);
 
-    let autoCancelled = 0;
-    let failed = 0;
-    for (const b of candidates) {
+    const outcomes = await mapLimit(candidates, 5, async (b) => {
       try {
-        // eslint-disable-next-line no-await-in-loop
         await db.transaction(async (tx) => {
           await releaseAllParticipantHolds(
             tx,
@@ -2775,18 +2937,24 @@ export function createBookingService(deps: {
           });
         });
         // Best-effort cleanup of the provider-side event (NO_SHOW is terminal).
-        // eslint-disable-next-line no-await-in-loop
         await meeting.cancelEvent(b.id);
-        autoCancelled++;
+        return { ok: true };
       } catch (error) {
-        failed++;
         log({
           level: "error",
           action: "tutor_lateness_check_failed",
           bookingId: b.id,
           error: { message: String(error) },
         });
+        return { ok: false };
       }
+    });
+
+    let autoCancelled = 0;
+    let failed = 0;
+    for (const outcome of outcomes) {
+      if (outcome.ok) autoCancelled++;
+      else failed++;
     }
     return { autoCancelled, failed };
   }

@@ -24,7 +24,7 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { client, orpc } from "@/utils/orpc";
 import { TutorInviteForm } from "@/components/admin/tutor-invite-form";
 import { TutorReviewCard } from "@/components/admin/tutor-review-card";
-import { IconCopy, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconRefresh, IconTrash } from "@tabler/icons-react";
 
 export const Route = createFileRoute("/_app/admin-tutors")({
   component: RouteComponent,
@@ -72,9 +72,21 @@ function RouteComponent() {
 
   const resendInvite = useMutation(
     orpc.adminTutor.resendInvite.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (data) => {
         void refetchInvites();
-        toastManager.add({ title: "Invitation renewed", type: "success" });
+        // Tokens are only surfaced once, at create/resend — copy the new link
+        // here so the admin can still share it (M10).
+        if (data.token) {
+          const url = `${window.location.origin}/invite?token=${data.token}`;
+          void navigator.clipboard.writeText(url).then(() =>
+            toastManager.add({
+              title: "Invitation renewed — invite link copied",
+              type: "success",
+            }),
+          );
+        } else {
+          toastManager.add({ title: "Invitation renewed", type: "success" });
+        }
       },
       onError: (error: Error) =>
         toastManager.add({
@@ -140,7 +152,6 @@ function RouteComponent() {
                   displayName: string;
                   email: string;
                   status: string;
-                  token?: string;
                 }) => (
                   <div
                     key={invite.id}
@@ -155,23 +166,6 @@ function RouteComponent() {
                       <Badge variant="secondary" className="capitalize">
                         {invite.status}
                       </Badge>
-                      {invite.status === "invited" && invite.token && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            const url = `${window.location.origin}/invite?token=${invite.token}`;
-                            void navigator.clipboard.writeText(url).then(() =>
-                              toastManager.add({
-                                title: "Invite link copied",
-                                type: "success",
-                              }),
-                            );
-                          }}
-                        >
-                          <IconCopy /> Copy link
-                        </Button>
-                      )}
                       {invite.status === "invited" ? (
                         <>
                           <Button

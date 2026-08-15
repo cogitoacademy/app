@@ -363,7 +363,63 @@ describe("createGoogleMeetingProviderWithFallback", () => {
     const where = mock(() => ({ returning }));
     const set = mock(() => ({ where }));
     const update = mock(() => ({ set }));
-    const db = { insert, update } as any;
+    const countSelect = mock(() => ({
+      from: mock(() => ({
+        where: mock(async () => [{ count: 1 }]),
+      })),
+    }));
+    const db = { insert, update, select: countSelect } as any;
+
+    const provider = createGoogleMeetingProviderWithFallback(config, db);
+    const result = await provider.createEvent("b1");
+
+    expect(insert).toHaveBeenCalledTimes(1);
+    // Attempt 1 of 3: the failed row stays intact for the scheduler retry job
+    // (M12) — no immediate manual fallback.
+    expect(update).not.toHaveBeenCalled();
+    expect(result.provider).toBe("google_meet");
+    expect(result.status).toBe("failed");
+  });
+
+  test("falls back to manual only after MAX_MEETING_RETRY_ATTEMPTS failures (M12)", async () => {
+    mockCalendarEventsInsert.mockImplementationOnce(async () => {
+      throw new Error("Google API error");
+    });
+
+    const failedRow = {
+      id: "me1",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: null,
+      meetingUrl: null,
+      status: "failed",
+      errorReason: "Error: Google API error",
+    };
+    const manualRow = {
+      id: "me2",
+      bookingId: "b1",
+      provider: "manual",
+      externalEventId: null,
+      meetingUrl: null,
+      status: "manual",
+      errorReason: null,
+    };
+
+    const insert = mock(() => ({
+      values: mock(() => ({
+        returning: mock(async () => [failedRow]),
+      })),
+    }));
+    const returning = mock(async () => [manualRow]);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const countSelect = mock(() => ({
+      from: mock(() => ({
+        where: mock(async () => [{ count: 3 }]),
+      })),
+    }));
+    const db = { insert, update, select: countSelect } as any;
 
     const provider = createGoogleMeetingProviderWithFallback(config, db);
     const result = await provider.createEvent("b1");

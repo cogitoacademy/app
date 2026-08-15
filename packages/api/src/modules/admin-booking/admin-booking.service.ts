@@ -1,6 +1,7 @@
 import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
 import {
   BookingNotFoundError,
+  BookingOverrideConflictError,
   InvalidRefundStateError,
   TerminalStateOverrideError,
 } from "./admin-booking.errors";
@@ -15,6 +16,7 @@ import {
 } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+import { escapeHtml } from "../../lib/sanitize";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
 import type {
@@ -138,17 +140,20 @@ export function createAdminBookingService(deps: {
         availableBalance: w.availableBalance + amount,
       };
     }
+    // Compensate actions first release the participant's hold (held ->
+    // available) and then apply the credit/deduct on top. This reconciles the
+    // held balance instead of leaving it stranded (H7).
     if (action === "compensate_credit") {
       return {
         totalBalance: w.totalBalance + amount,
-        heldBalance: w.heldBalance,
-        availableBalance: w.availableBalance + amount,
+        heldBalance: Math.max(w.heldBalance - amount, 0),
+        availableBalance: w.availableBalance + 2 * amount,
       };
     }
     return {
       totalBalance: w.totalBalance - amount,
-      heldBalance: w.heldBalance,
-      availableBalance: w.availableBalance - amount,
+      heldBalance: Math.max(w.heldBalance - amount, 0),
+      availableBalance: w.availableBalance,
     };
   }
   /**
@@ -194,7 +199,14 @@ export function createAdminBookingService(deps: {
         : [];
 
     const perParticipantImpact: PerParticipantImpact[] = [];
-    if (input.marksAction && bookingRow.holdAmount > 0) {
+    // Gate the money action on actual participant holds (not the booking-level
+    // holdAmount, which can drift from the sum of participant holds) so an
+    // admin's requested action is never a silent no-op (L7).
+    const totalParticipantHeld = participants.reduce(
+      (sum, p) => sum + p.heldAmount,
+      0,
+    );
+    if (input.marksAction && totalParticipantHeld > 0) {
       for (const participant of affectedParts) {
         if (participant.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
@@ -247,6 +259,8 @@ export function createAdminBookingService(deps: {
         plan.overrideMeta,
       );
       if (!updateResult) throw new BookingNotFoundError(input.bookingId);
+      if ("raced" in updateResult)
+        throw new BookingOverrideConflictError(input.bookingId);
 
       await repo.insertStateHistoryEntry(tx, {
         bookingId: input.bookingId,
@@ -259,6 +273,7 @@ export function createAdminBookingService(deps: {
       });
 
       let totalReleased = 0;
+      const clearedParticipantIds = new Set<string>();
 
       for (const impact of plan.perParticipantImpact) {
         if (impact.action === "release_holds") {
@@ -273,6 +288,17 @@ export function createAdminBookingService(deps: {
           });
           totalReleased += impact.heldAmount;
         } else if (impact.action === "compensate_credit") {
+          // Release the hold first, then compensate on top (H7): held marks
+          // must not stay stranded after the override.
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: impact.walletId,
+            amount: impact.heldAmount,
+            eventKey: `override.release.${input.bookingId}.${impact.participantId}`,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: `Admin override: ${input.reason}`,
+            bookingId: input.bookingId,
+          });
           // eslint-disable-next-line no-await-in-loop
           await wallet.compensate(tx, {
             walletId: impact.walletId,
@@ -285,6 +311,17 @@ export function createAdminBookingService(deps: {
           });
           totalReleased += impact.heldAmount;
         } else if (impact.action === "compensate_deduct") {
+          // Forfeit semantics: release the hold, then deduct from available
+          // (total -= H, held -= H, available net unchanged).
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: impact.walletId,
+            amount: impact.heldAmount,
+            eventKey: `override.release.${input.bookingId}.${impact.participantId}`,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: `Admin override: ${input.reason}`,
+            bookingId: input.bookingId,
+          });
           // eslint-disable-next-line no-await-in-loop
           await wallet.compensate(tx, {
             walletId: impact.walletId,
@@ -297,10 +334,24 @@ export function createAdminBookingService(deps: {
           });
           totalReleased += impact.heldAmount;
         }
+        // eslint-disable-next-line no-await-in-loop
+        await repo.updateParticipantHeldAmount(tx, impact.participantId, 0);
+        clearedParticipantIds.add(impact.participantId);
       }
 
       if (totalReleased > 0) {
-        await repo.updateBookingHoldAmount(tx, input.bookingId, 0);
+        // Recompute the booking-level hold from the participants that were not
+        // released, instead of blindly zeroing it (H7/M3).
+        const remainingHeld = await repo
+          .findParticipantsByBookingId(tx, input.bookingId)
+          .then((participants) =>
+            participants.reduce(
+              (sum, p) =>
+                clearedParticipantIds.has(p.id) ? sum : sum + p.heldAmount,
+              0,
+            ),
+          );
+        await repo.updateBookingHoldAmount(tx, input.bookingId, remainingHeld);
       }
 
       if (notification) {
@@ -314,7 +365,7 @@ export function createAdminBookingService(deps: {
             severity: NOTIFICATION_SEVERITY.ACTION,
             title: "Your booking was updated by an admin",
             body: `Your booking was updated (${input.category})${
-              input.userNote ? `: ${input.userNote}` : ""
+              input.userNote ? `: ${escapeHtml(input.userNote)}` : ""
             }.`,
             eventKey: `override.applied.${input.bookingId}.${userId}`,
             emailRequired: true,
@@ -428,17 +479,17 @@ export function createAdminBookingService(deps: {
     adminId: string,
     input: { paymentId: string; reason: string },
   ) {
-    const payment = await repo.findPaymentById(db, input.paymentId);
-    if (!payment) throw new BookingNotFoundError(input.paymentId);
-
-    if (
-      payment.status !== PAYMENT_STATUS.PAID &&
-      payment.status !== PAYMENT_STATUS.SETTLED
-    ) {
-      throw new InvalidRefundStateError(input.paymentId, payment.status);
-    }
-
     return db.transaction(async (tx) => {
+      const payment = await repo.findPaymentById(tx, input.paymentId);
+      if (!payment) throw new BookingNotFoundError(input.paymentId);
+
+      if (
+        payment.status !== PAYMENT_STATUS.PAID &&
+        payment.status !== PAYMENT_STATUS.SETTLED
+      ) {
+        throw new InvalidRefundStateError(input.paymentId, payment.status);
+      }
+
       const participantWallet = await wallet.getByUserId(tx, payment.userId);
       if (!participantWallet) throw new BookingNotFoundError(payment.userId);
 
@@ -452,11 +503,16 @@ export function createAdminBookingService(deps: {
         type: "compensate_credit",
       });
 
-      await repo.updatePaymentStatus(
+      // Conditional update inside the transaction: a payment can only be
+      // refunded from PAID/SETTLED, so a concurrent SETTLED webhook can never
+      // flip an already-REFUNDED payment back (M6).
+      const updatedPayment = await repo.updatePaymentStatusIfRefundable(
         tx,
         input.paymentId,
-        PAYMENT_STATUS.REFUNDED,
       );
+      if (!updatedPayment) {
+        throw new InvalidRefundStateError(input.paymentId, payment.status);
+      }
 
       await refund.createRefundRecord(tx, {
         paymentId: input.paymentId,

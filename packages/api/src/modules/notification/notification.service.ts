@@ -15,6 +15,7 @@ interface NotificationEmailPort {
     subject: string;
     html: string;
     category: "booking" | "payment" | "refund" | "schedule" | "override";
+    idempotencyKey?: string;
   }): Promise<{ messageId: string } | { skipped: true }>;
 }
 
@@ -222,7 +223,11 @@ export function createNotificationService(
       return { sent: 0, failed: 0 };
     }
 
-    const rows = await repo.listPendingDispatches(db, limit);
+    // Claim atomically so a concurrent scheduler run (or a crash between send
+    // and status update) can never double-deliver: claimed rows move to
+    // `sending`, and the Resend call carries an Idempotency-Key derived from
+    // the dispatch row id (M14).
+    const rows = await repo.claimPendingDispatches(db, limit);
     let sent = 0;
     let failed = 0;
 
@@ -247,6 +252,7 @@ export function createNotificationService(
             | "refund"
             | "schedule"
             | "override",
+          idempotencyKey: row.id,
         });
         if ("skipped" in res && res.skipped) {
           await repo.updateDispatchStatusById(db, row.id, "suppressed");
@@ -257,6 +263,9 @@ export function createNotificationService(
       } catch (error) {
         failed++;
         await repo.incrementDispatchAttempts(db, row.id, String(error));
+        // Return the row to `failed` so the next run can claim it again
+        // (up to MAX_DISPATCH_ATTEMPTS).
+        await repo.updateDispatchStatusById(db, row.id, "failed");
         log({
           level: "error",
           action: "notification_email_dispatch_failed",
@@ -290,7 +299,7 @@ export function createNotificationService(
     const items = rows.slice(0, limit) as NotificationListItem[];
     const nextCursor =
       rows.length > limit
-        ? items[items.length - 1]!.createdAt.toISOString()
+        ? `${items[items.length - 1]!.createdAt.toISOString()}|${items[items.length - 1]!.id}`
         : null;
 
     return { items, nextCursor };

@@ -14,6 +14,7 @@ import {
   INVITE_EXPIRY_DAYS,
   USER_ROLE,
 } from "@cogito-app/api/shared/constants";
+import { hashInviteToken } from "@cogito-app/api/lib/tokens";
 
 const SEED_SUFFIX = "seed";
 const SEED_DISPLAY_TAG = "[seed]";
@@ -29,6 +30,16 @@ export function seedAllowed(
 export function seedAdminPassword(value: string | undefined): string | null {
   if (!value || value.length < 12) return null;
   return value;
+}
+
+function demoPassword(envValue: string | undefined, fallback: string): string {
+  if (!envValue) return fallback;
+  if (envValue.length < 8) {
+    throw new Error(
+      "SEED_TUTOR_PASSWORD / SEED_STUDENT_PASSWORD must be at least 8 characters",
+    );
+  }
+  return envValue;
 }
 
 const PACKAGES = [
@@ -131,9 +142,13 @@ async function seed() {
   console.log("Admin user ready:", admin.id);
 
   const tutorEmail = `tutor.${SEED_SUFFIX}@cogitoacademy.id`;
+  const tutorPassword = demoPassword(
+    process.env.SEED_TUTOR_PASSWORD,
+    "tutor123",
+  );
   const tutorUser = await ensureUser(
     tutorEmail,
-    "tutor123",
+    tutorPassword,
     `${SEED_DISPLAY_TAG} Tutor`,
   );
   await db
@@ -153,7 +168,7 @@ async function seed() {
       .values({
         email: tutorEmail,
         displayName: `${SEED_DISPLAY_TAG} Tutor`,
-        token: crypto.randomUUID(),
+        token: hashInviteToken(crypto.randomUUID()),
         status: "accepted",
         invitedBy: admin.id,
         expiresAt: new Date(
@@ -202,24 +217,29 @@ async function seed() {
 
   await seedDemoStudent(
     `student.${SEED_SUFFIX}@cogitoacademy.id`,
-    "student123",
+    demoPassword(process.env.SEED_STUDENT_PASSWORD, "student123"),
     `${SEED_DISPLAY_TAG} Student`,
+  );
+
+  const friendPassword = demoPassword(
+    process.env.SEED_STUDENT_PASSWORD,
+    "student123",
   );
 
   await Promise.all([
     seedDemoStudent(
       `student.friend1.${SEED_SUFFIX}@cogitoacademy.id`,
-      "student123",
+      friendPassword,
       `${SEED_DISPLAY_TAG} Alya Friend`,
     ),
     seedDemoStudent(
       `student.friend2.${SEED_SUFFIX}@cogitoacademy.id`,
-      "student123",
+      friendPassword,
       `${SEED_DISPLAY_TAG} Bima Friend`,
     ),
     seedDemoStudent(
       `student.friend3.${SEED_SUFFIX}@cogitoacademy.id`,
-      "student123",
+      friendPassword,
       `${SEED_DISPLAY_TAG} Citra Friend`,
     ),
   ]);

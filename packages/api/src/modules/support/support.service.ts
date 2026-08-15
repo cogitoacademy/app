@@ -52,14 +52,21 @@ export function createSupportService(deps: {
   const { supportRepo, notification, audit, db } = deps;
 
   async function createTicket(userId: string, input: CreateTicketInput) {
-    let bookingId = input.bookingId ?? null;
+    const bookingId = input.bookingId ?? null;
+
+    let booking: Awaited<
+      ReturnType<typeof supportRepo.findBookingForReporter>
+    > = null;
+    if (bookingId) {
+      // A ticket may only reference a booking the reporter is part of (L2).
+      booking = await supportRepo.findBookingForReporter(db, bookingId, userId);
+      if (!booking) throw new SupportBookingAccessError(bookingId);
+    }
 
     if (LATENESS_CATEGORIES.has(input.category)) {
-      if (!bookingId) throw new SupportBookingAccessError("none");
-      const b = await supportRepo.findBookingForReporter(db, bookingId, userId);
-      if (!b) throw new SupportBookingAccessError(bookingId);
+      if (!booking || !bookingId) throw new SupportBookingAccessError("none");
       const reportableAt = new Date(
-        b.scheduledStartAt.getTime() + LATENESS_TOLERANCE_MS,
+        booking.scheduledStartAt.getTime() + LATENESS_TOLERANCE_MS,
       );
       if (new Date() < reportableAt) {
         throw new LatenessReportTooEarlyError(bookingId);

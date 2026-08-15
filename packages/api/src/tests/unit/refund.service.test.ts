@@ -162,13 +162,12 @@ describe("RefundService", () => {
   });
 
   describe("listCorrections", () => {
-    test("returns corrections filtered by compensate types", async () => {
+    test("passes the compensate filter to listLedger and returns its items", async () => {
       const wallet = {
         ...makeWalletPort(),
         listLedger: mock(async () => ({
           items: [
             { entryType: "compensate_credit", id: "1" },
-            { entryType: "credit", id: "2" },
             { entryType: "compensate_deduct", id: "3" },
           ],
           nextCursor: null,
@@ -183,10 +182,16 @@ describe("RefundService", () => {
 
       const result = await service.listCorrections({ walletId: "w1" });
       expect(result.items.length).toBe(2);
+      expect(wallet.listLedger).toHaveBeenCalledWith(
+        "w1",
+        expect.objectContaining({
+          entryType: ["compensate_credit", "compensate_deduct"],
+        }),
+      );
     });
 
-    test("applies default limit and slices correctly", async () => {
-      const items = Array.from({ length: 25 }, (_, i) => ({
+    test("applies the default limit as limit + 1 for cursor detection", async () => {
+      const items = Array.from({ length: 21 }, (_, i) => ({
         entryType: "compensate_credit",
         id: String(i),
       }));
@@ -205,7 +210,11 @@ describe("RefundService", () => {
       });
 
       const result = await service.listCorrections({ walletId: "w1" });
-      expect(result.items.length).toBeLessThanOrEqual(20);
+      expect(result.nextCursor).toBe("cursor1");
+      expect(wallet.listLedger).toHaveBeenCalledWith(
+        "w1",
+        expect.objectContaining({ limit: 21 }),
+      );
     });
 
     test("passes cursor to listLedger", async () => {

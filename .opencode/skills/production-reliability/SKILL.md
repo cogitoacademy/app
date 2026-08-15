@@ -14,6 +14,7 @@ Use this skill for production-facing changes, infrastructure, persistence, exter
 ## 1. Model the System
 
 Identify:
+
 - compute;
 - network;
 - storage;
@@ -34,6 +35,7 @@ Stateless application instances should be replaceable where HA is required.
 ## 2. Failure Domains
 
 Consider failures at:
+
 - function;
 - process;
 - container;
@@ -49,6 +51,7 @@ Do not claim HA if a critical single point of failure remains.
 ## 3. Health Checks
 
 Distinguish:
+
 - liveness: is the process functioning?
 - readiness: can it safely receive traffic?
 - startup: has initialization completed?
@@ -62,6 +65,7 @@ Avoid health checks that cause cascading failure by overwhelming dependencies.
 Every network dependency needs a bounded timeout appropriate to its operation.
 
 Use different time budgets where appropriate:
+
 - connection;
 - request;
 - database query;
@@ -72,6 +76,7 @@ Never allow an external dependency to hang indefinitely.
 ## 5. Retries
 
 Retry only when:
+
 - the error is plausibly transient;
 - retry is bounded;
 - backoff is used where appropriate;
@@ -85,6 +90,7 @@ Avoid retry storms.
 Any operation that may be retried after an ambiguous network outcome must have a deliberate duplicate-prevention strategy when duplicates are harmful.
 
 Examples:
+
 - idempotency keys;
 - unique constraints;
 - deduplication tables;
@@ -94,6 +100,7 @@ Examples:
 ## 7. Graceful Shutdown
 
 Processes should:
+
 1. stop accepting new work;
 2. allow in-flight work to finish within a deadline;
 3. close resources;
@@ -105,6 +112,7 @@ Workers should stop safely and avoid acknowledging work that was not completed.
 ## 8. Data and Backups
 
 Do not confuse:
+
 - HA;
 - replication;
 - backups;
@@ -113,6 +121,7 @@ Do not confuse:
 Replication improves availability/durability but does not replace independent backups.
 
 Backups require:
+
 - retention;
 - encryption where appropriate;
 - access controls;
@@ -124,6 +133,7 @@ A backup that has never been restored is an assumption, not proven recovery.
 ## 9. Database Changes
 
 For schema changes:
+
 - consider old and new application versions during rollout;
 - prefer backward-compatible migrations for rolling deployments;
 - separate destructive changes into later steps;
@@ -140,6 +150,7 @@ Build immutable artifact -> verify -> deploy -> health check -> observe -> rollb
 Do not mutate production servers manually when automation can provide a repeatable deployment.
 
 For migrations, define:
+
 - preconditions;
 - migration;
 - verification;
@@ -149,6 +160,7 @@ For migrations, define:
 ## 11. Observability
 
 At minimum, production services should expose enough evidence to answer:
+
 - Is the service healthy?
 - Is traffic failing?
 - Is latency increasing?
@@ -163,6 +175,7 @@ Alerts must be actionable and tied to a response.
 ## 12. Incident Readiness
 
 For critical services, maintain runbooks for:
+
 - service crash;
 - database failure;
 - disk exhaustion;
@@ -172,6 +185,7 @@ For critical services, maintain runbooks for:
 - backup restore.
 
 A good runbook says:
+
 - how to detect;
 - how to diagnose;
 - safe mitigation;
@@ -182,6 +196,7 @@ A good runbook says:
 ## 13. Migration Mindset
 
 When moving infrastructure:
+
 - recreate infrastructure from configuration where practical;
 - migrate persistent state explicitly;
 - do not assume logs or caches must move;

@@ -136,7 +136,12 @@ export async function upsertAvailability(
         recurrenceRule: input.recurrenceRule ?? null,
         isActive: input.isActive ?? true,
       })
-      .where(eq(availabilitySlot.id, input.id))
+      .where(
+        and(
+          eq(availabilitySlot.id, input.id),
+          eq(availabilitySlot.tutorId, userId),
+        ),
+      )
       .returning();
     return updated;
   }
