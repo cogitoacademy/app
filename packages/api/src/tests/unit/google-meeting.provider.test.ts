@@ -227,6 +227,7 @@ describe("createGoogleMeetingProvider", () => {
     mockCalendarEventsInsert.mockImplementationOnce(async () => ({
       data: { id: "evt_123" },
     }));
+    const originalGet = mockCalendarEventsGet.mockImplementation;
     mockCalendarEventsGet.mockImplementation(async () => {
       throw new Error("poll network error");
     });
@@ -248,6 +249,9 @@ describe("createGoogleMeetingProvider", () => {
 
     const provider = createGoogleMeetingProvider(config, db);
     const result = await provider.createEvent("b1");
+
+    // Restore the default get mock so later tests are unaffected.
+    mockCalendarEventsGet.mockImplementation(originalGet);
 
     // The event was created on Google's side — a poll failure must not turn
     // the row into `failed` (that would cause a duplicate event on retry).
