@@ -482,13 +482,13 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B6/B8/B9 are **Fixed
 - ✅ `PAYMENT_PROVIDER=xendit` requires Xendit credentials (no silent stub fallback)
 - ✅ Unbounded `reason` inputs bounded (`.max(500)`) + `escapeHtml` in email bodies (adminNote interpolation tracked in BACKEND-CLEANUP)
 - ✅ OpenAPI spec auth-gated in non-production; read-time body-size enforcement (413)
-- Remaining: **RPC rate-limit path bug** — `routes.ts` matches dotted paths (`/rpc/payment.createPurchase`, `/rpc/invite.verify`, `/rpc/booking.`, `/rpc/auth.students/search`) but real oRPC URLs are slash-separated procedure keys (`/rpc/payment/createPurchase`, …) so those limits never fire (only the `/api/auth/*` limit works). Tracked in REVIEW-FIXES-2. Password policy upper/lower/digit (C6) still open.
+- Remaining: **Password policy upper/lower/digit (C6)** still open; RPC rate-limit path bug (R1) is **Fixed** — see the wave-2 table below.
 
 ### 2026-08-15 wave-2 findings (tracked in `docs/plans/active/REVIEW-FIXES-2.md`)
 
 | ID  | Severity | Finding                                                                                                                                                                                      | Location                                                         |
 | --- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| R1  | HIGH     | RPC rate-limit paths use dotted keys; real URLs are slash keys — limits never fire                                                                                                           | `routes.ts:212-251`                                              |
+| R1  | HIGH     | RPC rate-limit paths use dotted keys; real URLs are slash keys — limits never fire. **FIXED** (PR A): path matching extracted to `rate-limit-paths.ts` (`matchRateLimitPath`/`matchAuthPath`), tested in `rpc-rate-limit.test.ts` | `routes.ts`, `rate-limit-paths.ts` |
 | R2  | HIGH     | Solo `withdraw` from CONFIRMED/SCHEDULED → `AWAITING_RECONFIRMATION` instead of CANCELLED (hold not zeroed, Meet link not cancelled, withdrawn student can reconfirm into a no-hold booking) | `booking.service.ts:2069-2081`                                   |
 | R3  | HIGH     | `meeting.cancelEvent` inside the withdraw tx isn't rolled back if the reprice throws                                                                                                         | `booking.service.ts:2049`                                        |
 | R4  | MED      | Presigned POST policy omits `x-amz-algorithm/credential/date` conditions — R2/S3 reject unmatched form fields                                                                                | `storage.ts:65-73`                                               |

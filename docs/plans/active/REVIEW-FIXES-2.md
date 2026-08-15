@@ -1,6 +1,6 @@
 # Backend Review Fixes 2 — Implementation Plan
 
-> **STATUS: ACTIVE — planned for execution on a fresh branch from main (`30f805e`).** Wave-2 findings from the 2026-08-15 codebase review (post-#48): 10 code findings (R1–R10), 9 files below the 90% coverage target, and 2 small PRD gaps pulled in (U13, U4). Verified at git HEAD `30f805e` (merge of #48).
+> **STATUS: ACTIVE — execution in progress on branch `fix/review-fixes-2` (worktree `wt-review-fixes2`).** PR A (R1) landed — path matching extracted to `rate-limit-paths.ts`. Wave-2 findings from the 2026-08-15 codebase review (post-#48): 10 code findings (R1–R10), 9 files below the 90% coverage target, and 2 small PRD gaps pulled in (U13, U4). Verified at git HEAD `30f805e` (merge of #48).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -60,7 +60,9 @@
 - Consumes: existing `rateLimit` instances (`paymentRateLimit`, `inviteRateLimit`, `bookingRateLimit`, `searchRateLimit`), `getClientIp`.
 - Produces: the four `path`/`path.startsWith` checks use the real slash-key URLs.
 
-- [ ] **Step 1: Write the failing test**
+> **Execution note (PR A, merged):** the HTTP-level loop test below was replaced by a deterministic unit test. `server.handle()`-level 429 tests hang the bun test process on this stack (pre-existing `evlog()` + ioredis `eval` interaction, reproduced identically on main). Instead, path matching was extracted into a pure module `apps/server/src/rate-limit-paths.ts` (`matchRateLimitPath`, `matchAuthPath`) and tested directly in `rpc-rate-limit.test.ts`; `routes.ts` delegates to it and the old source-text `rate-limit.test.ts` was updated accordingly.
+
+- [x] **Step 1: Write the failing test** (adapted to `matchRateLimitPath` unit test — see execution note)
 
 Create `apps/server/src/rpc-rate-limit.test.ts`:
 
@@ -108,12 +110,12 @@ describe("RPC rate limits match real slash-key paths", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun test --env-file apps/server/.env apps/server/src/rpc-rate-limit.test.ts`
 Expected: FAIL — the 6th payment request returns 401 (auth, not 429) because the rate limit never fires.
 
-- [ ] **Step 3: Fix the path patterns in `routes.ts`**
+- [x] **Step 3: Fix the path patterns in `routes.ts`** (extracted to `rate-limit-paths.ts`)
 
 In the `.onRequest` rate-limit hook, change:
 
@@ -157,17 +159,17 @@ to:
 if (path.startsWith("/rpc/auth/searchStudents")) {
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bun test --env-file apps/server/.env apps/server/src/rpc-rate-limit.test.ts`
 Expected: PASS (429 on the 6th payment request and the 31st booking request).
 
-- [ ] **Step 5: Update docs**
+- [x] **Step 5: Update docs**
 
 - `docs/CONTEXT.md` — the R1 row in the "2026-08-15 wave-2 findings" table and the "Remaining:" bullet in the security section: mark R1 **Fixed** (with PR ref after merge).
 - `docs/plans/active/REVIEW-FIXES-2.md` — mark Task A.1 done.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/routes.ts apps/server/src/rpc-rate-limit.test.ts docs/CONTEXT.md docs/plans/active/REVIEW-FIXES-2.md

@@ -2,6 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { createContext } from "@cogito-app/api/context";
 import { appRouter } from "@cogito-app/api/routers";
 import { rateLimit } from "@cogito-app/api/lib/rate-limit";
+import type { RateLimitResult } from "@cogito-app/api/lib/rate-limit";
 import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
 import { MAX_UPLOAD_BYTES } from "@cogito-app/api/modules/upload/upload.types";
@@ -9,6 +10,7 @@ import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth } from "@cogito-app/auth";
 import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
+import { matchAuthPath, matchRateLimitPath } from "./rate-limit-paths";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
@@ -193,10 +195,7 @@ export function createServer() {
       const path = url.pathname;
       const ip = getClientIp(request, env.TRUST_PROXY, server ?? undefined);
 
-      if (
-        path.startsWith("/api/auth/sign-in/") ||
-        path.startsWith("/api/auth/sign-up/")
-      ) {
+      if (matchAuthPath(path)) {
         const { allowed, retryAfterMs } = await authRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
@@ -209,47 +208,15 @@ export function createServer() {
         }
       }
 
-      if (path === "/rpc/payment.createPurchase") {
-        const { allowed, retryAfterMs } = await paymentRateLimit(ip);
-        if (!allowed) {
-          return new Response(JSON.stringify({ error: "Too many requests" }), {
-            status: 429,
-            headers: {
-              "Content-Type": "application/json",
-              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
-            },
-          });
-        }
-      }
+      const rateLimitKind = matchRateLimitPath(path);
+      let limiter: ((ip: string) => Promise<RateLimitResult>) | null = null;
+      if (rateLimitKind === "payment") limiter = paymentRateLimit;
+      else if (rateLimitKind === "invite") limiter = inviteRateLimit;
+      else if (rateLimitKind === "booking") limiter = bookingRateLimit;
+      else if (rateLimitKind === "search") limiter = searchRateLimit;
 
-      if (path.startsWith("/rpc/invite.verify")) {
-        const { allowed, retryAfterMs } = await inviteRateLimit(ip);
-        if (!allowed) {
-          return new Response(JSON.stringify({ error: "Too many requests" }), {
-            status: 429,
-            headers: {
-              "Content-Type": "application/json",
-              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
-            },
-          });
-        }
-      }
-
-      if (path.startsWith("/rpc/booking.")) {
-        const { allowed, retryAfterMs } = await bookingRateLimit(ip);
-        if (!allowed) {
-          return new Response(JSON.stringify({ error: "Too many requests" }), {
-            status: 429,
-            headers: {
-              "Content-Type": "application/json",
-              "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
-            },
-          });
-        }
-      }
-
-      if (path.startsWith("/rpc/auth.students/search")) {
-        const { allowed, retryAfterMs } = await searchRateLimit(ip);
+      if (limiter) {
+        const { allowed, retryAfterMs } = await limiter(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
             status: 429,

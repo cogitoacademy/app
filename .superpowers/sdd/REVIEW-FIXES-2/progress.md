@@ -7,7 +7,7 @@ Wave plan (dispatched by a fresh agent with zero context — this ledger tracks 
 
 ## PR A — Rate limiting & request path
 
-- Task A.1 RPC rate-limit paths (R1) — status:
+- Task A.1 RPC rate-limit paths (R1) — DONE (path matching extracted to `rate-limit-paths.ts`; unit-tested via `matchRateLimitPath`; source-text test updated. Note: HTTP-level 429 loop tests hang bun test on this stack — pre-existing evlog+ioredis interaction, reproduced on main; documented in plan execution note. Also noted pre-existing env-xid/allowlist test failures from missing REDIS_URL in fixtures, out of CI scope.)
 
 ## PR B — Booking withdraw fixes
 
