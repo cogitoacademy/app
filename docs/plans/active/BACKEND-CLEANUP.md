@@ -1,11 +1,11 @@
 # Cogito Backend — Cleanup & Reliability Plan
 
-| Field      | Value                                                        |
-| ---------- | ------------------------------------------------------------ |
-| Status     | Planned — not implemented (future PRs against main)          |
-| Branch     | main (future PRs)                                            |
-| Created    | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)           |
-| Scope      | Backend-only — no behavior changes unless explicitly marked  |
+| Field   | Value                                                       |
+| ------- | ----------------------------------------------------------- |
+| Status  | Planned — not implemented (future PRs against main)         |
+| Branch  | main (future PRs)                                           |
+| Created | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)          |
+| Scope   | Backend-only — no behavior changes unless explicitly marked |
 
 Dead code, silent failure modes, and test-quality issues found during the 2026-08-14 codebase audit (dead-code scan + PRD audit). None of these change user-facing behavior; each item is independently testable. Order by severity, not by section.
 
@@ -15,19 +15,19 @@ Dead code, silent failure modes, and test-quality issues found during the 2026-0
 
 ## Summary
 
-| #   | Item                                                                                  | Severity | Type          |
-| --- | ------------------------------------------------------------------------------------- | -------- | ------------- |
-| C1  | `booking.service.ts:841` silent catch swallows meeting-creation/transition failures   | High     | **DONE** — error logged (`tutor_accept_meeting_failed`); recovery loop added via `retry-failed-meetings` job |
-| C2  | Dead DB columns + index + relations                                                   | Medium   | **DONE** — migration 0016 drops 8 dead columns/index/relations; `refundedAmount` kept (frontend displays it) |
-| C3  | Dead repo/service exports                                                             | Low      | **DONE** — removed; `resolvePublicUrl`, `initStructuredLogger`, `ENTRY_TYPE`, `transition`/`canTransition` kept (used by code or tests) |
-| C4  | Silent Redis→in-memory fallbacks emit no logs                                          | Medium   | **DONE** — `logRedisFallback` warn on configured-Redis failures |
-| C5  | Xendit retry never retries timeout (AbortError) errors                                 | Medium   | **DONE** — default retryable + provider predicate cover AbortError/TimeoutError |
-| C6  | `achievement.service.ts:153` adminNote interpolated raw into email HTML                | Medium   | **DONE** — `escapeHtml` on adminNote |
-| C7  | `webhook-timestamp.test.ts` tests a stale local copy, not the real function           | Low      | **DONE** — moved to `apps/server/src/webhooks/timestamp.test.ts`, imports the real function |
-| C8  | `tutor-invite-onboarding.test.ts:149` `describe.skip("TC-09")` with no rationale       | Low      | **DONE** — enabled, passes against the test DB |
-| C9  | Dead re-exports (`handlers`, `redis`) from `@cogito-app/api`                           | Low      | **DONE** — `services` only |
-| C10 | Dev DB SQL logging redaction misses short secrets                                     | Medium   | **DONE** — secret-shaped params redacted |
-| C11 | `webhook-timestamp.test.ts` + docs refer to `.env.example`-undocumented env vars       | Low      | Docs          |
+| #   | Item                                                                                | Severity | Type                                                                                                                                    |
+| --- | ----------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | `booking.service.ts:841` silent catch swallows meeting-creation/transition failures | High     | **DONE** — error logged (`tutor_accept_meeting_failed`); recovery loop added via `retry-failed-meetings` job                            |
+| C2  | Dead DB columns + index + relations                                                 | Medium   | **DONE** — migration 0016 drops 8 dead columns/index/relations; `refundedAmount` kept (frontend displays it)                            |
+| C3  | Dead repo/service exports                                                           | Low      | **DONE** — removed; `resolvePublicUrl`, `initStructuredLogger`, `ENTRY_TYPE`, `transition`/`canTransition` kept (used by code or tests) |
+| C4  | Silent Redis→in-memory fallbacks emit no logs                                       | Medium   | **DONE** — `logRedisFallback` warn on configured-Redis failures                                                                         |
+| C5  | Xendit retry never retries timeout (AbortError) errors                              | Medium   | **DONE** — default retryable + provider predicate cover AbortError/TimeoutError                                                         |
+| C6  | `achievement.service.ts:153` adminNote interpolated raw into email HTML             | Medium   | **DONE** — `escapeHtml` on adminNote                                                                                                    |
+| C7  | `webhook-timestamp.test.ts` tests a stale local copy, not the real function         | Low      | **DONE** — moved to `apps/server/src/webhooks/timestamp.test.ts`, imports the real function                                             |
+| C8  | `tutor-invite-onboarding.test.ts:149` `describe.skip("TC-09")` with no rationale    | Low      | **DONE** — enabled, passes against the test DB                                                                                          |
+| C9  | Dead re-exports (`handlers`, `redis`) from `@cogito-app/api`                        | Low      | **DONE** — `services` only                                                                                                              |
+| C10 | Dev DB SQL logging redaction misses short secrets                                   | Medium   | **DONE** — secret-shaped params redacted                                                                                                |
+| C11 | `webhook-timestamp.test.ts` + docs refer to `.env.example`-undocumented env vars    | Low      | Docs                                                                                                                                    |
 
 ---
 
@@ -47,6 +47,7 @@ try {
 **Problem:** every error inside the try is swallowed with no log. If `meeting.createEvent()` throws (rather than returning `{ status: "failed" }`), the booking silently stays `CONFIRMED` with no meeting link and no error record, then sends the "Booking accepted" notification to the proposer. This is revenue/UX critical and invisible in prod telemetry.
 
 **Fix:**
+
 1. Log the error (`log({ level: "error", action: "tutor_accept_meeting_failed", ... })`) inside the catch — **do not** change the fallback-to-reload behavior (accept must not fail because Meet is down).
 2. Ensure the meeting provider's failure path returns `{ status: "failed", errorReason }` instead of throwing (verify `google-meeting.provider.ts` — the circuit breaker may throw; if so, catch at the provider boundary and record the `meetingEvent` failure row).
 
@@ -58,16 +59,16 @@ try {
 
 Verified unused by `rg` across the entire repo (schema-only definitions, no reads/writes in services/repos):
 
-| Column                                                                 | Schema location          | Notes                                                              |
-| ---------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------ |
+| Column                                                                         | Schema location             | Notes                                                             |
+| ------------------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------------- |
 | `booking.seriesParentId` (+ index + `seriesParent`/`seriesChildren` relations) | `booking.ts:88,133,412-419` | Series children link via `bookingSession.seriesBookingId` instead |
-| `booking.refundedAmount`                                                | `booking.ts:81`          | Never read/written                                                 |
-| `booking.notificationFlags`                                             | `booking.ts:86-87`       | Never read/written                                                 |
-| `booking.rescheduleMeta`                                                | `booking.ts:84`          | Never read/written                                                 |
-| `bookingParticipant.heldLedgerId`                                       | `booking.ts:151`         | FK never populated                                                 |
-| `meetingEvent.createdBy` (+ relation)                                   | `booking.ts:373,486-489` | Never written/read                                                 |
-| `notificationDispatch.providerMessageId`                                | `notification.ts:65`     | Outbox never records the provider message id                       |
-| `notificationDispatch.sentAt`                                           | `notification.ts:70`     | Never written                                                      |
+| `booking.refundedAmount`                                                       | `booking.ts:81`             | Never read/written                                                |
+| `booking.notificationFlags`                                                    | `booking.ts:86-87`          | Never read/written                                                |
+| `booking.rescheduleMeta`                                                       | `booking.ts:84`             | Never read/written                                                |
+| `bookingParticipant.heldLedgerId`                                              | `booking.ts:151`            | FK never populated                                                |
+| `meetingEvent.createdBy` (+ relation)                                          | `booking.ts:373,486-489`    | Never written/read                                                |
+| `notificationDispatch.providerMessageId`                                       | `notification.ts:65`        | Outbox never records the provider message id                      |
+| `notificationDispatch.sentAt`                                                  | `notification.ts:70`        | Never written                                                     |
 
 **Fix:** remove the columns from the schema files, run `bun run db:generate` to produce a migration (`DROP COLUMN`), inspect the generated SQL, and apply. **Pre-production only** — no deployed data exists (CD is broken; see `docs/RUNBOOK.md`). Keep `booking.timezone` (accepted dead state K6) and `ledgerEntry.balanceAfterWalletTotal/Held` (write-only audit snapshot — intentionally retained).
 
@@ -79,23 +80,23 @@ Verified unused by `rg` across the entire repo (schema-only definitions, no read
 
 Verified unused outside their defining file:
 
-| Symbol                                             | Location                          | Action |
-| -------------------------------------------------- | --------------------------------- | ------ |
-| `insert()` (wallet)                                | `wallet.repo.ts:68,398`           | Remove + factory entry |
-| `updateBalances()` (wallet)                        | `wallet.repo.ts:97,399`           | Remove + factory entry |
-| `updateDispatchStatus(notificationId, status)`     | `notification.repo.ts:134,323`    | Remove (outbox uses `updateDispatchStatusById`) |
-| `findDispatch()`                                   | `notification.repo.ts:306,336`    | Remove |
-| `updateRole()` (admin)                             | `admin.repo.ts:82,123`            | Remove (service uses `updateRoleWithExpected`) |
-| `deleteRow()` (achievement)                        | `achievement.repo.ts:182,261`     | Remove (service uses `deleteWithVersion`) |
-| `initStructuredLogger()`                           | `lib/logger.ts:15`                | Check test usage; remove if only tests use it (update tests to `log`) |
-| `SESSION_DURATION_MINUTES`                         | `shared/constants.ts:15`          | Verify with `rg` before removing |
-| `COGITO_TAKE_RATE`                                 | `shared/constants.ts:21`          | Verify with `rg` before removing (pricing uses baseline-split tables) |
-| `PAYMENT_PROVIDER_NAME`                            | `shared/constants.ts:170-175`     | Remove |
-| `MEETING_PROVIDER`                                 | `shared/constants.ts:177-183`     | Remove |
-| `ENTRY_TYPE`                                       | `shared/constants.ts:193-201`     | Remove |
-| `resolvePublicUrl()` (upload)                      | `upload.service.ts:49-53`         | Remove (or keep if U-frontend plans to use it — decide) |
+| Symbol                                                      | Location                       | Action                                                                                                        |
+| ----------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `insert()` (wallet)                                         | `wallet.repo.ts:68,398`        | Remove + factory entry                                                                                        |
+| `updateBalances()` (wallet)                                 | `wallet.repo.ts:97,399`        | Remove + factory entry                                                                                        |
+| `updateDispatchStatus(notificationId, status)`              | `notification.repo.ts:134,323` | Remove (outbox uses `updateDispatchStatusById`)                                                               |
+| `findDispatch()`                                            | `notification.repo.ts:306,336` | Remove                                                                                                        |
+| `updateRole()` (admin)                                      | `admin.repo.ts:82,123`         | Remove (service uses `updateRoleWithExpected`)                                                                |
+| `deleteRow()` (achievement)                                 | `achievement.repo.ts:182,261`  | Remove (service uses `deleteWithVersion`)                                                                     |
+| `initStructuredLogger()`                                    | `lib/logger.ts:15`             | Check test usage; remove if only tests use it (update tests to `log`)                                         |
+| `SESSION_DURATION_MINUTES`                                  | `shared/constants.ts:15`       | Verify with `rg` before removing                                                                              |
+| `COGITO_TAKE_RATE`                                          | `shared/constants.ts:21`       | Verify with `rg` before removing (pricing uses baseline-split tables)                                         |
+| `PAYMENT_PROVIDER_NAME`                                     | `shared/constants.ts:170-175`  | Remove                                                                                                        |
+| `MEETING_PROVIDER`                                          | `shared/constants.ts:177-183`  | Remove                                                                                                        |
+| `ENTRY_TYPE`                                                | `shared/constants.ts:193-201`  | Remove                                                                                                        |
+| `resolvePublicUrl()` (upload)                               | `upload.service.ts:49-53`      | Remove (or keep if U-frontend plans to use it — decide)                                                       |
 | `transition`/`canTransition` on the returned service object | `booking.service.ts:2703-2735` | Remove from the returned object (keep local `transition`); `canTransition` is an import re-exported — drop it |
-| `BookingTransition` interface                      | `booking-state.types.ts:35`       | Remove (booking.service defines its own) |
+| `BookingTransition` interface                               | `booking-state.types.ts:35`    | Remove (booking.service defines its own)                                                                      |
 
 **Test:** `bun run check-types` + full suite (any test importing a removed symbol fails loudly).
 
@@ -118,6 +119,7 @@ Verified unused outside their defining file:
 **Location:** `xendit-payment.provider.ts:79-103` passes `retryable: (err) => err instanceof TypeError` to `retryWithBackoff`, but `fetchWithTimeout` (`lib/retry.ts:50`) aborts via `AbortController` → the rejection is a `DOMException` named `AbortError`, **not** a `TypeError`. Network timeouts therefore never retry despite the 3-attempt wrapper.
 
 **Fix:**
+
 1. `lib/retry.ts` — extend the default `retryable` to also match `err?.name === "AbortError"` (and optionally `"TimeoutError"`/message containing `abort`/`timeout`).
 2. `xendit-payment.provider.ts` — use the updated default (or pass the same predicate).
 3. Same check for `resend-email.provider.ts` and `google-meeting.provider.ts` timeout paths.
@@ -141,6 +143,7 @@ Verified unused outside their defining file:
 **Location:** `packages/api/src/tests/unit/webhook-timestamp.test.ts:9-24` re-implements `validateWebhookTimestamp` inline instead of importing the real function from `apps/server/src/webhooks/payments.ts` — it passes even if the real implementation breaks.
 
 **Fix:**
+
 1. Export `validateWebhookTimestamp` from `apps/server/src/webhooks/payments.ts` (currently local).
 2. Move/replace the test with a file next to the implementation (`apps/server/src/webhooks/`) importing the real function.
 3. Delete the stale copy.
@@ -182,6 +185,7 @@ Verified unused outside their defining file:
 ## C11: Undocumented/awkward env-var docs (Low)
 
 **Items:**
+
 1. `apps/server/.env.example` documents `WEBHOOK_ALLOWED_IPS` (default: allow all IPs when empty — the allowlist is off by default; only signature verification gates webhooks). Add a warning comment that leaving it empty disables IP gating.
 2. `.env.example` is missing `GOOGLE_MEET_ENABLED` semantics notes (already present) and `SCHEDULER_ENABLED` — verify and add.
 3. `docs/RUNBOOK.md` "Rollback a Deployment" references `cogito-app:previous` docker tag naming that no longer matches the GHCR image names (`ghcr.io/cogitoacademy/app/server`). Update.
