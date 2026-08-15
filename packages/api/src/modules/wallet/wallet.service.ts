@@ -413,10 +413,14 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
   }
 
   /**
-   * Checks whether a user's available balance meets the Knowledge Bank threshold.
+   * Checks whether a user's total balance meets the Knowledge Bank threshold.
+   *
+   * Per PRD DL-16, held Marks (committed to bookings) count toward the
+   * 35-Mark threshold, so eligibility uses `totalBalance`, not the available
+   * balance (U13).
    *
    * @param userId - the user to check
-   * @returns eligibility, the available balance, and the threshold
+   * @returns eligibility, the total balance, and the threshold
    */
   async function knowledgeBankEligible(userId: string) {
     const w = await repo.getByUserId(db, userId);
@@ -428,8 +432,8 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
       };
     }
     return {
-      eligible: w.availableBalance >= KNOWLEDGE_BANK_THRESHOLD,
-      balance: w.availableBalance,
+      eligible: w.totalBalance >= KNOWLEDGE_BANK_THRESHOLD,
+      balance: w.totalBalance,
       threshold: KNOWLEDGE_BANK_THRESHOLD,
     };
   }

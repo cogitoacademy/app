@@ -29,7 +29,7 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 | U10 | Achievement submission fields match PRD (issuer, visibility, enum category) | FR-18 (prd.tex:1004-1014) | Low      | achievement   | Not implemented                                                                          |
 | U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | **Closed** — implemented by BACKEND-REVIEW-HARDENING M4 (`fix/backend-review-hardening`) |
 | U12 | Offline room approval deadline rule (12h window)                            | DL-25 (prd.tex:853)       | Low      | booking       | Deviation (deadline = session start)                                                     |
-| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | Not implemented (carried from phase-2 Task 5.2)                                          |
+| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | **Implemented (REVIEW-FIXES-2 PR F)**                                                                                                  |
 | U14 | Offline room availability integrated into booking creation (G13)            | FR-22, TC-20              | Low      | room/booking  | Not implemented                                                                          |
 
 ---
@@ -265,9 +265,11 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U13: Knowledge Bank eligibility uses total balance (B4, from BACKEND-HARDENING-PHASE2 Task 5.2)
 
+**Status: IMPLEMENTED** (REVIEW-FIXES-2 PR F) — `knowledgeBankEligible` (`wallet.service.ts:421-435`) now compares and returns `totalBalance`; held Marks count toward the 35-Mark threshold. Spec below retained as reference.
+
 **PRD DL-16 / FR-12:** KB eligibility = login + **≥ 35 total Marks** (total balance, not available).
 
-**Current state:** `knowledgeBankEligible` (`wallet.service.ts:421-435`) compares `availableBalance`. Held Marks (committed to bookings) should count toward the 35-Mark threshold.
+**Current state (at the time of writing):** `knowledgeBankEligible` (`wallet.service.ts:421-435`) compares `availableBalance`. Held Marks (committed to bookings) should count toward the 35-Mark threshold.
 
 **Required:**
 

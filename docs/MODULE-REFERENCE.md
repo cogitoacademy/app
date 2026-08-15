@@ -661,7 +661,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `credit(db, params)` — Atomically credits available balance (payment received)
 - `compensate(db, params)` — Compensation operation (positive or negative)
 - `listLedger(walletId, opts)` — Paginated ledger with `bookingId` and `eventKey` filters
-- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; **known bug B4** — uses `availableBalance` instead of total balance (`wallet.service.ts:431`); tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`
+- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, PRD DL-16 / U13)
 - `listActivePackages()` — Returns active mark packages
 
 **Dependencies:** `WalletRepo`

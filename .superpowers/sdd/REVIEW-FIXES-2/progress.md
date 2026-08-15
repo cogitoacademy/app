@@ -40,5 +40,5 @@ Wave plan (dispatched by a fresh agent with zero context — this ledger tracks 
 
 ## PR F — Small PRD gaps
 
-- Task F.1 KB total balance (U13) — status:
+- Task F.1 KB total balance (U13) — DONE (knowledgeBankEligible compares/returns totalBalance; held marks count toward the 35 threshold; unit + handler + integration green)
 - Task F.2 group-series withdraw guard (U4) — status:

@@ -646,9 +646,9 @@ Commit per file group: `test(api): raise <module> coverage above 90%`
 - Modify: `packages/api/src/modules/wallet/wallet.service.ts:421-435`
 - Modify: `packages/api/src/tests/unit/wallet.service.test.ts`, `wallet.handler.test.ts`
 
-- [ ] **Step 1:** Add the failing case: wallet with `availableBalance: 30`, `heldBalance: 10` (`totalBalance: 40`) → `knowledgeBankEligible` returns `eligible: true`.
-- [ ] **Step 2:** Change `knowledgeBankEligible` to compare and return `totalBalance` (both `eligible` and `balance` fields).
-- [ ] **Step 3:** Commit `fix(wallet): Knowledge Bank eligibility uses total balance (U13)`
+- [x] **Step 1:** Add the failing case: wallet with `availableBalance: 30`, `heldBalance: 10` (`totalBalance: 40`) → `knowledgeBankEligible` returns `eligible: true`.
+- [x] **Step 2:** Change `knowledgeBankEligible` to compare and return `totalBalance` (both `eligible` and `balance` fields).
+- [x] **Step 3:** Commit `fix(wallet): Knowledge Bank eligibility uses total balance (U13)`
 
 ### Task F.2: Group-series withdraw guard (U4)
 
