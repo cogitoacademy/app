@@ -20,7 +20,7 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 | U1  | Admin manual meeting-link entry                                             | FR-21, TC-36              | Medium   | meeting       | Not implemented                                                                          |
 | U2  | Student self-service reschedule before H-2                                  | FR-14, TC-15              | Medium   | booking       | Not implemented                                                                          |
 | U3  | Reconfirmation-deadline repricing for still-valid partial headcount         | FR-16, TC-18              | High     | booking       | Not implemented                                                                          |
-| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | **Implemented (REVIEW-FIXES-2 PR F)**                                                                                             |
+| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | **Implemented (REVIEW-FIXES-2 PR F)**                                                    |
 | U5  | Per-participant no-show marking for series sessions                         | FR-20, TC-30              | Medium   | booking       | Not implemented                                                                          |
 | U6  | Admin per-session series cancel with Marks-return choice                    | FR-20, TC-31              | Medium   | admin-booking | Not implemented                                                                          |
 | U7  | Per-session tutor reschedule within a series                                | FR-20, TC-33              | Low      | booking       | Not implemented                                                                          |
@@ -29,7 +29,7 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 | U10 | Achievement submission fields match PRD (issuer, visibility, enum category) | FR-18 (prd.tex:1004-1014) | Low      | achievement   | Not implemented                                                                          |
 | U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | **Closed** — implemented by BACKEND-REVIEW-HARDENING M4 (`fix/backend-review-hardening`) |
 | U12 | Offline room approval deadline rule (12h window)                            | DL-25 (prd.tex:853)       | Low      | booking       | Deviation (deadline = session start)                                                     |
-| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | **Implemented (REVIEW-FIXES-2 PR F)**                                                                                                  |
+| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | **Implemented (REVIEW-FIXES-2 PR F)**                                                    |
 | U14 | Offline room availability integrated into booking creation (G13)            | FR-22, TC-20              | Low      | room/booking  | Not implemented                                                                          |
 
 ---
