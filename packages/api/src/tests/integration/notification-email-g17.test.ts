@@ -259,4 +259,57 @@ describe("Notification email matrix (G17)", () => {
     expect(result).toHaveProperty("sent");
     expect(result).toHaveProperty("failed");
   });
+
+  test("stale sending dispatch at the attempts budget is NOT reclaimed (R6)", async () => {
+    const { services } = await import("@cogito-app/api/services");
+
+    const [notifRow] = await db
+      .insert(notificationTable)
+      .values({
+        userId: studentId,
+        category: "booking",
+        title: "R6 test",
+        body: "R6 stale-sending test",
+        severity: "info",
+        eventKey: `r6.stale.${Date.now()}`,
+      })
+      .returning();
+
+    const staleAtBudget = await db
+      .insert(notificationDispatch)
+      .values({
+        notificationId: notifRow!.id,
+        channel: "email",
+        recipientEmail: "stale-budget@cogito.test",
+        status: "sending",
+        attempts: 3,
+        createdAt: new Date(Date.now() - 15 * 60 * 1000),
+      })
+      .returning();
+    const staleUnderBudget = await db
+      .insert(notificationDispatch)
+      .values({
+        notificationId: notifRow!.id,
+        channel: "email",
+        recipientEmail: "stale-under-budget@cogito.test",
+        status: "sending",
+        attempts: 1,
+        createdAt: new Date(Date.now() - 15 * 60 * 1000),
+      })
+      .returning();
+
+    await services.notification.dispatchQueuedEmails(50);
+
+    const [afterBudget] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.id, staleAtBudget![0].id));
+    const [afterUnder] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.id, staleUnderBudget![0].id));
+
+    expect(afterBudget!.status).toBe("sending");
+    expect(afterUnder!.status).not.toBe("sending");
+  });
 });

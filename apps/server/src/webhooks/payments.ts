@@ -89,7 +89,11 @@ export function paymentsWebhook(app: Elysia) {
         validateWebhookTimestamp(request);
 
         const idempotencyKey = `${provider}:${payload.providerEventId || "no-event-id"}`;
-        if (!(await webhookIdempotency.claim(idempotencyKey))) {
+        // Short 2-minute claim window (R7): a crash mid-processing only blocks
+        // retries for 2 minutes instead of the 24h processed-record TTL, so the
+        // provider's retry can re-process after a crash. `markProcessed` below
+        // still stores the 24h processed record for real duplicates.
+        if (!(await webhookIdempotency.claim(idempotencyKey, 120))) {
           set.status = 200;
           return { ok: true, idempotent: true };
         }

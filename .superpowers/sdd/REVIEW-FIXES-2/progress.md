@@ -21,10 +21,10 @@ Wave plan (dispatched by a fresh agent with zero context — this ledger tracks 
 
 ## PR D — Reliability
 
-- Task D.1 outbox reclaim attempts gate (R6) — status:
-- Task D.2 webhook idempotency short TTL (R7) — status:
-- Task D.3 waitForMeetUrl keeps created event (R8) — status:
-- Task D.4 escape eventName + seed-invite print (R9/R10) — status:
+- Task D.1 outbox reclaim attempts gate (R6) — DONE (SQL stale branch requires attempts < MAX_DISPATCH_ATTEMPTS; integration test in notification-email-g17)
+- Task D.2 webhook idempotency short TTL (R7) — DONE (claim(key, 120); new webhook-idempotency-ttl.test.ts with mocked services)
+- Task D.3 waitForMeetUrl keeps created event (R8) — DONE (try/catch around poll; warn log; row stays 'created' with meetingUrl null; unit test)
+- Task D.4 escape eventName + seed-invite print (R9/R10) — DONE (escapeHtml on eventName in adminReview body; seed-invite prints fresh-invite hint instead of the hash; 3 unit tests; note: existing achievement mocks needed eventName added)
 
 ## PR E — Coverage hardening
 

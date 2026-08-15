@@ -221,6 +221,44 @@ describe("createGoogleMeetingProvider", () => {
     expect(errorLog).toBeDefined();
   });
 
+  test("createEvent keeps the created event when the URL poll fails (R8)", async () => {
+    // Insert succeeds but returns no conferenceData, so createEvent must poll
+    // for the Meet URL — and the poll throws.
+    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+      data: { id: "evt_123" },
+    }));
+    mockCalendarEventsGet.mockImplementation(async () => {
+      throw new Error("poll network error");
+    });
+
+    const createdRow = {
+      id: "me1",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: "evt_123",
+      meetingUrl: null,
+      status: "created",
+      errorReason: null,
+    };
+
+    const returning = mock(async () => [createdRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { insert } as any;
+
+    const provider = createGoogleMeetingProvider(config, db);
+    const result = await provider.createEvent("b1");
+
+    // The event was created on Google's side — a poll failure must not turn
+    // the row into `failed` (that would cause a duplicate event on retry).
+    expect(result.status).toBe("created");
+    expect(result.externalEventId).toBe("evt_123");
+    expect(result.meetingUrl).toBeNull();
+    expect(insert).toHaveBeenCalledTimes(1);
+    const insertValues = values.mock.calls[0][0] as Record<string, unknown>;
+    expect(insertValues.status).toBe("created");
+  });
+
   test("createEvent creates event with OAuth refresh token flow", async () => {
     const config = {
       authType: "oauth_refresh_token" as const,

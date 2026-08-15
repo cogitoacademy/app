@@ -1,6 +1,6 @@
 # Backend Review Fixes 2 — Implementation Plan
 
-> **STATUS: ACTIVE — execution in progress on branch `fix/review-fixes-2` (worktree `wt-review-fixes2`).** PR A (R1) landed — path matching extracted to `rate-limit-paths.ts`. Wave-2 findings from the 2026-08-15 codebase review (post-#48): 10 code findings (R1–R10), 9 files below the 90% coverage target, and 2 small PRD gaps pulled in (U13, U4). Verified at git HEAD `30f805e` (merge of #48).
+> **STATUS: ACTIVE — execution in progress on branch `fix/review-fixes-2` (worktree `wt-review-fixes2`).** PR A (R1), PR B (R2/R3), PR C (R4/R5), PR D (R6–R10) landed. Wave-2 findings from the 2026-08-15 codebase review (post-#48): 10 code findings (R1–R10), 9 files below the 90% coverage target, and 2 small PRD gaps pulled in (U13, U4). Verified at git HEAD `30f805e` (merge of #48).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -646,9 +646,9 @@ Commit per file group: `test(api): raise <module> coverage above 90%`
 - Modify: `packages/api/src/modules/wallet/wallet.service.ts:421-435`
 - Modify: `packages/api/src/tests/unit/wallet.service.test.ts`, `wallet.handler.test.ts`
 
-- [x] **Step 1:** Add the failing case: wallet with `availableBalance: 30`, `heldBalance: 10` (`totalBalance: 40`) → `knowledgeBankEligible` returns `eligible: true`.
-- [x] **Step 2:** Change `knowledgeBankEligible` to compare and return `totalBalance` (both `eligible` and `balance` fields).
-- [x] **Step 3:** Commit `fix(wallet): Knowledge Bank eligibility uses total balance (U13)`
+- [ ] **Step 1:** Add the failing case: wallet with `availableBalance: 30`, `heldBalance: 10` (`totalBalance: 40`) → `knowledgeBankEligible` returns `eligible: true`.
+- [ ] **Step 2:** Change `knowledgeBankEligible` to compare and return `totalBalance` (both `eligible` and `balance` fields).
+- [ ] **Step 3:** Commit `fix(wallet): Knowledge Bank eligibility uses total balance (U13)`
 
 ### Task F.2: Group-series withdraw guard (U4)
 
@@ -659,9 +659,9 @@ Commit per file group: `test(api): raise <module> coverage above 90%`
 - Modify: `packages/api/src/modules/booking/booking.router.ts` + `booking.handler.ts` (map the error via `mapBookingError` — check the handler's error mapper)
 - Test: `packages/api/src/tests/unit/booking.service.test.ts` + integration
 
-- [x] **Step 1:** Failing test: confirmed group-series participant calls `withdraw` → rejected with the new error; solo-series withdraw still works.
-- [x] **Step 2:** Implement the guard at the top of `withdraw` (before any wallet movement): `if (b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1) throw new BookingSeriesNoOptOutError(bookingId);`
-- [x] **Step 3:** Commit `fix(booking): block group-series full-series withdrawal (U4)`
+- [ ] **Step 1:** Failing test: confirmed group-series participant calls `withdraw` → rejected with the new error; solo-series withdraw still works.
+- [ ] **Step 2:** Implement the guard at the top of `withdraw` (before any wallet movement): `if (b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1) throw new BookingSeriesNoOptOutError(bookingId);`
+- [ ] **Step 3:** Commit `fix(booking): block group-series full-series withdrawal (U4)`
 
 ---
 
