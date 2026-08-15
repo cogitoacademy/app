@@ -451,7 +451,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 **Business Rules:**
 
 - Corrections can be positive (credit) or negative (deduct)
-- Event keys use deterministic format `correction.{type}.{walletId}.{uuid}`
+- Event keys use a deterministic format `correction.{type}.{walletId}.{sha256(payload)[:32]}` — derived from the payload so a retried request can never double-apply (idempotent via the ledger unique index)
 - Every correction is audit-logged with before/after wallet state
 
 ---
@@ -630,7 +630,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 **Service Methods:**
 
 - `createUploadUrl(userId, { filename, contentType })` — Returns `{ uploadUrl, key, publicUrl, contentType, maxBytes }`; key = `{userId}/{uuid}-{sanitizedFilename}`
-- `resolvePublicUrl(key)` — Key → public URL helper (currently unused — candidate for removal, see BACKEND-CLEANUP)
+- `resolvePublicUrl(key)` — Key → public URL helper (used by `createUploadUrl` output)
 
 **Business Rules:**
 

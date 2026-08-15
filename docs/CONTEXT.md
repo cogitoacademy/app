@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ## Architecture
 
@@ -230,7 +230,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 - `createSolo`, `get`, `listMine`, `cancel`
 - `acceptReschedule`, `rejectReschedule`, `cancelSession`
 - `addSessionNote`, `getSessionNotes`
-- `createGroup`, `createSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
+- `createGroup`, `createSeries`, `createGroupSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
 - `listSessions`
 
 ### TutorActions Module (tutor)
@@ -280,7 +280,7 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
 - Cookies: sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. Same-origin subdomain sharing works because `app.cogitoacademy.id` and `cogitoacademy.id` share the same site.
 - `CogitoUser` type exported with role field.
-- **Pending (foundation hardening):** password policy (min 8, upper/lower/digit) — still open (C6); conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`). **Email verification (G2) deferred** (additive; depends on Resend wiring + frontend route).
+- **Pending (foundation hardening):** password policy — partially implemented (min 8 enforced via `minPasswordLength: 8`; upper/lower/digit rule still open — C6). Conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`). **Email verification (G2) deferred** (additive; depends on Resend wiring + frontend route).
 
 ## CI/CD
 
@@ -289,7 +289,7 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 - **Lefthook** pre-commit: oxlint + oxfmt. Pre-push: typecheck.
 - **Dependabot**: weekly npm + GitHub Actions updates.
 - **Coverage**: 90% for `packages/api`, 80% overall (after foundation hardening)
-- **Health**: `GET /health` with DB ping (Redis ping not yet implemented — see DEFERRED-OPS-TASKS 1.6)
+- **Health**: `GET /health` returns `{ status, checks: { database, redis }, timestamp }` — both DB `SELECT 1` and Redis `ping()` are checked
 - **Deployment platform**: Coolify (self-hosted PaaS on Hetzner VPS)
 - **Scheduler boot**: The BullMQ worker + 6 repeatable jobs (`expire-bookings` 5m, `release-expired-holds` 10m, `check-tutor-lateness` 5m, `send-notification-email` 60s, `escalate-support-tickets` 15m, `retry-failed-meetings` 5m — wired in `apps/server/src/scheduler.ts`) only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and the booking-expiry/hold-release/email/SLA jobs never run. `send-notification-email` consumes the email outbox (`notification.dispatchQueuedEmails`): notification writes queue dispatch rows (`status='queued'`) inside the DB transaction and the scheduler sends them, so no email I/O happens inside open transactions.
 
@@ -299,7 +299,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 
 | Plan                                                              | Branch                             | Status                                                                                                       |
 | ----------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `docs/plans/active/BACKEND-REVIEW-HARDENING.md`                   | `fix/backend-review-hardening`     | Active — 2026-08-15 review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                                |
+| `docs/plans/active/REVIEW-FIXES-2.md`                             | `chore/docs-sync` (future PRs)     | Active — wave-2 review fixes (rate limits, withdraw, uploads/payments, reliability) + coverage hardening     |
 | `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
 | `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
 | `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
@@ -307,10 +307,12 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                                                         |
 | `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                                                         |
 | `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                      | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                     |
+| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                      | Merged to main (#34–#38)                                                                                     |
 | `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                      | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness) |
+| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`     | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                             |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending                        |
-| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                  | Active — planned: 12 untracked PRD deviations (U1–U12) + B4 (U13) from the 2026-08-14 audit                  |
-| `docs/plans/active/BACKEND-CLEANUP.md`                            | main (future PR)                   | Active — planned: dead code, silent failure modes, test-quality nits                                         |
+| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                  | Active — U11 closed; U9 partial; U1–U8, U10, U12–U14 open (verified against code 2026-08-15)                 |
+| `docs/plans/active/BACKEND-CLEANUP.md`                            | main (merged)                      | Completed — all 11 items merged (2026-08-15)                                                                 |
 | `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Active — 4 closed, 3 partial, 10 open                                                                        |
 | `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                                                   |
 | `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                                                         |
@@ -324,12 +326,13 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 4. Deferred Ops Tasks (code gaps 1.1–1.8) → merged to main; §2 Redis session caching deferred
 5. PRD Gaps Backend (G1–G20) → merged to main (#35, #36, #39–#43)
 6. Backend Hardening Phase 2 (BACKEND-HARDENING-PHASE2.md, PRs 1–6) → merged to main (#46)
-7. PRD Gaps Phase 3 (PRD-GAPS-PHASE3.md — U1–U14) + Backend Cleanup (BACKEND-CLEANUP.md) → next to execute
-8. Frontend Gaps (FRONTEND-GAPS-SPEC — 10 open: F1–F3, F6, F7, F9, F11–F14; F8/F16/F17 partial) → after / parallel with #7
-9. Production Ops (DEFERRED-OPS-TASKS §3 manual verification, §4 production ops) → requires live env + Coolify
+7. Backend Review Hardening (BACKEND-REVIEW-HARDENING.md) → merged to main (#48)
+8. Review Fixes 2 (REVIEW-FIXES-2.md — rate limits, withdraw, uploads/payments, reliability, coverage) → next to execute
+9. PRD Gaps Phase 3 (PRD-GAPS-PHASE3.md — U1–U8, U10, U12–U14 open; U11 closed, U9 partial) + Frontend Gaps (FRONTEND-GAPS-SPEC) → after / parallel with #8
+10. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
-Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. The only open item from that plan is Task 5.2 (B4 — Knowledge Bank total-balance). Next: **PRD-GAPS-PHASE3 (U1–U14)** and **BACKEND-CLEANUP**, then the open frontend gaps, then production ops.
+Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). Next: **REVIEW-FIXES-2 (wave-2 findings: RPC rate-limit path bug, solo withdraw, presigned POST conditions, REFUNDED reconciliation, outbox/idempotency reliability, coverage hardening)**, then the open PRD-gap feature work, frontend gaps, then production ops.
 
 ## Role E2E Readiness Snapshot (2026-08-14)
 
@@ -358,7 +361,7 @@ The admin override queue, wallet/ledger view, override preview, room assignment 
 ### Backend Gap Groups
 
 - Ready now (merged to main): student solo/group/series booking primitives, reschedule propose/accept/reject, session notes, group invite confirm/decline/reconfirm, wallet/ledger/packages/Knowledge Bank, purchases, achievements, notifications, tutor onboarding/availability/payouts/incoming-booking actions, support tickets (G1), and the admin capabilities listed above (G8–G10, G16–G18).
-- Still open backend sub-gaps (tracked in `docs/plans/active/PRD-GAPS-PHASE3.md`): Knowledge Bank total-balance eligibility (B4/U13), offline room availability not integrated into booking creation (G13/U14), plus the 12 untracked PRD deviations found by the 2026-08-14 PRD-vs-code audit (U1–U12: manual meeting-link entry, student self-reschedule, reconfirmation-deadline repricing, group-series full withdrawal, per-participant no-show, admin per-session cancel, per-session reschedule, refund reconciliation guard, business-hours SLA windows, achievement field parity, group invitee validation, offline room deadline). Dead-code/silent-failure items tracked in `docs/plans/active/BACKEND-CLEANUP.md`.
+- Still open backend sub-gaps (tracked in `docs/plans/active/PRD-GAPS-PHASE3.md`): Knowledge Bank total-balance eligibility (B4/U13), offline room availability not integrated into booking creation (G13/U14), plus the untracked PRD deviations from the 2026-08-14 PRD-vs-code audit (U1–U8, U10, U12: manual meeting-link entry, student self-reschedule, reconfirmation-deadline repricing, group-series full withdrawal, per-participant no-show, admin per-session cancel, per-session reschedule, refund reconciliation guard, business-hours SLA windows, achievement field parity, offline room deadline — U9 partial, U11 closed). Dead-code/silent-failure items tracked in `docs/plans/active/BACKEND-CLEANUP.md` (completed).
 
 ### Current Execution Order
 
@@ -406,54 +409,54 @@ The following bugs from the production-readiness plan are **fixed** (see complet
 
 Status column: **Fixed** = verified in code on main after #17 merge; **Open** = not yet implemented.
 
-| ID  | Bug                                                                    | Priority | Story | Status                                                                                         |
-| --- | ---------------------------------------------------------------------- | -------- | ----- | ---------------------------------------------------------------------------------------------- |
-| A1  | Group booking cancel doesn't release invitee holds                     | P0       | 1     | Fixed                                                                                          |
-| A2  | Group booking tutorDecline doesn't release invitee holds               | P0       | 1     | Fixed                                                                                          |
-| A3  | expireBookings doesn't release invitee holds                           | P0       | 1     | Fixed                                                                                          |
-| A4  | withdraw→cancel doesn't release other participants' holds              | P0       | 1     | Fixed                                                                                          |
-| A5  | confirmedHeadcount not decremented on withdraw                         | P0       | 1     | Fixed                                                                                          |
-| A6  | holdAmount not zeroed on cancel/decline/expire                         | P0       | 1     | Fixed                                                                                          |
-| A7  | Series cancel doesn't cascade to bookingSession rows                   | P0       | 1     | Fixed                                                                                          |
-| B1  | RESCHEDULE_PROPOSED has no expiry — booking stuck forever              | P0       | 2     | Fixed                                                                                          |
-| B2  | AWAITING_ADMIN_ROOM_APPROVAL/SCHEDULED not in expiry cron              | P0       | 2     | Fixed                                                                                          |
-| C1  | booking.get() IDOR — no ownership check                                | P0       | 3     | Fixed                                                                                          |
-| C2  | booking.listSessions() IDOR — no ownership check                       | P0       | 3     | Fixed                                                                                          |
-| C3  | Tutor actions lack tutorProcedure role guard                           | P1       | 3     | Fixed                                                                                          |
-| C4  | resendInvite doesn't invalidate old token                              | P1       | 3     | Fixed                                                                                          |
-| C5  | OpenAPI spec exposed without auth                                      | P1       | 3     | Fixed                                                                                          |
-| C6  | No password policy                                                     | P1       | 4     | Open                                                                                           |
-| D1  | Wallet ledger insert not atomic with balance update                    | P0       | 5     | Fixed                                                                                          |
-| D2  | 8 read-then-write race conditions without optimistic lock              | P1       | 5     | Fixed                                                                                          |
-| D3  | Payment webhook out-of-order delivery — user not credited              | P0       | 5     | Fixed                                                                                          |
-| D4  | Booking creation has no idempotency key                                | P1       | 7     | Fixed                                                                                          |
-| E1  | notification.write() swallows all errors silently                      | P1       | 6     | Fixed                                                                                          |
-| E2  | Google Meet + Resend calls have no timeout                             | P1       | 6     | Fixed                                                                                          |
-| E3  | No statement_timeout on DB pool                                        | P1       | 6     | **Fixed** (`packages/db/src/index.ts:20` — `statement_timeout: 30_000`)                        |
-| E4  | No uncaughtException handler                                           | P1       | 6     | **Fixed** (`apps/server/src/index.ts:24`)                                                      |
-| E5  | Webhook timestamp validation disabled outside production               | P1       | 6     | Fixed                                                                                          |
-| F1  | Unbounded string inputs (no .max()) — DoS vector                       | P2       | 4     | Fixed                                                                                          |
-| F2  | Unbounded array inputs (no .max())                                     | P2       | 4     | Fixed                                                                                          |
-| F3  | Dates not validated to be in the future                                | P2       | 4     | Fixed                                                                                          |
-| G1  | No session expiry configured                                           | P1       | 4     | **Fixed** (`packages/auth/src/index.ts:39` — `expiresIn: 60*60*24*7`)                          |
-| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1       | 4     | Open                                                                                           |
-| G3  | Google OAuth credentials fall back to empty string                     | P2       | 4     | Fixed                                                                                          |
-| G4  | No CSRF token (sameSite=none in production)                            | P0       | 4     | Fixed (sameSite=strict in production)                                                          |
-| H1  | CSP incomplete — production-breaking (no connect-src)                  | P0       | 8     | **Fixed** (`packages/api/src/lib/security-headers.ts:15` — `connect-src 'self' ${corsOrigin}`) |
-| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk                 | P1       | 8     | Fixed                                                                                          |
-| I2  | Missing composite index for overlap check query                        | P2       | 8     | Fixed                                                                                          |
-| I3  | Dev DB logging may expose sensitive params                             | P2       | 8     | Fixed                                                                                          |
-| J1  | No React error boundary — blank page on crash                          | P1       | 9     | Fixed (`apps/web/src/components/error-boundary.tsx`)                                           |
-| J2  | No auth session expiry handling on frontend                            | P1       | 9     | Open                                                                                           |
-| J3  | 4 dead frontend components                                             | P2       | 9     | Fixed                                                                                          |
-| J4  | `any` type casts in route files                                        | P2       | 9     | Fixed                                                                                          |
-| K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     | Fixed                                                                                          |
-| K2  | No body size limit on webhook endpoints                                | P2       | 6     | Fixed                                                                                          |
-| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 4 jobs have `attempts: 3` + exponential backoff (no DLQ)                           |
-| K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states              | P3       | 2     | Accepted (dead states, no action needed)                                                       |
-| K5  | repricedMarks column is dead — never set or read                       | P3       | 2     | Accepted (dead column, no action needed)                                                       |
-| K6  | timezone field stored but never used                                   | P3       | 2     | Accepted (stored, no action needed)                                                            |
-| K7  | metrics.ts has no TTL eviction for stale path entries                  | P3       | 9     | Open                                                                                           |
+| ID  | Bug                                                                    | Priority | Story | Status                                                                                             |
+| --- | ---------------------------------------------------------------------- | -------- | ----- | -------------------------------------------------------------------------------------------------- |
+| A1  | Group booking cancel doesn't release invitee holds                     | P0       | 1     | Fixed                                                                                              |
+| A2  | Group booking tutorDecline doesn't release invitee holds               | P0       | 1     | Fixed                                                                                              |
+| A3  | expireBookings doesn't release invitee holds                           | P0       | 1     | Fixed                                                                                              |
+| A4  | withdraw→cancel doesn't release other participants' holds              | P0       | 1     | Fixed                                                                                              |
+| A5  | confirmedHeadcount not decremented on withdraw                         | P0       | 1     | Fixed                                                                                              |
+| A6  | holdAmount not zeroed on cancel/decline/expire                         | P0       | 1     | Fixed                                                                                              |
+| A7  | Series cancel doesn't cascade to bookingSession rows                   | P0       | 1     | Fixed                                                                                              |
+| B1  | RESCHEDULE_PROPOSED has no expiry — booking stuck forever              | P0       | 2     | Fixed                                                                                              |
+| B2  | AWAITING_ADMIN_ROOM_APPROVAL/SCHEDULED not in expiry cron              | P0       | 2     | Fixed                                                                                              |
+| C1  | booking.get() IDOR — no ownership check                                | P0       | 3     | Fixed                                                                                              |
+| C2  | booking.listSessions() IDOR — no ownership check                       | P0       | 3     | Fixed                                                                                              |
+| C3  | Tutor actions lack tutorProcedure role guard                           | P1       | 3     | Fixed                                                                                              |
+| C4  | resendInvite doesn't invalidate old token                              | P1       | 3     | Fixed                                                                                              |
+| C5  | OpenAPI spec exposed without auth                                      | P1       | 3     | Fixed                                                                                              |
+| C6  | No password policy                                                     | P1       | 4     | Partial — `minPasswordLength: 8` enforced; upper/lower/digit rule open (tracked in REVIEW-FIXES-2) |
+| D1  | Wallet ledger insert not atomic with balance update                    | P0       | 5     | Fixed                                                                                              |
+| D2  | 8 read-then-write race conditions without optimistic lock              | P1       | 5     | Fixed                                                                                              |
+| D3  | Payment webhook out-of-order delivery — user not credited              | P0       | 5     | Fixed                                                                                              |
+| D4  | Booking creation has no idempotency key                                | P1       | 7     | Fixed                                                                                              |
+| E1  | notification.write() swallows all errors silently                      | P1       | 6     | Fixed                                                                                              |
+| E2  | Google Meet + Resend calls have no timeout                             | P1       | 6     | Fixed                                                                                              |
+| E3  | No statement_timeout on DB pool                                        | P1       | 6     | **Fixed** (`packages/db/src/index.ts:20` — `statement_timeout: 30_000`)                            |
+| E4  | No uncaughtException handler                                           | P1       | 6     | **Fixed** (`apps/server/src/index.ts:24`)                                                          |
+| E5  | Webhook timestamp validation disabled outside production               | P1       | 6     | Fixed                                                                                              |
+| F1  | Unbounded string inputs (no .max()) — DoS vector                       | P2       | 4     | Fixed                                                                                              |
+| F2  | Unbounded array inputs (no .max())                                     | P2       | 4     | Fixed                                                                                              |
+| F3  | Dates not validated to be in the future                                | P2       | 4     | Fixed                                                                                              |
+| G1  | No session expiry configured                                           | P1       | 4     | **Fixed** (`packages/auth/src/index.ts:39` — `expiresIn: 60*60*24*7`)                              |
+| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1       | 4     | Open                                                                                               |
+| G3  | Google OAuth credentials fall back to empty string                     | P2       | 4     | Fixed                                                                                              |
+| G4  | No CSRF token (sameSite=none in production)                            | P0       | 4     | Fixed (sameSite=strict in production)                                                              |
+| H1  | CSP incomplete — production-breaking (no connect-src)                  | P0       | 8     | **Fixed** (`packages/api/src/lib/security-headers.ts:15` — `connect-src 'self' ${corsOrigin}`)     |
+| I1  | findBookingsExpiringByDeadline has no LIMIT — OOM risk                 | P1       | 8     | Fixed                                                                                              |
+| I2  | Missing composite index for overlap check query                        | P2       | 8     | Fixed                                                                                              |
+| I3  | Dev DB logging may expose sensitive params                             | P2       | 8     | Fixed                                                                                              |
+| J1  | No React error boundary — blank page on crash                          | P1       | 9     | Fixed (`apps/web/src/components/error-boundary.tsx`)                                               |
+| J2  | No auth session expiry handling on frontend                            | P1       | 9     | Open                                                                                               |
+| J3  | 4 dead frontend components                                             | P2       | 9     | Fixed                                                                                              |
+| J4  | `any` type casts in route files                                        | P2       | 9     | Fixed                                                                                              |
+| K1  | No constant-time comparison for signatures/tokens                      | P2       | 6     | Fixed                                                                                              |
+| K2  | No body size limit on webhook endpoints                                | P2       | 6     | Fixed                                                                                              |
+| K3  | Scheduler jobs have no retry attempts                                  | P2       | 8     | Fixed — all 6 repeatable jobs have `attempts: 3` + exponential backoff (no DLQ)                    |
+| K4  | DRAFT and AWAITING_MARKS_HOLD are unreachable dead states              | P3       | 2     | Accepted (dead states, no action needed)                                                           |
+| K5  | repricedMarks column is dead — never set or read                       | P3       | 2     | Accepted (dead column, no action needed)                                                           |
+| K6  | timezone field stored but never used                                   | P3       | 2     | Accepted (stored, no action needed)                                                                |
+| K7  | metrics.ts has no TTL eviction for stale path entries                  | P3       | 9     | Fixed — `lib/metrics.ts` evicts entries older than 10 min (cleanup every 60s)                      |
 
 ### 2026-08-14 audit additions (implemented in `docs/plans/completed/BACKEND-HARDENING-PHASE2.md` via PR #46)
 
@@ -479,11 +482,26 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B6/B8/B9 are **Fixed
 - ✅ `PAYMENT_PROVIDER=xendit` requires Xendit credentials (no silent stub fallback)
 - ✅ Unbounded `reason` inputs bounded (`.max(500)`) + `escapeHtml` in email bodies (adminNote interpolation tracked in BACKEND-CLEANUP)
 - ✅ OpenAPI spec auth-gated in non-production; read-time body-size enforcement (413)
-- Remaining: no invite/booking creation rate limits apply to `/api/auth/*`; password policy (C6) still open.
+- Remaining: **RPC rate-limit path bug** — `routes.ts` matches dotted paths (`/rpc/payment.createPurchase`, `/rpc/invite.verify`, `/rpc/booking.`, `/rpc/auth.students/search`) but real oRPC URLs are slash-separated procedure keys (`/rpc/payment/createPurchase`, …) so those limits never fire (only the `/api/auth/*` limit works). Tracked in REVIEW-FIXES-2. Password policy upper/lower/digit (C6) still open.
+
+### 2026-08-15 wave-2 findings (tracked in `docs/plans/active/REVIEW-FIXES-2.md`)
+
+| ID  | Severity | Finding                                                                                                                                                                                      | Location                                                         |
+| --- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| R1  | HIGH     | RPC rate-limit paths use dotted keys; real URLs are slash keys — limits never fire                                                                                                           | `routes.ts:212-251`                                              |
+| R2  | HIGH     | Solo `withdraw` from CONFIRMED/SCHEDULED → `AWAITING_RECONFIRMATION` instead of CANCELLED (hold not zeroed, Meet link not cancelled, withdrawn student can reconfirm into a no-hold booking) | `booking.service.ts:2069-2081`                                   |
+| R3  | HIGH     | `meeting.cancelEvent` inside the withdraw tx isn't rolled back if the reprice throws                                                                                                         | `booking.service.ts:2049`                                        |
+| R4  | MED      | Presigned POST policy omits `x-amz-algorithm/credential/date` conditions — R2/S3 reject unmatched form fields                                                                                | `storage.ts:65-73`                                               |
+| R5  | MED      | REFUNDED webhook keeps credited marks; `mapXenditStatus` lacks REFUNDED (real Xendit refund 500s)                                                                                            | `payment.service.ts:270-293`, `xendit-payment.provider.ts:35-46` |
+| R6  | MED      | Outbox stale-`sending` reclaim ignores the attempts budget                                                                                                                                   | `notification.repo.ts:190-196`                                   |
+| R7  | MED      | Webhook idempotency claim locks the key 24h on crash                                                                                                                                         | `idempotency.ts:69-92`, `payments.ts:91-95`                      |
+| R8  | MED      | `waitForMeetUrl` failure after successful insert → duplicate Google events on retry                                                                                                          | `google-meeting.provider.ts:542-598`                             |
+| R9  | LOW      | `eventName` unescaped in the adminReview notification body                                                                                                                                   | `achievement.service.ts:152-153`                                 |
+| R10 | LOW      | `seed-invite.ts` prints the stored token hash as if it were the plaintext                                                                                                                    | `seed-invite.ts:32`                                              |
 
 ## Redis Key Namespace Map
 
-Redis keys follow the pattern `cogito:{namespace}:{key}`. When `REDIS_URL` is set, all stateful services use Redis for persistence. Without Redis, they fall back to in-memory stores (for development and CI).
+Redis keys follow the pattern `cogito:{namespace}:{key}`. **Redis is mandatory** (`REDIS_URL` is required in the env schema since #48); all stateful services use Redis for persistence. The in-memory implementations remain only as defensive fallback code when a configured Redis call fails at runtime.
 
 | Namespace     | Key Pattern                | Used By          | TTL / Eviction               |
 | ------------- | -------------------------- | ---------------- | ---------------------------- |
@@ -491,17 +509,19 @@ Redis keys follow the pattern `cogito:{namespace}:{key}`. When `REDIS_URL` is se
 | `cogito:rl`   | `{keyPrefix}:{identifier}` | rateLimit        | Window TTL (Redis EXPIRE)    |
 | `cogito:cb`   | `{name}`                   | CircuitBreaker   | 2× resetTimeout (Redis HSET) |
 | `cogito:sess` | Better Auth managed        | Session store    | 7 days (Better Auth config)  |
-| `cogito-jobs` | BullMQ managed             | Scheduler        | Per-job repeat interval      |
 
-### In-Memory Fallback
+> `cogito:sess` is **reserved/unused** — Redis session caching is not implemented (Better Auth uses cookieCache + DB adapter; DEFERRED-OPS-TASKS §2).
+> | `cogito-jobs` | BullMQ managed | Scheduler | Per-job repeat interval |
 
-Each stateful service (`IdempotencyStore`, `rateLimit`, `CircuitBreaker`) checks for Redis availability at runtime. If `REDIS_URL` is unset or the Redis connection fails, the service transparently falls back to an in-memory implementation:
+### In-Memory Fallback (defensive only)
+
+Each stateful service (`IdempotencyStore`, `rateLimit`, `CircuitBreaker`) checks for Redis availability at runtime. If a configured Redis call fails, the service falls back to an in-memory implementation (with a warning log):
 
 - **IdempotencyStore**: `Map<string, { result, timestamp }>` with periodic cleanup and max-entries eviction.
 - **rateLimit**: `Map<string, { count, resetAt }>` with periodic cleanup and max-entries eviction.
 - **CircuitBreaker**: In-memory `state`, `failureCount`, `lastFailureTime`, `halfOpenAttempts` fields.
 
-The in-memory fallback ensures all tests pass without a Redis service in CI.
+Redis itself is mandatory (`REDIS_URL` is required); the fallback only keeps tests and degraded moments working, and only per-process.
 
 ### Adding Redis to a New Feature
 

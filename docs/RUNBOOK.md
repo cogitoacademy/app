@@ -86,15 +86,10 @@ redis-cli info server    # Server info
 
 ```bash
 curl http://localhost:3001/health
-# Returns: { "status": "ok", "db": "ok", "redis": "ok" }
+# Returns: { "status": "ok", "checks": { "database": "ok", "redis": "ok" }, "timestamp": "..." }
 ```
 
-If Redis is unavailable, the app degrades gracefully:
-
-- Sessions fall back to database lookup
-- Rate limiting uses in-memory store
-- Circuit breaker state resets on restart
-- BullMQ jobs error but app starts
+Redis is **mandatory** (`REDIS_URL` is required — the server won't boot without it). The in-memory stores are defensive fallbacks only when a configured Redis call fails at runtime; they are per-process and degrade cross-instance guarantees.
 
 ### Clear Rate Limit Keys
 
@@ -163,45 +158,40 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ### Redis Connection Errors
 
-- `ECONNREFUSED` — Redis not running. Start Redis or set `REDIS_URL` to empty for in-memory fallback.
-- App starts without Redis but with degraded features (see above).
+- `ECONNREFUSED` — Redis not running. Start it (`bun run db:start` brings up postgres + redis). Redis is required; the server fails fast on env validation if `REDIS_URL` is missing.
 
 ## Rollback a Deployment
 
-1. SSH into the server
-2. Find the current deployment: `docker ps | grep cogito`
-3. Roll back to previous image:
-   ```bash
-   docker tag cogito-app:previous cogito-app:rollback
-   docker stop cogito-app-container
-   docker run -d --name cogito-app-container cogito-app:rollback
-   ```
-4. Verify health: `curl http://localhost:3001/health`
-5. If database migration was part of the deployment, check migration status:
+Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/app/{server,web}`). Rollback is done in Coolify:
+
+1. Open the Coolify dashboard → the service (server / web)
+2. Use **Rollback to previous release** (Coolify keeps the previous image/version)
+3. Verify health: `curl https://cogitoacademy.id/health`
+4. If a database migration was part of the deployment, check migration status:
    ```bash
    bun run db:studio  # Check migration table
    ```
-6. Roll back migrations if needed (rare — coordinate with DBA)
+5. Roll back migrations if needed (rare — coordinate with DBA)
 
 ## Environment Variables
 
 Key environment variables (see `.env.example` for full list):
 
-| Variable                 | Required | Description                             |
-| ------------------------ | -------- | --------------------------------------- |
-| `DATABASE_URL`           | Yes      | PostgreSQL connection string            |
-| `BETTER_AUTH_SECRET`     | Yes      | Auth secret key                         |
-| `BETTER_AUTH_URL`        | Yes      | Base URL for auth cookies               |
-| `CORS_ORIGIN`            | Yes      | Allowed CORS origin                     |
-| `PAYMENT_WEBHOOK_SECRET` | Yes      | Xendit webhook verification token       |
-| `REDIS_URL`              | No       | Redis URL (falls back to in-memory)     |
-| `GOOGLE_CLIENT_EMAIL`    | No       | Google service account email            |
-| `GOOGLE_PRIVATE_KEY`     | No       | Google service account private key      |
-| `GOOGLE_CALENDAR_ID`     | No       | Google Calendar ID for meeting creation |
-| `RESEND_API_KEY`         | No       | Resend API key for email delivery       |
-| `RESEND_FROM_EMAIL`      | No       | Sender email address                    |
-| `XENDIT_SECRET_KEY`      | No       | Xendit API secret key                   |
-| `XENDIT_WEBHOOK_TOKEN`   | No       | Xendit webhook verification token       |
+| Variable                 | Required | Description                                         |
+| ------------------------ | -------- | --------------------------------------------------- |
+| `DATABASE_URL`           | Yes      | PostgreSQL connection string                        |
+| `BETTER_AUTH_SECRET`     | Yes      | Auth secret key                                     |
+| `BETTER_AUTH_URL`        | Yes      | Base URL for auth cookies                           |
+| `CORS_ORIGIN`            | Yes      | Allowed CORS origin                                 |
+| `PAYMENT_WEBHOOK_SECRET` | Yes      | Xendit webhook verification token                   |
+| `REDIS_URL`              | Yes      | Redis URL (required since #48 — mandatory for boot) |
+| `GOOGLE_CLIENT_EMAIL`    | No       | Google service account email                        |
+| `GOOGLE_PRIVATE_KEY`     | No       | Google service account private key                  |
+| `GOOGLE_CALENDAR_ID`     | No       | Google Calendar ID for meeting creation             |
+| `RESEND_API_KEY`         | No       | Resend API key for email delivery                   |
+| `RESEND_FROM_EMAIL`      | No       | Sender email address                                |
+| `XENDIT_SECRET_KEY`      | No       | Xendit API secret key                               |
+| `XENDIT_WEBHOOK_TOKEN`   | No       | Xendit webhook verification token                   |
 
 ## Test Environment
 
