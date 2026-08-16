@@ -94,18 +94,32 @@ async function main() {
   const repo = process.env.GITHUB_REPOSITORY;
 
   const file = Bun.file(lcovPath);
+
+  // C9: a missing/empty lcov file must fail the job — otherwise the gate
+  // silently passes when the coverage run produced nothing.
+  if (!(await file.exists())) {
+    console.error(
+      `❌ Coverage file missing: ${lcovPath} — cannot verify the coverage gate.`,
+    );
+    process.exit(1);
+  }
+
   const content = await file.text();
 
   if (!content.trim()) {
-    console.log("No coverage data found.");
-    return;
+    console.error(
+      "❌ Coverage file is empty — cannot verify the coverage gate.",
+    );
+    process.exit(1);
   }
 
   const records = parseLcov(content);
 
   if (records.length === 0) {
-    console.log("No coverage records parsed.");
-    return;
+    console.error(
+      "❌ No coverage records parsed — cannot verify the coverage gate.",
+    );
+    process.exit(1);
   }
 
   const apiRecords = records.filter((r) => isApiFile(r.file));
