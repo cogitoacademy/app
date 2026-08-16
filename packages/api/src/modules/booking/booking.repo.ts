@@ -2,6 +2,7 @@ import {
   eq,
   and,
   gte,
+  asc,
   desc,
   inArray,
   notInArray,
@@ -126,6 +127,18 @@ async function findAvailabilityWindowContaining(
       lte(availabilitySlot.startDate, startAt),
       gte(availabilitySlot.endDate, endAt),
     ),
+  });
+}
+
+async function listActiveTutorAvailability(conn: DbOrTx, tutorId: string) {
+  return conn.query.availabilitySlot.findMany({
+    where: and(
+      eq(availabilitySlot.tutorId, tutorId),
+      eq(availabilitySlot.isActive, true),
+      gte(availabilitySlot.endDate, new Date()),
+    ),
+    orderBy: [asc(availabilitySlot.startDate)],
+    limit: 100,
   });
 }
 
@@ -927,6 +940,7 @@ export function createBookingRepo(db: DbType) {
     findTutorProfile,
     findAvailabilitySlot,
     findAvailabilityWindowContaining,
+    listActiveTutorAvailability,
     findParticipant,
     findConfirmedParticipants,
     findUserEmails,

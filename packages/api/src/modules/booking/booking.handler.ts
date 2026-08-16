@@ -108,6 +108,23 @@ export function createBookingHandler(booking: BookingService) {
       );
     },
 
+    getRescheduleAvailability: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: GetBookingInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.getRescheduleAvailability(
+            input.bookingId,
+            context.session!.user.id,
+          ),
+        mapBookingError,
+      );
+    },
+
     listMine: async ({
       context,
       input,

@@ -9,6 +9,7 @@ function makeBookingService() {
   return {
     createSolo: mock(async () => ({ id: "b1" })),
     getById: mock(async () => ({ id: "b1" })),
+    getRescheduleAvailability: mock(async () => [{ id: "slot1" }]),
     listMine: mock(async () => ({ items: [] })),
     cancel: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     proposeReschedule: mock(async () => ({
@@ -112,6 +113,24 @@ describe("bookingHandler", () => {
 
       expect(booking.getById).toHaveBeenCalledWith("b1", "u1");
       expect(result).toEqual({ id: "b1" });
+    });
+  });
+
+  describe("getRescheduleAvailability", () => {
+    test("loads availability for the booking and signed-in user", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+
+      const result = await handler.getRescheduleAvailability({
+        context: makeContext("student1"),
+        input: { bookingId: "b1" },
+      });
+
+      expect(booking.getRescheduleAvailability).toHaveBeenCalledWith(
+        "b1",
+        "student1",
+      );
+      expect(result).toEqual([{ id: "slot1" }]);
     });
   });
 

@@ -501,6 +501,11 @@ export function createBookingService(deps: {
     };
   }
 
+  async function getRescheduleAvailability(bookingId: string, userId: string) {
+    const b = await loadBookingAndAssertAccess(db, userId, bookingId);
+    return repo.listActiveTutorAvailability(db, b.tutorId);
+  }
+
   /**
    * Lists bookings where the user is the proposer, with cursor pagination.
    *
@@ -3206,6 +3211,7 @@ export function createBookingService(deps: {
 
   return {
     getById,
+    getRescheduleAvailability,
     listMine,
     listForTutor,
     createSolo,

@@ -65,7 +65,6 @@ export function canProposeBookingReschedule({
 
 export function BookingRescheduleAction({
   bookingId,
-  tutorId,
   viewerRole,
   modality,
   currentStartAt,
@@ -85,20 +84,13 @@ export function BookingRescheduleAction({
   const [newTime, setNewTime] = useState("");
   const [reason, setReason] = useState("");
   const isTutor = viewerRole === "tutor";
-  const publicAvailabilityQuery = useQuery({
-    ...orpc.tutors.getProfile.queryOptions({ input: { tutorId } }),
-    enabled: open && !isTutor,
+  const availabilityQuery = useQuery({
+    ...orpc.booking.getRescheduleAvailability.queryOptions({
+      input: { bookingId },
+    }),
+    enabled: open,
   });
-  const ownAvailabilityQuery = useQuery({
-    ...orpc.tutor.listAvailability.queryOptions(),
-    enabled: open && isTutor,
-  });
-  const availabilityQuery = isTutor
-    ? ownAvailabilityQuery
-    : publicAvailabilityQuery;
-  const availabilitySlots = isTutor
-    ? (ownAvailabilityQuery.data ?? [])
-    : (publicAvailabilityQuery.data?.availabilitySlots ?? []);
+  const availabilitySlots = availabilityQuery.data ?? [];
   const slots = availabilitySlots
     .filter(
       (slot) =>

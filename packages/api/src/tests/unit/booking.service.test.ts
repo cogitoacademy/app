@@ -41,6 +41,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findTutorProfile: mock(async () => null),
     findAvailabilitySlot: mock(async () => null),
     findAvailabilityWindowContaining: mock(async () => null),
+    listActiveTutorAvailability: mock(async () => []),
     findOverlappingBookings: mock(async () => []),
     insertBooking: mock(async () => ({})),
     insertParticipant: mock(async () => {}),
@@ -427,6 +428,27 @@ describe("BookingService", () => {
       await expect(service.getById("b1", "userB")).rejects.toThrow(
         BookingNotOwnedError,
       );
+    });
+  });
+
+  describe("getRescheduleAvailability", () => {
+    test("returns the booking tutor's slots to an authorized participant", async () => {
+      const slots = [makeSlot()];
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => makeBooking()),
+          findParticipant: mock(async () => makeParticipant()),
+          listActiveTutorAvailability: mock(async () => slots),
+        },
+      });
+
+      const result = await service.getRescheduleAvailability("b1", "student1");
+
+      expect(repo.listActiveTutorAvailability).toHaveBeenCalledWith(
+        expect.anything(),
+        "tutor1",
+      );
+      expect(result).toEqual(slots);
     });
   });
 

@@ -411,6 +411,14 @@ The web dashboard has no aggregate endpoint. Its role-specific views compose exi
 - **Output:** `{ booking }`
 - **Description:** Records one acceptance on the active proposal. Partial acceptance does not change the schedule; unanimous tutor + active-student acceptance applies the proposed 90-minute time and restores the booking state that was active before the proposal.
 
+### `booking.getRescheduleAvailability`
+
+- **RPC path:** `/rpc/booking/getRescheduleAvailability`
+- **Auth:** Protected; booking tutor, proposer, or participant
+- **Input:** `{ bookingId }`
+- **Output:** `AvailabilitySlot[]`
+- **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility.
+
 ### `booking.rejectReschedule`
 
 - **Auth:** Protected; required tutor or active student voter

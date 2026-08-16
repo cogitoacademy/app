@@ -53,6 +53,18 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(getBookingInput)
       .handler(handler.get),
 
+    getRescheduleAvailability: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/reschedule/availability",
+        tags: ["Bookings"],
+        summary: "List tutor availability for rescheduling",
+        description:
+          "Returns active tutor availability to booking participants",
+      })
+      .input(getBookingInput)
+      .handler(handler.getRescheduleAvailability),
+
     listMine: studentProcedure
       .route({
         method: "POST",
