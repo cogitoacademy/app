@@ -86,7 +86,14 @@ export async function insertPayment(
   conn: DbOrTx,
   values: typeof paymentRecord.$inferInsert,
 ) {
-  await conn.insert(paymentRecord).values(values);
+  // B6: the provider reference is unique — a concurrent writer that already
+  // inserted the same reference (check-then-insert race) is a no-op.
+  const [inserted] = await conn
+    .insert(paymentRecord)
+    .values(values)
+    .onConflictDoNothing({ target: paymentRecord.providerReference })
+    .returning();
+  return inserted ?? null;
 }
 
 /**

@@ -144,6 +144,42 @@ describe("PaymentService", () => {
       expect(result.providerReference).toBe("stub:user1:pkg1");
     });
 
+    test("B6: createIntent reuses the existing row when its insert conflicts (check-then-insert race)", async () => {
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        // The pre-check misses the row (race window), the insert loses the
+        // unique provider_reference conflict, and the re-read finds the
+        // winner's PENDING row — createIntent must reuse it.
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay_winner",
+          status: "PENDING",
+          walletId: "w1",
+          providerReference: "stub:user1:pkg1",
+        })),
+        insertPayment: mock(async () => null),
+      });
+      const db = makeDb();
+
+      const service = createPaymentService({
+        db,
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+      expect(result.paymentId).toBe("pay_winner");
+      expect(result.providerReference).toBe("stub:user1:pkg1");
+      expect(result.checkoutUrl).toBeDefined();
+    });
+
     test("createIntent re-purchases after a FAILED payment (new checkout)", async () => {
       const updatePaymentStatus = mock(async () => {});
       const repo = makeRepo({

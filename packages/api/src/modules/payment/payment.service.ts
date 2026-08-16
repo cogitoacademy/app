@@ -146,7 +146,7 @@ export function createPaymentService(deps: {
     const paymentId = crypto.randomUUID();
     const providerReference = idempotencyKey;
 
-    await repo.insertPayment({
+    const inserted = await repo.insertPayment({
       id: paymentId,
       userId,
       walletId,
@@ -157,6 +157,27 @@ export function createPaymentService(deps: {
       marks: pkg.marks,
       status: PAYMENT_STATUS.PENDING,
     });
+
+    // B6: a concurrent request won the check-then-insert race and its row
+    // was committed first — reuse the existing (PENDING) payment instead of
+    // creating a zombie duplicate.
+    if (!inserted) {
+      const existingRow = await repo.findPaymentByProviderReference(
+        providerReference,
+      );
+      if (existingRow) {
+        const existingIntent = await provider.createIntent({
+          paymentId: existingRow.id,
+          amountIdr: pkg.priceIdr,
+          providerReference: existingRow.providerReference,
+        });
+        return {
+          paymentId: existingRow.id,
+          providerReference: existingRow.providerReference,
+          checkoutUrl: existingIntent.checkoutUrl,
+        };
+      }
+    }
 
     try {
       const intent = await provider.createIntent({

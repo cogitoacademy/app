@@ -130,6 +130,38 @@ describe("PaymentService", () => {
     expect(methods).not.toContain("withdraw");
   });
 
+  test("B6: inserting a duplicate provider_reference is a no-op (unique index + onConflictDoNothing)", async () => {
+    const user = await createTestUser(`b6.${Date.now()}@cogito.test`);
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    // Simulate the check-then-insert race: a second writer inserts the same
+    // provider reference while the row already exists. Must NOT create a
+    // zombie PENDING row.
+    const repo = createPaymentRepo(db);
+    await repo.insertPayment({
+      id: crypto.randomUUID(),
+      userId: user.id,
+      walletId: walletRow.id,
+      provider: "stub",
+      providerReference: intent.providerReference,
+      amountIdr: 430000,
+      marks: 50,
+      status: "PENDING",
+    });
+
+    const rows = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.providerReference, intent.providerReference));
+    expect(rows.length).toBe(1);
+  });
+
   test("TC-re: FAILED payment can be re-purchased with a fresh intent", async () => {
     const user = await createTestUser("rerepurchase@cogito.test");
     const walletRow = await services.wallet.getOrCreate(user.id);
