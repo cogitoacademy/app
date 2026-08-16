@@ -18,13 +18,20 @@ import {
 } from "@cogito-app/ui/components/selia/select";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Input } from "@cogito-app/ui/components/selia/input";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import type { CogitoUser } from "@cogito-app/auth";
 import { client, orpc } from "@/utils/orpc";
 import { TutorInviteForm } from "@/components/admin/tutor-invite-form";
 import { TutorReviewCard } from "@/components/admin/tutor-review-card";
-import { IconRefresh, IconTrash } from "@tabler/icons-react";
+import {
+  IconCopy,
+  IconInbox,
+  IconRefresh,
+  IconTrash,
+} from "@tabler/icons-react";
+import { EmptyState } from "@/components/empty-state";
 
 export const Route = createFileRoute("/_app/admin-tutors")({
   component: RouteComponent,
@@ -39,6 +46,9 @@ export const Route = createFileRoute("/_app/admin-tutors")({
 function RouteComponent() {
   const [profileFilter, setProfileFilter] = useState("");
   const [inviteFilter, setInviteFilter] = useState("");
+  const [latestInviteLinks, setLatestInviteLinks] = useState<
+    Record<string, string>
+  >({});
 
   const { data: profiles = [], refetch: refetchProfiles } = useQuery({
     queryKey: ["adminTutorProfiles", profileFilter],
@@ -74,23 +84,51 @@ function RouteComponent() {
     orpc.adminTutor.resendInvite.mutationOptions({
       onSuccess: (data) => {
         void refetchInvites();
-        // Tokens are only surfaced once, at create/resend — copy the new link
-        // here so the admin can still share it (M10).
-        if (data.token) {
-          const url = `${window.location.origin}/invite?token=${data.token}`;
-          void navigator.clipboard.writeText(url).then(() =>
-            toastManager.add({
-              title: "Invitation renewed — invite link copied",
-              type: "success",
-            }),
-          );
-        } else {
-          toastManager.add({ title: "Invitation renewed", type: "success" });
-        }
+        const url = `${window.location.origin}/invite?token=${data.token}`;
+        setLatestInviteLinks((current) => ({
+          ...current,
+          [data.id]: url,
+        }));
+        void navigator.clipboard.writeText(url);
+        toastManager.add({
+          title: "New invite link copied",
+          description: "The previous invite link is no longer valid.",
+          type: "success",
+        });
       },
       onError: (error: Error) =>
         toastManager.add({
           title: "Invitation could not be renewed",
+          description: error.message,
+          type: "error",
+        }),
+    }),
+  );
+
+  const sendInviteAgain = useMutation(
+    orpc.adminTutor.sendInviteAgain.mutationOptions({
+      onSuccess: (data) => {
+        void refetchInvites();
+        const url = `${window.location.origin}/invite?token=${data.token}`;
+        setLatestInviteLinks((current) => ({
+          ...current,
+          [data.id]: url,
+        }));
+        toastManager.add({
+          title:
+            data.emailDelivery === "sent"
+              ? "Invitation sent again"
+              : "Email was not delivered",
+          description:
+            data.emailDelivery === "sent"
+              ? "A new link was emailed; the previous link is invalid."
+              : "Use Generate & copy link for manual delivery.",
+          type: data.emailDelivery === "sent" ? "success" : "warning",
+        });
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Invitation could not be sent",
           description: error.message,
           type: "error",
         }),
@@ -143,7 +181,14 @@ function RouteComponent() {
         </CardHeader>
         <CardBody>
           {invites.length === 0 ? (
-            <Text className="text-muted">No invitations found.</Text>
+            <EmptyState
+              icon={<IconInbox />}
+              title="No invitations found"
+              description="New tutor invitations will appear here."
+              tone="secondary"
+              size="compact"
+              className="rounded-lg"
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {invites.map(
@@ -152,6 +197,8 @@ function RouteComponent() {
                   displayName: string;
                   email: string;
                   status: string;
+                  token?: string;
+                  updatedAt: Date;
                 }) => (
                   <div
                     key={invite.id}
@@ -160,12 +207,52 @@ function RouteComponent() {
                     <div className="flex flex-col">
                       <Text className="font-medium">{invite.displayName}</Text>
                       <Text className="text-sm text-muted">{invite.email}</Text>
+                      <Text className="text-xs text-dimmed">
+                        Last updated{" "}
+                        {new Date(invite.updatedAt).toLocaleString()}
+                      </Text>
+                      {latestInviteLinks[invite.id] ? (
+                        <div className="mt-2 flex max-w-xl gap-2">
+                          <Input
+                            value={latestInviteLinks[invite.id]}
+                            readOnly
+                          />
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(
+                                latestInviteLinks[invite.id]!,
+                              );
+                            }}
+                          >
+                            <IconCopy /> Copy
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary" className="capitalize">
                         {invite.status}
                       </Badge>
+                      {invite.status === "invited" && invite.token && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            const url = `${window.location.origin}/invite?token=${invite.token}`;
+                            void navigator.clipboard.writeText(url).then(() =>
+                              toastManager.add({
+                                title: "Invite link copied",
+                                type: "success",
+                              }),
+                            );
+                          }}
+                        >
+                          <IconCopy /> Copy link
+                        </Button>
+                      )}
                       {invite.status === "invited" ? (
                         <>
                           <Button
@@ -179,10 +266,30 @@ function RouteComponent() {
                               resendInvite.variables?.inviteId === invite.id
                             }
                             disabled={
-                              resendInvite.isPending || revokeInvite.isPending
+                              resendInvite.isPending ||
+                              sendInviteAgain.isPending ||
+                              revokeInvite.isPending
                             }
                           >
-                            <IconRefresh /> Renew
+                            <IconRefresh /> Generate &amp; copy link
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              sendInviteAgain.mutate({ inviteId: invite.id })
+                            }
+                            progress={
+                              sendInviteAgain.isPending &&
+                              sendInviteAgain.variables?.inviteId === invite.id
+                            }
+                            disabled={
+                              resendInvite.isPending ||
+                              sendInviteAgain.isPending ||
+                              revokeInvite.isPending
+                            }
+                          >
+                            Send again
                           </Button>
                           <Button
                             size="sm"
@@ -242,7 +349,14 @@ function RouteComponent() {
         </CardHeader>
         <CardBody>
           {profiles.length === 0 ? (
-            <Text className="text-muted">No tutor profiles found.</Text>
+            <EmptyState
+              icon={<IconInbox />}
+              title="No tutor profiles found"
+              description="Tutor profiles matching this status will appear here."
+              tone="secondary"
+              size="compact"
+              className="rounded-lg"
+            />
           ) : (
             <div className="grid items-stretch gap-4 lg:grid-cols-2">
               {profiles.map(

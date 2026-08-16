@@ -42,6 +42,8 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     listBookingsByProposer: mock(async () => []),
     findTutorProfile: mock(async () => null),
     findAvailabilitySlot: mock(async () => null),
+    findAvailabilityWindowContaining: mock(async () => null),
+    listActiveTutorAvailability: mock(async () => []),
     findOverlappingBookings: mock(async () => []),
     insertBooking: mock(async () => ({})),
     insertParticipant: mock(async () => {}),
@@ -74,6 +76,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateBookingPriceSnapshot: mock(async () => {}),
     updateBookingSchedule: mock(async () => {}),
     findSessionById: mock(async () => null),
+    updateSessionSchedule: mock(async () => {}),
     cancelSession: mock(async () => {}),
     insertSessionNote: mock(async () => ({})),
     listSessionNotes: mock(async () => []),
@@ -213,8 +216,9 @@ function makeSlot(overrides: Record<string, unknown> = {}) {
   return {
     id: "slot1",
     tutorId: "tutor1",
-    startDate: new Date(Date.now() + 48 * 60 * 60 * 1000),
-    endDate: new Date(Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000),
+    startDate: new Date(Date.now() + 47 * 60 * 60 * 1000),
+    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    modality: "both",
     isActive: true,
     ...overrides,
   };
@@ -426,6 +430,27 @@ describe("BookingService", () => {
       await expect(service.getById("b1", "userB")).rejects.toThrow(
         BookingNotOwnedError,
       );
+    });
+  });
+
+  describe("getRescheduleAvailability", () => {
+    test("returns the booking tutor's slots to an authorized participant", async () => {
+      const slots = [makeSlot()];
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => makeBooking()),
+          findParticipant: mock(async () => makeParticipant()),
+          listActiveTutorAvailability: mock(async () => slots),
+        },
+      });
+
+      const result = await service.getRescheduleAvailability("b1", "student1");
+
+      expect(repo.listActiveTutorAvailability).toHaveBeenCalledWith(
+        expect.anything(),
+        "tutor1",
+      );
+      expect(result).toEqual(slots);
     });
   });
 
@@ -807,7 +832,10 @@ describe("BookingService", () => {
 
     test("throws BookingSeriesSizeError when session count is below minimum", async () => {
       const { service } = createService({
-        repo: { findTutorProfile: mock(async () => makeTutorProfile()) },
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
       });
 
       await expect(
@@ -840,7 +868,10 @@ describe("BookingService", () => {
 
     test("rejects overlapping sessions within the same series (M3)", async () => {
       const { service } = createService({
-        repo: { findTutorProfile: mock(async () => makeTutorProfile()) },
+        repo: {
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          findAvailabilitySlot: mock(async () => makeSlot()),
+        },
       });
 
       await expect(
@@ -2910,28 +2941,28 @@ describe("BookingService", () => {
       expect(notification.write.mock.calls[0][0]).toMatchObject({
         userId: "student1",
         title: "Reschedule proposed",
-        body: "Tutor proposed a new time for the booking.",
+        body: "A new time was proposed for the booking.",
       });
     });
 
-    test("throws BookingNotOwnedError when a student tries to propose a reschedule", async () => {
+    test("allows the booking proposer to propose inside tutor availability", async () => {
       const booking = makeBooking({
         currentState: "awaiting_tutor_review",
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
       });
-      const { service } = createService({
+      const { service, repo } = createService({
         repo: {
           findBookingById: mock(async () => ({ ...booking, version: 1 })),
           findParticipant: mock(async () => makeParticipant()),
+          findAvailabilityWindowContaining: mock(async () => makeSlot()),
         },
       });
 
       const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
       const end = new Date(start.getTime() + 90 * 60 * 1000);
 
-      await expect(
-        service.proposeReschedule("student1", "b1", start, end),
-      ).rejects.toThrow(BookingNotOwnedError);
+      await service.proposeReschedule("student1", "b1", start, end);
+      expect(repo.insertRescheduleProposal).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -4033,15 +4064,16 @@ describe("BookingService", () => {
 
   describe("Story 2: State Machine Completeness", () => {
     describe("RESCHEDULE_PROPOSED expiry", () => {
-      test("expires reschedule_proposed booking to EXPIRED and releases holds", async () => {
+      test("expires only the proposal, retaining the original booking and hold", async () => {
         const expiringBooking = makeBooking({
           currentState: "reschedule_proposed",
+          previousState: "scheduled",
           holdAmount: 42,
           proposerId: "student1",
         });
-        const p1 = makeParticipant({ heldAmount: 42 });
+        const proposal = { id: "r1", bookingId: "b1", status: "pending" };
 
-        const { service, wallet, repo } = createService({
+        const { service, wallet, repo, meeting } = createService({
           repo: {
             findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
             findBookingById: mock(async () => ({
@@ -4049,9 +4081,9 @@ describe("BookingService", () => {
               currentState: "reschedule_proposed",
               version: 1,
             })),
-            findConfirmedParticipants: mock(async () => [p1]),
+            findPendingRescheduleProposal: mock(async () => proposal),
             updateBookingVersioned: mock(async () => ({
-              updated: { ...expiringBooking, currentState: "expired" },
+              updated: { ...expiringBooking, currentState: "scheduled" },
               newVersion: 2,
             })),
           },
@@ -4060,17 +4092,14 @@ describe("BookingService", () => {
         const result = await service.expireBookings();
 
         expect(result).toEqual({ expired: 1, failed: 0 });
-        expect(wallet.release).toHaveBeenCalledTimes(1);
-        expect(wallet.release.mock.calls[0][1]).toMatchObject({
-          amount: 42,
-          actorType: "system",
-          reason: "Booking expired",
-        });
-        expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect(repo.updateRescheduleProposal).toHaveBeenCalledWith(
           expect.anything(),
-          "b1",
-          0,
+          "r1",
+          expect.objectContaining({ status: "expired" }),
         );
+        expect(wallet.release).not.toHaveBeenCalled();
+        expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+        expect(meeting.cancelEvent).not.toHaveBeenCalled();
       });
     });
 
@@ -4764,7 +4793,7 @@ describe("BookingService", () => {
 
       const result = await service.acceptReschedule("student1", "b1");
 
-      expect(result.currentState).toBe("awaiting_reconfirmation");
+      expect(result.currentState).toBe("awaiting_tutor_review");
       expect(repo.updateRescheduleProposal).toHaveBeenCalledWith(
         expect.anything(),
         "r1",
@@ -4815,6 +4844,88 @@ describe("BookingService", () => {
         startAt: proposal.proposedStartAt,
         endAt: proposal.proposedEndAt,
       });
+    });
+
+    test("partial acceptance records the decision without changing the schedule", async () => {
+      const booking = makeRescheduleBooking({ previousState: "scheduled" });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "student1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 5400_000),
+        decisions: {
+          student1: "accepted" as const,
+          tutor1: "pending" as const,
+          student2: "pending" as const,
+        },
+        status: "pending",
+      };
+      const { service, repo, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          findParticipant: mock(async () => ({ id: "p2", userId: "student2" })),
+        },
+      });
+
+      const result = await service.acceptReschedule("student2", "b1", "r1");
+
+      expect(result.currentState).toBe("reschedule_proposed");
+      expect(repo.updateRescheduleProposal).toHaveBeenCalledWith(
+        expect.anything(),
+        "r1",
+        expect.objectContaining({
+          status: "pending",
+          decisions: {
+            student1: "accepted",
+            tutor1: "pending",
+            student2: "accepted",
+          },
+        }),
+      );
+      expect(repo.updateBookingSchedule).not.toHaveBeenCalled();
+      expect(meeting.updateEvent).not.toHaveBeenCalled();
+    });
+
+    test("tutor can provide the final acceptance and restore scheduled state", async () => {
+      const booking = makeRescheduleBooking({ previousState: "scheduled" });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "student1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 5400_000),
+        decisions: {
+          student1: "accepted" as const,
+          tutor1: "pending" as const,
+        },
+        status: "pending",
+      };
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      const result = await service.acceptReschedule("tutor1", "b1", "r1");
+
+      expect(result.currentState).toBe("scheduled");
+      expect(repo.updateBookingSchedule).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({
+          scheduledStartAt: proposal.proposedStartAt,
+          scheduledEndAt: proposal.proposedEndAt,
+        }),
+      );
     });
 
     test("acceptReschedule throws when caller is not the proposer", async () => {

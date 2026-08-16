@@ -2,9 +2,15 @@
 
 Last updated: 2026-08-14
 
+Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
+
+The invite form performs an admin-only account preflight by exact normalized email. Provider facts come from Better Auth `account.providerId` rows (`google`, `credential`, or both); admin-role accounts are shown as ineligible and cannot be submitted from the UI.
+
 ## Overview
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
+
+Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
 | File                  | Purpose                                                  |
 | --------------------- | -------------------------------------------------------- |
@@ -46,6 +52,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 - Achievements start in `pending` status
 - Only the owning student can create/update/delete their achievements
+- `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available only to the owner/admin workflows, while `documentationUrl` is optional public-safe documentation
 - Optimistic locking prevents lost updates (`version` field)
 - Admin review changes status to `approved` or `rejected`
 
@@ -138,6 +145,12 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
+**Business Rules:**
+
+- Tutor invitation email copy has one primary action: accept the invitation and set up the tutor profile
+- The email states the exact account email required for claiming, shows expiry in UTC, and includes a plain fallback URL
+- Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
+
 ---
 
 ## Audit Module
@@ -182,6 +195,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `me(userId)` — Returns user + profile + tutorProfile + wallet (creates wallet if missing)
 - `getProfile(userId)` — Returns user with profile and tutor profile
 - `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts)
+- Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`.
 - `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 results
 
 **Dependencies:** `AuthRepo`, `WalletPort` (for lazy wallet creation)
@@ -206,7 +220,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
-- `booking.router.ts` — `booking.*` protected routes + `tutorActions.*` tutor-guarded routes
+- `booking.router.ts` — Student-owned booking mutations use `studentProcedure`; shared party reads/notes stay protected; `tutorActions.*` uses `tutorProcedure`
 
 **Service Methods:**
 
@@ -226,9 +240,8 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `tutorDecline(bookingId, tutorId, reason?)` — Tutor declines; releases all holds
 - `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
-- `proposeReschedule(tutorId, bookingId, start, end, reason?)` — Tutor proposes a new slot
-- `acceptReschedule(userId, bookingId)` — Student accepts the proposal
-- `rejectReschedule(userId, bookingId)` — Student rejects the proposal
+- `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason?)` — Tutor or booking proposer proposes a fixed 90-minute replacement for one session
+- `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state.
 - `addSessionNote(userId, bookingId, content)` — Adds a sanitized note to a completed session
 - `getSessionNotes(userId, bookingId)` — Lists notes for a completed session
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late so the lateness job skips the booking
@@ -252,7 +265,10 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - Series cancel cascades to all `bookingSession` rows
 - Wallet holds are released on cancel, decline, and expiry
 - Overlap detection prevents double-booking tutor slots
+- Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
+- Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. Only the tutor may propose outside the original availability window.
 - Optimistic locking via `version` field prevents concurrent state changes
+- Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run.
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
 - Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U3, U5–U7); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)
@@ -562,21 +578,22 @@ The `packages/api` package implements business logic using a 4-layer architectur
 **Files:**
 
 - `tutor.types.ts` — Zod schemas for profile fields, `getMyPayoutsInput`
-- `availability.types.ts` — Availability slot types (`upsert`, weekly-create, delete)
+- `availability.types.ts` — Availability slot types (`upsert`, weekly-create, weekly-replace, delete)
 - `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
 - `tutor.repo.ts` — `findByUserId`, `create`, `update`, `upsertAvailability`
-- `tutor.service.ts` — `getMyProfile`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
+- `tutor.service.ts` — `getMyProfile`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
 - `tutor.handler.ts` — Maps handler context/input
 - `tutor.router.ts` — Tutor-guarded routes (`tutorProcedure`)
 
 **Service Methods:**
 
 - `getMyProfile(userId)` — Returns tutor profile
-- `updateMyProfile(userId, input)` — Updates draft profile fields with optimistic lock (`version`); throws `TutorProfileNotEditableError` if published
+- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). Published profiles apply bio and availability-summary edits immediately, while trust-sensitive edits are stored as pending changes for admin review so discovery continues serving the approved values.
 - `submitForReview(userId)` — Validates required fields + pricing, then sets `onboardingStatus` to `pending_review`; records audit log
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
+- `replaceWeeklyAvailability(userId, input)` — Atomically replaces future recurring occurrences from weekday/time ranges; preserves one-off overrides and skips generated occurrences they supersede
 - `deleteAvailability(userId, slotId)` — Deactivates a slot (soft delete)
 - `getMyPayouts(userId, { dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
 
@@ -586,6 +603,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 - Only tutors with `published` status are visible in discovery
 - Availability slots must be in the future and non-overlapping
+- A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - Profile updates use optimistic locking (`version`)
 
@@ -593,7 +611,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 ## Tutor Discovery Module
 
-**Purpose:** Public-facing tutor search and profile viewing.
+**Purpose:** Student-only tutor search and profile viewing.
 
 **Files:**
 
@@ -602,7 +620,7 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `discovery.repo.ts` — `listPublished`, `findByUserId`
 - `discovery.service.ts` — `listPublished(filters)`, `getProfile(userId)`
 - `discovery.handler.ts` — Maps handler context/input
-- `discovery.router.ts` — Protected routes
+- `discovery.router.ts` — Student-only routes (`studentProcedure`)
 
 **Service Methods:**
 

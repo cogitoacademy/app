@@ -103,8 +103,8 @@ describe("Admin override preview (G10)", () => {
       })
       .execute();
 
-    const slotStart = new Date(Date.now() + 48 * 3600_000);
-    const slotEnd = new Date(Date.now() + 49 * 3600_000);
+    const slotStart = new Date(Date.now() + 24 * 3600_000);
+    const slotEnd = new Date(Date.now() + 26 * 3600_000);
     await db
       .insert(availabilitySlot)
       .values({

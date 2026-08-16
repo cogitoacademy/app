@@ -2,6 +2,11 @@
 
 import { useRef } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -31,6 +36,16 @@ const MODALITY_VARIANTS: Record<string, "info" | "success" | "warning"> = {
   both: "warning",
 };
 
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
 type TutorDrawerProps = {
   tutor: {
     id: string;
@@ -57,6 +72,8 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
   if (!t) return null;
 
   const selectedTutor = t;
+  const tutorName =
+    selectedTutor.displayName ?? selectedTutor.user?.name ?? "Tutor";
 
   const prices = selectedTutor.prices ?? {};
   const priceEntries = Object.entries(prices).toSorted(
@@ -67,7 +84,16 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerPopup direction="right" className="w-full max-w-lg">
         <DrawerHeader className="flex justify-between">
-          <DrawerTitle>{t.displayName ?? t.user?.name ?? "Tutor"}</DrawerTitle>
+          <div className="flex min-w-0 items-center gap-3">
+            <Avatar size="lg">
+              <AvatarImage
+                src={selectedTutor.user?.image ?? undefined}
+                alt={tutorName}
+              />
+              <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
+            </Avatar>
+            <DrawerTitle className="truncate">{tutorName}</DrawerTitle>
+          </div>
           <DrawerClose
             render={<Button variant="plain" size="sm" aria-label="Close" />}
           >

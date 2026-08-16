@@ -163,7 +163,12 @@ function createServices() {
     wallet: wallet.service,
     payout: booking.service,
   });
-  const adminTutor = createAdminTutorModule({ db, audit: audit.service });
+  const adminTutor = createAdminTutorModule({
+    db,
+    audit: audit.service,
+    email: email.service,
+    appBaseUrl: env.CORS_ORIGIN,
+  });
   const tutor = createTutorModule({
     db,
     pricing: pricing.service,

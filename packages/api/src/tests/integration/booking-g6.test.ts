@@ -80,8 +80,8 @@ async function createPublishedTutor(email: string, ts: number) {
     })
     .returning();
 
-  const start = new Date(Date.now() + 24 * 3600_000);
-  const end = new Date(Date.now() + 25 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
+  const end = new Date(start.getTime() + 7 * 24 * 3600_000);
   const [slot] = await db
     .insert(availabilitySlot)
     .values({
@@ -149,13 +149,22 @@ describe("G6: tutor reschedule with student approval", () => {
     return b.id;
   }
 
+  function nextRescheduleWindow() {
+    const base = Date.now() + (100 + bookingCounter * 10) * 3600_000;
+    return {
+      start: new Date(base),
+      end: new Date(base + 90 * 60_000),
+    };
+  }
+
   test("student cannot propose a reschedule (tutor-only)", async () => {
     const id = await createSoloBooking();
+    const proposed = nextRescheduleWindow();
     await expect(
       studentClient.tutorActions.proposeReschedule({
         bookingId: id,
-        proposedStartAt: new Date(Date.now() + 72 * 3600_000),
-        proposedEndAt: new Date(Date.now() + 73 * 3600_000),
+        proposedStartAt: proposed.start,
+        proposedEndAt: proposed.end,
         reason: "nope",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -164,8 +173,7 @@ describe("G6: tutor reschedule with student approval", () => {
   test("tutor proposes a reschedule → student notified", async () => {
     const id = await createSoloBooking();
     bookingId = id;
-    const start = new Date(Date.now() + 72 * 3600_000);
-    const end = new Date(Date.now() + 73 * 3600_000);
+    const { start, end } = nextRescheduleWindow();
 
     const updated = await tutorClient.tutorActions.proposeReschedule({
       bookingId,
@@ -193,11 +201,11 @@ describe("G6: tutor reschedule with student approval", () => {
     expect(notifs[0]!.userId).toBe(studentId);
   });
 
-  test("student accepts → time updated, awaiting_reconfirmation, tutor notified", async () => {
+  test("student accepts → time updated, previous state restored, tutor notified", async () => {
     const updated = await studentClient.booking.acceptReschedule({
       bookingId,
     });
-    expect(updated.currentState).toBe("awaiting_reconfirmation");
+    expect(updated.currentState).toBe("awaiting_tutor_review");
 
     const b = await studentClient.booking.get({ bookingId });
     expect(b.scheduledStartAt.getTime()).toBeGreaterThan(
@@ -221,31 +229,31 @@ describe("G6: tutor reschedule with student approval", () => {
     expect(notifs[0]!.userId).toBe(tutorId);
   });
 
-  test("tutor cannot accept/reject (student-only)", async () => {
+  test("tutor's pre-recorded acceptance remains pending the student decision", async () => {
     const id = await createSoloBooking();
+    const proposed = nextRescheduleWindow();
     await tutorClient.tutorActions.proposeReschedule({
       bookingId: id,
-      proposedStartAt: new Date(Date.now() + 72 * 3600_000),
-      proposedEndAt: new Date(Date.now() + 73 * 3600_000),
+      proposedStartAt: proposed.start,
+      proposedEndAt: proposed.end,
     });
 
-    await expect(
-      tutorClient.booking.acceptReschedule({ bookingId: id }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(
-      tutorClient.booking.rejectReschedule({ bookingId: id }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const updated = await tutorClient.booking.acceptReschedule({
+      bookingId: id,
+    });
+    expect(updated.currentState).toBe("reschedule_proposed");
   });
 
   test("student rejects → proposal rejected, booking unchanged, tutor notified", async () => {
     const id = await createSoloBooking();
     const original = await studentClient.booking.get({ bookingId: id });
     const originalStart = original.scheduledStartAt.getTime();
+    const proposed = nextRescheduleWindow();
 
     await tutorClient.tutorActions.proposeReschedule({
       bookingId: id,
-      proposedStartAt: new Date(Date.now() + 72 * 3600_000),
-      proposedEndAt: new Date(Date.now() + 73 * 3600_000),
+      proposedStartAt: proposed.start,
+      proposedEndAt: proposed.end,
       reason: "conflict",
     });
 

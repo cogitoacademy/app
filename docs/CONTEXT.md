@@ -2,6 +2,18 @@
 
 Last updated: 2026-08-16
 
+Invitation history keeps metadata but never stores plaintext invite secrets. The latest generated link remains visible and repeatedly copyable during the current admin page session. For any pending history entry, **Generate & copy link** rotates the token, invalidates the previous link, and records the existing resend audit action.
+
+Before submission, the admin tutor invite form checks whether the normalized email is registered and displays the user's current role and linked Better Auth methods (Google, email/password, or both). This preflight is admin-only and resets whenever the email input changes.
+
+Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16).
+
+The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, upcoming sessions, availability, profile status, and payout totals. Admins see escalated booking operations plus pending tutor-profile and achievement review queues. These are frontend compositions of existing oRPC procedures; there is no dashboard-specific backend endpoint.
+
+## Tutor invite flow
+
+Admin create/resend produces a single-use plaintext token, stores only its SHA-256 digest, and attempts delivery through the shared Resend provider. The branded invitation email explains the tutor value proposition, uses one primary profile-setup CTA, identifies the required account email, displays a readable UTC expiry, and includes the raw claim URL as a fallback. Delivery status is returned to the admin UI; failed/stubbed delivery keeps the invite usable and exposes the one-time clipboard fallback. Claim requires an authenticated account with the same email (case-insensitive), consumes the invite and creates the tutor profile transactionally, and permits only student/tutor roles—admin cannot be silently demoted. Email/password and Google accounts share this claim path; OAuth preserves the `/invite?token=...` return URL.
+
 ## Architecture
 
 Monorepo (Turborepo + Bun workspaces). PostgreSQL 16 (Docker port 6767). Drizzle ORM. Elysia server. oRPC (not tRPC). Better Auth 1.6.11. React 19 + TanStack Router/Query/Form. Selia UI (TailwindCSS v4 + @base-ui/react).
@@ -119,6 +131,20 @@ export interface ServiceRegistry {
 
 Routers access handlers via `context.services.{module}.{method}`. Other modules access services via DI through their consumer-driven ports.
 
+## Domain & Policy References
+
+### Booking creation UX
+
+- The student booking form does not ask users to choose solo versus group up
+  front. `Invite students (optional)` is always available; zero invitees uses
+  the solo/solo-series RPC, while one or more invitees automatically uses the
+  group/group-series RPC and updates participant count and pricing.
+- Removing the final invitee automatically returns the request to solo without
+  clearing the selected schedule or learning goal.
+
+- [`marks-economy-architecture.md`](marks-economy-architecture.md) — canonical reference for the closed-loop Marks economy, package pricing, tutor honorarium/take-rate formulas, regulatory assumptions, Knowledge Bank gating, and related engineering changes.
+- The Marks blueprint is a reference architecture, not a substitute for Indonesian legal, regulatory, accounting, or payment-provider review before production launch.
+
 ## Infrastructure
 
 - **Database:** PostgreSQL 16 via `postgres.js` (consolidated — driver migration complete)
@@ -140,13 +166,13 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ### `studentProfile` (student-profile.ts) — uuid PK
 
-### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status
+### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status + profile_edit_status; keeps approved public values separate from pending reviewed edits
 
 ### `availabilitySlot` (availability-slot.ts) — tutor availability windows (one-time + weekly-generated)
 
 ### `tutorInvite` (tutor-invite.ts) — CHECK status, revoked_by/at fields
 
-### `achievement` (achievement.ts) — CHECK status
+### `achievement` (achievement.ts) — CHECK status; private `evidence_url`, optional public `documentation_url`, `awarding_date`
 
 ### `auditLog` (audit-log.ts) — CHECK actor_type, before/after state jsonb
 
@@ -215,6 +241,8 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 - `list`, `create`, `update`, `delete`
 - `adminList`, `adminReview`
+- Verification evidence is owner/admin-only; optional activity documentation is the public-safe image. No public achievement endpoint exists yet.
+- The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell.
 
 ### Wallet Module (protected)
 
@@ -225,13 +253,19 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 - `calculateSoloPrice`, `calculateGroupPrice`, `calculateSeriesPrice`, `validateFloorPrice`
 
-### Booking Module (protected)
+### Booking Module (student mutations + shared authenticated reads)
+
+Tutor availability is modeled as free-time windows rather than pre-sized sessions. The booking UI uses the shared Selia calendar and a cross-browser 24-hour autocomplete time field; students can enter any exact minute, but a start must leave room for the server-fixed 90-minute session inside the selected window. A one-session selection is one-time and multiple selections form a series automatically.
 
 - `createSolo`, `get`, `listMine`, `cancel`
-- `acceptReschedule`, `rejectReschedule`, `cancelSession`
+- `proposeReschedule`, `acceptReschedule`, `rejectReschedule`, `cancelSession`
 - `addSessionNote`, `getSessionNotes`
 - `createGroup`, `createSeries`, `createGroupSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
 - `listSessions`
+
+Tutor discovery and every student-owned booking mutation are guarded by `studentProcedure`. Tutor/admin accounts cannot browse the student tutor catalog or create/cancel/confirm/reconfirm/withdraw bookings; tutor fulfillment remains under `tutorActions.*`.
+
+After submission, the tutor or booking proposer can propose a replacement time from the booking-detail action panel. Rescheduling is session-scoped; each proposal requires tutor and all active-student approval, and the original schedule remains active until unanimous acceptance.
 
 ### TutorActions Module (tutor)
 
@@ -284,12 +318,10 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 
 ## CI/CD
 
-- **GitHub Actions** (`.github/workflows/ci.yml`): 4 parallel jobs (lint, typecheck, build, test+coverage). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle (since P4 the auto-commit runs **only on `pull_request` events from the same repo, and never when the last commit is the bot's own** — C7). Tests run `packages/api/src/tests/` + `apps/server/src/openapi.test.ts` in one process, and the remaining `apps/server/src/` tests in a **separate process** (the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`, which would otherwise shadow the real module for parallel API tests). Coverage gate: `packages/api` ≥ 90% lines, overall ≥ 80% (enforced by `.github/scripts/coverage-comment.ts`, which now **fails the job when lcov is missing** — C9). Typecheck/build run with `permissions: contents: read`; lint caches bun installs.
-- **CD** (after infrastructure branch): build → push to GHCR → Coolify auto-deploys. Since P4 the Coolify webhook trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — the `COOLIFY_STAGING_WEBHOOK`/`COOLIFY_PROD_WEBHOOK` secrets must be set (see RUNBOOK "Deploy Secrets").
+- **GitHub Actions** (`.github/workflows/ci.yml`): 4 parallel jobs (lint, typecheck, build, test+coverage). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/` + `apps/server/src/openapi.test.ts` in one process, and the remaining `apps/server/src/` tests in a **separate process** (the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`, which would otherwise shadow the real module for parallel API tests). Coverage gate: `packages/api` ≥ 90% lines, overall ≥ 80% (enforced by `.github/scripts/coverage-comment.ts`).
+- **CD** (after infrastructure branch): build → push to GHCR → Coolify auto-deploys
 - **Lefthook** pre-commit: oxlint + oxfmt. Pre-push: typecheck.
-- **Labeler** (`.github/workflows/labeler.yml`): labels PRs `server`/`web`/`infrastructure`/`docs`/`dependencies`/`github-actions` by changed paths (`.github/labeler.yml`, actions/labeler@v7 `changed-files` format); needs `pull-requests: write` permission; supports `workflow_dispatch` with `pr-number` for backfilling.
-- **Docker** (P4): root `.dockerignore` (hermetic build contexts), server runs as `bun` user, web runs as `nginx` user on a digest-pinned `nginx:alpine` with a HEALTHCHECK; postgres `stop_grace_period: 30s` in both compose files.
-- **Graceful shutdown** (P4): `apps/server/src/index.ts` quits the shared ioredis client and force-exits after 10s if draining hangs (C8).
+- **Labeler** (`.github/workflows/labeler.yml`): labels PRs `server`/`web`/`infrastructure`/`docs` by changed paths (`.github/labeler.yml`); needs `pull-requests: write` permission.
 - **Dependabot**: weekly npm + GitHub Actions updates.
 - **Coverage**: 90% for `packages/api`, 80% overall (after foundation hardening)
 - **Health**: `GET /health` returns `{ status, checks: { database, redis }, timestamp }` — both DB `SELECT 1` and Redis `ping()` are checked
@@ -300,26 +332,25 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-| Plan                                                              | Branch                              | Status                                                                                                                                         |
-| ----------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/completed/REVIEW-FIXES-2.md`                          | main (merged)                       | Completed — wave-2 review fixes merged to main via #50–#57 (R1–R10, coverage hardening, U13/U4)                                                |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`         | Merged to main (#16)                                                                                                                           |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`         | Merged to main (#16)                                                                                                                           |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`         | Merged to main (#16)                                                                                                                           |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening`  | Merged to main (#17)                                                                                                                           |
-| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness`  | Merged to main (#18)                                                                                                                           |
-| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`        | Merged to main (#19)                                                                                                                           |
-| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                       | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                                                       |
-| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                       | Merged to main (#34–#38)                                                                                                                       |
-| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                       | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness)                                   |
-| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`      | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                                                               |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                   | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending                                                          |
-| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                   | Active — U4, U11, U13 closed; U9 partial; U1–U3, U5–U8, U10, U12, U14 open (verified against code 2026-08-16)                                  |
-| `docs/plans/completed/BACKEND-CLEANUP.md`                         | main (merged)                       | Completed — all 11 items verified merged (2026-08-16; plan moved to completed)                                                                 |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (open PR #55) | Active — F2/F3/F6/F7/F11/F17 covered by open PR #55; F8/F13/F14/F16 + F18-withdraw/J2/dead-components open                                     |
-| `docs/plans/active/REVIEW-FIXES-3.md`                             | main (future PRs)                   | Active — wave-3 audit fixes: docs sync (P1), PR #55 blockers (P2), backend money bugs B1–B9 (P3), CI/CD C1–C9 (P4), U-items (P5), F-items (P6) |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                   | Superseded                                                                                                                                     |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                   | Historical reference                                                                                                                           |
+| Plan                                                              | Branch                             | Status                                                                                                       |
+| ----------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `docs/plans/active/REVIEW-FIXES-2.md`                             | `chore/docs-sync` (future PRs)     | Active — wave-2 review fixes (rate limits, withdraw, uploads/payments, reliability) + coverage hardening     |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                                                                                         |
+| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                                                         |
+| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                                                         |
+| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                      | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                     |
+| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                      | Merged to main (#34–#38)                                                                                     |
+| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                      | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness) |
+| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`     | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                             |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending                        |
+| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                  | Active — U11 closed; U9 partial; U1–U8, U10, U12–U14 open (verified against code 2026-08-15)                 |
+| `docs/plans/active/BACKEND-CLEANUP.md`                            | main (merged)                      | Completed — all 11 items merged (2026-08-15)                                                                 |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Active — 4 closed, 3 partial, 10 open                                                                        |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                                                   |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                                                         |
 
 ### Execution Order
 
@@ -331,13 +362,12 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 5. PRD Gaps Backend (G1–G20) → merged to main (#35, #36, #39–#43)
 6. Backend Hardening Phase 2 (BACKEND-HARDENING-PHASE2.md, PRs 1–6) → merged to main (#46)
 7. Backend Review Hardening (BACKEND-REVIEW-HARDENING.md) → merged to main (#48)
-8. Review Fixes 2 (REVIEW-FIXES-2.md — rate limits, withdraw, uploads/payments, reliability, coverage) → **completed (merged via #50–#57)**
-9. PRD Gaps Phase 3 (PRD-GAPS-PHASE3.md — U1–U3, U5–U8, U10, U12, U14 open; U4/U11/U13 closed, U9 partial) + Frontend Gaps (FRONTEND-GAPS-SPEC) → after / parallel with #8
-10. Review Fixes 3 (REVIEW-FIXES-3.md — docs reconciliation, PR #55 blocker report, backend money fixes B1–B9, CI/CD hardening C1–C9, remaining U-items and F-items) → execution in progress (P1–P5 merged/targeted at main; P6 after PR #55)
-11. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
+8. Review Fixes 2 (REVIEW-FIXES-2.md — rate limits, withdraw, uploads/payments, reliability, coverage) → next to execute
+9. PRD Gaps Phase 3 (PRD-GAPS-PHASE3.md — U1–U8, U10, U12–U14 open; U11 closed, U9 partial) + Frontend Gaps (FRONTEND-GAPS-SPEC) → after / parallel with #8
+10. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
-Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). **REVIEW-FIXES-2 merged to main via #50–#57** — the wave-2 fixes: RPC rate-limit path bug (R1), solo withdraw (R2/R3), presigned POST conditions (R4), REFUNDED reconciliation (R5), outbox/idempotency/meeting reliability (R6–R8), email escaping + seed-invite (R9/R10), coverage hardening (9 files ≥ 90%), Knowledge Bank total-balance eligibility (U13), group-series no-opt-out (U4), plus CI pipeline hardening (lint auto-fix, full server-test coverage in CI, labeler fix). Next: the open PRD-gap feature work, frontend gaps, then production ops — the wave-3 audit fixes are tracked in `docs/plans/active/REVIEW-FIXES-3.md` (P1–P5 landing at main; P6 after PR #55).
+Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). Next: **REVIEW-FIXES-2 (wave-2 findings: RPC rate-limit path bug, solo withdraw, presigned POST conditions, REFUNDED reconciliation, outbox/idempotency reliability, coverage hardening)**, then the open PRD-gap feature work, frontend gaps, then production ops.
 
 ## Role E2E Readiness Snapshot (2026-08-14)
 
@@ -347,13 +377,19 @@ Use this section as the current role-readiness baseline. Re-audit only after the
 
 ### Student
 
+The student My Profile surface supports self-service account name and profile-image updates through Better Auth, alongside learning/contact fields. The sign-in email remains read-only on this page. Student identity edits do not require admin review.
+
 **Primary promotion flow is ready:** email/password auth -> tutor discovery -> solo booking -> Marks hold -> booking list/detail -> cancellation. Profile, balance/top-up, basic achievements, notification bell, calendar export, and WhatsApp contact surfaces are also present.
+
+Booking detail uses a task-detail layout shared by student and tutor views: a compact identity-and-status header, a single primary content flow for schedule, session actions, and activity, and a sticky metadata rail for session access, Marks, and participants. All existing lifecycle actions and data remain available without changing the booking API.
 
 **Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject UI (F7), lateness/no-show reporting UI (F3), public achievements (F16), email verification, and session-expiry UX remain open. Backend support for reschedule accept/reject and lateness/no-show reporting (G1/G6) has landed. The notification center and Knowledge Bank gating UX are now implemented.
 
 ### Tutor
 
-The tutor workspace now has the primary management surfaces: tutor-only onboarding, a weekly-first availability page, an incoming booking list, and booking detail actions for accept, decline, and complete. Weekly availability is materialized into concrete future slots through the selected end date (up to 52 weeks); one-time custom slots remain available for exceptions or force majeure. The incoming list uses the tutor-owned booking query rather than proposer-only `booking.listMine`.
+The tutor workspace now has the primary management surfaces: tutor-only onboarding, a Calendly-style availability page, an incoming booking list, and booking detail actions for accept, decline, and complete. Tutors configure multiple weekly-hour ranges per weekday, copy a range to weekdays, choose modality per range, and generate concrete future windows through an end date (up to 52 weeks). Date-specific overrides supersede only the conflicting recurring occurrence, while the weekly calendar preview exposes and removes individual generated windows. Existing bookings remain intact because replacement soft-deactivates availability rather than deleting referenced rows. The incoming list uses the tutor-owned booking query rather than proposer-only `booking.listMine`.
+
+Published tutor profiles remain editable. Bio and availability-summary edits publish immediately; trust-sensitive edits are held in `pendingProfileChanges` with a separate edit-review status, so discovery continues serving the last approved profile until an admin approves the proposal or requests revisions.
 
 The primary Tutor E2E flow has been manually verified with seeded accounts, including availability, incoming booking review, Google Meet link creation, student notification/state, and completion. Tutor reschedule, session notes, payout, and individual series completion are now backend-ready (G6/G7/G16/G18); their UI is tracked in FRONTEND-GAPS-SPEC (F6/F7/F9/F13/F8). Lateness/no-show support is backend-ready via `support.createTicket` (G1) with the report UI still pending (F3).
 
@@ -361,12 +397,12 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 
 Backend is ready for user role management, tutor invite/review, achievement moderation, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
 
-The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, and room availability/approval backend (G8–G10, G13–G14) have landed; the corresponding admin UI remains frontend work (F1/F2/F11/F12). Remaining backend sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U1–U14) and `docs/plans/completed/BACKEND-CLEANUP.md` (completed).
+The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, and room availability/approval backend (G8–G10, G13–G14) have landed; the corresponding admin UI remains frontend work (F1/F2/F11/F12). Remaining backend sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U1–U14) and `docs/plans/active/BACKEND-CLEANUP.md`.
 
 ### Backend Gap Groups
 
 - Ready now (merged to main): student solo/group/series booking primitives, reschedule propose/accept/reject, session notes, group invite confirm/decline/reconfirm, wallet/ledger/packages/Knowledge Bank, purchases, achievements, notifications, tutor onboarding/availability/payouts/incoming-booking actions, support tickets (G1), and the admin capabilities listed above (G8–G10, G16–G18).
-- Still open backend sub-gaps (tracked in `docs/plans/active/PRD-GAPS-PHASE3.md`): offline room availability not integrated into booking creation (G13/U14), plus the untracked PRD deviations from the 2026-08-14 PRD-vs-code audit (U1–U3, U5–U8, U10, U12, U14: manual meeting-link entry, student self-reschedule, reconfirmation-deadline repricing, per-participant no-show, admin per-session cancel, per-session reschedule, refund reconciliation guard, business-hours SLA windows, achievement field parity, offline room deadline — U9 partial; U4 group-series full withdrawal, U11 invitee validation, and U13 Knowledge Bank total-balance eligibility **implemented** (REVIEW-FIXES-2 PR F / BACKEND-REVIEW-HARDENING M4)). Dead-code/silent-failure items tracked in `docs/plans/completed/BACKEND-CLEANUP.md` (completed). Wave-3 execution plan: `docs/plans/active/REVIEW-FIXES-3.md`.
+- Still open backend sub-gaps (tracked in `docs/plans/active/PRD-GAPS-PHASE3.md`): Knowledge Bank total-balance eligibility (B4/U13), offline room availability not integrated into booking creation (G13/U14), plus the untracked PRD deviations from the 2026-08-14 PRD-vs-code audit (U1–U8, U10, U12: manual meeting-link entry, student self-reschedule, reconfirmation-deadline repricing, group-series full withdrawal, per-participant no-show, admin per-session cancel, per-session reschedule, refund reconciliation guard, business-hours SLA windows, achievement field parity, offline room deadline — U9 partial, U11 closed). Dead-code/silent-failure items tracked in `docs/plans/active/BACKEND-CLEANUP.md` (completed).
 
 ### Current Execution Order
 
@@ -465,17 +501,17 @@ Status column: **Fixed** = verified in code on main after #17 merge; **Open** = 
 
 ### 2026-08-14 audit additions (implemented in `docs/plans/completed/BACKEND-HARDENING-PHASE2.md` via PR #46)
 
-Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B6/B8/B9 are **Fixed**; B4 was **Open** (tracked as U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`) and is now **Fixed** (REVIEW-FIXES-2 PR F).
+Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B6/B8/B9 are **Fixed**; B4 remains **Open** (tracked as U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`).
 
 > Note: these B-IDs are distinct from the B1–B6/N-series IDs in the production-readiness plan above (same letter, different findings).
 
-| ID  | Finding                                                                                                                                                                                           | Severity | Status                                                                                                                                             |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B3  | Group booking with 2 ≤ headcount < target EXPIRES at the 12h deadline instead of repricing + reconfirming (FR-16/TC-18) — `expireBookings` `booking.service.ts:2009-2048` has no headcount branch | High     | **Fixed (#46)** — headcount branch reprices to `AWAITING_RECONFIRMATION` + 12h deadline + notify. Reconfirmation-deadline sub-case → U3            |
-| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                                                            | Medium   | **Fixed (REVIEW-FIXES-2 PR F / U13)** — `knowledgeBankEligible` compares and returns `totalBalance`; held Marks count toward the 35-Mark threshold |
-| B6  | No payment/refund notifications at all (notification matrix rows unfulfilled) — `payment.service.ts` writes none                                                                                  | Medium   | **Fixed (#46)** — `payment.{id}.credited`/`.refunded` (+ admin refund payer notify)                                                                |
-| B8  | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34) — `booking.service.ts:1881`                                            | Medium   | **Fixed (#46)** — `createGroupSeries` with upfront per-session holds                                                                               |
-| B9  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules) — `booking.service.ts:1134-1140`                                                                                      | Low-Med  | **Fixed (#46)** — post-H2 cancelSession forfeits the session hold                                                                                  |
+| ID  | Finding                                                                                                                                                                                           | Severity | Status                                                                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| B3  | Group booking with 2 ≤ headcount < target EXPIRES at the 12h deadline instead of repricing + reconfirming (FR-16/TC-18) — `expireBookings` `booking.service.ts:2009-2048` has no headcount branch | High     | **Fixed (#46)** — headcount branch reprices to `AWAITING_RECONFIRMATION` + 12h deadline + notify. Reconfirmation-deadline sub-case → U3 |
+| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                                                            | Medium   | **Open** — tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`                                                                        |
+| B6  | No payment/refund notifications at all (notification matrix rows unfulfilled) — `payment.service.ts` writes none                                                                                  | Medium   | **Fixed (#46)** — `payment.{id}.credited`/`.refunded` (+ admin refund payer notify)                                                     |
+| B8  | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34) — `booking.service.ts:1881`                                            | Medium   | **Fixed (#46)** — `createGroupSeries` with upfront per-session holds                                                                    |
+| B9  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules) — `booking.service.ts:1134-1140`                                                                                      | Low-Med  | **Fixed (#46)** — post-H2 cancelSession forfeits the session hold                                                                       |
 
 **Security items (all resolved in #46 unless noted):**
 
@@ -503,22 +539,6 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B6/B8/B9 are **Fixed
 | R8  | MED      | `waitForMeetUrl` failure after successful insert → duplicate Google events on retry. **FIXED** (PR D): poll failure keeps the created row with `meetingUrl: null`                                                                                                                                                   | `google-meeting.provider.ts` (createEvent)         |
 | R9  | LOW      | `eventName` unescaped in the adminReview notification body. **FIXED** (PR D): escaped via `escapeHtml`                                                                                                                                                                                                              | `achievement.service.ts` (adminReview)             |
 | R10 | LOW      | `seed-invite.ts` prints the stored token hash as if it were the plaintext. **FIXED** (PR D): prints a fresh-invite hint instead                                                                                                                                                                                     | `seed-invite.ts`                                   |
-| COV | —        | 9 API files below the 90% lines gate. **FIXED** (PR E): all 9 now ≥ 90% — storage 100%, availability.types 100%, request-id 100%, meeting/index 100%, auth.handler 100%, google-meeting.provider 96.8%, auth.errors 100%, auth.repo 100%, fallback.provider 100%                                                    | see `tests/unit` per module                        |
-
-### 2026-08-16 wave-3 findings (tracked in `docs/plans/active/REVIEW-FIXES-3.md`)
-
-| ID  | Severity | Finding                                                                                                                                             | Location                                                         | Status                                                                                                                                            |
-| --- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B1  | HIGH     | Offline bookings auto-NO_SHOW at session start (deadline = start) → holds released before tutor completes                                           | `booking.service.ts` (tutorAccept, transitionBookingToScheduled) | **FIXED (P3.1)** — room approval window `min(now+12h, start)` (DL-25/U12); room assign bumps deadline to `scheduledEndAt + 2h`                    |
-| B2  | HIGH     | REFUNDED webhook reversal races admin refund → double refund application (stale-snapshot guard; different eventKeys bypass the ledger unique index) | `payment.service.ts` (confirmFromWebhook), `payment.repo.ts`     | **FIXED (P3.2)** — conditional `WHERE status IN (PAID, SETTLED)` update; reversal runs only when this webhook actually transitioned the row       |
-| B3  | MED      | Solo/solo-series withdraw in awaiting states regresses to AWAITING_RECONFIRMATION (revivable with zero holds)                                       | `booking.service.ts` (withdraw)                                  | **FIXED (P3.3)** — solo/solo-series always cancel + zero hold from any non-terminal state                                                         |
-| B4  | MED      | `tutorAccept` ignores past `deadlineAt` → accepts a booking whose holds were released (free session)                                                | `booking.service.ts` (tutorAccept)                               | **FIXED (P3.4)** — `BOOKING_ACCEPTANCE_DEADLINE_PASSED` guard                                                                                     |
-| B5  | MED      | Partial-group reprice at expiry throws → booking wedged, holds stuck, 5-min retry loop forever                                                      | `booking.service.ts` (expireBookings)                            | **FIXED (P3.5)** — reprice failure falls back to release + EXPIRED                                                                                |
-| B6  | LOW      | `createIntent` check-then-insert race can create duplicate PENDING payments (non-unique `provider_reference`)                                       | `payment.service.ts`, `payment.repo.ts`, `payment-record.ts`     | **FIXED (P3.6)** — migration 0019: unique index + `onConflictDoNothing` + reuse                                                                   |
-| B7  | LOW      | `withdraw` double-decrements `confirmedHeadcount` (double-withdraw) and decrements for non-confirmed participants                                   | `booking.service.ts` (withdraw)                                  | **FIXED (P3.7)** — guards on `confirmationState`; double-withdraw is a no-op; group-under-minimum expires (EXPIRED) when CANCELLED is unreachable |
-| B8  | HIGH     | U3: reconfirmation-deadline repricing for still-valid partial headcount not implemented (AWAITING_RECONFIRMATION expires instead of repricing)      | `booking.service.ts` (expireBookings)                            | **FIXED (P3.8)** — reprices again at every 12h deadline; <2 headcount still expires                                                               |
-| B9  | HIGH     | U8: `adminRefund` blindly refunds full `payment.marks` regardless of spend (no reconciliation guard)                                                | `admin-booking.service.ts` (adminRefund)                         | **FIXED (P3.8)** — refund capped at unspent remainder (`sumCreditedMarks − balance`); fully-spent rejected (`REFUND_SPEND_EXHAUSTED`)             |
-| U12 | LOW      | Offline room-approval deadline rule deviation (deadline = session start instead of DL-25 12h window)                                                | `booking.service.ts` (tutorAccept)                               | **CLOSED (P3.1)** — decision (b): `min(now + 12h, scheduledStartAt)`                                                                              |
 
 ## Redis Key Namespace Map
 

@@ -261,14 +261,18 @@ describe("Tutor Invite & Onboarding", () => {
       expect(result.publishedAt).toBeDefined();
     });
 
-    test("published profile cannot be edited by tutor", async () => {
+    test("published profile stores sensitive tutor edits for admin review", async () => {
       const version = await getTutorVersion();
-      await expectRejects(
-        tutorClient.tutor.updateMyProfile({
-          version,
-          displayName: "Should Not Work",
-        }),
-      );
+      const updated = await tutorClient.tutor.updateMyProfile({
+        version,
+        displayName: "Pending Display Name",
+      });
+
+      expect(updated.displayName).not.toBe("Pending Display Name");
+      expect(updated.profileEditStatus).toBe("pending_review");
+      expect(updated.pendingProfileChanges).toMatchObject({
+        displayName: "Pending Display Name",
+      });
     });
 
     test("admin can suspend published tutor", async () => {

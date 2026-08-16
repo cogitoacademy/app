@@ -32,6 +32,7 @@ type GetBookingInput = z.infer<typeof getBookingInput>;
 type ListMineInput = z.infer<typeof listMineInput>;
 type ListSessionsInput = z.infer<typeof listSessionsInput>;
 type BookingActionInput = z.infer<typeof bookingActionInput>;
+type RescheduleDecisionInput = BookingActionInput & { proposalId?: string };
 type ConfirmInviteInput = z.infer<typeof confirmInviteInput>;
 type DeclineInviteInput = z.infer<typeof declineInviteInput>;
 type ReconfirmInput = z.infer<typeof reconfirmInput>;
@@ -47,6 +48,27 @@ export type TutorActionsHandler = ReturnType<typeof createTutorActionsHandler>;
 
 export function createBookingHandler(booking: BookingService) {
   return {
+    proposeReschedule: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: ProposeRescheduleInput;
+    }) =>
+      withDomainMap(
+        () =>
+          booking.proposeReschedule(
+            context.session!.user.id,
+            input.bookingId,
+            input.proposedStartAt,
+            input.proposedEndAt ??
+              new Date(input.proposedStartAt.getTime() + 90 * 60 * 1000),
+            input.reason,
+            input.availabilitySlotId,
+            input.sessionId,
+          ),
+        mapBookingError,
+      ),
     createSolo: async ({
       context,
       input,
@@ -66,6 +88,7 @@ export function createBookingHandler(booking: BookingService) {
               scheduledStartAt: input.scheduledStartAt,
               scheduledEndAt: input.scheduledEndAt,
               timezone: input.timezone,
+              learningGoal: input.learningGoal,
             }),
           mapBookingError,
         ),
@@ -81,6 +104,23 @@ export function createBookingHandler(booking: BookingService) {
     }) => {
       return withDomainMap(
         () => booking.getById(input.bookingId, context.session!.user.id),
+        mapBookingError,
+      );
+    },
+
+    getRescheduleAvailability: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: GetBookingInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.getRescheduleAvailability(
+            input.bookingId,
+            context.session!.user.id,
+          ),
         mapBookingError,
       );
     },
@@ -121,11 +161,15 @@ export function createBookingHandler(booking: BookingService) {
       input,
     }: {
       context: Context;
-      input: BookingActionInput;
+      input: RescheduleDecisionInput;
     }) => {
       return withDomainMap(
         () =>
-          booking.acceptReschedule(context.session!.user.id, input.bookingId),
+          booking.acceptReschedule(
+            context.session!.user.id,
+            input.bookingId,
+            input.proposalId,
+          ),
         mapBookingError,
       );
     },
@@ -135,11 +179,15 @@ export function createBookingHandler(booking: BookingService) {
       input,
     }: {
       context: Context;
-      input: BookingActionInput;
+      input: RescheduleDecisionInput;
     }) => {
       return withDomainMap(
         () =>
-          booking.rejectReschedule(context.session!.user.id, input.bookingId),
+          booking.rejectReschedule(
+            context.session!.user.id,
+            input.bookingId,
+            input.proposalId,
+          ),
         mapBookingError,
       );
     },
@@ -210,6 +258,7 @@ export function createBookingHandler(booking: BookingService) {
               scheduledStartAt: input.scheduledStartAt,
               scheduledEndAt: input.scheduledEndAt,
               timezone: input.timezone,
+              learningGoal: input.learningGoal,
             }),
           mapBookingError,
         ),
@@ -237,6 +286,7 @@ export function createBookingHandler(booking: BookingService) {
               modality: input.modality,
               sessions: input.sessions,
               timezone: input.timezone,
+              learningGoal: input.learningGoal,
             }),
           mapBookingError,
         ),
@@ -266,6 +316,7 @@ export function createBookingHandler(booking: BookingService) {
               inviteeUserIds: input.inviteeUserIds,
               sessions: input.sessions,
               timezone: input.timezone,
+              learningGoal: input.learningGoal,
             }),
           mapBookingError,
         ),
@@ -382,7 +433,8 @@ export function createTutorActionsHandler(booking: BookingService) {
             context.session!.user.id,
             input.bookingId,
             input.proposedStartAt,
-            input.proposedEndAt,
+            input.proposedEndAt ??
+              new Date(input.proposedStartAt.getTime() + 90 * 60 * 1000),
             input.reason,
           ),
         mapBookingError,

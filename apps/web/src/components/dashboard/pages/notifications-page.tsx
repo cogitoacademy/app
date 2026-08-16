@@ -38,6 +38,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { EmptyStateCard } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 const PAGE_SIZE = 20;
@@ -175,17 +176,12 @@ export function NotificationsPage() {
           </CardBody>
         </Card>
       ) : items.length === 0 ? (
-        <Card>
-          <CardBody className="flex min-h-64 flex-col items-center justify-center text-center">
-            <IconBox variant="info-subtle" size="lg" className="mb-4">
-              <IconBell />
-            </IconBox>
-            <Heading size="sm">You are all caught up</Heading>
-            <Text className="mt-2 max-w-md text-muted">
-              New booking and account updates will appear here.
-            </Text>
-          </CardBody>
-        </Card>
+        <EmptyStateCard
+          icon={<IconBell />}
+          title="You are all caught up"
+          description="New booking and account updates will appear here."
+          tone="success"
+        />
       ) : (
         <Card>
           <CardHeader>

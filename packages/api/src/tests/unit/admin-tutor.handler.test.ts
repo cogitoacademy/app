@@ -28,6 +28,13 @@ function makeAuditPort() {
   return { record: mock(async () => {}) };
 }
 
+function makeEmailDeps() {
+  return {
+    emailPort: { send: mock(async () => ({ messageId: "email1" })) },
+    appBaseUrl: "https://app.cogito.test",
+  };
+}
+
 function makeDb() {
   return {
     transaction: mock(async (fn: any) => {
@@ -110,6 +117,7 @@ describe("AdminTutorService", () => {
       const service = createAdminTutorService({
         adminTutorRepo: repo,
         auditPort: makeAuditPort(),
+        ...makeEmailDeps(),
         db: makeDb(),
       });
 
@@ -132,6 +140,7 @@ describe("AdminTutorService", () => {
       const service = createAdminTutorService({
         adminTutorRepo: repo,
         auditPort: makeAuditPort(),
+        ...makeEmailDeps(),
         db: makeDb(),
       });
 
@@ -154,6 +163,7 @@ describe("AdminTutorService", () => {
       const service = createAdminTutorService({
         adminTutorRepo: repo,
         auditPort: makeAuditPort(),
+        ...makeEmailDeps(),
         db: makeDb(),
       });
 
@@ -180,6 +190,7 @@ describe("AdminTutorService", () => {
       const service = createAdminTutorService({
         adminTutorRepo: repo,
         auditPort: makeAuditPort(),
+        ...makeEmailDeps(),
         db: makeDb(),
       });
 
@@ -223,6 +234,7 @@ describe("AdminTutorService", () => {
       const service = createAdminTutorService({
         adminTutorRepo: repo,
         auditPort: makeAuditPort(),
+        ...makeEmailDeps(),
         db: makeDb(),
       });
 

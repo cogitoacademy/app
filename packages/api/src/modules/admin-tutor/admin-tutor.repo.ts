@@ -1,5 +1,10 @@
 import { eq, and, desc } from "drizzle-orm";
-import { tutorInvite, tutorProfile } from "@cogito-app/db/schema";
+import {
+  account,
+  tutorInvite,
+  tutorProfile,
+  user,
+} from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { INVITE_STATUS } from "../../shared/constants";
 
@@ -49,6 +54,15 @@ export interface TutorProfileUpdates {
   onboardingStatus?: string;
   adminReviewNote?: string | null;
   publishedAt?: Date | null;
+  displayName?: string | null;
+  credentialsSummary?: string | null;
+  expertise?: string[] | null;
+  modality?: string | null;
+  prices?: Record<string, number> | null;
+  proofUrls?: string[] | null;
+  pendingProfileChanges?: Record<string, unknown> | null;
+  profileEditStatus?: string;
+  profileEditAdminNote?: string | null;
 }
 
 /**
@@ -70,6 +84,17 @@ async function findActiveInviteByEmail(
       ),
     })) ?? null
   );
+}
+
+async function findUserAccountsByEmail(conn: DbOrTx, email: string) {
+  const existingUser = await conn.query.user.findFirst({
+    where: eq(user.email, email),
+  });
+  if (!existingUser) return undefined;
+  const accounts = await conn.query.account.findMany({
+    where: eq(account.userId, existingUser.id),
+  });
+  return { ...existingUser, accounts };
 }
 
 /**
@@ -209,6 +234,7 @@ async function listTutorProfiles(
 export function createAdminTutorRepo() {
   return {
     findActiveInviteByEmail,
+    findUserAccountsByEmail,
     insertInvite,
     getInviteById,
     updateInvite,

@@ -18,10 +18,11 @@ type AchievementCardProps = {
     category: string;
     award: string;
     level: string;
-    eventDate: string | null;
+    awardingDate: string | null;
     location: string | null;
     description: string | null;
-    imageUrl: string | null;
+    evidenceUrl: string | null;
+    documentationUrl: string | null;
     status: "pending" | "approved" | "rejected";
     adminNote: string | null;
   };
@@ -58,10 +59,10 @@ export function AchievementCard({
 
   return (
     <Card className="flex flex-col">
-      {achievement.imageUrl && (
+      {achievement.documentationUrl && (
         <div className="aspect-video w-full overflow-hidden rounded-t-[inherit] bg-accent">
           <img
-            src={achievement.imageUrl}
+            src={achievement.documentationUrl}
             alt={achievement.eventName}
             className="h-full w-full object-cover"
           />
@@ -79,9 +80,9 @@ export function AchievementCard({
         <Text className="mt-1 font-medium text-foreground">
           {achievement.award}
         </Text>
-        {(achievement.eventDate || achievement.location) && (
+        {(achievement.awardingDate || achievement.location) && (
           <Text className="mt-2 text-sm text-muted">
-            {[formatDate(achievement.eventDate), achievement.location]
+            {[formatDate(achievement.awardingDate), achievement.location]
               .filter(Boolean)
               .join(" · ")}
           </Text>

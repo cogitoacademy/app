@@ -220,19 +220,19 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 **PRD fields:** title, category (enum: competition/award/certificate/leadership/publication/other), short summary, issuer/institution, date earned, proof URL **or file**, optional public note, visibility flag.
 
-**Current state:** `achievement.types.ts:3-13` + schema `achievement.ts:24-33` store `eventName, category (free text), award, level, eventDate, location, description, subjects, imageUrl`. Missing: **issuer/institution**, **visibility flag**; category not enum-constrained; proof is a single `imageUrl` (no file upload flow beyond the new upload module, no PDF/URL-optional shape).
+**Current state:** `achievement.types.ts` + schema `achievement.ts` store `eventName, category (free text), award, level, awardingDate, location, description, subjects, evidenceUrl, documentationUrl`. Verification evidence and optional public documentation are separate. Missing: **issuer/institution**, **visibility flag**; category is not enum-constrained.
 
 **Required:**
 
 1. Migration: add `issuer` (text) + `visibility` (boolean, default true) columns; keep legacy columns (or map `eventName → title` alias at the API boundary to avoid breaking the frontend — decide during implementation).
 2. Constrain `category` to the PRD enum (existing rows: map or allow `other`).
-3. Proof: `imageUrl` may reference an `upload.createUploadUrl` key/URL (already possible); document the flow; add `proofUrl` if the PRD requires a non-image link.
+3. Proof: `evidenceUrl` may reference an `upload.createUploadUrl` key/URL and remains verification-only; `documentationUrl` is the optional public image/link.
 
 **Acceptance tests:**
 
 - Create/update accepts the new fields; category enum enforced
 - `visibility=false` achievements excluded from public surfacing (F16)
-- Uploaded proof file URL accepted as `imageUrl`
+- Uploaded proof file URL accepted as `evidenceUrl`; optional public documentation accepted separately
 
 ---
 

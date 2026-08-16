@@ -75,3 +75,43 @@ export const createWeeklyAvailabilityInput = z
       });
     }
   });
+
+const weeklyTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+const weeklyRangeInput = z
+  .object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: weeklyTime,
+    endTime: weeklyTime,
+    modality: z.enum(["online", "offline", "both"]),
+  })
+  .refine((range) => range.endTime > range.startTime, {
+    message: "endTime must be after startTime",
+    path: ["endTime"],
+  });
+
+export const replaceWeeklyAvailabilityInput = z
+  .object({
+    effectiveFrom: z.coerce.date(),
+    repeatUntil: futureDate,
+    ranges: z.array(weeklyRangeInput).max(21),
+  })
+  .superRefine((input, ctx) => {
+    if (input.repeatUntil < input.effectiveFrom) {
+      ctx.addIssue({
+        code: "custom",
+        message: "repeatUntil must be on or after effectiveFrom",
+        path: ["repeatUntil"],
+      });
+    }
+    if (
+      input.repeatUntil.getTime() - input.effectiveFrom.getTime() >
+      MAX_WEEKLY_RANGE_MS
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Weekly availability can be scheduled for up to 52 weeks",
+        path: ["repeatUntil"],
+      });
+    }
+  });

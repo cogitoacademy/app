@@ -84,8 +84,8 @@ async function createPublishedTutor(
     })
     .execute();
 
-  const start = new Date(Date.now() + 48 * 3600_000);
-  const end = new Date(Date.now() + 49 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
+  const end = new Date(start.getTime() + 7 * 24 * 3600_000);
   const [slot] = await db
     .insert(availabilitySlot)
     .values({ tutorId, startDate: start, endDate: end, modality: "both" })
@@ -126,8 +126,9 @@ describe("G14 admin room relocate and cancel", () => {
   let booking1Id: string;
   let booking2Id: string;
 
-  const startISO = new Date(Date.now() + 24 * 3600_000).toISOString();
-  const endISO = new Date(Date.now() + 25 * 3600_000).toISOString();
+  const scheduledStart = new Date(Date.now() + 24 * 3600_000);
+  const startISO = scheduledStart.toISOString();
+  const endISO = new Date(scheduledStart.getTime() + 90 * 60_000).toISOString();
 
   beforeAll(async () => {
     const adminRes = await signUpAndSignIn(
