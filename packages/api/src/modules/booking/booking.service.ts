@@ -62,6 +62,7 @@ import type {
   BookingAuditPort,
   BookingNotificationPort,
   BookingMeetingPort,
+  BookingRoomPort,
 } from "./index";
 
 export interface CreateSoloInput {
@@ -71,6 +72,7 @@ export interface CreateSoloInput {
   scheduledStartAt: Date;
   scheduledEndAt: Date;
   timezone: string;
+  requestedRoomId?: string;
 }
 
 export interface CreateGroupInput {
@@ -82,6 +84,7 @@ export interface CreateGroupInput {
   scheduledStartAt: Date;
   scheduledEndAt: Date;
   timezone: string;
+  requestedRoomId?: string;
 }
 
 export interface CreateSeriesInput {
@@ -168,8 +171,10 @@ export function createBookingService(deps: {
   audit: BookingAuditPort;
   notification: BookingNotificationPort;
   meeting: BookingMeetingPort;
+  roomPort?: BookingRoomPort;
 }) {
-  const { db, repo, wallet, pricing, audit, notification, meeting } = deps;
+  const { db, repo, wallet, pricing, audit, notification, meeting, roomPort } =
+    deps;
 
   async function assertBookingAccess(
     b: { proposerId: string; tutorId: string },
@@ -643,7 +648,29 @@ export function createBookingService(deps: {
         emailRequired: true,
       });
 
-      return b;
+      // U14 (FR-22/TC-20): an offline booking may carry a room request at
+      // creation. When the room is free a `requested` roomBooking row is
+      // created in the same transaction; when it is taken the booking still
+      // proceeds (awaiting_admin_room_approval) and the response flags the
+      // conflict so the UI can suggest alternatives.
+      let roomRequested = false;
+      let roomConflict = false;
+      if (
+        modality === MODALITY.OFFLINE &&
+        input.requestedRoomId &&
+        roomPort
+      ) {
+        const request = await roomPort.requestRoomForBooking(tx, {
+          bookingId,
+          roomId: input.requestedRoomId,
+          startAt: input.scheduledStartAt,
+          endAt: input.scheduledEndAt,
+        });
+        roomRequested = request.available;
+        roomConflict = request.available === false && request.reason === "taken";
+      }
+
+      return { ...b, roomRequested, roomConflict };
     });
   }
 
@@ -1698,7 +1725,26 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.STUDENT,
       });
 
-      return b;
+      // U14: room request at creation for offline groups (same semantics as
+      // the solo path).
+      let roomRequested = false;
+      let roomConflict = false;
+      if (
+        input.modality === MODALITY.OFFLINE &&
+        input.requestedRoomId &&
+        roomPort
+      ) {
+        const request = await roomPort.requestRoomForBooking(tx, {
+          bookingId,
+          roomId: input.requestedRoomId,
+          startAt: input.scheduledStartAt,
+          endAt: input.scheduledEndAt,
+        });
+        roomRequested = request.available;
+        roomConflict = request.available === false && request.reason === "taken";
+      }
+
+      return { ...b, roomRequested, roomConflict };
     });
   }
 

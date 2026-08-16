@@ -12,11 +12,19 @@ export const createSoloInput = z
       .date()
       .refine((d) => d > new Date(), "Must be in the future"),
     timezone: z.string().max(50).default("Asia/Jakarta"),
+    requestedRoomId: z.string().max(100).optional(),
   })
   .refine((d) => d.scheduledEndAt > d.scheduledStartAt, {
     message: "scheduledEndAt must be after scheduledStartAt",
     path: ["scheduledEndAt"],
-  });
+  })
+  .refine(
+    (d) => d.modality === "offline" || !d.requestedRoomId,
+    {
+      message: "requestedRoomId is only valid for offline bookings",
+      path: ["requestedRoomId"],
+    },
+  );
 
 export const createGroupInput = z
   .object({
@@ -32,11 +40,19 @@ export const createGroupInput = z
       .date()
       .refine((d) => d > new Date(), "Must be in the future"),
     timezone: z.string().max(50).default("Asia/Jakarta"),
+    requestedRoomId: z.string().max(100).optional(),
   })
   .refine((d) => d.scheduledEndAt > d.scheduledStartAt, {
     message: "scheduledEndAt must be after scheduledStartAt",
     path: ["scheduledEndAt"],
-  });
+  })
+  .refine(
+    (d) => d.modality === "offline" || !d.requestedRoomId,
+    {
+      message: "requestedRoomId is only valid for offline bookings",
+      path: ["requestedRoomId"],
+    },
+  );
 
 export const createSeriesInput = z.object({
   tutorId: z.string().max(100),

@@ -112,6 +112,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -141,6 +142,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -518,6 +520,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.previewOverride({
@@ -557,6 +560,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -585,6 +589,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -607,6 +612,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.previewOverride({
@@ -667,6 +673,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       await service.applyOverride("admin1", {
@@ -715,6 +722,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.adminRefund("admin1", {
@@ -734,6 +742,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings();
@@ -751,6 +760,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ bookingId: "b1" });
@@ -767,6 +777,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ bookingId: "nonexistent" });
@@ -788,6 +799,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ limit: 2 });
@@ -828,6 +840,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ limit: 2, cursor: "b9" });
@@ -863,6 +876,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       await service.listBookings({
@@ -911,6 +925,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ limit: 5 });
@@ -933,6 +948,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -958,6 +974,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.getBookingStateHistory("b1");
@@ -980,6 +997,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -1009,6 +1027,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
