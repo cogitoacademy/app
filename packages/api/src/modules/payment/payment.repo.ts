@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+import { PAYMENT_STATUS } from "../../shared/constants";
 
 export type PaymentRepo = ReturnType<typeof createPaymentRepo>;
 
@@ -108,6 +109,41 @@ export async function updatePaymentStatus(
   await conn.update(paymentRecord).set(data).where(eq(paymentRecord.id, id));
 }
 
+/**
+ * Conditionally updates a payment to a new status, but only when the row is
+ * still in a credit state (PAID/SETTLED). Returns the updated row, or null
+ * when the payment was already transitioned out of a credit state (e.g. an
+ * admin refund committed first — B2).
+ *
+ * @param conn - the database connection or active transaction
+ * @param id - the payment id
+ * @param data - the status and optional webhook fields
+ */
+export async function updatePaymentStatusIfInCreditState(
+  conn: DbOrTx,
+  id: string,
+  data: {
+    status: string;
+    providerEventId?: string;
+    failureReason?: string | null;
+  },
+) {
+  const [updated] = await conn
+    .update(paymentRecord)
+    .set({ ...data, updatedAt: new Date() })
+    .where(
+      and(
+        eq(paymentRecord.id, id),
+        inArray(paymentRecord.status, [
+          PAYMENT_STATUS.PAID,
+          PAYMENT_STATUS.SETTLED,
+        ]),
+      ),
+    )
+    .returning();
+  return updated ?? null;
+}
+
 export function createPaymentRepo(db: DbType) {
   return {
     findPackageByCode(code: string, conn?: DbOrTx) {
@@ -136,6 +172,17 @@ export function createPaymentRepo(db: DbType) {
       conn?: DbOrTx,
     ) {
       return updatePaymentStatus(conn ?? db, id, data);
+    },
+    updatePaymentStatusIfInCreditState(
+      id: string,
+      data: {
+        status: string;
+        providerEventId?: string;
+        failureReason?: string | null;
+      },
+      conn?: DbOrTx,
+    ) {
+      return updatePaymentStatusIfInCreditState(conn ?? db, id, data);
     },
   };
 }

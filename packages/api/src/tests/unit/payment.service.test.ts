@@ -43,6 +43,7 @@ function makeRepo(overrides: Partial<PaymentRepo> = {}): PaymentRepo {
     findPaymentByProviderEventId: mock(async () => null),
     insertPayment: mock(async () => {}),
     updatePaymentStatus: mock(async () => {}),
+    updatePaymentStatusIfInCreditState: mock(async () => ({})),
     ...overrides,
   } as PaymentRepo;
 }
@@ -764,7 +765,10 @@ describe("PaymentService", () => {
 
     test("REFUNDED webhook on a PAID payment writes a refund notification", async () => {
       const wallet = makeWallet();
-      const updatePaymentStatus = mock(async () => {});
+      const updatePaymentStatusIfInCreditState = mock(async () => ({
+        id: "pay1",
+        status: PAYMENT_STATUS.REFUNDED,
+      }));
       const repo = makeRepo({
         findPaymentByProviderReference: mock(async () => ({
           id: "pay1",
@@ -776,7 +780,7 @@ describe("PaymentService", () => {
           providerReference: "stub:user1:pkg1",
         })),
         findPaymentByProviderEventId: mock(async () => null),
-        updatePaymentStatus,
+        updatePaymentStatusIfInCreditState,
       });
       const notification = { writeBestEffort: mock(async () => {}) };
 
@@ -802,7 +806,7 @@ describe("PaymentService", () => {
       });
 
       expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
-      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+      expect(updatePaymentStatusIfInCreditState).toHaveBeenCalledTimes(1);
       expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
       expect(notification.writeBestEffort).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -825,7 +829,10 @@ describe("PaymentService", () => {
           availableBalance: 0,
         })),
       };
-      const updatePaymentStatus = mock(async () => {});
+      const updatePaymentStatusIfInCreditState = mock(async () => ({
+        id: "pay1",
+        status: PAYMENT_STATUS.REFUNDED,
+      }));
       const repo = makeRepo({
         findPaymentByProviderReference: mock(async () => ({
           id: "pay1",
@@ -837,7 +844,7 @@ describe("PaymentService", () => {
           providerReference: "stub:user1:pkg1",
         })),
         findPaymentByProviderEventId: mock(async () => null),
-        updatePaymentStatus,
+        updatePaymentStatusIfInCreditState,
       });
       const notification = { writeBestEffort: mock(async () => {}) };
 
@@ -925,6 +932,62 @@ describe("PaymentService", () => {
       expect(result.status).toBe(PAYMENT_STATUS.PENDING);
       expect(wallet.compensate).toHaveBeenCalledTimes(0);
       expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
+    });
+
+    test("B2: REFUNDED webhook with a stale PAID snapshot does not reverse when the row is already REFUNDED (admin refund won)", async () => {
+      const wallet = {
+        ...makeWallet(),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 0,
+          heldBalance: 0,
+          availableBalance: 0,
+        })),
+      };
+      // The conditional update is a no-op (returns null): the real row was
+      // already moved to REFUNDED by the admin refund. The webhook read a
+      // stale PAID snapshot before the admin refund committed.
+      const updatePaymentStatusIfInCreditState = mock(async () => null);
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatusIfInCreditState,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_b2_stale",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
+      expect(updatePaymentStatusIfInCreditState).toHaveBeenCalledTimes(1);
+      expect(wallet.compensate).toHaveBeenCalledTimes(0);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(0);
     });
   });
 
