@@ -55,6 +55,37 @@ async function listByUserId(conn: DbOrTx, userId: string) {
 }
 
 /**
+ * Lists approved + visible achievements for the public landing (F16), with
+ * the owner's display name attached.
+ */
+export async function listApprovedPublic(conn: DbOrTx) {
+  return conn
+    .select({
+      id: achievement.id,
+      userId: achievement.userId,
+      eventName: achievement.eventName,
+      category: achievement.category,
+      award: achievement.award,
+      level: achievement.level,
+      issuer: achievement.issuer,
+      awardingDate: achievement.awardingDate,
+      location: achievement.location,
+      description: achievement.description,
+      evidenceUrl: achievement.evidenceUrl,
+      documentationUrl: achievement.documentationUrl,
+      createdAt: achievement.createdAt,
+      displayName: user.name,
+    })
+    .from(achievement)
+    .innerJoin(user, eq(user.id, achievement.userId))
+    .where(
+      and(eq(achievement.status, "approved"), eq(achievement.visibility, true)),
+    )
+    .orderBy(desc(achievement.awardingDate), desc(achievement.createdAt))
+    .limit(100);
+}
+
+/**
  * Inserts a new achievement.
  *
  * @param conn - the database connection or active transaction
@@ -250,6 +281,7 @@ async function updateStatus(
 export function createAchievementRepo() {
   return {
     listByUserId,
+    listApprovedPublic,
     insert,
     findByIdForUser,
     update,

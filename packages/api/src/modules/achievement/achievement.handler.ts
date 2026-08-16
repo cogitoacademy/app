@@ -29,6 +29,13 @@ export function createAchievementHandler(deps: {
     );
   }
 
+  async function listApproved() {
+    return withDomainMap(
+      () => achievementService.listApprovedPublic(),
+      mapAchievementError,
+    );
+  }
+
   async function create({
     context,
     input,
@@ -98,7 +105,7 @@ export function createAchievementHandler(deps: {
     );
   }
 
-  return { list, create, update, remove, adminList, adminReview };
+  return { list, listApproved, create, update, remove, adminList, adminReview };
 }
 
 export type AchievementHandler = ReturnType<typeof createAchievementHandler>;

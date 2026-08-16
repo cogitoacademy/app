@@ -19,6 +19,23 @@ export type CogitoUser = {
   updatedAt: Date;
 };
 
+// C6 (foundation-hardening): passwords must contain at least one uppercase
+// letter, one lowercase letter, and one digit (min length 8 enforced by
+// better-auth's minPasswordLength). Validated at sign-up via the createUser
+// hook — better-auth 1.6.11 has no built-in complexity options.
+export function assertPasswordPolicy(password: string) {
+  if (!/[A-Z]/.test(password)) {
+    return "Password must contain at least one uppercase letter";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "Password must contain at least one lowercase letter";
+  }
+  if (!/[0-9]/.test(password)) {
+    return "Password must contain at least one digit";
+  }
+  return null;
+}
+
 export function createAuth() {
   return betterAuth({
     database: drizzleAdapter(db, {

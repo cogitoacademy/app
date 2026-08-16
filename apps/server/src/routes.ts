@@ -7,7 +7,7 @@ import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
 import { MAX_UPLOAD_BYTES } from "@cogito-app/api/modules/upload/upload.types";
 import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
-import { auth } from "@cogito-app/auth";
+import { auth, assertPasswordPolicy } from "@cogito-app/auth";
 import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 import { matchAuthPath, matchRateLimitPath } from "./rate-limit-paths";
@@ -246,6 +246,18 @@ export function createServer() {
                   headers: { "Content-Type": "application/json" },
                 },
               );
+            }
+            // C6: enforce the password complexity policy at sign-up (the
+            // server owns the body here — better-auth 1.6.11 has no built-in
+            // complexity options or effective global-hook short-circuit).
+            if (request.url.endsWith("/api/auth/sign-up/email")) {
+              const parsed = JSON.parse(body || "{}") as {
+                password?: string;
+              };
+              const policyError = assertPasswordPolicy(parsed.password ?? "");
+              if (policyError) {
+                return status(400, { message: policyError });
+              }
             }
             const bounded = new Request(request.url, {
               method: request.method,
