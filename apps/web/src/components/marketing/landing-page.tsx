@@ -20,7 +20,9 @@ import {
 } from "@cogito-app/ui/components/selia/item";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { orpc } from "@/utils/orpc";
 import {
   IconArrowRight,
   IconBrandWhatsapp,
@@ -66,6 +68,67 @@ const achievementHighlights = [
   "Research and writing portfolio",
   "University application readiness",
 ] as const;
+
+function PublicAchievements() {
+  const { data, isPending } = useQuery(
+    orpc.achievement.listApproved.queryOptions({ input: {} }),
+  );
+  const items = data ?? [];
+  const shown = items.slice(0, 3);
+  if (isPending) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <Card key={i}>
+            <CardBody>
+              <IconBox variant="tertiary">
+                <IconCertificate />
+              </IconBox>
+              <Text className="mt-4 font-medium">Loading achievements…</Text>
+            </CardBody>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+  if (shown.length === 0) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-3">
+        {achievementHighlights.map((item) => (
+          <Card key={item}>
+            <CardBody>
+              <IconBox variant="tertiary">
+                <IconCertificate />
+              </IconBox>
+              <Text className="mt-4 font-medium">{item}</Text>
+            </CardBody>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      {shown.map((a) => (
+        <Card key={a.id}>
+          <CardBody>
+            <IconBox variant="tertiary">
+              <IconCertificate />
+            </IconBox>
+            <Text className="mt-4 font-medium">{a.eventName}</Text>
+            <Text className="mt-1 text-sm text-muted">
+              {a.displayName}
+              {a.issuer ? ` · ${a.issuer}` : ""}
+            </Text>
+            <Badge variant="tertiary" className="mt-3">
+              {a.category}
+            </Badge>
+          </CardBody>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 export function LandingPage() {
   return (
@@ -269,23 +332,12 @@ export function LandingPage() {
               Achievements become part of the story.
             </Heading>
             <Text className="mt-4 text-muted">
-              The public surface is ready to promote approved student outcomes.
-              Once the public achievements API is added, this section can be
-              wired to live moderation data.
+              Approved student outcomes are showcased here — competition wins,
+              certificates, and leadership milestones that went through Cogito's
+              review process.
             </Text>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {achievementHighlights.map((item) => (
-              <Card key={item}>
-                <CardBody>
-                  <IconBox variant="tertiary">
-                    <IconCertificate />
-                  </IconBox>
-                  <Text className="mt-4 font-medium">{item}</Text>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
+          <PublicAchievements />
         </div>
       </section>
 

@@ -1,44 +1,33 @@
 # REVIEW-FIXES-3 — SDD Progress Ledger
 
 Wave-3 audit execution. Worktree: `/Users/miapalovaara/cogito/wt-review-fixes3`.
-Baseline: API 1747 pass / 0 fail, server 44 pass / 0 fail; api coverage 98.2%, overall 98.0%.
 
 ## Status
 
 | PR  | Tasks                                   | Status        | Notes |
 | --- | --------------------------------------- | ------------- | ----- |
-| P1  | Docs reconciliation (D1–D4)             | MERGED (#60)  | Main body landed in #59; follow-up closed CONTEXT gaps. Squash-merged. |
-| P2  | PR #55 blocker report (report only)     | MERGED (#61)  | Comment posted: https://github.com/cogitoacademy/app/pull/55#issuecomment-5306378534 |
-| P3  | Backend money-correctness B1–B9 (TDD)   | MERGED (#62)  | 9 commits, 1782/44 pass at merge time; API 98.1%, overall 98.0% |
-| P4  | CI/CD hardening C1–C9                   | MERGED (#63)  | Labeler v7 + labels + backfill, CD fail-loudly, .dockerignore, non-root Dockerfiles (verified locally), stop_grace_period, lint auto-commit guard, redis quit + force-exit, ci.yml hygiene |
-| P5  | U1, U5, U10, U14 + hygiene (5.8)        | PR #64 open   | 5 commits; full suite 1782+44 pass; API 97.7%, overall 97.6% |
-| P5  | U2, U6, U7                              | pending       | Student self-reschedule, admin per-session cancel, per-session tutor reschedule — feature-scale, next wave |
-| P6  | Frontend F-items + auth                 | blocked       | Requires PR #55 merge (open, red CI — blocker report posted) |
+| P1  | Docs reconciliation (D1–D4)             | MERGED (#60)  | Main body in #59; follow-up closed CONTEXT gaps |
+| P2  | PR #55 blocker report (report only)     | MERGED (#61)  | Comment: pull/55#issuecomment-5306378534 |
+| P3  | Backend money-correctness B1–B9 (TDD)   | MERGED (#62)  | 9 commits; API 98.1%, overall 98.0% |
+| P4  | CI/CD hardening C1–C9                   | MERGED (#63)  | Labeler v7+labels+backfill, CD fail-loudly, docker hardening, shutdown drains |
+| P5  | U1–U7, U10, U14 + hygiene               | MERGED (#64)  | Full suite 1803+44; API 97.6%, overall 97.5% |
+| P6  | F8/F13/F14/F16/C6                       | PR #65 open   | PR #55 merged (d4e50e0) unblocked P6; branch carried a main-merge reconciliation (migrations renumbered 0023, U5/U14/H-2-gate re-applied over #55) |
+| P6  | G2 email verification                   | deferred      | better-auth plugin + Resend + UI (was deferred in CONTEXT before wave-3) |
+| —   | J2 session-expiry UX, F18 inviter-withdraw UI | open   | Tracked in FRONTEND-GAPS-SPEC |
 
-## Per-PR report (plan requirement)
+## Frontend gaps (user follow-up)
 
-| PR | Merge commit | Tests | Coverage deltas | PR URL | CI |
-| -- | ------------ | ----- | --------------- | ------ | -- |
-| P1 | `7674dcb` | docs-only (no test impact; full suite verified locally) | — | #60 | green (duplicate run pending approval; earlier run green) |
-| P2 | `44fd088` | docs-only | — | #61 | green |
-| P3 | `648d7ca` | 1769 API + 44 server (then 1782 after P5 test updates) | API 98.2→98.1, overall 98.0 | #62 | green |
-| P4 | `266978a` | 44 server; Dockerfiles built+run non-root locally | — | #63 | green |
-| P5 | open (#64) | 1782 API + 44 server | API 98.1→97.7, overall 98.0→97.6 (new feature code) | #64 | running |
+- PR #55 (`feat: complete frontend PRD gap flows`) **merged 2026-08-16** (`d4e50e0`). The P2 blocker items (TS6133 `proposedEndAt`, migration 0020 achievement-column mismatch, spec deletions, stray artifacts) were resolved by the author before merge; the labeler backfill + spec note were handled in P4/P1.
+- P6 landed: F16 (public `achievement.listApproved` + landing), F14 (disclaimer callout), F8 (per-session completion UI), F13 (payout details card), C6 (password policy server+client). Remaining: G2 (deferred), J2, F18-withdraw.
 
-## Key decisions recorded
+## Merge reconciliation (P5 branch, #55 hit main mid-P5)
 
-- U12 (P3.1): DL-25 decision (b) — `deadlineAt = min(now + 12h, scheduledStartAt)`; room assign bumps to `scheduledEndAt + 2h`.
-- B6 (P3.6): migration numbered 0019 on main (PR #55's 0019–0021 not merged).
-- U10 (P5): migration 0020 on main; legacy `category` values in tests mapped to enum.
-- P5 remaining: U2 (rescheduleSelf needs state-machine/product decision), U6, U7.
-- P6: blocked on PR #55 (TS6133 + migration 0020 mismatch — reported).
+- Migrations: my 0020 (achievement) → **0023_achievement_prd_fields** (0023_* renamed; #55's 0020–0022 took the numbers); my proposal session_id migration dropped (#55 added the column).
+- Re-applied over #55's code: U5 (markParticipantNoShow), U14 (requestedRoomId + room request), achievement enum fields, U2 H-2 gate + U7 sibling-overlap guard (main's multiparty reschedule already covered the flows), web achievement-form category enum.
+- Fixed merge dupes: schema `sessionId`, repo insert params; `tsgo`-based check-types after `bun install`.
+- All wave-3 U-tests pass against the merged code (slots widened for #55's availability-window enforcement).
 
-## Commit log (P5 branch)
+## Container-stop logs (user question)
 
-- `d91cadd` chore(booking): explicit column lists; drop unused BookingTransition (5.8)
-- `2041d48` feat(achievement): PRD field parity — issuer, visibility, category enum (U10)
-- `dc17b2e` feat(admin): manual meeting-link entry with participant notification (U1)
-- `a3bc6ce` feat(booking,room): offline room availability integrated into booking creation (U14)
-- `3eb9883` feat(tutor): per-participant no-show marking with hold forfeit (U5)
-- `7931e8d` docs: record wave-3 P5 statuses
-- `c980b98` test(achievement): use PRD category enum values in legacy tests
+- Postgres `FATAL: terminating connection due to administrator command` on stop is **inherent** when connections are open at shutdown (verified: 5 live connections → 5 FATALs); `stop_grace_period: 30s` (P4) gives postgres time to fast-shutdown cleanly, and app-before-db stop ordering (Coolify dependency order; RUNBOOK note) eliminates the lines.
+- App-side stop is clean with the C8 fix: `shutdown_signal → redis_quit → db_pool_drained` verified.

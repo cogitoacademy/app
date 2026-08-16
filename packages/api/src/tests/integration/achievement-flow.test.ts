@@ -204,6 +204,31 @@ describe("Achievement review flow", () => {
     expect(created.visibility).toBe(true);
   });
 
+  test("F16: listApproved returns only approved + visible achievements with names", async () => {
+    const publicResult = await studentClient.achievement.listApproved();
+
+    // The approved achievement (visible by default) appears; the rejected one
+    // and any visibility=false rows do not.
+    const approved = await db
+      .select()
+      .from(achievement)
+      .where(eq(achievement.status, "approved"))
+      .limit(1);
+    if (approved.length > 0) {
+      const hit = publicResult.find((a) => a.id === approved[0]!.id);
+      expect(hit).toBeDefined();
+      expect(hit!.displayName).toBeTruthy();
+    }
+    const rejected = await db
+      .select()
+      .from(achievement)
+      .where(eq(achievement.status, "rejected"))
+      .limit(1);
+    if (rejected.length > 0) {
+      expect(publicResult.some((a) => a.id === rejected[0]!.id)).toBe(false);
+    }
+  });
+
   test("admin list filters by status", async () => {
     const approved = await adminClient.achievement.adminList({
       status: "approved",

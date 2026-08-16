@@ -314,7 +314,7 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
 - Cookies: sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. Same-origin subdomain sharing works because `app.cogitoacademy.id` and `cogitoacademy.id` share the same site.
 - `CogitoUser` type exported with role field.
-- **Pending (foundation hardening):** password policy — partially implemented (min 8 enforced via `minPasswordLength: 8`; upper/lower/digit rule still open — C6). Conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`). **Email verification (G2) deferred** (additive; depends on Resend wiring + frontend route).
+- **Pending (foundation hardening):** password policy — **implemented (C6 closed by REVIEW-FIXES-3 P6)** — min 8 via `minPasswordLength` + upper/lower/digit via `assertPasswordPolicy` enforced in the server auth route at sign-up (`apps/server/src/routes.ts`), mirrored in the sign-up form. Conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`). **Email verification (G2) deferred** (additive; depends on Resend wiring + frontend route).
 
 ## CI/CD
 

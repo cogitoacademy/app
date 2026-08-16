@@ -132,6 +132,55 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
         />
       </div>
 
+      <Card>
+        <CardHeader>
+          <IconBox variant="success-subtle">
+            <IconCoins />
+          </IconBox>
+          <div>
+            <CardTitle>Payout details</CardTitle>
+            <CardDescription>
+              Completed sessions settle your share of the Marks; each Mark
+              converts to Rp 7,000 at payout.
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardBody>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <Text className="text-sm text-muted">Completed sessions</Text>
+              <Text className="mt-1 text-lg font-semibold">
+                {payouts.data?.completedSessions ?? 0}
+              </Text>
+            </div>
+            <div>
+              <Text className="text-sm text-muted">Total session Marks</Text>
+              <Text className="mt-1 text-lg font-semibold">
+                {payouts.data?.totalMarks ?? 0}
+              </Text>
+            </div>
+            <div>
+              <Text className="text-sm text-muted">Cogito take</Text>
+              <Text className="mt-1 text-lg font-semibold">
+                {payouts.data?.cogitoTake ?? 0}
+              </Text>
+            </div>
+            <div>
+              <Text className="text-sm text-muted">Tutor payout</Text>
+              <Text className="mt-1 text-lg font-semibold">
+                {payouts.data?.tutorPayout ?? 0} Marks
+              </Text>
+              <Text className="mt-1 text-sm text-muted">
+                ≈ Rp{" "}
+                {((payouts.data?.tutorPayout ?? 0) * 7000).toLocaleString(
+                  "id-ID",
+                )}
+              </Text>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
         <Card>
           <CardHeader>

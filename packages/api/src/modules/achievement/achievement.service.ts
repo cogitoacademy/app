@@ -61,6 +61,13 @@ export function createAchievementService(deps: {
     return achievementRepo.listByUserId(db, userId);
   }
 
+  /**
+   * Lists approved + visible achievements for the public landing (F16).
+   */
+  async function listApprovedPublic() {
+    return achievementRepo.listApprovedPublic(db);
+  }
+
   async function create(
     userId: string,
     input: Omit<InsertAchievementParams, "userId">,
@@ -173,7 +180,15 @@ export function createAchievementService(deps: {
     });
   }
 
-  return { list, create, update, remove, adminList, adminReview };
+  return {
+    list,
+    listApprovedPublic,
+    create,
+    update,
+    remove,
+    adminList,
+    adminReview,
+  };
 }
 
 export type AchievementService = ReturnType<typeof createAchievementService>;

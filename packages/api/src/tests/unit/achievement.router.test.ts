@@ -30,6 +30,7 @@ describe("achievementRouter", () => {
       "create",
       "delete",
       "list",
+      "listApproved",
       "update",
     ]);
   });
