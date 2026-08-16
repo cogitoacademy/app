@@ -216,7 +216,6 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       `student.dl.under.${ts}@cogito.test`,
     );
     await createTestWallet(soloStudent.id, 300);
-
     const start = new Date(Date.now() + 48 * 3600_000);
     const b = await repo.insertBooking(db, {
       id: crypto.randomUUID(),
@@ -261,5 +260,40 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     const w = await getWalletByUserId(soloStudent.id);
     expect(w!.heldBalance).toBe(0);
     expect(w!.availableBalance).toBe(300);
+  });
+
+  test("B5: partial group at deadline whose reprice fails (insufficient marks) falls back to EXPIRED instead of wedging", async () => {
+    const a = await createTestUser(`student.dl.b5.a.${ts}@cogito.test`);
+    await createTestWallet(a.id, 30);
+    const c = await createTestUser(`student.dl.b5.c.${ts}@cogito.test`);
+    await createTestWallet(c.id, 30);
+
+    // 2-of-5 group, both students committed their entire balance to the
+    // size-5 hold (30 each): repricing to the size-2 rate (45/student) needs
+    // +15 available per student, which neither has — reprice must fail.
+    const seeded = await seedPartialGroup({
+      tutorId,
+      confirmedUserIds: [a.id, c.id],
+      targetGroupSize: 5,
+      perStudent: 30,
+    });
+
+    const result = await services.booking.expireBookings();
+    // The failure is handled inside the expiry job — no wedged booking left
+    // to retry forever.
+    expect(result.failed).toBe(0);
+
+    const [row] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, seeded.id));
+    expect(row!.currentState).toBe(BOOKING_STATE.EXPIRED);
+    expect(row!.holdAmount).toBe(0);
+
+    for (const id of [a.id, c.id]) {
+      const w = await getWalletByUserId(id);
+      expect(w!.heldBalance).toBe(0);
+      expect(w!.availableBalance).toBe(30);
+    }
   });
 });

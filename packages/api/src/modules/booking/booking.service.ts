@@ -2758,35 +2758,64 @@ export function createBookingService(deps: {
             confirmed.length >= MIN_GROUP_HEADCOUNT &&
             confirmed.length < b.targetGroupSize
           ) {
-            await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.SYSTEM);
-
-            await repo.updateBookingDeadline(
-              tx,
-              b.id,
-              new Date(Date.now() + RESPONSE_WINDOW_MS),
-            );
-
-            await transition(tx, b.id, BOOKING_STATE.AWAITING_RECONFIRMATION, {
-              actorId: "system",
-              actorType: ACTOR_TYPE.SYSTEM,
-              reason: "Group deadline passed with partial headcount",
-            });
-
-            for (const p of confirmed) {
-              // eslint-disable-next-line no-await-in-loop
-              await notification.writeBestEffort({
-                db: tx,
-                userId: p.userId,
+            // B5: if the reprice cannot be funded (InsufficientMarksError
+            // etc.), fall back to the normal expiry path — the booking must
+            // never stay wedged with a past deadline for the job to retry
+            // every 5 minutes forever.
+            let repriced = true;
+            try {
+              await repriceGroupForHeadcount(
+                tx,
+                b,
+                confirmed,
+                ACTOR_TYPE.SYSTEM,
+              );
+            } catch (error) {
+              repriced = false;
+              log({
+                level: "warn",
+                action: "expire_reprice_failed",
                 bookingId: b.id,
-                category: NOTIFICATION_CATEGORY.BOOKING,
-                severity: NOTIFICATION_SEVERITY.ACTION,
-                title: "Group deadline reached",
-                body: "Your group did not fill before the deadline. The per-student price was updated — please reconfirm within 12 hours.",
-                eventKey: `booking.${b.id}.deadline_reprice.${p.userId}`,
-                emailRequired: true,
+                message:
+                  "Group reprice at deadline failed; falling back to expiry",
+                error: { message: String(error) },
               });
             }
-            return;
+
+            if (repriced) {
+              await repo.updateBookingDeadline(
+                tx,
+                b.id,
+                new Date(Date.now() + RESPONSE_WINDOW_MS),
+              );
+
+              await transition(
+                tx,
+                b.id,
+                BOOKING_STATE.AWAITING_RECONFIRMATION,
+                {
+                  actorId: "system",
+                  actorType: ACTOR_TYPE.SYSTEM,
+                  reason: "Group deadline passed with partial headcount",
+                },
+              );
+
+              for (const p of confirmed) {
+                // eslint-disable-next-line no-await-in-loop
+                await notification.writeBestEffort({
+                  db: tx,
+                  userId: p.userId,
+                  bookingId: b.id,
+                  category: NOTIFICATION_CATEGORY.BOOKING,
+                  severity: NOTIFICATION_SEVERITY.ACTION,
+                  title: "Group deadline reached",
+                  body: "Your group did not fill before the deadline. The per-student price was updated — please reconfirm within 12 hours.",
+                  eventKey: `booking.${b.id}.deadline_reprice.${p.userId}`,
+                  emailRequired: true,
+                });
+              }
+              return;
+            }
           }
 
           await releaseAllParticipantHolds(
