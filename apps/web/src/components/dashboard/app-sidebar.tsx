@@ -40,6 +40,7 @@ import {
   IconSelector,
   IconSettings,
   IconShieldCheck,
+  IconTimelineEventText,
   IconUser,
   IconUserSquare,
   IconUsersGroup,
@@ -59,7 +60,7 @@ const studentNavItems = [
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/onboarding", label: "My Profile", icon: IconUser },
-  { to: "/availability", label: "Availability", icon: IconCalendarEvent },
+  { to: "/availability", label: "Availability", icon: IconTimelineEventText },
   { to: "/tutor-bookings", label: "Bookings", icon: IconCalendarEvent },
 ] as const;
 

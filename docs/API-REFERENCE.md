@@ -210,6 +210,15 @@ The web dashboard has no aggregate endpoint. Its role-specific views compose exi
 - **Errors:** `WEEKLY_AVAILABILITY_RANGE` (400) if > 53 occurrences, `AVAILABILITY_SLOT_OVERLAP` (409)
 - **Description:** Materializes weekly windows from `startDate` through `repeatUntil`
 
+### `tutor.replaceWeeklyAvailability`
+
+- **RPC path:** `/rpc/tutor/replaceWeeklyAvailability`
+- **Auth:** Tutor
+- **Input:** `{ effectiveFrom, repeatUntil, ranges: [{ dayOfWeek, startTime, endTime, modality }] }` (`dayOfWeek` 0–6, times use 24-hour `HH:mm`, max 21 weekly ranges, range up to 52 weeks)
+- **Output:** `AvailabilitySlot[]`
+- **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409) for overlapping weekly ranges
+- **Description:** Atomically deactivates future recurring windows from `effectiveFrom` and regenerates them from weekly hours. One-off date overrides are preserved and take priority over conflicting generated occurrences.
+
 ### `tutor.deleteAvailability`
 
 - **Auth:** Tutor

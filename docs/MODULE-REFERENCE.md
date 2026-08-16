@@ -578,21 +578,22 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 **Files:**
 
 - `tutor.types.ts` — Zod schemas for profile fields, `getMyPayoutsInput`
-- `availability.types.ts` — Availability slot types (`upsert`, weekly-create, delete)
+- `availability.types.ts` — Availability slot types (`upsert`, weekly-create, weekly-replace, delete)
 - `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
 - `tutor.repo.ts` — `findByUserId`, `create`, `update`, `upsertAvailability`
-- `tutor.service.ts` — `getMyProfile`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
+- `tutor.service.ts` — `getMyProfile`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
 - `tutor.handler.ts` — Maps handler context/input
 - `tutor.router.ts` — Tutor-guarded routes (`tutorProcedure`)
 
 **Service Methods:**
 
 - `getMyProfile(userId)` — Returns tutor profile
-- `updateMyProfile(userId, input)` — Updates draft profile fields with optimistic lock (`version`); throws `TutorProfileNotEditableError` if published
+- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). Published profiles apply bio and availability-summary edits immediately, while trust-sensitive edits are stored as pending changes for admin review so discovery continues serving the approved values.
 - `submitForReview(userId)` — Validates required fields + pricing, then sets `onboardingStatus` to `pending_review`; records audit log
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
+- `replaceWeeklyAvailability(userId, input)` — Atomically replaces future recurring occurrences from weekday/time ranges; preserves one-off overrides and skips generated occurrences they supersede
 - `deleteAvailability(userId, slotId)` — Deactivates a slot (soft delete)
 - `getMyPayouts(userId, { dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
 
@@ -602,6 +603,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 - Only tutors with `published` status are visible in discovery
 - Availability slots must be in the future and non-overlapping
+- A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - Profile updates use optimistic locking (`version`)
 

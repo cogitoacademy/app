@@ -22,6 +22,10 @@ import {
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 
+function utcDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 /**
  * Validates tutor profile update input against status and pricing constraints.
  *
@@ -29,7 +33,6 @@ type TutorProfileRow = typeof tutorProfile.$inferSelect;
  * @param input - the update input to validate
  * @param pricingPort - the pricing port used to validate prices
  * @throws {TutorProfileNotFoundError} if the profile does not exist
- * @throws {TutorProfileNotEditableError} if the profile is published
  * @throws {InvalidTutorPricingError} if prices violate the Cogito floor
  */
 export function validateUpdateInput(
@@ -270,11 +273,19 @@ export function createTutorService(deps: {
       const existing = await tutorRepo.listAvailability(tx, userId, {
         from: new Date(),
       });
-      const overlapping = existing.find((slot) => {
+      const overlapping = existing.filter((slot) => {
         if (input.id && slot.id === input.id) return false;
         return start < slot.endDate && end > slot.startDate;
       });
-      if (overlapping) {
+      const recurringOccurrences = input.isRecurring
+        ? []
+        : overlapping.filter((slot) => slot.isRecurring);
+      await Promise.all(
+        recurringOccurrences.map((occurrence) =>
+          tutorRepo.deleteAvailability(tx, occurrence.id),
+        ),
+      );
+      if (overlapping.some((slot) => !slot.isRecurring)) {
         throw new AvailabilitySlotOverlapError(userId);
       }
 
@@ -354,6 +365,89 @@ export function createTutorService(deps: {
       );
     });
   }
+
+  async function replaceWeeklyAvailability(
+    userId: string,
+    input: {
+      effectiveFrom: Date;
+      repeatUntil: Date;
+      ranges: Array<{
+        dayOfWeek: number;
+        startTime: string;
+        endTime: string;
+        modality: "online" | "offline" | "both";
+      }>;
+    },
+  ) {
+    const occurrences: Array<{
+      startDate: Date;
+      endDate: Date;
+      modality: "online" | "offline" | "both";
+    }> = [];
+    const firstDay = new Date(`${utcDateKey(input.effectiveFrom)}T00:00:00Z`);
+    const lastDay = new Date(`${utcDateKey(input.repeatUntil)}T00:00:00Z`);
+
+    for (
+      let day = firstDay;
+      day <= lastDay;
+      day = new Date(day.getTime() + 24 * 60 * 60 * 1000)
+    ) {
+      for (const range of input.ranges) {
+        if (day.getUTCDay() !== range.dayOfWeek) continue;
+        const key = utcDateKey(day);
+        occurrences.push({
+          startDate: new Date(`${key}T${range.startTime}:00+07:00`),
+          endDate: new Date(`${key}T${range.endTime}:00+07:00`),
+          modality: range.modality,
+        });
+      }
+    }
+
+    const sorted = occurrences.toSorted(
+      (a, b) => a.startDate.getTime() - b.startDate.getTime(),
+    );
+    if (
+      sorted.some(
+        (occurrence, index) =>
+          index > 0 && occurrence.startDate < sorted[index - 1]!.endDate,
+      )
+    ) {
+      throw new AvailabilitySlotOverlapError(userId);
+    }
+
+    return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, userId);
+      await tutorRepo.deactivateFutureRecurringAvailability(
+        tx,
+        userId,
+        input.effectiveFrom,
+      );
+      const existingOverrides = (
+        await tutorRepo.listAvailability(tx, userId, {
+          from: input.effectiveFrom,
+        })
+      ).filter((slot) => !slot.isRecurring);
+      const withoutOverrideConflicts = sorted.filter(
+        (occurrence) =>
+          !existingOverrides.some(
+            (slot) =>
+              occurrence.startDate < slot.endDate &&
+              occurrence.endDate > slot.startDate,
+          ),
+      );
+
+      return Promise.all(
+        withoutOverrideConflicts.map((occurrence) =>
+          tutorRepo.upsertAvailability(tx, userId, {
+            ...occurrence,
+            isRecurring: true,
+            recurrenceRule: "weekly",
+            isActive: true,
+          }),
+        ),
+      );
+    });
+  }
   /**
    * Deactivates an availability slot (soft delete) if it belongs to the tutor.
    *
@@ -394,6 +488,7 @@ export function createTutorService(deps: {
     listAvailability,
     upsertAvailability,
     createWeeklyAvailability,
+    replaceWeeklyAvailability,
     deleteAvailability,
     getMyPayouts,
   };

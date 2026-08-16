@@ -73,6 +73,7 @@ export function BookingLifecycleActions({
   proposedStartAt,
   proposedEndAt,
   activeProposalId,
+  isRescheduleProposer,
   viewerRescheduleDecision,
   rescheduleReason,
   onBookingChanged,
@@ -89,6 +90,7 @@ export function BookingLifecycleActions({
   proposedStartAt?: string | Date;
   proposedEndAt?: string | Date;
   activeProposalId?: string;
+  isRescheduleProposer?: boolean;
   viewerRescheduleDecision?: "pending" | "accepted" | "rejected";
   rescheduleReason?: string;
   onBookingChanged: () => void;
@@ -237,6 +239,13 @@ export function BookingLifecycleActions({
     canReconfirm;
   const decisionPending = accept.isPending || reject.isPending;
   const invitePending = confirmInvite.isPending || declineInvite.isPending;
+  const acceptedRescheduleMessage = isRescheduleProposer
+    ? bookingType === "group"
+      ? "Your proposed time is waiting for the other participants."
+      : `Your proposed time is waiting for the ${viewerRole === "tutor" ? "student" : "tutor"} to respond.`
+    : bookingType === "group"
+      ? "You accepted the new time. Waiting for the other participants."
+      : `You accepted the new time. Waiting for the ${viewerRole === "tutor" ? "student" : "tutor"} to respond.`;
 
   return (
     <>
@@ -275,7 +284,7 @@ export function BookingLifecycleActions({
               ) : null}
               {viewerRescheduleDecision === "accepted" ? (
                 <Text className="text-sm text-success">
-                  You accepted. Waiting for the remaining participants.
+                  {acceptedRescheduleMessage}
                 </Text>
               ) : null}
               {viewerRescheduleDecision === "pending" ? (

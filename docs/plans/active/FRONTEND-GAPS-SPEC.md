@@ -19,28 +19,33 @@ The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This
 
 ### Existing routes (`apps/web/src/routes/`)
 
-| Route                        | Component                       | Status                               |
-| ---------------------------- | ------------------------------- | ------------------------------------ |
-| `/` (index)                  | index.tsx (marketing landing)   | Exists                               |
-| `/login`                     | login.tsx (sign-in-form)        | Exists                               |
-| `/invite`                    | invite.tsx (invite-claim)       | Exists                               |
-| `/auth/callback`             | auth.callback.tsx               | Exists                               |
-| `/_app`                      | _app.tsx (App layout + sidebar) | Exists                               |
-| `/_app/dashboard`            | _app.dashboard.tsx              | Exists (static stats)                |
-| `/_app/balance`              | _app.balance.tsx                | Exists (wallet + Knowledge Bank)     |
-| `/_app/bookings`             | _app.bookings.tsx               | Exists (list + cancel)               |
-| `/_app/bookings/$bookingId`  | _app.bookings_.$bookingId.tsx   | Exists (student + tutor detail)      |
-| `/_app/tutors`               | _app.tutors.tsx                 | Exists (discovery)                   |
-| `/_app/tutors/$tutorId/book` | _app.tutors_.$tutorId.book.tsx  | Exists (solo/group/series creation)  |
-| `/_app/achievements`         | _app.achievements.tsx           | Exists (submission + list)           |
-| `/_app/profile`              | _app.profile.tsx                | Exists (incl. parent contact fields) |
-| `/_app/notifications`        | _app.notifications.tsx          | Exists (full page — see F10)         |
-| `/_app/onboarding`           | _app.onboarding.tsx             | Exists (tutor onboarding)            |
-| `/_app/tutor-bookings`       | _app.tutor-bookings.tsx         | Exists (incoming list + review link) |
-| `/_app/availability`         | _app.availability.tsx           | Exists (weekly + one-time slots)     |
-| `/_app/admin-tutors`         | _app.admin-tutors.tsx           | Exists (admin tutor invite + review) |
-| `/_app/admin-achievements`   | _app.admin-achievements.tsx     | Exists (moderation UI)               |
-| `/_app/admin`                | —                               | **Missing** (F1)                     |
+The tutor booking form now exposes optional student invitations at all times.
+Booking type is derived from invitees (none = solo, one or more = group), so
+students no longer need to select a separate solo/group mode before searching
+for classmates.
+
+| Route                       | Component                       | Status                                                                                           |
+| --------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `/` (index)                 | Landing redirect                | Exists                                                                                           |
+| `/login`                    | sign-in-form.tsx                | Exists                                                                                           |
+| `/auth/callback`            | auth callback                   | Exists                                                                                           |
+| `/invite`                   | invite-claim-page.tsx           | Exists                                                                                           |
+| `/_app`                     | App layout + sidebar            | Exists                                                                                           |
+| `/_app/dashboard`           | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                  |
+| `/_app/balance`             | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                            |
+| `/_app/bookings`            | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                             |
+| `/_app/bookings/$bookingId` | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history            |
+| `/_app/tutors`              | tutors-page-content.tsx         | Exists (discovery list)                                                                          |
+| `/_app/tutors/$tutorId/book`| create-booking-page.tsx         | Exists (solo/group/series creation)                                                              |
+| `/_app/achievements`        | achivements-page.tsx            | Exists (submission + list)                                                                       |
+| `/_app/profile`             | profile-page.tsx                | Complete — student account name/photo plus learning and parent contact fields                    |
+| `/_app/onboarding`          | onboarding-form.tsx             | Exists (tutor onboarding)                                                                        |
+| `/_app/tutor-bookings`      | tutor-bookings-page.tsx         | Exists (incoming list + review link)                                                             |
+| `/_app/availability`        | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview |
+| `/_app/notifications`       | notifications-page.tsx          | Exists (full page)                                                                                |
+| `/_app/admin-operations`    | admin-operations-page.tsx       | Partial F1 baseline — booking queue, rooms, and wallet lookup                                     |
+| `/_app/admin-tutors`        | admin tutor invite + review     | Exists                                                                                           |
+| `/_app/admin-achievements`  | achievement-moderation-page.tsx | Exists (moderation UI)                                                                           |
 
 ### Remaining gaps (no complete surface yet)
 
@@ -52,7 +57,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 | #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status  |
 | --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ------- |
-| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Missing |
+| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Partial |
 | F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed* |
 | F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed* |
 | F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed  |
@@ -435,7 +440,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **PARTIAL (2026-08-14).** The booking detail route is implemented for student and tutor views, including a state timeline, meeting/room sections, cancellation, tutor accept/decline, and tutor session completion. Missing: reschedule (F6/F7), lateness/no-show reporting (F3), and session notes (F9) — all backend-dependent gaps.
+**Current state:** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, contextual actions, and chronological activity in the main flow, with session access, Marks, and participant metadata in a sticky desktop rail.
 
 **Required:**
 
