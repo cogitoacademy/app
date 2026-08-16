@@ -7,6 +7,7 @@ import {
   internalServerError,
 } from "../../lib/errors";
 import { BookingNotEditableError } from "../booking/booking.errors";
+import { BookingStateTransitionError } from "../booking/booking.errors";
 
 export class BookingNotFoundError extends DomainError {
   readonly domain = "admin-booking";
@@ -68,5 +69,7 @@ export function mapAdminBookingError(
     return badRequest(err.message, err);
   if (err instanceof BookingNotEditableError)
     return badRequest(err.message, err);
+  if (err instanceof BookingStateTransitionError)
+    return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

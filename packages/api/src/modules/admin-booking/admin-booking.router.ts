@@ -5,6 +5,7 @@ import {
   getBookingStateHistoryInput,
   adminRefundInput,
   setMeetingLinkInput,
+  cancelSeriesSessionInput,
 } from "./admin-booking.types";
 import type { AdminBookingHandler } from "./admin-booking.handler";
 
@@ -78,5 +79,17 @@ export function createAdminBookingRouter(handler: AdminBookingHandler) {
       })
       .input(setMeetingLinkInput)
       .handler(handler.setMeetingLink),
+
+    cancelSeriesSession: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/booking/cancel-series-session",
+        tags: ["Admin Booking"],
+        summary: "Cancel one series session with a Marks choice",
+        description:
+          "Cancels a single series session; the session hold is released, forfeited, or partially returned per marksAction (U6/TC-31)",
+      })
+      .input(cancelSeriesSessionInput)
+      .handler(handler.cancelSeriesSession),
   };
 }

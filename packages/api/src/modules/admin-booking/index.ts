@@ -6,6 +6,7 @@ import type { MeetingEvent } from "../meeting/meeting.types";
 import type {
   WalletSnapshot,
   ReleaseParams,
+  DeductParams,
   CompensateParams,
 } from "../wallet/wallet.service";
 import { createAdminBookingRepo } from "./admin-booking.repo";
@@ -23,6 +24,7 @@ export interface AdminBookingAuditPort {
 export interface AdminBookingWalletPort {
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
   release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
+  deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
   compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
   sumCreditedMarks(db: DbOrTx, walletId: string): Promise<number>;
 }

@@ -7,6 +7,7 @@ import {
   TerminalStateOverrideError,
 } from "./admin-booking.errors";
 import { BookingNotEditableError } from "../booking/booking.errors";
+import { BookingStateTransitionError } from "../booking/booking.errors";
 import {
   ACTOR_TYPE,
   DEFAULT_PAGE_LIMIT,
@@ -649,6 +650,141 @@ export function createAdminBookingService(deps: {
     });
   }
 
+  /**
+   * Cancels one series session with an explicit Marks-handling choice
+   * (U6 / FR-20 TC-31). The session's per-participant hold is released,
+   * forfeited, or partially released per `marksAction`; the session row is
+   * cancelled; audit + participant notifications are recorded.
+   *
+   * @param adminId - the admin actor
+   * @param input - the session and the marks action
+   * @throws {BookingNotFoundError} if the session or booking does not exist
+   * @throws {BookingStateTransitionError} if the session is not scheduled
+   */
+  async function cancelSeriesSession(
+    adminId: string,
+    input: {
+      sessionId: string;
+      marksAction: "release" | "forfeit" | "partial";
+      amount?: number;
+    },
+  ) {
+    return db.transaction(async (tx) => {
+      const session = await repo.findSessionById(tx, input.sessionId);
+      if (!session) throw new BookingNotFoundError(input.sessionId);
+      if (session.currentState !== BOOKING_STATE.SCHEDULED) {
+        throw new BookingStateTransitionError(
+          session.currentState,
+          "cancelSeriesSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
+      const bookingRow = await repo.findBookingById(
+        tx,
+        session.seriesBookingId,
+      );
+      if (!bookingRow) throw new BookingNotFoundError(session.seriesBookingId);
+
+      const participants = await repo.findParticipantsByBookingId(
+        tx,
+        session.seriesBookingId,
+      );
+      const confirmed = participants.filter(
+        (p) =>
+          p.confirmationState === "confirmed" ||
+          p.confirmationState === "reconfirmed",
+      );
+
+      const partialAmount = Math.min(
+        input.amount ?? session.holdAmount,
+        session.holdAmount,
+      );
+
+      for (const p of confirmed) {
+        const effective = Math.min(
+          input.marksAction === "partial" ? partialAmount : session.holdAmount,
+          p.heldAmount,
+        );
+        if (effective <= 0) continue;
+
+        // eslint-disable-next-line no-await-in-loop
+        const w = await wallet.getByUserId(tx, p.userId);
+        if (!w) throw new BookingNotFoundError(p.userId);
+        if (input.marksAction === "forfeit") {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.deduct(tx, {
+            walletId: w.id,
+            amount: effective,
+            eventKey: `booking.${session.seriesBookingId}.session.${session.id}.forfeit.${p.userId}`,
+            sourceReference: session.seriesBookingId,
+            bookingId: session.seriesBookingId,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: "Session cancelled by admin (marks forfeited)",
+          });
+        } else {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: w.id,
+            amount: effective,
+            eventKey: `booking.${session.seriesBookingId}.session.${session.id}.cancel.${p.userId}`,
+            sourceReference: session.seriesBookingId,
+            bookingId: session.seriesBookingId,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason:
+              input.marksAction === "partial"
+                ? "Session cancelled by admin (partial marks returned)"
+                : "Session cancelled by admin (marks returned)",
+          });
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await repo.updateParticipantHeldAmount(
+          tx,
+          p.id,
+          Math.max(0, p.heldAmount - effective),
+        );
+        // eslint-disable-next-line no-await-in-loop
+        await notification?.writeBestEffort({
+          db: tx,
+          userId: p.userId,
+          bookingId: session.seriesBookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Session cancelled by admin",
+          body:
+            input.marksAction === "forfeit"
+              ? "A session of your series was cancelled and its held marks were forfeited."
+              : "A session of your series was cancelled and its held marks were returned.",
+          eventKey: `booking.${session.seriesBookingId}.session.${session.id}.cancelled.${p.userId}`,
+          emailRequired: true,
+        });
+      }
+
+      await repo.cancelSession(tx, session.id);
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "admin_cancel_series_session",
+        targetId: session.id,
+        targetType: "booking_session",
+        beforeState: { currentState: session.currentState },
+        afterState: {
+          currentState: "cancelled",
+          marksAction: input.marksAction,
+          amount: input.marksAction === "partial" ? partialAmount : undefined,
+        },
+      });
+
+      return {
+        sessionId: session.id,
+        currentState: "cancelled",
+        marksAction: input.marksAction,
+        affectedParticipants: confirmed.length,
+      };
+    });
+  }
+
   return {
     applyOverride,
     previewOverride,
@@ -656,5 +792,6 @@ export function createAdminBookingService(deps: {
     getBookingStateHistory,
     adminRefund,
     setMeetingLink,
+    cancelSeriesSession,
   };
 }
