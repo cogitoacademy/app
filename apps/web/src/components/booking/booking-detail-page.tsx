@@ -154,6 +154,19 @@ export function BookingDetailPage({
     }),
   );
 
+  const sessionsQuery = useQuery(
+    orpc.booking.listSessions.queryOptions({
+      input: { bookingId },
+      enabled: bookingQuery.data?.type === "series",
+    }),
+  );
+  const completeSessionById = (sessionId: string) => {
+    const confirmed = window.confirm(
+      "Complete this session? Its held Marks will be settled.",
+    );
+    if (confirmed) complete.mutate({ bookingId, sessionId });
+  };
+
   if (bookingQuery.isPending) return <BookingDetailSkeleton />;
 
   if (bookingQuery.isError) {
@@ -288,6 +301,11 @@ export function BookingDetailPage({
             <Text className="mt-2 max-w-2xl text-muted">
               {getBookingStateDescription(booking.currentState)}
             </Text>
+            {booking.disclaimer ? (
+              <div className="mt-3 max-w-2xl rounded-lg border border-warning-border bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+                {booking.disclaimer}
+              </div>
+            ) : null}
           </div>
           <Badge variant={getBookingStateVariant(booking.currentState)} pill>
             {getBookingStateLabel(booking.currentState)}
@@ -398,6 +416,67 @@ export function BookingDetailPage({
               </CardFooter>
             ) : null}
           </Card>
+
+          {booking.type === "series" ? (
+            <Card className="min-w-0 overflow-hidden">
+              <CardHeader>
+                <CardTitle>Series sessions</CardTitle>
+                <CardDescription>
+                  Each session is completed individually to settle its held
+                  Marks.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="grid gap-3">
+                {sessionsQuery.data?.map((session) => {
+                  const sessionEnded =
+                    new Date(session.scheduledEndAt).getTime() <= Date.now();
+                  const completed =
+                    session.currentState === "completed" ||
+                    session.currentState === "cancelled";
+                  return (
+                    <div
+                      key={session.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-item-border bg-item p-3"
+                    >
+                      <div className="min-w-0">
+                        <Text className="font-medium">
+                          {formatBookingDate(
+                            session.scheduledStartAt,
+                            booking.timezone,
+                          )}
+                        </Text>
+                        <Text className="text-sm text-muted">
+                          {formatBookingTimeRange(
+                            session.scheduledStartAt,
+                            session.scheduledEndAt,
+                            booking.timezone,
+                          )}
+                        </Text>
+                      </div>
+                      {completed ? (
+                        <Badge variant="tertiary" pill>
+                          {session.currentState}
+                        </Badge>
+                      ) : isTutor &&
+                        session.currentState === "scheduled" &&
+                        sessionEnded ? (
+                        <Button
+                          size="sm"
+                          onClick={() => completeSessionById(session.id)}
+                          progress={complete.isPending}
+                          disabled={tutorActionPending}
+                        >
+                          Complete session
+                        </Button>
+                      ) : (
+                        <Badge pill>{session.currentState}</Badge>
+                      )}
+                    </div>
+                  );
+                })}
+              </CardBody>
+            </Card>
+          ) : null}
 
           <BookingLifecycleActions
             bookingId={bookingId}
