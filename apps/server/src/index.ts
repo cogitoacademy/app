@@ -73,8 +73,23 @@ await initScheduler();
 
 async function gracefulShutdown(signal: string) {
   log({ level: "info", action: "shutdown_signal", signal });
+  // C8: bound the drain — if the DB pool (or anything else) hangs, force-exit
+  // instead of letting the container time out and SIGKILL us.
+  const forceExit = setTimeout(() => {
+    log({ level: "warn", action: "shutdown_force_exit" });
+    process.exit(1);
+  }, 10_000);
+  forceExit.unref();
+
   server.stop();
   await shutdownScheduler();
+  try {
+    const { getRedisClient } = await import("@cogito-app/api/lib/redis");
+    await getRedisClient().quit();
+    log({ level: "info", action: "redis_quit" });
+  } catch {
+    log({ level: "info", action: "redis_quit_skipped" });
+  }
   try {
     const { db } = await import("@cogito-app/db");
     await db.$client.end();
@@ -82,6 +97,7 @@ async function gracefulShutdown(signal: string) {
   } catch {
     log({ level: "info", action: "db_pool_drain_skipped" });
   }
+  clearTimeout(forceExit);
   process.exit(0);
 }
 
