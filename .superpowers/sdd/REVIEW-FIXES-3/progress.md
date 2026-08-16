@@ -5,14 +5,14 @@ Baseline: API 1747 pass / 0 fail, server 44 pass / 0 fail; api coverage 98.2%, o
 
 ## Status
 
-| PR  | Tasks                                   | Status   | Notes |
-| --- | --------------------------------------- | -------- | ----- |
-| P1  | Docs reconciliation (D1–D4)             | DONE-1   | Main body landed in #59; follow-up commit closes remaining CONTEXT gaps (REVIEW-FIXES-3 row, stale cleanup path, header date). |
-| P2  | PR #55 blocker report (report only)     | pending  | |
-| P3  | Backend money-correctness B1–B9 (TDD)   | pending  | |
-| P4  | CI/CD hardening C1–C9                   | pending  | |
-| P5  | Backend U-items U1/U2/U5/U6/U7/U10/U14 + hygiene | pending | |
-| P6  | Frontend F-items + auth                 | blocked  | Requires PR #55 merge (open, red CI). |
+| PR  | Tasks                                            | Status  | Notes                                                                                                                          |
+| --- | ------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| P1  | Docs reconciliation (D1–D4)                      | DONE-1  | Main body landed in #59; follow-up commit closes remaining CONTEXT gaps (REVIEW-FIXES-3 row, stale cleanup path, header date). |
+| P2  | PR #55 blocker report (report only)              | pending |                                                                                                                                |
+| P3  | Backend money-correctness B1–B9 (TDD)            | pending |                                                                                                                                |
+| P4  | CI/CD hardening C1–C9                            | pending |                                                                                                                                |
+| P5  | Backend U-items U1/U2/U5/U6/U7/U10/U14 + hygiene | pending |                                                                                                                                |
+| P6  | Frontend F-items + auth                          | blocked | Requires PR #55 merge (open, red CI).                                                                                          |
 
 ## P1 follow-up
 
