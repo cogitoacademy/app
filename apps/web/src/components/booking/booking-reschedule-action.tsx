@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { IconCalendarEvent } from "@tabler/icons-react";
+import { IconCalendarEvent, IconCheck, IconClock } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import {
@@ -185,39 +185,46 @@ export function BookingRescheduleAction({
             {usingAvailability ? (
               <Field>
                 <FieldLabel>Tutor availability</FieldLabel>
-                <Select
-                  value={selectedSlotId || null}
-                  onValueChange={(value) => {
-                    const id = getSelectItemValue(value) ?? "";
-                    const slot = slots.find((candidate) => candidate.id === id);
-                    setSelectedSlotId(id);
-                    if (slot) {
-                      const earliestStart = getEarliestStart(slot.startDate);
-                      setNewDate(formatDateValue(earliestStart));
-                      setNewTime(formatTimeValue(earliestStart));
-                    }
-                  }}
-                  disabled={profileQuery.isPending || slots.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        profileQuery.isPending
-                          ? "Loading tutor availability…"
-                          : "Choose an available window"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      {slots.map((slot) => (
-                        <SelectItem key={slot.id} value={slot.id}>
-                          {formatSlotLabel(slot.startDate, slot.endDate)}
-                        </SelectItem>
-                      ))}
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
+                {profileQuery.isPending ? (
+                  <div className="rounded-lg border border-item-border bg-item p-4 text-sm text-muted">
+                    Loading tutor availability…
+                  </div>
+                ) : slots.length > 0 ? (
+                  <div className="grid max-h-72 gap-2 overflow-y-auto p-0.5 sm:grid-cols-2">
+                    {slots.map((slot) => {
+                      const selected = slot.id === selectedSlotId;
+                      return (
+                        <Button
+                          key={slot.id}
+                          type="button"
+                          variant={selected ? "primary" : "outline"}
+                          aria-pressed={selected}
+                          className="h-auto min-h-20 justify-start px-4 py-3 text-left"
+                          onClick={() => {
+                            const earliestStart = getEarliestStart(
+                              slot.startDate,
+                            );
+                            setSelectedSlotId(slot.id);
+                            setNewDate(formatDateValue(earliestStart));
+                            setNewTime(formatTimeValue(earliestStart));
+                          }}
+                        >
+                          <span className="flex min-w-0 flex-col items-start gap-1">
+                            <span className="font-medium">
+                              {formatSlotDate(slot.startDate)}
+                            </span>
+                            <span className="flex items-center gap-1.5 text-sm opacity-80">
+                              <IconClock />
+                              {formatTimeValue(slot.startDate)}–
+                              {formatTimeValue(slot.endDate)} WIB
+                            </span>
+                          </span>
+                          {selected ? <IconCheck className="ml-auto" /> : null}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 <FieldDescription>
                   {profileQuery.isError
                     ? "Tutor availability could not be loaded."
@@ -350,13 +357,16 @@ function formatTimeValue(value: Date | string) {
 }
 
 function formatSlotLabel(start: Date | string, end: Date | string) {
-  const date = new Intl.DateTimeFormat("en-ID", {
+  return `${formatSlotDate(start)} · ${formatTimeValue(start)}–${formatTimeValue(end)} WIB`;
+}
+
+function formatSlotDate(value: Date | string) {
+  return new Intl.DateTimeFormat("en-ID", {
     timeZone: "Asia/Jakarta",
     weekday: "short",
     day: "numeric",
     month: "short",
-  }).format(new Date(start));
-  return `${date} · ${formatTimeValue(start)}–${formatTimeValue(end)} WIB`;
+  }).format(new Date(value));
 }
 
 function formatSchedule(value?: Date | string | null) {
