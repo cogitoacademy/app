@@ -9,6 +9,7 @@ import {
   RESPONSE_WINDOW_MS,
   OFFLINE_SCHEDULED_GRACE_MS,
   LATE_CANCEL_THRESHOLD_MS,
+  LATENESS_TOLERANCE_MS,
   MIN_GROUP_HEADCOUNT,
   MIN_SERIES_SESSIONS,
   MAX_SERIES_SESSIONS,
@@ -655,11 +656,7 @@ export function createBookingService(deps: {
       // conflict so the UI can suggest alternatives.
       let roomRequested = false;
       let roomConflict = false;
-      if (
-        modality === MODALITY.OFFLINE &&
-        input.requestedRoomId &&
-        roomPort
-      ) {
+      if (modality === MODALITY.OFFLINE && input.requestedRoomId && roomPort) {
         const request = await roomPort.requestRoomForBooking(tx, {
           bookingId,
           roomId: input.requestedRoomId,
@@ -667,7 +664,8 @@ export function createBookingService(deps: {
           endAt: input.scheduledEndAt,
         });
         roomRequested = request.available;
-        roomConflict = request.available === false && request.reason === "taken";
+        roomConflict =
+          request.available === false && request.reason === "taken";
       }
 
       return { ...b, roomRequested, roomConflict };
@@ -1401,6 +1399,116 @@ export function createBookingService(deps: {
     });
   }
 
+  /**
+   * Marks a participant as no-show for a session (U5 / FR-20 TC-30). Only
+   * after `scheduledStartAt + 15min` and before the session is completed.
+   * Forfeits the participant's (per-session) hold via the same ledger path as
+   * the late-cancel penalty and notifies the participant. A solo booking is
+   * transitioned to NO_SHOW; a series session keeps its state so other
+   * participants are unaffected.
+   *
+   * @param bookingId - the booking (solo) or series parent booking
+   * @param tutorId - the acting tutor
+   * @param participantUserId - the no-show participant
+   * @param sessionId - the series session (required for series bookings)
+   */
+  async function markParticipantNoShow(
+    bookingId: string,
+    tutorId: string,
+    participantUserId: string,
+    sessionId?: string,
+  ) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.tutorId !== tutorId)
+        throw new BookingNotOwnedError(bookingId, tutorId);
+
+      const participant = await repo.findParticipant(
+        tx,
+        bookingId,
+        participantUserId,
+      );
+      if (!participant)
+        throw new BookingParticipantNotFoundError(participantUserId);
+
+      const isSeries = b.type === BOOKING_TYPE.SERIES;
+      const session = isSeries
+        ? sessionId
+          ? await repo.findSessionById(tx, sessionId)
+          : null
+        : null;
+      if (isSeries && !session)
+        throw new BookingSessionNotFoundError(sessionId ?? "");
+
+      const sessionStartAt = session?.scheduledStartAt ?? b.scheduledStartAt;
+      const now = new Date();
+      if (now.getTime() < sessionStartAt.getTime() + LATENESS_TOLERANCE_MS) {
+        throw new BookingNotEditableError(
+          "No-show can only be marked 15 minutes after the session starts",
+        );
+      }
+
+      const sessionState = session?.currentState ?? b.currentState;
+      if (sessionState !== BOOKING_STATE.SCHEDULED) {
+        throw new BookingStateTransitionError(
+          sessionState,
+          "mark_no_show",
+          BOOKING_STATE.NO_SHOW,
+        );
+      }
+
+      const forfeitAmount = isSeries
+        ? Math.min(session!.holdAmount, participant.heldAmount)
+        : participant.heldAmount;
+      if (forfeitAmount > 0) {
+        const w = await wallet.getByUserId(tx, participantUserId);
+        if (!w) throw new BookingNotFoundError(participantUserId);
+        await wallet.deduct(tx, {
+          walletId: w.id,
+          amount: forfeitAmount,
+          eventKey: `booking.${bookingId}.no_show.${participantUserId}.${sessionId ?? "solo"}`,
+          sourceReference: bookingId,
+          bookingId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Marked as no-show",
+        });
+      }
+
+      await repo.updateParticipantState(tx, participant.id, {
+        attendanceState: ATTENDANCE_STATE.ABSENT,
+      });
+
+      if (!isSeries) {
+        await repo.updateBookingHoldAmount(tx, bookingId, 0);
+        await transition(tx, bookingId, BOOKING_STATE.NO_SHOW, {
+          actorId: tutorId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Participant marked as no-show",
+        });
+      }
+
+      await notification.writeBestEffort({
+        db: tx,
+        userId: participantUserId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Session marked as no-show",
+        body: "You were marked as a no-show for this session and the held marks were forfeited.",
+        eventKey: `booking.${bookingId}.no_show.notify.${participantUserId}.${sessionId ?? "solo"}`,
+        emailRequired: true,
+      });
+
+      return {
+        bookingId,
+        participantUserId,
+        sessionId: sessionId ?? null,
+        forfeitedMarks: forfeitAmount,
+      };
+    });
+  }
+
   async function proposeReschedule(
     userId: string,
     bookingId: string,
@@ -1741,7 +1849,8 @@ export function createBookingService(deps: {
           endAt: input.scheduledEndAt,
         });
         roomRequested = request.available;
-        roomConflict = request.available === false && request.reason === "taken";
+        roomConflict =
+          request.available === false && request.reason === "taken";
       }
 
       return { ...b, roomRequested, roomConflict };
@@ -3144,6 +3253,7 @@ export function createBookingService(deps: {
     tutorDecline,
     completeSession,
     markTutorAttendance,
+    markParticipantNoShow,
     proposeReschedule,
     acceptReschedule,
     rejectReschedule,

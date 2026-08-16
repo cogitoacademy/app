@@ -17,6 +17,7 @@ import {
   proposeRescheduleInput,
   completeSessionInput,
   markAttendanceInput,
+  markParticipantNoShowInput,
   cancelSessionInput,
   acceptRescheduleInput,
   rejectRescheduleInput,
@@ -289,5 +290,17 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       })
       .input(markAttendanceInput)
       .handler(handler.markAttendance),
+
+    markParticipantNoShow: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/mark-participant-no-show",
+        tags: ["Tutor", "Bookings"],
+        summary: "Mark a participant as no-show",
+        description:
+          "Tutor marks a participant as no-show for a session 15 minutes after it starts; their session hold is forfeited (U5/TC-30)",
+      })
+      .input(markParticipantNoShowInput)
+      .handler(handler.markParticipantNoShow),
   };
 }

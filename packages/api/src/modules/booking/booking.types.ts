@@ -18,13 +18,10 @@ export const createSoloInput = z
     message: "scheduledEndAt must be after scheduledStartAt",
     path: ["scheduledEndAt"],
   })
-  .refine(
-    (d) => d.modality === "offline" || !d.requestedRoomId,
-    {
-      message: "requestedRoomId is only valid for offline bookings",
-      path: ["requestedRoomId"],
-    },
-  );
+  .refine((d) => d.modality === "offline" || !d.requestedRoomId, {
+    message: "requestedRoomId is only valid for offline bookings",
+    path: ["requestedRoomId"],
+  });
 
 export const createGroupInput = z
   .object({
@@ -46,13 +43,10 @@ export const createGroupInput = z
     message: "scheduledEndAt must be after scheduledStartAt",
     path: ["scheduledEndAt"],
   })
-  .refine(
-    (d) => d.modality === "offline" || !d.requestedRoomId,
-    {
-      message: "requestedRoomId is only valid for offline bookings",
-      path: ["requestedRoomId"],
-    },
-  );
+  .refine((d) => d.modality === "offline" || !d.requestedRoomId, {
+    message: "requestedRoomId is only valid for offline bookings",
+    path: ["requestedRoomId"],
+  });
 
 export const createSeriesInput = z.object({
   tutorId: z.string().max(100),
@@ -175,6 +169,12 @@ export const getSessionNotesInput = bookingActionInput;
 export const markAttendanceInput = z.object({
   bookingId: z.string().max(100),
   attendance: z.enum(["present", "late"]),
+});
+
+export const markParticipantNoShowInput = z.object({
+  bookingId: z.string().max(100),
+  participantUserId: z.string().max(100),
+  sessionId: z.string().max(100).optional(),
 });
 
 export const getBookingInput = z.object({
