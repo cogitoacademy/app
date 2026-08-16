@@ -1614,11 +1614,111 @@ export function createBookingService(deps: {
     });
   }
 
+  /**
+   * Student-initiated reschedule before H-2 (U2 / FR-14 TC-15). The student
+   * proposes a new time; the tutor approves via `acceptReschedule` (the
+   * proposal direction decides who approves). Gated to at least
+   * `LATE_CANCEL_THRESHOLD_MS` (2h) before the new start.
+   */
+  async function rescheduleSelf(
+    userId: string,
+    bookingId: string,
+    newStartAt: Date,
+    newEndAt: Date,
+    reason?: string,
+  ) {
+    return db.transaction(async (tx) => {
+      const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
+      if (b.proposerId !== userId)
+        throw new BookingNotOwnedError(bookingId, userId);
+      if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
+        throw new BookingStateTransitionError(
+          b.currentState,
+          "reschedule",
+          BOOKING_STATE.RESCHEDULE_PROPOSED,
+        );
+      }
+      if (
+        b.currentState !== BOOKING_STATE.SCHEDULED &&
+        b.currentState !== BOOKING_STATE.CONFIRMED &&
+        b.currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
+      ) {
+        throw new BookingNotEditableError(
+          "Only scheduled or confirmed bookings can be rescheduled",
+        );
+      }
+
+      // H-2 gate: the new session must start at least 2 hours out.
+      if (newStartAt.getTime() < Date.now() + LATE_CANCEL_THRESHOLD_MS) {
+        throw new BookingNotEditableError(
+          "Reschedule must be at least 2 hours before the new session start (H-2)",
+        );
+      }
+
+      const overlapping = await repo.findOverlappingBookings(
+        tx,
+        b.tutorId,
+        newStartAt,
+        newEndAt,
+        { excludeBookingId: bookingId, excludeStates: [...TERMINAL_STATES] },
+      );
+      if (overlapping.length > 0) {
+        throw new BookingConflictError(
+          b.tutorId,
+          newStartAt.toISOString(),
+          newEndAt.toISOString(),
+        );
+      }
+
+      const updated = await transition(
+        tx,
+        bookingId,
+        BOOKING_STATE.RESCHEDULE_PROPOSED,
+        {
+          actorId: userId,
+          actorType: ACTOR_TYPE.STUDENT,
+          reason,
+          metadata: { proposedStartAt: newStartAt, proposedEndAt: newEndAt },
+        },
+      );
+
+      await repo.insertRescheduleProposal(tx, {
+        bookingId,
+        proposedBy: userId,
+        proposedStartAt: newStartAt,
+        proposedEndAt: newEndAt,
+        status: CONFIRMATION_STATE.PENDING,
+      });
+
+      await repo.updateBookingDeadline(
+        tx,
+        bookingId,
+        new Date(Date.now() + 24 * 60 * 60 * 1000),
+      );
+
+      await notification.write({
+        db: tx,
+        userId: b.tutorId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Student requested a reschedule",
+        body: "The student proposed a new time for the session and is awaiting your approval.",
+        eventKey: `booking.${bookingId}.student_reschedule_proposed`,
+        emailRequired: true,
+      });
+
+      return updated;
+    });
+  }
+
   async function acceptReschedule(userId: string, bookingId: string) {
     const { proposal, updated } = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
-      if (b.proposerId !== userId)
+      const isStudentActor = b.proposerId === userId;
+      const isTutorActor = b.tutorId === userId;
+      if (!isStudentActor && !isTutorActor)
         throw new BookingNotOwnedError(bookingId, userId);
       if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
         throw new BookingRescheduleNotPendingError(bookingId);
@@ -1626,6 +1726,19 @@ export function createBookingService(deps: {
 
       const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
       if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
+
+      // U2: the proposal direction decides who approves. A student accepts a
+      // tutor-proposed time; a tutor approves a student-proposed time. Nobody
+      // may approve their own proposal.
+      if (pending.proposedBy === userId) {
+        throw new BookingNotOwnedError(bookingId, userId);
+      }
+      if (
+        (isStudentActor && pending.proposedBy !== b.tutorId) ||
+        (isTutorActor && pending.proposedBy !== b.proposerId)
+      ) {
+        throw new BookingNotOwnedError(bookingId, userId);
+      }
 
       await repo.updateRescheduleProposal(tx, pending.id, {
         status: "accepted",
@@ -1652,8 +1765,10 @@ export function createBookingService(deps: {
         BOOKING_STATE.AWAITING_RECONFIRMATION,
         {
           actorId: userId,
-          actorType: ACTOR_TYPE.STUDENT,
-          reason: "Student accepted the reschedule proposal",
+          actorType: isTutorActor ? ACTOR_TYPE.TUTOR : ACTOR_TYPE.STUDENT,
+          reason: isTutorActor
+            ? "Tutor approved the student's reschedule proposal"
+            : "Student accepted the reschedule proposal",
           metadata: {
             proposedStartAt: pending.proposedStartAt,
             proposedEndAt: pending.proposedEndAt,
@@ -1669,12 +1784,14 @@ export function createBookingService(deps: {
 
       await notification.write({
         db: tx,
-        userId: b.tutorId,
+        userId: isTutorActor ? b.proposerId : b.tutorId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Reschedule accepted",
-        body: "The student accepted the proposed new time.",
+        body: isTutorActor
+          ? "The tutor approved your proposed new time."
+          : "The student accepted the proposed new time.",
         eventKey: `booking.${bookingId}.reschedule_accepted`,
         emailRequired: true,
       });
@@ -3308,6 +3425,7 @@ export function createBookingService(deps: {
     markTutorAttendance,
     markParticipantNoShow,
     proposeReschedule,
+    rescheduleSelf,
     acceptReschedule,
     rejectReschedule,
     cancelSession,

@@ -17,6 +17,7 @@ import type {
   reconfirmInput,
   withdrawInput,
   proposeRescheduleInput,
+  rescheduleSelfInput,
   completeSessionInput,
   markAttendanceInput,
   markParticipantNoShowInput,
@@ -38,6 +39,7 @@ type DeclineInviteInput = z.infer<typeof declineInviteInput>;
 type ReconfirmInput = z.infer<typeof reconfirmInput>;
 type WithdrawInput = z.infer<typeof withdrawInput>;
 type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
+type RescheduleSelfInput = z.infer<typeof rescheduleSelfInput>;
 type CompleteSessionInput = z.infer<typeof completeSessionInput>;
 type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;
 type MarkParticipantNoShowInput = z.infer<typeof markParticipantNoShowInput>;
@@ -49,6 +51,26 @@ export type TutorActionsHandler = ReturnType<typeof createTutorActionsHandler>;
 
 export function createBookingHandler(booking: BookingService) {
   return {
+    rescheduleSelf: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: RescheduleSelfInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.rescheduleSelf(
+            context.session!.user.id,
+            input.bookingId,
+            input.newStartAt,
+            input.newEndAt,
+            input.reason,
+          ),
+        mapBookingError,
+      );
+    },
+
     createSolo: async ({
       context,
       input,
@@ -421,6 +443,20 @@ export function createTutorActionsHandler(booking: BookingService) {
             context.session!.user.id,
             input.reason,
           ),
+        mapBookingError,
+      );
+    },
+
+    approveReschedule: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: BookingActionInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.acceptReschedule(context.session!.user.id, input.bookingId),
         mapBookingError,
       );
     },

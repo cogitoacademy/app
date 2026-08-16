@@ -131,6 +131,22 @@ export const withdrawInput = z.object({
   reason: z.string().max(2000).optional(),
 });
 
+export const rescheduleSelfInput = z
+  .object({
+    bookingId: z.string().max(100),
+    newStartAt: z.coerce
+      .date()
+      .refine((d) => d > new Date(), "Must be in the future"),
+    newEndAt: z.coerce
+      .date()
+      .refine((d) => d > new Date(), "Must be in the future"),
+    reason: z.string().max(2000).optional(),
+  })
+  .refine((d) => d.newEndAt > d.newStartAt, {
+    message: "newEndAt must be after newStartAt",
+    path: ["newEndAt"],
+  });
+
 export const proposeRescheduleInput = z
   .object({
     bookingId: z.string().max(100),

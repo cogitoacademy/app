@@ -15,6 +15,7 @@ import {
   reconfirmInput,
   withdrawInput,
   proposeRescheduleInput,
+  rescheduleSelfInput,
   completeSessionInput,
   markAttendanceInput,
   markParticipantNoShowInput,
@@ -71,6 +72,18 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(cancelBookingInput)
       .handler(handler.cancel),
+
+    rescheduleSelf: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/rescheduleSelf",
+        tags: ["Booking"],
+        summary: "Student self-reschedule before H-2",
+        description:
+          "Proposes a new time for an accepted booking; the tutor approves (U2/FR-14 TC-15)",
+      })
+      .input(rescheduleSelfInput)
+      .handler(handler.rescheduleSelf),
 
     acceptReschedule: protectedProcedure
       .route({
@@ -302,5 +315,17 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       })
       .input(markParticipantNoShowInput)
       .handler(handler.markParticipantNoShow),
+
+    approveReschedule: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/approve-reschedule",
+        tags: ["Tutor", "Bookings"],
+        summary: "Approve a student-proposed reschedule",
+        description:
+          "Tutor approves the student's reschedule proposal (U2); the booking moves to the new time",
+      })
+      .input(bookingActionInput)
+      .handler(handler.approveReschedule),
   };
 }
