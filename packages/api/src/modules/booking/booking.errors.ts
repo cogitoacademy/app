@@ -108,6 +108,17 @@ export class BookingCancellationDeadlinePassedError extends DomainError {
   }
 }
 
+export class BookingAcceptanceDeadlinePassedError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "BOOKING_ACCEPTANCE_DEADLINE_PASSED",
+      "Booking deadline has passed — held marks were released",
+      { id },
+    );
+  }
+}
+
 export class BookingRoomNotAssignedError extends DomainError {
   readonly domain = "booking";
   constructor(id: string) {
@@ -315,6 +326,8 @@ export function mapBookingError(
   if (err instanceof BookingNotAwaitingReviewError)
     return badRequest(err.message, err);
   if (err instanceof BookingCancellationDeadlinePassedError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingAcceptanceDeadlinePassedError)
     return badRequest(err.message, err);
   if (err instanceof BookingGroupSizeError) return badRequest(err.message, err);
   if (err instanceof BookingSeriesSizeError)

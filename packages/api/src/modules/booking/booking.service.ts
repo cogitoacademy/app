@@ -43,6 +43,7 @@ import {
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
   BookingSeriesNoOptOutError,
+  BookingAcceptanceDeadlinePassedError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { lockTutorForBooking } from "../../lib/locks";
@@ -789,6 +790,11 @@ export function createBookingService(deps: {
         throw new BookingNotOwnedError(bookingId, tutorId);
       if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
+      }
+      // B4: once the booking deadline passed, the held marks were released —
+      // accepting would grant a free session. Mirror the expiry path.
+      if (b.deadlineAt && b.deadlineAt.getTime() < Date.now()) {
+        throw new BookingAcceptanceDeadlinePassedError(bookingId);
       }
 
       const isOffline = b.modality === MODALITY.OFFLINE;

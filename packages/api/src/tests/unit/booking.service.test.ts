@@ -22,6 +22,7 @@ import {
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
   BookingSeriesNoOptOutError,
+  BookingAcceptanceDeadlinePassedError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -1180,6 +1181,25 @@ describe("BookingService", () => {
       await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
         BookingNotAwaitingReviewError,
       );
+    });
+
+    test("B4: throws BookingAcceptanceDeadlinePassedError when the booking deadline has passed", async () => {
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({
+              currentState: "awaiting_tutor_review",
+              deadlineAt: new Date(Date.now() - 60_000),
+            }),
+          ),
+        },
+      });
+
+      await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
+        BookingAcceptanceDeadlinePassedError,
+      );
+      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+      expect(repo.updateBookingDeadline).not.toHaveBeenCalled();
     });
 
     test("accepts online booking — transitions to confirmed then scheduled and creates meeting with attendees", async () => {
