@@ -78,7 +78,7 @@ describe("bookingHandler", () => {
         availabilitySlotId: "slot1",
         modality: "online",
         scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
         timezone: "Asia/Jakarta",
       };
 
@@ -92,7 +92,7 @@ describe("bookingHandler", () => {
         availabilitySlotId: "slot1",
         modality: "online",
         scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
         timezone: "Asia/Jakarta",
       });
       expect(result).toEqual({ id: "b1" });
@@ -235,7 +235,7 @@ describe("bookingHandler", () => {
         targetGroupSize: 5,
         inviteeUserIds: ["u2", "u3"],
         scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
         timezone: "Asia/Jakarta",
       };
 
@@ -251,7 +251,7 @@ describe("bookingHandler", () => {
         targetGroupSize: 5,
         inviteeUserIds: ["u2", "u3"],
         scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
         timezone: "Asia/Jakarta",
       });
       expect(result).toEqual({ id: "bg1" });
@@ -270,11 +270,11 @@ describe("bookingHandler", () => {
         sessions: [
           {
             scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-            scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+            scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
           },
           {
             scheduledStartAt: new Date("2025-01-08T10:00:00Z"),
-            scheduledEndAt: new Date("2025-01-08T11:00:00Z"),
+            scheduledEndAt: new Date("2025-01-08T11:30:00Z"),
           },
         ],
         timezone: "Asia/Jakarta",
@@ -292,11 +292,11 @@ describe("bookingHandler", () => {
         sessions: [
           {
             scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-            scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+            scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
           },
           {
             scheduledStartAt: new Date("2025-01-08T10:00:00Z"),
-            scheduledEndAt: new Date("2025-01-08T11:00:00Z"),
+            scheduledEndAt: new Date("2025-01-08T11:30:00Z"),
           },
         ],
         timezone: "Asia/Jakarta",
@@ -459,7 +459,7 @@ describe("tutorActionsHandler", () => {
       const input = {
         bookingId: "b1",
         proposedStartAt: new Date("2025-02-01T10:00:00Z"),
-        proposedEndAt: new Date("2025-02-01T11:00:00Z"),
+        proposedEndAt: new Date("2025-02-01T11:30:00Z"),
         reason: "time change",
       };
 
@@ -472,7 +472,7 @@ describe("tutorActionsHandler", () => {
         "t1",
         "b1",
         new Date("2025-02-01T10:00:00Z"),
-        new Date("2025-02-01T11:00:00Z"),
+        new Date("2025-02-01T11:30:00Z"),
         "time change",
       );
       expect(result).toEqual({
