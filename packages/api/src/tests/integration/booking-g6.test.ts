@@ -229,7 +229,7 @@ describe("G6: tutor reschedule with student approval", () => {
     expect(notifs[0]!.userId).toBe(tutorId);
   });
 
-  test("tutor cannot accept/reject (student-only)", async () => {
+  test("tutor's pre-recorded acceptance remains pending the student decision", async () => {
     const id = await createSoloBooking();
     const proposed = nextRescheduleWindow();
     await tutorClient.tutorActions.proposeReschedule({
@@ -238,12 +238,10 @@ describe("G6: tutor reschedule with student approval", () => {
       proposedEndAt: proposed.end,
     });
 
-    await expect(
-      tutorClient.booking.acceptReschedule({ bookingId: id }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(
-      tutorClient.booking.rejectReschedule({ bookingId: id }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const updated = await tutorClient.booking.acceptReschedule({
+      bookingId: id,
+    });
+    expect(updated.currentState).toBe("reschedule_proposed");
   });
 
   test("student rejects → proposal rejected, booking unchanged, tutor notified", async () => {

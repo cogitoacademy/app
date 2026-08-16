@@ -253,8 +253,9 @@ describe("Scheduler: expireBookings against real Postgres", () => {
       },
       {
         state: BOOKING_STATE.RESCHEDULE_PROPOSED,
-        target: BOOKING_STATE.EXPIRED,
+        target: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
         holdAmount: 70,
+        retainedHoldAmount: 70,
       },
       {
         state: BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
@@ -281,12 +282,12 @@ describe("Scheduler: expireBookings against real Postgres", () => {
       const id = ids[cases.indexOf(c)]!;
       const [row] = await db.select().from(booking).where(eq(booking.id, id));
       expect(row!.currentState).toBe(c.target);
-      expect(row!.holdAmount).toBe(0);
+      expect(row!.holdAmount).toBe(c.retainedHoldAmount ?? 0);
     }
 
     const wB = await getWalletByUserId(studentB.id);
-    expect(wB!.heldBalance).toBe(0);
-    expect(wB!.availableBalance).toBe(500);
+    expect(wB!.heldBalance).toBe(70);
+    expect(wB!.availableBalance).toBe(430);
   });
 
   test("differential: releaseExpiredHolds is a no-op once expireBookings released the holds", async () => {
@@ -298,8 +299,8 @@ describe("Scheduler: expireBookings against real Postgres", () => {
     expect(wA!.availableBalance).toBe(200);
 
     const wB = await getWalletByUserId(studentB.id);
-    expect(wB!.heldBalance).toBe(0);
-    expect(wB!.availableBalance).toBe(500);
+    expect(wB!.heldBalance).toBe(70);
+    expect(wB!.availableBalance).toBe(430);
 
     const releases = await db
       .select()
