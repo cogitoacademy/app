@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { CogitoUser } from "@cogito-app/auth";
 
-import { DashboardPage } from "@/components/dashboard/page";
+import { AdminDashboardPage } from "@/components/dashboard/admin-dashboard-page";
 import { StudentDashboardPage } from "@/components/dashboard/student-dashboard-page";
+import { TutorDashboardPage } from "@/components/dashboard/tutor-dashboard-page";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: RouteComponent,
@@ -16,5 +17,9 @@ function RouteComponent() {
     return <StudentDashboardPage studentName={user.name} />;
   }
 
-  return <DashboardPage />;
+  if (user?.role === "tutor") {
+    return <TutorDashboardPage tutorName={user.name} />;
+  }
+
+  return <AdminDashboardPage adminName={user?.name ?? "Admin"} />;
 }

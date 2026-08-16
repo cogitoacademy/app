@@ -2,6 +2,7 @@ import { describe, test, expect, mock } from "bun:test";
 import {
   validateReviewAction,
   buildReviewUpdates,
+  buildTutorInviteEmail,
   createAdminTutorService,
   type ReviewAction,
   type TutorProfileSnapshot,
@@ -67,6 +68,41 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe("AdminTutor Service", () => {
+  describe("buildTutorInviteEmail", () => {
+    test("creates a clear, branded invitation with one primary action", () => {
+      const message = buildTutorInviteEmail(
+        makeInvite({ expiresAt: new Date("2026-08-23T12:00:00.000Z") }),
+        "https://app.cogito.test/",
+      );
+
+      expect(message.subject).toBe("You’re invited to teach with Cogito");
+      expect(message.html).toContain("You’re invited to tutor with Cogito");
+      expect(message.html).toContain("background:#e09e06");
+      expect(message.html).toContain("Accept invitation &amp; set up profile");
+      expect(message.html).toContain("23 August 2026 at 12:00 UTC");
+      expect(message.html).toContain(
+        "https://app.cogito.test/invite?token=tok1",
+      );
+      expect(message.html).toContain("tutor@example.com");
+    });
+
+    test("escapes invitee-controlled copy and encodes the token", () => {
+      const message = buildTutorInviteEmail(
+        makeInvite({
+          displayName: '<script>alert("x")</script>',
+          email: "unsafe&email@example.com",
+          token: "token with spaces&symbols",
+        }),
+        "https://app.cogito.test",
+      );
+
+      expect(message.html).not.toContain("<script>");
+      expect(message.html).toContain("&lt;script&gt;");
+      expect(message.html).toContain("unsafe&amp;email@example.com");
+      expect(message.html).toContain("token%20with%20spaces%26symbols");
+    });
+  });
+
   describe("validateReviewAction", () => {
     test("returns profile for valid action with profile", () => {
       const result = validateReviewAction(

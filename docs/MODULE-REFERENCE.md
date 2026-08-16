@@ -10,6 +10,8 @@ The invite form performs an admin-only account preflight by exact normalized ema
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
 
+Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+
 | File                  | Purpose                                                  |
 | --------------------- | -------------------------------------------------------- |
 | `{module}.types.ts`   | Zod input/output schemas                                 |
@@ -141,6 +143,12 @@ The `packages/api` package implements business logic using a 4-layer architectur
 - `reviewTutorProfile(profileId, status, adminNote?)` — Approve/reject tutor profile
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
+
+**Business Rules:**
+
+- Tutor invitation email copy has one primary action: accept the invitation and set up the tutor profile
+- The email states the exact account email required for claiming, shows expiry in UTC, and includes a plain fallback URL
+- Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
 
 ---
 

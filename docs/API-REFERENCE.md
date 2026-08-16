@@ -6,6 +6,8 @@ Last updated: 2026-08-15
 
 All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`.
 
+The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: student (`booking.listMine`, `tutors.listPublished`, `wallet.get`), tutor (`tutorActions.listBookings`, `tutor.listAvailability`, `tutor.getMyProfile`, `tutor.getMyPayouts`), and admin (`adminBooking.listBookings`, `adminTutor.listTutorProfiles`, `achievement.adminList`).
+
 ### Auth Levels
 
 | Level       | Description                                           |
@@ -119,7 +121,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Admin
 - **Input:** `{ email, displayName, internalNotes? }`
 - **Output:** `{ invite }`
-- **Description:** Creates tutor invite with unique token
+- **Description:** Creates a tutor invite with a unique token and sends the branded tutor-onboarding email with an account-email reminder, UTC expiry, primary claim CTA, and fallback URL
 
 ### `adminTutor.listInvites`
 

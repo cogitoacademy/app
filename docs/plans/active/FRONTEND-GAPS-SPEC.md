@@ -53,7 +53,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 | #   | Gap                                                         | PRD Ref                | Depends on (backend)                          | Effort | Priority |
 | --- | ----------------------------------------------------------- | ---------------------- | --------------------------------------------- | ------ | -------- |
-| F1  | Admin dashboard + override queue (implemented baseline)     | FR-10, OQ-04           | G8, G9, G10                                   | 3d     | Partial  |
+| F1  | Admin dashboard + override queue (implemented baseline)     | FR-10, OQ-04           | G8, G9, G10                                   | 3d     | Closed   |
 | F2  | Admin override form with before/after preview (implemented) | FR-10, prd.tex:717-728 | G10                                           | 2d     | Closed   |
 | F3  | Report tutor lateness/no-show button (implemented)          | FR-14, DL-26           | G1                                            | 1d     | Closed   |
 | F4  | Competition Calendar link (implemented)                     | FR-11                  | None (external link)                          | 0.5d   | Closed   |
@@ -65,7 +65,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F10 | Notifications page (implemented)                            | FR-17                  | G17                                           | 1.5d   | Closed   |
 | F11 | Admin wallet/ledger view (implemented)                      | FR-10                  | G9                                            | 1d     | Closed   |
 | F12 | Admin room approval UI (implemented baseline)               | FR-22                  | G14                                           | 1d     | Partial  |
-| F13 | Tutor payout view                                           | DL-11                  | G16                                           | 0.5d   | Medium   |
+| F13 | Tutor payout view (dashboard summary implemented)           | DL-11                  | G16                                           | 0.5d   | Partial  |
 | F14 | Group series no opt-out disclaimer display                  | FR-20                  | G15                                           | 0.5d   | Low      |
 | F15 | Knowledge Bank gating flow (full)                           | FR-12                  | Partial (wallet.knowledgeBankEligible exists) | 0.5d   | Medium   |
 | F16 | Achievements public landing surfacing                       | FR-18                  | None (public site)                            | 1d     | Low      |
@@ -81,7 +81,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10 (Admin Override), OQ-04 (SLA escalation), prd.tex:717-728
 
-**Current state:** `/_app/admin-operations` now provides the urgency-sorted booking monitor and escalated filter. Dedicated support-ticket assignment/SLA automation remains outside this baseline.
+**Current state:** The role-specific `/_app/dashboard` admin view summarizes escalated booking operations, tutor-profile reviews, and achievement reviews, with direct links to the complete queues. `/_app/admin-operations` provides the urgency-sorted booking monitor and escalated filter. Dedicated support-ticket assignment/SLA automation remains outside this baseline.
 
 **Required:**
 

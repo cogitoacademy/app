@@ -6,7 +6,19 @@ For manual tutor-invite delivery, copy the visible latest link. After reloading 
 
 **Generate & copy link** never sends email. Use the separate **Send again** action when an admin intentionally wants Resend to deliver a replacement link.
 
+Tutor invitation delivery should be smoke-tested in both desktop and mobile email clients. Verify the **Accept invitation & set up profile** button and fallback URL lead to `/invite?token=…`, the invited account email is correct, and the displayed expiry is explicitly labeled UTC.
+
 ## Starting the Server
+
+### Dashboard smoke check
+
+After a web deployment, sign in once as each supported role and open `/dashboard`:
+
+- Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations.
+- Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/tutor-bookings`, `/availability`, and `/onboarding`.
+- Admin: priority operations and moderation counts; actions link to `/admin-operations`, `/admin-tutors`, and `/admin-achievements`.
+
+The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
 
 ### Development
 
