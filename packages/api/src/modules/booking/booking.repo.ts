@@ -394,7 +394,7 @@ async function insertRescheduleProposal(
 
 async function findPendingRescheduleProposal(conn: DbOrTx, bookingId: string) {
   const [proposal] = await conn
-    .select()
+    .select({ ...getTableColumns(bookingRescheduleProposal) })
     .from(bookingRescheduleProposal)
     .where(
       and(
@@ -468,7 +468,7 @@ export async function listSessionsBySeriesId(
 
 async function findSessionById(conn: DbOrTx, sessionId: string) {
   const [session] = await conn
-    .select()
+    .select({ ...getTableColumns(bookingSession) })
     .from(bookingSession)
     .where(eq(bookingSession.id, sessionId))
     .limit(1);
@@ -499,7 +499,7 @@ async function insertSessionNote(
 
 async function listSessionNotes(conn: DbOrTx, bookingId: string) {
   return conn
-    .select()
+    .select({ ...getTableColumns(sessionNote) })
     .from(sessionNote)
     .where(eq(sessionNote.bookingId, bookingId))
     .orderBy(desc(sessionNote.createdAt));
@@ -603,7 +603,7 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
       ),
     );
   return conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(
       and(
@@ -671,7 +671,7 @@ async function findTutorParticipant(
   bookingId: string,
 ): Promise<typeof bookingParticipant.$inferSelect | null> {
   const [participant] = await conn
-    .select()
+    .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(
       and(
@@ -739,7 +739,7 @@ async function findCompletedBookingsByTutor(
     conditions.push(lte(booking.scheduledStartAt, dateTo));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(and(...conditions));
 }
@@ -803,7 +803,7 @@ export function createBookingRepo(db: DbType) {
     // multiple meeting_event rows (e.g. a pre-fix google-failed row plus the
     // manual fallback). Fetch the newest explicitly so G11 status is stable.
     const [meetingRow] = await db
-      .select()
+      .select({ ...getTableColumns(meetingEvent) })
       .from(meetingEvent)
       .where(eq(meetingEvent.bookingId, bookingId))
       .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
