@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 ## Architecture
 
@@ -298,25 +298,26 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-| Plan                                                              | Branch                              | Status                                                                                                        |
-| ----------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/completed/REVIEW-FIXES-2.md`                          | main (merged)                       | Completed — wave-2 review fixes merged to main via #50–#57 (R1–R10, coverage hardening, U13/U4)               |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`         | Merged to main (#16)                                                                                          |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`         | Merged to main (#16)                                                                                          |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`         | Merged to main (#16)                                                                                          |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening`  | Merged to main (#17)                                                                                          |
-| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness`  | Merged to main (#18)                                                                                          |
-| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`        | Merged to main (#19)                                                                                          |
-| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                       | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                      |
-| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                       | Merged to main (#34–#38)                                                                                      |
-| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                       | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness)  |
-| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`      | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                              |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                   | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending                         |
-| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                   | Active — U4, U11, U13 closed; U9 partial; U1–U3, U5–U8, U10, U12, U14 open (verified against code 2026-08-16) |
-| `docs/plans/completed/BACKEND-CLEANUP.md`                         | main (merged)                       | Completed — all 11 items verified merged (2026-08-16; plan moved to completed)                                |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (open PR #55) | Active — F2/F3/F6/F7/F11/F17 covered by open PR #55; F8/F13/F14/F16 + F18-withdraw/J2/dead-components open    |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                   | Superseded                                                                                                    |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                   | Historical reference                                                                                          |
+| Plan                                                              | Branch                              | Status                                                                                                                                         |
+| ----------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/completed/REVIEW-FIXES-2.md`                          | main (merged)                       | Completed — wave-2 review fixes merged to main via #50–#57 (R1–R10, coverage hardening, U13/U4)                                                |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`         | Merged to main (#16)                                                                                                                           |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`         | Merged to main (#16)                                                                                                                           |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`         | Merged to main (#16)                                                                                                                           |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening`  | Merged to main (#17)                                                                                                                           |
+| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness`  | Merged to main (#18)                                                                                                                           |
+| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`        | Merged to main (#19)                                                                                                                           |
+| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                       | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                                                       |
+| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                       | Merged to main (#34–#38)                                                                                                                       |
+| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                       | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness)                                   |
+| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`      | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                                                               |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                   | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending                                                          |
+| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                   | Active — U4, U11, U13 closed; U9 partial; U1–U3, U5–U8, U10, U12, U14 open (verified against code 2026-08-16)                                  |
+| `docs/plans/completed/BACKEND-CLEANUP.md`                         | main (merged)                       | Completed — all 11 items verified merged (2026-08-16; plan moved to completed)                                                                 |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (open PR #55) | Active — F2/F3/F6/F7/F11/F17 covered by open PR #55; F8/F13/F14/F16 + F18-withdraw/J2/dead-components open                                     |
+| `docs/plans/active/REVIEW-FIXES-3.md`                             | main (future PRs)                   | Active — wave-3 audit fixes: docs sync (P1), PR #55 blockers (P2), backend money bugs B1–B9 (P3), CI/CD C1–C9 (P4), U-items (P5), F-items (P6) |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                   | Superseded                                                                                                                                     |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                   | Historical reference                                                                                                                           |
 
 ### Execution Order
 
@@ -330,10 +331,11 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 7. Backend Review Hardening (BACKEND-REVIEW-HARDENING.md) → merged to main (#48)
 8. Review Fixes 2 (REVIEW-FIXES-2.md — rate limits, withdraw, uploads/payments, reliability, coverage) → **completed (merged via #50–#57)**
 9. PRD Gaps Phase 3 (PRD-GAPS-PHASE3.md — U1–U3, U5–U8, U10, U12, U14 open; U4/U11/U13 closed, U9 partial) + Frontend Gaps (FRONTEND-GAPS-SPEC) → after / parallel with #8
-10. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
+10. Review Fixes 3 (REVIEW-FIXES-3.md — docs reconciliation, PR #55 blocker report, backend money fixes B1–B9, CI/CD hardening C1–C9, remaining U-items and F-items) → execution in progress (P1–P5 merged/targeted at main; P6 after PR #55)
+11. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
-Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). **REVIEW-FIXES-2 merged to main via #50–#57** — the wave-2 fixes: RPC rate-limit path bug (R1), solo withdraw (R2/R3), presigned POST conditions (R4), REFUNDED reconciliation (R5), outbox/idempotency/meeting reliability (R6–R8), email escaping + seed-invite (R9/R10), coverage hardening (9 files ≥ 90%), Knowledge Bank total-balance eligibility (U13), group-series no-opt-out (U4), plus CI pipeline hardening (lint auto-fix, full server-test coverage in CI, labeler fix). Next: the open PRD-gap feature work, frontend gaps, then production ops.
+Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). **REVIEW-FIXES-2 merged to main via #50–#57** — the wave-2 fixes: RPC rate-limit path bug (R1), solo withdraw (R2/R3), presigned POST conditions (R4), REFUNDED reconciliation (R5), outbox/idempotency/meeting reliability (R6–R8), email escaping + seed-invite (R9/R10), coverage hardening (9 files ≥ 90%), Knowledge Bank total-balance eligibility (U13), group-series no-opt-out (U4), plus CI pipeline hardening (lint auto-fix, full server-test coverage in CI, labeler fix). Next: the open PRD-gap feature work, frontend gaps, then production ops — the wave-3 audit fixes are tracked in `docs/plans/active/REVIEW-FIXES-3.md` (P1–P5 landing at main; P6 after PR #55).
 
 ## Role E2E Readiness Snapshot (2026-08-14)
 
@@ -357,7 +359,7 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 
 Backend is ready for user role management, tutor invite/review, achievement moderation, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
 
-The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, and room availability/approval backend (G8–G10, G13–G14) have landed; the corresponding admin UI remains frontend work (F1/F2/F11/F12). Remaining backend sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U1–U14) and `docs/plans/active/BACKEND-CLEANUP.md`.
+The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, and room availability/approval backend (G8–G10, G13–G14) have landed; the corresponding admin UI remains frontend work (F1/F2/F11/F12). Remaining backend sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U1–U14) and `docs/plans/completed/BACKEND-CLEANUP.md` (completed).
 
 ### Backend Gap Groups
 
