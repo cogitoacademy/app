@@ -2,10 +2,10 @@
 
 | Field      | Value                                         |
 | ---------- | --------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-14)     |
-| Branch     | `feature/frontend-gaps` (future)              |
+| Status     | Living gap inventory (updated 2026-08-16)     |
+| Branch     | `f/frontend-prd-gaps` (open PR #55)           |
 | Created    | 2026-07-29                                    |
-| Audited    | 2026-08-14                                    |
+| Audited    | 2026-08-16                                    |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed |
 | Scope      | Frontend only (`apps/web/`)                   |
 
@@ -53,26 +53,28 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status  |
 | --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ------- |
 | F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Missing |
-| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Missing |
-| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Missing |
+| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed* |
+| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed* |
 | F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed  |
 | F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed  |
-| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Missing |
-| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Missing |
+| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed* |
+| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed* |
 | F8  | Series session completion UI                  | FR-20                  | G18                                         | 1d     | Partial |
-| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | Missing |
+| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | Partial |
 | F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed  |
-| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Missing |
-| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | Missing |
-| F13 | Tutor payout view                             | DL-11                  | G16 (needs new tutor.getMyPayouts router)   | 0.5d   | Missing |
+| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed* |
+| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | Partial |
+| F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | Missing |
 | F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | Missing |
 | F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed  |
 | F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | Partial |
-| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Partial |
+| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed* |
 
 **Total estimated effort: ~15 days for remaining gaps (F1-F3, F6-F9, F11-F14, F16-F17 partial; F4, F5, F10, F15 are done).**
 
 > **Audit 2026-08-14:** F4, F5, F10, F15 verified **closed** in `apps/web` (git HEAD `9b7df5e`). F8, F16, F17 remain partial. All remaining missing gaps have backend procedures ready except F13 (needs new `tutor.getMyPayouts` router) and F16 (needs a new public achievement list procedure).
+
+> **Audit 2026-08-16 (against open PR #55 `f/frontend-prd-gaps`):** The open PR delivers F2, F3, F6, F7, F11, F17 (marked **Closed*** = implemented in the PR, pending merge) and partial F1/F9/F12/F15. After it merges, still open: **F8** (per-session series completion — UI has no session list/`sessionId`), **F13** (tutor payout view; backend `tutor.getMyPayouts` **exists since #43** — the old "router does not exist" note was stale), **F14** (group-series no-opt-out disclaimer display — backend constant only), **F16** (public achievements; no public procedure exists), plus F18 inviter-side `withdraw` UI, J2 proactive session-expiry UX, and the dead-components cleanup (`chart.tsx`, `data.ts`, `user-menu.tsx` still present). ⚠ The PR carries blockers (red CI: unused `proposedEndAt` at `booking.service.ts:1407`; migration 0020 renames achievement columns but `schema/achievement.ts`/repo still use `imageUrl`/`eventDate` — would break achievement CRUD) — see REVIEW-FIXES-3 P2.
 
 ---
 
@@ -138,7 +140,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-14, DL-26, prd.tex:747
 
-**Current state:** No report button on booking detail. Backend G1 not yet implemented.
+**Current state:** Implemented in open PR #55 (`booking-lifecycle-actions.tsx`: `canReportLateness` student + ≥15 min after start → `support.createTicket`; ticket status on booking detail). Pending merge.
 
 **Required:**
 
@@ -199,7 +201,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** `proposeReschedule` exists but is student-action (wrong role — G6 backend fix needed). No tutor UI for proposing reschedule.
+**Current state:** Implemented in open PR #55 (`booking-reschedule-action.tsx`: calendar + time input + reason; `booking.proposeReschedule` tutor-or-proposer, per-session `sessionId`, supersedes pending proposal; backend `proposeReschedule` moved to booking.router). Pending merge.
 
 **Required (after G6 backend fix):**
 
@@ -219,7 +221,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** No `acceptReschedule`/`rejectReschedule` endpoints (G6 backend) or UI.
+**Current state:** Implemented in open PR #55 (`booking-lifecycle-actions.tsx`: accept/reject with `proposalId`, multiparty `decisions` voting — unanimous required, restore pre-proposal state; backend `acceptReschedule`/`rejectReschedule` rewritten for multiparty). Pending merge.
 
 **Required (after G6 backend):**
 
@@ -242,9 +244,9 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-20
 
-**Current state:** **PARTIAL (2026-08-14).** Tutor booking detail has a single complete-session button. There is no per-session list for series bookings (each session cannot be individually completed). Backend G18 not yet implemented.
+**Current state:** **PARTIAL (2026-08-16).** Tutor booking detail has a single whole-booking complete-session button; there is **no per-session list** and no `sessionId` passed, so series completion fails (`BookingSessionRequiredError`). Backend `completeSeriesSession`/`completeSession({sessionId})` is ready (solo + group series, per-session deduction). NOT covered by PR #55.
 
-**Required (after G18 backend):**
+**Required (backend ready):**
 
 1. On tutor booking detail for series bookings, list each session with its state
 2. "Complete" button per session (enabled when session start time has passed)
@@ -263,7 +265,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-09, DL-18, prd.tex:1033-1043
 
-**Current state:** No session notes UI. Backend G7 not implemented.
+**Current state:** **PARTIAL (2026-08-16).** Open PR #55 adds a notes list + textarea on completed bookings, rendered via `dangerouslySetInnerHTML` with **server-side** `sanitizeHtml` (backend `packages/api/src/lib/sanitize.ts`). No rich-text toolbar editor (headings/lists/emphasis) and no client-side DOMPurify — FR-09's formatting requirements are only partially met.
 
 **Required (after G7 backend):**
 
@@ -351,9 +353,9 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** DL-11
 
-**Current state:** No payout view. Backend `tutor.getMyPayouts` router does **not** exist (needs to be created); `admin.getTutorPayouts` exists. Backend G16 not implemented.
+**Current state:** No payout view in `apps/web`. Backend `tutor.getMyPayouts` **exists** since #43 (`tutor.router.ts:93-103`); `admin.getTutorPayouts` exists. Frontend UI is the only missing piece.
 
-**Required (after G16 + new tutor.getMyPayouts router):**
+**Required (backend ready):**
 
 1. New route or section in tutor dashboard: "My payouts"
 2. Calls `tutor.getMyPayouts` with date range
@@ -457,7 +459,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-20, TC-25
 
-**Current state:** **MISSING entirely (2026-08-14).** Group booking _creation_ is implemented (incl. debounced student search, up to 5 invitees) but there is **no invitee-facing UI**. No `confirmInvite`/`declineInvite`/`reconfirm`/`withdraw` calls exist anywhere in `apps/web`. Backend `booking.confirmInvite`, `booking.declineInvite`, `booking.reconfirm`, and `booking.withdrawGroup` are ready.
+**Current state:** **PARTIAL (2026-08-16).** Open PR #55 wires `confirmInvite`/`declineInvite`/`reconfirm` in `booking-lifecycle-actions.tsx`. **Still missing:** inviter-side `withdraw` UI for an invite, and the full no-opt-out disclaimer on the invitee acceptance screen (see F14).
 
 **Required:**
 
@@ -539,5 +541,6 @@ Card, Button, Badge, Heading, Text, Stack, Input, Field, Select, Menu, Table, It
 
 ### Version Notes
 
+- v1.2 (2026-08-16): Re-audited against open PR #55 (`f/frontend-prd-gaps`, 25 commits). Marked F2/F3/F6/F7/F11/F17 as covered by the PR (Closed* = pending merge), F1/F9/F12 as partial-after-PR, and corrected F13's backend note (`tutor.getMyPayouts` exists since #43). Flagged the PR's blockers (red CI unused `proposedEndAt`; migration 0020 achievement-column schema mismatch; undeclared F18/J2/dead-components section deletions) — tracked in REVIEW-FIXES-3 P2. Still open after PR #55: F8, F13, F14, F16, F18-withdraw, J2, dead-components cleanup.
 - v1.1 (2026-08-14): Full frontend audit at `apps/web` git HEAD `9b7df5e`. Corrected the "Current Frontend State" routes table (was stale — e.g. notifications page existed). Statuses updated: F4, F5, F10, F15 → **Closed**; F8, F16, F17 → **Partial**; F1-F3, F6, F7, F9, F11-F14 → **Missing**. Added gaps F18 (group invite accept/decline/reconfirm UI), J2 (session expiry UX), and a dead-components cleanup note. Effort revised from ~20d to ~15d for the remaining ~10 gaps.
 - v1.0 (2026-07-29): Created. 17 frontend gaps catalogued (F1-F17) with PRD references, backend dependencies, and acceptance criteria. Derived from PRD §Product Surfaces and audit of `apps/web/src/`. Runs parallel with backend PRD-GAPS-SPEC.md.
