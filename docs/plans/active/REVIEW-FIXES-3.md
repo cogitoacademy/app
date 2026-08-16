@@ -230,7 +230,7 @@
 - [ ] ci.yml: `permissions: contents: read` on typecheck/build; bun cache on lint job; coverage gate step fails when lcov missing.
 - [ ] Commit `fix(ci): least-privilege permissions, lint cache, lcov-missing gate (C9)`.
 
-**P4 docs:** CONTEXT CI/CD section; RUNBOOK (secrets, shutdown, labeler setup).
+- [x] **P4 docs:** CONTEXT CI/CD section; RUNBOOK (secrets, shutdown, labeler setup).
 
 ---
 
