@@ -415,7 +415,6 @@ async function insertRescheduleProposal(
     bookingId: string;
     sessionId?: string;
     proposedBy: string;
-    sessionId?: string;
     proposedStartAt: Date;
     proposedEndAt: Date;
     reason?: string;

@@ -64,6 +64,7 @@ import type {
   BookingAuditPort,
   BookingNotificationPort,
   BookingMeetingPort,
+  BookingRoomPort,
 } from "./index";
 
 export interface CreateSoloInput {
@@ -707,7 +708,7 @@ export function createBookingService(deps: {
           bookingId,
           roomId: input.requestedRoomId,
           startAt: input.scheduledStartAt,
-          endAt: input.scheduledEndAt,
+          endAt: session.scheduledEndAt,
         });
         roomRequested = request.available;
         roomConflict =
@@ -2046,7 +2047,7 @@ export function createBookingService(deps: {
           bookingId,
           roomId: input.requestedRoomId,
           startAt: input.scheduledStartAt,
-          endAt: input.scheduledEndAt,
+          endAt: session.scheduledEndAt,
         });
         roomRequested = request.available;
         roomConflict =
