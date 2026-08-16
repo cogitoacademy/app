@@ -53,22 +53,22 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status  |
 | --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ------- |
 | F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Missing |
-| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed*  |
-| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed*  |
+| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed* |
+| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed* |
 | F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed  |
 | F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed  |
-| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed*  |
-| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed*  |
+| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed* |
+| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed* |
 | F8  | Series session completion UI                  | FR-20                  | G18                                         | 1d     | Partial |
 | F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | Partial |
 | F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed  |
-| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed*  |
+| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed* |
 | F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | Partial |
 | F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | Missing |
 | F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | Missing |
 | F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed  |
 | F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | Partial |
-| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed*  |
+| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed* |
 
 **Total estimated effort: ~15 days for remaining gaps (F1-F3, F6-F9, F11-F14, F16-F17 partial; F4, F5, F10, F15 are done).**
 

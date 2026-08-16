@@ -26,60 +26,60 @@
 
 ### Docs / plans
 
-| ID  | Finding | Location | PR |
-| --- | ------- | -------- | -- |
-| D1  | BACKEND-CLEANUP all 11 items implemented but still listed active | `docs/plans/active/BACKEND-CLEANUP.md` | P1 |
-| D2  | CONTEXT plans table lists U4/U13 as open; they are implemented | `docs/CONTEXT.md:315` | P1 |
-| D3  | FRONTEND-GAPS-SPEC branch name stale (`feature/frontend-gaps` vs `f/frontend-prd-gaps`); F13 backend note stale (`tutor.getMyPayouts` exists since #43); F2/F3/F6/F7/F11/F17 statuses not updated for open PR #55 | `docs/plans/active/FRONTEND-GAPS-SPEC.md` | P1 |
-| D4  | DEFERRED-OPS 1.4 claims done; 7 bare `.select()` remain in booking.repo | `docs/plans/active/DEFERRED-OPS-TASKS.md:32` | P1 |
-| D5  | PR #55 (`f/frontend-prd-gaps`, 25 commits) has red CI (unused `proposedEndAt`), a migration 0020 schema mismatch (achievement columns renamed but `schema/achievement.ts`/repo still use `imageUrl`/`eventDate`), undeclared F18/J2/dead-components spec deletions, and stray repo-root artifacts (`.qa-marks-before/`, `artifacts/`, ~2.7 MB) | PR #55 | P2 (report only) |
+| ID  | Finding                                                                                                                                                                                                                                                                                                                                        | Location                                     | PR               |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ---------------- |
+| D1  | BACKEND-CLEANUP all 11 items implemented but still listed active                                                                                                                                                                                                                                                                               | `docs/plans/active/BACKEND-CLEANUP.md`       | P1               |
+| D2  | CONTEXT plans table lists U4/U13 as open; they are implemented                                                                                                                                                                                                                                                                                 | `docs/CONTEXT.md:315`                        | P1               |
+| D3  | FRONTEND-GAPS-SPEC branch name stale (`feature/frontend-gaps` vs `f/frontend-prd-gaps`); F13 backend note stale (`tutor.getMyPayouts` exists since #43); F2/F3/F6/F7/F11/F17 statuses not updated for open PR #55                                                                                                                              | `docs/plans/active/FRONTEND-GAPS-SPEC.md`    | P1               |
+| D4  | DEFERRED-OPS 1.4 claims done; 7 bare `.select()` remain in booking.repo                                                                                                                                                                                                                                                                        | `docs/plans/active/DEFERRED-OPS-TASKS.md:32` | P1               |
+| D5  | PR #55 (`f/frontend-prd-gaps`, 25 commits) has red CI (unused `proposedEndAt`), a migration 0020 schema mismatch (achievement columns renamed but `schema/achievement.ts`/repo still use `imageUrl`/`eventDate`), undeclared F18/J2/dead-components spec deletions, and stray repo-root artifacts (`.qa-marks-before/`, `artifacts/`, ~2.7 MB) | PR #55                                       | P2 (report only) |
 
 ### Backend money-correctness
 
-| ID  | Severity | Finding | Location | PR |
-| --- | -------- | ------- | -------- | -- |
-| B1  | HIGH | Offline bookings auto-NO_SHOW at session start (deadline = start) → holds released before tutor completes; tutor still paid from snapshot | `booking.service.ts:834`, `room.service.ts:114-116`, `booking.service.ts:2713-2904`, `booking.repo.ts:576-587` | P3.1 |
-| B2  | HIGH | REFUNDED webhook reversal races admin refund → double credit (stale-snapshot guard; different eventKeys bypass ledger unique index) | `payment.service.ts:271-299` vs `admin-booking.service.ts:496-504` | P3.2 |
-| B3  | MED | Solo/solo-series withdraw in `AWAITING_TUTOR_REVIEW` regresses to `AWAITING_RECONFIRMATION` (contradicts R2); revivable with zero holds; later deduct can consume another booking's hold | `booking.service.ts:2079-2116` | P3.3 |
-| B4  | MED | `tutorAccept` ignores past `deadlineAt` → accepts a booking whose holds were released (free session) | `booking.service.ts:783-856` | P3.4 |
-| B5  | MED | Partial-group reprice at expiry throws `InsufficientMarksError` → booking wedged, holds stuck, 5-min retry loop | `booking.service.ts:2737-2772` | P3.5 |
-| B6  | LOW | `createIntent` can insert duplicate PENDING payments (non-unique `provider_reference`) → zombie rows | `payment.service.ts:146-159`, `payment-record.ts:31` | P3.6 |
-| B7  | LOW | `withdraw` can double-decrement `confirmedHeadcount`; non-confirmed invitee can withdraw | `booking.service.ts:1964-2010` | P3.7 |
-| B8  | HIGH | U3: reconfirmation-deadline repricing for still-valid partial headcount not implemented (`AWAITING_RECONFIRMATION` expires + releases instead of repricing) | `booking.service.ts:2738-2743` | P3.8 |
-| B9  | HIGH | U8: `adminRefund` blindly refunds full `payment.marks` regardless of spend (no reconciliation guard) | `admin-booking.service.ts:478-552` | P3.8 |
+| ID  | Severity | Finding                                                                                                                                                                                  | Location                                                                                                       | PR   |
+| --- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---- |
+| B1  | HIGH     | Offline bookings auto-NO_SHOW at session start (deadline = start) → holds released before tutor completes; tutor still paid from snapshot                                                | `booking.service.ts:834`, `room.service.ts:114-116`, `booking.service.ts:2713-2904`, `booking.repo.ts:576-587` | P3.1 |
+| B2  | HIGH     | REFUNDED webhook reversal races admin refund → double credit (stale-snapshot guard; different eventKeys bypass ledger unique index)                                                      | `payment.service.ts:271-299` vs `admin-booking.service.ts:496-504`                                             | P3.2 |
+| B3  | MED      | Solo/solo-series withdraw in `AWAITING_TUTOR_REVIEW` regresses to `AWAITING_RECONFIRMATION` (contradicts R2); revivable with zero holds; later deduct can consume another booking's hold | `booking.service.ts:2079-2116`                                                                                 | P3.3 |
+| B4  | MED      | `tutorAccept` ignores past `deadlineAt` → accepts a booking whose holds were released (free session)                                                                                     | `booking.service.ts:783-856`                                                                                   | P3.4 |
+| B5  | MED      | Partial-group reprice at expiry throws `InsufficientMarksError` → booking wedged, holds stuck, 5-min retry loop                                                                          | `booking.service.ts:2737-2772`                                                                                 | P3.5 |
+| B6  | LOW      | `createIntent` can insert duplicate PENDING payments (non-unique `provider_reference`) → zombie rows                                                                                     | `payment.service.ts:146-159`, `payment-record.ts:31`                                                           | P3.6 |
+| B7  | LOW      | `withdraw` can double-decrement `confirmedHeadcount`; non-confirmed invitee can withdraw                                                                                                 | `booking.service.ts:1964-2010`                                                                                 | P3.7 |
+| B8  | HIGH     | U3: reconfirmation-deadline repricing for still-valid partial headcount not implemented (`AWAITING_RECONFIRMATION` expires + releases instead of repricing)                              | `booking.service.ts:2738-2743`                                                                                 | P3.8 |
+| B9  | HIGH     | U8: `adminRefund` blindly refunds full `payment.marks` regardless of spend (no reconciliation guard)                                                                                     | `admin-booking.service.ts:478-552`                                                                             | P3.8 |
 
 ### CI/CD & infra
 
-| ID  | Severity | Finding | Location | PR |
-| --- | -------- | ------- | -------- | -- |
-| C1  | HIGH | Labeler config format incompatible with `actions/labeler@v7` (`any:` + bare globs; needs `changed-files:` → `any-glob-to-any-file:`) → zero labels applied on every PR | `.github/labeler.yml` | P4.1 |
-| C2  | HIGH | Labels `server`/`web`/`docs`/`infrastructure` (+ `dependencies`/`github-actions`) don't exist in repo → even a fixed config 422s | repo settings | P4.1 |
-| C3  | HIGH | CD webhook secrets (`COOLIFY_STAGING_WEBHOOK`/`COOLIFY_PROD_WEBHOOK`) undefined (0 secrets configured) + `\|\| true` swallows failures → deploys are silent no-ops | `cd-staging.yml`, `cd-prod.yml` | P4.2 |
-| C4  | HIGH | No root `.dockerignore`; Dockerfiles `COPY . .` → context leaks `node_modules`/`.git`/`coverage`; deps-stage node_modules overwritten | repo root, `apps/server/Dockerfile`, `apps/web/Dockerfile` | P4.3 |
-| C5  | MED | Dockerfiles run as root; `nginx:alpine` unpinned; web has no HEALTHCHECK | Dockerfiles | P4.4 |
-| C6  | MED | Postgres shutdown FATAL spam (20 pool connections → 20 FATAL lines): no `stop_grace_period` in compose; no app-before-db stop ordering | `docker-compose.yml`, `docker-compose.test.yml` | P4.5 |
-| C7  | MED | CI lint auto-commit can push to main on push events (bypasses review); no guard for `github-actions[bot]` commits | `ci.yml` | P4.6 |
-| C8  | LOW-MED | Shared ioredis client never `quit()` on graceful shutdown; no force-exit timer on `db.$client.end()` | `apps/server/src/index.ts:74-89`, `redis.ts:222` | P4.7 |
-| C9  | LOW | ci.yml typecheck/build lack `permissions: contents: read`; lint job lacks bun cache; coverage gate silently passes when lcov missing | `ci.yml`, `coverage-comment.ts` | P4.8 |
+| ID  | Severity | Finding                                                                                                                                                                | Location                                                   | PR   |
+| --- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---- |
+| C1  | HIGH     | Labeler config format incompatible with `actions/labeler@v7` (`any:` + bare globs; needs `changed-files:` → `any-glob-to-any-file:`) → zero labels applied on every PR | `.github/labeler.yml`                                      | P4.1 |
+| C2  | HIGH     | Labels `server`/`web`/`docs`/`infrastructure` (+ `dependencies`/`github-actions`) don't exist in repo → even a fixed config 422s                                       | repo settings                                              | P4.1 |
+| C3  | HIGH     | CD webhook secrets (`COOLIFY_STAGING_WEBHOOK`/`COOLIFY_PROD_WEBHOOK`) undefined (0 secrets configured) + `\|\| true` swallows failures → deploys are silent no-ops     | `cd-staging.yml`, `cd-prod.yml`                            | P4.2 |
+| C4  | HIGH     | No root `.dockerignore`; Dockerfiles `COPY . .` → context leaks `node_modules`/`.git`/`coverage`; deps-stage node_modules overwritten                                  | repo root, `apps/server/Dockerfile`, `apps/web/Dockerfile` | P4.3 |
+| C5  | MED      | Dockerfiles run as root; `nginx:alpine` unpinned; web has no HEALTHCHECK                                                                                               | Dockerfiles                                                | P4.4 |
+| C6  | MED      | Postgres shutdown FATAL spam (20 pool connections → 20 FATAL lines): no `stop_grace_period` in compose; no app-before-db stop ordering                                 | `docker-compose.yml`, `docker-compose.test.yml`            | P4.5 |
+| C7  | MED      | CI lint auto-commit can push to main on push events (bypasses review); no guard for `github-actions[bot]` commits                                                      | `ci.yml`                                                   | P4.6 |
+| C8  | LOW-MED  | Shared ioredis client never `quit()` on graceful shutdown; no force-exit timer on `db.$client.end()`                                                                   | `apps/server/src/index.ts:74-89`, `redis.ts:222`           | P4.7 |
+| C9  | LOW      | ci.yml typecheck/build lack `permissions: contents: read`; lint job lacks bun cache; coverage gate silently passes when lcov missing                                   | `ci.yml`, `coverage-comment.ts`                            | P4.8 |
 
 ### Remaining backend U-items and frontend F-items
 
-| ID  | Finding | PR |
-| --- | ------- | -- |
-| U1  | Admin manual meeting-link entry (FR-21/TC-36) | P5.1 |
-| U2  | Student self-service reschedule before H-2 (FR-14/TC-15) | P5.2 |
-| U5  | Per-participant no-show marking (FR-20/TC-30) | P5.3 |
-| U6  | Admin per-session series cancel with Marks-return choice (FR-20/TC-31) | P5.4 |
-| U7  | Per-session tutor reschedule within a series (FR-20/TC-33) | P5.5 |
-| U10 | Achievement submission field parity — issuer, visibility, enum category (FR-18) | P5.6 |
-| U14 | Offline room availability integrated into booking creation (FR-22/TC-20) | P5.7 |
+| ID  | Finding                                                                                                | PR   |
+| --- | ------------------------------------------------------------------------------------------------------ | ---- |
+| U1  | Admin manual meeting-link entry (FR-21/TC-36)                                                          | P5.1 |
+| U2  | Student self-service reschedule before H-2 (FR-14/TC-15)                                               | P5.2 |
+| U5  | Per-participant no-show marking (FR-20/TC-30)                                                          | P5.3 |
+| U6  | Admin per-session series cancel with Marks-return choice (FR-20/TC-31)                                 | P5.4 |
+| U7  | Per-session tutor reschedule within a series (FR-20/TC-33)                                             | P5.5 |
+| U10 | Achievement submission field parity — issuer, visibility, enum category (FR-18)                        | P5.6 |
+| U14 | Offline room availability integrated into booking creation (FR-22/TC-20)                               | P5.7 |
 | —   | Hygiene: 7 bare `.select()` in booking.repo; unused `BookingTransition` in `booking-state.types.ts:35` | P5.8 |
-| F8  | Per-session series completion UI (backend `completeSession({sessionId})` ready) | P6.1 |
-| F13 | Tutor payout view (backend `tutor.getMyPayouts` ready) | P6.2 |
-| F14 | Group-series no-opt-out disclaimer display (backend constant ready) | P6.3 |
-| F16 | Public achievements landing (needs new public procedure) | P6.4 |
-| G2  | Email verification flow (deferred; better-auth plugin) | P6.5 |
-| C6  | Password policy upper/lower/digit | P6.6 |
+| F8  | Per-session series completion UI (backend `completeSession({sessionId})` ready)                        | P6.1 |
+| F13 | Tutor payout view (backend `tutor.getMyPayouts` ready)                                                 | P6.2 |
+| F14 | Group-series no-opt-out disclaimer display (backend constant ready)                                    | P6.3 |
+| F16 | Public achievements landing (needs new public procedure)                                               | P6.4 |
+| G2  | Email verification flow (deferred; better-auth plugin)                                                 | P6.5 |
+| C6  | Password policy upper/lower/digit                                                                      | P6.6 |
 
 ---
 

@@ -1,11 +1,11 @@
 # Cogito Backend — Cleanup & Reliability Plan
 
-| Field   | Value                                                       |
-| ------- | ----------------------------------------------------------- |
+| Field   | Value                                                                                           |
+| ------- | ----------------------------------------------------------------------------------------------- |
 | Status  | **COMPLETED** — all 11 items implemented and merged (2026-08-15); moved to completed 2026-08-16 |
-| Branch  | main (merged)                                               |
-| Created | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)          |
-| Scope   | Backend-only — no behavior changes unless explicitly marked |
+| Branch  | main (merged)                                                                                   |
+| Created | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)                                              |
+| Scope   | Backend-only — no behavior changes unless explicitly marked                                     |
 
 Dead code, silent failure modes, and test-quality issues found during the 2026-08-14 codebase audit (dead-code scan + PRD audit). None of these change user-facing behavior; each item is independently testable. Order by severity, not by section.
 

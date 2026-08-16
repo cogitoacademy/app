@@ -39,4 +39,3 @@ Use the superpowers `executing-plans` workflow (or `subagent-driven-development`
 For each merged PR report: commit hash, test counts (targeted + full suite), coverage deltas, PR URL, CI status. When all PRs land: full suite + coverage gates, move `REVIEW-FIXES-3.md` to `docs/plans/completed/`, update `docs/plans/README.md`, update the SDD ledger, and give a final summary table.
 
 ---
-

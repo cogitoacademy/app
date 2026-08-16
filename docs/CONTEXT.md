@@ -298,25 +298,25 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-| Plan                                                              | Branch                             | Status                                                                                                       |
-| ----------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `docs/plans/completed/REVIEW-FIXES-2.md`                          | main (merged)                      | Completed — wave-2 review fixes merged to main via #50–#57 (R1–R10, coverage hardening, U13/U4)              |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`        | Merged to main (#16)                                                                                         |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening` | Merged to main (#17)                                                                                         |
-| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness` | Merged to main (#18)                                                                                         |
-| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`       | Merged to main (#19)                                                                                         |
-| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                      | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                     |
-| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                      | Merged to main (#34–#38)                                                                                     |
-| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                      | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness) |
-| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`     | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                             |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending                        |
-| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                  | Active — U4, U11, U13 closed; U9 partial; U1–U3, U5–U8, U10, U12, U14 open (verified against code 2026-08-16) |
-| `docs/plans/completed/BACKEND-CLEANUP.md`                          | main (merged)                      | Completed — all 11 items verified merged (2026-08-16; plan moved to completed)                             |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (open PR #55) | Active — F2/F3/F6/F7/F11/F17 covered by open PR #55; F8/F13/F14/F16 + F18-withdraw/J2/dead-components open |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                                                   |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                                                         |
+| Plan                                                              | Branch                              | Status                                                                                                        |
+| ----------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/completed/REVIEW-FIXES-2.md`                          | main (merged)                       | Completed — wave-2 review fixes merged to main via #50–#57 (R1–R10, coverage hardening, U13/U4)               |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`         | Merged to main (#16)                                                                                          |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`         | Merged to main (#16)                                                                                          |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`         | Merged to main (#16)                                                                                          |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening`  | Merged to main (#17)                                                                                          |
+| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness`  | Merged to main (#18)                                                                                          |
+| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`        | Merged to main (#19)                                                                                          |
+| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                       | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                      |
+| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                       | Merged to main (#34–#38)                                                                                      |
+| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                       | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness)  |
+| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`      | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                              |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                   | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending                         |
+| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                   | Active — U4, U11, U13 closed; U9 partial; U1–U3, U5–U8, U10, U12, U14 open (verified against code 2026-08-16) |
+| `docs/plans/completed/BACKEND-CLEANUP.md`                         | main (merged)                       | Completed — all 11 items verified merged (2026-08-16; plan moved to completed)                                |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (open PR #55) | Active — F2/F3/F6/F7/F11/F17 covered by open PR #55; F8/F13/F14/F16 + F18-withdraw/J2/dead-components open    |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                   | Superseded                                                                                                    |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                   | Historical reference                                                                                          |
 
 ### Execution Order
 
