@@ -1,0 +1,17 @@
+# Keep the Docker build context hermetic: node_modules/.git/coverage and
+# local artifacts must never be shipped into image builds (C4).
+node_modules
+.git
+.gitignore
+coverage
+dist
+docs
+designs
+.superpowers
+artifacts
+.qa-*
+.wt-*
+*.local
+.env
+.env.*
+!.env.example

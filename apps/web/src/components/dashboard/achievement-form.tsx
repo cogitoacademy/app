@@ -67,11 +67,12 @@ type AchievementFormValues = {
   category: string;
   award: string;
   level: string;
-  eventDate: string;
+  awardingDate: string;
   location: string;
   description: string;
   subjects: string[];
-  imageUrl: string;
+  evidenceUrl: string;
+  documentationUrl: string;
 };
 
 type AchievementFormProps = {
@@ -89,11 +90,12 @@ const DEFAULT_VALUES: AchievementFormValues = {
   category: "",
   award: "",
   level: "",
-  eventDate: "",
+  awardingDate: "",
   location: "",
   description: "",
   subjects: [],
-  imageUrl: "",
+  evidenceUrl: "",
+  documentationUrl: "",
 };
 
 const achievementFormSchema = z.object({
@@ -101,11 +103,18 @@ const achievementFormSchema = z.object({
   category: z.string().min(1, "Category is required").max(255),
   award: z.string().trim().min(1, "Award / result is required").max(255),
   level: z.string().min(1, "Level is required").max(255),
-  eventDate: z.string().max(255),
+  awardingDate: z.string().max(255),
   location: z.string().max(255),
   description: z.string().max(2000),
   subjects: z.array(z.string().max(255)).max(20),
-  imageUrl: z.string().trim().url("Enter a valid public image URL").max(2048),
+  evidenceUrl: z.string().trim().url("Enter a valid evidence URL").max(2048),
+  documentationUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .refine((value) => !value || isValidImageUrl(value), {
+      message: "Enter a valid public documentation URL",
+    }),
 });
 
 function isValidImageUrl(value: string) {
@@ -206,11 +215,12 @@ export function AchievementForm({
               category: value.category,
               award: value.award,
               level: value.level,
-              eventDate: value.eventDate || undefined,
+              awardingDate: value.awardingDate || undefined,
               location: value.location || undefined,
               description: value.description || undefined,
               subjects: value.subjects,
-              imageUrl: value.imageUrl || undefined,
+              evidenceUrl: value.evidenceUrl || undefined,
+              documentationUrl: value.documentationUrl || undefined,
             },
           });
         } else {
@@ -219,11 +229,12 @@ export function AchievementForm({
             category: value.category,
             award: value.award,
             level: value.level,
-            eventDate: value.eventDate || undefined,
+            awardingDate: value.awardingDate || undefined,
             location: value.location || undefined,
             description: value.description || undefined,
             subjects: value.subjects,
-            imageUrl: value.imageUrl || undefined,
+            evidenceUrl: value.evidenceUrl || undefined,
+            documentationUrl: value.documentationUrl || undefined,
           });
         }
       } catch {
@@ -362,15 +373,16 @@ export function AchievementForm({
                 )}
               </form.Field>
 
-              <form.Field name="imageUrl">
+              <form.Field name="evidenceUrl">
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>
-                      Achievement image <span className="text-danger">*</span>
+                      Private verification evidence{" "}
+                      <span className="text-danger">*</span>
                     </FieldLabel>
                     <FieldDescription>
-                      Add a public image of the certificate, medal, or event. It
-                      will appear on your achievement card after approval.
+                      Add the certificate or proof used by moderators. This URL
+                      is not used as the public achievement-card image.
                     </FieldDescription>
                     <Input
                       id={field.name}
@@ -438,10 +450,38 @@ export function AchievementForm({
                 )}
               </form.Field>
 
-              <form.Field name="eventDate">
+              <form.Field name="documentationUrl">
                 {(field) => (
                   <Field>
-                    <FieldLabel>Event Date</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>
+                      Public documentation image
+                    </FieldLabel>
+                    <FieldDescription>
+                      Optional public image shown on the achievement card after
+                      approval.
+                    </FieldDescription>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      type="url"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="https://..."
+                    />
+                    {field.state.meta.errors.map((error) => (
+                      <FieldError key={String(error)}>
+                        {String(error)}
+                      </FieldError>
+                    ))}
+                  </Field>
+                )}
+              </form.Field>
+
+              <form.Field name="awardingDate">
+                {(field) => (
+                  <Field>
+                    <FieldLabel>Awarding Date</FieldLabel>
                     <DatePicker
                       value={field.state.value}
                       onChange={(value) => field.handleChange(value)}

@@ -52,7 +52,10 @@ export const paymentRecord = pgTable(
     ),
     uniqueIndex("payment_provider_event_id_idx").on(table.providerEventId),
     index("payment_userId_idx").on(table.userId),
-    index("payment_providerReference_idx").on(table.providerReference),
+    // B6: the provider reference is the idempotency key — a unique index
+    // (not just an index) prevents concurrent check-then-insert races from
+    // creating zombie PENDING rows.
+    uniqueIndex("payment_provider_reference_idx").on(table.providerReference),
     index("payment_status_idx").on(table.status),
     index("payment_userId_status_idx").on(table.userId, table.status),
   ],

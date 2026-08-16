@@ -359,7 +359,7 @@ function ModerationCard({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {achievement.eventDate ? (
+          {achievement.awardingDate ? (
             <AchievementFact
               icon={<IconCalendarEvent />}
               label="Event date"
@@ -367,7 +367,7 @@ function ModerationCard({
                 day: "numeric",
                 month: "short",
                 year: "numeric",
-              }).format(new Date(achievement.eventDate))}
+              }).format(new Date(achievement.awardingDate))}
             />
           ) : null}
           {achievement.location ? (
@@ -393,13 +393,13 @@ function ModerationCard({
         ) : null}
       </CardBody>
       <CardFooter className="justify-between">
-        {achievement.imageUrl ? (
+        {achievement.evidenceUrl ? (
           <Button
             variant="plain"
             size="sm"
             render={
               <a
-                href={achievement.imageUrl}
+                href={achievement.evidenceUrl}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`Open evidence for ${achievement.eventName}`}

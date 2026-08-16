@@ -273,7 +273,7 @@ The web dashboard has no aggregate endpoint. Its role-specific views compose exi
 ### `achievement.create`
 
 - **Auth:** Protected
-- **Input:** `{ eventName, category, award, level, eventDate?, location?, description?, subjects?, imageUrl? }`
+- **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? }`
 - **Output:** `{ achievement }`
 - **Description:** Submits a new achievement in `pending` status
 
@@ -332,7 +332,7 @@ The web dashboard has no aggregate endpoint. Its role-specific views compose exi
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ eligible, balance, threshold }`
-- **Description:** Checks Knowledge Bank gating (min balance threshold); **known bug B4** — checks `availableBalance` instead of total balance (tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
+- **Description:** Checks Knowledge Bank gating (min balance threshold); eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, per PRD DL-16 / U13). No Marks are deducted.
 
 ### `wallet.competitionCalendarLink`
 
@@ -502,7 +502,7 @@ The web dashboard has no aggregate endpoint. Its role-specific views compose exi
 - **Auth:** Student (participant)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ withdrawn: true, late: boolean }`
-- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels
+- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels. Group-series bookings (`type: "series"` with `targetGroupSize > 1`) are rejected with `CONFLICT` (`BOOKING_SERIES_NO_OPT_OUT`) — no opt-out from the series (U4)
 
 ### `booking.listSessions`
 
@@ -735,4 +735,4 @@ The web dashboard has no aggregate endpoint. Its role-specific views compose exi
 - **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
 - **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
-- **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. achievement `imageUrl`, user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
+- **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset

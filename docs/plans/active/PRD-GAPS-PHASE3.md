@@ -1,36 +1,36 @@
 # Cogito Backend — PRD Gaps Phase 3 Specification
 
-| Field      | Value                                                                |
-| ---------- | -------------------------------------------------------------------- |
-| Status     | Planned — not implemented (future PRs against main)                  |
-| Branch     | main (future PRs)                                                    |
-| Created    | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)                   |
-| Depends on | #36/#39–#43 (G1–G20) + #46 (BACKEND-HARDENING-PHASE2) merged to main |
-| Next       | After this spec: `BACKEND-CLEANUP.md`, then FRONTEND-GAPS-SPEC       |
-| Scope      | Backend-only                                                         |
+| Field      | Value                                                                        |
+| ---------- | ---------------------------------------------------------------------------- |
+| Status     | Active — U1/U2/U5/U6/U7/U10/U14 open; U3/U4/U8/U11/U12/U13 done (2026-08-16) |
+| Branch     | main (future PRs)                                                            |
+| Created    | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)                           |
+| Depends on | #36/#39–#43 (G1–G20) + #46 (BACKEND-HARDENING-PHASE2) merged to main         |
+| Next       | After this spec: `BACKEND-CLEANUP.md`, then FRONTEND-GAPS-SPEC               |
+| Scope      | Backend-only                                                                 |
 
-This spec catalogs the PRD requirements the backend **does not yet implement** that were found by the 2026-08-14 PRD-vs-code audit (read `docs/prd.tex` FR/DL/TC references and compare against code at HEAD `ec8b16c`). None of these are tracked anywhere else — the previous gap specs (`PRD-GAPS-SPEC.md` G1–G20) and `BACKEND-HARDENING-PHASE2.md` (B-series) are complete.
+This spec catalogs the PRD requirements the backend **does not yet implement** that were found by the 2026-08-14 PRD-vs-code audit (read `docs/prd.tex` FR/DL/TC references and compare against code at HEAD `ec8b16c`). Statuses re-verified against code at `7375b9d` (2026-08-16): U4/U13 implemented by REVIEW-FIXES-2 PR F, U11 closed by BACKEND-REVIEW-HARDENING M4 (#48). The remaining open items (U1/U2/U3/U5/U6/U7/U8/U10/U14) are tracked for execution in `docs/plans/active/REVIEW-FIXES-3.md` (P3/P5).
 
 > **Rule:** the PRD (`docs/prd.tex`) is the source of truth. If a requirement in this spec conflicts with the PRD, the PRD wins.
 
 ## Gap Summary
 
-| #   | Requirement                                                                 | PRD Ref                   | Severity | Module        | Status                                                                                   |
-| --- | --------------------------------------------------------------------------- | ------------------------- | -------- | ------------- | ---------------------------------------------------------------------------------------- |
-| U1  | Admin manual meeting-link entry                                             | FR-21, TC-36              | Medium   | meeting       | Not implemented                                                                          |
-| U2  | Student self-service reschedule before H-2                                  | FR-14, TC-15              | Medium   | booking       | Not implemented                                                                          |
-| U3  | Reconfirmation-deadline repricing for still-valid partial headcount         | FR-16, TC-18              | High     | booking       | Not implemented                                                                          |
-| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | Not implemented                                                                          |
-| U5  | Per-participant no-show marking for series sessions                         | FR-20, TC-30              | Medium   | booking       | Not implemented                                                                          |
-| U6  | Admin per-session series cancel with Marks-return choice                    | FR-20, TC-31              | Medium   | admin-booking | Not implemented                                                                          |
-| U7  | Per-session tutor reschedule within a series                                | FR-20, TC-33              | Low      | booking       | Not implemented                                                                          |
-| U8  | Payment-error refund reconciliation guard (no blind full refund)            | TC-39, Refund Policy      | High     | admin-booking | Not implemented                                                                          |
-| U9  | Support SLA business-hours windows (30 min / 4 h) + WhatsApp escalation     | OQ-04                     | Medium   | support       | Partial (in-app escalation job exists, #46)                                              |
-| U10 | Achievement submission fields match PRD (issuer, visibility, enum category) | FR-18 (prd.tex:1004-1014) | Low      | achievement   | Not implemented                                                                          |
-| U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | **Closed** — implemented by BACKEND-REVIEW-HARDENING M4 (`fix/backend-review-hardening`) |
-| U12 | Offline room approval deadline rule (12h window)                            | DL-25 (prd.tex:853)       | Low      | booking       | Deviation (deadline = session start)                                                     |
-| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | Not implemented (carried from phase-2 Task 5.2)                                          |
-| U14 | Offline room availability integrated into booking creation (G13)            | FR-22, TC-20              | Low      | room/booking  | Not implemented                                                                          |
+| #   | Requirement                                                                 | PRD Ref                   | Severity | Module        | Status                                                                                                   |
+| --- | --------------------------------------------------------------------------- | ------------------------- | -------- | ------------- | -------------------------------------------------------------------------------------------------------- |
+| U1  | Admin manual meeting-link entry                                             | FR-21, TC-36              | Medium   | meeting       | Not implemented                                                                                          |
+| U2  | Student self-service reschedule before H-2                                  | FR-14, TC-15              | Medium   | booking       | Not implemented                                                                                          |
+| U3  | Reconfirmation-deadline repricing for still-valid partial headcount         | FR-16, TC-18              | High     | booking       | **Implemented (REVIEW-FIXES-3 P3.8)** — reprices again at every 12h deadline; <2 headcount still expires |
+| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | **Implemented (REVIEW-FIXES-2 PR F)**                                                                    |
+| U5  | Per-participant no-show marking for series sessions                         | FR-20, TC-30              | Medium   | booking       | Not implemented                                                                                          |
+| U6  | Admin per-session series cancel with Marks-return choice                    | FR-20, TC-31              | Medium   | admin-booking | Not implemented                                                                                          |
+| U7  | Per-session tutor reschedule within a series                                | FR-20, TC-33              | Low      | booking       | Not implemented                                                                                          |
+| U8  | Payment-error refund reconciliation guard (no blind full refund)            | TC-39, Refund Policy      | High     | admin-booking | **Implemented (REVIEW-FIXES-3 P3.8)** — refund capped at unspent remainder; fully-spent rejected         |
+| U9  | Support SLA business-hours windows (30 min / 4 h) + WhatsApp escalation     | OQ-04                     | Medium   | support       | Partial (in-app escalation job exists, #46)                                                              |
+| U10 | Achievement submission fields match PRD (issuer, visibility, enum category) | FR-18 (prd.tex:1004-1014) | Low      | achievement   | Not implemented                                                                                          |
+| U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | **Closed** — implemented by BACKEND-REVIEW-HARDENING M4 (#48; branch merged, code on main)               |
+| U12 | Offline room approval deadline rule (12h window)                            | DL-25 (prd.tex:853)       | Low      | booking       | **Closed** — `min(now + 12h, scheduledStartAt)` per DL-25 + SCHEDULED grace bump (REVIEW-FIXES-3 P3.1)   |
+| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | **Implemented (REVIEW-FIXES-2 PR F)**                                                                    |
+| U14 | Offline room availability integrated into booking creation (G13)            | FR-22, TC-20              | Low      | room/booking  | Not implemented                                                                                          |
 
 ---
 
@@ -76,6 +76,8 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U3: Reconfirmation-deadline repricing (FR-16 / TC-18 — second deadline)
 
+**Status: CLOSED** (REVIEW-FIXES-3 P3.8, 2026-08-16) — `expireBookings` now reprices at every 12h deadline for both `AWAITING_PARTICIPANT_CONFIRMATION` and `AWAITING_RECONFIRMATION` (valid partial headcount ≥ 2 < target): reprice → fresh 12h deadline → stay in reconfirmation + notify. Headcount < 2 still expires + releases. Covered by `booking-reprice-deadline.test.ts` (U3/B8 cases).
+
 **PRD:** a group at a deadline with valid partial headcount (≥ 2, < target) reprices to the final per-student total and enters reconfirmation. This applies at **every** 12h deadline, not just the first.
 
 **Current state:** `expireBookings` (`booking.service.ts:2456-2492`) has a headcount branch **only for `AWAITING_PARTICIPANT_CONFIRMATION`** (the first deadline, fixed in #46/B3). A group sitting in `AWAITING_RECONFIRMATION` at its reconfirmation deadline with `confirmed >= 2` falls into the else-branch and **EXPIRES + releases all holds** instead of repricing again and reissuing reconfirmation.
@@ -94,9 +96,11 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U4: Group-series full-series withdrawal not blocked (FR-20 / TC-24)
 
+**Status: IMPLEMENTED** (REVIEW-FIXES-2 PR F) — `withdraw` (`booking.service.ts:1949`) rejects `type === SERIES && targetGroupSize > 1` with `BOOKING_SERIES_NO_OPT_OUT` before any wallet movement; solo-series (`targetGroupSize: 1`) withdraw is unchanged. Spec below retained as reference.
+
 **PRD (prd.tex:890):** group-series participants "cannot withdraw from the series as a whole."
 
-**Current state:** `cancelSession` blocks per-session cancellation for group series (`booking.service.ts:1243-1245`), but `withdraw` (`booking.service.ts:1902`) has **no `type === SERIES && targetGroupSize > 1` guard** — a confirmed group-series participant can still call `withdraw` to leave the whole series (deducting/releasing their hold), contradicting the no-opt-out rule.
+**Current state (at the time of writing):** `cancelSession` blocks per-session cancellation for group series (`booking.service.ts:1243-1245`), but `withdraw` (`booking.service.ts:1902`) has **no `type === SERIES && targetGroupSize > 1` guard** — a confirmed group-series participant can still call `withdraw` to leave the whole series (deducting/releasing their hold), contradicting the no-opt-out rule.
 
 **Required:**
 
@@ -172,6 +176,8 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U8: Payment-error refund reconciliation guard (TC-39 / Refund Policy prd.tex:687-688)
 
+**Status: CLOSED** (REVIEW-FIXES-3 P3.8, 2026-08-16) — `adminRefund` computes spend as `sumCreditedMarks − current total balance` and refunds only the unspent remainder of the payment (FIFO). A fully-spent payment is rejected with `REFUND_SPEND_EXHAUSTED` (no blind refund). Covered by `refund-flow.test.ts` (U8/B9 cases).
+
 **PRD:** refunds are only for payment errors + admin corrections, and must NOT be a blind full cash refund when the credited Marks were already spent.
 
 **Current state:** `adminRefund` (`admin-booking.service.ts:427-496`) credits back the **full** `payment.marks` for any PAID/SETTLED payment regardless of how many Marks the user has since spent (only guarded by existing wallet/ledger balance mechanics — it can over-credit relative to what was actually paid for, and can create negative effective spend accounting).
@@ -214,19 +220,19 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 **PRD fields:** title, category (enum: competition/award/certificate/leadership/publication/other), short summary, issuer/institution, date earned, proof URL **or file**, optional public note, visibility flag.
 
-**Current state:** `achievement.types.ts:3-13` + schema `achievement.ts:24-33` store `eventName, category (free text), award, level, eventDate, location, description, subjects, imageUrl`. Missing: **issuer/institution**, **visibility flag**; category not enum-constrained; proof is a single `imageUrl` (no file upload flow beyond the new upload module, no PDF/URL-optional shape).
+**Current state:** `achievement.types.ts` + schema `achievement.ts` store `eventName, category (free text), award, level, awardingDate, location, description, subjects, evidenceUrl, documentationUrl`. Verification evidence and optional public documentation are separate. Missing: **issuer/institution**, **visibility flag**; category is not enum-constrained.
 
 **Required:**
 
 1. Migration: add `issuer` (text) + `visibility` (boolean, default true) columns; keep legacy columns (or map `eventName → title` alias at the API boundary to avoid breaking the frontend — decide during implementation).
 2. Constrain `category` to the PRD enum (existing rows: map or allow `other`).
-3. Proof: `imageUrl` may reference an `upload.createUploadUrl` key/URL (already possible); document the flow; add `proofUrl` if the PRD requires a non-image link.
+3. Proof: `evidenceUrl` may reference an `upload.createUploadUrl` key/URL and remains verification-only; `documentationUrl` is the optional public image/link.
 
 **Acceptance tests:**
 
 - Create/update accepts the new fields; category enum enforced
 - `visibility=false` achievements excluded from public surfacing (F16)
-- Uploaded proof file URL accepted as `imageUrl`
+- Uploaded proof file URL accepted as `evidenceUrl`; optional public documentation accepted separately
 
 ---
 
@@ -252,22 +258,26 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U12: Offline room approval deadline rule (DL-25)
 
+**Status: CLOSED** (REVIEW-FIXES-3 P3.1, 2026-08-16) — decision (b): `deadlineAt = min(now + 12h, scheduledStartAt)` per DL-25, plus the B1 companion fix: room assignment bumps the deadline to `scheduledEndAt + 2h` so SCHEDULED offline bookings are not auto-NO_SHOW'd at session start. Implemented in `booking.service.ts` (tutorAccept + `transitionBookingToScheduled`); covered by `packages/api/src/tests/integration/booking-offline-scheduled.test.ts`.
+
 **PRD (prd.tex:853):** offline room approval should follow the 12-hour window rules (DL-25).
 
-**Current state:** `tutorAccept` sets the offline booking's `deadlineAt = scheduledStartAt` (`booking.service.ts:861`) — the room-approval window is capped by session start rather than the 12h approval window. The result is stricter than the PRD (a booking created > 12h before the session gets less approval time), so this may be intentional — but it is an undocumented deviation.
+**Current state (at the time of writing):** `tutorAccept` sets the offline booking's `deadlineAt = scheduledStartAt` (`booking.service.ts:861`) — the room-approval window is capped by session start rather than the 12h approval window. The result is stricter than the PRD (a booking created > 12h before the session gets less approval time), so this may be intentional — but it is an undocumented deviation.
 
 **Required (decision + implementation):**
 
-1. Decide with the PRD owner: either (a) keep session-start cap and document it in the PRD/context, or (b) implement `deadlineAt = min(now + 12h, scheduledStartAt)` per DL-25.
-2. Add a test asserting the chosen behavior for offline bookings (created 24h ahead → deadline 12h; created 6h ahead → deadline at session start).
+1. ~~Decide with the PRD owner: either (a) keep session-start cap and document it in the PRD/context, or (b) implement `deadlineAt = min(now + 12h, scheduledStartAt)` per DL-25.~~ **Resolved (b)** per DL-25.
+2. ~~Add a test asserting the chosen behavior for offline bookings (created 24h ahead → deadline 12h; created 6h ahead → deadline at session start).~~ Done — `booking-offline-scheduled.test.ts`.
 
 ---
 
 ## U13: Knowledge Bank eligibility uses total balance (B4, from BACKEND-HARDENING-PHASE2 Task 5.2)
 
+**Status: IMPLEMENTED** (REVIEW-FIXES-2 PR F) — `knowledgeBankEligible` (`wallet.service.ts:421-435`) now compares and returns `totalBalance`; held Marks count toward the 35-Mark threshold. Spec below retained as reference.
+
 **PRD DL-16 / FR-12:** KB eligibility = login + **≥ 35 total Marks** (total balance, not available).
 
-**Current state:** `knowledgeBankEligible` (`wallet.service.ts:421-435`) compares `availableBalance`. Held Marks (committed to bookings) should count toward the 35-Mark threshold.
+**Current state (at the time of writing):** `knowledgeBankEligible` (`wallet.service.ts:421-435`) compares `availableBalance`. Held Marks (committed to bookings) should count toward the 35-Mark threshold.
 
 **Required:**
 

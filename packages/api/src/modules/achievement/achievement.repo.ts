@@ -8,11 +8,12 @@ export interface InsertAchievementParams {
   category: string;
   award: string;
   level: string;
-  eventDate?: string;
+  awardingDate?: string;
   location?: string;
   description?: string;
   subjects?: string[];
-  imageUrl?: string;
+  evidenceUrl?: string;
+  documentationUrl?: string;
 }
 
 export interface UpdateAchievementData {
@@ -20,11 +21,12 @@ export interface UpdateAchievementData {
   category?: string;
   award?: string;
   level?: string;
-  eventDate?: string;
+  awardingDate?: string;
   location?: string;
   description?: string;
   subjects?: string[];
-  imageUrl?: string;
+  evidenceUrl?: string;
+  documentationUrl?: string;
 }
 
 export interface AdminListInput {
@@ -64,11 +66,12 @@ async function insert(conn: DbOrTx, params: InsertAchievementParams) {
       category: params.category,
       award: params.award,
       level: params.level,
-      eventDate: params.eventDate ?? null,
+      awardingDate: params.awardingDate ?? null,
       location: params.location ?? null,
       description: params.description ?? null,
       subjects: params.subjects ?? [],
-      imageUrl: params.imageUrl ?? null,
+      evidenceUrl: params.evidenceUrl ?? null,
+      documentationUrl: params.documentationUrl ?? null,
     })
     .returning();
   return result;

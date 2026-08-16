@@ -1,17 +1,19 @@
 # Cogito Backend — Cleanup & Reliability Plan
 
-| Field   | Value                                                       |
-| ------- | ----------------------------------------------------------- |
-| Status  | Planned — not implemented (future PRs against main)         |
-| Branch  | main (future PRs)                                           |
-| Created | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)          |
-| Scope   | Backend-only — no behavior changes unless explicitly marked |
+| Field   | Value                                                                                           |
+| ------- | ----------------------------------------------------------------------------------------------- |
+| Status  | **COMPLETED** — all 11 items implemented and merged (2026-08-15); moved to completed 2026-08-16 |
+| Branch  | main (merged)                                                                                   |
+| Created | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)                                              |
+| Scope   | Backend-only — no behavior changes unless explicitly marked                                     |
 
 Dead code, silent failure modes, and test-quality issues found during the 2026-08-14 codebase audit (dead-code scan + PRD audit). None of these change user-facing behavior; each item is independently testable. Order by severity, not by section.
 
 > **Rule:** every removal must be verified unused first (`rg` for the symbol across `packages/api/src`, `apps/server/src`; test files may keep using helpers — in that case keep the helper or update the test).
 
-> **Status:** all 11 items implemented and merged to main (2026-08-15). Retained as reference. Two new recovery mechanisms were added beyond this list: `retry-failed-meetings` scheduler job (re-covers CONFIRMED online bookings with failed meetings) and email-outbox retry (failed dispatch rows retried up to 3 attempts).
+> **Status:** all 11 items implemented and merged to main (2026-08-15); re-verified 2026-08-16 and moved to `docs/plans/completed/`. Retained as reference. Two new recovery mechanisms were added beyond this list: `retry-failed-meetings` scheduler job (re-covers CONFIRMED online bookings with failed meetings) and email-outbox retry (failed dispatch rows retried up to 3 attempts).
+>
+> **Known minor leftover (2026-08-16):** the unused `BookingTransition` interface in `booking-state.types.ts:35` (C3 said removed) is still present — harmless dead export; tracked in REVIEW-FIXES-3 P5.8.
 
 ## Summary
 

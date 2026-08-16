@@ -7,6 +7,7 @@ import {
   ACTOR_TYPE,
   ATTENDANCE_STATE,
   RESPONSE_WINDOW_MS,
+  OFFLINE_SCHEDULED_GRACE_MS,
   LATE_CANCEL_THRESHOLD_MS,
   MIN_GROUP_HEADCOUNT,
   MIN_SERIES_SESSIONS,
@@ -42,6 +43,8 @@ import {
   BookingRescheduleNotFoundError,
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
+  BookingSeriesNoOptOutError,
+  BookingAcceptanceDeadlinePassedError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { lockTutorForBooking } from "../../lib/locks";
@@ -835,6 +838,11 @@ export function createBookingService(deps: {
       if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
       }
+      // B4: once the booking deadline passed, the held marks were released —
+      // accepting would grant a free session. Mirror the expiry path.
+      if (b.deadlineAt && b.deadlineAt.getTime() < Date.now()) {
+        throw new BookingAcceptanceDeadlinePassedError(bookingId);
+      }
 
       const isOffline = b.modality === MODALITY.OFFLINE;
 
@@ -877,7 +885,15 @@ export function createBookingService(deps: {
           },
         );
 
-        await repo.updateBookingDeadline(tx, bookingId, b.scheduledStartAt);
+        // DL-25 (U12): the offline room-approval window is 12 hours, capped
+        // at session start when the session starts sooner.
+        const approvalDeadline = new Date(
+          Math.min(
+            Date.now() + RESPONSE_WINDOW_MS,
+            b.scheduledStartAt.getTime(),
+          ),
+        );
+        await repo.updateBookingDeadline(tx, bookingId, approvalDeadline);
         updated = await repo.findBookingById(tx, bookingId);
       }
 
@@ -2092,6 +2108,8 @@ export function createBookingService(deps: {
           heldAmount: 0,
         });
 
+        // A reconfirmation decline always comes from a confirmed/reconfirmed
+        // participant — the headcount is always decremented here.
         await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
 
         const remaining = await repo.findConfirmedParticipants(
@@ -2127,6 +2145,13 @@ export function createBookingService(deps: {
     let cancelMeeting = false;
     const result = await db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
+      // PRD (prd.tex:890): once confirmed, group-series participants cannot
+      // opt out of the series as a whole (U4). Per-session cancellation is
+      // already blocked in cancelSession; this guards the full-series path
+      // before any wallet movement.
+      if (b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1) {
+        throw new BookingSeriesNoOptOutError(bookingId);
+      }
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingCancelledError(bookingId);
       }
@@ -2139,6 +2164,22 @@ export function createBookingService(deps: {
         b.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
       const isLate = now > h2;
+
+      // B7: a participant who already withdrew (or was marked no-show) cannot
+      // withdraw again — no hold movement, no state churn, no second
+      // headcount decrement.
+      if (
+        participant.confirmationState === CONFIRMATION_STATE.WITHDRAWN_PRE_H2 ||
+        participant.confirmationState ===
+          CONFIRMATION_STATE.WITHDRAWN_POST_H2 ||
+        participant.confirmationState === CONFIRMATION_STATE.NO_SHOW
+      ) {
+        return { withdrawn: false, late: isLate };
+      }
+
+      const wasConfirmed =
+        participant.confirmationState === CONFIRMATION_STATE.CONFIRMED ||
+        participant.confirmationState === CONFIRMATION_STATE.RECONFIRMED;
       const participantState = isLate
         ? CONFIRMATION_STATE.WITHDRAWN_POST_H2
         : CONFIRMATION_STATE.WITHDRAWN_PRE_H2;
@@ -2177,7 +2218,11 @@ export function createBookingService(deps: {
         heldAmount: 0,
       });
 
-      await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
+      // B7: only participants who were actually confirmed count towards
+      // confirmedHeadcount — a pending invitee withdrawing never was counted.
+      if (wasConfirmed) {
+        await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
+      }
 
       const remaining = await repo.findConfirmedParticipants(
         tx,
@@ -2199,7 +2244,19 @@ export function createBookingService(deps: {
 
         await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
-        await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
+        // B7+: PRD (prd.tex:846) says the booking expires when the minimum
+        // headcount is no longer met. CANCELLED is not reachable from
+        // awaiting_participant_confirmation/awaiting_reconfirmation — use
+        // EXPIRED there instead of throwing (which would roll back the
+        // withdrawal entirely).
+        const cancelTarget = canTransition(
+          b.currentState as BookingState,
+          BOOKING_STATE.CANCELLED,
+        )
+          ? BOOKING_STATE.CANCELLED
+          : BOOKING_STATE.EXPIRED;
+
+        await transition(tx, bookingId, cancelTarget, {
           actorId: userId,
           actorType: ACTOR_TYPE.STUDENT,
           reason: "Not enough participants after withdrawal",
@@ -2247,37 +2304,30 @@ export function createBookingService(deps: {
           // stranded (the old code cancelled the whole booking here).
           void currentState;
         } else if (
-          b.type === BOOKING_TYPE.SOLO &&
-          (currentState === BOOKING_STATE.CONFIRMED ||
-            currentState === BOOKING_STATE.SCHEDULED ||
-            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL)
+          b.type === BOOKING_TYPE.SOLO ||
+          b.type === BOOKING_TYPE.SERIES
         ) {
-          // R2: the proposer is the only participant, so cancelling the whole
-          // booking is correct — a solo booking must never regress to
-          // AWAITING_RECONFIRMATION (no one left to reconfirm, hold stranded).
+          // R2 + B3: solo / solo-series bookings always cancel on withdraw,
+          // from any non-terminal state. The proposer is the only
+          // participant — regressing to AWAITING_RECONFIRMATION would strand
+          // a zero-hold booking that could be revived (and a later deduct
+          // could consume another booking's hold). Zero the hold and cancel.
           await repo.updateBookingHoldAmount(tx, bookingId, 0);
-          cancelMeeting = true;
+          if (
+            currentState === BOOKING_STATE.CONFIRMED ||
+            currentState === BOOKING_STATE.SCHEDULED ||
+            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
+          ) {
+            cancelMeeting = true;
+          }
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
             reason: "Participant withdrew",
           });
-        } else if (regressableStates.has(currentState)) {
-          await transition(
-            tx,
-            bookingId,
-            BOOKING_STATE.AWAITING_RECONFIRMATION,
-            {
-              actorId: userId,
-              actorType: ACTOR_TYPE.STUDENT,
-              reason: "Participant withdrew before H-2",
-            },
-          );
-
-          await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
         } else {
-          // Solo / solo-series: the proposer is the only participant, so
-          // cancelling the whole booking is correct.
+          // Unreachable defensive branch: any other booking type/state
+          // combination cancels rather than stranding holds.
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
@@ -2732,6 +2782,15 @@ export function createBookingService(deps: {
       actorType: ACTOR_TYPE.ADMIN,
       reason: "Room assigned",
     });
+    // B1: an offline SCHEDULED booking must not expire (NO_SHOW) at session
+    // start — the room-approval deadline was capped at the start time. Bump
+    // the deadline past session end (mirroring the online path), so the
+    // no-show job only fires after the session finished plus a grace window.
+    await repo.updateBookingDeadline(
+      tx,
+      bookingId,
+      new Date(b.scheduledEndAt.getTime() + OFFLINE_SCHEDULED_GRACE_MS),
+    );
   }
 
   /**
@@ -2950,41 +3009,77 @@ export function createBookingService(deps: {
           // expiring it. Only groups that never reached the minimum headcount
           // expire and release all holds.
           const confirmed = await repo.findConfirmedParticipants(tx, b.id);
-          if (
+          const atRepricingDeadline =
             b.currentState ===
-              BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION &&
+              BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION ||
+            b.currentState === BOOKING_STATE.AWAITING_RECONFIRMATION;
+          if (
+            atRepricingDeadline &&
             confirmed.length >= MIN_GROUP_HEADCOUNT &&
             confirmed.length < b.targetGroupSize
           ) {
-            await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.SYSTEM);
-
-            await repo.updateBookingDeadline(
-              tx,
-              b.id,
-              new Date(Date.now() + RESPONSE_WINDOW_MS),
-            );
-
-            await transition(tx, b.id, BOOKING_STATE.AWAITING_RECONFIRMATION, {
-              actorId: "system",
-              actorType: ACTOR_TYPE.SYSTEM,
-              reason: "Group deadline passed with partial headcount",
-            });
-
-            for (const p of confirmed) {
-              // eslint-disable-next-line no-await-in-loop
-              await notification.writeBestEffort({
-                db: tx,
-                userId: p.userId,
+            // B5: if the reprice cannot be funded (InsufficientMarksError
+            // etc.), fall back to the normal expiry path — the booking must
+            // never stay wedged with a past deadline for the job to retry
+            // every 5 minutes forever.
+            let repriced = true;
+            try {
+              await repriceGroupForHeadcount(
+                tx,
+                b,
+                confirmed,
+                ACTOR_TYPE.SYSTEM,
+              );
+            } catch (error) {
+              repriced = false;
+              log({
+                level: "warn",
+                action: "expire_reprice_failed",
                 bookingId: b.id,
-                category: NOTIFICATION_CATEGORY.BOOKING,
-                severity: NOTIFICATION_SEVERITY.ACTION,
-                title: "Group deadline reached",
-                body: "Your group did not fill before the deadline. The per-student price was updated — please reconfirm within 12 hours.",
-                eventKey: `booking.${b.id}.deadline_reprice.${p.userId}`,
-                emailRequired: true,
+                message:
+                  "Group reprice at deadline failed; falling back to expiry",
+                error: { message: String(error) },
               });
             }
-            return;
+
+            if (repriced) {
+              await repo.updateBookingDeadline(
+                tx,
+                b.id,
+                new Date(Date.now() + RESPONSE_WINDOW_MS),
+              );
+
+              // U3/B8: a group already in AWAITING_RECONFIRMATION stays there
+              // (no self-transition); the first-deadline case moves into it.
+              if (b.currentState !== BOOKING_STATE.AWAITING_RECONFIRMATION) {
+                await transition(
+                  tx,
+                  b.id,
+                  BOOKING_STATE.AWAITING_RECONFIRMATION,
+                  {
+                    actorId: "system",
+                    actorType: ACTOR_TYPE.SYSTEM,
+                    reason: "Group deadline passed with partial headcount",
+                  },
+                );
+              }
+
+              for (const p of confirmed) {
+                // eslint-disable-next-line no-await-in-loop
+                await notification.writeBestEffort({
+                  db: tx,
+                  userId: p.userId,
+                  bookingId: b.id,
+                  category: NOTIFICATION_CATEGORY.BOOKING,
+                  severity: NOTIFICATION_SEVERITY.ACTION,
+                  title: "Group deadline reached",
+                  body: "Your group did not fill before the deadline. The per-student price was updated — please reconfirm within 12 hours.",
+                  eventKey: `booking.${b.id}.deadline_reprice.${p.userId}`,
+                  emailRequired: true,
+                });
+              }
+              return;
+            }
           }
 
           await releaseAllParticipantHolds(

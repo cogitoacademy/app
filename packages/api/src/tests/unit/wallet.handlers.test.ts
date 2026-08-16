@@ -11,7 +11,11 @@ const walletService = {
   })),
   listLedger: mock(async () => ({ items: [] })),
   listActivePackages: mock(async () => [{ id: "pkg1" }]),
-  knowledgeBankEligible: mock(async () => ({ eligible: true })),
+  knowledgeBankEligible: mock(async () => ({
+    eligible: true,
+    balance: 40,
+    threshold: 35,
+  })),
 };
 
 const walletHandler = createWalletHandler({
@@ -75,7 +79,7 @@ describe("walletHandler", () => {
       } as any);
 
       expect(walletService.knowledgeBankEligible).toHaveBeenCalledWith("u1");
-      expect(result).toEqual({ eligible: true });
+      expect(result).toEqual({ eligible: true, balance: 40, threshold: 35 });
     });
   });
 

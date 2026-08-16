@@ -3,14 +3,15 @@
 | Field      | Value                                         |
 | ---------- | --------------------------------------------- |
 | Status     | Living gap inventory (updated 2026-08-16)     |
-| Branch     | `feature/frontend-gaps` (future)              |
+| Branch     | `f/frontend-prd-gaps` (open PR #55)           |
 | Created    | 2026-07-29                                    |
+| Audited    | 2026-08-16                                    |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed |
 | Scope      | Frontend only (`apps/web/`)                   |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
-The backend spec is `docs/plans/active/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
+The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
 ---
 
@@ -18,30 +19,28 @@ The backend spec is `docs/plans/active/PRD-GAPS-SPEC.md` (backend-only). This is
 
 ### Existing routes (`apps/web/src/routes/`)
 
-The tutor booking form now exposes optional student invitations at all times.
-Booking type is derived from invitees (none = solo, one or more = group), so
-students no longer need to select a separate solo/group mode before searching
-for classmates.
-
-| Route                       | Component                       | Status                                                                        |
-| --------------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
-| `/` (index)                 | Landing redirect                | Exists                                                                        |
-| `/login`                    | sign-in-form.tsx                | Exists                                                                        |
-| `/auth/callback`            | auth callback                   | Exists                                                                        |
-| `/invite`                   | invite-claim-page.tsx           | Exists                                                                        |
-| `/_app`                     | App layout + sidebar            | Exists                                                                        |
-| `/_app/dashboard`           | dashboard/page.tsx              | Exists (stats only)                                                           |
-| `/_app/balance`             | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                         |
-| `/_app/bookings`            | bookings-page.tsx               | Exists (list + cancel only)                                                   |
-| `/_app/tutors`              | tutors-page-content.tsx         | Exists (discovery list)                                                       |
-| `/_app/achievements`        | achivements-page.tsx            | Exists (submission + list)                                                    |
-| `/_app/profile`             | profile-page.tsx                | Complete — student account name/photo plus learning and parent contact fields |
-| `/_app/onboarding`          | onboarding-form.tsx             | Exists (tutor onboarding)                                                     |
-| `/_app/tutor-bookings`      | tutor-bookings-page.tsx         | Exists (incoming list + review link)                                          |
-| `/_app/availability`        | availability-page.tsx           | Exists (weekly + one-time slots)                                              |
-| `/_app/bookings/$bookingId` | booking-detail-page.tsx         | Exists (student/tutor detail actions)                                         |
-| `/_app/admin-tutors`        | admin tutor invite + review     | Exists                                                                        |
-| `/_app/admin-achievements`  | achievement-moderation-page.tsx | Exists (moderation UI)                                                        |
+| Route                        | Component                       | Status                               |
+| ---------------------------- | ------------------------------- | ------------------------------------ |
+| `/` (index)                  | index.tsx (marketing landing)   | Exists                               |
+| `/login`                     | login.tsx (sign-in-form)        | Exists                               |
+| `/invite`                    | invite.tsx (invite-claim)       | Exists                               |
+| `/auth/callback`             | auth.callback.tsx               | Exists                               |
+| `/_app`                      | _app.tsx (App layout + sidebar) | Exists                               |
+| `/_app/dashboard`            | _app.dashboard.tsx              | Exists (static stats)                |
+| `/_app/balance`              | _app.balance.tsx                | Exists (wallet + Knowledge Bank)     |
+| `/_app/bookings`             | _app.bookings.tsx               | Exists (list + cancel)               |
+| `/_app/bookings/$bookingId`  | _app.bookings_.$bookingId.tsx   | Exists (student + tutor detail)      |
+| `/_app/tutors`               | _app.tutors.tsx                 | Exists (discovery)                   |
+| `/_app/tutors/$tutorId/book` | _app.tutors_.$tutorId.book.tsx  | Exists (solo/group/series creation)  |
+| `/_app/achievements`         | _app.achievements.tsx           | Exists (submission + list)           |
+| `/_app/profile`              | _app.profile.tsx                | Exists (incl. parent contact fields) |
+| `/_app/notifications`        | _app.notifications.tsx          | Exists (full page — see F10)         |
+| `/_app/onboarding`           | _app.onboarding.tsx             | Exists (tutor onboarding)            |
+| `/_app/tutor-bookings`       | _app.tutor-bookings.tsx         | Exists (incoming list + review link) |
+| `/_app/availability`         | _app.availability.tsx           | Exists (weekly + one-time slots)     |
+| `/_app/admin-tutors`         | _app.admin-tutors.tsx           | Exists (admin tutor invite + review) |
+| `/_app/admin-achievements`   | _app.admin-achievements.tsx     | Exists (moderation UI)               |
+| `/_app/admin`                | —                               | **Missing** (F1)                     |
 
 ### Remaining gaps (no complete surface yet)
 
@@ -51,27 +50,31 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 ## Frontend Gap Summary
 
-| #   | Gap                                                         | PRD Ref                | Depends on (backend)                          | Effort | Priority |
-| --- | ----------------------------------------------------------- | ---------------------- | --------------------------------------------- | ------ | -------- |
-| F1  | Admin dashboard + override queue (implemented baseline)     | FR-10, OQ-04           | G8, G9, G10                                   | 3d     | Closed   |
-| F2  | Admin override form with before/after preview (implemented) | FR-10, prd.tex:717-728 | G10                                           | 2d     | Closed   |
-| F3  | Report tutor lateness/no-show button (implemented)          | FR-14, DL-26           | G1                                            | 1d     | Closed   |
-| F4  | Competition Calendar link (implemented)                     | FR-11                  | None (external link)                          | 0.5d   | Closed   |
-| F5  | WhatsApp support button (implemented)                       | FR-14, OQ-04           | None (external link)                          | 0.5d   | Closed   |
-| F6  | Tutor reschedule proposal UI (implemented)                  | FR-15                  | G6                                            | 1d     | Closed   |
-| F7  | Student reschedule approval UI (implemented)                | FR-15                  | G6                                            | 1d     | Closed   |
-| F8  | Series session completion UI                                | FR-20                  | G18                                           | 1d     | Medium   |
-| F9  | Session notes view + add (implemented baseline)             | FR-09, DL-18           | G7                                            | 1.5d   | Partial  |
-| F10 | Notifications page (implemented)                            | FR-17                  | G17                                           | 1.5d   | Closed   |
-| F11 | Admin wallet/ledger view (implemented)                      | FR-10                  | G9                                            | 1d     | Closed   |
-| F12 | Admin room approval UI (implemented baseline)               | FR-22                  | G14                                           | 1d     | Partial  |
-| F13 | Tutor payout view (dashboard summary implemented)           | DL-11                  | G16                                           | 0.5d   | Partial  |
-| F14 | Group series no opt-out disclaimer display                  | FR-20                  | G15                                           | 0.5d   | Low      |
-| F15 | Knowledge Bank gating flow (full)                           | FR-12                  | Partial (wallet.knowledgeBankEligible exists) | 0.5d   | Medium   |
-| F16 | Achievements public landing surfacing                       | FR-18                  | None (public site)                            | 1d     | Low      |
-| F17 | Booking detail page (implemented lifecycle)                 | FR-07, FR-08           | G6, G11                                       | 2d     | Closed   |
+| #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status  |
+| --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ------- |
+| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Missing |
+| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed* |
+| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed* |
+| F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed  |
+| F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed  |
+| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed* |
+| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed* |
+| F8  | Series session completion UI                  | FR-20                  | G18                                         | 1d     | Partial |
+| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | Partial |
+| F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed  |
+| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed* |
+| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | Partial |
+| F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | Missing |
+| F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | Missing |
+| F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed  |
+| F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | Partial |
+| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed* |
 
-**Total estimated effort: ~20 days (frontend)**
+**Total estimated effort: ~15 days for remaining gaps (F1-F3, F6-F9, F11-F14, F16-F17 partial; F4, F5, F10, F15 are done).**
+
+> **Audit 2026-08-14:** F4, F5, F10, F15 verified **closed** in `apps/web` (git HEAD `9b7df5e`). F8, F16, F17 remain partial. All remaining missing gaps have backend procedures ready except F13 (needs new `tutor.getMyPayouts` router) and F16 (needs a new public achievement list procedure).
+
+> **Audit 2026-08-16 (against open PR #55 `f/frontend-prd-gaps`):** The open PR delivers F2, F3, F6, F7, F11, F17 (marked **Closed*** = implemented in the PR, pending merge) and partial F1/F9/F12/F15. After it merges, still open: **F8** (per-session series completion — UI has no session list/`sessionId`), **F13** (tutor payout view; backend `tutor.getMyPayouts` **exists since #43**), **F14** (group-series no-opt-out disclaimer display), **F16** (public achievements; no public procedure exists), plus F18 inviter-side `withdraw` UI, J2 proactive session-expiry UX, and the dead-components cleanup. The P2 blockers are resolved in the branch: type checks use `tsgo`, achievement fields are renamed end-to-end, migrations are rebased to `0020`–`0022`, the audited sections are retained, and temporary QA artifacts are removed. Final GitHub CI remains required before merge.
 
 ---
 
@@ -81,7 +84,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10 (Admin Override), OQ-04 (SLA escalation), prd.tex:717-728
 
-**Current state:** The role-specific `/_app/dashboard` admin view summarizes escalated booking operations, tutor-profile reviews, and achievement reviews, with direct links to the complete queues. `/_app/admin-operations` provides the urgency-sorted booking monitor and escalated filter. Dedicated support-ticket assignment/SLA automation remains outside this baseline.
+**Current state:** No admin dashboard route exists. Only `_app.admin-tutors` (tutor invite + review). No booking monitor, no override queue, no urgency sorting.
 
 **Required:**
 
@@ -108,7 +111,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10, prd.tex:717-728 (Emergency Override UI/UX Requirements)
 
-**Current state:** Implemented in the Admin Operations workspace with category, reason, participant IDs, Marks action, user/internal notes, before/after preview, and apply action.
+**Current state:** `applyOverride` endpoint exists but no UI.
 
 **Required:**
 
@@ -137,7 +140,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-14, DL-26, prd.tex:747
 
-**Current state:** Implemented on booking detail after the 15-minute tolerance, including ticket status display for the current booking.
+**Current state:** Implemented in open PR #55 (`booking-lifecycle-actions.tsx`: `canReportLateness` student + ≥15 min after start → `support.createTicket`; ticket status on booking detail). Pending merge.
 
 **Required:**
 
@@ -160,7 +163,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-11
 
-**Current state:** Implemented in the authenticated sidebar as an external resource link. Public-site surfacing is outside the current app scope.
+**Current state:** **CLOSED (2026-08-14).** Competition Calendar link is present in the authenticated sidebar, on the dashboard, and on the marketing landing page. No work remains; kept here for the record.
 
 **Required:**
 
@@ -179,7 +182,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-14, OQ-04, prd.tex:1260
 
-**Current state:** Implemented in the authenticated sidebar as an external WhatsApp support link.
+**Current state:** **CLOSED (2026-08-14).** WhatsApp support link (`wa.me/6288101190195`) is present in the authenticated sidebar, on the dashboard, and on the marketing landing page. No work remains; kept here for the record.
 
 **Required:**
 
@@ -198,14 +201,14 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** Implemented for tutors and booking proposers on eligible booking-detail states, including immediately after a solo booking reaches tutor review. The form uses the shared Selia calendar and cross-browser 24-hour autocomplete time input.
+**Current state:** Implemented in open PR #55 (`booking-reschedule-action.tsx`: calendar + time input + reason; `booking.proposeReschedule` tutor-or-proposer, per-session `sessionId`, supersedes pending proposal; backend `proposeReschedule` moved to booking.router). Pending merge.
 
 **Required (after G6 backend fix):**
 
-1. On booking detail, show "Propose reschedule" to the tutor or booking proposer in eligible lifecycle states
-2. Form: shared calendar, 24-hour minute-level time autocomplete, reason (optional)
-3. Calls the role-appropriate `proposeReschedule` procedure with an optional series `sessionId`
-4. Shows the pending proposal and collects tutor plus active-student decisions
+1. On tutor booking detail (`_app.tutor-bookings`), add "Propose reschedule" action for bookings in `confirmed`/`scheduled` state
+2. Form: new date/time picker, reason (optional)
+3. Calls `booking.proposeReschedule` (tutor role, after G6 fix)
+4. Shows pending status after submission
 
 **Acceptance:**
 
@@ -218,7 +221,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** Implemented for students, including the proposed schedule recovered from booking state-history metadata.
+**Current state:** Implemented in open PR #55 (`booking-lifecycle-actions.tsx`: accept/reject with `proposalId`, multiparty `decisions` voting — unanimous required, restore pre-proposal state; backend `acceptReschedule`/`rejectReschedule` rewritten for multiparty). Pending merge.
 
 **Required (after G6 backend):**
 
@@ -241,9 +244,9 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-20
 
-**Current state:** `completeSession` exists for solo/group but rejects series (G18 backend). No UI for completing individual series sessions.
+**Current state:** **PARTIAL (2026-08-16).** Tutor booking detail has a single whole-booking complete-session button; there is **no per-session list** and no `sessionId` passed, so series completion fails (`BookingSessionRequiredError`). Backend `completeSeriesSession`/`completeSession({sessionId})` is ready (solo + group series, per-session deduction). NOT covered by PR #55.
 
-**Required (after G18 backend):**
+**Required (backend ready):**
 
 1. On tutor booking detail for series bookings, list each session with its state
 2. "Complete" button per session (enabled when session start time has passed)
@@ -262,7 +265,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-09, DL-18, prd.tex:1033-1043
 
-**Current state:** Completed bookings show sanitized notes and allow both parties to add notes. A full toolbar-based rich-text editor remains optional polish.
+**Current state:** **PARTIAL (2026-08-16).** Open PR #55 adds a notes list + textarea on completed bookings, rendered via `dangerouslySetInnerHTML` with **server-side** `sanitizeHtml` (backend `packages/api/src/lib/sanitize.ts`). No rich-text toolbar editor (headings/lists/emphasis) and no client-side DOMPurify — FR-09's formatting requirements are only partially met.
 
 **Required (after G7 backend):**
 
@@ -284,7 +287,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-17
 
-**Current state:** Implemented with cursor pagination, unread state, mark-one/mark-all actions, and booking links.
+**Current state:** **CLOSED (2026-08-14).** Full `/_app/notifications` page exists at `apps/web/src/routes/_app.notifications.tsx`: cursor pagination, read/unread states, mark-all-read, and unread count in the sidebar bell. Only the optional category filter remains unimplemented (nice-to-have, not a PRD blocker).
 
 **Required:**
 
@@ -307,7 +310,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-10
 
-**Current state:** Implemented in Admin Operations with exact user-ID lookup, balance summary, and latest ledger entries.
+**Current state:** No admin wallet view. Backend G9 not implemented.
 
 **Required (after G9 backend):**
 
@@ -328,7 +331,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-22
 
-**Current state:** Admin Operations supports room assignment, relocation, and cancellation. A dedicated visual approval queue remains optional refinement.
+**Current state:** No admin room approval UI. Backend G14 not implemented.
 
 **Required (after G14 backend):**
 
@@ -350,9 +353,9 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** DL-11
 
-**Current state:** No payout view. Backend G16 not implemented. Depends on G19 (pricing fix) for correct calculation.
+**Current state:** No payout view in `apps/web`. Backend `tutor.getMyPayouts` **exists** since #43 (`tutor.router.ts:93-103`); `admin.getTutorPayouts` exists. Frontend UI is the only missing piece.
 
-**Required (after G16 + G19 backend):**
+**Required (backend ready):**
 
 1. New route or section in tutor dashboard: "My payouts"
 2. Calls `tutor.getMyPayouts` with date range
@@ -391,7 +394,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-12, DL-16
 
-**Current state:** `balance-page.tsx` has a Knowledge Bank card that checks `wallet.knowledgeBankEligible` and shows an "Open Knowledge Bank" button. Partial implementation.
+**Current state:** **CLOSED (2026-08-14).** `balance-page.tsx` shows the exact DL-16 copy and gates the Knowledge Bank behind eligibility computed client-side via `totalBalance >= 35`. No Marks deduction. Backend `wallet.knowledgeBankEligible` exists but is unused by the UI.
 
 **Required:**
 
@@ -412,7 +415,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-18
 
-**Current state:** Achievement submission + moderation exists. No public landing page surfacing of approved achievements.
+**Current state:** **PARTIAL (2026-08-14).** Static 3-card section on the landing page with hardcoded "public API not added yet" note. Backend has **no** public achievement procedure — a new public `achievement.listApproved` (or similar) route is required before real data can be shown.
 
 **Required:**
 
@@ -432,7 +435,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes.
+**Current state:** **PARTIAL (2026-08-14).** The booking detail route is implemented for student and tutor views, including a state timeline, meeting/room sections, cancellation, tutor accept/decline, and tutor session completion. Missing: reschedule (F6/F7), lateness/no-show reporting (F3), and session notes (F9) — all backend-dependent gaps.
 
 **Required:**
 
@@ -447,9 +450,73 @@ Full override form per PRD §Emergency Override UI/UX:
 
 - Clicking a booking in list → opens detail
 - All role-appropriate actions visible
-- Role boundary complete: only students see tutor discovery/booking surfaces; tutor/admin direct route access redirects, and backend student procedures reject non-student booking mutations.
 - Meeting link gated by confirmation state
 - State history visible
+
+---
+
+### F18: Group Invite Accept/Decline/Reconfirm UI
+
+**PRD:** FR-20, TC-25
+
+**Current state:** **PARTIAL (2026-08-16).** Open PR #55 wires `confirmInvite`/`declineInvite`/`reconfirm` in `booking-lifecycle-actions.tsx`. **Still missing:** inviter-side `withdraw` UI for an invite, and the full no-opt-out disclaimer on the invitee acceptance screen (see F14).
+
+**Required:**
+
+1. Invitee view showing: all session dates/times, per-student price, total Marks hold, full-series no-opt-out disclaimer (per TC-25 / F14), accept/decline actions
+2. Accept → calls `booking.confirmInvite`
+3. Decline → calls `booking.declineInvite`
+4. Reconfirm flow for invitees whose attendance confirmation expires → calls `booking.reconfirm`
+5. Inviter-side withdraw for an invite → calls `booking.withdrawGroup`
+6. Post-action states rendered (confirmed/pending/declined/withdrawn) in both the group booking detail and the invitee's booking list
+
+**Acceptance:**
+
+- Invitee can accept/decline a group invite and sees schedule + price + hold + disclaimer first
+- Reconfirmation prompt appears when needed
+- Inviter can withdraw an invite
+- No `confirmInvite`/`declineInvite`/`reconfirm`/`withdraw` gaps remain in `apps/web`
+
+---
+
+### J2: Session Expiry UX
+
+**PRD:** J2 (foundation-hardening), session expiry (7 days)
+
+**Current state:** **LAZY HANDLING ONLY (2026-08-14).** No proactive expiry UX. `_app.tsx` `beforeLoad` calls `getSession()` and redirects when the session is gone; `orpc.ts` `QueryCache` redirects on 401/403. There is no countdown, toast, or pre-expiry warning.
+
+**Required:**
+
+1. Pre-expiry UX: countdown/warning toast before the session expires (e.g., at the 7-day session TTL boundary)
+2. On expiry: clear cached queries, show "Session expired" notice, redirect to `/login` with a return path
+3. Avoid data loss: block/queue in-flight mutations on expiry with a clear message
+
+**Acceptance:**
+
+- User is warned before the session expires instead of a hard redirect on the next request
+- Expired session → redirected to login with reason shown
+- No stale client cache survives logout/expiry
+
+---
+
+### Dead Components Cleanup
+
+**Current state (2026-08-14):** Three components have **0 importers** in `apps/web` and are candidates for removal:
+
+- `chart.tsx`
+- `data.ts`
+- `user-menu.tsx`
+
+**Required:**
+
+1. Verify zero importers with a repo-wide search before deleting
+2. Remove the dead files and any orphaned exports they reference
+3. Keep `mode-toggle.tsx` if referenced by the sidebar; otherwise add it to this list
+
+**Acceptance:**
+
+- No `chart.tsx` / `data.ts` / `user-menu.tsx` references remain in `apps/web`
+- `check-types` and `bun run build` pass after removal
 
 ---
 
@@ -474,5 +541,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Field, Select, Menu, Table, It
 
 ### Version Notes
 
+- v1.4 (2026-08-16): Reconciled PR #55 with merged PRs #59, #61, #62, and #63. Resolved migration numbering and achievement-contract blockers, retained F18/J2/dead-component audit coverage, removed temporary QA artifacts, and kept the remaining frontend gaps explicit pending final CI.
+- v1.3 (2026-08-16): Wave-3 P2 executed — full blocker report posted on PR #55 ([comment 5306378534](https://github.com/cogitoacademy/app/pull/55#issuecomment-5306378534)) covering the red CI (TS6133 `proposedEndAt` at `booking.service.ts:1407`), migration 0020 achievement-column schema mismatch, undeclared F18/J2/dead-components section deletions, stray `.qa-marks-before/` + `artifacts/` at repo root, and the backend surface riding the PR (multiparty reschedule, `studentProcedure`, admin-tutor edit review, migrations 0019/0020/0021). Blockers remain with the branch author; PR #55 is not mergeable until resolved.
+- v1.2 (2026-08-16): Re-audited against open PR #55 (`f/frontend-prd-gaps`, 25 commits). Marked F2/F3/F6/F7/F11/F17 as covered by the PR (Closed* = pending merge), F1/F9/F12 as partial-after-PR, and corrected F13's backend note (`tutor.getMyPayouts` exists since #43). Flagged the PR's blockers (red CI unused `proposedEndAt`; migration 0020 achievement-column schema mismatch; undeclared F18/J2/dead-components section deletions) — tracked in REVIEW-FIXES-3 P2. Still open after PR #55: F8, F13, F14, F16, F18-withdraw, J2, dead-components cleanup.
+- v1.1 (2026-08-14): Full frontend audit at `apps/web` git HEAD `9b7df5e`. Corrected the "Current Frontend State" routes table (was stale — e.g. notifications page existed). Statuses updated: F4, F5, F10, F15 → **Closed**; F8, F16, F17 → **Partial**; F1-F3, F6, F7, F9, F11-F14 → **Missing**. Added gaps F18 (group invite accept/decline/reconfirm UI), J2 (session expiry UX), and a dead-components cleanup note. Effort revised from ~20d to ~15d for the remaining ~10 gaps.
 - v1.0 (2026-07-29): Created. 17 frontend gaps catalogued (F1-F17) with PRD references, backend dependencies, and acceptance criteria. Derived from PRD §Product Surfaces and audit of `apps/web/src/`. Runs parallel with backend PRD-GAPS-SPEC.md.
-- v1.1 (2026-08-13): Synced implemented booking lifecycle and Admin Operations surfaces. Closed F2/F3/F6/F7/F10/F11/F17; marked F1/F9/F12 as partial where deeper workflow polish remains.

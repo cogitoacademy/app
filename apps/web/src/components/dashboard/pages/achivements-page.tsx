@@ -139,11 +139,12 @@ export function AchivementsPage() {
             category: editAchievement.category,
             award: editAchievement.award,
             level: editAchievement.level,
-            eventDate: editAchievement.eventDate ?? "",
+            awardingDate: editAchievement.awardingDate ?? "",
             location: editAchievement.location ?? "",
             description: editAchievement.description ?? "",
             subjects: editAchievement.subjects ?? [],
-            imageUrl: editAchievement.imageUrl ?? "",
+            evidenceUrl: editAchievement.evidenceUrl ?? "",
+            documentationUrl: editAchievement.documentationUrl ?? "",
           }}
           open={editOpen}
           onOpenChange={(open) => {

@@ -48,6 +48,8 @@ bun run db:test          # Starts isolated test PostgreSQL + Redis (docker-compo
 
 > Note: the dev and test PostgreSQL containers both map host port 6767 — do not run `db:start` and `db:test` simultaneously. `db:test` uses `docker-compose.test.yml` (repo root) and the test harness targets `cogito-test` via `apps/server/.env.test(.example)`.
 
+> **Shutdown noise (C6):** stopping the Postgres container while the app still holds pooled connections prints `FATAL: terminating connection due to administrator command` lines — that is normal fast-shutdown, not a failure. Postgres has a `stop_grace_period: 30s` in both compose files; stop the app (or `docker compose stop` the app service) **before** the DB so connections drain cleanly. On Coolify, set a stop grace period ≥ 30s for the app so graceful shutdown (redis quit + DB drain) can finish before SIGKILL.
+
 ### Run Migrations
 
 ```bash
@@ -222,6 +224,20 @@ Key environment variables (see `.env.example` for full list):
 | `RESEND_FROM_EMAIL`      | No       | Sender email address                                |
 | `XENDIT_SECRET_KEY`      | No       | Xendit API secret key                               |
 | `XENDIT_WEBHOOK_TOKEN`   | No       | Xendit webhook verification token                   |
+
+## Deploy Secrets (CD webhooks)
+
+The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing.
+
+**Setup (one-time, user action):**
+
+1. Coolify → your service → **Webhooks** tab → copy the **Deploy webhook** URL.
+2. GitHub → repo **Settings → Secrets and variables → Actions**:
+   - `COOLIFY_STAGING_WEBHOOK` — staging service webhook URL
+   - `COOLIFY_PROD_WEBHOOK` — production service webhook URL
+3. Push to `staging` (or `main`) and verify the "Trigger Coolify deploy" step is green.
+
+Until the secrets are set, CD pushes will fail at the trigger step by design (a silent no-op deploy is worse than a red build).
 
 ## Test Environment
 

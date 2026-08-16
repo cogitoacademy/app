@@ -26,6 +26,8 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/package.json ./
 
 ENV NODE_ENV=production
+# C5: run as the unprivileged bun user (rootless container).
+USER bun
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD bun -e "const r = await fetch('http://localhost:3001/health'); if (!r.ok) process.exit(1)"

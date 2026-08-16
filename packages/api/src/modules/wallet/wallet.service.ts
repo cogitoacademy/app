@@ -1,4 +1,4 @@
-import { KNOWLEDGE_BANK_THRESHOLD } from "../../shared/constants";
+import { KNOWLEDGE_BANK_THRESHOLD, ENTRY_TYPE } from "../../shared/constants";
 import { ledgerEntry } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -93,6 +93,7 @@ export interface WalletPort {
   getById(db: DbOrTx, walletId: string): Promise<WalletSnapshot | null>;
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
   getOrCreate(userId: string): Promise<WalletSnapshot>;
+  sumCreditedMarks(db: DbOrTx, walletId: string): Promise<number>;
   listLedger(
     walletId: string,
     opts?: LedgerQueryOptions,
@@ -413,10 +414,14 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
   }
 
   /**
-   * Checks whether a user's available balance meets the Knowledge Bank threshold.
+   * Checks whether a user's total balance meets the Knowledge Bank threshold.
+   *
+   * Per PRD DL-16, held Marks (committed to bookings) count toward the
+   * 35-Mark threshold, so eligibility uses `totalBalance`, not the available
+   * balance (U13).
    *
    * @param userId - the user to check
-   * @returns eligibility, the available balance, and the threshold
+   * @returns eligibility, the total balance, and the threshold
    */
   async function knowledgeBankEligible(userId: string) {
     const w = await repo.getByUserId(db, userId);
@@ -428,8 +433,8 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
       };
     }
     return {
-      eligible: w.availableBalance >= KNOWLEDGE_BANK_THRESHOLD,
-      balance: w.availableBalance,
+      eligible: w.totalBalance >= KNOWLEDGE_BANK_THRESHOLD,
+      balance: w.totalBalance,
       threshold: KNOWLEDGE_BANK_THRESHOLD,
     };
   }
@@ -443,6 +448,18 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return repo.listActivePackages(db);
   }
 
+  /**
+   * Sums the marks ever credited to a wallet via purchase credits (U8/B9
+   * refund reconciliation: credited − current balance = spend).
+   *
+   * @param conn - the database connection or active transaction
+   * @param walletId - the wallet id
+   * @returns the total credited marks
+   */
+  async function sumCreditedMarks(conn: DbOrTx, walletId: string) {
+    return repo.sumLedgerAmount(conn, walletId, [ENTRY_TYPE.CREDIT]);
+  }
+
   return {
     hold,
     release,
@@ -453,6 +470,7 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     getByUserId,
     getOrCreate,
     listLedger,
+    sumCreditedMarks,
     knowledgeBankEligible,
     listActivePackages,
   };

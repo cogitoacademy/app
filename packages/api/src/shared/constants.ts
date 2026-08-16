@@ -5,6 +5,7 @@ export const MAX_MEETING_RETRY_ATTEMPTS = 3;
 export const KNOWLEDGE_BANK_THRESHOLD = 35;
 
 export const RESPONSE_WINDOW_MS = 12 * 60 * 60 * 1000;
+export const OFFLINE_SCHEDULED_GRACE_MS = 2 * 60 * 60 * 1000;
 export const LATE_CANCEL_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 export const LATENESS_TOLERANCE_MS = 15 * 60 * 1000;
 export const SUPPORT_SLA_MS = 12 * 60 * 60 * 1000;
