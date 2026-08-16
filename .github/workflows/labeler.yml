@@ -3,6 +3,12 @@ name: Labeler
 on:
   pull_request:
     types: [opened, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: "PR number to label (backfill for previously-created PRs)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,3 +21,4 @@ jobs:
       - uses: actions/labeler@v7
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ inputs.pr-number }}
