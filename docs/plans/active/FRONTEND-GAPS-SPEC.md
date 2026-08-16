@@ -24,28 +24,28 @@ Booking type is derived from invitees (none = solo, one or more = group), so
 students no longer need to select a separate solo/group mode before searching
 for classmates.
 
-| Route                       | Component                       | Status                                                                                           |
-| --------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `/` (index)                 | Landing redirect                | Exists                                                                                           |
-| `/login`                    | sign-in-form.tsx                | Exists                                                                                           |
-| `/auth/callback`            | auth callback                   | Exists                                                                                           |
-| `/invite`                   | invite-claim-page.tsx           | Exists                                                                                           |
-| `/_app`                     | App layout + sidebar            | Exists                                                                                           |
-| `/_app/dashboard`           | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                  |
-| `/_app/balance`             | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                            |
-| `/_app/bookings`            | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                             |
-| `/_app/bookings/$bookingId` | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history            |
-| `/_app/tutors`              | tutors-page-content.tsx         | Exists (discovery list)                                                                          |
-| `/_app/tutors/$tutorId/book`| create-booking-page.tsx         | Exists (solo/group/series creation)                                                              |
-| `/_app/achievements`        | achivements-page.tsx            | Exists (submission + list)                                                                       |
-| `/_app/profile`             | profile-page.tsx                | Complete — student account name/photo plus learning and parent contact fields                    |
-| `/_app/onboarding`          | onboarding-form.tsx             | Exists (tutor onboarding)                                                                        |
-| `/_app/tutor-bookings`      | tutor-bookings-page.tsx         | Exists (incoming list + review link)                                                             |
-| `/_app/availability`        | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview |
-| `/_app/notifications`       | notifications-page.tsx          | Exists (full page)                                                                                |
-| `/_app/admin-operations`    | admin-operations-page.tsx       | Partial F1 baseline — booking queue, rooms, and wallet lookup                                     |
-| `/_app/admin-tutors`        | admin tutor invite + review     | Exists                                                                                           |
-| `/_app/admin-achievements`  | achievement-moderation-page.tsx | Exists (moderation UI)                                                                           |
+| Route                        | Component                       | Status                                                                                           |
+| ---------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `/` (index)                  | Landing redirect                | Exists                                                                                           |
+| `/login`                     | sign-in-form.tsx                | Exists                                                                                           |
+| `/auth/callback`             | auth callback                   | Exists                                                                                           |
+| `/invite`                    | invite-claim-page.tsx           | Exists                                                                                           |
+| `/_app`                      | App layout + sidebar            | Exists                                                                                           |
+| `/_app/dashboard`            | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                  |
+| `/_app/balance`              | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                            |
+| `/_app/bookings`             | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                             |
+| `/_app/bookings/$bookingId`  | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history            |
+| `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                          |
+| `/_app/tutors/$tutorId/book` | create-booking-page.tsx         | Exists (solo/group/series creation)                                                              |
+| `/_app/achievements`         | achivements-page.tsx            | Exists (submission + list)                                                                       |
+| `/_app/profile`              | profile-page.tsx                | Complete — student account name/photo plus learning and parent contact fields                    |
+| `/_app/onboarding`           | onboarding-form.tsx             | Exists (tutor onboarding)                                                                        |
+| `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Exists (incoming list + review link)                                                             |
+| `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview |
+| `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                               |
+| `/_app/admin-operations`     | admin-operations-page.tsx       | Partial F1 baseline — booking queue, rooms, and wallet lookup                                    |
+| `/_app/admin-tutors`         | admin tutor invite + review     | Exists                                                                                           |
+| `/_app/admin-achievements`   | achievement-moderation-page.tsx | Exists (moderation UI)                                                                           |
 
 ### Remaining gaps (no complete surface yet)
 
