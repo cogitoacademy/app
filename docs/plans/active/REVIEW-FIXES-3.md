@@ -236,14 +236,14 @@
 
 ## PR P5 — Remaining backend U-items
 
-- **5.1 (U1)** admin manual meeting-link entry — new admin RPC (`adminBooking.setMeetingLink` or meeting module port) + interplay with `retry-failed-meetings` (stop retrying once manual link set).
+- [x] **5.1 (U1)** admin manual meeting-link entry — new admin RPC (`adminBooking.setMeetingLink` or meeting module port) + interplay with `retry-failed-meetings` (stop retrying once manual link set). — `setMeetingLink` on `MeetingPort` + `adminBooking.setMeetingLink` RPC; status `created` excludes it from the retry job; `admin-meeting-link.test.ts`
 - **5.2 (U2)** student self-reschedule pre-H-2 — proposer-initiated reschedule reusing the proposal flow, H-2 guard, repricing rules.
-- **5.3 (U5)** per-participant no-show marking — admin/tutor surface; forfeit the participant's hold per PRD.
+- [x] **5.3 (U5)** per-participant no-show marking — admin/tutor surface; forfeit the participant's hold per PRD. — `tutorActions.markParticipantNoShow` (solo → NO_SHOW; series → session forfeit); `tutor-no-show-u5.test.ts`
 - **5.4 (U6)** admin per-session series cancel with Marks-return choice (mirror override `marksAction`).
 - **5.5 (U7)** per-session tutor reschedule within a series (extend `proposeReschedule` with `sessionId` — coordinate with PR #55's per-session work).
-- **5.6 (U10)** achievement field parity — `issuer`, `visibility`, category enum (coordinate with PR #55 migration 0020 rename; do schema first).
-- **5.7 (U14)** room availability in booking creation — `requestedRoomId` on createSolo/createGroup input + availability check + room booking row.
-- **5.8 (hygiene)** convert 7 bare `.select()` in `booking.repo.ts`; remove unused `BookingTransition` in `booking-state.types.ts:35`.
+- [x] **5.6 (U10)** achievement field parity — `issuer`, `visibility`, category enum (coordinate with PR #55 migration 0020 rename; do schema first). — migration 0020 (main numbering) + zod enum + web form; `achievement-flow.test.ts`
+- [x] **5.7 (U14)** room availability in booking creation — `requestedRoomId` on createSolo/createGroup input + availability check + room booking row. — `requestRoomForBooking` port (two-phase DI wiring); `booking-u14-room-request.test.ts`
+- [x] **5.8 (hygiene)** convert 7 bare `.select()` in `booking.repo.ts`; remove unused `BookingTransition` in `booking-state.types.ts:35`.
 - Each TDD; docs per PR (PRD-GAPS-PHASE3 statuses; CONTEXT).
 
 ---
