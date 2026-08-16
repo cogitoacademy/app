@@ -162,9 +162,8 @@ export function createPaymentService(deps: {
     // was committed first — reuse the existing (PENDING) payment instead of
     // creating a zombie duplicate.
     if (!inserted) {
-      const existingRow = await repo.findPaymentByProviderReference(
-        providerReference,
-      );
+      const existingRow =
+        await repo.findPaymentByProviderReference(providerReference);
       if (existingRow) {
         const existingIntent = await provider.createIntent({
           paymentId: existingRow.id,

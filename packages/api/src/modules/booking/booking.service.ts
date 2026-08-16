@@ -1930,6 +1930,8 @@ export function createBookingService(deps: {
           heldAmount: 0,
         });
 
+        // A reconfirmation decline always comes from a confirmed/reconfirmed
+        // participant — the headcount is always decremented here.
         await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
 
         const remaining = await repo.findConfirmedParticipants(
@@ -1984,6 +1986,22 @@ export function createBookingService(deps: {
         b.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
       const isLate = now > h2;
+
+      // B7: a participant who already withdrew (or was marked no-show) cannot
+      // withdraw again — no hold movement, no state churn, no second
+      // headcount decrement.
+      if (
+        participant.confirmationState === CONFIRMATION_STATE.WITHDRAWN_PRE_H2 ||
+        participant.confirmationState ===
+          CONFIRMATION_STATE.WITHDRAWN_POST_H2 ||
+        participant.confirmationState === CONFIRMATION_STATE.NO_SHOW
+      ) {
+        return { withdrawn: false, late: isLate };
+      }
+
+      const wasConfirmed =
+        participant.confirmationState === CONFIRMATION_STATE.CONFIRMED ||
+        participant.confirmationState === CONFIRMATION_STATE.RECONFIRMED;
       const participantState = isLate
         ? CONFIRMATION_STATE.WITHDRAWN_POST_H2
         : CONFIRMATION_STATE.WITHDRAWN_PRE_H2;
@@ -2022,7 +2040,11 @@ export function createBookingService(deps: {
         heldAmount: 0,
       });
 
-      await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
+      // B7: only participants who were actually confirmed count towards
+      // confirmedHeadcount — a pending invitee withdrawing never was counted.
+      if (wasConfirmed) {
+        await repo.decrementBookingConfirmedHeadcount(tx, bookingId);
+      }
 
       const remaining = await repo.findConfirmedParticipants(
         tx,
@@ -2044,7 +2066,19 @@ export function createBookingService(deps: {
 
         await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
-        await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
+        // B7+: PRD (prd.tex:846) says the booking expires when the minimum
+        // headcount is no longer met. CANCELLED is not reachable from
+        // awaiting_participant_confirmation/awaiting_reconfirmation — use
+        // EXPIRED there instead of throwing (which would roll back the
+        // withdrawal entirely).
+        const cancelTarget = canTransition(
+          b.currentState as BookingState,
+          BOOKING_STATE.CANCELLED,
+        )
+          ? BOOKING_STATE.CANCELLED
+          : BOOKING_STATE.EXPIRED;
+
+        await transition(tx, bookingId, cancelTarget, {
           actorId: userId,
           actorType: ACTOR_TYPE.STUDENT,
           reason: "Not enough participants after withdrawal",
