@@ -312,9 +312,9 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                      | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness) |
 | `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`     | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                             |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                  | Active — code gaps 1.1–1.8 done; §2 Redis session caching deferred; §3/§4 ops pending                        |
-| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                  | Active — U11 closed; U9 partial; U1–U8, U10, U12–U14 open (verified against code 2026-08-15)                 |
-| `docs/plans/active/BACKEND-CLEANUP.md`                            | main (merged)                      | Completed — all 11 items merged (2026-08-15)                                                                 |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `feature/frontend-gaps` (future)   | Active — 4 closed, 3 partial, 10 open                                                                        |
+| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (future PRs)                  | Active — U4, U11, U13 closed; U9 partial; U1–U3, U5–U8, U10, U12, U14 open (verified against code 2026-08-16) |
+| `docs/plans/completed/BACKEND-CLEANUP.md`                          | main (merged)                      | Completed — all 11 items verified merged (2026-08-16; plan moved to completed)                             |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (open PR #55) | Active — F2/F3/F6/F7/F11/F17 covered by open PR #55; F8/F13/F14/F16 + F18-withdraw/J2/dead-components open |
 | `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                  | Superseded                                                                                                   |
 | `docs/archive/REFACTORING-PLAN.md`                                | —                                  | Historical reference                                                                                         |
 
@@ -329,7 +329,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 6. Backend Hardening Phase 2 (BACKEND-HARDENING-PHASE2.md, PRs 1–6) → merged to main (#46)
 7. Backend Review Hardening (BACKEND-REVIEW-HARDENING.md) → merged to main (#48)
 8. Review Fixes 2 (REVIEW-FIXES-2.md — rate limits, withdraw, uploads/payments, reliability, coverage) → **completed (merged via #50–#57)**
-9. PRD Gaps Phase 3 (PRD-GAPS-PHASE3.md — U1–U8, U10, U12–U14 open; U11 closed, U9 partial) + Frontend Gaps (FRONTEND-GAPS-SPEC) → after / parallel with #8
+9. PRD Gaps Phase 3 (PRD-GAPS-PHASE3.md — U1–U3, U5–U8, U10, U12, U14 open; U4/U11/U13 closed, U9 partial) + Frontend Gaps (FRONTEND-GAPS-SPEC) → after / parallel with #8
 10. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
@@ -362,7 +362,7 @@ The admin override queue, wallet/ledger view, override preview, room assignment 
 ### Backend Gap Groups
 
 - Ready now (merged to main): student solo/group/series booking primitives, reschedule propose/accept/reject, session notes, group invite confirm/decline/reconfirm, wallet/ledger/packages/Knowledge Bank, purchases, achievements, notifications, tutor onboarding/availability/payouts/incoming-booking actions, support tickets (G1), and the admin capabilities listed above (G8–G10, G16–G18).
-- Still open backend sub-gaps (tracked in `docs/plans/active/PRD-GAPS-PHASE3.md`): offline room availability not integrated into booking creation (G13/U14), plus the untracked PRD deviations from the 2026-08-14 PRD-vs-code audit (U1–U3, U5–U8, U10, U12, U14: manual meeting-link entry, student self-reschedule, reconfirmation-deadline repricing, per-participant no-show, admin per-session cancel, per-session reschedule, refund reconciliation guard, business-hours SLA windows, achievement field parity, offline room deadline — U9 partial, U11 closed, U4 group-series full withdrawal and U13 Knowledge Bank total-balance eligibility **implemented** in REVIEW-FIXES-2 PR F). Dead-code/silent-failure items tracked in `docs/plans/active/BACKEND-CLEANUP.md` (completed).
+- Still open backend sub-gaps (tracked in `docs/plans/active/PRD-GAPS-PHASE3.md`): offline room availability not integrated into booking creation (G13/U14), plus the untracked PRD deviations from the 2026-08-14 PRD-vs-code audit (U1–U3, U5–U8, U10, U12, U14: manual meeting-link entry, student self-reschedule, reconfirmation-deadline repricing, per-participant no-show, admin per-session cancel, per-session reschedule, refund reconciliation guard, business-hours SLA windows, achievement field parity, offline room deadline — U9 partial; U4 group-series full withdrawal, U11 invitee validation, and U13 Knowledge Bank total-balance eligibility **implemented** (REVIEW-FIXES-2 PR F / BACKEND-REVIEW-HARDENING M4)). Dead-code/silent-failure items tracked in `docs/plans/completed/BACKEND-CLEANUP.md` (completed). Wave-3 execution plan: `docs/plans/active/REVIEW-FIXES-3.md`.
 
 ### Current Execution Order
 

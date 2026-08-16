@@ -29,11 +29,12 @@ Configured in scheduler.service.ts: `attempts: 3, backoff: { type: 'exponential'
 
 Replaced `SELECT *` in `wallet.repo.ts` getById/getByUserId with explicit column lists.
 
-### 1.4 Booking repo explicit column lists (from 3.3) ✅
+### 1.4 Booking repo explicit column lists (from 3.3) ✅ (partial)
 
 Replaced `.select()` in `booking.repo.ts` findBookingById and other queries with explicit columns.
 
 - Landed in **BACKEND-HARDENING PR C** (task C3).
+- **Remaining (2026-08-16):** 7 leaf queries still use bare `.select()` — `findSessionById`, `listSessionNotes`, `findOverlappingBookings`, `findTutorParticipant`, `listBookingsByState` area, the `meetingEvent` lookup, and `findConfirmedMeetingsPendingRetry` (`booking.repo.ts`). Low risk (explicit-column conversion is hygiene, not correctness); tracked in REVIEW-FIXES-3 P5.8.
 
 ### 1.5 Webhook IP allowlisting (from 5.1) ✅
 
