@@ -219,6 +219,10 @@ export function BookingDetailPage({
   const rescheduleAction = canProposeReschedule ? (
     <BookingRescheduleAction
       bookingId={bookingId}
+      tutorId={booking.tutorId}
+      viewerRole={viewerRole}
+      modality={booking.modality}
+      currentStartAt={booking.scheduledStartAt}
       onBookingChanged={refreshBookingQueries}
     />
   ) : null;
