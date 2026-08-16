@@ -1404,7 +1404,7 @@ export function createBookingService(deps: {
     userId: string,
     bookingId: string,
     proposedStartAt: Date,
-    proposedEndAt: Date,
+    _proposedEndAt: Date,
     reason?: string,
     availabilitySlotId?: string,
     sessionId?: string,

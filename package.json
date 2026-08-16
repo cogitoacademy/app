@@ -64,6 +64,7 @@
   "devDependencies": {
     "@cogito-app/config": "workspace:*",
     "@types/bun": "catalog:",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "lefthook": "^2.1.9",
     "oxfmt": "^0.62.0",
     "oxlint": "^1.77.0",
