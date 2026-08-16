@@ -1515,6 +1515,7 @@ export function createBookingService(deps: {
     proposedStartAt: Date,
     proposedEndAt: Date,
     reason?: string,
+    sessionId?: string,
   ) {
     return db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
@@ -1528,6 +1529,44 @@ export function createBookingService(deps: {
         );
       }
 
+      // U7: a per-session reschedule targets one series session. Validate it
+      // belongs to this booking before proposing.
+      if (sessionId) {
+        if (b.type !== BOOKING_TYPE.SERIES) {
+          throw new BookingNotEditableError(bookingId);
+        }
+        const session = await repo.findSessionById(tx, sessionId);
+        if (!session || session.seriesBookingId !== bookingId) {
+          throw new BookingSessionNotFoundError(sessionId);
+        }
+        if (session.currentState !== BOOKING_STATE.SCHEDULED) {
+          throw new BookingStateTransitionError(
+            session.currentState,
+            "reschedule",
+            BOOKING_STATE.RESCHEDULE_PROPOSED,
+          );
+        }
+
+        // The booking-level overlap check cannot see sibling series sessions —
+        // check them explicitly so a session cannot be moved onto another
+        // session of the same series (U7).
+        const siblings = await repo.listSessionsBySeriesId(tx, bookingId);
+        const overlappingSibling = siblings.find(
+          (s) =>
+            s.id !== sessionId &&
+            s.currentState === BOOKING_STATE.SCHEDULED &&
+            s.scheduledStartAt < proposedEndAt &&
+            s.scheduledEndAt > proposedStartAt,
+        );
+        if (overlappingSibling) {
+          throw new BookingConflictError(
+            b.tutorId,
+            proposedStartAt.toISOString(),
+            proposedEndAt.toISOString(),
+          );
+        }
+      }
+
       const updated = await transition(
         tx,
         bookingId,
@@ -1536,13 +1575,18 @@ export function createBookingService(deps: {
           actorId: userId,
           actorType: ACTOR_TYPE.TUTOR,
           reason,
-          metadata: { proposedStartAt, proposedEndAt },
+          metadata: {
+            proposedStartAt,
+            proposedEndAt,
+            sessionId: sessionId ?? null,
+          },
         },
       );
 
       await repo.insertRescheduleProposal(tx, {
         bookingId,
         proposedBy: userId,
+        sessionId,
         proposedStartAt,
         proposedEndAt,
         status: CONFIRMATION_STATE.PENDING,
@@ -1588,10 +1632,19 @@ export function createBookingService(deps: {
         decidedAt: new Date(),
       });
 
-      await repo.updateBookingSchedule(tx, bookingId, {
-        scheduledStartAt: pending.proposedStartAt,
-        scheduledEndAt: pending.proposedEndAt,
-      });
+      // U7: a session-scoped proposal moves only the session row; the
+      // booking-level schedule is untouched for series sessions.
+      if (pending.sessionId) {
+        await repo.updateBookingSessionTimes(tx, pending.sessionId, {
+          scheduledStartAt: pending.proposedStartAt,
+          scheduledEndAt: pending.proposedEndAt,
+        });
+      } else {
+        await repo.updateBookingSchedule(tx, bookingId, {
+          scheduledStartAt: pending.proposedStartAt,
+          scheduledEndAt: pending.proposedEndAt,
+        });
+      }
 
       const transitioned = await transition(
         tx,

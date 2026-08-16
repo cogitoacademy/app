@@ -217,6 +217,11 @@ export const bookingRescheduleProposal = pgTable(
     proposedBy: text("proposed_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    // U7: set when the proposal targets a single series session instead of
+    // the whole booking.
+    sessionId: text("session_id").references(() => bookingSession.id, {
+      onDelete: "set null",
+    }),
     proposedStartAt: timestamp("proposed_start_at", {
       withTimezone: true,
     }).notNull(),

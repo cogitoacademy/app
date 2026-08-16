@@ -384,12 +384,24 @@ async function insertRescheduleProposal(
   values: {
     bookingId: string;
     proposedBy: string;
+    sessionId?: string;
     proposedStartAt: Date;
     proposedEndAt: Date;
     status: string;
   },
 ) {
   await conn.insert(bookingRescheduleProposal).values(values);
+}
+
+async function updateBookingSessionTimes(
+  conn: DbOrTx,
+  sessionId: string,
+  values: { scheduledStartAt: Date; scheduledEndAt: Date },
+) {
+  await conn
+    .update(bookingSession)
+    .set({ ...values, updatedAt: new Date() })
+    .where(eq(bookingSession.id, sessionId));
 }
 
 async function findPendingRescheduleProposal(conn: DbOrTx, bookingId: string) {
@@ -897,6 +909,7 @@ export function createBookingRepo(db: DbType) {
     insertStateHistory,
     insertRescheduleProposal,
     findPendingRescheduleProposal,
+    updateBookingSessionTimes,
     updateRescheduleProposal,
     insertBookingSession,
     findSessionById,

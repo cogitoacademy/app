@@ -388,6 +388,7 @@ export function createTutorActionsHandler(booking: BookingService) {
             input.proposedStartAt,
             input.proposedEndAt,
             input.reason,
+            input.sessionId,
           ),
         mapBookingError,
       );

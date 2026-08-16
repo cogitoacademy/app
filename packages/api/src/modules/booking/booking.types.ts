@@ -141,6 +141,7 @@ export const proposeRescheduleInput = z
       .date()
       .refine((d) => d > new Date(), "Must be in the future"),
     reason: z.string().max(2000).optional(),
+    sessionId: z.string().max(100).optional(),
   })
   .refine((d) => d.proposedEndAt > d.proposedStartAt, {
     message: "proposedEndAt must be after proposedStartAt",
