@@ -45,21 +45,20 @@ const LEVELS = [
   "School",
 ] as const;
 
-const CATEGORY_SUGGESTIONS = [
-  "MUN",
-  "WSC",
-  "Olympiad",
-  "Debate",
-  "Science",
-  "Arts",
-  "Sports",
-  "Academic",
-  "Leadership",
+const CATEGORY_OPTIONS = [
+  { value: "competition", label: "Competition" },
+  { value: "award", label: "Award" },
+  { value: "certificate", label: "Certificate" },
+  { value: "leadership", label: "Leadership" },
+  { value: "publication", label: "Publication" },
+  { value: "other", label: "Other" },
 ] as const;
+
+export type AchievementCategory = (typeof CATEGORY_OPTIONS)[number]["value"];
 
 type AchievementFormValues = {
   eventName: string;
-  category: string;
+  category: AchievementCategory;
   award: string;
   level: string;
   eventDate: string;
@@ -81,7 +80,7 @@ type AchievementFormProps = {
 
 const DEFAULT_VALUES: AchievementFormValues = {
   eventName: "",
-  category: "",
+  category: "other",
   award: "",
   level: "",
   eventDate: "",
@@ -246,16 +245,18 @@ export function AchievementForm({
                     <FieldLabel>Category</FieldLabel>
                     <Select
                       value={field.state.value}
-                      onValueChange={(v) => field.handleChange(v as string)}
+                      onValueChange={(v) =>
+                        field.handleChange(v as AchievementCategory)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectPopup>
                         <SelectList>
-                          {CATEGORY_SUGGESTIONS.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
+                          {CATEGORY_OPTIONS.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              {cat.label}
                             </SelectItem>
                           ))}
                         </SelectList>

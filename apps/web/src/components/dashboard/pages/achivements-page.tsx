@@ -14,7 +14,7 @@ import { AchievementBanner } from "../achievement-banner";
 import { AchievementCard } from "../achievement-card";
 import { AchievementEmptyState } from "../achievement-empty-state";
 import { AchievementFilters } from "../achievement-filters";
-import { AchievementForm } from "../achievement-form";
+import { AchievementForm, type AchievementCategory } from "../achievement-form";
 import { AchievementStats } from "../achievement-stats";
 import { orpc } from "@/utils/orpc";
 
@@ -131,7 +131,7 @@ export function AchivementsPage() {
           expectedVersion={editAchievement.version}
           defaultValues={{
             eventName: editAchievement.eventName,
-            category: editAchievement.category,
+            category: editAchievement.category as AchievementCategory,
             award: editAchievement.award,
             level: editAchievement.level,
             eventDate: editAchievement.eventDate ?? "",

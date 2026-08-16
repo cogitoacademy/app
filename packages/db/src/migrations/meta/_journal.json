@@ -141,6 +141,13 @@
       "when": 1786867448177,
       "tag": "0019_ordinary_lady_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786869370474,
+      "tag": "0020_harsh_cloak",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,8 @@ export interface InsertAchievementParams {
   category: string;
   award: string;
   level: string;
+  issuer?: string;
+  visibility?: boolean;
   eventDate?: string;
   location?: string;
   description?: string;
@@ -20,6 +22,8 @@ export interface UpdateAchievementData {
   category?: string;
   award?: string;
   level?: string;
+  issuer?: string;
+  visibility?: boolean;
   eventDate?: string;
   location?: string;
   description?: string;
@@ -64,6 +68,8 @@ async function insert(conn: DbOrTx, params: InsertAchievementParams) {
       category: params.category,
       award: params.award,
       level: params.level,
+      issuer: params.issuer ?? null,
+      visibility: params.visibility ?? true,
       eventDate: params.eventDate ?? null,
       location: params.location ?? null,
       description: params.description ?? null,
