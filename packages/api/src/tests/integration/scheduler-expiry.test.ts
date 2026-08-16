@@ -67,7 +67,7 @@ async function createPublishedTutor(email: string, ts: number) {
     .values({
       tutorId: tutor.id,
       startDate: start,
-      endDate: new Date(start.getTime() + 2 * 3600_000),
+      endDate: new Date(start.getTime() + 7 * 24 * 3600_000),
       modality: "both",
     })
     .returning();

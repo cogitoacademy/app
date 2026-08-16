@@ -127,7 +127,7 @@ describe("G14 admin room relocate and cancel", () => {
   let booking2Id: string;
 
   const startISO = new Date(Date.now() + 24 * 3600_000).toISOString();
-  const endISO = new Date(Date.now() + 25 * 3600_000).toISOString();
+  const endISO = new Date(Date.now() + 25.5 * 3600_000).toISOString();
 
   beforeAll(async () => {
     const adminRes = await signUpAndSignIn(
