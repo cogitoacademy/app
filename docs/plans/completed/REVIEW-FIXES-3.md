@@ -1,6 +1,6 @@
 # Backend Review Fixes 3 — Wave-3 Audit Plan
 
-> **STATUS: ACTIVE — planned for execution on main (`7375b9d`).** Wave-3 findings from the 2026-08-16 full audit (docs/plans reconciliation, open PR #55 blockers, backend money-correctness bugs, CI/CD hardening, remaining U-items and F-items). Verified at git HEAD `7375b9d` (post-#58).
+> **STATUS: COMPLETED — all PRs merged to main (2026-08-16): #60 (P1 docs), #61 (P2 blocker report), #62 (P3 money fixes), #63 (P4 CI/CD), #64 (P5 U-items), #65 (P6 frontend + auth).** G2 (email verification) remains deferred (pre-existing; depends on Resend wiring + frontend route); J2/F18-withdraw tracked in FRONTEND-GAPS-SPEC.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
