@@ -118,65 +118,65 @@
 
 **Files:** `booking.service.ts` (tutorAccept deadline + expireBookings/releaseExpiredHolds), `room.service.ts` (bump deadline on SCHEDULED transition), `booking.repo.ts` (deadline candidate query), `booking-transitions.ts` if needed.
 
-- [ ] **Step 1:** Failing test (integration `booking-g4`/`scheduler-expiry`): offline booking transitions to `SCHEDULED` at start time → `expireBookings` must NOT NO_SHOW it; tutor can still `completeSession`.
-- [ ] **Step 2:** Implement: when transitioning to `SCHEDULED` (tutor accept online, room assign offline), set `deadlineAt = scheduledEndAt + grace` (e.g. +2h) OR exclude offline/SCHEDULED bookings from the deadline jobs; resolve the U12 deviation decision (12h window vs session start) — document in PRD-GAPS-PHASE3 U12.
-- [ ] **Step 3:** Run booking + scheduler tests; commit `fix(booking): offline bookings no longer auto-expire at session start (B1, U12)`.
+- [x] **Step 1:** Failing test (integration `booking-g4`/`scheduler-expiry`): offline booking transitions to `SCHEDULED` at start time → `expireBookings` must NOT NO_SHOW it; tutor can still `completeSession`. — `booking-offline-scheduled.test.ts`
+- [x] **Step 2:** Implement: when transitioning to `SCHEDULED` (tutor accept online, room assign offline), set `deadlineAt = scheduledEndAt + grace` (e.g. +2h) OR exclude offline/SCHEDULED bookings from the deadline jobs; resolve the U12 deviation decision (12h window vs session start) — document in PRD-GAPS-PHASE3 U12. — DL-25 decision (b): `min(now + 12h, scheduledStartAt)`; room assign bumps deadline to `scheduledEndAt + OFFLINE_SCHEDULED_GRACE_MS (2h)`
+- [x] **Step 3:** Run booking + scheduler tests; commit `fix(booking): offline bookings no longer auto-expire at session start (B1, U12)`.
 
 ### Task 3.2: Close the webhook-refund/admin-refund double-credit race (B2)
 
 **Files:** `payment.service.ts:271-299`, `payment.repo.ts` (conditional status update), tests `payment.service.test.ts` + `refund-flow.test.ts`.
 
-- [ ] **Step 1:** Failing test: PAID payment; admin refund commits first; a REFUNDED webhook that read PAID earlier must NOT compensate again (post-lock re-read).
-- [ ] **Step 2:** Implement: inside the webhook tx, re-read the payment row after the status UPDATE (or make the UPDATE conditional `WHERE status IN (PAID, SETTLED)` and compensate only when the returning row was a credit state).
-- [ ] **Step 3:** Commit `fix(payment): prevent double credit when refund webhook races admin refund (B2)`.
+- [x] **Step 1:** Failing test: PAID payment; admin refund commits first; a REFUNDED webhook that read PAID earlier must NOT compensate again (post-lock re-read). — integration `refund-flow.test.ts` (stale-snapshot replay) + unit tests
+- [x] **Step 2:** Implement: inside the webhook tx, re-read the payment row after the status UPDATE (or make the UPDATE conditional `WHERE status IN (PAID, SETTLED)` and compensate only when the returning row was a credit state). — `updatePaymentStatusIfInCreditState`
+- [x] **Step 3:** Commit `fix(payment): prevent double credit when refund webhook races admin refund (B2)`.
 
 ### Task 3.3: Solo/solo-series withdraw always cancels (B3)
 
 **Files:** `booking.service.ts:2079-2116`.
 
-- [ ] **Step 1:** Failing unit test: solo booking in `AWAITING_TUTOR_REVIEW` withdrawn → `CANCELLED` + hold zeroed (currently regresses).
-- [ ] **Step 2:** Reorder: SOLO cancel branch before the generic `regressableStates` branch; zero `holdAmount`.
-- [ ] **Step 3:** Commit `fix(booking): solo withdraw in awaiting states cancels instead of regressing (B3)`.
+- [x] **Step 1:** Failing unit test: solo booking in `AWAITING_TUTOR_REVIEW` withdrawn → `CANCELLED` + hold zeroed (currently regresses). — `booking.service.test.ts` B3 cases (solo + solo-series)
+- [x] **Step 2:** Reorder: SOLO cancel branch before the generic `regressableStates` branch; zero `holdAmount`.
+- [x] **Step 3:** Commit `fix(booking): solo withdraw in awaiting states cancels instead of regressing (B3)`.
 
 ### Task 3.4: `tutorAccept` rejects past-deadline bookings (B4)
 
 **Files:** `booking.service.ts:783-856`.
 
-- [ ] **Step 1:** Failing test: booking past `deadlineAt` → `tutorAccept` throws (or re-holds).
-- [ ] **Step 2:** Implement the deadline guard (reject accept when `deadlineAt < now`, mirroring the release path).
-- [ ] **Step 3:** Commit `fix(booking): reject tutor accept after the booking deadline (B4)`.
+- [x] **Step 1:** Failing test: booking past `deadlineAt` → `tutorAccept` throws (or re-holds). — `booking.service.test.ts` B4 case
+- [x] **Step 2:** Implement the deadline guard (reject accept when `deadlineAt < now`, mirroring the release path). — `BookingAcceptanceDeadlinePassedError`
+- [x] **Step 3:** Commit `fix(booking): reject tutor accept after the booking deadline (B4)`.
 
 ### Task 3.5: Partial-group reprice failure falls back to expiry (B5)
 
 **Files:** `booking.service.ts:2737-2772`.
 
-- [ ] **Step 1:** Failing test: partial group at expiry with insufficient Marks → booking EXPIRED + holds released (currently wedged + retried forever).
-- [ ] **Step 2:** Catch reprice failure → release + `EXPIRED` (no wedge).
-- [ ] **Step 3:** Commit `fix(booking): fall back to expiry when partial-group reprice fails (B5)`.
+- [x] **Step 1:** Failing test: partial group at expiry with insufficient Marks → booking EXPIRED + holds released (currently wedged + retried forever). — `booking-reprice-deadline.test.ts` B5 case
+- [x] **Step 2:** Catch reprice failure → release + `EXPIRED` (no wedge).
+- [x] **Step 3:** Commit `fix(booking): fall back to expiry when partial-group reprice fails (B5)`.
 
 ### Task 3.6: Unique `payment_record.provider_reference` (B6)
 
 **Files:** migration 0022, `payment.service.ts:146-159`.
 
-- [ ] **Step 1:** Migration `CREATE UNIQUE INDEX` on `payment_record.provider_reference`; service `onConflictDoNothing`/reuse.
-- [ ] **Step 2:** Test duplicate `createPurchase` concurrency → single PENDING row.
-- [ ] **Step 3:** Commit `fix(payment): unique provider reference prevents zombie pending payments (B6)`.
+- [x] **Step 1:** Migration `CREATE UNIQUE INDEX` on `payment_record.provider_reference`; service `onConflictDoNothing`/reuse. — migration 0019 on main (PR #55's 0019–0021 not merged; plan's '0022' numbering assumed #55 landed)
+- [x] **Step 2:** Test duplicate `createPurchase` concurrency → single PENDING row. — `payment-flow.test.ts` B6 + repo/service unit tests
+- [x] **Step 3:** Commit `fix(payment): unique provider reference prevents zombie pending payments (B6)`.
 
 ### Task 3.7: `withdraw` headcount + participant-state guard (B7)
 
 **Files:** `booking.service.ts:1964-2010`.
 
-- [ ] **Step 1:** Failing test: withdrawing a non-confirmed (pending) participant does not decrement headcount; double-withdraw no-op.
-- [ ] **Step 2:** Implement guard on `participant.confirmationState`.
-- [ ] **Step 3:** Commit `fix(booking): withdraw only decrements headcount for confirmed participants (B7)`.
+- [x] **Step 1:** Failing test: withdrawing a non-confirmed (pending) participant does not decrement headcount; double-withdraw no-op. — `booking.service.test.ts` B7 cases
+- [x] **Step 2:** Implement guard on `participant.confirmationState`. — plus group-under-minimum → EXPIRED when CANCELLED unreachable (B7+ latent fix)
+- [x] **Step 3:** Commit `fix(booking): withdraw only decrements headcount for confirmed participants (B7)`.
 
 ### Task 3.8: Reconfirmation-deadline repricing (B8/U3) + spend-limited refund guard (B9/U8)
 
 **Files:** `booking.service.ts:2738-2743` (expireBookings headcount branch for AWAITING_RECONFIRMATION), `admin-booking.service.ts:478-552` (adminRefund spend guard).
 
-- [ ] **Step 1:** Failing tests: (a) AWAITING_RECONFIRMATION with valid partial headcount → repriced + new deadline, not EXPIRED; (b) adminRefund on a spent payment → refund capped at unspent remainder or rejected with a clean error.
-- [ ] **Step 2:** Implement both.
-- [ ] **Step 3:** Commit `fix(booking,admin): reconfirmation repricing + spend-limited refund reconciliation (U3, U8)`.
+- [x] **Step 1:** Failing tests: (a) AWAITING_RECONFIRMATION with valid partial headcount → repriced + new deadline, not EXPIRED; (b) adminRefund on a spent payment → refund capped at unspent remainder or rejected with a clean error. — `booking-reprice-deadline.test.ts` U3 + `refund-flow.test.ts` U8
+- [x] **Step 2:** Implement both. — headcount branch extended to AWAITING_RECONFIRMATION; `sumCreditedMarks` + `RefundSpendExhaustedError`
+- [x] **Step 3:** Commit `fix(booking,admin): reconfirmation repricing + spend-limited refund reconciliation (U3, U8)`.
 
 **P3 docs:** CONTEXT known-bugs/wave-3 table rows; PRD-GAPS-PHASE3 U3/U8/U12 statuses.
 
