@@ -274,7 +274,7 @@ describe("Validation bounds — array .max()", () => {
     const subjects = Array.from({ length: 21 }, (_, i) => `subject-${i}`);
     const result = achievementInput.safeParse({
       eventName: "Test",
-      category: "academic",
+      category: "other",
       award: "Gold",
       level: "national",
       subjects,

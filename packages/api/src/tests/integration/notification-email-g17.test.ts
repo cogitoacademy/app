@@ -199,7 +199,7 @@ describe("Notification email matrix (G17)", () => {
   test("achievement submit → in-app notification row, NO email dispatch row", async () => {
     const created = await studentClient.achievement.create({
       eventName: "Math Olympiad",
-      category: "academic",
+      category: "other",
       award: "Gold",
       level: "national",
       description: "Won gold in the national olympiad",
