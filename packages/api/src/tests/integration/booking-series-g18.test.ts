@@ -85,8 +85,8 @@ async function createPublishedTutor(email: string, ts: number) {
     })
     .execute();
 
-  const start = new Date(Date.now() + 48 * 3600_000);
-  const end = new Date(Date.now() + 49 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
+  const end = new Date(start.getTime() + 7 * 24 * 3600_000);
   const [slot] = await db
     .insert(availabilitySlot)
     .values({ tutorId, startDate: start, endDate: end, modality: "both" })

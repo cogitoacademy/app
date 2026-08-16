@@ -61,7 +61,7 @@ async function createPublishedTutor(email: string, ts: number) {
     publishedAt: new Date(),
   });
 
-  const start = new Date(Date.now() + 24 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
   const [slot] = await db
     .insert(availabilitySlot)
     .values({
@@ -81,7 +81,7 @@ async function seedExpiringBooking(params: {
   state: string;
   holdAmount: number;
 }) {
-  const start = new Date(Date.now() + 48 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
   const b = await repo.insertBooking(db, {
     id: crypto.randomUUID(),
     type: BOOKING_TYPE.SOLO,
