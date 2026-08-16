@@ -90,7 +90,7 @@ async function createPublishedTutor(
     .values({
       tutorId,
       startDate: start,
-      endDate: new Date(start.getTime() + 6 * 3600_000),
+      endDate: new Date(start.getTime() + 240 * 3600_000),
       modality: "both",
     })
     .returning();
@@ -151,13 +151,16 @@ describe("U2: student self-service reschedule before H-2 (FR-14/TC-15)", () => {
   test("U2: student proposes a reschedule pre-H-2 → tutor approves → booking moves", async () => {
     const b = await createAcceptedBooking();
 
-    const newStart = new Date(Date.now() + 72 * 3600_000);
-    const newEnd = new Date(Date.now() + 73 * 3600_000);
-    await studentClient.booking.rescheduleSelf({
+    // The proposed time must fall inside the tutor's availability window
+    // (+24h..+30h) and not overlap the current booking (+48h).
+    const newStart = new Date(Date.now() + 26 * 3600_000);
+    const newEnd = new Date(Date.now() + 27 * 3600_000);
+    await studentClient.booking.proposeReschedule({
       bookingId: b.id,
-      newStartAt: newStart.toISOString(),
-      newEndAt: newEnd.toISOString(),
+      proposedStartAt: newStart.toISOString(),
+      proposedEndAt: newEnd.toISOString(),
       reason: "Jadwal bentrok",
+      availabilitySlotId: slotId,
     });
 
     const fetched = await studentClient.booking.get({ bookingId: b.id });
@@ -170,8 +173,13 @@ describe("U2: student self-service reschedule before H-2 (FR-14/TC-15)", () => {
       .limit(1);
     expect(proposal!.proposedBy).not.toBe(b.tutorId);
 
-    // The tutor approves the student's proposal.
-    await tutorClient.tutorActions.approveReschedule({ bookingId: b.id });
+    // The tutor approves the student's proposal (multiparty decisions).
+    const accept = await tutorClient.booking.acceptReschedule({
+      bookingId: b.id,
+    });
+    // Multiparty accept returns the booking to its previous state (SCHEDULED
+    // for an accepted solo booking) with the new times applied.
+    expect(accept.currentState).toBe("scheduled");
 
     const [row] = await db
       .select()
@@ -179,7 +187,6 @@ describe("U2: student self-service reschedule before H-2 (FR-14/TC-15)", () => {
       .where(eq(booking.id, b.id))
       .limit(1);
     expect(row!.scheduledStartAt.getTime()).toBe(newStart.getTime());
-    expect(row!.currentState).toBe("awaiting_reconfirmation");
   });
 
   test("U2: post-H-2 student reschedule is rejected", async () => {
@@ -187,10 +194,10 @@ describe("U2: student self-service reschedule before H-2 (FR-14/TC-15)", () => {
 
     const tooSoon = new Date(Date.now() + 60 * 60 * 1000); // 1h out < H-2
     await expect(
-      studentClient.booking.rescheduleSelf({
+      studentClient.booking.proposeReschedule({
         bookingId: b.id,
-        newStartAt: tooSoon.toISOString(),
-        newEndAt: new Date(tooSoon.getTime() + 3600_000).toISOString(),
+        proposedStartAt: tooSoon.toISOString(),
+        proposedEndAt: new Date(tooSoon.getTime() + 3600_000).toISOString(),
       }),
     ).rejects.toThrow(/editable/i);
   });
@@ -199,17 +206,19 @@ describe("U2: student self-service reschedule before H-2 (FR-14/TC-15)", () => {
     const b1 = await createAcceptedBooking();
     const b2 = await createAcceptedBooking();
 
-    // Propose a time overlapping the OTHER accepted booking.
+    // Propose a time overlapping the OTHER accepted booking (both inside the
+    // tutor's availability window).
     const [other] = await db
       .select()
       .from(booking)
       .where(eq(booking.id, b2.id))
       .limit(1);
     await expect(
-      studentClient.booking.rescheduleSelf({
+      studentClient.booking.proposeReschedule({
         bookingId: b1.id,
-        newStartAt: other!.scheduledStartAt.toISOString(),
-        newEndAt: other!.scheduledEndAt.toISOString(),
+        proposedStartAt: other!.scheduledStartAt.toISOString(),
+        proposedEndAt: other!.scheduledEndAt.toISOString(),
+        availabilitySlotId: slotId,
       }),
     ).rejects.toThrow(/conflict/i);
   });

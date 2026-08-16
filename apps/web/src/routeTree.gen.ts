@@ -15,6 +15,7 @@ import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
+import { Route as AppAdminOperationsRouteImport } from './routes/_app.admin-operations'
 import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
 import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
@@ -56,6 +57,11 @@ const AppAchievementsRoute = AppAchievementsRouteImport.update({
 const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
   id: '/admin-achievements',
   path: '/admin-achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminOperationsRoute = AppAdminOperationsRouteImport.update({
+  id: '/admin-operations',
+  path: '/admin-operations',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminTutorsRoute = AppAdminTutorsRouteImport.update({
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/achievements': typeof AppAchievementsRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-operations': typeof AppAdminOperationsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
   '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/achievements': typeof AppAchievementsRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-operations': typeof AppAdminOperationsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
   '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/achievements': typeof AppAchievementsRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
+  '/_app/admin-operations': typeof AppAdminOperationsRoute
   '/_app/admin-tutors': typeof AppAdminTutorsRoute
   '/_app/availability': typeof AppAvailabilityRoute
   '/_app/balance': typeof AppBalanceRoute
@@ -194,6 +203,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/achievements'
     | '/admin-achievements'
+    | '/admin-operations'
     | '/admin-tutors'
     | '/availability'
     | '/balance'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/achievements'
     | '/admin-achievements'
+    | '/admin-operations'
     | '/admin-tutors'
     | '/availability'
     | '/balance'
@@ -235,6 +246,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/achievements'
     | '/_app/admin-achievements'
+    | '/_app/admin-operations'
     | '/_app/admin-tutors'
     | '/_app/availability'
     | '/_app/balance'
@@ -300,6 +312,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-achievements'
       fullPath: '/admin-achievements'
       preLoaderRoute: typeof AppAdminAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-operations': {
+      id: '/_app/admin-operations'
+      path: '/admin-operations'
+      fullPath: '/admin-operations'
+      preLoaderRoute: typeof AppAdminOperationsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-tutors': {
@@ -399,6 +418,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
   AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
+  AppAdminOperationsRoute: typeof AppAdminOperationsRoute
   AppAdminTutorsRoute: typeof AppAdminTutorsRoute
   AppAvailabilityRoute: typeof AppAvailabilityRoute
   AppBalanceRoute: typeof AppBalanceRoute
@@ -416,6 +436,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
   AppAdminAchievementsRoute: AppAdminAchievementsRoute,
+  AppAdminOperationsRoute: AppAdminOperationsRoute,
   AppAdminTutorsRoute: AppAdminTutorsRoute,
   AppAvailabilityRoute: AppAvailabilityRoute,
   AppBalanceRoute: AppBalanceRoute,

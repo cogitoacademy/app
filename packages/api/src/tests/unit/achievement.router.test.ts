@@ -56,11 +56,11 @@ describe("achievementRouter", () => {
         category: "other",
         award: "Gold",
         level: "national",
-        eventDate: "2024-01-01",
+        awardingDate: "2024-01-01",
         location: "Jakarta",
         description: "Desc",
         subjects: ["math"],
-        imageUrl: "https://img.jpg",
+        evidenceUrl: "https://img.jpg",
       });
       expect(result.success).toBe(true);
     });

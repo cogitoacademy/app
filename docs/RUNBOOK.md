@@ -1,8 +1,24 @@
 # Cogito Runbook
 
-Last updated: 2026-08-14
+Last updated: 2026-08-16
+
+For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
+
+**Generate & copy link** never sends email. Use the separate **Send again** action when an admin intentionally wants Resend to deliver a replacement link.
+
+Tutor invitation delivery should be smoke-tested in both desktop and mobile email clients. Verify the **Accept invitation & set up profile** button and fallback URL lead to `/invite?token=…`, the invited account email is correct, and the displayed expiry is explicitly labeled UTC.
 
 ## Starting the Server
+
+### Dashboard smoke check
+
+After a web deployment, sign in once as each supported role and open `/dashboard`:
+
+- Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations.
+- Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/tutor-bookings`, `/availability`, and `/onboarding`.
+- Admin: priority operations and moderation counts; actions link to `/admin-operations`, `/admin-tutors`, and `/admin-achievements`.
+
+The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
 
 ### Development
 
@@ -133,6 +149,14 @@ Student's `availableBalance` is less than the required hold amount. Check wallet
 
 Invalid state machine transition. Check `booking-transitions.ts` for valid transitions.
 
+For rescheduling, `reschedule_proposed` must return to the state captured in `booking.previousState` after unanimous acceptance or rejection. A partial acceptance must leave both the current schedule and `reschedule_proposed` state unchanged. If a decision reports that no pending proposal exists, refresh booking detail: the supplied `proposalId` may belong to a superseded proposal.
+
+When a 24-hour reschedule proposal deadline passes, expire only the proposal. Keep the original schedule and wallet holds, restore `booking.previousState`, and do not cancel the provider meeting event.
+
+### `BOOKING_NOT_EDITABLE` while creating a booking (400)
+
+Confirm the chosen start is inside the selected tutor availability window and leaves the full server-fixed 90 minutes before the window ends. The web form shows the valid start range and blocks invalid submissions. Also verify the availability is active and that no non-terminal booking overlaps the requested session; declined, cancelled, and expired bookings should not keep the time blocked.
+
 ### `LAST_ADMIN` (409)
 
 Attempted to remove the last admin role. Promote another user to admin first.
@@ -158,6 +182,10 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 - `Refusing to run tests against a non-test database` — The test harness detected a `DATABASE_URL` whose database name does not include `test`.
 - `resetDatabase() is blocked outside a dedicated test database` — An integration test tried to truncate tables while pointed at a non-test database.
 
+### Role-boundary errors
+
+- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use `tutorActions.*` for tutor fulfillment and `adminTutor.*` for admin review.
+
 ### Redis Connection Errors
 
 - `ECONNREFUSED` — Redis not running. Start it (`bun run db:start` brings up postgres + redis). Redis is required; the server fails fast on env validation if `REDIS_URL` is missing.
@@ -176,6 +204,8 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
 5. Roll back migrations if needed (rare — coordinate with DBA)
 
 ## Environment Variables
+
+Student account name/image editing uses the existing Better Auth session and requires no additional environment variables or database migration.
 
 Key environment variables (see `.env.example` for full list):
 

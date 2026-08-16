@@ -1,2 +1,0 @@
-ALTER TABLE "booking_reschedule_proposal" ADD COLUMN "session_id" text;--> statement-breakpoint
-ALTER TABLE "booking_reschedule_proposal" ADD CONSTRAINT "booking_reschedule_proposal_session_id_booking_session_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."booking_session"("id") ON DELETE set null ON UPDATE no action;

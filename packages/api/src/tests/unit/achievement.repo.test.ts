@@ -91,11 +91,12 @@ describe("insert", () => {
 
     expect(conn.values).toHaveBeenCalledWith(
       expect.objectContaining({
-        eventDate: null,
+        awardingDate: null,
         location: null,
         description: null,
         subjects: [],
-        imageUrl: null,
+        evidenceUrl: null,
+        documentationUrl: null,
       }),
     );
   });
@@ -109,20 +110,22 @@ describe("insert", () => {
       category: "art",
       award: "bronze",
       level: "local",
-      eventDate: "2025-01-01",
+      awardingDate: "2025-01-01",
       location: "Jakarta",
       description: "Nice work",
       subjects: ["math", "physics"],
-      imageUrl: "https://img.png",
+      evidenceUrl: "https://img.png",
+      documentationUrl: "https://public.png",
     });
 
     expect(conn.values).toHaveBeenCalledWith(
       expect.objectContaining({
-        eventDate: "2025-01-01",
+        awardingDate: "2025-01-01",
         location: "Jakarta",
         description: "Nice work",
         subjects: ["math", "physics"],
-        imageUrl: "https://img.png",
+        evidenceUrl: "https://img.png",
+        documentationUrl: "https://public.png",
       }),
     );
   });

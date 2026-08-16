@@ -8,21 +8,31 @@ import { cn } from "@cogito-app/ui/lib/utils";
 import { Calendar } from "./calendar";
 
 export type DatePickerProps = {
+  id?: string;
   value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  minDate?: string;
+  maxDate?: string;
 };
 
 export function DatePicker({
+  id,
   value,
   onChange,
   placeholder = "Pick a date",
   disabled,
+  minDate,
+  maxDate,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
 
   const date = value ? parseISO(value) : undefined;
+  const disabledDates = [
+    ...(minDate ? [{ before: parseISO(minDate) }] : []),
+    ...(maxDate ? [{ after: parseISO(maxDate) }] : []),
+  ];
 
   const handleSelect = (selectedDate: Date | undefined) => {
     if (selectedDate) {
@@ -36,6 +46,7 @@ export function DatePicker({
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
+        id={id}
         disabled={disabled}
         className={cn(
           "flex items-center gap-2 w-full",
@@ -67,7 +78,14 @@ export function DatePicker({
               "transition-[opacity,scale]",
             )}
           >
-            <Calendar mode="single" selected={date} onSelect={handleSelect} />
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={handleSelect}
+              disabled={disabledDates}
+              startMonth={minDate ? parseISO(minDate) : undefined}
+              endMonth={maxDate ? parseISO(maxDate) : undefined}
+            />
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

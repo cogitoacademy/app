@@ -56,7 +56,7 @@ describe("Achievement review flow", () => {
       category: "competition",
       award: "Medali Emas",
       level: "nasional",
-      eventDate: "2026-06-10",
+      awardingDate: "2026-06-10",
       location: "Jakarta",
       description: "Juara 1 Olimpiade Matematika",
       subjects: ["Mathematics"],

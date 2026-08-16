@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconCalendarEvent,
+  IconChevronLeft,
+  IconChevronRight,
   IconClock,
+  IconCopy,
   IconDeviceLaptop,
   IconMapPin,
-  IconPencil,
   IconPlus,
+  IconSettings,
   IconTrash,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -17,15 +20,12 @@ import {
   Card,
   CardBody,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@cogito-app/ui/components/selia/field";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -39,650 +39,637 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
-import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
-import {
-  formatBookingDate,
-  formatBookingTimeRange,
-} from "@/components/booking/booking-ui";
+import { formatBookingTimeRange } from "@/components/booking/booking-ui";
 import { orpc } from "@/utils/orpc";
 
-const BOOKING_TIMEZONE = "Asia/Jakarta";
-const MODALITY_LABELS = {
-  online: "Online",
-  offline: "Offline",
-  both: "Online and offline",
-} as const;
+const TIMEZONE = "Asia/Jakarta";
+const DAY_MS = 86_400_000;
+const DAYS = [
+  [1, "Monday", "Mon"],
+  [2, "Tuesday", "Tue"],
+  [3, "Wednesday", "Wed"],
+  [4, "Thursday", "Thu"],
+  [5, "Friday", "Fri"],
+  [6, "Saturday", "Sat"],
+  [0, "Sunday", "Sun"],
+] as const;
 
-type Modality = keyof typeof MODALITY_LABELS;
-type ScheduleMode = "weekly" | "custom";
-
-type AvailabilityForm = {
-  mode: ScheduleMode;
-  startDate: string;
-  endDate: string;
-  repeatUntil: string;
-  modality: Modality;
-};
-
-type AvailabilityErrors = Partial<
-  Record<keyof AvailabilityForm | "form", string>
->;
-
+type Modality = "online" | "offline" | "both";
+type TimeRange = { id: string; start: string; end: string; modality: Modality };
+type WeeklyDay = { enabled: boolean; ranges: TimeRange[] };
+type WeeklySchedule = Record<number, WeeklyDay>;
 type AvailabilitySlot = {
   id: string;
   startDate: string | Date;
   endDate: string | Date;
-  modality: Modality;
   isRecurring: boolean;
-  recurrenceRule: string | null;
+  modality?: Modality;
 };
 
-function createEmptyForm(): AvailabilityForm {
-  return {
-    mode: "weekly",
-    startDate: "",
-    endDate: "",
-    repeatUntil: toDateInputValue(Date.now() + 12 * 7 * 24 * 60 * 60 * 1000),
-    modality: "online",
-  };
+const newRange = (): TimeRange => ({
+  id: crypto.randomUUID(),
+  start: "09:00",
+  end: "17:00",
+  modality: "online",
+});
+
+function initialSchedule(): WeeklySchedule {
+  return Object.fromEntries(
+    DAYS.map(([day]) => [
+      day,
+      { enabled: day >= 1 && day <= 5, ranges: [newRange()] },
+    ]),
+  );
 }
 
-function getDateTimePart(parts: Intl.DateTimeFormatPart[], type: string) {
-  return parts.find((part) => part.type === type)?.value ?? "";
-}
-
-function toDateTimeLocalValue(value: string | Date | number) {
+function dateKey(value: Date | number = Date.now()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BOOKING_TIMEZONE,
+    timeZone: TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+  }).formatToParts(new Date(value));
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function addDays(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function weekStart(value: string) {
+  const date = new Date(`${value}T00:00:00Z`);
+  return addDays(value, -((date.getUTCDay() + 6) % 7));
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Availability update failed.";
+}
+
+function timeValue(value: string | Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
     hour: "2-digit",
     minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(value));
-
-  return `${getDateTimePart(parts, "year")}-${getDateTimePart(parts, "month")}-${getDateTimePart(parts, "day")}T${getDateTimePart(parts, "hour")}:${getDateTimePart(parts, "minute")}`;
-}
-
-function toDateInputValue(value: string | Date | number) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BOOKING_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(value));
-
-  return `${getDateTimePart(parts, "year")}-${getDateTimePart(parts, "month")}-${getDateTimePart(parts, "day")}`;
-}
-
-function parseDateTimeLocalValue(value: string) {
-  return new Date(`${value}:00+07:00`);
-}
-
-function parseDateInputValue(value: string) {
-  return new Date(`${value}T23:59:59+07:00`);
-}
-
-function getAvailabilityErrorMessage(error: unknown) {
-  const message =
-    error && typeof error === "object" && "message" in error
-      ? String((error as { message?: string }).message)
-      : "Something went wrong while updating availability.";
-  const normalized = message.toLowerCase();
-
-  if (normalized.includes("overlap")) {
-    return "This time overlaps an existing availability slot. Choose a different time.";
-  }
-  if (normalized.includes("input validation")) {
-    return "Check the start time, end time, and session format, then try again.";
-  }
-
-  return message;
+    hour12: false,
+  }).format(new Date(value));
 }
 
 export function AvailabilityPage() {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<AvailabilityForm>(createEmptyForm);
-  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
-  const [errors, setErrors] = useState<AvailabilityErrors>({});
-
-  const availabilityQuery = useQuery(
-    orpc.tutor.listAvailability.queryOptions(),
+  const [schedule, setSchedule] = useState<WeeklySchedule>(initialSchedule);
+  const [repeatUntil, setRepeatUntil] = useState(() =>
+    dateKey(Date.now() + 12 * 7 * DAY_MS),
   );
+  const [overrideDate, setOverrideDate] = useState(() =>
+    dateKey(Date.now() + DAY_MS),
+  );
+  const [override, setOverride] = useState<TimeRange>(newRange);
+  const [previewStart, setPreviewStart] = useState(() => weekStart(dateKey()));
+  const hydratedSchedule = useRef(false);
+  const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
+  const refresh = () =>
+    queryClient.invalidateQueries({
+      queryKey: orpc.tutor.listAvailability.key(),
+    });
 
-  const saveMutation = useMutation(
+  const replaceWeekly = useMutation(
+    orpc.tutor.replaceWeeklyAvailability.mutationOptions({
+      onSuccess: (slots) => {
+        toastManager.add({
+          title: "Weekly hours saved",
+          description: `${slots.length} availability windows generated.`,
+          type: "success",
+        });
+        void refresh();
+      },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Weekly hours could not be saved",
+          description: errorMessage(error),
+          type: "error",
+        }),
+    }),
+  );
+  const addOverride = useMutation(
     orpc.tutor.upsertAvailability.mutationOptions({
       onSuccess: () => {
-        toastManager.add({
-          title: editingSlotId ? "Availability updated" : "Availability added",
-          description:
-            "Students can now request a session in this time window.",
-          type: "success",
-        });
-        resetForm();
-        void queryClient.invalidateQueries({
-          queryKey: orpc.tutor.listAvailability.key(),
-        });
+        toastManager.add({ title: "Date override added", type: "success" });
+        void refresh();
       },
-      onError: (error: unknown) => {
-        const message = getAvailabilityErrorMessage(error);
-        setErrors({ form: message });
+      onError: (error: unknown) =>
         toastManager.add({
-          title: "Availability could not be saved",
-          description: message,
+          title: "Date override could not be added",
+          description: errorMessage(error),
           type: "error",
-        });
-      },
+        }),
     }),
   );
-
-  const weeklyMutation = useMutation(
-    orpc.tutor.createWeeklyAvailability.mutationOptions({
-      onSuccess: (createdSlots) => {
-        toastManager.add({
-          title: "Weekly schedule added",
-          description: `${createdSlots.length} weekly ${createdSlots.length === 1 ? "slot is" : "slots are"} now available to students.`,
-          type: "success",
-        });
-        resetForm();
-        void queryClient.invalidateQueries({
-          queryKey: orpc.tutor.listAvailability.key(),
-        });
-      },
-      onError: (error: unknown) => {
-        const message = getAvailabilityErrorMessage(error);
-        setErrors({ form: message });
-        toastManager.add({
-          title: "Weekly schedule could not be added",
-          description: message,
-          type: "error",
-        });
-      },
-    }),
-  );
-
-  const deleteMutation = useMutation(
+  const removeSlot = useMutation(
     orpc.tutor.deleteAvailability.mutationOptions({
-      onSuccess: (_data, variables) => {
-        toastManager.add({ title: "Availability removed", type: "success" });
-        if (editingSlotId === variables.id) resetForm();
-        void queryClient.invalidateQueries({
-          queryKey: orpc.tutor.listAvailability.key(),
-        });
-      },
-      onError: (error: unknown) => {
-        toastManager.add({
-          title: "Availability could not be removed",
-          description: getAvailabilityErrorMessage(error),
-          type: "error",
-        });
-      },
+      onSuccess: () => void refresh(),
     }),
   );
 
-  const slots = ((availabilityQuery.data ?? []) as AvailabilitySlot[]).toSorted(
+  const slots = ((availability.data ?? []) as AvailabilitySlot[]).toSorted(
     (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
   );
-  const minDateTime = toDateTimeLocalValue(Date.now() + 60_000);
-  const isSaving = saveMutation.isPending || weeklyMutation.isPending;
-
-  function resetForm() {
-    setForm(createEmptyForm());
-    setEditingSlotId(null);
-    setErrors({});
-  }
-
-  function updateForm<K extends keyof AvailabilityForm>(
-    field: K,
-    value: AvailabilityForm[K],
-  ) {
-    setForm((current) => ({ ...current, [field]: value }));
-    setErrors((current) => {
-      const next = { ...current };
-      delete next[field];
-      delete next.form;
-      return next;
-    });
-  }
-
-  function setScheduleMode(mode: ScheduleMode) {
-    setEditingSlotId(null);
-    setForm((current) => ({
-      ...current,
-      mode,
-      repeatUntil:
-        mode === "weekly"
-          ? current.repeatUntil ||
-            toDateInputValue(Date.now() + 12 * 7 * 24 * 60 * 60 * 1000)
-          : "",
-    }));
-    setErrors({});
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const nextErrors: AvailabilityErrors = {};
-    if (!form.startDate) nextErrors.startDate = "Choose a start time.";
-    if (!form.endDate) nextErrors.endDate = "Choose an end time.";
-
-    const start = form.startDate
-      ? parseDateTimeLocalValue(form.startDate)
-      : null;
-    const end = form.endDate ? parseDateTimeLocalValue(form.endDate) : null;
-    const repeatUntil =
-      form.mode === "weekly" && form.repeatUntil
-        ? parseDateInputValue(form.repeatUntil)
-        : null;
-
-    if (start && Number.isNaN(start.getTime())) {
-      nextErrors.startDate = "Choose a valid start time.";
-    } else if (start && start <= new Date()) {
-      nextErrors.startDate = "The start time must be in the future.";
+  useEffect(() => {
+    if (hydratedSchedule.current || slots.length === 0) return;
+    const recurring = slots.filter((slot) => slot.isRecurring);
+    if (recurring.length === 0) return;
+    const next = initialSchedule();
+    for (const day of DAYS) next[day[0]] = { enabled: false, ranges: [] };
+    for (const slot of recurring) {
+      const day = new Date(
+        `${dateKey(new Date(slot.startDate))}T00:00:00Z`,
+      ).getUTCDay();
+      const candidate = {
+        id: crypto.randomUUID(),
+        start: timeValue(slot.startDate),
+        end: timeValue(slot.endDate),
+        modality: slot.modality ?? "online",
+      };
+      const current = next[day]!;
+      if (
+        !current.ranges.some(
+          (range) =>
+            range.start === candidate.start &&
+            range.end === candidate.end &&
+            range.modality === candidate.modality,
+        )
+      ) {
+        current.ranges.push(candidate);
+      }
+      current.enabled = true;
     }
-    if (end && Number.isNaN(end.getTime())) {
-      nextErrors.endDate = "Choose a valid end time.";
-    } else if (end && end <= new Date()) {
-      nextErrors.endDate = "The end time must be in the future.";
-    }
-    if (start && end && end <= start) {
-      nextErrors.endDate = "The end time must be after the start time.";
-    }
-    if (form.mode === "weekly") {
-      if (!form.repeatUntil) {
-        nextErrors.repeatUntil = "Choose when the weekly schedule ends.";
-      } else if (!repeatUntil || Number.isNaN(repeatUntil.getTime())) {
-        nextErrors.repeatUntil = "Choose a valid end date.";
-      } else if (start && repeatUntil < start) {
-        nextErrors.repeatUntil =
-          "The schedule end date must be on or after the first session.";
+    for (const day of DAYS) {
+      if (next[day[0]]!.ranges.length === 0) {
+        next[day[0]]!.ranges = [newRange()];
       }
     }
-
-    if (
-      Object.keys(nextErrors).length > 0 ||
-      !start ||
-      !end ||
-      (form.mode === "weekly" && !repeatUntil)
-    ) {
-      setErrors(nextErrors);
-      return;
+    hydratedSchedule.current = true;
+    setSchedule(next);
+  }, [slots]);
+  const previewDays = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(previewStart, index)),
+    [previewStart],
+  );
+  const slotsByDay = useMemo(() => {
+    const result = new Map<string, AvailabilitySlot[]>();
+    for (const slot of slots) {
+      const key = dateKey(new Date(slot.startDate));
+      result.set(key, [...(result.get(key) ?? []), slot]);
     }
+    return result;
+  }, [slots]);
 
-    if (form.mode === "weekly") {
-      weeklyMutation.mutate({
-        startDate: start,
-        endDate: end,
-        repeatUntil: repeatUntil!,
-        modality: form.modality,
-      });
-    } else {
-      saveMutation.mutate({
-        id: editingSlotId ?? undefined,
-        startDate: start,
-        endDate: end,
-        modality: form.modality,
-        isRecurring: false,
-        isActive: true,
-      });
-    }
+  function updateDay(day: number, fn: (value: WeeklyDay) => WeeklyDay) {
+    setSchedule((current) => ({ ...current, [day]: fn(current[day]!) }));
   }
 
-  function editSlot(slot: AvailabilitySlot) {
-    setEditingSlotId(slot.id);
-    setForm({
-      mode: "custom",
-      startDate: toDateTimeLocalValue(slot.startDate),
-      endDate: toDateTimeLocalValue(slot.endDate),
-      repeatUntil: "",
-      modality: slot.modality,
+  function saveWeekly(event: FormEvent) {
+    event.preventDefault();
+    const ranges = DAYS.flatMap(([day]) => {
+      const value = schedule[day]!;
+      return value.enabled
+        ? value.ranges.map((range) => ({
+            dayOfWeek: day,
+            startTime: range.start,
+            endTime: range.end,
+            modality: range.modality,
+          }))
+        : [];
     });
-    setErrors({});
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function removeSlot(slot: AvailabilitySlot) {
-    if (
-      !window.confirm(
-        `Remove the ${formatBookingDate(slot.startDate, BOOKING_TIMEZONE)} availability slot?`,
-      )
-    ) {
+    if (ranges.some((range) => range.endTime <= range.startTime)) {
+      toastManager.add({
+        title: "Check weekly hours",
+        description: "Every end time must be after its start time.",
+        type: "error",
+      });
       return;
     }
-    deleteMutation.mutate({ id: slot.id });
+    replaceWeekly.mutate({
+      effectiveFrom: new Date(`${dateKey(Date.now() + DAY_MS)}T00:00:00+07:00`),
+      repeatUntil: new Date(`${repeatUntil}T23:59:59+07:00`),
+      ranges,
+    });
   }
 
-  if (availabilityQuery.isPending) return <AvailabilitySkeleton />;
-
-  if (availabilityQuery.isError) {
-    return (
-      <Card>
-        <CardBody className="flex min-h-72 flex-col items-center justify-center text-center">
-          <IconBox variant="danger-subtle" size="lg" className="mb-4">
-            <IconCalendarEvent />
-          </IconBox>
-          <Heading size="sm">Availability could not be loaded</Heading>
-          <Text className="mt-2 max-w-md text-muted">
-            {getAvailabilityErrorMessage(availabilityQuery.error)}
-          </Text>
-          <Button
-            variant="secondary"
-            className="mt-5"
-            onClick={() => void availabilityQuery.refetch()}
-          >
-            Try again
-          </Button>
-        </CardBody>
-      </Card>
-    );
+  function saveOverride(event: FormEvent) {
+    event.preventDefault();
+    if (override.end <= override.start) return;
+    addOverride.mutate({
+      startDate: new Date(`${overrideDate}T${override.start}:00+07:00`),
+      endDate: new Date(`${overrideDate}T${override.end}:00+07:00`),
+      modality: override.modality,
+      isRecurring: false,
+      isActive: true,
+    });
   }
+
+  if (availability.isPending) return <AvailabilitySkeleton />;
 
   return (
     <Stack direction="column" spacing="lg">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Badge variant="info" pill>
-            Tutor workspace
-          </Badge>
-          <Heading size="md" className="mt-3">
-            Availability
-          </Heading>
-          <Text className="mt-2 max-w-2xl text-muted">
-            Add future time windows that students can choose when requesting a
-            session. All times use Western Indonesia Time (WIB).
+          <Heading size="md">Availability</Heading>
+          <Text className="mt-1 text-muted">
+            Set recurring hours once, then add exceptions for specific dates.
           </Text>
         </div>
-        {availabilityQuery.isFetching ? (
-          <Badge variant="secondary" pill>
-            Updating...
-          </Badge>
-        ) : null}
+        <Badge variant="secondary" pill>
+          Asia/Jakarta · 90-minute sessions
+        </Badge>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.75fr)_minmax(0,1.25fr)] xl:items-start">
-        <Card>
-          <CardHeader>
-            <IconBox variant="info-subtle">
-              {editingSlotId ? <IconPencil /> : <IconPlus />}
-            </IconBox>
-            <CardTitle>
-              {editingSlotId ? "Edit availability" : "Add availability"}
-            </CardTitle>
-            <CardDescription>
-              {editingSlotId
-                ? "Edit this availability occurrence as a custom slot."
-                : "Set a weekly schedule or add a one-time custom slot."}
-            </CardDescription>
-          </CardHeader>
-          <CardBody>
-            <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-              {!editingSlotId ? (
-                <Tabs
-                  value={form.mode}
-                  onValueChange={(value) => {
-                    if (value === "weekly" || value === "custom") {
-                      setScheduleMode(value);
-                    }
-                  }}
-                >
-                  <TabsList>
-                    <TabsItem value="weekly">Weekly schedule</TabsItem>
-                    <TabsItem value="custom">One-time slot</TabsItem>
-                  </TabsList>
-                </Tabs>
-              ) : null}
-
-              <Field>
-                <FieldLabel htmlFor="availability-start">Start time</FieldLabel>
-                <Input
-                  id="availability-start"
-                  type="datetime-local"
-                  min={minDateTime}
-                  value={form.startDate}
-                  onChange={(event) =>
-                    updateForm("startDate", event.target.value)
-                  }
-                />
-                {errors.startDate ? (
-                  <FieldError>{errors.startDate}</FieldError>
-                ) : null}
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="availability-end">End time</FieldLabel>
-                <Input
-                  id="availability-end"
-                  type="datetime-local"
-                  min={form.startDate || minDateTime}
-                  value={form.endDate}
-                  onChange={(event) =>
-                    updateForm("endDate", event.target.value)
-                  }
-                />
-                {errors.endDate ? (
-                  <FieldError>{errors.endDate}</FieldError>
-                ) : null}
-              </Field>
-
-              {form.mode === "weekly" ? (
-                <Field>
-                  <FieldLabel htmlFor="availability-repeat-until">
-                    Repeat until
-                  </FieldLabel>
-                  <Input
-                    id="availability-repeat-until"
-                    type="date"
-                    min={form.startDate.slice(0, 10)}
-                    value={form.repeatUntil}
-                    onChange={(event) =>
-                      updateForm("repeatUntil", event.target.value)
-                    }
-                  />
-                  <FieldDescription>
-                    The first session&apos;s weekday and time repeat every week.
-                    The default horizon is 12 weeks, with up to 52 weeks
-                    supported.
-                  </FieldDescription>
-                  {errors.repeatUntil ? (
-                    <FieldError>{errors.repeatUntil}</FieldError>
-                  ) : null}
-                </Field>
-              ) : null}
-
-              <Field>
-                <FieldLabel>Session format</FieldLabel>
-                <Select
-                  value={form.modality}
-                  onValueChange={(value) => {
-                    const modality = getSelectItemValue(value);
-                    if (
-                      modality !== "online" &&
-                      modality !== "offline" &&
-                      modality !== "both"
-                    ) {
-                      return;
-                    }
-                    updateForm("modality", modality);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a format" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="offline">Offline</SelectItem>
-                      <SelectItem value="both">Online and offline</SelectItem>
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
-                <FieldDescription>
-                  Students will only see formats supported by your tutor
-                  profile.
-                </FieldDescription>
-              </Field>
-
-              {errors.form ? (
-                <Text className="text-danger">{errors.form}</Text>
-              ) : null}
-
-              <div className="flex flex-wrap justify-end gap-2">
-                {editingSlotId ? (
-                  <Button
-                    type="button"
-                    variant="plain"
-                    onClick={resetForm}
-                    disabled={isSaving}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)] xl:items-start">
+        <form onSubmit={saveWeekly}>
+          <Card>
+            <CardHeader>
+              <IconBox variant="primary-subtle">
+                <IconClock />
+              </IconBox>
+              <CardTitle>Weekly hours</CardTitle>
+              <CardDescription>
+                Choose when students can normally book you.
+              </CardDescription>
+            </CardHeader>
+            <CardBody className="divide-y divide-item-border">
+              {DAYS.map(([day, label]) => {
+                const value = schedule[day]!;
+                return (
+                  <div
+                    key={day}
+                    className="grid gap-3 py-4 sm:grid-cols-[8rem_1fr]"
                   >
-                    Cancel
-                  </Button>
-                ) : null}
-                <Button type="submit" progress={isSaving} disabled={isSaving}>
-                  {editingSlotId
-                    ? "Save changes"
-                    : form.mode === "weekly"
-                      ? "Add weekly schedule"
-                      : "Add custom slot"}
-                </Button>
-              </div>
-            </form>
-          </CardBody>
-        </Card>
+                    <label className="flex items-center gap-3 self-start pt-2">
+                      <Checkbox
+                        checked={value.enabled}
+                        onCheckedChange={(checked) =>
+                          updateDay(day, (current) => ({
+                            ...current,
+                            enabled: checked === true,
+                          }))
+                        }
+                      />
+                      <Text className="font-medium">{label}</Text>
+                    </label>
+                    {value.enabled ? (
+                      <div className="space-y-2">
+                        {value.ranges.map((range) => (
+                          <div
+                            key={range.id}
+                            className="grid gap-2 sm:grid-cols-[1fr_1fr_10rem_auto]"
+                          >
+                            <Input
+                              type="time"
+                              aria-label={`${label} start`}
+                              value={range.start}
+                              onChange={(event) =>
+                                updateDay(day, (current) => ({
+                                  ...current,
+                                  ranges: current.ranges.map((item) =>
+                                    item.id === range.id
+                                      ? { ...item, start: event.target.value }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            />
+                            <Input
+                              type="time"
+                              aria-label={`${label} end`}
+                              value={range.end}
+                              onChange={(event) =>
+                                updateDay(day, (current) => ({
+                                  ...current,
+                                  ranges: current.ranges.map((item) =>
+                                    item.id === range.id
+                                      ? { ...item, end: event.target.value }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            />
+                            <ModalitySelect
+                              value={range.modality}
+                              onChange={(modality) =>
+                                updateDay(day, (current) => ({
+                                  ...current,
+                                  ranges: current.ranges.map((item) =>
+                                    item.id === range.id
+                                      ? { ...item, modality }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="plain"
+                              size="sm-icon"
+                              aria-label={`Remove ${label} hours`}
+                              disabled={value.ranges.length === 1}
+                              onClick={() =>
+                                updateDay(day, (current) => ({
+                                  ...current,
+                                  ranges: current.ranges.filter(
+                                    (item) => item.id !== range.id,
+                                  ),
+                                }))
+                              }
+                            >
+                              <IconTrash />
+                            </Button>
+                          </div>
+                        ))}
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="plain"
+                            size="sm"
+                            disabled={value.ranges.length >= 3}
+                            onClick={() =>
+                              updateDay(day, (current) => ({
+                                ...current,
+                                ranges: [...current.ranges, newRange()],
+                              }))
+                            }
+                          >
+                            <IconPlus /> Add hours
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="plain"
+                            size="sm"
+                            onClick={() => {
+                              const source = value.ranges;
+                              setSchedule((current) =>
+                                Object.fromEntries(
+                                  DAYS.map(([target]) => [
+                                    target,
+                                    target >= 1 && target <= 5
+                                      ? {
+                                          enabled: true,
+                                          ranges: source.map((range) => ({
+                                            id: crypto.randomUUID(),
+                                            start: range.start,
+                                            end: range.end,
+                                            modality: range.modality,
+                                          })),
+                                        }
+                                      : current[target]!,
+                                  ]),
+                                ),
+                              );
+                            }}
+                          >
+                            <IconCopy /> Apply to weekdays
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Text className="py-2 text-muted">Unavailable</Text>
+                    )}
+                  </div>
+                );
+              })}
+            </CardBody>
+            <CardFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-end">
+              <Field className="sm:max-w-56">
+                <FieldLabel htmlFor="schedule-until">Generate until</FieldLabel>
+                <Input
+                  id="schedule-until"
+                  type="date"
+                  min={dateKey(Date.now() + DAY_MS)}
+                  value={repeatUntil}
+                  onChange={(event) => setRepeatUntil(event.target.value)}
+                />
+              </Field>
+              <Button type="submit" progress={replaceWeekly.isPending}>
+                Save weekly hours
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
 
-        <Card>
-          <CardHeader>
-            <IconBox variant="success-subtle">
-              <IconCalendarEvent />
-            </IconBox>
-            <CardTitle>Upcoming availability</CardTitle>
-            <CardDescription>
-              {slots.length === 0
-                ? "No future slots yet. Add a weekly schedule or custom slot to start receiving requests."
-                : `${slots.length} future ${slots.length === 1 ? "slot" : "slots"} available to students.`}
-            </CardDescription>
-          </CardHeader>
-          <CardBody>
-            {slots.length === 0 ? (
-              <div className="rounded-lg border border-item-border bg-item p-8 text-center">
-                <IconBox
-                  variant="secondary-subtle"
-                  size="lg"
-                  className="mx-auto mb-4"
-                >
-                  <IconClock />
-                </IconBox>
-                <Heading size="sm">Your calendar is open</Heading>
-                <Text className="mt-2 text-muted">
-                  Add a time window and students will be able to choose it when
-                  booking a solo session.
-                </Text>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {slots.map((slot) => (
-                  <AvailabilitySlotCard
-                    key={slot.id}
-                    slot={slot}
-                    isEditing={editingSlotId === slot.id}
-                    isDeleting={
-                      deleteMutation.isPending &&
-                      deleteMutation.variables?.id === slot.id
-                    }
-                    onEdit={() => editSlot(slot)}
-                    onRemove={() => removeSlot(slot)}
+        <div className="space-y-4 xl:sticky xl:top-6">
+          <Card>
+            <CardHeader>
+              <IconBox variant="info-subtle">
+                <IconCalendarEvent />
+              </IconBox>
+              <CardTitle>Date override</CardTitle>
+              <CardDescription>
+                Add different hours for one specific date.
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              <form onSubmit={saveOverride} className="space-y-3">
+                <Field>
+                  <FieldLabel htmlFor="override-date">Date</FieldLabel>
+                  <Input
+                    id="override-date"
+                    type="date"
+                    min={dateKey(Date.now() + DAY_MS)}
+                    value={overrideDate}
+                    onChange={(event) => setOverrideDate(event.target.value)}
                   />
-                ))}
-              </div>
-            )}
-          </CardBody>
-        </Card>
+                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="time"
+                    aria-label="Override start"
+                    value={override.start}
+                    onChange={(event) =>
+                      setOverride((current) => ({
+                        ...current,
+                        start: event.target.value,
+                      }))
+                    }
+                  />
+                  <Input
+                    type="time"
+                    aria-label="Override end"
+                    value={override.end}
+                    onChange={(event) =>
+                      setOverride((current) => ({
+                        ...current,
+                        end: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <ModalitySelect
+                  value={override.modality}
+                  onChange={(modality) =>
+                    setOverride((current) => ({ ...current, modality }))
+                  }
+                />
+                <Button type="submit" block progress={addOverride.isPending}>
+                  <IconPlus /> Add date override
+                </Button>
+              </form>
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader>
+              <IconBox variant="secondary-subtle">
+                <IconSettings />
+              </IconBox>
+              <CardTitle>Scheduling rules</CardTitle>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              <Rule label="Session duration" value="90 minutes" />
+              <Rule label="Timezone" value="Asia/Jakarta" />
+              <Rule label="Availability" value="Weekly + overrides" />
+              <Text className="text-sm text-muted">
+                Existing bookings stay reserved when weekly hours change.
+              </Text>
+            </CardBody>
+          </Card>
+        </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <IconBox variant="success-subtle">
+            <IconCalendarEvent />
+          </IconBox>
+          <CardTitle>Calendar preview</CardTitle>
+          <CardDescription>
+            Windows currently visible to students.
+          </CardDescription>
+        </CardHeader>
+        <CardBody>
+          <div className="mb-4 flex items-center justify-between">
+            <Button
+              variant="plain"
+              size="sm-icon"
+              aria-label="Previous week"
+              onClick={() => setPreviewStart((current) => addDays(current, -7))}
+            >
+              <IconChevronLeft />
+            </Button>
+            <Text className="font-medium">Week of {previewStart}</Text>
+            <Button
+              variant="plain"
+              size="sm-icon"
+              aria-label="Next week"
+              onClick={() => setPreviewStart((current) => addDays(current, 7))}
+            >
+              <IconChevronRight />
+            </Button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-7">
+            {previewDays.map((date, index) => (
+              <div
+                key={date}
+                className="min-h-40 rounded-lg border border-item-border bg-item p-2"
+              >
+                <Text className="text-xs font-medium">
+                  {DAYS[index]![2]} · {date.slice(8)}
+                </Text>
+                <div className="mt-2 space-y-2">
+                  {(slotsByDay.get(date) ?? []).map((slot) => (
+                    <div
+                      key={slot.id}
+                      className="rounded border border-item-border bg-background p-2"
+                    >
+                      <Text className="text-xs font-medium">
+                        {formatBookingTimeRange(
+                          slot.startDate,
+                          slot.endDate,
+                          TIMEZONE,
+                        )}
+                      </Text>
+                      <div className="mt-1 flex items-center justify-between gap-1">
+                        <Badge
+                          variant={slot.isRecurring ? "info" : "warning"}
+                          pill
+                        >
+                          {slot.isRecurring ? "Weekly" : "Override"}
+                        </Badge>
+                        <Button
+                          variant="plain"
+                          size="xs-icon"
+                          aria-label="Remove availability"
+                          onClick={() => removeSlot.mutate({ id: slot.id })}
+                        >
+                          <IconTrash />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardBody>
+      </Card>
     </Stack>
   );
 }
 
-function AvailabilitySlotCard({
-  slot,
-  isEditing,
-  isDeleting,
-  onEdit,
-  onRemove,
+function ModalitySelect({
+  value,
+  onChange,
 }: {
-  slot: AvailabilitySlot;
-  isEditing: boolean;
-  isDeleting: boolean;
-  onEdit: () => void;
-  onRemove: () => void;
+  value: Modality;
+  onChange: (value: Modality) => void;
 }) {
-  const ModalityIcon =
-    slot.modality === "offline" ? IconMapPin : IconDeviceLaptop;
-
   return (
-    <div
-      className={`rounded-lg border p-4 transition-colors ${
-        isEditing
-          ? "border-primary-border bg-primary/5"
-          : "border-item-border bg-item"
-      }`}
+    <Select
+      value={value}
+      onValueChange={(next) => {
+        const modality = getSelectItemValue(next);
+        if (
+          modality === "online" ||
+          modality === "offline" ||
+          modality === "both"
+        )
+          onChange(modality);
+      }}
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <IconBox variant="secondary-subtle" size="sm">
-            <ModalityIcon />
-          </IconBox>
-          <div className="min-w-0">
-            <Text className="font-medium">
-              {formatBookingDate(slot.startDate, BOOKING_TIMEZONE)}
-            </Text>
-            <Text className="mt-1 text-sm text-muted">
-              {formatBookingTimeRange(
-                slot.startDate,
-                slot.endDate,
-                BOOKING_TIMEZONE,
-              )}{" "}
-              WIB
-            </Text>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <Badge variant="secondary" pill>
-            {MODALITY_LABELS[slot.modality]}
-          </Badge>
-          <Badge variant={slot.isRecurring ? "info" : "secondary"} pill>
-            {slot.isRecurring ? "Weekly" : "One-time"}
-          </Badge>
-          <Button
-            variant="plain"
-            size="sm"
-            onClick={onEdit}
-            disabled={isDeleting}
-          >
-            <IconPencil /> {slot.isRecurring ? "Edit occurrence" : "Edit"}
-          </Button>
-          <Button
-            variant="plain"
-            size="sm"
-            className="text-danger"
-            onClick={onRemove}
-            progress={isDeleting}
-            disabled={isDeleting}
-          >
-            <IconTrash /> {slot.isRecurring ? "Remove occurrence" : "Remove"}
-          </Button>
-        </div>
-      </div>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPopup>
+        <SelectList>
+          <SelectItem value="online">
+            <IconDeviceLaptop /> Online
+          </SelectItem>
+          <SelectItem value="offline">
+            <IconMapPin /> Offline
+          </SelectItem>
+          <SelectItem value="both">Both</SelectItem>
+        </SelectList>
+      </SelectPopup>
+    </Select>
+  );
+}
+
+function Rule({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <Text className="text-sm text-muted">{label}</Text>
+      <Text className="text-sm font-medium">{value}</Text>
     </div>
   );
 }
 
 function AvailabilitySkeleton() {
   return (
-    <div className="grid animate-pulse gap-4 xl:grid-cols-[minmax(18rem,0.75fr)_minmax(0,1.25fr)]">
-      <Card className="min-h-96 bg-accent/40" />
+    <div className="grid animate-pulse gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)]">
+      <Card className="min-h-160 bg-accent/40" />
       <Card className="min-h-96 bg-accent/40" />
     </div>
   );

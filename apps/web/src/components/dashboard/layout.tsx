@@ -21,11 +21,11 @@ export function Layout({
   title?: string;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(
-    () => window.innerWidth >= 1024,
+    () => window.innerWidth >= 1280,
   );
 
   useEffect(() => {
-    const updateSidebar = () => setSidebarOpen(window.innerWidth >= 1024);
+    const updateSidebar = () => setSidebarOpen(window.innerWidth >= 1280);
     window.addEventListener("resize", updateSidebar);
     return () => window.removeEventListener("resize", updateSidebar);
   }, []);
@@ -40,7 +40,7 @@ export function Layout({
         type="button"
         aria-label="Close sidebar overlay"
         className={cn(
-          "fixed inset-0 z-10 hidden bg-black backdrop-blur-sm transition-all max-lg:block",
+          "fixed inset-0 z-10 hidden bg-black backdrop-blur-sm transition-all max-xl:block",
           sidebarOpen ? "visible opacity-40" : "invisible opacity-0",
         )}
         onClick={toggleSidebar}
@@ -58,7 +58,7 @@ export function Layout({
       >
         <nav
           className={cn(
-            "flex h-16 items-center gap-2.5 max-lg:px-4",
+            "flex h-16 items-center gap-2.5 max-xl:px-4",
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >
@@ -82,7 +82,7 @@ export function Layout({
         </nav>
         <div
           className={cn(
-            "flex min-h-[calc(100vh-4rem)] flex-col gap-6 pb-6 max-lg:px-4",
+            "flex min-h-[calc(100vh-4rem)] flex-col gap-6 pb-6 max-xl:px-4",
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >

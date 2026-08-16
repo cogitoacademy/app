@@ -34,7 +34,7 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
       .replace(/_/g, "\\_");
     const q = `%${escaped}%`;
     conditions.push(
-      sql`(lower(${tutorProfile.displayName}) like lower(${q}) escape '\\' or lower(${tutorProfile.shortBio}) like lower(${q}) escape '\\' or lower(${tutorProfile.credentialsSummary}) like lower(${q}) escape '\\')`,
+      sql`(lower(${tutorProfile.displayName}) like lower(${q}) escape '\\' or lower(${tutorProfile.shortBio}) like lower(${q}) escape '\\' or lower(${tutorProfile.credentialsSummary}) like lower(${q}) escape '\\' or lower(coalesce(${tutorProfile.expertise}::text, '')) like lower(${q}) escape '\\')`,
     );
   }
 

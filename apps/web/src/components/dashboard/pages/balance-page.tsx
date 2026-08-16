@@ -29,6 +29,7 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@cogito-app/ui/lib/utils";
 
+import { EmptyState } from "@/components/empty-state";
 import { StatCard } from "../stat-card";
 import { orpc } from "@/utils/orpc";
 
@@ -314,12 +315,14 @@ export function BalancePage() {
           {ledgerLoading ? (
             <Text className="text-muted">Loading transaction history...</Text>
           ) : !ledger?.items.length ? (
-            <div className="rounded-lg border border-border p-6 text-center">
-              <Text className="font-medium">No transactions yet</Text>
-              <Text className="mt-1 text-sm text-muted">
-                Your top-ups and booking activity will appear here.
-              </Text>
-            </div>
+            <EmptyState
+              icon={<IconArrowsExchange />}
+              title="No transactions yet"
+              description="Your top-ups and booking activity will appear here."
+              tone="secondary"
+              size="compact"
+              className="rounded-lg border border-border"
+            />
           ) : (
             <div className="divide-y divide-border">
               {ledger.items.map((entry) => {

@@ -89,7 +89,7 @@ async function createPublishedTutor(
     .values({
       tutorId,
       startDate: start,
-      endDate: new Date(start.getTime() + 6 * 3600_000),
+      endDate: new Date(start.getTime() + 240 * 3600_000),
       modality: "both",
     })
     .returning();

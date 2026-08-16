@@ -6,11 +6,24 @@ import {
   revokeInviteInput,
   listTutorProfilesInput,
   reviewTutorProfileInput,
+  inspectInviteeInput,
 } from "./admin-tutor.types";
 import type { AdminTutorHandler } from "./admin-tutor.handler";
 
 export function createAdminTutorRouter(handler: AdminTutorHandler) {
   return {
+    inspectInvitee: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/tutors/invites/inspect-invitee",
+        tags: ["Admin Tutors"],
+        summary: "Inspect tutor invitee account",
+        description:
+          "Checks whether an email is registered and returns its authentication providers",
+      })
+      .input(inspectInviteeInput)
+      .handler(handler.inspectInvitee),
+
     createInvite: adminProcedure
       .route({
         method: "POST",
@@ -43,6 +56,18 @@ export function createAdminTutorRouter(handler: AdminTutorHandler) {
       })
       .input(resendInviteInput)
       .handler(handler.resendInvite),
+
+    sendInviteAgain: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/tutors/invites/send-again",
+        tags: ["Admin Tutors"],
+        summary: "Send tutor invite again",
+        description:
+          "Regenerates the invite token and explicitly sends the new link by email",
+      })
+      .input(resendInviteInput)
+      .handler(handler.sendInviteAgain),
 
     revokeInvite: adminProcedure
       .route({

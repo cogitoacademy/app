@@ -2,12 +2,14 @@ import {
   eq,
   and,
   gte,
+  asc,
   desc,
   inArray,
   notInArray,
   ne,
   lte,
   lt,
+  gt,
   sql,
   getTableColumns,
   notExists,
@@ -109,6 +111,34 @@ async function findAvailabilitySlot(
   }
   return conn.query.availabilitySlot.findFirst({
     where: and(...conditions),
+  });
+}
+
+async function findAvailabilityWindowContaining(
+  conn: DbOrTx,
+  tutorId: string,
+  startAt: Date,
+  endAt: Date,
+) {
+  return conn.query.availabilitySlot.findFirst({
+    where: and(
+      eq(availabilitySlot.tutorId, tutorId),
+      eq(availabilitySlot.isActive, true),
+      lte(availabilitySlot.startDate, startAt),
+      gte(availabilitySlot.endDate, endAt),
+    ),
+  });
+}
+
+async function listActiveTutorAvailability(conn: DbOrTx, tutorId: string) {
+  return conn.query.availabilitySlot.findMany({
+    where: and(
+      eq(availabilitySlot.tutorId, tutorId),
+      eq(availabilitySlot.isActive, true),
+      gte(availabilitySlot.endDate, new Date()),
+    ),
+    orderBy: [asc(availabilitySlot.startDate)],
+    limit: 100,
   });
 }
 
@@ -383,10 +413,14 @@ async function insertRescheduleProposal(
   conn: DbOrTx,
   values: {
     bookingId: string;
+    sessionId?: string;
     proposedBy: string;
     sessionId?: string;
     proposedStartAt: Date;
     proposedEndAt: Date;
+    reason?: string;
+    expiresAt: Date;
+    decisions: Record<string, "pending" | "accepted" | "rejected">;
     status: string;
   },
 ) {
@@ -422,7 +456,11 @@ async function findPendingRescheduleProposal(conn: DbOrTx, bookingId: string) {
 async function updateRescheduleProposal(
   conn: DbOrTx,
   proposalId: string,
-  values: { status: string; decidedAt: Date },
+  values: {
+    status?: string;
+    decidedAt?: Date;
+    decisions?: Record<string, "pending" | "accepted" | "rejected">;
+  },
 ) {
   await conn
     .update(bookingRescheduleProposal)
@@ -487,6 +525,17 @@ async function findSessionById(conn: DbOrTx, sessionId: string) {
   return session ?? null;
 }
 
+async function updateSessionSchedule(
+  conn: DbOrTx,
+  sessionId: string,
+  values: { scheduledStartAt: Date; scheduledEndAt: Date },
+) {
+  await conn
+    .update(bookingSession)
+    .set(values)
+    .where(eq(bookingSession.id, sessionId));
+}
+
 async function cancelSession(conn: DbOrTx, sessionId: string) {
   await conn
     .update(bookingSession)
@@ -536,8 +585,10 @@ async function findOverlappingBookings(
 ) {
   const conditions = [
     eq(booking.tutorId, tutorId),
-    lte(booking.scheduledStartAt, endAt),
-    gte(booking.scheduledEndAt, startAt),
+    // Half-open intervals: [start, end). Back-to-back 90-minute sessions do
+    // not overlap, while any shared minute does.
+    lt(booking.scheduledStartAt, endAt),
+    gt(booking.scheduledEndAt, startAt),
   ];
   if (opts?.excludeStates?.length) {
     conditions.push(notInArray(booking.currentState, opts.excludeStates));
@@ -828,6 +879,11 @@ export function createBookingRepo(db: DbType) {
         proposer: true,
         participants: { with: { user: true } },
         stateHistory: true,
+        rescheduleProposals: {
+          orderBy: [desc(bookingRescheduleProposal.createdAt)],
+          limit: 10,
+        },
+        sessions: true,
         roomBookings: { with: { room: true } },
       },
     });
@@ -895,6 +951,8 @@ export function createBookingRepo(db: DbType) {
     listBookingsByTutor,
     findTutorProfile,
     findAvailabilitySlot,
+    findAvailabilityWindowContaining,
+    listActiveTutorAvailability,
     findParticipant,
     findConfirmedParticipants,
     findUserEmails,
@@ -913,6 +971,7 @@ export function createBookingRepo(db: DbType) {
     updateRescheduleProposal,
     insertBookingSession,
     findSessionById,
+    updateSessionSchedule,
     cancelSession,
     completeSession,
     insertSessionNote,

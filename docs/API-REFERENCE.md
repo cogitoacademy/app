@@ -6,14 +6,17 @@ Last updated: 2026-08-15
 
 All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`.
 
+The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: student (`booking.listMine`, `tutors.listPublished`, `wallet.get`), tutor (`tutorActions.listBookings`, `tutor.listAvailability`, `tutor.getMyProfile`, `tutor.getMyPayouts`), and admin (`adminBooking.listBookings`, `adminTutor.listTutorProfiles`, `achievement.adminList`).
+
 ### Auth Levels
 
-| Level       | Description                                         |
-| ----------- | --------------------------------------------------- |
-| `public`    | No auth required                                    |
-| `protected` | Requires authenticated session                      |
-| `admin`     | Requires authenticated session with `role: "admin"` |
-| `tutor`     | Requires authenticated session with `role: "tutor"` |
+| Level       | Description                                           |
+| ----------- | ----------------------------------------------------- |
+| `public`    | No auth required                                      |
+| `protected` | Requires authenticated session                        |
+| `student`   | Requires authenticated session with `role: "student"` |
+| `admin`     | Requires authenticated session with `role: "admin"`   |
+| `tutor`     | Requires authenticated session with `role: "tutor"`   |
 
 ---
 
@@ -50,6 +53,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Input:** `{ phoneNumber?, schoolName?, gradeLevel?, parentName?, parentPhone?, parentEmail? }`
 - **Output:** `{ user, profile }`
 - **Description:** Creates or updates the authenticated user's student profile fields
+- **Account identity:** The student profile page also uses Better Auth `updateUser` to update the signed-in user's `name` and optional `image`; email remains read-only on this surface.
 
 ### `auth.searchStudents`
 
@@ -105,12 +109,19 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ## Admin Tutor (`adminTutor.*`)
 
+### `adminTutor.inspectInvitee`
+
+- **Auth:** Admin
+- **Input:** `{ email }`
+- **Output:** `{ exists, email, name, role, providers, hasGoogle, hasPassword }`
+- **Description:** Checks whether an invite email already belongs to a Better Auth user and reports linked authentication providers for clear admin guidance
+
 ### `adminTutor.createInvite`
 
 - **Auth:** Admin
 - **Input:** `{ email, displayName, internalNotes? }`
 - **Output:** `{ invite }`
-- **Description:** Creates tutor invite with unique token
+- **Description:** Creates a tutor invite with a unique token and sends the branded tutor-onboarding email with an account-email reminder, UTC expiry, primary claim CTA, and fallback URL
 
 ### `adminTutor.listInvites`
 
@@ -123,7 +134,14 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Auth:** Admin
 - **Input:** `{ inviteId }`
 - **Output:** `{ invite }`
-- **Description:** Regenerates token and expiry (invalidates the previous token)
+- **Description:** Regenerates token and expiry for manual copy (invalidates the previous token); does not send email
+
+### `adminTutor.sendInviteAgain`
+
+- **Auth:** Admin
+- **Input:** `{ inviteId }`
+- **Output:** Invite row with a new one-time plaintext token and `emailDelivery` (`sent`/`skipped`/`failed`)
+- **Description:** Explicitly rotates the invite link and sends the replacement through Resend
 
 ### `adminTutor.revokeInvite`
 
@@ -192,6 +210,15 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Errors:** `WEEKLY_AVAILABILITY_RANGE` (400) if > 53 occurrences, `AVAILABILITY_SLOT_OVERLAP` (409)
 - **Description:** Materializes weekly windows from `startDate` through `repeatUntil`
 
+### `tutor.replaceWeeklyAvailability`
+
+- **RPC path:** `/rpc/tutor/replaceWeeklyAvailability`
+- **Auth:** Tutor
+- **Input:** `{ effectiveFrom, repeatUntil, ranges: [{ dayOfWeek, startTime, endTime, modality }] }` (`dayOfWeek` 0–6, times use 24-hour `HH:mm`, max 21 weekly ranges, range up to 52 weeks)
+- **Output:** `AvailabilitySlot[]`
+- **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409) for overlapping weekly ranges
+- **Description:** Atomically deactivates future recurring windows from `effectiveFrom` and regenerates them from weekly hours. One-off date overrides are preserved and take priority over conflicting generated occurrences.
+
 ### `tutor.deleteAvailability`
 
 - **Auth:** Tutor
@@ -213,13 +240,13 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `tutors.listPublished`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ search?, expertise?, modality?, limit?, offset? }` (`limit` default 20, max 50)
 - **Output:** `{ items: TutorProfile[], total, limit, offset }`
 
 ### `tutors.getProfile`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ tutorId }`
 - **Output:** `{ profile }`
 
@@ -255,7 +282,7 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `achievement.create`
 
 - **Auth:** Protected
-- **Input:** `{ eventName, category, award, level, eventDate?, location?, description?, subjects?, imageUrl? }`
+- **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? }`
 - **Output:** `{ achievement }`
 - **Description:** Submits a new achievement in `pending` status
 
@@ -359,8 +386,8 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.createSolo`
 
-- **Auth:** Protected
-- **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, scheduledEndAt, timezone? }` (times in the future; `timezone` default `Asia/Jakarta`)
+- **Auth:** Student
+- **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`scheduledStartAt` must leave room for the server-fixed 90-minute session inside the availability window; `timezone` default `Asia/Jakarta`)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
 - **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
@@ -374,35 +401,50 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.listMine`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
 - **Description:** Returns bookings where the user is proposer
 
 ### `booking.cancel`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ bookingId, cancellationReason? }`
 - **Output:** `{ booking }`
 - **Description:** Cancels booking and releases held Marks; late cancel within H-2 becomes `late_cancelled`
 
 ### `booking.acceptReschedule`
 
-- **Auth:** Protected (student proposer)
-- **Input:** `{ bookingId }`
+- **Auth:** Protected; required tutor or active student voter
+- **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Student accepts the tutor's reschedule proposal
+- **Description:** Records one acceptance on the active proposal. Partial acceptance does not change the schedule; unanimous tutor + active-student acceptance applies the proposed 90-minute time and restores the booking state that was active before the proposal.
+
+### `booking.getRescheduleAvailability`
+
+- **RPC path:** `/rpc/booking/getRescheduleAvailability`
+- **Auth:** Protected; booking tutor, proposer, or participant
+- **Input:** `{ bookingId }`
+- **Output:** `AvailabilitySlot[]`
+- **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility.
 
 ### `booking.rejectReschedule`
 
-- **Auth:** Protected (student proposer)
-- **Input:** `{ bookingId }`
+- **Auth:** Protected; required tutor or active student voter
+- **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Student rejects the tutor's reschedule proposal
+- **Description:** Rejects the active proposal, preserves the original schedule, and restores the booking state that was active before the proposal
+
+### `booking.proposeReschedule`
+
+- **Auth:** Student (booking proposer)
+- **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
+- **Output:** `{ booking }`
+- **Description:** Proposes a new fixed 90-minute time for one booking session; proposals expire after 24 hours and require tutor plus all active-student approval
 
 ### `booking.cancelSession`
 
-- **Auth:** Protected (student proposer)
+- **Auth:** Student (proposer)
 - **Input:** `{ sessionId }`
 - **Output:** `{ booking }`
 - **Description:** Student cancels an individual series session; pre-H-2 releases the session hold, post-H-2 forfeits it (per-session penalty, #46). Group-series sessions cannot be cancelled (no opt-out)
@@ -423,22 +465,22 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.createGroup`
 
-- **Auth:** Protected
-- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, scheduledEndAt, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5)
+- **Auth:** Student
+- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is server-fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Description:** Creates a group booking, holds proposer Marks, invites participants; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
-- **Auth:** Protected
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ scheduledStartAt, scheduledEndAt }], timezone? }` (2–4 sessions)
+- **Auth:** Student
+- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (2–4 sessions; each session is fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
 
 ### `booking.createGroupSeries`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
@@ -446,27 +488,27 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ### `booking.confirmInvite`
 
-- **Auth:** Protected (invitee)
+- **Auth:** Student (invitee)
 - **Input:** `{ bookingId }`
 - **Output:** `{ confirmedHeadcount, targetGroupSize }`
 - **Description:** Invitee confirms participation and holds Marks
 
 ### `booking.declineInvite`
 
-- **Auth:** Protected (invitee)
+- **Auth:** Student (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
 
 ### `booking.reconfirm`
 
-- **Auth:** Protected (participant)
+- **Auth:** Student (participant)
 - **Input:** `{ bookingId, accept }`
 - **Output:** `{ reconfirmed: boolean }`
 - **Description:** Participant accepts or rejects the repriced offer
 
 ### `booking.withdraw`
 
-- **Auth:** Protected (participant)
+- **Auth:** Student (participant)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ withdrawn: true, late: boolean }`
 - **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels. Group-series bookings (`type: "series"` with `targetGroupSize > 1`) are rejected with `CONFLICT` (`BOOKING_SERIES_NO_OPT_OUT`) — no opt-out from the series (U4)
@@ -492,9 +534,9 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 ### `tutorActions.proposeReschedule`
 
 - **Auth:** Tutor
-- **Input:** `{ bookingId, proposedStartAt, proposedEndAt, reason? }`
+- **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
 - **Output:** `{ booking }`
-- **Description:** Tutor proposes a new slot; requires student acceptance via `booking.acceptReschedule`
+- **Description:** Tutor proposes a new fixed 90-minute time for one session; tutor proposals may be outside the original availability window and require every active student's acceptance
 
 ### `tutorActions.acceptBooking`
 
@@ -702,4 +744,4 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 - **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
 - **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
-- **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. achievement `imageUrl`, user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
+- **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset

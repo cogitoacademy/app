@@ -68,8 +68,8 @@ async function createPublishedTutor(email: string, ts: number) {
     })
     .returning();
 
-  const start = new Date(Date.now() + 24 * 3600_000);
-  const end = new Date(Date.now() + 25 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
+  const end = new Date(start.getTime() + 7 * 24 * 3600_000);
   const [slot] = await db
     .insert(availabilitySlot)
     .values({

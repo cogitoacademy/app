@@ -14,6 +14,15 @@ export interface UpdateProfileInput {
   proofUrls?: string[];
 }
 
+export interface PersistedProfileUpdate extends Omit<
+  UpdateProfileInput,
+  "version"
+> {
+  pendingProfileChanges?: Record<string, unknown>;
+  profileEditStatus?: string;
+  profileEditAdminNote?: string | null;
+}
+
 export interface UpsertAvailabilityInput {
   id?: string;
   startDate: Date;
@@ -50,7 +59,7 @@ export async function updateProfileWithVersion(
   conn: DbOrTx,
   userId: string,
   expectedVersion: number,
-  input: Omit<UpdateProfileInput, "version">,
+  input: PersistedProfileUpdate,
 ) {
   const rows = await conn
     .update(tutorProfile)
@@ -156,6 +165,19 @@ export async function upsertAvailability(
       recurrenceRule: input.recurrenceRule ?? null,
       isActive: input.isActive ?? true,
     })
+    .onConflictDoUpdate({
+      target: [
+        availabilitySlot.tutorId,
+        availabilitySlot.startDate,
+        availabilitySlot.endDate,
+      ],
+      set: {
+        modality: input.modality,
+        isRecurring: input.isRecurring ?? false,
+        recurrenceRule: input.recurrenceRule ?? null,
+        isActive: input.isActive ?? true,
+      },
+    })
     .returning();
   return created;
 }
@@ -173,6 +195,24 @@ export async function deleteAvailability(conn: DbOrTx, slotId: string) {
     .where(eq(availabilitySlot.id, slotId));
 }
 
+export async function deactivateFutureRecurringAvailability(
+  conn: DbOrTx,
+  userId: string,
+  from: Date,
+) {
+  await conn
+    .update(availabilitySlot)
+    .set({ isActive: false })
+    .where(
+      and(
+        eq(availabilitySlot.tutorId, userId),
+        eq(availabilitySlot.isRecurring, true),
+        eq(availabilitySlot.isActive, true),
+        gte(availabilitySlot.startDate, from),
+      ),
+    );
+}
+
 export function createTutorRepo() {
   return {
     getByUserId,
@@ -181,6 +221,7 @@ export function createTutorRepo() {
     listAvailability,
     upsertAvailability,
     deleteAvailability,
+    deactivateFutureRecurringAvailability,
   };
 }
 

@@ -45,6 +45,8 @@ lerna-debug.log*
 # Testing
 coverage
 .nyc_output
+.qa-*
+artifacts/
 .playwright-mcp
 playwright-report
 test-results

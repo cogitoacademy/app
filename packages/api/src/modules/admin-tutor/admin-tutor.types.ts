@@ -6,6 +6,10 @@ export const createInviteInput = z.object({
   internalNotes: z.string().max(2000).optional(),
 });
 
+export const inspectInviteeInput = z.object({
+  email: z.string().trim().toLowerCase().email().max(320),
+});
+
 export const listInvitesInput = z
   .object({
     status: z.enum(["invited", "accepted", "expired", "revoked"]).optional(),
@@ -40,7 +44,9 @@ export type ReviewAction =
   | "approve_unpublished"
   | "publish"
   | "unpublish"
-  | "suspend";
+  | "suspend"
+  | "approve_edits"
+  | "request_edit_changes";
 
 export const reviewTutorProfileInput = z.object({
   tutorProfileId: z.string().max(100),
@@ -50,6 +56,8 @@ export const reviewTutorProfileInput = z.object({
     "publish",
     "unpublish",
     "suspend",
+    "approve_edits",
+    "request_edit_changes",
   ]),
   adminNote: z.string().max(2000).optional(),
 });

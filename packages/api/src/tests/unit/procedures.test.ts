@@ -186,4 +186,33 @@ describe("procedures", () => {
     const mod = await import("../../procedures");
     expect(mod.tutorProcedure).toBeDefined();
   });
+
+  test("requireStudent rejects tutor and allows student", async () => {
+    const { requireStudent } = await import("../../procedures");
+
+    await expect(
+      (requireStudent as any)({
+        context: {
+          session: { user: { id: "t1", role: "tutor" } },
+          services: {},
+        },
+        next: async () => "ok",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    await expect(
+      (requireStudent as any)({
+        context: {
+          session: { user: { id: "s1", role: "student" } },
+          services: {},
+        },
+        next: async () => "ok",
+      }),
+    ).resolves.toBe("ok");
+  });
+
+  test("studentProcedure is exported", async () => {
+    const mod = await import("../../procedures");
+    expect(mod.studentProcedure).toBeDefined();
+  });
 });

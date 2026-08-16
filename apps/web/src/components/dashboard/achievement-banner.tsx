@@ -22,15 +22,17 @@ const BANNER_CONFIG: Record<
   }
 > = {
   pending: {
-    icon: <IconClock className="size-4" />,
+    icon: <IconClock className="size-4 text-warning" />,
     text: "Your achievements are being reviewed. We\u2019ll notify you once they\u2019re approved and live on cogitoacademy.id.",
-    className: "border-warning-border bg-warning/10 text-warning",
+    className:
+      "border-warning-border bg-linear-to-r from-warning/10 to-warning/5",
     storageKey: "achievement-banner-pending-dismissed",
   },
   allApproved: {
-    icon: <IconCheck className="size-4" />,
+    icon: <IconCheck className="size-4 text-success" />,
     text: "All your achievements are live on cogitoacademy.id. Keep adding more to build your portfolio!",
-    className: "border-success-border bg-success/10 text-success",
+    className:
+      "border-success-border bg-linear-to-r from-success/10 to-success/5",
     storageKey: "achievement-banner-approved-dismissed",
   },
 };
@@ -50,17 +52,21 @@ export function AchievementBanner({ type }: AchievementBannerProps) {
 
   return (
     <div
+      role="status"
       className={cn(
-        "flex items-start gap-3 rounded-lg border p-4",
+        "flex min-h-13 items-center gap-3 rounded-xl border px-4 py-3",
         config.className,
       )}
     >
-      <span className="shrink-0 mt-0.5">{config.icon}</span>
-      <Text className="flex-1 text-sm">{config.text}</Text>
+      <span className="flex size-6 shrink-0 items-center justify-center">
+        {config.icon}
+      </span>
+      <Text className="flex-1 text-sm leading-relaxed">{config.text}</Text>
       <Button
         variant="plain"
-        size="sm"
-        className="shrink-0"
+        size="xs-icon"
+        className="-mr-1 shrink-0"
+        aria-label="Dismiss achievement status"
         onClick={() => {
           setDismissed(true);
           localStorage.setItem(config.storageKey, "true");
