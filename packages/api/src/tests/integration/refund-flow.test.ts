@@ -229,6 +229,7 @@ describe("Refund flow", () => {
     expect(logs[0]!.afterState).toEqual({
       status: "REFUNDED",
       reason: "Pembayaran ganda",
+      refundedMarks: 50,
     });
   });
 
@@ -318,5 +319,114 @@ describe("Refund flow", () => {
         ),
       );
     expect(reversals.length).toBe(0);
+  });
+
+  test("U8/B9: adminRefund credits only the unspent remainder of the payment (payment-error reconciliation)", async () => {
+    const { services } = await import("@cogito-app/api/services");
+    const userRes = await signUpAndSignIn(
+      `u8.partial.${ts}@cogito.test`,
+      "Test1234!",
+      "U8 Partial",
+    );
+    const userCtx = await createTestContext(userRes.cookie);
+    if (!userCtx.session?.user) throw new Error("U8 user session missing");
+    const user = { id: userCtx.session.user.id };
+    const w = await creditWallet(user.id, 0);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      w.id,
+      "learner",
+    );
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: `evt_u8_partial_paid_${ts}`,
+      status: "PAID",
+    });
+
+    // The payer spent 40 of the 120 credited Marks.
+    await db
+      .update(wallet)
+      .set({ totalBalance: 80, availableBalance: 80 })
+      .where(eq(wallet.id, w.id));
+
+    const result = await adminClient.adminBooking.adminRefund({
+      paymentId: intent.paymentId,
+      reason: "Duplikat pembayaran",
+    });
+    expect(result.status).toBe("refunded");
+
+    const [row] = await db.select().from(wallet).where(eq(wallet.id, w.id));
+    expect(row!.totalBalance).toBe(160);
+    expect(row!.availableBalance).toBe(160);
+
+    const records = await db
+      .select()
+      .from(refundRecord)
+      .where(eq(refundRecord.paymentId, intent.paymentId));
+    expect(records.length).toBe(1);
+    expect(records[0]!.marks).toBe(80);
+
+    const [pay] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, intent.paymentId))
+      .limit(1);
+    expect(pay!.status).toBe("REFUNDED");
+  });
+
+  test("U8/B9: adminRefund rejects a fully-spent payment — no blind refund", async () => {
+    const { services } = await import("@cogito-app/api/services");
+    const userRes = await signUpAndSignIn(
+      `u8.spent.${ts}@cogito.test`,
+      "Test1234!",
+      "U8 Spent",
+    );
+    const userCtx = await createTestContext(userRes.cookie);
+    if (!userCtx.session?.user) throw new Error("U8 user session missing");
+    const user = { id: userCtx.session.user.id };
+    const w = await creditWallet(user.id, 0);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      w.id,
+      "learner",
+    );
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: `evt_u8_spent_paid_${ts}`,
+      status: "PAID",
+    });
+
+    // The payer spent every credited Mark.
+    await db
+      .update(wallet)
+      .set({ totalBalance: 0, availableBalance: 0 })
+      .where(eq(wallet.id, w.id));
+
+    await expect(
+      adminClient.adminBooking.adminRefund({
+        paymentId: intent.paymentId,
+        reason: "Duplikat pembayaran",
+      }),
+    ).rejects.toThrow(/no blind refund/i);
+
+    const [row] = await db.select().from(wallet).where(eq(wallet.id, w.id));
+    expect(row!.totalBalance).toBe(0);
+
+    const [pay] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, intent.paymentId))
+      .limit(1);
+    expect(pay!.status).toBe("PAID");
+
+    const records = await db
+      .select()
+      .from(refundRecord)
+      .where(eq(refundRecord.paymentId, intent.paymentId));
+    expect(records.length).toBe(0);
   });
 });

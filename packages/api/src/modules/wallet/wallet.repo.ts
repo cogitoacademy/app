@@ -313,6 +313,31 @@ export async function listActivePackages(conn: DbOrTx) {
 }
 
 /**
+ * Sums ledger entry amounts for a wallet filtered by entry types.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param entryTypes - the entry types to include
+ * @returns the summed amount (0 when no entries match)
+ */
+export async function sumLedgerAmount(
+  conn: DbOrTx,
+  walletId: string,
+  entryTypes: string[],
+) {
+  const [row] = await conn
+    .select({ total: sql<number>`COALESCE(SUM(${ledgerEntry.amount}), 0)` })
+    .from(ledgerEntry)
+    .where(
+      and(
+        eq(ledgerEntry.walletId, walletId),
+        inArray(ledgerEntry.entryType, entryTypes),
+      ),
+    );
+  return row?.total ?? 0;
+}
+
+/**
  * Inserts a wallet only if one does not already exist for the user.
  *
  * @param db - the database connection
@@ -350,5 +375,6 @@ export function createWalletRepo() {
     insertLedger,
     findLedgerEntries,
     listActivePackages,
+    sumLedgerAmount,
   };
 }

@@ -3,6 +3,7 @@ import {
   BookingNotFoundError,
   BookingOverrideConflictError,
   InvalidRefundStateError,
+  RefundSpendExhaustedError,
   TerminalStateOverrideError,
 } from "./admin-booking.errors";
 import {
@@ -493,9 +494,24 @@ export function createAdminBookingService(deps: {
       const participantWallet = await wallet.getByUserId(tx, payment.userId);
       if (!participantWallet) throw new BookingNotFoundError(payment.userId);
 
+      // U8/B9 (TC-39 / Refund Policy prd.tex:687-688): refunds exist for
+      // payment errors, never a blind full refund of already-spent Marks.
+      // Spend = total purchase credits - current total balance; the
+      // refundable amount is this payment's unspent remainder (FIFO). A fully
+      // spent payment is rejected with a clean error.
+      const creditedMarks = await wallet.sumCreditedMarks(
+        tx,
+        participantWallet.id,
+      );
+      const spent = Math.max(0, creditedMarks - participantWallet.totalBalance);
+      const refundableMarks = Math.max(0, payment.marks - spent);
+      if (refundableMarks <= 0) {
+        throw new RefundSpendExhaustedError(input.paymentId);
+      }
+
       await wallet.compensate(tx, {
         walletId: participantWallet.id,
-        amount: payment.marks,
+        amount: refundableMarks,
         eventKey: `refund.${payment.id}`,
         sourceReference: payment.id,
         actorType: ACTOR_TYPE.ADMIN,
@@ -518,7 +534,7 @@ export function createAdminBookingService(deps: {
         paymentId: input.paymentId,
         walletId: participantWallet.id,
         amountIdr: payment.amountIdr ?? 0,
-        marks: payment.marks,
+        marks: refundableMarks,
         reason: input.reason,
         actorId: adminId,
       });
@@ -544,7 +560,11 @@ export function createAdminBookingService(deps: {
         targetId: input.paymentId,
         targetType: "payment_record",
         beforeState: { status: payment.status },
-        afterState: { status: "REFUNDED", reason: input.reason },
+        afterState: {
+          status: "REFUNDED",
+          reason: input.reason,
+          refundedMarks: refundableMarks,
+        },
       });
 
       return { paymentId: input.paymentId, status: "refunded" };

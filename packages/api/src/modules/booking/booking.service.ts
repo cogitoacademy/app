@@ -2786,9 +2786,12 @@ export function createBookingService(deps: {
           // expiring it. Only groups that never reached the minimum headcount
           // expire and release all holds.
           const confirmed = await repo.findConfirmedParticipants(tx, b.id);
-          if (
+          const atRepricingDeadline =
             b.currentState ===
-              BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION &&
+              BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION ||
+            b.currentState === BOOKING_STATE.AWAITING_RECONFIRMATION;
+          if (
+            atRepricingDeadline &&
             confirmed.length >= MIN_GROUP_HEADCOUNT &&
             confirmed.length < b.targetGroupSize
           ) {
@@ -2823,16 +2826,20 @@ export function createBookingService(deps: {
                 new Date(Date.now() + RESPONSE_WINDOW_MS),
               );
 
-              await transition(
-                tx,
-                b.id,
-                BOOKING_STATE.AWAITING_RECONFIRMATION,
-                {
-                  actorId: "system",
-                  actorType: ACTOR_TYPE.SYSTEM,
-                  reason: "Group deadline passed with partial headcount",
-                },
-              );
+              // U3/B8: a group already in AWAITING_RECONFIRMATION stays there
+              // (no self-transition); the first-deadline case moves into it.
+              if (b.currentState !== BOOKING_STATE.AWAITING_RECONFIRMATION) {
+                await transition(
+                  tx,
+                  b.id,
+                  BOOKING_STATE.AWAITING_RECONFIRMATION,
+                  {
+                    actorId: "system",
+                    actorType: ACTOR_TYPE.SYSTEM,
+                    reason: "Group deadline passed with partial headcount",
+                  },
+                );
+              }
 
               for (const p of confirmed) {
                 // eslint-disable-next-line no-await-in-loop

@@ -23,6 +23,7 @@ export interface AdminBookingWalletPort {
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
   release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
   compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
+  sumCreditedMarks(db: DbOrTx, walletId: string): Promise<number>;
 }
 
 export interface AdminBookingRefundPort {
