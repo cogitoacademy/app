@@ -6,6 +6,7 @@ import {
   RefundSpendExhaustedError,
   TerminalStateOverrideError,
 } from "./admin-booking.errors";
+import { BookingNotEditableError } from "../booking/booking.errors";
 import {
   ACTOR_TYPE,
   DEFAULT_PAGE_LIMIT,
@@ -25,6 +26,7 @@ import type {
   AdminBookingWalletPort,
   AdminBookingRefundPort,
   AdminBookingNotificationPort,
+  AdminBookingMeetingPort,
 } from "./index";
 
 export const OVERRIDE_CATEGORIES = [
@@ -126,8 +128,9 @@ export function createAdminBookingService(deps: {
   wallet: AdminBookingWalletPort;
   refund: AdminBookingRefundPort;
   notification?: AdminBookingNotificationPort;
+  meeting: AdminBookingMeetingPort;
 }) {
-  const { db, repo, auditPort, wallet, refund, notification } = deps;
+  const { db, repo, auditPort, wallet, refund, notification, meeting } = deps;
 
   function projectWalletAfter(
     w: WalletBalances,
@@ -571,11 +574,87 @@ export function createAdminBookingService(deps: {
     });
   }
 
+  /**
+   * Records an admin-pasted manual meeting URL on a SCHEDULED/CONFIRMED
+   * online booking (U1 / FR-21: "Admin may paste any valid meeting URL as
+   * fallback" when Google Meet generation failed or is disabled).
+   *
+   * @param adminId - the admin actor
+   * @param input - the booking id and the meeting URL
+   * @returns the resulting meeting event
+   * @throws {BookingNotFoundError} if the booking does not exist
+   * @throws {BookingNotEditableError} if the booking is not SCHEDULED/CONFIRMED
+   */
+  async function setMeetingLink(
+    adminId: string,
+    input: { bookingId: string; url: string },
+  ) {
+    return db.transaction(async (tx) => {
+      const bookingRow = await repo.findBookingById(tx, input.bookingId);
+      if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
+      if (
+        bookingRow.currentState !== BOOKING_STATE.SCHEDULED &&
+        bookingRow.currentState !== BOOKING_STATE.CONFIRMED
+      ) {
+        throw new BookingNotEditableError(
+          `Meeting link can only be set on SCHEDULED/CONFIRMED bookings (current: ${bookingRow.currentState})`,
+        );
+      }
+
+      const meetingEventRow = await meeting.setManualLink(
+        input.bookingId,
+        input.url,
+      );
+
+      const allParticipants = await repo.findParticipantsByBookingId(
+        tx,
+        input.bookingId,
+      );
+      const confirmed = allParticipants.filter(
+        (p) =>
+          p.confirmationState === "confirmed" ||
+          p.confirmationState === "reconfirmed",
+      );
+      for (const p of confirmed) {
+        // eslint-disable-next-line no-await-in-loop
+        await notification?.writeBestEffort({
+          db: tx,
+          userId: p.userId,
+          bookingId: input.bookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Meeting link ready",
+          body: "The meeting link for the session is ready.",
+          eventKey: `booking.${input.bookingId}.meeting_link.${p.userId}`,
+          emailRequired: true,
+        });
+      }
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "admin_set_meeting_link",
+        targetId: input.bookingId,
+        targetType: "booking",
+        beforeState: { meetingStatus: "failed-or-manual" },
+        afterState: { provider: "manual", meetingUrl: input.url },
+      });
+
+      return {
+        bookingId: input.bookingId,
+        meetingUrl: meetingEventRow.meetingUrl,
+        status: meetingEventRow.status,
+      };
+    });
+  }
+
   return {
     applyOverride,
     previewOverride,
     listBookings,
     getBookingStateHistory,
     adminRefund,
+    setMeetingLink,
   };
 }

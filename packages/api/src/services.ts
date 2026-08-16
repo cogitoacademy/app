@@ -215,6 +215,7 @@ function createServices() {
     wallet: wallet.service,
     refund: refund.service,
     notification: notification.service,
+    meeting,
   });
 
   const support = createSupportModule({

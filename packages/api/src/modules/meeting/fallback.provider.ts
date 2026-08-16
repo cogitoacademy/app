@@ -58,5 +58,45 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
     }
   }
 
-  return { createEvent, updateEvent, cancelEvent };
+  async function setManualLink(
+    bookingId: string,
+    url: string,
+  ): Promise<MeetingEvent> {
+    const [existing] = await db
+      .select()
+      .from(meetingEvent)
+      .where(eq(meetingEvent.bookingId, bookingId))
+      .orderBy(meetingEvent.createdAt)
+      .limit(1);
+
+    const values = {
+      provider: "manual",
+      status: "created",
+      meetingUrl: url,
+      errorReason: null,
+    } as const;
+
+    if (existing) {
+      const [updated] = await db
+        .update(meetingEvent)
+        .set(values)
+        .where(eq(meetingEvent.id, existing.id))
+        .returning();
+      return updated as typeof meetingEvent.$inferSelect;
+    }
+
+    const [created] = await db
+      .insert(meetingEvent)
+      .values({
+        bookingId,
+        provider: "manual",
+        status: "created",
+        meetingUrl: url,
+        externalEventId: null,
+      })
+      .returning();
+    return created as typeof meetingEvent.$inferSelect;
+  }
+
+  return { createEvent, updateEvent, cancelEvent, setManualLink };
 }
