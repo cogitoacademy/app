@@ -6,27 +6,39 @@ const futureStart = z.coerce
 
 const learningGoal = z.string().trim().max(2000).default("");
 
-export const createSoloInput = z.object({
-  tutorId: z.string().max(100),
-  availabilitySlotId: z.string().max(100),
-  modality: z.enum(["online", "offline"]),
-  scheduledStartAt: futureStart,
-  scheduledEndAt: z.coerce.date().optional(),
-  learningGoal,
-  timezone: z.string().max(50).default("Asia/Jakarta"),
-});
+export const createSoloInput = z
+  .object({
+    tutorId: z.string().max(100),
+    availabilitySlotId: z.string().max(100),
+    modality: z.enum(["online", "offline"]),
+    scheduledStartAt: futureStart,
+    scheduledEndAt: z.coerce.date().optional(),
+    learningGoal,
+    timezone: z.string().max(50).default("Asia/Jakarta"),
+    requestedRoomId: z.string().max(100).optional(),
+  })
+  .refine((d) => d.modality === "offline" || !d.requestedRoomId, {
+    message: "requestedRoomId is only valid for offline bookings",
+    path: ["requestedRoomId"],
+  });
 
-export const createGroupInput = z.object({
-  tutorId: z.string().max(100),
-  availabilitySlotId: z.string().max(100),
-  modality: z.enum(["online", "offline"]),
-  targetGroupSize: z.number().int().min(2).max(6),
-  inviteeUserIds: z.array(z.string().max(100)).min(1).max(5),
-  scheduledStartAt: futureStart,
-  scheduledEndAt: z.coerce.date().optional(),
-  learningGoal,
-  timezone: z.string().max(50).default("Asia/Jakarta"),
-});
+export const createGroupInput = z
+  .object({
+    tutorId: z.string().max(100),
+    availabilitySlotId: z.string().max(100),
+    modality: z.enum(["online", "offline"]),
+    targetGroupSize: z.number().int().min(2).max(6),
+    inviteeUserIds: z.array(z.string().max(100)).min(1).max(5),
+    scheduledStartAt: futureStart,
+    scheduledEndAt: z.coerce.date().optional(),
+    learningGoal,
+    timezone: z.string().max(50).default("Asia/Jakarta"),
+    requestedRoomId: z.string().max(100).optional(),
+  })
+  .refine((d) => d.modality === "offline" || !d.requestedRoomId, {
+    message: "requestedRoomId is only valid for offline bookings",
+    path: ["requestedRoomId"],
+  });
 
 export const createSeriesInput = z.object({
   tutorId: z.string().max(100),
@@ -132,6 +144,12 @@ export const getSessionNotesInput = bookingActionInput;
 export const markAttendanceInput = z.object({
   bookingId: z.string().max(100),
   attendance: z.enum(["present", "late"]),
+});
+
+export const markParticipantNoShowInput = z.object({
+  bookingId: z.string().max(100),
+  participantUserId: z.string().max(100),
+  sessionId: z.string().max(100).optional(),
 });
 
 export const getBookingInput = z.object({

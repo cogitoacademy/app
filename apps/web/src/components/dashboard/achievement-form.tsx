@@ -50,21 +50,20 @@ const LEVELS = [
   "School",
 ] as const;
 
-const CATEGORY_SUGGESTIONS = [
-  "MUN",
-  "WSC",
-  "Olympiad",
-  "Debate",
-  "Science",
-  "Arts",
-  "Sports",
-  "Academic",
-  "Leadership",
+const CATEGORY_OPTIONS = [
+  { value: "competition", label: "Competition" },
+  { value: "award", label: "Award" },
+  { value: "certificate", label: "Certificate" },
+  { value: "leadership", label: "Leadership" },
+  { value: "publication", label: "Publication" },
+  { value: "other", label: "Other" },
 ] as const;
+
+export type AchievementCategory = (typeof CATEGORY_OPTIONS)[number]["value"];
 
 type AchievementFormValues = {
   eventName: string;
-  category: string;
+  category: AchievementCategory;
   award: string;
   level: string;
   awardingDate: string;
@@ -87,7 +86,7 @@ type AchievementFormProps = {
 
 const DEFAULT_VALUES: AchievementFormValues = {
   eventName: "",
-  category: "",
+  category: "other",
   award: "",
   level: "",
   awardingDate: "",
@@ -100,7 +99,14 @@ const DEFAULT_VALUES: AchievementFormValues = {
 
 const achievementFormSchema = z.object({
   eventName: z.string().trim().min(1, "Event name is required").max(255),
-  category: z.string().min(1, "Category is required").max(255),
+  category: z.enum([
+    "competition",
+    "award",
+    "certificate",
+    "leadership",
+    "publication",
+    "other",
+  ]),
   award: z.string().trim().min(1, "Award / result is required").max(255),
   level: z.string().min(1, "Level is required").max(255),
   awardingDate: z.string().max(255),
@@ -327,7 +333,10 @@ export function AchievementForm({
                     <Select
                       value={field.state.value}
                       onValueChange={(value) =>
-                        field.handleChange(getSelectItemValue(value) ?? "")
+                        field.handleChange(
+                          (getSelectItemValue(value) ??
+                            "other") as AchievementCategory,
+                        )
                       }
                     >
                       <SelectTrigger>
@@ -335,9 +344,9 @@ export function AchievementForm({
                       </SelectTrigger>
                       <SelectPopup>
                         <SelectList>
-                          {CATEGORY_SUGGESTIONS.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
+                          {CATEGORY_OPTIONS.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              {cat.label}
                             </SelectItem>
                           ))}
                         </SelectList>
@@ -425,7 +434,10 @@ export function AchievementForm({
                     <Select
                       value={field.state.value}
                       onValueChange={(value) =>
-                        field.handleChange(getSelectItemValue(value) ?? "")
+                        field.handleChange(
+                          (getSelectItemValue(value) ??
+                            "other") as AchievementCategory,
+                        )
                       }
                     >
                       <SelectTrigger>

@@ -78,6 +78,49 @@ export function createRoomService(
     return existing.length === 0;
   }
 
+  /**
+   * Requests a room for an offline booking at creation time (U14 / FR-22).
+   * Runs inside the booking-creation transaction: creates a `requested`
+   * roomBooking row when the room is free (no confirmed booking overlaps),
+   * otherwise reports the conflict so the booking can proceed without a room.
+   *
+   * @param conn - the database connection or active transaction
+   * @param params - the booking, room and slot
+   * @returns availability result with the room booking id when requested
+   */
+  async function requestRoomForBooking(
+    conn: DbOrTx,
+    params: {
+      bookingId: string;
+      roomId: string;
+      startAt: Date;
+      endAt: Date;
+    },
+  ): Promise<{ available: boolean; reason?: string; roomBookingId?: string }> {
+    const roomRow = await repo.findRoomById(conn, params.roomId);
+    if (!roomRow) return { available: false, reason: "room_not_found" };
+
+    const conflicting = await repo.findRoomBookings(
+      conn,
+      params.roomId,
+      params.startAt,
+      params.endAt,
+      params.bookingId,
+    );
+    if (conflicting.length > 0) {
+      return { available: false, reason: "taken" };
+    }
+
+    const inserted = await repo.insertRoomBooking(conn, {
+      roomId: params.roomId,
+      bookingId: params.bookingId,
+      startAt: params.startAt,
+      endAt: params.endAt,
+      status: ROOM_BOOKING_STATUS.REQUESTED,
+    });
+    return { available: true, roomBookingId: inserted.id };
+  }
+
   async function assignRoom(
     bookingId: string,
     roomId: string,
@@ -213,6 +256,7 @@ export function createRoomService(
     listActive,
     createRoom,
     checkAvailability,
+    requestRoomForBooking,
     assignRoom,
     relocateRoom,
     cancelRoomBooking,

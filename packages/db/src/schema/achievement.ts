@@ -8,6 +8,7 @@ import {
   integer,
   index,
   check,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { uuidPrimaryKey } from "./auth";
@@ -25,6 +26,9 @@ export const achievement = pgTable(
     category: text("category").notNull(),
     award: text("award").notNull(),
     level: text("level").notNull(),
+    // U10 (FR-18): issuer/institution + visibility flag for public surfacing.
+    issuer: text("issuer"),
+    visibility: boolean("visibility").notNull().default(true),
     awardingDate: date("awarding_date"),
     location: text("location"),
     description: text("description"),
@@ -44,6 +48,10 @@ export const achievement = pgTable(
     check(
       "achievement_status_check",
       sql`${table.status} IN ('draft', 'pending', 'pending_review', 'approved', 'rejected', 'archived')`,
+    ),
+    check(
+      "achievement_category_check",
+      sql`${table.category} IN ('competition','award','certificate','leadership','publication','other')`,
     ),
     index("achievement_userId_idx").on(table.userId),
     index("achievement_status_idx").on(table.status),

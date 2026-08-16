@@ -2,9 +2,11 @@ import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { AuditRecordParams } from "../audit/audit.service";
 import type { NotificationWriteParams } from "../notification/notification.service";
+import type { MeetingEvent } from "../meeting/meeting.types";
 import type {
   WalletSnapshot,
   ReleaseParams,
+  DeductParams,
   CompensateParams,
 } from "../wallet/wallet.service";
 import { createAdminBookingRepo } from "./admin-booking.repo";
@@ -22,6 +24,7 @@ export interface AdminBookingAuditPort {
 export interface AdminBookingWalletPort {
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
   release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
+  deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
   compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
   sumCreditedMarks(db: DbOrTx, walletId: string): Promise<number>;
 }
@@ -44,12 +47,17 @@ export interface AdminBookingNotificationPort {
   writeBestEffort(params: NotificationWriteParams): Promise<void>;
 }
 
+export interface AdminBookingMeetingPort {
+  setManualLink(bookingId: string, url: string): Promise<MeetingEvent>;
+}
+
 export function createAdminBookingModule(deps: {
   db: DbType;
   audit: AdminBookingAuditPort;
   wallet: AdminBookingWalletPort;
   refund: AdminBookingRefundPort;
   notification?: AdminBookingNotificationPort;
+  meeting: AdminBookingMeetingPort;
 }) {
   const repo = createAdminBookingRepo();
   const service = createAdminBookingService({
@@ -59,6 +67,7 @@ export function createAdminBookingModule(deps: {
     wallet: deps.wallet,
     refund: deps.refund,
     notification: deps.notification,
+    meeting: deps.meeting,
   });
   const handler = createAdminBookingHandler(service);
   return { service, handler };

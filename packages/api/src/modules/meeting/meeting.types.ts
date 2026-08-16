@@ -34,4 +34,10 @@ export interface MeetingPort {
    * (cancelled/late_cancelled/declined/expired). No-op for manual links.
    */
   cancelEvent(bookingId: string): Promise<void>;
+  /**
+   * Records an admin-pasted manual meeting URL on the booking (U1 / FR-21).
+   * Updates the existing meetingEvent row (or creates one) as an active
+   * manual link — this also stops `retry-failed-meetings` from retrying.
+   */
+  setManualLink(bookingId: string, url: string): Promise<MeetingEvent>;
 }

@@ -474,6 +474,8 @@ describe("tutorActionsHandler", () => {
         new Date("2025-02-01T10:00:00Z"),
         new Date("2025-02-01T11:30:00Z"),
         "time change",
+        undefined,
+        undefined,
       );
       expect(result).toEqual({
         id: "b1",

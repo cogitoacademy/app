@@ -38,7 +38,7 @@ describe("achievementRouter", () => {
     test("achievementInput accepts valid required fields", () => {
       const result = achievementInput.safeParse({
         eventName: "Olympiad",
-        category: "academic",
+        category: "other",
         award: "Gold",
         level: "national",
       });
@@ -53,7 +53,7 @@ describe("achievementRouter", () => {
     test("achievementInput accepts optional fields", () => {
       const result = achievementInput.safeParse({
         eventName: "Olympiad",
-        category: "academic",
+        category: "other",
         award: "Gold",
         level: "national",
         awardingDate: "2024-01-01",
@@ -147,7 +147,7 @@ describe("achievementHandler", () => {
       } as any;
       const input = {
         eventName: "Olympiad",
-        category: "academic",
+        category: "other",
         award: "Gold",
         level: "national",
       };

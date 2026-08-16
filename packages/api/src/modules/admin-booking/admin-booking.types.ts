@@ -28,3 +28,19 @@ export const adminRefundInput = z.object({
   paymentId: z.string().max(100),
   reason: z.string().min(1).max(2000),
 });
+
+export const setMeetingLinkInput = z.object({
+  bookingId: z.string().max(100),
+  url: z.string().url().max(2048),
+});
+
+export const cancelSeriesSessionInput = z
+  .object({
+    sessionId: z.string().max(100),
+    marksAction: z.enum(["release", "forfeit", "partial"]),
+    amount: z.number().int().min(0).max(1000).optional(),
+  })
+  .refine((d) => d.marksAction !== "partial" || d.amount !== undefined, {
+    message: "amount is required when marksAction is partial",
+    path: ["amount"],
+  });

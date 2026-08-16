@@ -1,8 +1,9 @@
-import { eq, asc, inArray, gt, and, sql } from "drizzle-orm";
+import { eq, asc, inArray, gt, and, sql, getTableColumns } from "drizzle-orm";
 import {
   booking,
   bookingStateHistory,
   bookingParticipant,
+  bookingSession,
   paymentRecord,
 } from "@cogito-app/db/schema";
 import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
@@ -250,6 +251,22 @@ export async function findParticipantsByBookingId(
     .where(eq(bookingParticipant.bookingId, bookingId));
 }
 
+export async function findSessionById(conn: DbOrTx, sessionId: string) {
+  const [row] = await conn
+    .select({ ...getTableColumns(bookingSession) })
+    .from(bookingSession)
+    .where(eq(bookingSession.id, sessionId))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function cancelSession(conn: DbOrTx, sessionId: string) {
+  await conn
+    .update(bookingSession)
+    .set({ currentState: "cancelled", holdAmount: 0 })
+    .where(eq(bookingSession.id, sessionId));
+}
+
 /**
  * Finds a payment record by id.
  *
@@ -342,6 +359,8 @@ export function createAdminBookingRepo() {
     updateBookingWithOverride,
     insertStateHistoryEntry,
     findParticipantsByBookingId,
+    findSessionById,
+    cancelSession,
     findPaymentById,
     updatePaymentStatus,
     updatePaymentStatusIfRefundable,

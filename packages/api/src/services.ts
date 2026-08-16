@@ -149,6 +149,21 @@ function createServices() {
   const wallet = createWalletModule({ db });
   const auth = createAuthModule({ db, wallet: wallet.service });
   const notification = createNotificationModule({ db, email: email.service });
+
+  // Room is created before booking (U14: booking requests rooms at creation)
+  // with a lazy booking port — the delegate only fires at runtime, after
+  // `bookingService` is assigned below.
+  let bookingService: BookingService | undefined;
+  const room = createRoomModule({
+    db,
+    bookingPort: {
+      transitionBookingToScheduled: (tx, bookingId, actorId) =>
+        bookingService!.transitionBookingToScheduled(tx, bookingId, actorId),
+      getBookingRecipients: (tx, bookingId) =>
+        bookingService!.getBookingRecipients(tx, bookingId),
+    },
+    notificationPort: notification.service,
+  });
   const booking = createBookingModule({
     db,
     wallet: wallet.service,
@@ -156,7 +171,9 @@ function createServices() {
     audit: audit.service,
     notification: notification.service,
     meeting,
+    roomPort: room.service,
   });
+  bookingService = booking.service;
   const admin = createAdminModule({
     db,
     audit: audit.service,
@@ -181,11 +198,6 @@ function createServices() {
     db,
     audit: audit.service,
     notification: notification.service,
-  });
-  const room = createRoomModule({
-    db,
-    bookingPort: booking.service,
-    notificationPort: notification.service,
   });
 
   const payment = createPaymentModule({
@@ -220,6 +232,7 @@ function createServices() {
     wallet: wallet.service,
     refund: refund.service,
     notification: notification.service,
+    meeting,
   });
 
   const support = createSupportModule({

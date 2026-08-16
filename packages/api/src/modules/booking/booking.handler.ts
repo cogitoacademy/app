@@ -19,6 +19,7 @@ import type {
   proposeRescheduleInput,
   completeSessionInput,
   markAttendanceInput,
+  markParticipantNoShowInput,
   cancelSessionInput,
   addSessionNoteInput,
 } from "./booking.types";
@@ -40,6 +41,7 @@ type WithdrawInput = z.infer<typeof withdrawInput>;
 type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
 type CompleteSessionInput = z.infer<typeof completeSessionInput>;
 type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;
+type MarkParticipantNoShowInput = z.infer<typeof markParticipantNoShowInput>;
 type CancelSessionInput = z.infer<typeof cancelSessionInput>;
 type AddSessionNoteInput = z.infer<typeof addSessionNoteInput>;
 
@@ -89,6 +91,7 @@ export function createBookingHandler(booking: BookingService) {
               scheduledEndAt: input.scheduledEndAt,
               timezone: input.timezone,
               learningGoal: input.learningGoal,
+              requestedRoomId: input.requestedRoomId,
             }),
           mapBookingError,
         ),
@@ -259,6 +262,7 @@ export function createBookingHandler(booking: BookingService) {
               scheduledEndAt: input.scheduledEndAt,
               timezone: input.timezone,
               learningGoal: input.learningGoal,
+              requestedRoomId: input.requestedRoomId,
             }),
           mapBookingError,
         ),
@@ -436,6 +440,8 @@ export function createTutorActionsHandler(booking: BookingService) {
             input.proposedEndAt ??
               new Date(input.proposedStartAt.getTime() + 90 * 60 * 1000),
             input.reason,
+            input.availabilitySlotId,
+            input.sessionId,
           ),
         mapBookingError,
       );
@@ -490,6 +496,24 @@ export function createTutorActionsHandler(booking: BookingService) {
       );
     },
 
+    markParticipantNoShow: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: MarkParticipantNoShowInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.markParticipantNoShow(
+            input.bookingId,
+            context.session!.user.id,
+            input.participantUserId,
+            input.sessionId,
+          ),
+        mapBookingError,
+      );
+    },
     markAttendance: async ({
       context,
       input,

@@ -32,12 +32,6 @@ export const BOOKING_STATES = [
 
 export type BookingState = (typeof BOOKING_STATES)[number];
 
-export interface BookingTransition {
-  from: BookingState;
-  event: string;
-  to: BookingState;
-}
-
 export const TERMINAL_STATES: BookingState[] = [
   BOOKING_STATE.DECLINED,
   BOOKING_STATE.CANCELLED,

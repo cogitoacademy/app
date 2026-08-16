@@ -1,10 +1,21 @@
 import { z } from "zod";
 
+export const ACHIEVEMENT_CATEGORIES = [
+  "competition",
+  "award",
+  "certificate",
+  "leadership",
+  "publication",
+  "other",
+] as const;
+
 export const achievementInput = z.object({
   eventName: z.string().min(1, "Event name is required").max(255),
-  category: z.string().min(1, "Category is required").max(255),
+  category: z.enum(ACHIEVEMENT_CATEGORIES),
   award: z.string().min(1, "Award is required").max(255),
   level: z.string().min(1, "Level is required").max(255),
+  issuer: z.string().max(255).optional(),
+  visibility: z.boolean().optional(),
   awardingDate: z
     .string()
     .max(255)

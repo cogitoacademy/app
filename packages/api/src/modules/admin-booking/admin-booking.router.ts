@@ -4,6 +4,8 @@ import {
   listOverridesInput,
   getBookingStateHistoryInput,
   adminRefundInput,
+  setMeetingLinkInput,
+  cancelSeriesSessionInput,
 } from "./admin-booking.types";
 import type { AdminBookingHandler } from "./admin-booking.handler";
 
@@ -65,5 +67,29 @@ export function createAdminBookingRouter(handler: AdminBookingHandler) {
       })
       .input(adminRefundInput)
       .handler(handler.adminRefund),
+
+    setMeetingLink: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/booking/setMeetingLink",
+        tags: ["Admin Booking"],
+        summary: "Record a manual meeting URL on a booking",
+        description:
+          "Admin pastes a valid meeting URL as fallback when Google Meet generation failed or is disabled (U1/FR-21)",
+      })
+      .input(setMeetingLinkInput)
+      .handler(handler.setMeetingLink),
+
+    cancelSeriesSession: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/booking/cancel-series-session",
+        tags: ["Admin Booking"],
+        summary: "Cancel one series session with a Marks choice",
+        description:
+          "Cancels a single series session; the session hold is released, forfeited, or partially returned per marksAction (U6/TC-31)",
+      })
+      .input(cancelSeriesSessionInput)
+      .handler(handler.cancelSeriesSession),
   };
 }

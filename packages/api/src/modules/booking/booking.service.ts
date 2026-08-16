@@ -9,6 +9,7 @@ import {
   RESPONSE_WINDOW_MS,
   OFFLINE_SCHEDULED_GRACE_MS,
   LATE_CANCEL_THRESHOLD_MS,
+  LATENESS_TOLERANCE_MS,
   MIN_GROUP_HEADCOUNT,
   MIN_SERIES_SESSIONS,
   MAX_SERIES_SESSIONS,
@@ -63,6 +64,7 @@ import type {
   BookingAuditPort,
   BookingNotificationPort,
   BookingMeetingPort,
+  BookingRoomPort,
 } from "./index";
 
 export interface CreateSoloInput {
@@ -73,6 +75,7 @@ export interface CreateSoloInput {
   scheduledEndAt?: Date;
   timezone: string;
   learningGoal?: string;
+  requestedRoomId?: string;
 }
 
 export interface CreateGroupInput {
@@ -85,6 +88,7 @@ export interface CreateGroupInput {
   scheduledEndAt?: Date;
   timezone: string;
   learningGoal?: string;
+  requestedRoomId?: string;
 }
 
 export interface CreateSeriesInput {
@@ -181,8 +185,10 @@ export function createBookingService(deps: {
   audit: BookingAuditPort;
   notification: BookingNotificationPort;
   meeting: BookingMeetingPort;
+  roomPort?: BookingRoomPort;
 }) {
-  const { db, repo, wallet, pricing, audit, notification, meeting } = deps;
+  const { db, repo, wallet, pricing, audit, notification, meeting, roomPort } =
+    deps;
 
   async function assertBookingAccess(
     b: { proposerId: string; tutorId: string },
@@ -690,7 +696,26 @@ export function createBookingService(deps: {
         emailRequired: true,
       });
 
-      return b;
+      // U14 (FR-22/TC-20): an offline booking may carry a room request at
+      // creation. When the room is free a `requested` roomBooking row is
+      // created in the same transaction; when it is taken the booking still
+      // proceeds (awaiting_admin_room_approval) and the response flags the
+      // conflict so the UI can suggest alternatives.
+      let roomRequested = false;
+      let roomConflict = false;
+      if (modality === MODALITY.OFFLINE && input.requestedRoomId && roomPort) {
+        const request = await roomPort.requestRoomForBooking(tx, {
+          bookingId,
+          roomId: input.requestedRoomId,
+          startAt: input.scheduledStartAt,
+          endAt: session.scheduledEndAt,
+        });
+        roomRequested = request.available;
+        roomConflict =
+          request.available === false && request.reason === "taken";
+      }
+
+      return { ...b, roomRequested, roomConflict };
     });
   }
 
@@ -1383,6 +1408,111 @@ export function createBookingService(deps: {
     return repo.listSessionNotes(db, bookingId);
   }
 
+  /**
+   * Marks a participant as no-show for a session (U5 / FR-20 TC-30). Only
+   * after `scheduledStartAt + 15min` and before the session is completed.
+   * Forfeits the participant's (per-session) hold via the same ledger path as
+   * the late-cancel penalty and notifies the participant. A solo booking is
+   * transitioned to NO_SHOW; a series session keeps its state so other
+   * participants are unaffected.
+   */
+  async function markParticipantNoShow(
+    bookingId: string,
+    tutorId: string,
+    participantUserId: string,
+    sessionId?: string,
+  ) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.tutorId !== tutorId)
+        throw new BookingNotOwnedError(bookingId, tutorId);
+
+      const participant = await repo.findParticipant(
+        tx,
+        bookingId,
+        participantUserId,
+      );
+      if (!participant)
+        throw new BookingParticipantNotFoundError(participantUserId);
+
+      const isSeries = b.type === BOOKING_TYPE.SERIES;
+      const session = isSeries
+        ? sessionId
+          ? await repo.findSessionById(tx, sessionId)
+          : null
+        : null;
+      if (isSeries && !session)
+        throw new BookingSessionNotFoundError(sessionId ?? "");
+
+      const sessionStartAt = session?.scheduledStartAt ?? b.scheduledStartAt;
+      const now = new Date();
+      if (now.getTime() < sessionStartAt.getTime() + LATENESS_TOLERANCE_MS) {
+        throw new BookingNotEditableError(
+          "No-show can only be marked 15 minutes after the session starts",
+        );
+      }
+
+      const sessionState = session?.currentState ?? b.currentState;
+      if (sessionState !== BOOKING_STATE.SCHEDULED) {
+        throw new BookingStateTransitionError(
+          sessionState,
+          "mark_no_show",
+          BOOKING_STATE.NO_SHOW,
+        );
+      }
+
+      const forfeitAmount = isSeries
+        ? Math.min(session!.holdAmount, participant.heldAmount)
+        : participant.heldAmount;
+      if (forfeitAmount > 0) {
+        const w = await wallet.getByUserId(tx, participantUserId);
+        if (!w) throw new BookingNotFoundError(participantUserId);
+        await wallet.deduct(tx, {
+          walletId: w.id,
+          amount: forfeitAmount,
+          eventKey: `booking.${bookingId}.no_show.${participantUserId}.${sessionId ?? "solo"}`,
+          sourceReference: bookingId,
+          bookingId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Marked as no-show",
+        });
+      }
+
+      await repo.updateParticipantState(tx, participant.id, {
+        attendanceState: ATTENDANCE_STATE.ABSENT,
+      });
+
+      if (!isSeries) {
+        await repo.updateBookingHoldAmount(tx, bookingId, 0);
+        await transition(tx, bookingId, BOOKING_STATE.NO_SHOW, {
+          actorId: tutorId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Participant marked as no-show",
+        });
+      }
+
+      await notification.writeBestEffort({
+        db: tx,
+        userId: participantUserId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Session marked as no-show",
+        body: "You were marked as a no-show for this session and the held marks were forfeited.",
+        eventKey: `booking.${bookingId}.no_show.notify.${participantUserId}.${sessionId ?? "solo"}`,
+        emailRequired: true,
+      });
+
+      return {
+        bookingId,
+        participantUserId,
+        sessionId: sessionId ?? null,
+        forfeitedMarks: forfeitAmount,
+      };
+    });
+  }
+
   async function markTutorAttendance(
     bookingId: string,
     tutorId: string,
@@ -1444,6 +1574,16 @@ export function createBookingService(deps: {
 
       const session = normalizeSession(proposedStartAt);
       if (userId !== b.tutorId) {
+        // U2 (FR-14 TC-15): student-initiated reschedules are only allowed
+        // before H-2 — the new session must start at least 2 hours out.
+        if (
+          session.scheduledStartAt.getTime() <
+          Date.now() + LATE_CANCEL_THRESHOLD_MS
+        ) {
+          throw new BookingNotEditableError(
+            "Reschedule must be at least 2 hours before the new session start (H-2)",
+          );
+        }
         const slot = availabilitySlotId
           ? await repo.findAvailabilitySlot(tx, availabilitySlotId, b.tutorId)
           : await repo.findAvailabilityWindowContaining(
@@ -1466,6 +1606,24 @@ export function createBookingService(deps: {
         const existingSession = await repo.findSessionById(tx, sessionId);
         if (!existingSession || existingSession.seriesBookingId !== bookingId) {
           throw new BookingSessionNotFoundError(sessionId);
+        }
+        // U7: the booking-level overlap check cannot see sibling series
+        // sessions — check them explicitly so a session cannot be moved onto
+        // another session of the same series.
+        const siblings = await repo.listSessionsBySeriesId(tx, bookingId);
+        const overlappingSibling = siblings.find(
+          (sib) =>
+            sib.id !== sessionId &&
+            sib.currentState === BOOKING_STATE.SCHEDULED &&
+            sib.scheduledStartAt < session.scheduledEndAt &&
+            sib.scheduledEndAt > session.scheduledStartAt,
+        );
+        if (overlappingSibling) {
+          throw new BookingConflictError(
+            b.tutorId,
+            session.scheduledStartAt.toISOString(),
+            session.scheduledEndAt.toISOString(),
+          );
         }
       }
       const overlapping = await repo.findOverlappingBookings(
@@ -1876,7 +2034,27 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.STUDENT,
       });
 
-      return b;
+      // U14: room request at creation for offline groups (same semantics as
+      // the solo path).
+      let roomRequested = false;
+      let roomConflict = false;
+      if (
+        input.modality === MODALITY.OFFLINE &&
+        input.requestedRoomId &&
+        roomPort
+      ) {
+        const request = await roomPort.requestRoomForBooking(tx, {
+          bookingId,
+          roomId: input.requestedRoomId,
+          startAt: input.scheduledStartAt,
+          endAt: session.scheduledEndAt,
+        });
+        roomRequested = request.available;
+        roomConflict =
+          request.available === false && request.reason === "taken";
+      }
+
+      return { ...b, roomRequested, roomConflict };
     });
   }
 
@@ -3322,6 +3500,7 @@ export function createBookingService(deps: {
     tutorDecline,
     completeSession,
     markTutorAttendance,
+    markParticipantNoShow,
     proposeReschedule,
     acceptReschedule,
     rejectReschedule,
