@@ -146,7 +146,7 @@ export function createPaymentService(deps: {
     const paymentId = crypto.randomUUID();
     const providerReference = idempotencyKey;
 
-    await repo.insertPayment({
+    const inserted = await repo.insertPayment({
       id: paymentId,
       userId,
       walletId,
@@ -157,6 +157,26 @@ export function createPaymentService(deps: {
       marks: pkg.marks,
       status: PAYMENT_STATUS.PENDING,
     });
+
+    // B6: a concurrent request won the check-then-insert race and its row
+    // was committed first — reuse the existing (PENDING) payment instead of
+    // creating a zombie duplicate.
+    if (!inserted) {
+      const existingRow =
+        await repo.findPaymentByProviderReference(providerReference);
+      if (existingRow) {
+        const existingIntent = await provider.createIntent({
+          paymentId: existingRow.id,
+          amountIdr: pkg.priceIdr,
+          providerReference: existingRow.providerReference,
+        });
+        return {
+          paymentId: existingRow.id,
+          providerReference: existingRow.providerReference,
+          checkoutUrl: existingIntent.checkoutUrl,
+        };
+      }
+    }
 
     try {
       const intent = await provider.createIntent({
@@ -268,47 +288,60 @@ export function createPaymentService(deps: {
           });
         }
       } else {
-        await repo.updatePaymentStatus(
-          record.id,
-          {
-            status: input.status,
-            providerEventId: input.providerEventId,
-            failureReason: input.failureReason ?? null,
-          },
-          tx,
-        );
+        // B2: the REFUNDED webhook may race an admin refund. The status
+        // update is conditional on the row still being in a credit state
+        // (PAID/SETTLED) — if the admin refund already committed, the update
+        // is a no-op and the reversal must NOT run again (double refund).
+        // The compensation only runs when THIS webhook actually transitioned
+        // the row out of a credit state.
+        if (input.status === PAYMENT_STATUS.REFUNDED) {
+          const reversed = await repo.updatePaymentStatusIfInCreditState(
+            record.id,
+            {
+              status: input.status,
+              providerEventId: input.providerEventId,
+              failureReason: input.failureReason ?? null,
+            },
+            tx,
+          );
 
-        // R5: a REFUNDED webhook reverses the marks credited on PAID/SETTLED
-        // (only if the record actually went through a credit). Uses the
-        // compensate_deduct primitive — it removes the marks from the
-        // available balance, unlike `deduct` which only releases holds.
-        if (
-          input.status === PAYMENT_STATUS.REFUNDED &&
-          (record.status === PAYMENT_STATUS.PAID ||
-            record.status === PAYMENT_STATUS.SETTLED)
-        ) {
-          await wallet.compensate(tx, {
-            walletId: record.walletId,
-            amount: record.marks,
-            eventKey: `refund.${record.id}.reverse`,
-            sourceReference: record.id,
-            actorType: "system",
-            reason: "Refund: reversed credited marks",
-            type: "compensate_deduct",
-          });
-        }
+          if (reversed) {
+            // R5: reverses the marks credited on PAID/SETTLED via the
+            // compensate_deduct primitive — it removes the marks from the
+            // available balance, unlike `deduct` which only releases holds.
+            await wallet.compensate(tx, {
+              walletId: record.walletId,
+              amount: record.marks,
+              eventKey: `refund.${record.id}.reverse`,
+              sourceReference: record.id,
+              actorType: "system",
+              reason: "Refund: reversed credited marks",
+              type: "compensate_deduct",
+            });
+          }
 
-        if (notification && input.status === PAYMENT_STATUS.REFUNDED) {
-          await notification.writeBestEffort({
-            db: tx,
-            userId: record.userId,
-            category: NOTIFICATION_CATEGORY.REFUND,
-            severity: NOTIFICATION_SEVERITY.ACTION,
-            title: "Refund processed",
-            body: "Your payment has been refunded to your account.",
-            eventKey: `payment.${record.id}.refunded`,
-            emailRequired: true,
-          });
+          if (notification && reversed) {
+            await notification.writeBestEffort({
+              db: tx,
+              userId: record.userId,
+              category: NOTIFICATION_CATEGORY.REFUND,
+              severity: NOTIFICATION_SEVERITY.ACTION,
+              title: "Refund processed",
+              body: "Your payment has been refunded to your account.",
+              eventKey: `payment.${record.id}.refunded`,
+              emailRequired: true,
+            });
+          }
+        } else {
+          await repo.updatePaymentStatus(
+            record.id,
+            {
+              status: input.status,
+              providerEventId: input.providerEventId,
+              failureReason: input.failureReason ?? null,
+            },
+            tx,
+          );
         }
       }
 

@@ -35,6 +35,17 @@ export class InvalidRefundStateError extends DomainError {
   }
 }
 
+export class RefundSpendExhaustedError extends DomainError {
+  readonly domain = "admin-booking";
+  constructor(id: string) {
+    super(
+      "REFUND_SPEND_EXHAUSTED",
+      "All credited Marks for this payment were spent — no blind refund; use a compensating correction instead",
+      { id },
+    );
+  }
+}
+
 export class BookingOverrideConflictError extends DomainError {
   readonly domain = "admin-booking";
   constructor(id: string) {
@@ -51,6 +62,8 @@ export function mapAdminBookingError(
   if (err instanceof BookingOverrideConflictError)
     return conflict(err.message, err);
   if (err instanceof InvalidRefundStateError)
+    return badRequest(err.message, err);
+  if (err instanceof RefundSpendExhaustedError)
     return badRequest(err.message, err);
   return internalServerError(err.message, err);
 }

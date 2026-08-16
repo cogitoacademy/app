@@ -1,4 +1,4 @@
-import { KNOWLEDGE_BANK_THRESHOLD } from "../../shared/constants";
+import { KNOWLEDGE_BANK_THRESHOLD, ENTRY_TYPE } from "../../shared/constants";
 import { ledgerEntry } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -93,6 +93,7 @@ export interface WalletPort {
   getById(db: DbOrTx, walletId: string): Promise<WalletSnapshot | null>;
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
   getOrCreate(userId: string): Promise<WalletSnapshot>;
+  sumCreditedMarks(db: DbOrTx, walletId: string): Promise<number>;
   listLedger(
     walletId: string,
     opts?: LedgerQueryOptions,
@@ -447,6 +448,18 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     return repo.listActivePackages(db);
   }
 
+  /**
+   * Sums the marks ever credited to a wallet via purchase credits (U8/B9
+   * refund reconciliation: credited − current balance = spend).
+   *
+   * @param conn - the database connection or active transaction
+   * @param walletId - the wallet id
+   * @returns the total credited marks
+   */
+  async function sumCreditedMarks(conn: DbOrTx, walletId: string) {
+    return repo.sumLedgerAmount(conn, walletId, [ENTRY_TYPE.CREDIT]);
+  }
+
   return {
     hold,
     release,
@@ -457,6 +470,7 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
     getByUserId,
     getOrCreate,
     listLedger,
+    sumCreditedMarks,
     knowledgeBankEligible,
     listActivePackages,
   };

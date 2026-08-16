@@ -129,11 +129,24 @@ describe("findPaymentByProviderEventId", () => {
 
 describe("insertPayment", () => {
   test("inserts payment record", async () => {
-    const values = mock(async () => {});
+    const returning = mock(async () => [
+      {
+        id: "p1",
+        userId: "u1",
+        walletId: "w1",
+        provider: "xendit",
+        providerReference: "xendit:u1:starter",
+        amountIdr: 50000,
+        marks: 100,
+        status: "PENDING",
+      },
+    ]);
+    const onConflictDoNothing = mock(() => ({ returning }));
+    const values = mock(() => ({ onConflictDoNothing }));
     const mockInsert = mock(() => ({ values }));
     const conn: any = { insert: mockInsert };
 
-    await insertPayment(conn, {
+    const result = await insertPayment(conn, {
       id: "p1",
       userId: "u1",
       walletId: "w1",
@@ -147,6 +160,28 @@ describe("insertPayment", () => {
 
     expect(mockInsert).toHaveBeenCalledTimes(1);
     expect(values).toHaveBeenCalledTimes(1);
+    expect(onConflictDoNothing).toHaveBeenCalledTimes(1);
+    expect(result).not.toBeNull();
+  });
+
+  test("returns null when a concurrent writer already inserted the same provider reference", async () => {
+    const returning = mock(async () => []);
+    const onConflictDoNothing = mock(() => ({ returning }));
+    const values = mock(() => ({ onConflictDoNothing }));
+    const conn: any = { insert: mock(() => ({ values })) };
+
+    const result = await insertPayment(conn, {
+      id: "p1",
+      userId: "u1",
+      walletId: "w1",
+      provider: "xendit",
+      providerReference: "xendit:u1:starter",
+      amountIdr: 50000,
+      marks: 100,
+      status: "PENDING",
+    });
+
+    expect(result).toBeNull();
   });
 });
 
@@ -228,7 +263,9 @@ describe("createPaymentRepo", () => {
   });
 
   test("repo insertPayment uses conn when provided", async () => {
-    const values = mock(async () => {});
+    const returning = mock(async () => []);
+    const onConflictDoNothing = mock(() => ({ returning }));
+    const values = mock(() => ({ onConflictDoNothing }));
     const mockInsert = mock(() => ({ values }));
     const conn: any = { insert: mockInsert };
 

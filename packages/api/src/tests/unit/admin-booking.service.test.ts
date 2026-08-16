@@ -65,6 +65,7 @@ function makeWalletPort(overrides: Record<string, unknown> = {}) {
       heldBalance: 0,
       availableBalance: 200,
     })),
+    sumCreditedMarks: mock(async () => 200),
     compensate: mock(async () => ({
       id: "w1",
       totalBalance: 250,

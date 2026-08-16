@@ -22,6 +22,7 @@ import {
   BookingRescheduleNotPendingError,
   BookingNotCompletedError,
   BookingSeriesNoOptOutError,
+  BookingAcceptanceDeadlinePassedError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -1182,6 +1183,25 @@ describe("BookingService", () => {
       );
     });
 
+    test("B4: throws BookingAcceptanceDeadlinePassedError when the booking deadline has passed", async () => {
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({
+              currentState: "awaiting_tutor_review",
+              deadlineAt: new Date(Date.now() - 60_000),
+            }),
+          ),
+        },
+      });
+
+      await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
+        BookingAcceptanceDeadlinePassedError,
+      );
+      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+      expect(repo.updateBookingDeadline).not.toHaveBeenCalled();
+    });
+
     test("accepts online booking — transitions to confirmed then scheduled and creates meeting with attendees", async () => {
       const booking = makeBooking({ modality: "online" });
       let findCallCount = 0;
@@ -1293,12 +1313,11 @@ describe("BookingService", () => {
 
       expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
       const deadlineArg = repo.updateBookingDeadline.mock.calls[0][2] as Date;
-      expect(deadlineArg.getTime()).toBeGreaterThanOrEqual(
-        scheduledStartAt.getTime() - 1000,
-      );
-      expect(deadlineArg.getTime()).toBeLessThanOrEqual(
-        scheduledStartAt.getTime() + 1000,
-      );
+      // DL-25 (U12): room approval window is 12h, capped at session start —
+      // this session is 48h out, so the deadline is now + 12h.
+      const expected = Date.now() + 12 * 60 * 60 * 1000;
+      expect(deadlineArg.getTime()).toBeGreaterThan(expected - 60_000);
+      expect(deadlineArg.getTime()).toBeLessThan(expected + 60_000);
       expect(meeting.createEvent).not.toHaveBeenCalled();
     });
 
@@ -2332,9 +2351,165 @@ describe("BookingService", () => {
       expect(wallet.release).toHaveBeenCalledTimes(1);
     });
 
+    test("B3: solo withdraw from AWAITING_TUTOR_REVIEW cancels + zeroes the hold (never regresses)", async () => {
+      const booking = makeBooking({
+        currentState: "awaiting_tutor_review",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+        },
+      });
+
+      const result = await service.withdraw("student1", "b1");
+
+      expect(result.withdrawn).toBe(true);
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
+      expect(repo.updateBookingVersioned).toHaveBeenCalledTimes(1);
+      const versionedCall = repo.updateBookingVersioned.mock
+        .calls[0] as unknown[];
+      expect(versionedCall[3]).toEqual(
+        expect.objectContaining({ currentState: "cancelled" }),
+      );
+    });
+
+    test("B3: solo-series withdraw from AWAITING_TUTOR_REVIEW cancels + zeroes the hold (never regresses)", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 1,
+        currentState: "awaiting_tutor_review",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+        },
+      });
+
+      const result = await service.withdraw("student1", "b1");
+
+      expect(result.withdrawn).toBe(true);
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
+      const versionedCall = repo.updateBookingVersioned.mock
+        .calls[0] as unknown[];
+      expect(versionedCall[3]).toEqual(
+        expect.objectContaining({ currentState: "cancelled" }),
+      );
+    });
+
+    test("B7: withdrawing a pending (non-confirmed) participant does not decrement confirmedHeadcount", async () => {
+      const booking = makeBooking({
+        type: "group",
+        targetGroupSize: 4,
+        minConfirmedHeadcount: 2,
+        confirmedHeadcount: 2,
+        currentState: "awaiting_participant_confirmation",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({
+        confirmationState: "pending",
+        heldAmount: 42,
+      });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          // The two confirmed participants remain after the pending invitee
+          // withdraws — the group survives and reprices.
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+          ]),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(repo.decrementBookingConfirmedHeadcount).not.toHaveBeenCalled();
+      expect(repo.updateParticipantState).toHaveBeenCalledTimes(1);
+    });
+
+    test("B7: double-withdraw is a no-op (no second headcount decrement)", async () => {
+      const booking = makeBooking({
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({
+        confirmationState: "withdrawn_pre_h2",
+        heldAmount: 0,
+      });
+      const { service, repo, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+        },
+      });
+
+      const result = await service.withdraw("student1", "b1");
+
+      expect(result.withdrawn).toBe(false);
+      expect(repo.decrementBookingConfirmedHeadcount).not.toHaveBeenCalled();
+      expect(repo.updateParticipantState).not.toHaveBeenCalled();
+      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+    });
+
+    test("B7+: confirmed participant leaving a partial group (remaining < minimum) expires the booking when CANCELLED is not reachable", async () => {
+      const booking = makeBooking({
+        type: "group",
+        targetGroupSize: 4,
+        minConfirmedHeadcount: 2,
+        confirmedHeadcount: 2,
+        currentState: "awaiting_participant_confirmation",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          // Only one confirmed participant remains — below the minimum.
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+          ]),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(repo.decrementBookingConfirmedHeadcount).toHaveBeenCalledTimes(1);
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
+      const versionedCall = repo.updateBookingVersioned.mock
+        .calls[0] as unknown[];
+      expect(versionedCall[3]).toEqual(
+        expect.objectContaining({ currentState: "expired" }),
+      );
+    });
+
     test("withdraws and releases held marks for participant", async () => {
       const booking = makeBooking({
-        currentState: "awaiting_participant_confirmation",
+        currentState: "awaiting_tutor_review",
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -2428,7 +2603,7 @@ describe("BookingService", () => {
 
     test("skips release when heldAmount is 0", async () => {
       const booking = makeBooking({
-        currentState: "awaiting_participant_confirmation",
+        currentState: "awaiting_tutor_review",
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
       });
       const participant = makeParticipant({ heldAmount: 0 });
@@ -3455,7 +3630,7 @@ describe("BookingService", () => {
 
     test("withdraw decrements headcount", async () => {
       const booking = makeBooking({
-        currentState: "awaiting_participant_confirmation",
+        currentState: "awaiting_tutor_review",
         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
       });
       const participant = makeParticipant({ heldAmount: 42 });
@@ -4062,7 +4237,7 @@ describe("BookingService", () => {
         expect(deadlineArg.getTime()).toBeLessThanOrEqual(expected + 1000);
       });
 
-      test("offline tutorAccept sets deadlineAt to scheduledStartAt for admin room approval", async () => {
+      test("offline tutorAccept caps the room-approval deadline at 12h (DL-25/U12)", async () => {
         const scheduledStartAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
         const booking = makeBooking({
           modality: "offline",
@@ -4110,12 +4285,11 @@ describe("BookingService", () => {
 
         expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
         const deadlineArg = repo.updateBookingDeadline.mock.calls[0][2] as Date;
-        expect(deadlineArg.getTime()).toBeGreaterThanOrEqual(
-          scheduledStartAt.getTime() - 1000,
-        );
-        expect(deadlineArg.getTime()).toBeLessThanOrEqual(
-          scheduledStartAt.getTime() + 1000,
-        );
+        // DL-25 (U12): room approval window is 12h, capped at session start —
+        // this session is 48h out, so the deadline is now + 12h.
+        const expected = Date.now() + 12 * 60 * 60 * 1000;
+        expect(deadlineArg.getTime()).toBeGreaterThan(expected - 60_000);
+        expect(deadlineArg.getTime()).toBeLessThan(expected + 60_000);
       });
     });
 
