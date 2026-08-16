@@ -7,6 +7,7 @@ import {
   ACTOR_TYPE,
   ATTENDANCE_STATE,
   RESPONSE_WINDOW_MS,
+  OFFLINE_SCHEDULED_GRACE_MS,
   LATE_CANCEL_THRESHOLD_MS,
   MIN_GROUP_HEADCOUNT,
   MIN_SERIES_SESSIONS,
@@ -831,7 +832,15 @@ export function createBookingService(deps: {
           },
         );
 
-        await repo.updateBookingDeadline(tx, bookingId, b.scheduledStartAt);
+        // DL-25 (U12): the offline room-approval window is 12 hours, capped
+        // at session start when the session starts sooner.
+        const approvalDeadline = new Date(
+          Math.min(
+            Date.now() + RESPONSE_WINDOW_MS,
+            b.scheduledStartAt.getTime(),
+          ),
+        );
+        await repo.updateBookingDeadline(tx, bookingId, approvalDeadline);
         updated = await repo.findBookingById(tx, bookingId);
       }
 
@@ -2544,6 +2553,15 @@ export function createBookingService(deps: {
       actorType: ACTOR_TYPE.ADMIN,
       reason: "Room assigned",
     });
+    // B1: an offline SCHEDULED booking must not expire (NO_SHOW) at session
+    // start — the room-approval deadline was capped at the start time. Bump
+    // the deadline past session end (mirroring the online path), so the
+    // no-show job only fires after the session finished plus a grace window.
+    await repo.updateBookingDeadline(
+      tx,
+      bookingId,
+      new Date(b.scheduledEndAt.getTime() + OFFLINE_SCHEDULED_GRACE_MS),
+    );
   }
 
   /**
