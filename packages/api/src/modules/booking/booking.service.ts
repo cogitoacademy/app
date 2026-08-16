@@ -2086,37 +2086,30 @@ export function createBookingService(deps: {
           // stranded (the old code cancelled the whole booking here).
           void currentState;
         } else if (
-          b.type === BOOKING_TYPE.SOLO &&
-          (currentState === BOOKING_STATE.CONFIRMED ||
-            currentState === BOOKING_STATE.SCHEDULED ||
-            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL)
+          b.type === BOOKING_TYPE.SOLO ||
+          b.type === BOOKING_TYPE.SERIES
         ) {
-          // R2: the proposer is the only participant, so cancelling the whole
-          // booking is correct — a solo booking must never regress to
-          // AWAITING_RECONFIRMATION (no one left to reconfirm, hold stranded).
+          // R2 + B3: solo / solo-series bookings always cancel on withdraw,
+          // from any non-terminal state. The proposer is the only
+          // participant — regressing to AWAITING_RECONFIRMATION would strand
+          // a zero-hold booking that could be revived (and a later deduct
+          // could consume another booking's hold). Zero the hold and cancel.
           await repo.updateBookingHoldAmount(tx, bookingId, 0);
-          cancelMeeting = true;
+          if (
+            currentState === BOOKING_STATE.CONFIRMED ||
+            currentState === BOOKING_STATE.SCHEDULED ||
+            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
+          ) {
+            cancelMeeting = true;
+          }
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
             reason: "Participant withdrew",
           });
-        } else if (regressableStates.has(currentState)) {
-          await transition(
-            tx,
-            bookingId,
-            BOOKING_STATE.AWAITING_RECONFIRMATION,
-            {
-              actorId: userId,
-              actorType: ACTOR_TYPE.STUDENT,
-              reason: "Participant withdrew before H-2",
-            },
-          );
-
-          await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
         } else {
-          // Solo / solo-series: the proposer is the only participant, so
-          // cancelling the whole booking is correct.
+          // Unreachable defensive branch: any other booking type/state
+          // combination cancels rather than stranding holds.
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
