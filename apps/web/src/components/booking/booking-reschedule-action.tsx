@@ -85,11 +85,21 @@ export function BookingRescheduleAction({
   const [newTime, setNewTime] = useState("");
   const [reason, setReason] = useState("");
   const isTutor = viewerRole === "tutor";
-  const profileQuery = useQuery({
+  const publicAvailabilityQuery = useQuery({
     ...orpc.tutors.getProfile.queryOptions({ input: { tutorId } }),
-    enabled: open,
+    enabled: open && !isTutor,
   });
-  const slots = (profileQuery.data?.availabilitySlots ?? [])
+  const ownAvailabilityQuery = useQuery({
+    ...orpc.tutor.listAvailability.queryOptions(),
+    enabled: open && isTutor,
+  });
+  const availabilityQuery = isTutor
+    ? ownAvailabilityQuery
+    : publicAvailabilityQuery;
+  const availabilitySlots = isTutor
+    ? (ownAvailabilityQuery.data ?? [])
+    : (publicAvailabilityQuery.data?.availabilitySlots ?? []);
+  const slots = availabilitySlots
     .filter(
       (slot) =>
         (slot.modality === "both" || slot.modality === modality) &&
@@ -185,7 +195,7 @@ export function BookingRescheduleAction({
             {usingAvailability ? (
               <Field>
                 <FieldLabel>Tutor availability</FieldLabel>
-                {profileQuery.isPending ? (
+                {availabilityQuery.isPending ? (
                   <div className="rounded-lg border border-item-border bg-item p-4 text-sm text-muted">
                     Loading tutor availability…
                   </div>
@@ -226,9 +236,9 @@ export function BookingRescheduleAction({
                   </div>
                 ) : null}
                 <FieldDescription>
-                  {profileQuery.isError
+                  {availabilityQuery.isError
                     ? "Tutor availability could not be loaded."
-                    : !profileQuery.isPending && slots.length === 0
+                    : !availabilityQuery.isPending && slots.length === 0
                       ? isTutor
                         ? "No matching windows. You can choose a custom time instead."
                         : "This tutor has no matching availability right now."
