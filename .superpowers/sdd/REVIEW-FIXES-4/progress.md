@@ -68,3 +68,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - Commit `cb96ee5` + fix round 1 `5fb17a0` (review found 1 Important: missing AWAITING_ADMIN_ROOM_APPROVAL test; fixed + re-reviewed clean).
 - Discovers pre-existing schema drift: migration 0020 dropped 'expired' from `reschedule_status_check` while schema+code rely on it → new migration 0024 restores it (journaled).
 - Targeted 5/5; regressions 24/24; check-types/lint/oxfmt clean.
+
+## P2.5 (H2) tutor lateness — complete
+
+- Commit `ce867e7` + fix round 1 `a2bfbf5` (3 Important fixed: RPC enum for tutor_lateness_pending via OVERRIDE_LIST_CATEGORIES; idempotent flagging via repo exclusion + two-sweep test; API-REFERENCE copy).
+- Design (user): marking window ±15min + admin surface via overrideMeta category; no auto-cancel/release.
+- Targeted 8/8; regressions 68/68 + full integration 280/280; unit 1530/1530; check-types/lint/oxfmt clean.
