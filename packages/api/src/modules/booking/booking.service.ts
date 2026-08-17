@@ -1814,6 +1814,34 @@ export function createBookingService(deps: {
             bookingId,
             new Date(Date.now() + RESPONSE_WINDOW_MS),
           );
+        } else if (targetState === BOOKING_STATE.SCHEDULED) {
+          // H1: an accepted reschedule moves the session to the proposal's new
+          // times — refresh the deadline from the NEW session end (mirror
+          // finalizeMeetingSchedule / transitionBookingToScheduled) so the
+          // booking is not auto-expired at the proposal's now+24h.
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(
+              pending.proposedEndAt.getTime() +
+                (b.modality === MODALITY.OFFLINE
+                  ? OFFLINE_SCHEDULED_GRACE_MS
+                  : 24 * 60 * 60 * 1000),
+            ),
+          );
+        } else if (targetState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) {
+          // Mirror the offline room-approval window (DL-25/U12): 12h, capped at
+          // the (new) session start.
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(
+              Math.min(
+                Date.now() + RESPONSE_WINDOW_MS,
+                pending.proposedStartAt.getTime(),
+              ),
+            ),
+          );
         }
 
         for (const recipientId of Object.keys(decisions).filter(
