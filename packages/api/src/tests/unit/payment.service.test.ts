@@ -32,6 +32,12 @@ function makeWallet() {
     deduct: mock(async () => ({ id: "w1", totalBalance: 0 })),
     compensate: mock(async () => ({ id: "w1", totalBalance: 0 })),
     getById: mock(async () => ({ id: "w1" })),
+    getOrCreate: mock(async () => ({
+      id: "w1",
+      totalBalance: 100,
+      heldBalance: 0,
+      availableBalance: 100,
+    })),
   };
 }
 
@@ -916,6 +922,164 @@ describe("PaymentService", () => {
         reason: "Refund: reversed credited marks",
         type: "compensate_deduct",
       });
+    });
+
+    test("H4: REFUNDED webhook with spent marks does not compensate, writes audit + refundRecord, returns REFUNDED", async () => {
+      const wallet = {
+        ...makeWallet(),
+        getOrCreate: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 0,
+          availableBalance: 30,
+        })),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 0,
+          heldBalance: 0,
+          availableBalance: 0,
+        })),
+      };
+      const updatePaymentStatusIfInCreditState = mock(async () => ({
+        id: "pay1",
+        status: PAYMENT_STATUS.REFUNDED,
+      }));
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatusIfInCreditState,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+      const audit = { record: mock(async () => {}) };
+      const refundRecord = { insertRefundRecord: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+        audit: audit as any,
+        refundRecord: refundRecord as any,
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_refunded_spent",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
+      expect(wallet.compensate).toHaveBeenCalledTimes(0);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(0);
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          db: tx,
+          actorId: null,
+          actorType: "system",
+          action: "refund_webhook_reconciliation",
+          targetId: "pay1",
+          targetType: "payment_record",
+          details: {
+            paymentId: "pay1",
+            marks: 100,
+            availableBalance: 30,
+            spent: 70,
+          },
+        }),
+      );
+      expect(refundRecord.insertRefundRecord).toHaveBeenCalledTimes(1);
+      expect(refundRecord.insertRefundRecord).toHaveBeenCalledWith(tx, {
+        paymentId: "pay1",
+        walletId: "w1",
+        amountIdr: 50000,
+        marks: 100,
+        reason:
+          "REFUNDED webhook: marks already spent; manual reconciliation required",
+      });
+    });
+
+    test("H4: REFUNDED webhook with sufficient available balance still compensates (clean case)", async () => {
+      const wallet = {
+        ...makeWallet(),
+        getOrCreate: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 0,
+          availableBalance: 100,
+        })),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 0,
+          heldBalance: 0,
+          availableBalance: 0,
+        })),
+      };
+      const updatePaymentStatusIfInCreditState = mock(async () => ({
+        id: "pay1",
+        status: PAYMENT_STATUS.REFUNDED,
+      }));
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatusIfInCreditState,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+      const audit = { record: mock(async () => {}) };
+      const refundRecord = { insertRefundRecord: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+        audit: audit as any,
+        refundRecord: refundRecord as any,
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_refunded_clean",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
+      expect(wallet.compensate).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledTimes(0);
+      expect(refundRecord.insertRefundRecord).toHaveBeenCalledTimes(0);
     });
 
     test("REFUNDED webhook on a PENDING (never credited) payment does not reverse", async () => {

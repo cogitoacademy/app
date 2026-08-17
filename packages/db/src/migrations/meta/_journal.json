@@ -169,6 +169,13 @@
       "when": 1786895747978,
       "tag": "0023_achievement_prd_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786938000000,
+      "tag": "0024_reschedule_status_expired",
+      "breakpoints": true
     }
   ]
 }

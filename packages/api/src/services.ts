@@ -161,6 +161,8 @@ function createServices() {
         bookingService!.transitionBookingToScheduled(tx, bookingId, actorId),
       getBookingRecipients: (tx, bookingId) =>
         bookingService!.getBookingRecipients(tx, bookingId),
+      cancelOfflineBooking: (tx, bookingId, actorId) =>
+        bookingService!.cancelOfflineBooking(tx, bookingId, actorId),
     },
     notificationPort: notification.service,
   });
@@ -200,6 +202,12 @@ function createServices() {
     notification: notification.service,
   });
 
+  const refund = createRefundModule({
+    db,
+    audit: audit.service,
+    wallet: wallet.service,
+  });
+
   const payment = createPaymentModule({
     db,
     wallet: wallet.service,
@@ -218,12 +226,8 @@ function createServices() {
         : undefined,
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
     notification: notification.service,
-  });
-
-  const refund = createRefundModule({
-    db,
     audit: audit.service,
-    wallet: wallet.service,
+    refundRecord: refund.repo,
   });
 
   const adminBooking = createAdminBookingModule({

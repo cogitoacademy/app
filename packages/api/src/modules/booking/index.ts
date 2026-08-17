@@ -55,6 +55,7 @@ export interface BookingMeetingPort {
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
+    conn?: DbOrTx,
   ): Promise<MeetingEvent>;
   updateEvent(
     bookingId: string,
@@ -73,6 +74,11 @@ export interface BookingRoomPort {
       endAt: Date;
     },
   ): Promise<{ available: boolean; reason?: string; roomBookingId?: string }>;
+  /**
+   * Cancels a still-pending (`requested`) room booking row (M7). No-op when
+   * the request was already confirmed/cancelled.
+   */
+  cancelRequestedRoomForBooking(conn: DbOrTx, bookingId: string): Promise<void>;
 }
 
 export interface BookingPayoutPort {

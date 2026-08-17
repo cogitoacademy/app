@@ -26,6 +26,17 @@ export interface RoomBookingPort {
     tx: DbOrTx,
     bookingId: string,
   ): Promise<{ tutorId: string; participantUserIds: string[] }>;
+  /**
+   * Cancels an offline booking that is still awaiting room approval (FR-22:
+   * "cancel only if no room is available" — M6). Releases all holds and
+   * transitions to CANCELLED in the caller's transaction. No-op when the
+   * booking already left AWAITING_ADMIN_ROOM_APPROVAL.
+   */
+  cancelOfflineBooking(
+    tx: DbOrTx,
+    bookingId: string,
+    actorId: string,
+  ): Promise<void>;
 }
 
 /**

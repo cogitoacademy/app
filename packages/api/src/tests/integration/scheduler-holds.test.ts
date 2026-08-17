@@ -138,7 +138,7 @@ describe("Scheduler: releaseExpiredHolds (real DB)", () => {
     expect(w!.availableBalance).toBe(108);
   });
 
-  test("releaseExpiredHolds releases only past-deadline holds", async () => {
+  test("releaseExpiredHolds releases only past-deadline holds and transitions them (M4)", async () => {
     const result = await services.booking.releaseExpiredHolds();
     expect(result.released).toBe(2);
 
@@ -149,10 +149,12 @@ describe("Scheduler: releaseExpiredHolds (real DB)", () => {
 
     const byId = new Map(rows.map((r) => [r.id, r]));
     expect(byId.get(expiredAId)!.holdAmount).toBe(0);
-    expect(byId.get(expiredAId)!.currentState).toBe(
-      BOOKING_STATE.AWAITING_TUTOR_REVIEW,
-    );
+    // M4: transition-or-skip — the hold is released together with the
+    // terminal transition, so a later tutor accept/complete can never deduct
+    // from a zeroed hold.
+    expect(byId.get(expiredAId)!.currentState).toBe(BOOKING_STATE.EXPIRED);
     expect(byId.get(expiredBId)!.holdAmount).toBe(0);
+    expect(byId.get(expiredBId)!.currentState).toBe(BOOKING_STATE.EXPIRED);
     expect(byId.get(futureId)!.holdAmount).toBe(50);
     expect(byId.get(futureId)!.currentState).toBe(
       BOOKING_STATE.AWAITING_TUTOR_REVIEW,
@@ -230,19 +232,21 @@ describe("Scheduler: releaseExpiredHolds (real DB)", () => {
     expect(byBooking.get(expiredBId)!.heldAmount).toBe(0);
   });
 
-  test("booking state is left untouched (holds-only sweeper)", async () => {
+  test("booking state is transitioned with a state-history entry (M4 transition-or-skip)", async () => {
     const [a] = await db
       .select()
       .from(booking)
       .where(eq(booking.id, expiredAId));
-    expect(a!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
-    expect(a!.stateReason).toBeNull();
+    expect(a!.currentState).toBe(BOOKING_STATE.EXPIRED);
+    expect(a!.stateReason).toBe("Deadline passed");
 
     const history = await db
       .select()
       .from(bookingStateHistory)
       .where(eq(bookingStateHistory.bookingId, expiredAId));
-    expect(history.length).toBe(0);
+    expect(history.length).toBe(1);
+    expect(history[0]!.toState).toBe(BOOKING_STATE.EXPIRED);
+    expect(history[0]!.actorType).toBe(ACTOR_TYPE.SYSTEM);
   });
 
   test("re-running releaseExpiredHolds is a no-op", async () => {

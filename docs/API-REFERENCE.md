@@ -407,7 +407,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature`, `x-event-id`, `x-timestamp`
 - **Output:** `{ ok: true }`
 - **Errors:** 401 signature failure, 408 stale timestamp (> 5 min), 403 IP not allowlisted, 500 processing failure
-- **Description:** Provider webhook; verifies signature, validates timestamp, then atomically claims the idempotency key (keyed on the verified payload's event id — released on processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46)
+- **Description:** Provider webhook; verifies signature, validates timestamp, then atomically claims the idempotency key (keyed on the verified payload's event id — released on processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46). A REFUNDED webhook reverses the credited Marks via `compensate_deduct` when the available balance suffices; if the Marks were already spent (`availableBalance < marks`), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4)
 
 ---
 
@@ -593,7 +593,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, attendance }` (`attendance` one of `present`/`late`)
 - **Output:** `{ booking }`
-- **Description:** Marks tutor attendance so the lateness auto-cancel job skips the booking
+- **Description:** Marks tutor attendance; only allowed within ±15 minutes of the scheduled start (`BookingNotEditableError` otherwise, so tutors can't pre-mark to dodge lateness). There is no auto-cancel: an unmarked session is instead surfaced to the admin queue via `adminBooking.listBookings({ category: "tutor_lateness_pending" })`.
 
 ---
 
@@ -691,7 +691,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `adminBooking.listBookings`
 
 - **Auth:** Admin
-- **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }`
+- **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
 - **Output:** `{ items: Booking[], nextCursor }`
 - **Description:** Paginated booking list sorted by urgency
 

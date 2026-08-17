@@ -4,6 +4,7 @@ import {
   BookingNotFoundError,
   TerminalStateOverrideError,
   InvalidRefundStateError,
+  OverrideMarksParticipantsRequiredError,
   mapAdminBookingError,
 } from "../../modules/admin-booking/admin-booking.errors";
 
@@ -60,6 +61,20 @@ describe("admin-booking.errors", () => {
       expect(err.name).toBe("InvalidRefundStateError");
     });
   });
+  describe("OverrideMarksParticipantsRequiredError", () => {
+    it("should be instance of DomainError", () => {
+      const err = new OverrideMarksParticipantsRequiredError("bk_1");
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err).toBeInstanceOf(Error);
+    });
+    it("should have correct properties", () => {
+      const err = new OverrideMarksParticipantsRequiredError("bk_1");
+      expect(err.code).toBe("OVERRIDE_MARKS_PARTICIPANTS_REQUIRED");
+      expect(err.domain).toBe("admin-booking");
+      expect(err.details).toEqual({ id: "bk_1" });
+      expect(err.name).toBe("OverrideMarksParticipantsRequiredError");
+    });
+  });
   describe("mapAdminBookingError", () => {
     it("should map BookingNotFoundError to NOT_FOUND", () => {
       const result = mapAdminBookingError(new BookingNotFoundError("bk_1"));
@@ -74,6 +89,12 @@ describe("admin-booking.errors", () => {
     it("should map InvalidRefundStateError to BAD_REQUEST", () => {
       const result = mapAdminBookingError(
         new InvalidRefundStateError("bk_1", "cancelled"),
+      );
+      expect(result.status).toBe(400);
+    });
+    it("should map OverrideMarksParticipantsRequiredError to BAD_REQUEST", () => {
+      const result = mapAdminBookingError(
+        new OverrideMarksParticipantsRequiredError("bk_1"),
       );
       expect(result.status).toBe(400);
     });

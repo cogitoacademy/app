@@ -5,6 +5,7 @@ import type {
   CreditParams,
   WalletSnapshot,
 } from "../wallet/wallet.service";
+import type { AuditRecordParams } from "../audit/audit.service";
 import type {
   PaymentProvider,
   PaymentNotificationPort,
@@ -25,6 +26,24 @@ export interface PaymentWalletPort {
   compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
 }
 
+export interface PaymentAuditPort {
+  record(params: AuditRecordParams): Promise<void>;
+}
+
+export interface PaymentRefundRecordPort {
+  insertRefundRecord(
+    db: DbOrTx,
+    params: {
+      paymentId: string | null;
+      walletId: string;
+      amountIdr: number;
+      marks: number;
+      reason: string;
+      actorId?: string;
+    },
+  ): Promise<unknown>;
+}
+
 export function createPaymentModule(deps: {
   db: DbType;
   wallet: PaymentWalletPort;
@@ -38,6 +57,8 @@ export function createPaymentModule(deps: {
   };
   webhookSecret: string;
   notification?: PaymentNotificationPort;
+  audit?: PaymentAuditPort;
+  refundRecord?: PaymentRefundRecordPort;
 }) {
   const useXendit = deps.provider === "xendit";
   if (useXendit && !deps.xenditConfig) {
@@ -72,6 +93,8 @@ export function createPaymentModule(deps: {
     provider,
     providerName,
     notification: deps.notification,
+    audit: deps.audit,
+    refundRecord: deps.refundRecord,
   });
   const handler = createPaymentHandler(service, deps.wallet);
   return { service, handler };

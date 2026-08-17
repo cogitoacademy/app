@@ -287,7 +287,23 @@ describe("Scheduler: expireBookings against real Postgres", () => {
 
     const wB = await getWalletByUserId(studentB.id);
     expect(wB!.heldBalance).toBe(70);
-    expect(wB!.availableBalance).toBe(430);
+    // M2: the SCHEDULED→NO_SHOW case FORFEITS its 40 marks (deduct), the
+    // EXPIRED/CANCELLED cases release (50+60+80), and the RESCHEDULE_PROPOSED
+    // case keeps its 70 held → available = 500 - 40 (forfeit) - 70 (held).
+    expect(wB!.availableBalance).toBe(390);
+    expect(wB!.totalBalance).toBe(460);
+
+    const forfeits = await db
+      .select()
+      .from(ledgerEntry)
+      .where(
+        and(
+          eq(ledgerEntry.actorType, ACTOR_TYPE.SYSTEM),
+          eq(ledgerEntry.entryType, ENTRY_TYPE.DEDUCT),
+        ),
+      );
+    expect(forfeits.length).toBe(1);
+    expect(forfeits[0]!.amount).toBe(40);
   });
 
   test("differential: releaseExpiredHolds is a no-op once expireBookings released the holds", async () => {
@@ -300,7 +316,10 @@ describe("Scheduler: expireBookings against real Postgres", () => {
 
     const wB = await getWalletByUserId(studentB.id);
     expect(wB!.heldBalance).toBe(70);
-    expect(wB!.availableBalance).toBe(430);
+    // M2: SCHEDULED→NO_SHOW forfeited 40 (deduct), so available stays at
+    // 390 after the differential run too (releaseExpiredHolds is a no-op).
+    expect(wB!.availableBalance).toBe(390);
+    expect(wB!.totalBalance).toBe(460);
 
     const releases = await db
       .select()

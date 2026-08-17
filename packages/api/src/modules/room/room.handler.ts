@@ -68,7 +68,7 @@ export function createRoomHandler(room: RoomService) {
     },
 
     relocate: async ({
-      context: _context,
+      context,
       input,
     }: {
       context: Context;
@@ -81,20 +81,21 @@ export function createRoomHandler(room: RoomService) {
             input.roomId,
             input.startAt,
             input.endAt,
+            context.session?.user.id,
           ),
         mapRoomError,
       );
     },
 
     cancelBooking: async ({
-      context: _context,
+      context,
       input,
     }: {
       context: Context;
       input: CancelRoomInput;
     }) => {
       return withDomainMap(
-        () => room.cancelRoomBooking(input.bookingId),
+        () => room.cancelRoomBooking(input.bookingId, context.session?.user.id),
         mapRoomError,
       );
     },

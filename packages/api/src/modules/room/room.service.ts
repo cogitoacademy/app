@@ -175,6 +175,7 @@ export function createRoomService(
     roomId: string,
     startAt: Date,
     endAt: Date,
+    actorId?: string,
   ) {
     return db.transaction(async (tx) => {
       const roomRow = await repo.findRoomById(tx, roomId);
@@ -214,6 +215,10 @@ export function createRoomService(
         status: ROOM_BOOKING_STATUS.CONFIRMED,
       });
 
+      if (bookingPort && actorId) {
+        await bookingPort.transitionBookingToScheduled(tx, bookingId, actorId);
+      }
+
       await notifyBookingRecipients(
         tx,
         bookingId,
@@ -226,9 +231,9 @@ export function createRoomService(
     });
   }
 
-  async function cancelRoomBooking(bookingId: string) {
+  async function cancelRoomBooking(bookingId: string, actorId?: string) {
     return db.transaction(async (tx) => {
-      const current = await repo.findActiveRoomBookingByBookingId(
+      const current = await repo.findCancellableRoomBookingByBookingId(
         tx,
         bookingId,
       );
@@ -239,6 +244,14 @@ export function createRoomService(
         current.id,
         ROOM_BOOKING_STATUS.CANCELLED,
       );
+
+      // M6 / FR-22: "cancel only if no room is available" — a booking still
+      // awaiting room approval cannot continue without a room: cancel it
+      // (transition + hold release + audit) in the same transaction. A
+      // booking that already got its room (SCHEDULED) continues without one.
+      if (bookingPort && actorId) {
+        await bookingPort.cancelOfflineBooking(tx, bookingId, actorId);
+      }
 
       await notifyBookingRecipients(
         tx,
@@ -252,6 +265,29 @@ export function createRoomService(
     });
   }
 
+  /**
+   * Cancels a still-pending (`requested`) room booking row. Called by the
+   * booking module when a participant withdraws from an offline booking in
+   * AWAITING_ADMIN_ROOM_APPROVAL (M7) so an admin `assignRoom` mid-
+   * reconfirmation cannot resurrect a room for a booking that went back to
+   * tutor review. No-op when the request was already confirmed/cancelled.
+   */
+  async function cancelRequestedRoomForBooking(
+    conn: DbOrTx,
+    bookingId: string,
+  ): Promise<void> {
+    const pending = await repo.findRequestedRoomBookingByBookingId(
+      conn,
+      bookingId,
+    );
+    if (!pending) return;
+    await repo.updateRoomBookingStatus(
+      conn,
+      pending.id,
+      ROOM_BOOKING_STATUS.CANCELLED,
+    );
+  }
+
   return {
     listActive,
     createRoom,
@@ -260,5 +296,6 @@ export function createRoomService(
     assignRoom,
     relocateRoom,
     cancelRoomBooking,
+    cancelRequestedRoomForBooking,
   };
 }

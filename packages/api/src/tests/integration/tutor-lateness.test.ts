@@ -9,6 +9,7 @@ import {
   availabilitySlot,
   ledgerEntry,
   notification,
+  auditLog,
   bookingParticipant,
 } from "@cogito-app/db/schema";
 
@@ -97,7 +98,7 @@ async function createPublishedTutor(email: string, ts: number) {
   return { tutorId, profileId: profile!.id, slotId: slot!.id };
 }
 
-describe("Tutor lateness auto-cancel flow", () => {
+describe("Tutor lateness flagging flow", () => {
   beforeAll(async () => {
     await resetDatabase();
   });
@@ -136,7 +137,154 @@ describe("Tutor lateness auto-cancel flow", () => {
     tutorClient = createTestClient(await createTestContext(tutorCookie));
   });
 
-  test("checkTutorLateness auto-cancels when tutor has not joined 15 min after start", async () => {
+  test("checkTutorLateness ignores bookings with marked tutor attendance", async () => {
+    const start = new Date(Date.now() + 72 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 73 * 3600_000).toISOString();
+    const b = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() - 20 * 60_000),
+        scheduledEndAt: new Date(Date.now() + 70 * 60_000),
+      })
+      .where(eq(booking.id, b.id));
+
+    await db
+      .insert(bookingParticipant)
+      .values({
+        bookingId: b.id,
+        userId: tutorId,
+        role: "tutor",
+        confirmationState: "confirmed",
+        heldAmount: 0,
+        attendanceState: "present",
+      })
+      .onConflictDoNothing();
+
+    const result = await services.booking.checkTutorLateness();
+    expect(result.flagged).toBe(0);
+    expect(result.failed).toBe(0);
+
+    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
+    expect(row!.currentState).toBe("scheduled");
+  });
+
+  test("markTutorAttendance within window still works", async () => {
+    const start = new Date(Date.now() + 96 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 97 * 3600_000).toISOString();
+    const b = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() - 5 * 60_000),
+        scheduledEndAt: new Date(Date.now() + 85 * 60_000),
+      })
+      .where(eq(booking.id, b.id));
+
+    const marked = await tutorClient.tutorActions.markAttendance({
+      bookingId: b.id,
+      attendance: "present",
+    });
+    expect(marked.attendanceState).toBe("present");
+
+    const result = await services.booking.checkTutorLateness();
+    expect(result.flagged).toBe(0);
+
+    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
+    expect(row!.currentState).toBe("scheduled");
+
+    const [participant] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(
+        and(
+          eq(bookingParticipant.bookingId, b.id),
+          eq(bookingParticipant.userId, tutorId),
+        ),
+      );
+    expect(participant!.attendanceState).toBe("present");
+  });
+
+  test("checkTutorLateness is idempotent: repeat sweeps do not re-flag already-flagged bookings", async () => {
+    const start = new Date(Date.now() + 72 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 73 * 3600_000).toISOString();
+    const b = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() - 20 * 60_000),
+        scheduledEndAt: new Date(Date.now() + 70 * 60_000),
+      })
+      .where(eq(booking.id, b.id));
+
+    const first = await services.booking.checkTutorLateness();
+    expect(first).toEqual({ flagged: 1, failed: 0 });
+
+    const second = await services.booking.checkTutorLateness();
+    expect(second.flagged).toBe(0);
+
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.action, "tutor_lateness_pending_review"),
+          eq(auditLog.targetId, b.id),
+        ),
+      );
+    expect(audits.length).toBe(1);
+
+    const proposerNotif = await db
+      .select()
+      .from(notification)
+      .where(
+        eq(notification.eventKey, `booking.${b.id}.tutor_lateness_pending`),
+      );
+    expect(proposerNotif.length).toBe(1);
+
+    const tutorNotif = await db
+      .select()
+      .from(notification)
+      .where(
+        eq(
+          notification.eventKey,
+          `booking.${b.id}.tutor_lateness_pending.tutor`,
+        ),
+      );
+    expect(tutorNotif.length).toBe(1);
+  });
+
+  test("checkTutorLateness flags unmarked sessions instead of auto-cancelling", async () => {
     const start = new Date(Date.now() + 48 * 3600_000).toISOString();
     const end = new Date(Date.now() + 49 * 3600_000).toISOString();
     const b = await studentClient.booking.createSolo({
@@ -155,139 +303,73 @@ describe("Tutor lateness auto-cancel flow", () => {
 
     await db
       .update(booking)
-      .set({ scheduledStartAt: new Date(Date.now() - 20 * 60_000) })
+      .set({
+        scheduledStartAt: new Date(Date.now() - 20 * 60_000),
+        scheduledEndAt: new Date(Date.now() + 70 * 60_000),
+      })
       .where(eq(booking.id, b.id));
 
-    await db
-      .insert(bookingParticipant)
-      .values({
-        bookingId: b.id,
-        userId: tutorId,
-        role: "tutor",
-        confirmationState: "confirmed",
-        heldAmount: 0,
-        attendanceState: "unknown",
-      })
-      .onConflictDoNothing();
+    const [before] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, b.id));
+    const holdBefore = before!.holdAmount;
+    const [proposerWalletBefore] = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, before!.proposerId));
 
     const result = await services.booking.checkTutorLateness();
-    expect(result.autoCancelled).toBe(1);
+    expect(result.flagged).toBe(1);
     expect(result.failed).toBe(0);
 
     const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
-    expect(row!.currentState).toBe("no_show");
-    expect(row!.holdAmount).toBe(0);
+    expect(row!.currentState).toBe("scheduled");
+    expect(row!.holdAmount).toBe(holdBefore);
+    expect(row!.overrideMeta).toMatchObject({
+      category: "tutor_lateness_pending",
+    });
 
-    const [tutorParticipant] = await db
+    const [proposerWallet] = await db
       .select()
-      .from(bookingParticipant)
+      .from(wallet)
+      .where(eq(wallet.userId, row!.proposerId));
+    expect(proposerWallet!.heldBalance).toBe(proposerWalletBefore!.heldBalance);
+
+    const audits = await db
+      .select()
+      .from(auditLog)
       .where(
         and(
-          eq(bookingParticipant.bookingId, b.id),
-          eq(bookingParticipant.userId, tutorId),
+          eq(auditLog.action, "tutor_lateness_pending_review"),
+          eq(auditLog.targetId, b.id),
         ),
       );
-    expect(tutorParticipant!.attendanceState).toBe("absent");
-    expect(tutorParticipant!.role).toBe("tutor");
+    expect(audits.length).toBe(1);
 
-    const notifs = await db
+    const proposerNotif = await db
       .select()
       .from(notification)
-      .where(eq(notification.eventKey, `booking.${b.id}.tutor_no_show`));
-    expect(notifs.length).toBe(1);
-    expect(notifs[0]!.title).toBe("Session auto-cancelled");
+      .where(
+        eq(notification.eventKey, `booking.${b.id}.tutor_lateness_pending`),
+      );
+    expect(proposerNotif.length).toBe(1);
+
+    const tutorNotif = await db
+      .select()
+      .from(notification)
+      .where(
+        eq(
+          notification.eventKey,
+          `booking.${b.id}.tutor_lateness_pending.tutor`,
+        ),
+      );
+    expect(tutorNotif.length).toBe(1);
 
     const released = await db
       .select()
       .from(ledgerEntry)
       .where(eq(ledgerEntry.bookingId, b.id));
-    expect(released.some((e) => e.entryType === "release")).toBe(true);
-
-    const proposerWallet = await db
-      .select()
-      .from(wallet)
-      .where(eq(wallet.userId, row!.proposerId));
-    expect(proposerWallet[0]!.heldBalance).toBe(0);
-  });
-
-  test("checkTutorLateness ignores bookings with marked tutor attendance", async () => {
-    const start = new Date(Date.now() + 72 * 3600_000).toISOString();
-    const end = new Date(Date.now() + 73 * 3600_000).toISOString();
-    const b = await studentClient.booking.createSolo({
-      tutorId,
-      availabilitySlotId: slotId,
-      modality: "online",
-      scheduledStartAt: start,
-      scheduledEndAt: end,
-      timezone: "Asia/Jakarta",
-    });
-
-    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
-
-    await db
-      .update(booking)
-      .set({ scheduledStartAt: new Date(Date.now() - 20 * 60_000) })
-      .where(eq(booking.id, b.id));
-
-    await db
-      .insert(bookingParticipant)
-      .values({
-        bookingId: b.id,
-        userId: tutorId,
-        role: "tutor",
-        confirmationState: "confirmed",
-        heldAmount: 0,
-        attendanceState: "present",
-      })
-      .onConflictDoNothing();
-
-    const result = await services.booking.checkTutorLateness();
-    expect(result.autoCancelled).toBe(0);
-
-    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
-    expect(row!.currentState).toBe("scheduled");
-  });
-
-  test("tutor markAttendance present after start → no auto-cancel (G3 acceptance)", async () => {
-    const start = new Date(Date.now() + 96 * 3600_000).toISOString();
-    const end = new Date(Date.now() + 97 * 3600_000).toISOString();
-    const b = await studentClient.booking.createSolo({
-      tutorId,
-      availabilitySlotId: slotId,
-      modality: "online",
-      scheduledStartAt: start,
-      scheduledEndAt: end,
-      timezone: "Asia/Jakarta",
-    });
-
-    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
-
-    await db
-      .update(booking)
-      .set({ scheduledStartAt: new Date(Date.now() - 5 * 60_000) })
-      .where(eq(booking.id, b.id));
-
-    const marked = await tutorClient.tutorActions.markAttendance({
-      bookingId: b.id,
-      attendance: "present",
-    });
-    expect(marked.attendanceState).toBe("present");
-
-    const result = await services.booking.checkTutorLateness();
-    expect(result.autoCancelled).toBe(0);
-
-    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
-    expect(row!.currentState).toBe("scheduled");
-
-    const [participant] = await db
-      .select()
-      .from(bookingParticipant)
-      .where(
-        and(
-          eq(bookingParticipant.bookingId, b.id),
-          eq(bookingParticipant.userId, tutorId),
-        ),
-      );
-    expect(participant!.attendanceState).toBe("present");
+    expect(released.some((e) => e.entryType === "release")).toBe(false);
   });
 });

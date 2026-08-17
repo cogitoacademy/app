@@ -3,11 +3,16 @@ import {
   ACTOR_TYPE,
   NOTIFICATION_CATEGORY,
   NOTIFICATION_SEVERITY,
-  SUPPORT_SLA_MS,
   LATENESS_TOLERANCE_MS,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   ADMIN_DEFAULT_PAGE_LIMIT,
+  WIB_UTC_OFFSET_HOURS,
+  SUPPORT_SLA_BUSINESS_MINUTES,
+  SUPPORT_SLA_OFF_HOURS_HOURS,
+  SUPPORT_BUSINESS_START_HOUR_WIB,
+  SUPPORT_BUSINESS_END_HOUR_WIB,
+  SUPPORT_BUSINESS_DAYS,
 } from "../../shared/constants";
 import type { SupportRepo } from "./support.repo";
 import type { SupportNotificationPort, SupportAuditPort } from "./index";
@@ -20,6 +25,41 @@ import {
 
 export const LATENESS_CATEGORIES = new Set(["tutor_late", "tutor_no_show"]);
 export const RESOLVED_STATUSES = new Set(["resolved", "closed"]);
+
+/**
+ * Whether the given instant falls inside business hours: Mon–Sat 09:00–21:00
+ * WIB (UTC+7). The instant is converted to WIB wall-clock time, so DST-free
+ * UTC+7 is a fixed offset.
+ */
+export function isBusinessTimeWib(at: Date): boolean {
+  const wibMs = at.getTime() + WIB_UTC_OFFSET_HOURS * 60 * 60 * 1000;
+  const wib = new Date(wibMs);
+  if (
+    !SUPPORT_BUSINESS_DAYS.includes(
+      wib.getUTCDay() as (typeof SUPPORT_BUSINESS_DAYS)[number],
+    )
+  ) {
+    return false;
+  }
+  const hour = wib.getUTCHours();
+  return (
+    hour >= SUPPORT_BUSINESS_START_HOUR_WIB &&
+    hour < SUPPORT_BUSINESS_END_HOUR_WIB
+  );
+}
+
+/**
+ * Computes the OQ-04 SLA deadline for a ticket created at `now`:
+ * 30 minutes during business hours (Mon–Sat 09:00–21:00 WIB), 4 hours outside.
+ * Wall-clock rule — the deadline is `now + SLA window` regardless of where the
+ * window lands.
+ */
+export function computeSlaDeadline(now: Date): Date {
+  if (isBusinessTimeWib(now)) {
+    return new Date(now.getTime() + SUPPORT_SLA_BUSINESS_MINUTES * 60_000);
+  }
+  return new Date(now.getTime() + SUPPORT_SLA_OFF_HOURS_HOURS * 60 * 60_000);
+}
 
 export interface CreateTicketInput {
   category: "tutor_late" | "tutor_no_show" | "technical" | "payment" | "other";
@@ -73,13 +113,36 @@ export function createSupportService(deps: {
       }
     }
 
-    const slaDeadline = new Date(Date.now() + SUPPORT_SLA_MS);
-    return supportRepo.insert(db, {
-      reporterId: userId,
-      bookingId,
-      category: input.category,
-      description: input.description,
-      slaDeadline,
+    const slaDeadline = computeSlaDeadline(new Date());
+    return db.transaction(async (tx) => {
+      const ticket = await supportRepo.insert(tx, {
+        reporterId: userId,
+        bookingId,
+        category: input.category,
+        description: input.description,
+        slaDeadline,
+      });
+
+      // OQ-04: auto-acknowledge on request so the reporter immediately knows
+      // their ticket is being handled and when the SLA deadline is.
+      await notification.writeBestEffort({
+        db: tx,
+        userId,
+        bookingId: bookingId ?? undefined,
+        category: NOTIFICATION_CATEGORY.SYSTEM,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title: "Support ticket received",
+        body: `Your support ticket (#${ticket.id.slice(0, 8)}) has been received. We respond within ${slaDeadline
+          .toISOString()
+          .slice(0, 16)}.`,
+        eventKey: `support.${ticket.id}.acknowledged`,
+        metadata: {
+          ticketId: ticket.id,
+          slaDeadline: slaDeadline.toISOString(),
+        },
+      });
+
+      return ticket;
     });
   }
 
@@ -107,7 +170,9 @@ export function createSupportService(deps: {
    * Auto-escalates open support tickets whose SLA deadline has passed.
    *
    * Called by the `escalate-support-tickets` scheduler job. Each overdue ticket
-   * is moved to `in_progress` and an audit entry records the escalation.
+   * is moved to `in_progress`, an audit entry records the escalation, and an
+   * `escalated` notification row is emitted as the hook point a future
+   * WhatsApp adapter consumes (see MODULE-REFERENCE Support Business Rules).
    *
    * @returns the number of tickets escalated
    */
@@ -128,6 +193,24 @@ export function createSupportService(deps: {
           beforeState: { status: ticket.status },
           afterState: { status: "in_progress" },
           details: { slaDeadline: ticket.slaDeadline.toISOString() },
+        });
+        // OQ-04: escalation hook — a future WhatsApp adapter consumes
+        // notifications with this event key (metadata carries the target).
+        await notification.writeBestEffort({
+          db: tx,
+          userId: ticket.reporterId,
+          bookingId: ticket.bookingId ?? undefined,
+          category: NOTIFICATION_CATEGORY.SYSTEM,
+          severity: NOTIFICATION_SEVERITY.INFO,
+          title: "Support ticket escalated",
+          body: `Your support ticket (#${ticket.id.slice(0, 8)}) has been escalated.`,
+          eventKey: `support.${ticket.id}.escalated`,
+          metadata: {
+            ticketId: ticket.id,
+            slaDeadline: ticket.slaDeadline.toISOString(),
+            whatsappTarget: "+6288101190195",
+            escalate: true,
+          },
         });
       });
       escalated++;

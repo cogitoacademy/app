@@ -1,5 +1,8 @@
 import { describe, test, expect, mock } from "bun:test";
-import { createSupportService } from "../../modules/support/support.service";
+import {
+  createSupportService,
+  isBusinessTimeWib,
+} from "../../modules/support/support.service";
 import {
   SupportTicketNotFoundError,
   SupportBookingAccessError,
@@ -122,8 +125,13 @@ describe("SupportService", () => {
         category: "tutor_late",
       });
       const slaMs = insertArg.slaDeadline.getTime() - Date.now();
-      expect(slaMs).toBeGreaterThanOrEqual(12 * 60 * 60 * 1000 - 1000);
-      expect(slaMs).toBeLessThanOrEqual(12 * 60 * 60 * 1000 + 1000);
+      if (isBusinessTimeWib(new Date())) {
+        expect(slaMs).toBeGreaterThanOrEqual(30 * 60 * 1000 - 1000);
+        expect(slaMs).toBeLessThanOrEqual(30 * 60 * 1000 + 1000);
+      } else {
+        expect(slaMs).toBeGreaterThanOrEqual(4 * 60 * 60 * 1000 - 1000);
+        expect(slaMs).toBeLessThanOrEqual(4 * 60 * 60 * 1000 + 1000);
+      }
     });
 
     test("throws LatenessReportTooEarlyError when start + 15min is in the future", async () => {
@@ -179,6 +187,27 @@ describe("SupportService", () => {
       expect(repo.findBookingForReporter).not.toHaveBeenCalled();
       expect(repo.insert).toHaveBeenCalledTimes(1);
       expect(repo.insert.mock.calls[0][1].bookingId).toBeNull();
+    });
+
+    test("auto-acknowledges the ticket to the reporter (OQ-04)", async () => {
+      const { service, notification } = createService();
+
+      const ticket = await service.createTicket("student1", {
+        category: "technical",
+        description: "Ack me",
+      });
+
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      const ack = notification.writeBestEffort.mock.calls[0][0];
+      expect(ack).toMatchObject({
+        userId: "student1",
+        eventKey: `support.${ticket.id}.acknowledged`,
+        title: "Support ticket received",
+        category: "system",
+      });
+      expect(ack.metadata).toMatchObject({
+        ticketId: ticket.id,
+      });
     });
   });
 
@@ -314,7 +343,7 @@ describe("SupportService", () => {
           slaDeadline: new Date(Date.now() - 60 * 60 * 1000),
         }),
       ];
-      const { service, repo, audit } = createService({
+      const { service, repo, audit, notification } = createService({
         repo: {
           listPastSla: mock(async () => overdue),
           markEscalated: mock(async () => {}),
@@ -335,6 +364,18 @@ describe("SupportService", () => {
         targetId: "t1",
         targetType: "support_ticket",
         afterState: { status: "in_progress" },
+      });
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      const hook = notification.writeBestEffort.mock.calls[0][0];
+      expect(hook).toMatchObject({
+        userId: "student1",
+        eventKey: "support.t1.escalated",
+        title: "Support ticket escalated",
+      });
+      expect(hook.metadata).toMatchObject({
+        ticketId: "t1",
+        whatsappTarget: "+6288101190195",
+        escalate: true,
       });
     });
 

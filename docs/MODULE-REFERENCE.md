@@ -244,12 +244,12 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state.
 - `addSessionNote(userId, bookingId, content)` — Adds a sanitized note to a completed session
 - `getSessionNotes(userId, bookingId)` — Lists notes for a completed session
-- `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late so the lateness job skips the booking
+- `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
 - `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
-- `releaseExpiredHolds()` — Releases holds on bookings past deadline
-- `checkTutorLateness()` — Auto-cancels bookings where the tutor never marked attendance past the 15-min lateness tolerance
+- `releaseExpiredHolds()` — Transition-or-skip (M4): transitions past-deadline bookings to their terminal target (shared `EXPIRY_TARGET` with `expireBookings`) FIRST, then releases holds (or forfeits for NO_SHOW); version conflicts / terminal / RESCHEDULE_PROPOSED bookings are skipped without touching the wallet
+- `checkTutorLateness()` — Flags scheduled bookings where the tutor never marked attendance past the 15-min lateness tolerance: keeps the booking SCHEDULED with holds intact, sets `overrideMeta.category = "tutor_lateness_pending"` (admin-queue surface), writes a `tutor_lateness_pending_review` audit record, and notifies proposer + tutor; returns `{ flagged, failed }` (no auto-cancel, no hold release)
 - `retryFailedMeetings()` — Re-creates Google Meet for CONFIRMED online bookings with a failed meetingEvent (up to 3 attempts, driven by the `retry-failed-meetings` job); prevents the CONFIRMED-without-meeting-link dead state
 
 **Dependencies:** `BookingRepo`, `BookingWalletPort`, `BookingPricingPort`, `BookingAuditPort`, `BookingNotificationPort`, `BookingMeetingPort`
@@ -404,10 +404,10 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 **Service Methods:**
 
 - `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reuses an existing PENDING intent for the same provider+user+package; resets FAILED/EXPIRED payments to PENDING and re-creates the intent (re-purchase, #46); returns `{ paymentId, providerReference, checkoutUrl }`
-- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE; writes `payment.{id}.credited` notification (B6, #46)
+- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE; writes `payment.{id}.credited` notification (B6, #46). On REFUNDED it reverses the credited Marks via `compensate_deduct` (`refund.{id}.reverse`) when the available balance suffices; when the Marks were already spent it marks the payment REFUNDED, writes a `refund_webhook_reconciliation` audit + `refund_record` row for admin, and skips the reversal + refund notification (P2.7/H4)
 - `getPurchase(paymentId, userId)` — Returns the payment record if owned by the user
 
-**Dependencies:** `PaymentRepo`, `PaymentWalletPort`, `PaymentProvider`, `NotificationPort`
+**Dependencies:** `PaymentRepo`, `PaymentWalletPort`, `PaymentProvider`, `NotificationPort`, `AuditPort`, `RefundRecordPort`
 
 **Business Rules:**
 
@@ -491,7 +491,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `createRoom({ name, location, capacity })` — Creates a room
 - `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` and notifies tutor + confirmed students (#46, G14)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
-- `relocateRoom(bookingId, roomId, startAt, endAt)` — Moves a booking to a different room, freeing the previous one; notifies tutor + confirmed students (#46)
+- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise) and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6)
 - `cancelRoomBooking(bookingId)` — Cancels the booking's room assignment (booking continues without a room); notifies tutor + confirmed students (#46)
 
 **Dependencies:** `RoomRepo`, `RoomNotificationPort`, `RoomBookingPort` (transition to scheduled)
@@ -506,7 +506,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 ## Scheduler Module
 
-**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness auto-cancel, email outbox dispatch, and support-ticket SLA escalation.
+**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness admin-queue flagging, email outbox dispatch, and support-ticket SLA escalation.
 
 **Files:**
 
@@ -525,7 +525,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `shutdown()` — Graceful shutdown with 10s timeout (forced close after timeout)
 - `onExpireBookings()` — Calls `bookingService.expireBookings()`
 - `onReleaseHolds()` — Calls `bookingService.releaseExpiredHolds()`
-- `onCheckTutorLateness()` — Calls `bookingService.checkTutorLateness()` (15-min lateness auto-cancel, G3)
+- `onCheckTutorLateness()` — Calls `bookingService.checkTutorLateness()` (flags unmarked tutor-attendance sessions for admin review past the 15-min lateness tolerance, G3)
 - `onSendNotificationEmail()` — Calls `notificationService.dispatchQueuedEmails(50)` (outbox consumer; #46; failed rows retried up to 3 attempts)
 - `onEscalateSupportTickets()` — Calls `supportService.escalatePastSlaTickets()` (marks overdue tickets in_progress + escalated + audit; #46)
 - `onRetryFailedMeetings()` — Calls `bookingService.retryFailedMeetings()` (re-schedules CONFIRMED online bookings with a failed meeting)
@@ -555,18 +555,20 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 **Service Methods:**
 
-- `createTicket(userId, { category, bookingId?, description })` — Lateness/no-show categories (`tutor_late`/`tutor_no_show`) require the reporter to be a participant and the booking to have started > 15 min ago (`LATENESS_TOLERANCE_MS`); sets `slaDeadline` = now + 12h (`SUPPORT_SLA_MS`)
+- `createTicket(userId, { category, bookingId?, description })` — Lateness/no-show categories (`tutor_late`/`tutor_no_show`) require the reporter to be a participant and the booking to have started > 15 min ago (`LATENESS_TOLERANCE_MS`); sets `slaDeadline` via `computeSlaDeadline` (OQ-04: 30 min Mon–Sat 09:00–21:00 WIB, else 4h) and auto-acknowledges the ticket to the reporter (`support.{id}.acknowledged` notification)
 - `listTickets(userId, { status?, limit? })` — The user's own tickets
 - `adminList({ status?, limit?, offset? })` — All tickets sorted by SLA urgency (earliest deadline first)
 - `adminResolveTicket(adminId, { ticketId, resolution })` — Sets `resolved` + assignee, notifies the reporter, records an audit log; throws `SupportTicketAlreadyResolvedError` if already resolved/closed
-- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated and records an audit log (#46)
+- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated, records an audit log, and emits a `support.{id}.escalated` notification row (metadata `whatsappTarget: +6288101190195`, `escalate: true`) as the hook point a future WhatsApp adapter consumes (OQ-04; #46, P2.8)
 
 **Dependencies:** `SupportRepo`, `SupportNotificationPort`, `SupportAuditPort`
 
 **Business Rules:**
 
 - Tickets start `open`; statuses `open`/`in_progress`/`resolved`/`closed`
-- SLA deadline is `created + 12 hours`; auto-escalation job landed in #46 (OQ-04 in-app part). Business-hours SLA windows (30 min / 4 h) + WhatsApp escalation remain open — tracked U9 in `docs/plans/active/PRD-GAPS-PHASE3.md`
+- SLA deadline per OQ-04 (REVIEW-FIXES-4 P2.8): 30 min during business hours (Mon–Sat 09:00–21:00 WIB, UTC+7), 4 h otherwise — wall-clock rule computed by `computeSlaDeadline`
+- Auto-acknowledgement notification on ticket creation (OQ-04)
+- Escalation emits a `support.{id}.escalated` notification row that a future WhatsApp adapter consumes; WhatsApp itself is out of scope until an integration is approved (OQ-04)
 - Lateness reports are time-gated (15 min after scheduled start)
 
 ---

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { OVERRIDE_CATEGORIES, MARKS_ACTIONS } from "./admin-booking.service";
+import {
+  OVERRIDE_CATEGORIES,
+  OVERRIDE_LIST_CATEGORIES,
+  MARKS_ACTIONS,
+} from "./admin-booking.service";
 
 export const applyOverrideInput = z.object({
   bookingId: z.string().max(100),
@@ -15,7 +19,7 @@ export const listOverridesInput = z.object({
   bookingId: z.string().max(100).optional(),
   limit: z.number().min(1).max(100).optional(),
   cursor: z.string().max(100).optional(),
-  category: z.enum(OVERRIDE_CATEGORIES).optional(),
+  category: z.enum(OVERRIDE_LIST_CATEGORIES).optional(),
   urgency: z.enum(["high", "medium", "low"]).optional(),
   escalated: z.boolean().optional(),
 });

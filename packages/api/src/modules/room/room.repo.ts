@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, ne, desc } from "drizzle-orm";
+import { eq, and, gte, lte, ne, desc, inArray } from "drizzle-orm";
 import { room, roomBooking } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { ROOM_BOOKING_STATUS } from "../../shared/constants";
@@ -161,6 +161,46 @@ export async function updateRoomBookingStatus(
   return row!;
 }
 
+/**
+ * Returns the most recent `requested` room booking for a booking — the
+ * pending room request created at booking-creation time (U14) that has not
+ * been confirmed or cancelled yet.
+ */
+export async function findRequestedRoomBookingByBookingId(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  return conn.query.roomBooking.findFirst({
+    where: and(
+      eq(roomBooking.bookingId, bookingId),
+      eq(roomBooking.status, ROOM_BOOKING_STATUS.REQUESTED),
+    ),
+    orderBy: [desc(roomBooking.createdAt)],
+  });
+}
+
+/**
+ * Returns the most recent non-cancelled room booking for a booking — either a
+ * live `confirmed` assignment or a still-pending `requested` row. Used by
+ * `cancelRoomBooking` (M6) so an admin can cancel a booking's room before it
+ * was ever confirmed.
+ */
+export async function findCancellableRoomBookingByBookingId(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  return conn.query.roomBooking.findFirst({
+    where: and(
+      eq(roomBooking.bookingId, bookingId),
+      inArray(roomBooking.status, [
+        ROOM_BOOKING_STATUS.REQUESTED,
+        ROOM_BOOKING_STATUS.CONFIRMED,
+      ]),
+    ),
+    orderBy: [desc(roomBooking.createdAt)],
+  });
+}
+
 export function createRoomRepo() {
   return {
     findActiveRooms,
@@ -170,6 +210,8 @@ export function createRoomRepo() {
     findRoomBookingsForUpdate,
     insertRoomBooking,
     findActiveRoomBookingByBookingId,
+    findRequestedRoomBookingByBookingId,
+    findCancellableRoomBookingByBookingId,
     updateRoomBookingStatus,
   };
 }

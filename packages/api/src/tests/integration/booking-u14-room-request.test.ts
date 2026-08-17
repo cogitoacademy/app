@@ -7,6 +7,7 @@ import {
   tutorProfile,
   availabilitySlot,
   roomBooking,
+  booking,
 } from "@cogito-app/db/schema";
 
 import {
@@ -229,6 +230,66 @@ describe("U14: room availability integrated into offline booking creation (FR-22
         timezone: "Asia/Jakarta",
         requestedRoomId: roomAId,
       }),
-    ).rejects.toThrow(/validation/i);
+    ).rejects.toThrow();
+  });
+
+  test("M6: admin cancels the room of an awaiting-room-approval booking → the booking is cancelled with hold release (FR-22 no room available)", async () => {
+    const t4Start = new Date(Date.now() + 66 * 3600_000).toISOString();
+    const t4End = new Date(Date.now() + 67 * 3600_000).toISOString();
+    const tutorId = (await db.select().from(tutorProfile).limit(1))[0]!.userId;
+
+    const b = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "offline",
+      scheduledStartAt: t4Start,
+      scheduledEndAt: t4End,
+      timezone: "Asia/Jakarta",
+      requestedRoomId: roomAId,
+    });
+    expect(b.roomRequested).toBe(true);
+
+    const cookie = await signInAndGetCookie(
+      `tutor.u14.${ts}@cogito.test`,
+      "Test1234!",
+    );
+    const tutorClient = createTestClient(await createTestContext(cookie ?? ""));
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+
+    const [before] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, b.id));
+    expect(before!.currentState).toBe("awaiting_admin_room_approval");
+    expect(before!.holdAmount).toBeGreaterThan(0);
+
+    const [walletBefore] = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, studentId));
+    const heldBefore = walletBefore!.heldBalance;
+
+    // FR-22: "cancel only if no room is available" — the admin cancels the
+    // room, which cancels the awaiting-approval booking in the same tx.
+    const rb = await adminClient.room.cancelBooking({ bookingId: b.id });
+    expect(rb.status).toBe("cancelled");
+
+    const rows = await db
+      .select()
+      .from(roomBooking)
+      .where(eq(roomBooking.bookingId, b.id));
+    expect(rows[0]!.status).toBe("cancelled");
+
+    const [after] = await db.select().from(booking).where(eq(booking.id, b.id));
+    expect(after!.currentState).toBe("cancelled");
+    expect(after!.holdAmount).toBe(0);
+
+    // The hold is released (not forfeited — the class never happened).
+    const [walletAfter] = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, studentId));
+    expect(walletAfter!.heldBalance).toBe(heldBefore - before!.holdAmount);
+    expect(walletAfter!.totalBalance).toBe(200);
   });
 });

@@ -519,8 +519,14 @@ export function createGoogleMeetingProvider(
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
+    conn?: DbOrTx,
   ): Promise<MeetingEvent> {
     const startedAt = Date.now();
+    // L2: when called inside a booking transaction, the local meetingEvent row
+    // must join that transaction so it rolls back with the booking — a failed
+    // transition would otherwise leave an orphan row (and re-accept would
+    // duplicate the provider event).
+    const write = conn ?? db;
     try {
       const TIMEOUT_MS = 30_000;
       const oauthAccessToken =
@@ -602,7 +608,7 @@ export function createGoogleMeetingProvider(
         }
       }
 
-      const [row] = await db
+      const [row] = await write
         .insert(meetingEvent)
         .values({
           bookingId,
@@ -632,7 +638,7 @@ export function createGoogleMeetingProvider(
         error: { message: String(error) },
       });
 
-      const [row] = await db
+      const [row] = await write
         .insert(meetingEvent)
         .values({
           bookingId,
@@ -671,12 +677,14 @@ export function createGoogleMeetingProviderWithFallback(
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
+    conn?: DbOrTx,
   ): Promise<MeetingEvent> {
     const result = await googleProvider.createEvent(
       bookingId,
       scheduledStartAt,
       scheduledEndAt,
       attendees,
+      conn,
     );
     if (result.status === "failed") {
       // Count this booking's failed google_meet attempts. The retry budget is
@@ -686,7 +694,9 @@ export function createGoogleMeetingProviderWithFallback(
       // (M12). Previously the row was rewritten to manual immediately, which
       // made the retry job dead code and left bookings SCHEDULED without a
       // link.
-      const [countRow] = await db
+      const read = conn ?? db;
+      const write = conn ?? db;
+      const [countRow] = await read
         .select({ count: sql<number>`count(*)::int` })
         .from(meetingEvent)
         .where(
@@ -699,7 +709,7 @@ export function createGoogleMeetingProviderWithFallback(
       const attempts = countRow?.count ?? 0;
 
       if (attempts >= MAX_MEETING_RETRY_ATTEMPTS) {
-        const [row] = await db
+        const [row] = await write
           .update(meetingEvent)
           .set({
             provider: "manual",

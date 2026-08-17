@@ -162,6 +162,12 @@ describe("G7: session notes with sanitization", () => {
   });
 
   test("tutor completes the session", async () => {
+    const { booking: bookingTable } = await import("@cogito-app/db/schema");
+    await db
+      .update(bookingTable)
+      .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(bookingTable.id, bookingId));
+
     const updated = await tutorClient.tutorActions.completeSession({
       bookingId,
     });

@@ -67,6 +67,18 @@ import type {
   BookingRoomPort,
 } from "./index";
 
+/**
+ * Terminal target per expiry-eligible state. Shared by `expireBookings` and
+ * `releaseExpiredHolds` so both jobs agree on where a past-deadline booking
+ * ends up (M4). RESCHEDULE_PROPOSED is handled by the proposal-expiry branch
+ * in `expireBookings` (targets the pre-proposal state) and is deliberately
+ * absent here.
+ */
+const EXPIRY_TARGET: Record<string, BookingState> = {
+  [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
+  [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
+};
+
 export interface CreateSoloInput {
   tutorId: string;
   availabilitySlotId: string;
@@ -284,7 +296,7 @@ export function createBookingService(deps: {
     tx: DbOrTx,
     bookingId: string,
     reason: string,
-    actorType: "student" | "tutor" | "system",
+    actorType: "student" | "tutor" | "admin" | "system",
     excludeUserId?: string,
   ): Promise<void> {
     const participants = await repo.findConfirmedParticipants(
@@ -749,14 +761,35 @@ export function createBookingService(deps: {
         );
       }
 
+      // M3: once a group series is past participant confirmation, the proposer
+      // cannot pull the whole class — the participants' package holds are
+      // committed (U4 no-opt-out applies to cancel too, not just withdraw).
+      // Admin overrides remain the escape hatch (require admin override
+      // otherwise). Cancelling before confirmation is still allowed.
+      if (
+        b.type === BOOKING_TYPE.SERIES &&
+        b.targetGroupSize > 1 &&
+        b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION
+      ) {
+        throw new BookingSeriesNoOptOutError(bookingId);
+      }
+
       const now = new Date();
       const h2 = new Date(
         b.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
       const isLate = now > h2;
-      const toState: BookingState = isLate
-        ? BOOKING_STATE.LATE_CANCELLED
-        : BOOKING_STATE.CANCELLED;
+      // CANCELLED is not reachable from AWAITING_PARTICIPANT_CONFIRMATION /
+      // AWAITING_RECONFIRMATION (mirrors withdraw's cancelTarget fallback) —
+      // use EXPIRED there so the cancel is never rolled back by the guard.
+      const toState: BookingState = canTransition(
+        b.currentState as BookingState,
+        isLate ? BOOKING_STATE.LATE_CANCELLED : BOOKING_STATE.CANCELLED,
+      )
+        ? isLate
+          ? BOOKING_STATE.LATE_CANCELLED
+          : BOOKING_STATE.CANCELLED
+        : BOOKING_STATE.EXPIRED;
 
       if (b.type === BOOKING_TYPE.SERIES) {
         await repo.cancelAllSessions(tx, bookingId);
@@ -1026,6 +1059,10 @@ export function createBookingService(deps: {
       );
     }
 
+    if (b.scheduledStartAt.getTime() > Date.now()) {
+      throw new BookingSessionNotStartedError(bookingId);
+    }
+
     if (b.type === BOOKING_TYPE.GROUP) {
       // After a group repricing the holds live on each remaining
       // participant's wallet (the proposer may have withdrawn and hold 0),
@@ -1131,10 +1168,15 @@ export function createBookingService(deps: {
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
         if (!w) throw new BookingNotFoundError(p.userId);
+        // L1: after an admin cancelSeriesSession(..., release) the remaining
+        // held amount may be below session.holdAmount — never deduct more than
+        // the participant actually holds (InsufficientBalanceError → a
+        // delivered-but-unpaid session).
+        const deductAmount = Math.min(session.holdAmount, p.heldAmount);
         // eslint-disable-next-line no-await-in-loop
         await wallet.deduct(tx, {
           walletId: w.id,
-          amount: session.holdAmount,
+          amount: deductAmount,
           eventKey: `booking.${bookingId}.session.${session.id}.deduct.${p.userId}`,
           sourceReference: bookingId,
           bookingId,
@@ -1143,16 +1185,29 @@ export function createBookingService(deps: {
         });
         // eslint-disable-next-line no-await-in-loop
         await repo.updateParticipantState(tx, p.id, {
-          heldAmount: Math.max(0, p.heldAmount - session.holdAmount),
+          heldAmount: Math.max(0, p.heldAmount - deductAmount),
         });
-        deductedHoldAmount += session.holdAmount;
+        deductedHoldAmount += deductAmount;
       }
     } else {
       proposerWallet = await wallet.getByUserId(tx, b.proposerId);
       if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+      proposerParticipant = await repo.findParticipant(
+        tx,
+        bookingId,
+        b.proposerId,
+      );
+      // L1: after an admin cancelSeriesSession(..., release) the remaining
+      // held amount may be below the per-session amount — never deduct more
+      // than the participant actually holds (InsufficientBalanceError → a
+      // delivered-but-unpaid session).
+      const deductAmount = Math.min(
+        session.holdAmount,
+        proposerParticipant?.heldAmount ?? proposerWallet.heldBalance,
+      );
       await wallet.deduct(tx, {
         walletId: proposerWallet.id,
-        amount: session.holdAmount,
+        amount: deductAmount,
         eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
         sourceReference: bookingId,
         bookingId,
@@ -1160,21 +1215,16 @@ export function createBookingService(deps: {
         reason: "Series session completed",
       });
 
-      proposerParticipant = await repo.findParticipant(
-        tx,
-        bookingId,
-        b.proposerId,
-      );
       if (proposerParticipant) {
         residualHeld = Math.max(
           0,
-          proposerParticipant.heldAmount - session.holdAmount,
+          proposerParticipant.heldAmount - deductAmount,
         );
         await repo.updateParticipantState(tx, proposerParticipant.id, {
           heldAmount: residualHeld,
         });
       }
-      deductedHoldAmount = session.holdAmount;
+      deductedHoldAmount = deductAmount;
     }
     await repo.updateBookingHoldAmount(
       tx,
@@ -1479,11 +1529,27 @@ export function createBookingService(deps: {
         });
       }
 
+      const isGroup = b.type === BOOKING_TYPE.GROUP;
+      // The forfeited hold no longer lives anywhere: zero the target's row so
+      // a later release (cancel/expire) never double-credits them. Solo and
+      // series keep their existing row bookkeeping.
       await repo.updateParticipantState(tx, participant.id, {
         attendanceState: ATTENDANCE_STATE.ABSENT,
+        ...(isGroup ? { heldAmount: 0 } : {}),
       });
 
-      if (!isSeries) {
+      if (isGroup) {
+        // Group (non-series): only the target participant's hold is forfeited
+        // (deducted above); the booking stays live and the other confirmed
+        // participants' holds are preserved. Recompute the booking hold as the
+        // sum of the remaining confirmed (non-ABSENT) participants' held
+        // amounts — mirroring the group branches in completeSingleSession.
+        const confirmed = await repo.findConfirmedParticipants(tx, bookingId);
+        const holdAmount = confirmed
+          .filter((p) => p.attendanceState !== ATTENDANCE_STATE.ABSENT)
+          .reduce((sum, p) => sum + p.heldAmount, 0);
+        await repo.updateBookingHoldAmount(tx, bookingId, holdAmount);
+      } else if (!isSeries) {
         await repo.updateBookingHoldAmount(tx, bookingId, 0);
         await transition(tx, bookingId, BOOKING_STATE.NO_SHOW, {
           actorId: tutorId,
@@ -1531,6 +1597,18 @@ export function createBookingService(deps: {
         );
       }
 
+      // Attendance may only be marked within the lateness tolerance of the
+      // scheduled start (bug H2a): a tutor can no longer pre-mark "present"
+      // days early to dodge the lateness check.
+      const now = Date.now();
+      const windowStart = b.scheduledStartAt.getTime() - LATENESS_TOLERANCE_MS;
+      const windowEnd = b.scheduledStartAt.getTime() + LATENESS_TOLERANCE_MS;
+      if (now < windowStart || now > windowEnd) {
+        throw new BookingNotEditableError(
+          "Tutor attendance can only be marked within 15 minutes of the session start",
+        );
+      }
+
       const tutorParticipant = await repo.findTutorParticipant(tx, bookingId);
       if (tutorParticipant) {
         await repo.updateParticipantState(tx, tutorParticipant.id, {
@@ -1574,6 +1652,17 @@ export function createBookingService(deps: {
 
       const session = normalizeSession(proposedStartAt);
       if (userId !== b.tutorId) {
+        // C2: the current session must also still be beyond H-2 — a student
+        // close to class cannot bypass the late-cancel penalty by proposing a
+        // reschedule to a slot ≥2h out (mirror the cancel() guard).
+        if (
+          b.scheduledStartAt.getTime() - Date.now() <=
+          LATE_CANCEL_THRESHOLD_MS
+        ) {
+          throw new BookingNotEditableError(
+            "Booking can no longer be rescheduled within 2 hours of the current session (H-2)",
+          );
+        }
         // U2 (FR-14 TC-15): student-initiated reschedules are only allowed
         // before H-2 — the new session must start at least 2 hours out.
         if (
@@ -1782,6 +1871,34 @@ export function createBookingService(deps: {
             tx,
             bookingId,
             new Date(Date.now() + RESPONSE_WINDOW_MS),
+          );
+        } else if (targetState === BOOKING_STATE.SCHEDULED) {
+          // H1: an accepted reschedule moves the session to the proposal's new
+          // times — refresh the deadline from the NEW session end (mirror
+          // finalizeMeetingSchedule / transitionBookingToScheduled) so the
+          // booking is not auto-expired at the proposal's now+24h.
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(
+              pending.proposedEndAt.getTime() +
+                (b.modality === MODALITY.OFFLINE
+                  ? OFFLINE_SCHEDULED_GRACE_MS
+                  : 24 * 60 * 60 * 1000),
+            ),
+          );
+        } else if (targetState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) {
+          // Mirror the offline room-approval window (DL-25/U12): 12h, capped at
+          // the (new) session start.
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(
+              Math.min(
+                Date.now() + RESPONSE_WINDOW_MS,
+                pending.proposedStartAt.getTime(),
+              ),
+            ),
           );
         }
 
@@ -2312,6 +2429,13 @@ export function createBookingService(deps: {
           });
         } else {
           await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
+          // M5: the surviving participants get a fresh 12h reconfirmation
+          // window — the previous window may have been (near) exhausted.
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(Date.now() + RESPONSE_WINDOW_MS),
+          );
         }
 
         return { reconfirmed: false };
@@ -2464,6 +2588,17 @@ export function createBookingService(deps: {
             cancelMeeting = true;
           }
 
+          // M7: a `requested` roomBooking row must not survive the regression
+          // — an admin `assignRoom` mid-reconfirmation would otherwise insert
+          // a confirmed room for a booking that is heading back to tutor
+          // review. No-op when the request was already confirmed/cancelled.
+          if (
+            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL &&
+            roomPort
+          ) {
+            await roomPort.cancelRequestedRoomForBooking(tx, bookingId);
+          }
+
           await transition(
             tx,
             bookingId,
@@ -2475,7 +2610,48 @@ export function createBookingService(deps: {
             },
           );
 
-          await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
+          // M8: if the survivors cannot fund the higher per-student price
+          // (InsufficientMarksError), the withdrawal must NOT roll back —
+          // PRD TC-19 expects the group to fall through to expiry (the same
+          // B5 handling expireBookings uses at the deadline).
+          try {
+            await repriceGroupForHeadcount(
+              tx,
+              b,
+              remaining,
+              ACTOR_TYPE.STUDENT,
+            );
+            // M5: the surviving participants get a fresh 12h reconfirmation
+            // window (the old one may be near exhaustion or already passed).
+            await repo.updateBookingDeadline(
+              tx,
+              bookingId,
+              new Date(Date.now() + RESPONSE_WINDOW_MS),
+            );
+          } catch (error) {
+            if (!(error instanceof InsufficientMarksError)) throw error;
+            log({
+              level: "warn",
+              action: "withdraw_reprice_failed",
+              bookingId,
+              message:
+                "Group reprice after withdrawal could not be funded; expiring the booking",
+              error: { message: String(error) },
+            });
+            await releaseAllParticipantHolds(
+              tx,
+              bookingId,
+              "Group cancelled: unfunded reprice after withdrawal",
+              ACTOR_TYPE.STUDENT,
+              userId,
+            );
+            await repo.updateBookingHoldAmount(tx, bookingId, 0);
+            await transition(tx, bookingId, BOOKING_STATE.EXPIRED, {
+              actorId: userId,
+              actorType: ACTOR_TYPE.STUDENT,
+              reason: "Not enough participants after withdrawal",
+            });
+          }
         } else if (b.type === BOOKING_TYPE.GROUP) {
           // A group in a non-regressable non-terminal state continues without
           // the withdrawer; their hold was released above and nothing is
@@ -2497,6 +2673,14 @@ export function createBookingService(deps: {
             currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
           ) {
             cancelMeeting = true;
+          }
+          // M7: cancel the pending room request so the freed room is never
+          // assigned to a cancelled booking.
+          if (
+            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL &&
+            roomPort
+          ) {
+            await roomPort.cancelRequestedRoomForBooking(tx, bookingId);
           }
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,
@@ -2972,6 +3156,48 @@ export function createBookingService(deps: {
   }
 
   /**
+   * Cancels an offline booking whose room could not be provided (FR-22:
+   * "cancel only if no room is available"). Called by the room module inside
+   * `cancelRoomBooking` when the booking is still awaiting room approval.
+   *
+   * Releases all participant holds, zeroes the booking hold, transitions to
+   * CANCELLED and records the cancellation reason + audit trail — the same
+   * in-transaction guarantees the student cancel path provides (M6).
+   *
+   * @param tx - the active room-module transaction
+   * @param bookingId - the booking id
+   * @param actorId - the admin actor
+   */
+  async function cancelOfflineBooking(
+    tx: DbOrTx,
+    bookingId: string,
+    actorId: string,
+  ): Promise<void> {
+    const b = await repo.findBookingById(tx, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    if (b.currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) return;
+
+    await releaseAllParticipantHolds(
+      tx,
+      bookingId,
+      "Booking cancelled: no room available",
+      ACTOR_TYPE.ADMIN,
+    );
+    await repo.updateBookingHoldAmount(tx, bookingId, 0);
+
+    await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
+      actorId,
+      actorType: ACTOR_TYPE.ADMIN,
+      reason: "No room available",
+    });
+    await repo.updateBookingCancellationReason(
+      tx,
+      bookingId,
+      "No room available",
+    );
+  }
+
+  /**
    * Returns the recipients of offline-room lifecycle notifications: the tutor
    * and every confirmed student participant. Consumed by the room module via a
    * consumer-driven port (P1-3).
@@ -3025,6 +3251,7 @@ export function createBookingService(deps: {
         b.scheduledStartAt,
         b.scheduledEndAt,
         attendees,
+        tx,
       );
 
       if (meetingResult.status === "failed") {
@@ -3046,14 +3273,31 @@ export function createBookingService(deps: {
         new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
       );
 
+      // L3: the "ready" copy is only truthful when the meeting row actually
+      // carries a URL — the fallback (manual) provider creates a row with
+      // meetingUrl null, so say "link pending" instead of promising a link.
+      const linkReady = Boolean(meetingResult.meetingUrl);
+      const tutorTitle = linkReady
+        ? "Meeting link ready"
+        : "Meeting link pending";
+      const tutorBody = linkReady
+        ? "The meeting link for the session is ready."
+        : "The meeting link for the session is pending — an admin will add it before the session.";
+      const participantTitle = linkReady
+        ? "Meeting link ready"
+        : "Meeting link pending";
+      const participantBody = linkReady
+        ? "The meeting link for your group session is ready."
+        : "The meeting link for your group session is pending — an admin will add it before the session.";
+
       await notification.writeBestEffort({
         db: tx,
         userId: b.tutorId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
-        title: "Meeting link ready",
-        body: "The meeting link for the session is ready.",
+        title: tutorTitle,
+        body: tutorBody,
         eventKey: `booking.${bookingId}.scheduled.tutor`,
         emailRequired: true,
       });
@@ -3067,8 +3311,8 @@ export function createBookingService(deps: {
           bookingId,
           category: NOTIFICATION_CATEGORY.BOOKING,
           severity: NOTIFICATION_SEVERITY.ACTION,
-          title: "Meeting link ready",
-          body: "The meeting link for your group session is ready.",
+          title: participantTitle,
+          body: participantBody,
           eventKey: `booking.${bookingId}.scheduled.${p.userId}`,
           emailRequired: true,
         });
@@ -3085,6 +3329,21 @@ export function createBookingService(deps: {
         bookingId,
         tutorId,
       });
+      // L2: the local meetingEvent row is inside the booking tx and rolls back
+      // with it — but the provider-side Google event cannot be rolled back. If
+      // the failure happened after the event was created (e.g. a transition
+      // version conflict), best-effort cancel the provider event so a re-accept
+      // does not duplicate it.
+      try {
+        await meeting.cancelEvent(bookingId);
+      } catch (cancelError) {
+        log({
+          level: "warn",
+          action: "meeting_finalize_cleanup_failed",
+          bookingId,
+          error: { message: String(cancelError) },
+        });
+      }
       return {
         scheduled: false,
         booking: (await repo.findBookingById(tx, bookingId)) ?? b,
@@ -3144,12 +3403,6 @@ export function createBookingService(deps: {
       BOOKING_STATE.SCHEDULED,
       BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
     ]);
-
-    const EXPIRY_TARGET: Record<string, BookingState> = {
-      [BOOKING_STATE.RESCHEDULE_PROPOSED]: BOOKING_STATE.EXPIRED,
-      [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
-      [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
-    };
 
     const outcomes = await mapLimit(candidates, 5, async (b) => {
       try {
@@ -3260,17 +3513,43 @@ export function createBookingService(deps: {
             }
           }
 
-          await releaseAllParticipantHolds(
-            tx,
-            b.id,
-            "Booking expired",
-            ACTOR_TYPE.SYSTEM,
-          );
-
-          await repo.updateBookingHoldAmount(tx, b.id, 0);
-
           const targetState =
             EXPIRY_TARGET[b.currentState as string] ?? BOOKING_STATE.EXPIRED;
+
+          const noShow = targetState === BOOKING_STATE.NO_SHOW;
+          if (noShow) {
+            // M2: a no-show forfeits the held Marks (PRD: no-show → deduct),
+            // it does not release them — the "forgot to click anything"
+            // default must enforce the forfeit, not hand the money back.
+            const participants = await repo.findConfirmedParticipants(tx, b.id);
+            for (const p of participants) {
+              if (p.heldAmount <= 0) continue;
+              // eslint-disable-next-line no-await-in-loop
+              const w = await wallet.getByUserId(tx, p.userId);
+              if (!w) continue;
+              // eslint-disable-next-line no-await-in-loop
+              await wallet.deduct(tx, {
+                walletId: w.id,
+                amount: p.heldAmount,
+                eventKey: `booking.${b.id}.no_show.${p.userId}`,
+                sourceReference: b.id,
+                bookingId: b.id,
+                actorType: ACTOR_TYPE.SYSTEM,
+                reason: "No-show forfeit",
+              });
+              // eslint-disable-next-line no-await-in-loop
+              await repo.updateParticipantState(tx, p.id, { heldAmount: 0 });
+            }
+          } else {
+            await releaseAllParticipantHolds(
+              tx,
+              b.id,
+              "Booking expired",
+              ACTOR_TYPE.SYSTEM,
+            );
+          }
+
+          await repo.updateBookingHoldAmount(tx, b.id, 0);
 
           await transition(tx, b.id, targetState, {
             actorId: "system",
@@ -3282,7 +3561,6 @@ export function createBookingService(deps: {
             await repo.cancelAllSessions(tx, b.id);
           }
 
-          const noShow = targetState === BOOKING_STATE.NO_SHOW;
           await notification.writeBestEffort({
             db: tx,
             userId: b.proposerId,
@@ -3293,7 +3571,7 @@ export function createBookingService(deps: {
               : NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
             body: noShow
-              ? "The session was marked as no-show and held marks were released."
+              ? "The session was marked as a no-show and held marks were forfeited."
               : "The booking deadline passed and held marks were released.",
             eventKey: `booking.${b.id}.expired.student`,
             emailRequired: noShow,
@@ -3309,7 +3587,7 @@ export function createBookingService(deps: {
               : NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
             body: noShow
-              ? "The session was marked as no-show and held marks were released."
+              ? "The session was marked as a no-show and held marks were forfeited."
               : "The booking expired because its deadline passed.",
             eventKey: `booking.${b.id}.expired.tutor`,
             emailRequired: noShow,
@@ -3352,13 +3630,66 @@ export function createBookingService(deps: {
     const outcomes = await mapLimit(candidates, 5, async (b) => {
       if (b.holdAmount <= 0) return { ok: true, released: false };
       try {
+        let didRelease = false;
         await db.transaction(async (tx) => {
-          await releaseAllParticipantHolds(
-            tx,
-            b.id,
-            "Hold released: deadline passed",
-            ACTOR_TYPE.SYSTEM,
-          );
+          const live = await repo.findBookingById(tx, b.id);
+          if (!live) return;
+          if (TERMINAL_STATES.includes(live.currentState as BookingState)) {
+            // Raced with expireBookings (or an admin action): the holds are
+            // already handled — never release from a terminal booking.
+            return;
+          }
+          if (live.currentState === BOOKING_STATE.RESCHEDULE_PROPOSED) {
+            // The proposal-expiry branch in expireBookings owns this path and
+            // retains the holds for the restored schedule. Skipping keeps the
+            // two jobs from fighting over the same booking (M4).
+            return;
+          }
+
+          // M4: transition-or-skip — the terminal transition comes FIRST so a
+          // version conflict throws before any wallet movement (a hold is only
+          // ever released together with the transition; a later tutor
+          // accept/complete can never deduct from a zeroed hold).
+          const targetState =
+            EXPIRY_TARGET[live.currentState as string] ?? BOOKING_STATE.EXPIRED;
+          const noShow = targetState === BOOKING_STATE.NO_SHOW;
+          await transition(tx, b.id, targetState, {
+            actorId: "system",
+            actorType: ACTOR_TYPE.SYSTEM,
+            reason: "Deadline passed",
+          });
+          didRelease = true;
+
+          if (noShow) {
+            // Same forfeit semantics as expireBookings (M2).
+            const participants = await repo.findConfirmedParticipants(tx, b.id);
+            for (const p of participants) {
+              if (p.heldAmount <= 0) continue;
+              // eslint-disable-next-line no-await-in-loop
+              const w = await wallet.getByUserId(tx, p.userId);
+              if (!w) continue;
+              // eslint-disable-next-line no-await-in-loop
+              await wallet.deduct(tx, {
+                walletId: w.id,
+                amount: p.heldAmount,
+                eventKey: `booking.${b.id}.no_show.${p.userId}`,
+                sourceReference: b.id,
+                bookingId: b.id,
+                actorType: ACTOR_TYPE.SYSTEM,
+                reason: "No-show forfeit",
+              });
+              // eslint-disable-next-line no-await-in-loop
+              await repo.updateParticipantState(tx, p.id, { heldAmount: 0 });
+            }
+          } else {
+            await releaseAllParticipantHolds(
+              tx,
+              b.id,
+              "Hold released: deadline passed",
+              ACTOR_TYPE.SYSTEM,
+            );
+          }
+
           await repo.updateBookingHoldAmount(tx, b.id, 0);
 
           await notification.writeBestEffort({
@@ -3366,13 +3697,22 @@ export function createBookingService(deps: {
             userId: b.proposerId,
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
-            severity: NOTIFICATION_SEVERITY.INFO,
-            title: "Booking hold released",
-            body: "Held marks for an expired booking were released back to your balance.",
-            eventKey: `booking.${b.id}.hold_released_expiry`,
+            severity: noShow
+              ? NOTIFICATION_SEVERITY.ACTION
+              : NOTIFICATION_SEVERITY.INFO,
+            title: noShow
+              ? "Session marked as no-show"
+              : "Booking hold released",
+            body: noShow
+              ? "The session was marked as a no-show and held marks were forfeited."
+              : "Held marks for an expired booking were released back to your balance.",
+            eventKey: noShow
+              ? `booking.${b.id}.expired.student`
+              : `booking.${b.id}.hold_released_expiry`,
+            emailRequired: noShow,
           });
         });
-        return { ok: true, released: true };
+        return { ok: true, released: didRelease };
       } catch (error) {
         log({
           level: "error",
@@ -3392,47 +3732,43 @@ export function createBookingService(deps: {
   }
 
   async function checkTutorLateness(): Promise<{
-    autoCancelled: number;
+    flagged: number;
     failed: number;
   }> {
     const candidates = await repo.findBookingsWithTutorLateness(db);
 
     const outcomes = await mapLimit(candidates, 5, async (b) => {
       try {
-        await db.transaction(async (tx) => {
-          await releaseAllParticipantHolds(
+        const outcome = await db.transaction(async (tx) => {
+          const overrideMeta: Record<string, unknown> = {
+            ...((b.overrideMeta ?? {}) as Record<string, unknown>),
+            category: "tutor_lateness_pending",
+            flaggedAt: new Date().toISOString(),
+          };
+          const updated = await repo.updateBookingVersioned(
             tx,
             b.id,
-            "Tutor no-show: auto-cancelled",
-            ACTOR_TYPE.SYSTEM,
+            b.version,
+            {
+              overrideMeta,
+            },
           );
+          // Another writer changed the booking; skip silently and let the next
+          // sweep re-evaluate it.
+          if (!updated) return "skipped" as const;
 
-          await repo.updateBookingHoldAmount(tx, b.id, 0);
-
-          const tutorParticipant = await repo.findTutorParticipant(tx, b.id);
-          if (tutorParticipant) {
-            await repo.updateParticipantState(tx, tutorParticipant.id, {
-              attendanceState: ATTENDANCE_STATE.ABSENT,
-            });
-          } else {
-            await repo.insertParticipant(tx, {
-              bookingId: b.id,
-              userId: b.tutorId,
-              role: "tutor",
-              confirmationState: CONFIRMATION_STATE.CONFIRMED,
-              heldAmount: 0,
-              attendanceState: ATTENDANCE_STATE.ABSENT,
-            });
-          }
-
-          await transition(tx, b.id, BOOKING_STATE.NO_SHOW, {
-            actorId: "system",
+          await audit.record({
+            db: tx,
+            actorId: null,
             actorType: ACTOR_TYPE.SYSTEM,
-            reason: "Tutor did not join within the lateness window",
-            metadata: {
+            action: "tutor_lateness_pending_review",
+            targetId: b.id,
+            targetType: "booking",
+            details: {
               latenessMinutes: Math.floor(
                 (Date.now() - b.scheduledStartAt.getTime()) / 60_000,
               ),
+              scheduledStartAt: b.scheduledStartAt.toISOString(),
             },
           });
 
@@ -3441,11 +3777,10 @@ export function createBookingService(deps: {
             userId: b.proposerId,
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
-            severity: NOTIFICATION_SEVERITY.ACTION,
-            title: "Session auto-cancelled",
-            body: "The tutor did not join within 15 minutes, so the session was auto-cancelled and held marks were released.",
-            eventKey: `booking.${b.id}.tutor_no_show`,
-            emailRequired: true,
+            severity: NOTIFICATION_SEVERITY.INFO,
+            title: "Session flagged for review",
+            body: "The session was flagged for admin review because tutor attendance was not confirmed.",
+            eventKey: `booking.${b.id}.tutor_lateness_pending`,
           });
 
           await notification.writeBestEffort({
@@ -3454,14 +3789,14 @@ export function createBookingService(deps: {
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
             severity: NOTIFICATION_SEVERITY.INFO,
-            title: "Session auto-cancelled",
-            body: "You did not join the session within 15 minutes, so it was auto-cancelled.",
-            eventKey: `booking.${b.id}.tutor_no_show.tutor`,
+            title: "Session flagged for review",
+            body: "The session was flagged for admin review because tutor attendance was not confirmed.",
+            eventKey: `booking.${b.id}.tutor_lateness_pending.tutor`,
           });
+
+          return "flagged" as const;
         });
-        // Best-effort cleanup of the provider-side event (NO_SHOW is terminal).
-        await meeting.cancelEvent(b.id);
-        return { ok: true };
+        return outcome;
       } catch (error) {
         log({
           level: "error",
@@ -3469,17 +3804,17 @@ export function createBookingService(deps: {
           bookingId: b.id,
           error: { message: String(error) },
         });
-        return { ok: false };
+        return "failed" as const;
       }
     });
 
-    let autoCancelled = 0;
+    let flagged = 0;
     let failed = 0;
     for (const outcome of outcomes) {
-      if (outcome.ok) autoCancelled++;
-      else failed++;
+      if (outcome === "flagged") flagged++;
+      else if (outcome === "failed") failed++;
     }
-    return { autoCancelled, failed };
+    return { flagged, failed };
   }
 
   return {
@@ -3516,6 +3851,7 @@ export function createBookingService(deps: {
     transition,
     canTransition,
     transitionBookingToScheduled,
+    cancelOfflineBooking,
     getBookingRecipients,
   };
 }
