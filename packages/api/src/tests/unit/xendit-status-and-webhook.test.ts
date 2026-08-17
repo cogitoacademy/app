@@ -38,6 +38,10 @@ describe("mapXenditStatus", () => {
     expect(mapXenditStatus("EXPIRED")).toBe("EXPIRED");
   });
 
+  test("maps REFUNDED to REFUNDED (R5)", () => {
+    expect(mapXenditStatus("REFUNDED")).toBe("REFUNDED");
+  });
+
   test("throws for unknown status", () => {
     expect(() => mapXenditStatus("UNKNOWN")).toThrow("Unknown payment status");
   });

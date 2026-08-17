@@ -34,7 +34,7 @@ async function seedBookingWithHold(params: {
   holdAmount: number;
   deadlineOffsetMs: number;
 }) {
-  const start = new Date(Date.now() + 48 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
   const b = await repo.insertBooking(db, {
     id: crypto.randomUUID(),
     type: BOOKING_TYPE.SOLO,

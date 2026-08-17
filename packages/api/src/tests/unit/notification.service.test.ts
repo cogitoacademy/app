@@ -47,6 +47,10 @@ function makeRepo(overrides: Partial<NotificationRepo> = {}): NotificationRepo {
     findUserEmail: mock(async () => ""),
     insertDispatch: mock(async () => {}),
     updateDispatchStatus: mock(async () => {}),
+    updateDispatchStatusById: mock(async () => {}),
+    claimPendingDispatches: mock(async () => []),
+    incrementDispatchAttempts: mock(async () => {}),
+    findNotificationById: mock(async () => null),
     listNotifications: mock(async () => []),
     countUnread: mock(async () => 0),
     updateReadStatus: mock(async () => {}),
@@ -100,7 +104,7 @@ describe("NotificationService (unit)", () => {
     expect(repo.insertNotification).toHaveBeenCalledTimes(1);
   });
 
-  test("writeInternal dispatches email for action severity with supported category and updates status to sent", async () => {
+  test("writeInternal queues email dispatch for action severity with supported category without calling emailPort.send", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => null),
       insertNotification: mock(async () => ({ id: "n_action" })),
@@ -117,19 +121,23 @@ describe("NotificationService (unit)", () => {
       title: "Booking Confirmed",
       body: "Your booking is confirmed",
       severity: "action",
+      emailRequired: true,
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
-    expect(emailPort.send).toHaveBeenCalledWith({
-      to: "user@example.com",
-      subject: "Booking Confirmed",
-      html: "Your booking is confirmed",
-      category: "booking",
-    });
-    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+    expect(repo.insertDispatch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        notificationId: "n_action",
+        channel: "email",
+        recipientEmail: "user@example.com",
+        status: "queued",
+      }),
+    );
   });
 
-  test("writeInternal dispatches email for critical severity with supported category", async () => {
+  test("writeInternal queues email dispatch for critical severity with supported category", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => null),
       insertNotification: mock(async () => ({ id: "n_critical" })),
@@ -146,17 +154,32 @@ describe("NotificationService (unit)", () => {
       title: "Payment Required",
       body: "Payment is due",
       severity: "critical",
+      emailRequired: true,
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
-    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
   });
 
-  test("writeInternal updates dispatch status to failed when email send fails", async () => {
+  test("dispatchQueuedEmails marks the dispatch row failed and increments attempts when email send fails", async () => {
     const repo = makeRepo({
-      findNotificationByEventKey: mock(async () => null),
-      insertNotification: mock(async () => ({ id: "n_fail" })),
-      findUserEmail: mock(async () => "user@example.com"),
+      claimPendingDispatches: mock(async () => [
+        {
+          id: "d1",
+          notificationId: "n_fail",
+          channel: "email",
+          recipientEmail: "user@example.com",
+          status: "queued",
+          attempts: 0,
+          createdAt: new Date(),
+        },
+      ]),
+      findNotificationById: mock(async () => ({
+        id: "n_fail",
+        title: "Booking Failed",
+        body: "Email dispatch will fail",
+        category: "booking",
+      })),
     });
     const emailPort = {
       send: mock(async () => {
@@ -164,22 +187,17 @@ describe("NotificationService (unit)", () => {
       }),
     };
 
-    const service = createNotificationService(repo, emailPort as any);
-
-    await service.write({
+    const service = createNotificationService(repo, emailPort as any, {
       db: {} as any,
-      userId: "user1",
-      category: "booking",
-      title: "Booking Failed",
-      body: "Email dispatch will fail",
-      severity: "action",
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
-    expect(repo.updateDispatchStatus).toHaveBeenCalledWith(
+    const result = await service.dispatchQueuedEmails();
+
+    expect(result).toEqual({ sent: 0, failed: 1 });
+    expect(repo.incrementDispatchAttempts).toHaveBeenCalledWith(
       expect.anything(),
-      "n_fail",
-      "failed",
+      "d1",
+      "Error: SMTP failure",
     );
 
     const errorCalls = logCaptures.filter(
@@ -205,6 +223,7 @@ describe("NotificationService (unit)", () => {
       title: "No Email",
       body: "No email body",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -227,6 +246,7 @@ describe("NotificationService (unit)", () => {
       title: "No User",
       body: "No user row",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -249,6 +269,7 @@ describe("NotificationService (unit)", () => {
       title: "Achievement Unlocked",
       body: "You earned a badge!",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -276,6 +297,7 @@ describe("NotificationService (unit)", () => {
       title: "System Notice",
       body: "System notice body",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -286,7 +308,7 @@ describe("NotificationService (unit)", () => {
     expect(debugCalls.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("writeInternal dispatches email with eventKey dedup check passing (no existing)", async () => {
+  test("writeInternal queues email dispatch with eventKey dedup check passing (no existing)", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => null),
       insertNotification: mock(async () => ({ id: "n_dedup_pass" })),
@@ -304,10 +326,11 @@ describe("NotificationService (unit)", () => {
       body: "New booking body",
       severity: "action",
       eventKey: "booking.b1.new",
+      emailRequired: true,
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
-    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
   });
 
   test("writeBestEffort catches and logs errors", async () => {
@@ -385,6 +408,7 @@ describe("NotificationService (unit)", () => {
       title: "Info Notification",
       body: "Just info",
       severity: "info",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
@@ -405,6 +429,7 @@ describe("NotificationService (unit)", () => {
       title: "No email port",
       body: "No email port body",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(true).toBe(true);
@@ -571,7 +596,7 @@ describe("NotificationService (unit)", () => {
     expect(repo.markAllRead).toHaveBeenCalledWith("user1");
   });
 
-  test("writeInternal dispatches email for refund category with action severity", async () => {
+  test("writeInternal queues email dispatch for refund category with action severity", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => null),
       insertNotification: mock(async () => ({ id: "n_refund" })),
@@ -588,12 +613,14 @@ describe("NotificationService (unit)", () => {
       title: "Refund Processed",
       body: "Your refund has been processed",
       severity: "action",
+      emailRequired: true,
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
   });
 
-  test("writeInternal dispatches email for schedule category with critical severity", async () => {
+  test("writeInternal queues email dispatch for schedule category with critical severity", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => null),
       insertNotification: mock(async () => ({ id: "n_schedule" })),
@@ -610,12 +637,14 @@ describe("NotificationService (unit)", () => {
       title: "Schedule Changed",
       body: "Your schedule has been updated",
       severity: "critical",
+      emailRequired: true,
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
   });
 
-  test("writeInternal dispatches email for override category with action severity", async () => {
+  test("writeInternal queues email dispatch for override category with action severity", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => null),
       insertNotification: mock(async () => ({ id: "n_override" })),
@@ -632,12 +661,14 @@ describe("NotificationService (unit)", () => {
       title: "Override Applied",
       body: "An override was applied",
       severity: "action",
+      emailRequired: true,
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
   });
 
-  test("writeInternal dispatches email for payment category with action severity", async () => {
+  test("writeInternal queues email dispatch for payment category with action severity", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => null),
       insertNotification: mock(async () => ({ id: "n_payment" })),
@@ -654,9 +685,11 @@ describe("NotificationService (unit)", () => {
       title: "Payment Received",
       body: "Your payment was received",
       severity: "action",
+      emailRequired: true,
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
   });
 
   test("skips email dispatch for unsupported categories (achievement) with emailPort", async () => {
@@ -676,9 +709,11 @@ describe("NotificationService (unit)", () => {
       title: "Achievement Unlocked",
       body: "You earned a badge!",
       severity: "action",
+      emailRequired: true,
     });
 
     expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
 
     const debugCalls = logCaptures.filter(
       (c: any) => c.action === "notification_email_skipped_category",
@@ -686,7 +721,7 @@ describe("NotificationService (unit)", () => {
     expect(debugCalls.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("dispatches email for supported categories (booking)", async () => {
+  test("queues email dispatch for supported categories (booking)", async () => {
     const repo = makeRepo({
       findNotificationByEventKey: mock(async () => null),
       insertNotification: mock(async () => ({ id: "n_booking" })),
@@ -703,9 +738,11 @@ describe("NotificationService (unit)", () => {
       title: "Booking Confirmed",
       body: "Your booking is confirmed",
       severity: "action",
+      emailRequired: true,
     });
 
-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
   });
 
   test("getUnreadCount is exposed as a function", async () => {
@@ -722,6 +759,10 @@ describe("write vs writeBestEffort", () => {
     findUserEmail: mock(async () => null),
     insertDispatch: mock(async () => {}),
     updateDispatchStatus: mock(async () => {}),
+    updateDispatchStatusById: mock(async () => {}),
+    claimPendingDispatches: mock(async () => []),
+    incrementDispatchAttempts: mock(async () => {}),
+    findNotificationById: mock(async () => null),
     listNotifications: mock(async () => []),
     countUnread: mock(async () => 0),
     findNotificationByIdForUser: mock(async () => null),
@@ -766,13 +807,13 @@ describe("write vs writeBestEffort", () => {
       }),
     });
 
-    const logCaptures: any[] = [];
+    const localCaptures: any[] = [];
     const origError = console.error;
     console.error = (...args: unknown[]) => {
       try {
-        logCaptures.push(JSON.parse(args[0] as string));
+        localCaptures.push(JSON.parse(args[0] as string));
       } catch {
-        logCaptures.push(args);
+        localCaptures.push(args);
       }
     };
 
@@ -781,7 +822,7 @@ describe("write vs writeBestEffort", () => {
 
     console.error = origError;
 
-    const errorLog = logCaptures.find(
+    const errorLog = localCaptures.find(
       (e: any) => e.action === "notification_write_failed",
     );
     expect(errorLog).toBeDefined();
@@ -792,5 +833,240 @@ describe("write vs writeBestEffort", () => {
     const repo = makeTestRepo();
     const service = createNotificationService(repo);
     await expect(service.writeBestEffort(baseParams)).resolves.toBeUndefined();
+  });
+});
+
+describe("NotificationService email routing decision (G17)", () => {
+  function makeRoutingRepo(
+    overrides: Partial<NotificationRepo> = {},
+  ): NotificationRepo {
+    return {
+      findNotificationByEventKey: mock(async () => null),
+      findNotificationByIdForUser: mock(async () => ({ id: "n1" })),
+      insertNotification: mock(async () => ({ id: "n_email" })),
+      findUserEmail: mock(async () => "user@example.com"),
+      insertDispatch: mock(async () => {}),
+      updateDispatchStatus: mock(async () => {}),
+      updateDispatchStatusById: mock(async () => {}),
+      claimPendingDispatches: mock(async () => []),
+      incrementDispatchAttempts: mock(async () => {}),
+      findNotificationById: mock(async () => null),
+      listNotifications: mock(async () => []),
+      countUnread: mock(async () => 0),
+      updateReadStatus: mock(async () => {}),
+      markAllRead: mock(async () => {}),
+      findDispatch: mock(async () => null),
+      ...overrides,
+    } as any;
+  }
+
+  const baseParams = {
+    db: {} as any,
+    userId: "user1",
+    category: "booking" as const,
+    title: "Test",
+    body: "Test body",
+    severity: "action" as const,
+    eventKey: "test.key",
+  };
+
+  test("emailRequired true + action severity + supported category → dispatch queued, no inline send", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({ ...baseParams, emailRequired: true });
+
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+    expect(repo.insertDispatch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        notificationId: "n_email",
+        channel: "email",
+        recipientEmail: "user@example.com",
+        status: "queued",
+      }),
+    );
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+
+  test("emailRequired default false + action severity + supported category → no email", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({ ...baseParams });
+
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+
+  test("emailRequired true + info severity + supported category → no email (severity gate)", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({
+      ...baseParams,
+      severity: "info",
+      emailRequired: true,
+    });
+
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+
+  test("emailRequired true + achievement category → no email (category backstop), in-app row kept", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({
+      ...baseParams,
+      category: "achievement",
+      emailRequired: true,
+    });
+
+    expect(repo.insertNotification).toHaveBeenCalledTimes(1);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+
+  test("achievement in-app only: emailRequired false → notification row, no dispatch", async () => {
+    const repo = makeRoutingRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+    const service = createNotificationService(repo, emailPort as any);
+
+    await service.write({
+      ...baseParams,
+      category: "achievement",
+      severity: "info",
+    });
+
+    expect(repo.insertNotification).toHaveBeenCalledTimes(1);
+    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
+  const queuedRow = (overrides: Record<string, unknown> = {}) => ({
+    id: "d1",
+    notificationId: "n1",
+    channel: "email",
+    recipientEmail: "user@example.com",
+    status: "queued",
+    attempts: 0,
+    createdAt: new Date(),
+    ...overrides,
+  });
+
+  test("sends queued rows and marks them sent", async () => {
+    const repo = makeRepo({
+      claimPendingDispatches: mock(async () => [queuedRow()]),
+      findNotificationById: mock(async () => ({
+        id: "n1",
+        title: "Booking Confirmed",
+        body: "Your booking is confirmed",
+        category: "booking",
+      })),
+    });
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+
+    const service = createNotificationService(repo, emailPort as any, {
+      db: {} as any,
+    });
+
+    const result = await service.dispatchQueuedEmails();
+
+    expect(result).toEqual({ sent: 1, failed: 0 });
+    expect(emailPort.send).toHaveBeenCalledWith({
+      to: "user@example.com",
+      subject: "Booking Confirmed",
+      html: "Your booking is confirmed",
+      category: "booking",
+      idempotencyKey: "d1",
+    });
+    expect(repo.updateDispatchStatusById).toHaveBeenCalledWith(
+      expect.anything(),
+      "d1",
+      "sent",
+    );
+  });
+
+  test("marks skipped sends as suppressed", async () => {
+    const repo = makeRepo({
+      claimPendingDispatches: mock(async () => [queuedRow()]),
+      findNotificationById: mock(async () => ({
+        id: "n1",
+        title: "Title",
+        body: "Body",
+        category: "booking",
+      })),
+    });
+    const emailPort = { send: mock(async () => ({ skipped: true })) };
+
+    const service = createNotificationService(repo, emailPort as any, {
+      db: {} as any,
+    });
+
+    const result = await service.dispatchQueuedEmails();
+
+    expect(result).toEqual({ sent: 0, failed: 0 });
+    expect(repo.updateDispatchStatusById).toHaveBeenCalledWith(
+      expect.anything(),
+      "d1",
+      "suppressed",
+    );
+  });
+
+  test("suppresses rows whose notification no longer exists", async () => {
+    const repo = makeRepo({
+      claimPendingDispatches: mock(async () => [queuedRow()]),
+      findNotificationById: mock(async () => null),
+    });
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+
+    const service = createNotificationService(repo, emailPort as any, {
+      db: {} as any,
+    });
+
+    const result = await service.dispatchQueuedEmails();
+
+    expect(result).toEqual({ sent: 0, failed: 0 });
+    expect(emailPort.send).toHaveBeenCalledTimes(0);
+    expect(repo.updateDispatchStatusById).toHaveBeenCalledWith(
+      expect.anything(),
+      "d1",
+      "suppressed",
+    );
+  });
+
+  test("limits the number of rows processed", async () => {
+    const repo = makeRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+
+    const service = createNotificationService(repo, emailPort as any, {
+      db: {} as any,
+    });
+
+    await service.dispatchQueuedEmails(10);
+
+    expect(repo.claimPendingDispatches).toHaveBeenCalledWith(
+      expect.anything(),
+      10,
+    );
+  });
+
+  test("returns zeroes without a db connection", async () => {
+    const repo = makeRepo();
+    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+
+    const service = createNotificationService(repo, emailPort as any);
+
+    const result = await service.dispatchQueuedEmails();
+
+    expect(result).toEqual({ sent: 0, failed: 0 });
+    expect(repo.claimPendingDispatches).toHaveBeenCalledTimes(0);
   });
 });

@@ -5,7 +5,7 @@ services:
     image: postgres:16-alpine
     container_name: cogito-app-postgres-test
     environment:
-      POSTGRES_DB: cogito-app
+      POSTGRES_DB: cogito-test
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     ports:
@@ -15,6 +15,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    # C6: give postgres time to fast-shutdown instead of killing pooled
+    # connections with SIGKILL (shutdown FATAL spam).
+    stop_grace_period: 30s
 
   redis:
     image: redis:7-alpine

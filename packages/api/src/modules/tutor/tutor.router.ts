@@ -1,10 +1,11 @@
 import { z } from "zod";
 
 import { tutorProcedure } from "../../procedures";
-import { updateMyProfileInput } from "./tutor.types";
+import { updateMyProfileInput, getMyPayoutsInput } from "./tutor.types";
 import {
   upsertAvailabilityInput,
   createWeeklyAvailabilityInput,
+  replaceWeeklyAvailabilityInput,
   deleteAvailabilityInput,
 } from "./availability.types";
 import type { TutorHandler } from "./tutor.handler";
@@ -79,6 +80,18 @@ export function createTutorRouter(handler: TutorHandler) {
       .input(createWeeklyAvailabilityInput)
       .handler(handler.createWeeklyAvailability),
 
+    replaceWeeklyAvailability: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/availability/weekly/replace",
+        tags: ["Tutor"],
+        summary: "Replace weekly availability",
+        description:
+          "Replaces future recurring windows from a weekly-hours schedule while preserving one-off overrides",
+      })
+      .input(replaceWeeklyAvailabilityInput)
+      .handler(handler.replaceWeeklyAvailability),
+
     deleteAvailability: tutorProcedure
       .route({
         method: "POST",
@@ -89,5 +102,17 @@ export function createTutorRouter(handler: TutorHandler) {
       })
       .input(deleteAvailabilityInput)
       .handler(handler.deleteAvailability),
+
+    getMyPayouts: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/payouts/get",
+        tags: ["Tutor"],
+        summary: "Get my payout summary",
+        description:
+          "Returns the authenticated tutor's payout summary from completed bookings",
+      })
+      .input(getMyPayoutsInput)
+      .handler(handler.getMyPayouts),
   };
 }

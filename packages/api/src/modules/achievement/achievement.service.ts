@@ -1,18 +1,27 @@
 import type { achievement } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
+import { escapeHtml } from "../../lib/sanitize";
 import {
   AchievementNotFoundError,
   AchievementNotEditableError,
   OptimisticLockError,
 } from "./achievement.errors";
-import { ACHIEVEMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
+import {
+  ACHIEVEMENT_STATUS,
+  ACTOR_TYPE,
+  NOTIFICATION_CATEGORY,
+  NOTIFICATION_SEVERITY,
+} from "../../shared/constants";
 import type {
   AchievementRepo,
   InsertAchievementParams,
   UpdateAchievementData,
   AdminListInput,
 } from "./achievement.repo";
-import type { AchievementAuditPort } from "./index";
+import type {
+  AchievementAuditPort,
+  AchievementNotificationPort,
+} from "./index";
 
 type AchievementRow = typeof achievement.$inferSelect;
 
@@ -43,19 +52,39 @@ export function validateDelete(existing: AchievementRow | undefined): void {
 export function createAchievementService(deps: {
   achievementRepo: AchievementRepo;
   auditPort: AchievementAuditPort;
+  notificationPort: AchievementNotificationPort;
   db: DbType;
 }) {
-  const { achievementRepo, auditPort, db } = deps;
+  const { achievementRepo, auditPort, notificationPort, db } = deps;
 
   async function list(userId: string) {
     return achievementRepo.listByUserId(db, userId);
+  }
+
+  /**
+   * Lists approved + visible achievements for the public landing (F16).
+   */
+  async function listApprovedPublic() {
+    return achievementRepo.listApprovedPublic(db);
   }
 
   async function create(
     userId: string,
     input: Omit<InsertAchievementParams, "userId">,
   ) {
-    return achievementRepo.insert(db, { ...input, userId });
+    const created = await achievementRepo.insert(db, { ...input, userId });
+    if (created) {
+      await notificationPort.writeBestEffort({
+        db,
+        userId,
+        category: NOTIFICATION_CATEGORY.ACHIEVEMENT,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title: "Achievement submitted",
+        body: `Your achievement "${escapeHtml(created.eventName)}" was submitted for review.`,
+        eventKey: `achievement.${created.id}.submitted`,
+      });
+    }
+    return created;
   }
 
   async function update(userId: string, input: UpdateAchievementInput) {
@@ -116,6 +145,24 @@ export function createAchievementService(deps: {
         input.adminNote,
       );
 
+      await notificationPort.writeBestEffort({
+        db: tx,
+        userId: existing.userId,
+        category: NOTIFICATION_CATEGORY.ACHIEVEMENT,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title:
+          input.status === "approved"
+            ? "Achievement approved"
+            : "Achievement rejected",
+        body:
+          input.status === "approved"
+            ? `Your achievement "${escapeHtml(existing.eventName)}" was approved.`
+            : `Your achievement "${escapeHtml(existing.eventName)}" was rejected.${
+                input.adminNote ? ` ${escapeHtml(input.adminNote)}` : ""
+              }`,
+        eventKey: `achievement.${input.achievementId}.reviewed`,
+      });
+
       await auditPort.record({
         db: tx,
         actorId: adminId,
@@ -133,7 +180,15 @@ export function createAchievementService(deps: {
     });
   }
 
-  return { list, create, update, remove, adminList, adminReview };
+  return {
+    list,
+    listApprovedPublic,
+    create,
+    update,
+    remove,
+    adminList,
+    adminReview,
+  };
 }
 
 export type AchievementService = ReturnType<typeof createAchievementService>;

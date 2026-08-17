@@ -108,6 +108,17 @@ export class BookingCancellationDeadlinePassedError extends DomainError {
   }
 }
 
+export class BookingAcceptanceDeadlinePassedError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "BOOKING_ACCEPTANCE_DEADLINE_PASSED",
+      "Booking deadline has passed — held marks were released",
+      { id },
+    );
+  }
+}
+
 export class BookingRoomNotAssignedError extends DomainError {
   readonly domain = "booking";
   constructor(id: string) {
@@ -229,6 +240,26 @@ export class BookingSessionNotFoundError extends DomainError {
   }
 }
 
+export class BookingSessionRequiredError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "BOOKING_SESSION_REQUIRED",
+      "A series session id is required to complete a series",
+      { id },
+    );
+  }
+}
+
+export class BookingSessionNotStartedError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super("BOOKING_SESSION_NOT_STARTED", "Series session has not started yet", {
+      id,
+    });
+  }
+}
+
 export class BookingSessionNotCancellableError extends DomainError {
   readonly domain = "booking";
   constructor(id: string) {
@@ -247,6 +278,17 @@ export class BookingNotCompletedError extends DomainError {
   }
 }
 
+export class BookingSeriesNoOptOutError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "BOOKING_SERIES_NO_OPT_OUT",
+      "Group series participants cannot withdraw from the series",
+      { id },
+    );
+  }
+}
+
 export function mapBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -257,6 +299,10 @@ export function mapBookingError(
     return notFound(err.message, err);
   if (err instanceof BookingSessionNotFoundError)
     return notFound(err.message, err);
+  if (err instanceof BookingSessionRequiredError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingSessionNotStartedError)
+    return badRequest(err.message, err);
   if (err instanceof BookingTutorNotAssignedError)
     return notFound(err.message, err);
   if (err instanceof BookingNotOwnedError) return forbidden(err.message, err);
@@ -281,6 +327,8 @@ export function mapBookingError(
     return badRequest(err.message, err);
   if (err instanceof BookingCancellationDeadlinePassedError)
     return badRequest(err.message, err);
+  if (err instanceof BookingAcceptanceDeadlinePassedError)
+    return badRequest(err.message, err);
   if (err instanceof BookingGroupSizeError) return badRequest(err.message, err);
   if (err instanceof BookingSeriesSizeError)
     return badRequest(err.message, err);
@@ -299,5 +347,7 @@ export function mapBookingError(
   if (err instanceof BookingExpiredError) return badRequest(err.message, err);
   if (err instanceof BookingNoShowError) return badRequest(err.message, err);
   if (err instanceof BookingCancelledError) return badRequest(err.message, err);
+  if (err instanceof BookingSeriesNoOptOutError)
+    return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

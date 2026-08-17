@@ -44,6 +44,11 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     listBookingsByState: mock(async () => []),
     getStateHistory: mock(async () => []),
     updateBookingHoldAmount: mock(async () => {}),
+    updateParticipantHeldAmount: mock(async () => {}),
+    updatePaymentStatusIfRefundable: mock(async () => ({
+      id: "pay1",
+      status: "REFUNDED",
+    })),
     ...overrides,
   };
 }
@@ -60,6 +65,7 @@ function makeWalletPort(overrides: Record<string, unknown> = {}) {
       heldBalance: 0,
       availableBalance: 200,
     })),
+    sumCreditedMarks: mock(async () => 200),
     compensate: mock(async () => ({
       id: "w1",
       totalBalance: 250,
@@ -106,6 +112,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -135,6 +142,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -326,6 +334,48 @@ describe("AdminBookingService", () => {
       });
     });
 
+    test("compensate actions release the hold first so nothing is stranded (H7)", async () => {
+      const wallet = makeWalletPort();
+      const repo = mockRepo({
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 75 },
+        ]),
+      });
+      const auditPort = makeAuditPort();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort,
+        wallet: wallet as any,
+        refund: makeRefundPort(),
+      });
+
+      await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "technical_failure",
+        reason: "Deduct compensation",
+        marksAction: "compensate_deduct",
+        affectedParticipants: ["u1"],
+      });
+
+      // release (held -> available) happens before the compensation deduct.
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release).toHaveBeenCalledWith(expect.anything(), {
+        walletId: "w1",
+        amount: 75,
+        eventKey: "override.release.b1.p1",
+        actorType: "admin",
+        reason: "Admin override: Deduct compensation",
+        bookingId: "b1",
+      });
+      expect(wallet.compensate).toHaveBeenCalledTimes(1);
+      expect(repo.updateParticipantHeldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        0,
+      );
+    });
+
     test("skips participant when wallet not found (getByUserId returns null)", async () => {
       const wallet = makeWalletPort({
         getByUserId: mock(async () => null),
@@ -413,7 +463,7 @@ describe("AdminBookingService", () => {
       expect(wallet.release).not.toHaveBeenCalled();
     });
 
-    test("does not process marks when holdAmount is 0 on booking", async () => {
+    test("processes marks when participants hold even if booking holdAmount is 0 (L7)", async () => {
       const wallet = makeWalletPort();
       const repo = mockRepo({
         findBookingById: mock(async () => ({
@@ -442,8 +492,13 @@ describe("AdminBookingService", () => {
         affectedParticipants: ["u1"],
       });
 
-      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.release).toHaveBeenCalledTimes(1);
       expect(wallet.compensate).not.toHaveBeenCalled();
+      expect(repo.updateParticipantHeldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        0,
+      );
     });
   });
 
@@ -465,6 +520,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.previewOverride({
@@ -504,6 +560,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -532,6 +589,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -554,6 +612,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.previewOverride({
@@ -614,6 +673,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       await service.applyOverride("admin1", {
@@ -626,6 +686,53 @@ describe("AdminBookingService", () => {
     });
   });
 
+  describe("adminRefund notifications", () => {
+    test("writes best-effort refund notification to the payer", async () => {
+      const notification = makeNotificationPort();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo: mockRepo(),
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        notification: notification as any,
+      });
+
+      const result = await service.adminRefund("admin1", {
+        paymentId: "pay1",
+        reason: "Admin refund",
+      });
+
+      expect(result.status).toBe("refunded");
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+      const params = notification.writeBestEffort.mock.calls[0][0];
+      expect(params).toMatchObject({
+        userId: "u1",
+        category: "refund",
+        severity: "action",
+        emailRequired: true,
+      });
+      expect(params.eventKey).toBe("payment.pay1.refunded.admin");
+    });
+
+    test("skips notification when no port provided", async () => {
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo: mockRepo(),
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
+      });
+
+      const result = await service.adminRefund("admin1", {
+        paymentId: "pay1",
+        reason: "Admin refund",
+      });
+      expect(result.status).toBe("refunded");
+    });
+  });
+
   describe("listBookings", () => {
     test("returns empty list when no bookings found", async () => {
       const repo = mockRepo();
@@ -635,6 +742,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings();
@@ -652,6 +760,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ bookingId: "b1" });
@@ -668,6 +777,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ bookingId: "nonexistent" });
@@ -689,6 +799,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ limit: 2 });
@@ -729,6 +840,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ limit: 2, cursor: "b9" });
@@ -764,6 +876,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       await service.listBookings({
@@ -812,6 +925,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.listBookings({ limit: 5 });
@@ -834,6 +948,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -859,6 +974,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.getBookingStateHistory("b1");
@@ -881,6 +997,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -910,6 +1027,7 @@ describe("AdminBookingService", () => {
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       try {
@@ -922,6 +1040,30 @@ describe("AdminBookingService", () => {
         expect(e).toBeInstanceOf(InvalidRefundStateError);
         expect(e.code).toBe("INVALID_REFUND_STATE");
       }
+    });
+
+    test("rolls back the credit when the conditional status update fails (M6)", async () => {
+      const wallet = makeWalletPort();
+      const refund = makeRefundPort();
+      const repo = mockRepo({
+        updatePaymentStatusIfRefundable: mock(async () => null),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: wallet as any,
+        refund,
+      });
+
+      await expect(
+        service.adminRefund("admin1", {
+          paymentId: "pay1",
+          reason: "Race test",
+        }),
+      ).rejects.toThrow(InvalidRefundStateError);
+      // Nothing after the guard may be recorded: no refund record, no audit.
+      expect(refund.createRefundRecord).not.toHaveBeenCalled();
     });
 
     test("success with PAID payment", async () => {
@@ -961,10 +1103,9 @@ describe("AdminBookingService", () => {
         reason: "Admin refund: Full refund",
         type: "compensate_credit",
       });
-      expect(repo.updatePaymentStatus).toHaveBeenCalledWith(
+      expect(repo.updatePaymentStatusIfRefundable).toHaveBeenCalledWith(
         expect.anything(),
         "pay1",
-        "REFUNDED",
       );
       expect(refund.createRefundRecord).toHaveBeenCalledWith(
         expect.anything(),
@@ -1017,10 +1158,9 @@ describe("AdminBookingService", () => {
         reason: "Admin refund: Settled refund",
         type: "compensate_credit",
       });
-      expect(repo.updatePaymentStatus).toHaveBeenCalledWith(
+      expect(repo.updatePaymentStatusIfRefundable).toHaveBeenCalledWith(
         expect.anything(),
         "pay2",
-        "REFUNDED",
       );
       expect(refund.createRefundRecord).toHaveBeenCalledWith(
         expect.anything(),

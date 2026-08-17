@@ -56,6 +56,37 @@ export interface BookingMeetingPort {
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
   ): Promise<MeetingEvent>;
+  updateEvent(
+    bookingId: string,
+    changes: { startAt?: Date; endAt?: Date },
+  ): Promise<void>;
+  cancelEvent(bookingId: string): Promise<void>;
+}
+
+export interface BookingRoomPort {
+  requestRoomForBooking(
+    conn: DbOrTx,
+    params: {
+      bookingId: string;
+      roomId: string;
+      startAt: Date;
+      endAt: Date;
+    },
+  ): Promise<{ available: boolean; reason?: string; roomBookingId?: string }>;
+}
+
+export interface BookingPayoutPort {
+  getTutorPayouts(input: {
+    tutorId: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<{
+    completedSessions: number;
+    totalMarks: number;
+    cogitoTake: number;
+    tutorPayout: number;
+    tutorPayoutIdr: number;
+  }>;
 }
 
 export function createBookingModule(deps: {
@@ -65,6 +96,7 @@ export function createBookingModule(deps: {
   audit: BookingAuditPort;
   notification: BookingNotificationPort;
   meeting: BookingMeetingPort;
+  roomPort?: BookingRoomPort;
 }) {
   const repo = createBookingRepo(deps.db);
   const service = createBookingService({
@@ -75,6 +107,7 @@ export function createBookingModule(deps: {
     audit: deps.audit,
     notification: deps.notification,
     meeting: deps.meeting,
+    roomPort: deps.roomPort,
   });
   const handler = createBookingHandler(service);
   const tutorActionsHandler = createTutorActionsHandler(service);

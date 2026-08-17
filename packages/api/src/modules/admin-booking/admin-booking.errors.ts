@@ -6,6 +6,8 @@ import {
   badRequest,
   internalServerError,
 } from "../../lib/errors";
+import { BookingNotEditableError } from "../booking/booking.errors";
+import { BookingStateTransitionError } from "../booking/booking.errors";
 
 export class BookingNotFoundError extends DomainError {
   readonly domain = "admin-booking";
@@ -35,13 +37,39 @@ export class InvalidRefundStateError extends DomainError {
   }
 }
 
+export class RefundSpendExhaustedError extends DomainError {
+  readonly domain = "admin-booking";
+  constructor(id: string) {
+    super(
+      "REFUND_SPEND_EXHAUSTED",
+      "All credited Marks for this payment were spent — no blind refund; use a compensating correction instead",
+      { id },
+    );
+  }
+}
+
+export class BookingOverrideConflictError extends DomainError {
+  readonly domain = "admin-booking";
+  constructor(id: string) {
+    super("BOOKING_OVERRIDE_CONFLICT", "Booking changed concurrently", { id });
+  }
+}
+
 export function mapAdminBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
   if (err instanceof BookingNotFoundError) return notFound(err.message, err);
   if (err instanceof TerminalStateOverrideError)
     return conflict(err.message, err);
+  if (err instanceof BookingOverrideConflictError)
+    return conflict(err.message, err);
   if (err instanceof InvalidRefundStateError)
     return badRequest(err.message, err);
+  if (err instanceof RefundSpendExhaustedError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingNotEditableError)
+    return badRequest(err.message, err);
+  if (err instanceof BookingStateTransitionError)
+    return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

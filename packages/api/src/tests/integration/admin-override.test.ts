@@ -84,8 +84,8 @@ async function createPublishedTutor(
     })
     .execute();
 
-  const start = new Date(Date.now() + 48 * 3600_000);
-  const end = new Date(Date.now() + 49 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
+  const end = new Date(start.getTime() + 7 * 24 * 3600_000);
   const [slot] = await db
     .insert(availabilitySlot)
     .values({
@@ -224,6 +224,9 @@ describe("Admin Override happy path", () => {
     expect(updated.currentState).toBe("cancelled");
     expect(updated.previousState).toBe("awaiting_tutor_review");
     expect(updated.overrideMeta).toMatchObject({ category: "force_cancel" });
+    // P1-5 regression: the response must reflect the post-override holdAmount
+    // (released to 0), not the stale pre-update value.
+    expect(updated.holdAmount).toBe(0);
 
     const [after] = await db
       .select()

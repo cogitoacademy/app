@@ -10,6 +10,7 @@ import {
   revokeInviteInput,
   listTutorProfilesInput,
   reviewTutorProfileInput,
+  inspectInviteeInput,
 } from "./admin-tutor.types";
 
 type CreateInviteInput = z.infer<typeof createInviteInput>;
@@ -18,11 +19,24 @@ type ResendInviteInput = z.infer<typeof resendInviteInput>;
 type RevokeInviteInput = z.infer<typeof revokeInviteInput>;
 type ListTutorProfilesInput = z.infer<typeof listTutorProfilesInput>;
 type ReviewTutorProfileInput = z.infer<typeof reviewTutorProfileInput>;
+type InspectInviteeInput = z.infer<typeof inspectInviteeInput>;
 
 export type AdminTutorHandler = ReturnType<typeof createAdminTutorHandler>;
 
 export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
   return {
+    inspectInvitee: async ({
+      input,
+    }: {
+      context: Context;
+      input: InspectInviteeInput;
+    }) => {
+      return withDomainMap(
+        () => adminTutorService.inspectInvitee(input),
+        mapAdminTutorError,
+      );
+    },
+
     createInvite: async ({
       context,
       input,
@@ -59,6 +73,23 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       return withDomainMap(
         () =>
           adminTutorService.resendInvite(
+            context.session!.user.id,
+            input.inviteId,
+          ),
+        mapAdminTutorError,
+      );
+    },
+
+    sendInviteAgain: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: ResendInviteInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          adminTutorService.sendInviteAgain(
             context.session!.user.id,
             input.inviteId,
           ),

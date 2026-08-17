@@ -28,6 +28,7 @@ describe("Booking State Transitions", () => {
   });
 
   test("canTransition returns true for valid transitions from confirmed", () => {
+    expect(canTransition("confirmed", "reschedule_proposed")).toBe(true);
     expect(canTransition("confirmed", "awaiting_admin_room_approval")).toBe(
       true,
     );
@@ -37,6 +38,7 @@ describe("Booking State Transitions", () => {
   });
 
   test("canTransition returns true for valid transitions from scheduled", () => {
+    expect(canTransition("scheduled", "reschedule_proposed")).toBe(true);
     expect(canTransition("scheduled", "completed")).toBe(true);
     expect(canTransition("scheduled", "cancelled")).toBe(true);
     expect(canTransition("scheduled", "late_cancelled")).toBe(true);
@@ -61,13 +63,20 @@ describe("Booking State Transitions", () => {
     }
   });
 
-  test("reschedule_proposed can transition to awaiting_reconfirmation, declined, or expired", () => {
+  test("reschedule_proposed can return to each eligible source state", () => {
     expect(
       canTransition("reschedule_proposed", "awaiting_reconfirmation"),
     ).toBe(true);
     expect(canTransition("reschedule_proposed", "declined")).toBe(true);
     expect(canTransition("reschedule_proposed", "expired")).toBe(true);
-    expect(canTransition("reschedule_proposed", "confirmed")).toBe(false);
+    expect(canTransition("reschedule_proposed", "awaiting_tutor_review")).toBe(
+      true,
+    );
+    expect(canTransition("reschedule_proposed", "confirmed")).toBe(true);
+    expect(canTransition("reschedule_proposed", "scheduled")).toBe(true);
+    expect(
+      canTransition("reschedule_proposed", "awaiting_admin_room_approval"),
+    ).toBe(true);
   });
 
   test("awaiting_participant_confirmation transitions", () => {

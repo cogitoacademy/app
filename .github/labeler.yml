@@ -1,20 +1,46 @@
+# actions/labeler@v7 configuration. Each label is a list of matchers;
+# a PR gets a label when any matcher matches its changed files
+# (changed-files → any-glob-to-any-file).
+
 server:
-  - apps/server/**/*
-  - packages/api/**/*
-  - packages/auth/**/*
-  - packages/db/**/*
-  - packages/env/**/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - apps/server/**
+          - packages/api/**
+          - packages/auth/**
+          - packages/db/**
+          - packages/env/**
 
 web:
-  - apps/web/**/*
-  - packages/ui/**/*
+  - changed-files:
+      - any-glob-to-any-file:
+          - apps/web/**
+          - packages/ui/**
 
 infrastructure:
-  - infra/**/*
-  - .github/workflows/**/*
-  - apps/server/Dockerfile
-  - apps/web/Dockerfile
+  - changed-files:
+      - any-glob-to-any-file:
+          - infra/**
+          - .github/workflows/**
+          - docker-compose*.yml
+          - apps/server/Dockerfile
+          - apps/web/Dockerfile
 
 docs:
-  - docs/**/*
-  - "*.md"
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - "*.md"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - bun.lock
+          - package.json
+          - packages/**/package.json
+          - .github/dependabot.yml
+
+github-actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**

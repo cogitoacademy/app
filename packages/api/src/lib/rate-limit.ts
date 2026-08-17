@@ -1,4 +1,5 @@
 import { COGITO_NS } from "./redis";
+import { logRedisFallback } from "./redis";
 import type { RedisClient } from "./redis";
 
 const MAX_ENTRIES = 10_000;
@@ -96,7 +97,8 @@ function redisRateLimit(
 
       const [allowed, retryAfter] = result;
       return { allowed: allowed === 1, retryAfterMs: retryAfter };
-    } catch {
+    } catch (error) {
+      logRedisFallback("rate-limit", error);
       return inMemoryRateLimit(windowMs, maxRequests, keyPrefix)(identifier);
     }
   };

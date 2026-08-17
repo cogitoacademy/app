@@ -30,6 +30,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "build:server": "turbo -F server build",
     "build:web": "turbo -F web build",
     "check-types": "turbo check-types",
     "dev:web": "turbo -F web dev",
@@ -63,6 +64,7 @@
   "devDependencies": {
     "@cogito-app/config": "workspace:*",
     "@types/bun": "catalog:",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "lefthook": "^2.1.9",
     "oxfmt": "^0.62.0",
     "oxlint": "^1.77.0",

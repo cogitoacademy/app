@@ -1,14 +1,19 @@
-import { z } from "zod";
-
-import { protectedProcedure, tutorProcedure } from "../../procedures";
+import {
+  protectedProcedure,
+  studentProcedure,
+  tutorProcedure,
+} from "../../procedures";
 import {
   createSoloInput,
   createGroupInput,
   createSeriesInput,
+  createGroupSeriesInput,
   getBookingInput,
   listMineInput,
   listSessionsInput,
   bookingActionInput,
+  cancelBookingInput,
+  declineBookingInput,
   confirmInviteInput,
   declineInviteInput,
   reconfirmInput,
@@ -16,6 +21,7 @@ import {
   proposeRescheduleInput,
   completeSessionInput,
   markAttendanceInput,
+  markParticipantNoShowInput,
   cancelSessionInput,
   acceptRescheduleInput,
   rejectRescheduleInput,
@@ -26,7 +32,7 @@ import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
 export function createBookingRouter(handler: BookingHandler) {
   return {
-    createSolo: protectedProcedure
+    createSolo: studentProcedure
       .route({
         method: "POST",
         path: "/booking/solo/create",
@@ -48,7 +54,19 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(getBookingInput)
       .handler(handler.get),
 
-    listMine: protectedProcedure
+    getRescheduleAvailability: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/reschedule/availability",
+        tags: ["Bookings"],
+        summary: "List tutor availability for rescheduling",
+        description:
+          "Returns active tutor availability to booking participants",
+      })
+      .input(getBookingInput)
+      .handler(handler.getRescheduleAvailability),
+
+    listMine: studentProcedure
       .route({
         method: "POST",
         path: "/booking/list-mine",
@@ -59,7 +77,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(listMineInput)
       .handler(handler.listMine),
 
-    cancel: protectedProcedure
+    cancel: studentProcedure
       .route({
         method: "POST",
         path: "/booking/cancel",
@@ -67,11 +85,7 @@ export function createBookingRouter(handler: BookingHandler) {
         summary: "Cancel booking",
         description: "Cancels a booking, releases held Marks if applicable",
       })
-      .input(
-        bookingActionInput.extend({
-          cancellationReason: z.string().optional(),
-        }),
-      )
+      .input(cancelBookingInput)
       .handler(handler.cancel),
 
     acceptReschedule: protectedProcedure
@@ -80,7 +94,7 @@ export function createBookingRouter(handler: BookingHandler) {
         path: "/booking/reschedule/accept",
         tags: ["Bookings"],
         summary: "Accept reschedule",
-        description: "Student accepts the tutor's reschedule proposal",
+        description: "A required tutor or student accepts the active proposal",
       })
       .input(acceptRescheduleInput)
       .handler(handler.acceptReschedule),
@@ -91,12 +105,12 @@ export function createBookingRouter(handler: BookingHandler) {
         path: "/booking/reschedule/reject",
         tags: ["Bookings"],
         summary: "Reject reschedule",
-        description: "Student rejects the tutor's reschedule proposal",
+        description: "A required tutor or student rejects the active proposal",
       })
       .input(rejectRescheduleInput)
       .handler(handler.rejectReschedule),
 
-    cancelSession: protectedProcedure
+    cancelSession: studentProcedure
       .route({
         method: "POST",
         path: "/booking/session/cancel",
@@ -131,7 +145,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(getSessionNotesInput)
       .handler(handler.getSessionNotes),
 
-    createGroup: protectedProcedure
+    createGroup: studentProcedure
       .route({
         method: "POST",
         path: "/booking/group/create",
@@ -143,7 +157,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(createGroupInput)
       .handler(handler.createGroup),
 
-    createSeries: protectedProcedure
+    createSeries: studentProcedure
       .route({
         method: "POST",
         path: "/booking/series/create",
@@ -154,7 +168,19 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(createSeriesInput)
       .handler(handler.createSeries),
 
-    confirmInvite: protectedProcedure
+    createGroupSeries: studentProcedure
+      .route({
+        method: "POST",
+        path: "/booking/group-series/create",
+        tags: ["Bookings"],
+        summary: "Create a group series booking",
+        description:
+          "Creates a multi-session group series (FR-20): the proposer holds the full package up front and invitees accept the whole series",
+      })
+      .input(createGroupSeriesInput)
+      .handler(handler.createGroupSeries),
+
+    confirmInvite: studentProcedure
       .route({
         method: "POST",
         path: "/booking/invite/confirm",
@@ -165,7 +191,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(confirmInviteInput)
       .handler(handler.confirmInvite),
 
-    declineInvite: protectedProcedure
+    declineInvite: studentProcedure
       .route({
         method: "POST",
         path: "/booking/invite/decline",
@@ -176,7 +202,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(declineInviteInput)
       .handler(handler.declineInvite),
 
-    reconfirm: protectedProcedure
+    reconfirm: studentProcedure
       .route({
         method: "POST",
         path: "/booking/reconfirm",
@@ -187,7 +213,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(reconfirmInput)
       .handler(handler.reconfirm),
 
-    withdraw: protectedProcedure
+    withdraw: studentProcedure
       .route({
         method: "POST",
         path: "/booking/withdraw",
@@ -209,6 +235,18 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(listSessionsInput)
       .handler(handler.listSessions),
+
+    proposeReschedule: studentProcedure
+      .route({
+        method: "POST",
+        path: "/booking/reschedule/propose",
+        tags: ["Bookings"],
+        summary: "Propose a new booking time",
+        description:
+          "Tutor or booking proposer creates or counters a reschedule proposal",
+      })
+      .input(proposeRescheduleInput)
+      .handler(handler.proposeReschedule),
   };
 }
 
@@ -255,11 +293,7 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
         summary: "Decline booking",
         description: "Tutor declines a booking and releases held Marks",
       })
-      .input(
-        bookingActionInput.extend({
-          reason: z.string().optional(),
-        }),
-      )
+      .input(declineBookingInput)
       .handler(handler.declineBooking),
 
     completeSession: tutorProcedure
@@ -284,5 +318,17 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       })
       .input(markAttendanceInput)
       .handler(handler.markAttendance),
+
+    markParticipantNoShow: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/mark-participant-no-show",
+        tags: ["Tutor", "Bookings"],
+        summary: "Mark a participant as no-show",
+        description:
+          "Tutor marks a participant as no-show for a session 15 minutes after it starts; their session hold is forfeited (U5/TC-30)",
+      })
+      .input(markParticipantNoShowInput)
+      .handler(handler.markParticipantNoShow),
   };
 }

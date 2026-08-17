@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   wallet,
@@ -80,8 +80,8 @@ async function createPublishedTutor(email: string, ts: number) {
     })
     .returning();
 
-  const start = new Date(Date.now() + 72 * 3600_000);
-  const end = new Date(Date.now() + 73 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
+  const end = new Date(start.getTime() + 7 * 24 * 3600_000);
   const [slot] = await db
     .insert(availabilitySlot)
     .values({
@@ -188,6 +188,19 @@ describe("G4: group repricing on headcount change", () => {
     expect(b.currentState).toBe("awaiting_tutor_review");
   });
 
+  test("group of 4: proposer is charged only perStudent once all invitees confirm", async () => {
+    const b = await proposerClient.booking.get({ bookingId });
+    expect(b.holdAmount).toBe(112);
+
+    const [proposerWallet] = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, proposerId));
+    expect(proposerWallet!.heldBalance).toBe(28);
+    expect(proposerWallet!.totalBalance).toBe(200);
+    expect(proposerWallet!.availableBalance).toBe(200 - 28);
+  });
+
   test("proposer withdraws → remaining 3 repriced to 35 marks/student", async () => {
     const result = await proposerClient.booking.withdraw({
       bookingId,
@@ -237,7 +250,9 @@ describe("G4: group repricing on headcount change", () => {
       const notifs = await db
         .select()
         .from(notification)
-        .where(eq(notification.eventKey, `booking.${bookingId}.reprice.${id}`));
+        .where(
+          like(notification.eventKey, `booking.${bookingId}.reprice.${id}.%`),
+        );
       expect(notifs.length).toBe(1);
       expect(notifs[0]!.title).toBe("Group price updated");
     }

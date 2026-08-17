@@ -1,22 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
+import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
+  CardFooter,
   CardHeader,
   CardHeaderAction,
   CardTitle,
-  CardFooter,
 } from "@cogito-app/ui/components/selia/card";
-import { Stack } from "@cogito-app/ui/components/selia/stack";
-import { Button } from "@cogito-app/ui/components/selia/button";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
-import { Text } from "@cogito-app/ui/components/selia/text";
-import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { Input } from "@cogito-app/ui/components/selia/input";
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import {
   Dialog,
   DialogBody,
@@ -26,6 +22,23 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@cogito-app/ui/components/selia/dialog";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
+import { Input } from "@cogito-app/ui/components/selia/input";
+import { Stack } from "@cogito-app/ui/components/selia/stack";
+import { Text } from "@cogito-app/ui/components/selia/text";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import {
+  IconAlertTriangle,
+  IconCalendarClock,
+  IconCertificate,
+  IconMail,
+  IconSchool,
+} from "@tabler/icons-react";
+
 import { orpc } from "@/utils/orpc";
 
 const FLOOR_ONLINE: Record<string, number> = {
@@ -59,9 +72,9 @@ const STATUS_BADGE: Record<
   }
 > = {
   draft: { label: "Draft", variant: "secondary" },
-  pending_review: { label: "Pending Review", variant: "warning" },
-  changes_requested: { label: "Changes Requested", variant: "danger" },
-  approved_unpublished: { label: "Approved (unpublished)", variant: "info" },
+  pending_review: { label: "Needs review", variant: "warning" },
+  changes_requested: { label: "Changes requested", variant: "danger" },
+  approved_unpublished: { label: "Approved", variant: "info" },
   published: { label: "Published", variant: "success" },
   suspended: { label: "Suspended", variant: "danger" },
 };
@@ -78,18 +91,28 @@ interface TutorReviewCardProps {
     availabilitySummary: string | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
-    user?: {
-      name: string;
-      email: string;
-    } | null;
+    pendingProfileChanges: Record<string, unknown> | null;
+    profileEditStatus: string;
+    profileEditAdminNote: string | null;
+    user?: { name: string; email: string } | null;
   };
   onAction?: () => void;
+}
+
+function getInitials(name?: string | null) {
+  return (name ?? "Tutor")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 }
 
 export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
   const queryClient = useQueryClient();
   const [noteAction, setNoteAction] = useState<
-    "request_changes" | "suspend" | null
+    "request_changes" | "request_edit_changes" | "suspend" | null
   >(null);
   const [adminNote, setAdminNote] = useState("");
   const reviewMutation = useMutation(
@@ -100,6 +123,7 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
         void queryClient.invalidateQueries({
           queryKey: orpc.adminTutor.listTutorProfiles.key(),
         });
+        toastManager.add({ title: "Tutor profile updated", type: "success" });
         onAction?.();
       },
       onError: (error: unknown) => {
@@ -118,7 +142,9 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
       | "approve_unpublished"
       | "publish"
       | "unpublish"
-      | "suspend",
+      | "suspend"
+      | "approve_edits"
+      | "request_edit_changes",
     note?: string,
   ) {
     reviewMutation.mutate({
@@ -130,86 +156,123 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
 
   function submitNoteAction() {
     const note = adminNote.trim();
-    if (!noteAction || !note) return;
-    handleAction(noteAction, note);
+    if (noteAction && note) handleAction(noteAction, note);
   }
 
-  const badge = STATUS_BADGE[profile.onboardingStatus] ?? {
-    label: profile.onboardingStatus,
-    variant: "secondary" as const,
-  };
-
+  const badge =
+    profile.profileEditStatus === "pending_review"
+      ? ({ label: "Edit review", variant: "warning" } as const)
+      : (STATUS_BADGE[profile.onboardingStatus] ?? {
+          label: profile.onboardingStatus,
+          variant: "secondary" as const,
+        });
   const floorPrices =
     profile.modality === "offline" ? FLOOR_OFFLINE : FLOOR_ONLINE;
+  const priceEntries = Object.entries(profile.prices ?? {}).toSorted(
+    ([a], [b]) => Number(a) - Number(b),
+  );
+  const reviewAction = reviewMutation.variables?.action;
+  const isPending = reviewMutation.isPending;
 
   return (
     <>
       <Card className="flex h-full min-w-0 flex-col overflow-hidden">
         <CardHeader className="items-start">
+          <Avatar>
+            <AvatarFallback>
+              {getInitials(profile.displayName ?? profile.user?.name)}
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0">
             <CardTitle className="truncate">
-              {profile.displayName ?? "Unnamed Tutor"}
+              {profile.displayName ?? profile.user?.name ?? "Unnamed tutor"}
             </CardTitle>
-            {profile.user && (
-              <Text className="mt-1 truncate text-sm text-muted">
-                {profile.user.email}
-              </Text>
-            )}
+            {profile.user ? (
+              <div className="mt-1 flex items-center gap-1.5 text-muted">
+                <IconMail className="size-3.5 shrink-0" />
+                <Text className="truncate text-sm">{profile.user.email}</Text>
+              </div>
+            ) : null}
           </div>
           <CardHeaderAction>
             <Badge variant={badge.variant}>{badge.label}</Badge>
           </CardHeaderAction>
         </CardHeader>
+
         <CardBody className="flex-1">
-          <Stack direction="column" spacing="md">
-            {profile.shortBio ? (
-              <Text className="leading-relaxed text-muted">
-                {profile.shortBio}
-              </Text>
-            ) : (
-              <Text className="text-sm italic text-dimmed">
-                No bio provided.
-              </Text>
-            )}
-            {profile.credentialsSummary && (
-              <div>
+          <Stack direction="column" spacing="md" className="m-0!">
+            <Text
+              className={
+                profile.shortBio
+                  ? "leading-relaxed text-muted"
+                  : "italic text-dimmed"
+              }
+            >
+              {profile.shortBio ?? "No tutor introduction provided."}
+            </Text>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ReviewDetail
+                icon={<IconSchool />}
+                label="Teaching mode"
+                value={
+                  profile.modality
+                    ? `${profile.modality} sessions`
+                    : "Not specified"
+                }
+                capitalize={Boolean(profile.modality)}
+              />
+              <ReviewDetail
+                icon={<IconCalendarClock />}
+                label="Availability"
+                value={profile.availabilitySummary ?? "Not specified"}
+              />
+            </div>
+
+            <section>
+              <div className="mb-2 flex items-center gap-2">
+                <IconCertificate className="size-4 text-muted" />
                 <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
                   Credentials
                 </Text>
-                <Text className="mt-1 text-sm">
-                  {profile.credentialsSummary}
-                </Text>
               </div>
-            )}
-            {profile.expertise && profile.expertise.length > 0 && (
-              <div>
-                <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
-                  Expertise
-                </Text>
+              <Text
+                className={
+                  profile.credentialsSummary
+                    ? "text-sm"
+                    : "text-sm italic text-dimmed"
+                }
+              >
+                {profile.credentialsSummary ?? "No credentials provided."}
+              </Text>
+            </section>
+
+            <section>
+              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                Expertise
+              </Text>
+              {profile.expertise?.length ? (
                 <div className="flex flex-wrap gap-1.5">
-                  {profile.expertise.map((e) => (
-                    <Badge key={e} variant="secondary">
-                      {e}
+                  {profile.expertise.map((expertise) => (
+                    <Badge key={expertise} variant="secondary">
+                      {expertise}
                     </Badge>
                   ))}
                 </div>
-              </div>
-            )}
-            {profile.modality && (
-              <div className="flex items-center justify-between rounded-lg bg-accent p-3">
-                <Text className="text-sm text-muted">Teaching mode</Text>
-                <Badge variant="info" className="capitalize">
-                  {profile.modality}
-                </Badge>
-              </div>
-            )}
-            {profile.prices && (
-              <div>
-                <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
-                  Marks per student
+              ) : (
+                <Text className="text-sm italic text-dimmed">
+                  No subjects listed.
                 </Text>
+              )}
+            </section>
+
+            <section>
+              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                Marks per student
+              </Text>
+              {priceEntries.length ? (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {Object.entries(profile.prices).map(([size, price]) => {
+                  {priceEntries.map(([size, price]) => {
                     const floor = floorPrices[size];
                     const belowFloor = floor !== undefined && price < floor;
                     return (
@@ -223,88 +286,149 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
                         <Text
                           className={
                             belowFloor
-                              ? "font-semibold text-danger"
-                              : "font-semibold"
+                              ? "mt-0.5 font-semibold text-danger"
+                              : "mt-0.5 font-semibold"
                           }
                         >
                           {price} Marks
                         </Text>
-                        <Text className="text-xs text-dimmed">
-                          Floor {floor ?? "-"}
+                        <Text
+                          className={
+                            belowFloor
+                              ? "mt-1 flex items-center gap-1 text-xs text-danger"
+                              : "mt-1 text-xs text-dimmed"
+                          }
+                        >
+                          {belowFloor ? (
+                            <IconAlertTriangle className="size-3" />
+                          ) : null}
+                          Minimum {floor ?? "—"}
                         </Text>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            )}
-            {profile.availabilitySummary && (
-              <div className="rounded-lg bg-accent p-3">
-                <Text className="text-xs text-muted">Availability</Text>
-                <Text className="mt-1 text-sm font-medium">
-                  {profile.availabilitySummary}
+              ) : (
+                <Text className="text-sm italic text-dimmed">
+                  No price list provided.
                 </Text>
-              </div>
-            )}
-            {profile.adminReviewNote && (
+              )}
+            </section>
+
+            {profile.adminReviewNote ? (
               <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
                 <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
-                  Latest admin note
+                  Latest review note
                 </Text>
                 <Text className="mt-1 text-sm">{profile.adminReviewNote}</Text>
               </div>
-            )}
-
-            {profile.onboardingStatus === "changes_requested" && (
-              <Text className="text-sm text-muted italic">
-                Awaiting tutor updates
-              </Text>
-            )}
+            ) : null}
+            {profile.pendingProfileChanges ? (
+              <section className="rounded-lg border border-warning-border bg-warning/10 p-3">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
+                  Proposed profile changes
+                </Text>
+                <Stack spacing="sm" className="mt-2">
+                  {Object.entries(profile.pendingProfileChanges).map(
+                    ([field, value]) => (
+                      <div key={field}>
+                        <Text className="text-xs capitalize text-muted">
+                          {field.replace(/([A-Z])/g, " $1")}
+                        </Text>
+                        <Text className="text-sm font-medium">
+                          {Array.isArray(value)
+                            ? value.join(", ")
+                            : typeof value === "object"
+                              ? JSON.stringify(value)
+                              : String(value)}
+                        </Text>
+                      </div>
+                    ),
+                  )}
+                </Stack>
+                {profile.profileEditAdminNote ? (
+                  <Text className="mt-2 text-sm">
+                    {profile.profileEditAdminNote}
+                  </Text>
+                ) : null}
+              </section>
+            ) : null}
           </Stack>
         </CardBody>
+
         <CardFooter className="flex-wrap gap-2">
-          {profile.onboardingStatus === "pending_review" && (
-            <Stack direction="row" spacing="sm" className="flex-wrap">
+          {profile.onboardingStatus === "published" &&
+          profile.profileEditStatus === "pending_review" ? (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setNoteAction("request_edit_changes")}
+                disabled={isPending}
+              >
+                Request revision
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handleAction("approve_edits")}
+                progress={isPending && reviewAction === "approve_edits"}
+                disabled={isPending}
+              >
+                Approve changes
+              </Button>
+            </>
+          ) : null}
+          {profile.onboardingStatus === "pending_review" ? (
+            <>
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => setNoteAction("request_changes")}
+                disabled={isPending}
               >
-                Request Changes
+                Request changes
               </Button>
               <Button
                 size="sm"
                 onClick={() => handleAction("approve_unpublished")}
+                progress={isPending && reviewAction === "approve_unpublished"}
+                disabled={isPending}
               >
-                Approve (unpublished)
+                Approve profile
               </Button>
-              <Button size="sm" onClick={() => handleAction("publish")}>
-                Publish
-              </Button>
-            </Stack>
-          )}
+            </>
+          ) : null}
 
-          {profile.onboardingStatus === "approved_unpublished" && (
-            <Stack direction="row" spacing="sm" className="flex-wrap">
-              <Button size="sm" onClick={() => handleAction("publish")}>
-                Publish Now
-              </Button>
+          {profile.onboardingStatus === "approved_unpublished" ? (
+            <>
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => setNoteAction("request_changes")}
+                disabled={isPending}
               >
-                Request Changes
+                Request changes
               </Button>
-            </Stack>
-          )}
+              <Button
+                size="sm"
+                onClick={() => handleAction("publish")}
+                progress={isPending && reviewAction === "publish"}
+                disabled={isPending}
+              >
+                Publish profile
+              </Button>
+            </>
+          ) : null}
 
-          {profile.onboardingStatus === "published" && (
-            <Stack direction="row" spacing="sm" className="flex-wrap">
+          {profile.onboardingStatus === "published" &&
+          profile.profileEditStatus !== "pending_review" ? (
+            <>
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => handleAction("unpublish")}
+                progress={isPending && reviewAction === "unpublish"}
+                disabled={isPending}
               >
                 Unpublish
               </Button>
@@ -312,18 +436,19 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
                 size="sm"
                 variant="danger"
                 onClick={() => setNoteAction("suspend")}
+                disabled={isPending}
               >
                 Suspend
               </Button>
-            </Stack>
-          )}
+            </>
+          ) : null}
         </CardFooter>
       </Card>
 
       <Dialog
         open={noteAction !== null}
         onOpenChange={(open) => {
-          if (!open && !reviewMutation.isPending) {
+          if (!open && !isPending) {
             setNoteAction(null);
             setAdminNote("");
           }
@@ -334,24 +459,30 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
             <DialogTitle>
               {noteAction === "suspend"
                 ? "Suspend tutor?"
-                : "Request profile changes?"}
+                : noteAction === "request_edit_changes"
+                  ? "Request revisions?"
+                  : "Request profile changes?"}
             </DialogTitle>
             <DialogDescription>
               {noteAction === "suspend"
                 ? "Explain why this tutor is being removed from discovery."
-                : "Explain what the tutor must update before another review."}
+                : "Give clear, actionable feedback before the tutor resubmits."}
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
             <Field>
-              <FieldLabel>Admin note</FieldLabel>
+              <FieldLabel htmlFor="tutor-review-note">Review note</FieldLabel>
+              <FieldDescription>
+                This note will be visible to the tutor.
+              </FieldDescription>
               <Input
+                id="tutor-review-note"
                 value={adminNote}
                 onChange={(event) => setAdminNote(event.target.value)}
                 placeholder={
                   noteAction === "suspend"
                     ? "Reason for suspension"
-                    : "Changes required"
+                    : "What needs to be updated?"
                 }
               />
             </Field>
@@ -363,15 +494,15 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
                 setNoteAction(null);
                 setAdminNote("");
               }}
-              disabled={reviewMutation.isPending}
+              disabled={isPending}
             >
               Cancel
             </Button>
             <Button
               variant={noteAction === "suspend" ? "danger" : "primary"}
               onClick={submitNoteAction}
-              progress={reviewMutation.isPending}
-              disabled={!adminNote.trim() || reviewMutation.isPending}
+              progress={isPending}
+              disabled={!adminNote.trim() || isPending}
             >
               {noteAction === "suspend" ? "Suspend tutor" : "Send request"}
             </Button>
@@ -379,5 +510,35 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
         </DialogPopup>
       </Dialog>
     </>
+  );
+}
+
+function ReviewDetail({
+  icon,
+  label,
+  value,
+  capitalize = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  capitalize?: boolean;
+}) {
+  return (
+    <div className="rounded-lg bg-accent p-3">
+      <div className="flex items-center gap-1.5 text-muted">
+        {icon}
+        <Text className="text-xs">{label}</Text>
+      </div>
+      <Text
+        className={
+          capitalize
+            ? "mt-1 text-sm font-medium capitalize"
+            : "mt-1 text-sm font-medium"
+        }
+      >
+        {value}
+      </Text>
+    </div>
   );
 }

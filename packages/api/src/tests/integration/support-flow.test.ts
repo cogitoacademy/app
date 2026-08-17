@@ -10,6 +10,7 @@ import {
   notification,
   supportTicket,
   user,
+  auditLog,
 } from "@cogito-app/db/schema";
 
 import {
@@ -82,8 +83,8 @@ async function createPublishedTutor(email: string, ts: number) {
     })
     .returning();
 
-  const start = new Date(Date.now() + 24 * 3600_000);
-  const end = new Date(Date.now() + 25 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
+  const end = new Date(start.getTime() + 7 * 24 * 3600_000);
   const [slot] = await db
     .insert(availabilitySlot)
     .values({
@@ -296,5 +297,65 @@ describe("Support ticket flow", () => {
         resolution: "Resolved twice",
       }),
     ).rejects.toThrow();
+  });
+
+  test("ticket past SLA deadline is auto-escalated by the scheduler consumer", async () => {
+    const { services } = await import("@cogito-app/api/services");
+
+    const t = await studentClient.support.createTicket({
+      category: "technical",
+      description: "SLA escalation test",
+    });
+    expect(t.status).toBe("open");
+
+    await db
+      .update(supportTicket)
+      .set({ slaDeadline: new Date(Date.now() - 60 * 60 * 1000) })
+      .where(eq(supportTicket.id, t.id));
+
+    const result = await services.support.escalatePastSlaTickets();
+    expect(result.escalated).toBeGreaterThanOrEqual(1);
+
+    const [row] = await db
+      .select()
+      .from(supportTicket)
+      .where(eq(supportTicket.id, t.id));
+    expect(row!.status).toBe("in_progress");
+
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, "support_ticket_escalated"));
+    expect(audits.length).toBeGreaterThanOrEqual(1);
+    expect(audits[0]!.targetId).toBe(t.id);
+    expect(audits[0]!.afterState).toEqual({ status: "in_progress" });
+  });
+
+  test("ticket within SLA deadline is NOT escalated", async () => {
+    const { services } = await import("@cogito-app/api/services");
+
+    const t = await studentClient.support.createTicket({
+      category: "technical",
+      description: "Within SLA",
+    });
+
+    const before = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, "support_ticket_escalated"));
+
+    await services.support.escalatePastSlaTickets();
+
+    const [row] = await db
+      .select()
+      .from(supportTicket)
+      .where(eq(supportTicket.id, t.id));
+    expect(row!.status).toBe("open");
+
+    const after = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, "support_ticket_escalated"));
+    expect(after.length).toBe(before.length);
   });
 });

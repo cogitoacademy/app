@@ -21,6 +21,8 @@ import { createAdminBookingModule } from "./modules/admin-booking";
 import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
 import { createSupportModule } from "./modules/support";
+import { createUploadModule } from "./modules/upload";
+import { createStorage } from "./lib/storage";
 
 import type { AuditPort } from "./modules/audit/audit.service";
 import type { PricingPort } from "./modules/pricing/pricing.service";
@@ -57,6 +59,8 @@ import type { AdminBookingHandler } from "./modules/admin-booking/admin-booking.
 import type { RefundHandler } from "./modules/refund/refund.handler";
 import type { SupportService } from "./modules/support/support.service";
 import type { SupportHandler } from "./modules/support/support.handler";
+import type { UploadService } from "./modules/upload/upload.service";
+import type { UploadHandler } from "./modules/upload/upload.handler";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -76,6 +80,7 @@ export interface ServiceRegistry {
   adminBooking: AdminBookingService;
   refund: RefundService;
   support: SupportService;
+  upload: UploadService;
 }
 
 export interface HandlerRegistry {
@@ -95,6 +100,7 @@ export interface HandlerRegistry {
   payment: PaymentHandler;
   room: RoomHandler;
   support: SupportHandler;
+  upload: UploadHandler;
 }
 
 function createServices() {
@@ -142,28 +148,66 @@ function createServices() {
   // Core modules
   const wallet = createWalletModule({ db });
   const auth = createAuthModule({ db, wallet: wallet.service });
+  const notification = createNotificationModule({ db, email: email.service });
+
+  // Room is created before booking (U14: booking requests rooms at creation)
+  // with a lazy booking port — the delegate only fires at runtime, after
+  // `bookingService` is assigned below.
+  let bookingService: BookingService | undefined;
+  const room = createRoomModule({
+    db,
+    bookingPort: {
+      transitionBookingToScheduled: (tx, bookingId, actorId) =>
+        bookingService!.transitionBookingToScheduled(tx, bookingId, actorId),
+      getBookingRecipients: (tx, bookingId) =>
+        bookingService!.getBookingRecipients(tx, bookingId),
+    },
+    notificationPort: notification.service,
+  });
+  const booking = createBookingModule({
+    db,
+    wallet: wallet.service,
+    pricing: pricing.service,
+    audit: audit.service,
+    notification: notification.service,
+    meeting,
+    roomPort: room.service,
+  });
+  bookingService = booking.service;
   const admin = createAdminModule({
     db,
     audit: audit.service,
     wallet: wallet.service,
+    payout: booking.service,
   });
-  const adminTutor = createAdminTutorModule({ db, audit: audit.service });
+  const adminTutor = createAdminTutorModule({
+    db,
+    audit: audit.service,
+    email: email.service,
+    appBaseUrl: env.CORS_ORIGIN,
+  });
   const tutor = createTutorModule({
     db,
     pricing: pricing.service,
     audit: audit.service,
+    payout: booking.service,
   });
   const discovery = createDiscoveryModule({ db });
   const invite = createInviteModule({ db, audit: audit.service });
-  const achievement = createAchievementModule({ db, audit: audit.service });
-  const notification = createNotificationModule({ db, email: email.service });
-  const room = createRoomModule({ db });
+  const achievement = createAchievementModule({
+    db,
+    audit: audit.service,
+    notification: notification.service,
+  });
 
   const payment = createPaymentModule({
     db,
     wallet: wallet.service,
+    provider: env.PAYMENT_PROVIDER,
     xenditConfig:
-      env.XENDIT_SECRET_KEY && env.XENDIT_WEBHOOK_TOKEN
+      env.PAYMENT_PROVIDER === "xendit" &&
+      env.XENDIT_SECRET_KEY &&
+      env.XENDIT_WEBHOOK_TOKEN
         ? {
             secretKey: env.XENDIT_SECRET_KEY!,
             webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
@@ -173,15 +217,7 @@ function createServices() {
           }
         : undefined,
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
-  });
-
-  const booking = createBookingModule({
-    db,
-    wallet: wallet.service,
-    pricing: pricing.service,
-    audit: audit.service,
     notification: notification.service,
-    meeting,
   });
 
   const refund = createRefundModule({
@@ -196,12 +232,24 @@ function createServices() {
     wallet: wallet.service,
     refund: refund.service,
     notification: notification.service,
+    meeting,
   });
 
   const support = createSupportModule({
     db,
     audit: audit.service,
     notification: notification.service,
+  });
+
+  const upload = createUploadModule({
+    storage: createStorage({
+      R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
+      R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
+      R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
+      R2_BUCKET: env.R2_BUCKET,
+      R2_PUBLIC_URL: env.R2_PUBLIC_URL,
+      UPLOAD_DIR: env.UPLOAD_DIR,
+    }),
   });
 
   const services: ServiceRegistry = {
@@ -222,6 +270,7 @@ function createServices() {
     adminBooking: adminBooking.service,
     refund: refund.service,
     support: support.service,
+    upload: upload.service,
   };
 
   const handlers: HandlerRegistry = {
@@ -241,6 +290,7 @@ function createServices() {
     payment: payment.handler,
     room: room.handler,
     support: support.handler,
+    upload: upload.handler,
   };
 
   return { services, handlers, redis };

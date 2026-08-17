@@ -2,14 +2,15 @@
 
 | Field      | Value                                                                        |
 | ---------- | ---------------------------------------------------------------------------- |
-| Status     | Planning reference                                                           |
-| Branch     | feature/prd-gaps (future)                                                    |
+| Status     | Completed / reference (all gaps landed on main, #36/#39–#43)                 |
+| Branch     | main                                                                         |
 | Created    | 2026-07-21                                                                   |
+| Audited    | 2026-08-14                                                                   |
 | Depends on | improvement/production-readiness + improvement/infrastructure merged to main |
 | Next       | —                                                                            |
 | Scope      | Backend-only                                                                 |
 
-This document catalogs all PRD requirements that are not yet implemented. It serves as a reference for future feature development. No implementation work should begin until `improvement/foundation-hardening` and `improvement/production-readiness` branches are merged to main.
+This document originally catalogued all PRD requirements that were not yet implemented. All gaps G1–G20 have since been implemented and merged to main (G19 in #36, G20 in #35, G1–G18 in #39–#43). It is retained as a **historical reference** for the gap specs and acceptance criteria; remaining sub-gaps are captured in the [New Findings — 2026-08-14 Audit](#new-findings--2026-08-14-audit) section and folded into `docs/plans/completed/BACKEND-HARDENING-PHASE2.md` (PR 5).
 
 ---
 
@@ -25,30 +26,30 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 ## 1. Gap Summary
 
-| #   | Gap                                       | PRD Ref                    | Priority | Effort | Module        |
-| --- | ----------------------------------------- | -------------------------- | -------- | ------ | ------------- |
-| G1  | Report tutor lateness/no-show             | FR-14, DL-26               | High     | 3d     | support       |
-| G2  | 12-hour deadline enforcement by scheduler | DL-25                      | High     | 2d     | scheduler     |
-| G3  | 15-minute lateness auto-cancel            | DL-26, OQ-07               | High     | 2d     | scheduler     |
-| G4  | Group repricing recalculation             | FR-16                      | High     | 2d     | booking       |
-| G5  | Series cancellation rules                 | FR-20                      | Medium   | 2d     | booking       |
-| G6  | Tutor reschedule with student approval    | FR-15                      | Medium   | 1d     | booking       |
-| G7  | Rich-text session notes                   | FR-09, DL-18               | Low      | 1d     | booking       |
-| G8  | Admin override queue with urgency         | FR-10                      | Medium   | 2d     | admin-booking |
-| G9  | Admin wallet/ledger view                  | FR-10                      | Medium   | 1d     | admin-booking |
-| G10 | Before/after override preview             | FR-10                      | Medium   | 1d     | admin-booking |
-| G11 | Meeting link visibility gating            | FR-21                      | High     | 1d     | meeting       |
-| G12 | Google Meet attendee automation           | FR-21, OQ-05               | Medium   | 2d     | meeting       |
-| G13 | Offline room availability                 | FR-22                      | Low      | 1d     | room          |
-| G14 | Admin room approval                       | FR-22                      | Low      | 1d     | room          |
-| G15 | Group series no opt-out disclaimer        | FR-20                      | Low      | 0.5d   | booking       |
-| G16 | Tutor payout calculation                  | DL-11                      | Medium   | 1d     | wallet        |
-| G17 | Full notification matrix                  | FR-17                      | Medium   | 2d     | notification  |
-| G18 | Series session completion                 | FR-20                      | Medium   | 1d     | booking       |
-| G19 | Pricing extra-take rule (above-baseline)  | FR-05, FR-19, DL-22, TC-06 | High     | 1d     | pricing       |
-| G20 | Scheduler never boots (prereq for G2/G3)  | —                          | High     | —      | scheduler     |
+| #   | Gap                                       | PRD Ref                    | Priority | Effort | Module        | Status (audit 2026-08-14)                                                                         |
+| --- | ----------------------------------------- | -------------------------- | -------- | ------ | ------------- | ------------------------------------------------------------------------------------------------- |
+| G1  | Report tutor lateness/no-show             | FR-14, DL-26               | High     | 3d     | support       | IMPLEMENTED (no SLA auto-escalation job; no attendance check)                                     |
+| G2  | 12-hour deadline enforcement by scheduler | DL-25                      | High     | 2d     | scheduler     | IMPLEMENTED                                                                                       |
+| G3  | 15-minute lateness auto-cancel            | DL-26, OQ-07               | High     | 2d     | scheduler     | IMPLEMENTED                                                                                       |
+| G4  | Group repricing recalculation             | FR-16                      | High     | 2d     | booking       | IMPLEMENTED (no waitlist/join-path repricing)                                                     |
+| G5  | Series cancellation rules                 | FR-20                      | Medium   | 2d     | booking       | IMPLEMENTED                                                                                       |
+| G6  | Tutor reschedule with student approval    | FR-15                      | Medium   | 1d     | booking       | IMPLEMENTED (meeting link not updated on acceptReschedule)                                        |
+| G7  | Rich-text session notes                   | FR-09, DL-18               | Low      | 1d     | booking       | IMPLEMENTED                                                                                       |
+| G8  | Admin override queue with urgency         | FR-10                      | Medium   | 2d     | admin-booking | IMPLEMENTED                                                                                       |
+| G9  | Admin wallet/ledger view                  | FR-10                      | Medium   | 1d     | admin-booking | IMPLEMENTED                                                                                       |
+| G10 | Before/after override preview             | FR-10                      | Medium   | 1d     | admin-booking | IMPLEMENTED                                                                                       |
+| G11 | Meeting link visibility gating            | FR-21                      | High     | 1d     | meeting       | IMPLEMENTED                                                                                       |
+| G12 | Google Meet attendee automation           | FR-21, OQ-05               | Medium   | 2d     | meeting       | IMPLEMENTED (update-on-reschedule + delete-on-cancel landed in #46)                               |
+| G13 | Offline room availability                 | FR-22                      | Low      | 1d     | room          | PARTIAL (checkAvailability exists but NOT integrated into booking creation — tracked U14)         |
+| G14 | Admin room approval                       | FR-22                      | Low      | 1d     | room          | IMPLEMENTED (assignRoom → SCHEDULED + notifications landed in #46)                                |
+| G15 | Group series no opt-out disclaimer        | FR-20                      | Low      | 0.5d   | booking       | IMPLEMENTED (group-series creation landed in #46; disclaimer in invite email)                     |
+| G16 | Tutor payout calculation                  | DL-11                      | Medium   | 1d     | wallet        | IMPLEMENTED                                                                                       |
+| G17 | Full notification matrix                  | FR-17                      | Medium   | 2d     | notification  | IMPLEMENTED (email content not templated per PRD; 60s send-notification-email job never enqueued) |
+| G18 | Series session completion                 | FR-20                      | Medium   | 1d     | booking       | IMPLEMENTED                                                                                       |
+| G19 | Pricing extra-take rule (above-baseline)  | FR-05, FR-19, DL-22, TC-06 | High     | 1d     | pricing       | IMPLEMENTED (#36)                                                                                 |
+| G20 | Scheduler never boots (prereq for G2/G3)  | —                          | High     | —      | scheduler     | FIXED (#35 — initScheduler wired)                                                                 |
 
-**Total estimated effort: ~25 days (backend)** (G19 done; G20 was a boot fix, not feature effort)
+**Total estimated effort: ~25 days (backend)** — all gaps G1–G20 have landed on main (G19 in #36, G20 in #35, G1–G18 in #39–#43). This spec is retained as a historical reference; the remaining sub-gaps are captured in the [New Findings — 2026-08-14 Audit](#new-findings--2026-08-14-audit) section and tracked in `docs/plans/completed/BACKEND-HARDENING-PHASE2.md` (PR 5).
 
 > **Note:** Frontend gaps are tracked separately in `docs/plans/active/FRONTEND-GAPS-SPEC.md`. This document is backend-only.
 
@@ -60,7 +61,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-14 (Support Ticket System), DL-26 (Lateness Tolerance)
 
-**Current state:** No support ticket model. No lateness reporting endpoint.
+**Status: IMPLEMENTED** — `packages/db/src/schema/support-ticket.ts`; `support.router.ts` (`createTicket`/`listTickets`/`adminListTickets`/`adminResolveTicket`); SLA 12h in `support.service.ts`; urgency sort in `support.repo.ts:77`. **Remaining sub-gaps:** no SLA auto-escalation job; no attendance check on report. Spec below retained as historical reference.
 
 **Required:**
 
@@ -101,7 +102,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** DL-25 (12-Hour Confirmation Window)
 
-**Current state:** The repeatable 5-minute `expireBookings` job IS wired on main (`scheduler.ts:86` → `scheduleBookingExpiryCheck`, `expire-bookings.job.ts:4`). It only runs if the scheduler boots (see G20 — fixed by PR C). Notification on expiry is the remaining gap.
+**Status: IMPLEMENTED** — `expire-bookings.job.ts` (5min) wired in `apps/server/src/scheduler.ts:93`; `booking.service.ts:2009-2098` releases holds + notifies; G20 `initScheduler` called in `apps/server/src/index.ts:66`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -116,7 +117,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 - Booking created with 12h deadline → after 12h, scheduler expires it
 - Held funds released when booking expires
 - Series session with past deadline → expired by scheduler
-- Notification sent when booking expires — **remaining gap** (expiry + hold release are implemented; student notification on expiry is not yet sent)
+- Notification sent when booking expires — **implemented** (expiry + hold release + student notification all landed; previously the remaining gap)
 
 ---
 
@@ -124,7 +125,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** DL-26 (Lateness Tolerance), OQ-07 (15-Minute Rule)
 
-**Current state:** No automatic detection of tutor lateness. Student must manually report.
+**Status: IMPLEMENTED** — `check-tutor-lateness.job.ts` wired in `scheduler.ts:95`; `booking.service.ts:2148-2231` transitions to NO_SHOW; `markAttendance` endpoint. Spec below retained as historical reference.
 
 **Required:**
 
@@ -152,7 +153,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-16 (Group Pricing Adjustment)
 
-**Current state:** Group bookings have a fixed price set at creation time. If headcount changes (someone drops out during reconfirmation), the price per student doesn't update.
+**Status: IMPLEMENTED** — `repriceGroupForHeadcount` in `booking.service.ts:291-396`; pre-H2 withdraw triggers it. **Remaining sub-gap:** no waitlist/join-path repricing. Spec below retained as historical reference.
 
 **Required:**
 
@@ -181,7 +182,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-20 (Series)
 
-**Current state:** The H-2 window IS enforced on whole-booking cancel (`booking.service.ts:391-398` — late cancellations transition to `LATE_CANCELLED`). The real gap is per-session cancellation: no `booking.cancelSession` endpoint exists.
+**Status: IMPLEMENTED** — `cancelSession` in `booking.router.ts:99-109` / `booking.service.ts:1108-1180`; H-2 window; group-series no-opt-out enforced at `:1123-1125`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -206,7 +207,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-15 (Rescheduling)
 
-**Current state:** `proposeReschedule` endpoint **already exists** (`booking.router.ts:71`, `booking.service.ts:619`) but is wired as a **student** action (`protectedProcedure`, `ACTOR_TYPE.STUDENT`). This **contradicts PRD FR-15**, which requires the **tutor** to propose and the **student** to approve. No `acceptReschedule` or `rejectReschedule` endpoints exist. The `bookingRescheduleProposal` table exists and is written to by the existing endpoint.
+**Status: IMPLEMENTED** — `proposeReschedule` is now `tutorProcedure`, `booking.service.ts:1250-1309`; `acceptReschedule` `:1311-1369`; `rejectReschedule` `:1371-1426`; proposal expiry handled. **Remaining sub-gap:** meeting link not updated on `acceptReschedule`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -239,7 +240,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-09 (Session Notes), DL-18 (Post-Session Documentation), PRD §Session Notes (prd.tex:1033-1043)
 
-**Current state:** There is no `_sessionNote` column. The dead `sessionNote` input on `completeSessionInput` (`booking.types.ts:107`) is discarded by the handler — `booking.handler.ts:300-315` calls `booking.completeSession(input.bookingId, ...)` only. No sanitization.
+**Status: IMPLEMENTED** — `sessionNote` table in `booking.ts:290-311`; `addSessionNote`/`getSessionNotes` endpoints; sanitizer in `lib/sanitize.ts`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -271,7 +272,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-10 (Admin Override)
 
-**Current state:** `applyOverride` exists. Pagination is FIXED by PR #28 — `listBookingsByState` consumes the cursor (`admin-booking.repo.ts:31-33`). Urgency sorting, SLA tracking, and exception filters are still missing.
+**Status: IMPLEMENTED** — urgency rank in `admin-booking.repo.ts:49-58`; filters; `computeEscalated` in `admin-booking.service.ts:88-95`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -292,7 +293,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-10 (Admin Override)
 
-**Current state:** No admin endpoint for viewing user wallets and ledger entries.
+**Status: IMPLEMENTED** — `admin.getWallet` / `admin.listLedgerEntries` in `admin.router.ts:36-57`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -313,7 +314,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-10 (Admin Override)
 
-**Current state:** `applyOverride` applies changes directly. No preview.
+**Status: IMPLEMENTED** — `previewOverride` in `admin-booking.router.ts:24-34`; `planOverride` in `admin-booking.service.ts:159-233`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -333,7 +334,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-21 (Meeting Link)
 
-**Current state:** The meeting link is created on **tutor accept** (`booking.service.ts:440+` — `tutorAccept` calls `meeting.createEvent`), not at confirmation. Gating is largely satisfied by the booking state machine. The remaining gap is placeholder UX for participants before the link exists.
+**Status: IMPLEMENTED** — meeting event created on `tutorAccept` `booking.service.ts:744`; `computeMeetingInfo` `:119-130`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -355,7 +356,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-21 (Meeting Link), OQ-05 (Calendar Integration)
 
-**Current state:** Google Meet events are created but don't include student/tutor as attendees.
+**Status: PARTIAL** — attendees added in `google-meeting.provider.ts:191-198,293-302`. **Remaining sub-gaps:** no event update-on-reschedule / delete-on-cancel (`MeetingPort` only has `createEvent`). Spec below retained as historical reference.
 
 **Required:**
 
@@ -380,7 +381,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-22 (Offline Room Booking)
 
-**Current state:** No room availability checking during booking creation.
+**Status: PARTIAL** — `room.checkAvailability` exists in `room.service.ts:22-36`. **Remaining sub-gap:** NOT integrated into booking creation — `createSolo`/`createGroup` never check room availability. Spec below retained as historical reference.
 
 **Required:**
 
@@ -404,7 +405,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-22 (Offline Room Booking)
 
-**Current state:** `room.assign` exists and acts as the approve-equivalent (`room.router.ts:29`, `room.handler.ts:25`). Relocate and cancel endpoints are missing.
+**Status: PARTIAL** — `assign`/`relocate`/`cancelBooking` in `room.router.ts:36-80`. **Remaining sub-gaps:** `assignRoom` does NOT transition `AWAITING_ADMIN_ROOM_APPROVAL`→`SCHEDULED`; no student notifications; `expireBookings` auto-cancels unapproved offline bookings. Spec below retained as historical reference.
 
 **Required:**
 
@@ -424,7 +425,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-20 (Series)
 
-**Current state:** No disclaimer text returned in series booking API response.
+**Status: PARTIAL (UNREACHABLE)** — `GROUP_SERIES_DISCLAIMER` const in `shared/constants.ts:12-13`; `computeDisclaimer` in `booking.service.ts:398-405`; enforcement in `cancelSession` `:1123-1125`. **Remaining sub-gap:** unreachable — `createSeries` hardcodes `targetGroupSize:1` at `booking.service.ts:1881`, so no group-series creation exists (see finding B8). Spec below retained as historical reference.
 
 **Required:**
 
@@ -443,7 +444,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** DL-11 (Tutor Payout)
 
-**Current state:** No endpoint for calculating tutor share from completed bookings.
+**Status: IMPLEMENTED** — `admin.getTutorPayouts` in `admin.router.ts:59-69`; `tutor.getMyPayouts` in `tutor.router.ts:93-103`; uses stored price snapshot + `TUTOR_PAYOUT_RATE_IDR`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -467,7 +468,7 @@ This document catalogs all PRD requirements that are not yet implemented. It ser
 
 **PRD:** FR-17 (Notification System), PRD §Notification Matrix (prd.tex:912-955)
 
-**Current state:** Notification records are created in DB. `onSendNotificationEmail` is implemented (N2 fixed). The notification service has `EMAIL_SUPPORTED_CATEGORIES` (booking/payment/refund/schedule/override) but the routing is category-level, not event-level. The existing matrix below was invented and does **not match the PRD**. This spec must be aligned to the PRD's source-of-truth matrix.
+**Status: IMPLEMENTED** — per-event `emailRequired` in `notification.service.ts:31-47`; dedup by `eventKey` `:115-121`; achievements never email. **Remaining sub-gaps:** email content not templated per PRD (group invite email lacks schedule/price/hold/CTA); the 60s `send-notification-email` BullMQ job is never enqueued (emails sent synchronously in `write()`). Spec below retained as historical reference.
 
 **Required:**
 
@@ -512,7 +513,7 @@ Implement the full notification matrix **as defined in the PRD** (prd.tex:912-95
 
 **PRD:** FR-20 (Series)
 
-**Current state:** No endpoint to mark individual series sessions as completed. `completeSession` rejects series bookings.
+**Status: IMPLEMENTED** — `completeSeriesSession` in `booking.service.ts:972-1106`; per-session deduct; all-complete→`completed`. Spec below retained as historical reference.
 
 **Required:**
 
@@ -539,9 +540,7 @@ Implement the full notification matrix **as defined in the PRD** (prd.tex:912-95
 
 **PRD:** FR-05 (tutor prices respect Cogito floors), FR-19 (tutor self-pricing), DL-22 (extra-take rule), TC-06 (verify above-floor tutor pricing split)
 
-> **Status: IMPLEMENTED** by BACKEND-HARDENING PR C (task C7). `computeSplit` now implements the PRD extra-take rule. Spec retained below as historical reference for the acceptance cases.
-
-**Current state — BUG (as of v1.2):** `pricing.service.ts:69-79` (`computeSplit`) uses a flat `COGITO_TAKE_RATE = 0.2` (20% of total Marks). This is **wrong**. The PRD requires the **extra-take rule**:
+**Status: IMPLEMENTED** — `pricing.service.ts:119-149` (`computeSplit`) implements the PRD extra-take rule and matches all TC-06 examples; landed via BACKEND-HARDENING PR C (task C7), merged to main in #36. Spec retained below as historical reference. The historical v1.2 bug (flat 20% rate) is superseded:
 
 - Baseline total = floor price per student × final confirmed headcount
 - Tutor total = tutor-set per-student price × final confirmed headcount
@@ -593,9 +592,7 @@ The constant `EXTRA_TAKE_DIVISOR = 5` is defined in `packages/api/src/shared/con
 
 **PRD:** — (foundation — prerequisite for G2/G3)
 
-**Current state — BUG (as of v1.3):** `initScheduler()` is defined in `apps/server/src/scheduler.ts:11` but was **never called** in `apps/server/src/index.ts` — only `shutdownScheduler` is imported/wired. The BullMQ worker and its 3 repeatable jobs (`expire-bookings` 5min, `release-expired-holds` 10min, `send-notification-email` 60s) therefore never start, so G2 (12-hour deadline) and G3 (lateness auto-cancel) can never run.
-
-> **Status: FIXED** by BACKEND-HARDENING PR C (task C1) — `initScheduler()` is now invoked during server bootstrap, gated on `SCHEDULER_ENABLED=true` + `REDIS_URL`.
+**Status: FIXED** — `initScheduler()` is wired in `apps/server/src/index.ts:66` (gated on `SCHEDULER_ENABLED=true` + `REDIS_URL`); implemented by BACKEND-HARDENING PR C (task C1), merged to main in #35. Spec below retained as historical reference.
 
 **Depends on:** G2/G3 require the scheduler to be running.
 
@@ -607,16 +604,32 @@ The constant `EXTRA_TAKE_DIVISOR = 5` is defined in `packages/api/src/shared/con
 
 ---
 
+### New Findings — 2026-08-14 Audit
+
+Audit of git HEAD `9b7df5e` against the PRD (FR/DL/TC refs). These were newly discovered gaps found _after_ G1–G20 merged. All except B4 were **implemented in `docs/plans/completed/BACKEND-HARDENING-PHASE2.md` (merged to main via PR #46, commit `ec8b16c`)**.
+
+> Note: the B-IDs here are distinct from the B1–B6/N-series IDs used in the production-readiness plan (`docs/plans/completed/PRODUCTION-READINESS-PLAN.md`) — same letter, different findings.
+
+| ID  | Severity | Finding                                                                                                                                  | Evidence                                                                    | Status                                                                                                                                                                                                |
+| --- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B3  | High     | Group booking with 2 ≤ headcount < target EXPIRES at the 12h deadline instead of repricing + reconfirming (FR-16/TC-18 violation)        | `expireBookings` headcount branch (`booking.service.ts:2456-2492`)          | **Fixed (#46)** — reprices to `AWAITING_RECONFIRMATION` + 12h deadline. Sub-case: reconfirmation-deadline reprice for still-valid partial headcount remains open (tracked U3 in `PRD-GAPS-PHASE3.md`) |
+| B4  | Medium   | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16 violation)                                                   | `wallet.service.ts:431`                                                     | **Open** — tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md` (Task 5.2 was not landed in #46)                                                                                                     |
+| B6  | Medium   | No payment/refund notifications at all (notification matrix rows unfulfilled)                                                            | `payment.service.ts:258-292` writes `payment.{id}.credited`/`.refunded`     | **Fixed (#46)**                                                                                                                                                                                       |
+| B8  | Medium   | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34 unimplemented) | `createGroupSeries` (`booking.service.ts:2150-2318`, `booking.types.ts:66`) | **Fixed (#46)**                                                                                                                                                                                       |
+| B9  | Low-Med  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules)                                                              | `cancelSession` forfeit path (`booking.service.ts:1264-1275`)               | **Fixed (#46)**                                                                                                                                                                                       |
+
+---
+
 ### Other PRD Requirements Not Yet Tracked
 
 These PRD requirements have no gap entry above but are not verified as implemented:
 
-| Ref                                             | Requirement                                                                                                                                                                                                                       | Status                                                                           | Action                                                                                                          |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| FR-02                                           | Optional parent contact information on student profile                                                                                                                                                                            | Not verified — check `studentProfile` schema + `auth.updateProfile`              | Verify schema has parent contact fields; add to profile form if missing                                         |
-| OQ-04                                           | Admin SLA escalation via WhatsApp (+62 881-0119-90195) — 30 min business hours, 4 hours outside                                                                                                                                   | Not implemented — G1 support ticket creates the queue but no WhatsApp escalation | Add SLA timer + WhatsApp escalation to G1 support ticket flow                                                   |
-| PRD §Emergency Override UI/UX (prd.tex:717-728) | Full override form: category, reason, affected participants, Marks action (no change/release/compensate/reverse/partial/finance-followup), payment/ledger display, before/after preview, audit history, user-visible notification | G10 covers preview only; the full form UX is not specified                       | Track in FRONTEND-GAPS-SPEC (admin override form)                                                               |
-| G7 (rich-text sanitization)                     | PRD §Session Notes requires sanitized rich text (paragraphs, headings, lists, links, bold, italic)                                                                                                                                | G7 mentions storage but not sanitization                                         | Add sanitization requirement to G7: use DOMPurify or similar before render; store editor JSON or sanitized HTML |
+| Ref                                             | Requirement                                                                                                                                                                                                                       | Status                                                                                                                                                                                                   | Action                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| FR-02                                           | Optional parent contact information on student profile                                                                                                                                                                            | **Verified present (2026-08-14)** — `profile-page.tsx` has parent contact fields; `auth.updateProfile` includes them                                                                                     | None needed                                          |
+| OQ-04                                           | Admin SLA escalation via WhatsApp (+62 881-0119-90195) — 30 min business hours, 4 hours outside                                                                                                                                   | **Partial (2026-08-14 + #46)** — in-app SLA escalation job landed in #46 (`escalate-support-tickets`, `support.service.ts:107-130`); WhatsApp channel + business-hours SLA windows still not implemented | Tracked U9 in `docs/plans/active/PRD-GAPS-PHASE3.md` |
+| PRD §Emergency Override UI/UX (prd.tex:717-728) | Full override form: category, reason, affected participants, Marks action (no change/release/compensate/reverse/partial/finance-followup), payment/ledger display, before/after preview, audit history, user-visible notification | **Tracked as F2 in FRONTEND-GAPS-SPEC** (admin override form); G10 covers preview only                                                                                                                   | Done — tracked in FRONTEND-GAPS-SPEC                 |
+| G7 (rich-text sanitization)                     | PRD §Session Notes requires sanitized rich text (paragraphs, headings, lists, links, bold, italic)                                                                                                                                | **Resolved** — G7 landed with sanitizer (`lib/sanitize.ts`) on main                                                                                                                                      | None needed                                          |
 
 ---
 
@@ -679,6 +692,8 @@ All new endpoints must use these patterns established by the foundation-hardenin
 
 ## 5. Estimated Timeline
 
+> **Historical** — all G1–G20 have merged to main (#36/#39–#43). This timeline is retained for reference only; the remaining sub-gaps are tracked in BACKEND-HARDENING-PHASE2.md (PR 5) and the New Findings section above.
+
 | Phase                                                 | Gaps               | Days         |
 | ----------------------------------------------------- | ------------------ | ------------ |
 | Support tickets + lateness (G1, G2, G3)               | G1, G2, G3         | 7            |
@@ -700,3 +715,5 @@ All new endpoints must use these patterns established by the foundation-hardenin
 - v1.1 (2026-07-27): Added "Established Patterns" section documenting foundation-hardening patterns that all new endpoints must use. Updated dependency line (consolidation merged → foundation-hardening).
 - v1.2 (2026-07-29): Codebase audit. Added G19 (pricing extra-take rule bug — `computeSplit` uses flat 20% instead of PRD's 1-per-5-Marks-above-baseline). Fixed G6 (proposeReschedule already exists but as student action, not tutor — reframed as role fix + add accept/reject). Fixed G7 (added sanitization requirement). Replaced G17 matrix with PRD source-of-truth matrix (prd.tex:912-955). Added "Other PRD Requirements Not Yet Tracked" section (FR-02 parent contact, OQ-04 WhatsApp SLA, full override form UX). Updated timeline to ~31 days. Marked scope as backend-only with reference to FRONTEND-GAPS-SPEC.md.
 - v1.3 (2026-08-12): Audit against verified main. G19 marked IMPLEMENTED (PR C / task C7 — extra-take rule now in `computeSplit`). Added G20 (scheduler never boots — `initScheduler()` never called; FIXED by PR C / task C1). Corrected stale current-state claims: G2 (5-min `expireBookings` job now wired; notification on expiry remains the gap), G5 (H-2 window enforced on whole-booking cancel; real gap is per-session `cancelSession`), G7 (no `_sessionNote` column; dead `sessionNote` input discarded by handler), G8 (N9 pagination fixed by PR #28), G11 (link created on tutor accept, not confirmation; gating satisfied by state machine; placeholder UX is the gap), G14 (`room.assign` exists as approve-equivalent; relocate/cancel missing).
+- v1.4 (2026-08-14): Audit sync against git HEAD `9b7df5e`. Status → **Completed / reference** (all G1–G20 landed on main: G19 in #36, G20 in #35, G1–G18 in #39–#43); Branch → `main`; added "Audited 2026-08-14". Added Status column to Gap Summary and replaced each detailed section's "Current state" with a "Status: IMPLEMENTED/PARTIAL" line plus evidence file:line. New "New Findings — 2026-08-14 Audit" section (B3 High, B4/B6/B8 Medium, B9 Low-Med) folded into BACKEND-HARDENING-PHASE2.md PR 5. Marked FR-02 as verified present (parent contact on `profile-page.tsx`), OQ-04 WhatsApp escalation still not implemented, full override form UX tracked as F2 in FRONTEND-GAPS-SPEC. Timeline marked historical.
+- v1.5 (2026-08-14): Post-#46 sync. Marked B3/B6/B8/B9 + G12/G14/G15 FIXED (merged via PR #46, commit `ec8b16c`); B4 remains open (re-tracked as U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`). OQ-04 updated to Partial (in-app SLA escalation landed; WhatsApp + business-hours windows pending). File moved from `docs/plans/active/` to `docs/plans/completed/`. Follow-ups from the 2026-08-14 PRD-vs-code audit (U1–U14) live in `docs/plans/active/PRD-GAPS-PHASE3.md`.

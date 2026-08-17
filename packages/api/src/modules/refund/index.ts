@@ -28,6 +28,7 @@ export interface RefundWalletPort {
       limit?: number;
       bookingId?: string;
       eventKey?: string;
+      entryType?: string | string[];
     },
   ): Promise<{ items: unknown[]; nextCursor: string | null }>;
 }

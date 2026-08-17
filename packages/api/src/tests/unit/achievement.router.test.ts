@@ -30,6 +30,7 @@ describe("achievementRouter", () => {
       "create",
       "delete",
       "list",
+      "listApproved",
       "update",
     ]);
   });
@@ -38,7 +39,7 @@ describe("achievementRouter", () => {
     test("achievementInput accepts valid required fields", () => {
       const result = achievementInput.safeParse({
         eventName: "Olympiad",
-        category: "academic",
+        category: "other",
         award: "Gold",
         level: "national",
       });
@@ -53,14 +54,14 @@ describe("achievementRouter", () => {
     test("achievementInput accepts optional fields", () => {
       const result = achievementInput.safeParse({
         eventName: "Olympiad",
-        category: "academic",
+        category: "other",
         award: "Gold",
         level: "national",
-        eventDate: "2024-01-01",
+        awardingDate: "2024-01-01",
         location: "Jakarta",
         description: "Desc",
         subjects: ["math"],
-        imageUrl: "https://img.jpg",
+        evidenceUrl: "https://img.jpg",
       });
       expect(result.success).toBe(true);
     });
@@ -147,7 +148,7 @@ describe("achievementHandler", () => {
       } as any;
       const input = {
         eventName: "Olympiad",
-        category: "academic",
+        category: "other",
         award: "Gold",
         level: "national",
       };

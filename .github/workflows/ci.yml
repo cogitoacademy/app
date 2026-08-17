@@ -4,6 +4,7 @@ on:
     branches: [main, staging]
   push:
     branches: [main, staging]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,21 +14,46 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx oxlint --format=github
-      - run: bunx oxfmt --check
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-lint-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-lint-
+      - name: Apply auto-fixable lint and format fixes
+        run: |
+          bunx oxlint --fix || true
+          bunx oxfmt --write || true
+      - name: Check last commit author
+        id: commit-check
+        run: echo "last-commit=$(git log -1 --format='%an')" >> "$GITHUB_OUTPUT"
+      - name: Commit auto-fixes
+        # C7: only on pull_request events (never auto-commit to main on push),
+        # only for non-fork branches, and never when the last commit is our
+        # own — otherwise the fix loop pushes straight to main unreviewed.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.commit-check.outputs.last-commit != 'github-actions[bot]'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: apply automated lint and format fixes"
+          commit_options: "--no-verify"
+      - name: Verify lint
+        run: bunx oxlint --format=github
+      - name: Verify formatting
+        run: bunx oxfmt --check
 
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -45,6 +71,8 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -121,6 +149,8 @@ jobs:
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
       - run: bun test packages/api/src/tests/ apps/server/src/openapi.test.ts
+      - name: "Server unit tests (separate process: webhook test uses mock.module)"
+        run: bun test apps/server/src/
       - name: Test with coverage
         run: bun test --coverage packages/api/src/tests/ apps/server/src/openapi.test.ts
         continue-on-error: true

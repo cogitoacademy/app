@@ -1,6 +1,6 @@
 "use client";
 
-import { IconPlus } from "@tabler/icons-react";
+import { IconFilterOff, IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -10,11 +10,12 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { EmptyStateCard } from "@/components/empty-state";
 import { AchievementBanner } from "../achievement-banner";
 import { AchievementCard } from "../achievement-card";
 import { AchievementEmptyState } from "../achievement-empty-state";
 import { AchievementFilters } from "../achievement-filters";
-import { AchievementForm } from "../achievement-form";
+import { AchievementForm, type AchievementCategory } from "../achievement-form";
 import { AchievementStats } from "../achievement-stats";
 import { orpc } from "@/utils/orpc";
 
@@ -97,9 +98,13 @@ export function AchivementsPage() {
       {items.length === 0 ? (
         <AchievementEmptyState />
       ) : filtered.length === 0 ? (
-        <Text className="py-8 text-center text-muted">
-          No achievements match the selected filters.
-        </Text>
+        <EmptyStateCard
+          icon={<IconFilterOff />}
+          title="No matching achievements"
+          description="Try another category or status filter."
+          tone="secondary"
+          size="compact"
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((a) => (
@@ -131,14 +136,15 @@ export function AchivementsPage() {
           expectedVersion={editAchievement.version}
           defaultValues={{
             eventName: editAchievement.eventName,
-            category: editAchievement.category,
+            category: editAchievement.category as AchievementCategory,
             award: editAchievement.award,
             level: editAchievement.level,
-            eventDate: editAchievement.eventDate ?? "",
+            awardingDate: editAchievement.awardingDate ?? "",
             location: editAchievement.location ?? "",
             description: editAchievement.description ?? "",
             subjects: editAchievement.subjects ?? [],
-            imageUrl: editAchievement.imageUrl ?? "",
+            evidenceUrl: editAchievement.evidenceUrl ?? "",
+            documentationUrl: editAchievement.documentationUrl ?? "",
           }}
           open={editOpen}
           onOpenChange={(open) => {

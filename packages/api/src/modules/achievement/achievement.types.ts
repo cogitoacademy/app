@@ -1,15 +1,33 @@
 import { z } from "zod";
 
+export const ACHIEVEMENT_CATEGORIES = [
+  "competition",
+  "award",
+  "certificate",
+  "leadership",
+  "publication",
+  "other",
+] as const;
+
 export const achievementInput = z.object({
   eventName: z.string().min(1, "Event name is required").max(255),
-  category: z.string().min(1, "Category is required").max(255),
+  category: z.enum(ACHIEVEMENT_CATEGORIES),
   award: z.string().min(1, "Award is required").max(255),
   level: z.string().min(1, "Level is required").max(255),
-  eventDate: z.string().max(255).optional(),
+  issuer: z.string().max(255).optional(),
+  visibility: z.boolean().optional(),
+  awardingDate: z
+    .string()
+    .max(255)
+    .refine((v) => !Number.isNaN(Date.parse(v)), {
+      message: "awardingDate must be a valid date",
+    })
+    .optional(),
   location: z.string().max(255).optional(),
   description: z.string().max(2000).optional(),
   subjects: z.array(z.string().max(255)).max(20).optional(),
-  imageUrl: z.string().max(2048).optional(),
+  evidenceUrl: z.string().url().max(2048).optional(),
+  documentationUrl: z.string().url().max(2048).optional(),
 });
 
 export const updateAchievementInput = z.object({

@@ -9,6 +9,7 @@ function makeBookingService() {
   return {
     createSolo: mock(async () => ({ id: "b1" })),
     getById: mock(async () => ({ id: "b1" })),
+    getRescheduleAvailability: mock(async () => [{ id: "slot1" }]),
     listMine: mock(async () => ({ items: [] })),
     cancel: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     proposeReschedule: mock(async () => ({
@@ -77,7 +78,7 @@ describe("bookingHandler", () => {
         availabilitySlotId: "slot1",
         modality: "online",
         scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
         timezone: "Asia/Jakarta",
       };
 
@@ -91,7 +92,7 @@ describe("bookingHandler", () => {
         availabilitySlotId: "slot1",
         modality: "online",
         scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
         timezone: "Asia/Jakarta",
       });
       expect(result).toEqual({ id: "b1" });
@@ -112,6 +113,24 @@ describe("bookingHandler", () => {
 
       expect(booking.getById).toHaveBeenCalledWith("b1", "u1");
       expect(result).toEqual({ id: "b1" });
+    });
+  });
+
+  describe("getRescheduleAvailability", () => {
+    test("loads availability for the booking and signed-in user", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+
+      const result = await handler.getRescheduleAvailability({
+        context: makeContext("student1"),
+        input: { bookingId: "b1" },
+      });
+
+      expect(booking.getRescheduleAvailability).toHaveBeenCalledWith(
+        "b1",
+        "student1",
+      );
+      expect(result).toEqual([{ id: "slot1" }]);
     });
   });
 
@@ -168,7 +187,11 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.acceptReschedule).toHaveBeenCalledWith("u1", "b1");
+      expect(booking.acceptReschedule).toHaveBeenCalledWith(
+        "u1",
+        "b1",
+        undefined,
+      );
       expect(result).toEqual({
         id: "b1",
         currentState: "awaiting_reconfirmation",
@@ -188,7 +211,11 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.rejectReschedule).toHaveBeenCalledWith("u1", "b1");
+      expect(booking.rejectReschedule).toHaveBeenCalledWith(
+        "u1",
+        "b1",
+        undefined,
+      );
       expect(result).toEqual({
         id: "b1",
         currentState: "awaiting_tutor_review",
@@ -208,7 +235,7 @@ describe("bookingHandler", () => {
         targetGroupSize: 5,
         inviteeUserIds: ["u2", "u3"],
         scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
         timezone: "Asia/Jakarta",
       };
 
@@ -224,7 +251,7 @@ describe("bookingHandler", () => {
         targetGroupSize: 5,
         inviteeUserIds: ["u2", "u3"],
         scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-        scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+        scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
         timezone: "Asia/Jakarta",
       });
       expect(result).toEqual({ id: "bg1" });
@@ -243,11 +270,11 @@ describe("bookingHandler", () => {
         sessions: [
           {
             scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-            scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+            scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
           },
           {
             scheduledStartAt: new Date("2025-01-08T10:00:00Z"),
-            scheduledEndAt: new Date("2025-01-08T11:00:00Z"),
+            scheduledEndAt: new Date("2025-01-08T11:30:00Z"),
           },
         ],
         timezone: "Asia/Jakarta",
@@ -265,11 +292,11 @@ describe("bookingHandler", () => {
         sessions: [
           {
             scheduledStartAt: new Date("2025-01-01T10:00:00Z"),
-            scheduledEndAt: new Date("2025-01-01T11:00:00Z"),
+            scheduledEndAt: new Date("2025-01-01T11:30:00Z"),
           },
           {
             scheduledStartAt: new Date("2025-01-08T10:00:00Z"),
-            scheduledEndAt: new Date("2025-01-08T11:00:00Z"),
+            scheduledEndAt: new Date("2025-01-08T11:30:00Z"),
           },
         ],
         timezone: "Asia/Jakarta",
@@ -432,7 +459,7 @@ describe("tutorActionsHandler", () => {
       const input = {
         bookingId: "b1",
         proposedStartAt: new Date("2025-02-01T10:00:00Z"),
-        proposedEndAt: new Date("2025-02-01T11:00:00Z"),
+        proposedEndAt: new Date("2025-02-01T11:30:00Z"),
         reason: "time change",
       };
 
@@ -445,8 +472,10 @@ describe("tutorActionsHandler", () => {
         "t1",
         "b1",
         new Date("2025-02-01T10:00:00Z"),
-        new Date("2025-02-01T11:00:00Z"),
+        new Date("2025-02-01T11:30:00Z"),
         "time change",
+        undefined,
+        undefined,
       );
       expect(result).toEqual({
         id: "b1",
@@ -494,18 +523,18 @@ describe("tutorActionsHandler", () => {
   });
 
   describe("completeSession", () => {
-    test("calls booking.completeSession with bookingId and session user id", async () => {
+    test("calls booking.completeSession with bookingId, session user id, and optional sessionId", async () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
       const context = makeContext("t1");
-      const input = { bookingId: "b1", sessionNote: "Great session" };
+      const input = { bookingId: "b1", sessionId: "s1" };
 
       const result = await handler.completeSession({
         context: context as any,
         input: input as any,
       });
 
-      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1");
+      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1", "s1");
       expect(result).toEqual({ id: "b1", currentState: "completed" });
     });
   });

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { IconSearch } from "@tabler/icons-react";
+import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
@@ -25,6 +26,7 @@ import {
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { EmptyStateCard } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 import { TutorCard } from "./tutor-card";
 import { TutorDrawer } from "./tutor-drawer";
@@ -65,13 +67,15 @@ export function TutorsPageContent() {
 
   const { data: tutors = [], isPending } = useQuery({
     ...orpc.tutors.listPublished.queryOptions({
-      search: search || undefined,
-      expertise: expertise || undefined,
-      modality: (modality || undefined) as
-        | "online"
-        | "offline"
-        | "both"
-        | undefined,
+      input: {
+        search: search.trim() || undefined,
+        expertise: expertise || undefined,
+        modality: (modality || undefined) as
+          | "online"
+          | "offline"
+          | "both"
+          | undefined,
+      },
     }),
     placeholderData: keepPreviousData,
   });
@@ -91,7 +95,7 @@ export function TutorsPageContent() {
       <div>
         <Heading size="md">Tutors</Heading>
         <Text className="text-muted">
-          Browse our verified tutors and find the right fit.
+          Find a verified tutor by name, subject, or learning style.
         </Text>
       </div>
 
@@ -101,7 +105,7 @@ export function TutorsPageContent() {
             <IconSearch className="size-4" />
           </InputGroupAddon>
           <Input
-            placeholder="Search by name or bio..."
+            placeholder="Search tutors or subjects..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -112,8 +116,11 @@ export function TutorsPageContent() {
             setExpertise(getSelectItemValue(value) ?? "")
           }
         >
-          <SelectTrigger className="w-full sm:w-44">
-            <SelectValue placeholder="Expertise" />
+          <SelectTrigger className="min-w-0 w-full sm:w-52">
+            <SelectValue
+              className="min-w-0 flex-1 truncate text-left"
+              placeholder="Expertise"
+            />
           </SelectTrigger>
           <SelectPopup>
             <SelectList>
@@ -132,8 +139,11 @@ export function TutorsPageContent() {
             setModality(getSelectItemValue(value) ?? "")
           }
         >
-          <SelectTrigger className="w-full sm:w-44">
-            <SelectValue placeholder="Modality" />
+          <SelectTrigger className="min-w-0 w-full sm:w-44">
+            <SelectValue
+              className="min-w-0 flex-1 truncate text-left"
+              placeholder="Modality"
+            />
           </SelectTrigger>
           <SelectPopup>
             <SelectList>
@@ -146,8 +156,30 @@ export function TutorsPageContent() {
         </Select>
       </div>
 
+      <div className="flex flex-wrap gap-2" aria-label="Filter by subject">
+        <Button
+          variant={expertise ? "secondary" : "primary"}
+          size="sm"
+          onClick={() => setExpertise("")}
+        >
+          All subjects
+        </Button>
+        {EXPERTISE_OPTIONS.filter((subject) => subject !== "Other").map(
+          (subject) => (
+            <Button
+              key={subject}
+              variant={expertise === subject ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setExpertise(subject)}
+            >
+              {subject}
+            </Button>
+          ),
+        )}
+      </div>
+
       {isPending ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {[
             "tutor-skeleton-1",
             "tutor-skeleton-2",
@@ -160,11 +192,26 @@ export function TutorsPageContent() {
           ))}
         </div>
       ) : tutors.length === 0 ? (
-        <Text className="py-8 text-center text-muted">
-          No tutors found matching your criteria.
-        </Text>
+        <EmptyStateCard
+          icon={<IconSearch />}
+          title="No tutors found"
+          description="We couldn't find a tutor matching those filters. Try another subject or reset your search."
+          tone="secondary"
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSearch("");
+                setExpertise("");
+                setModality("");
+              }}
+            >
+              Clear all filters
+            </Button>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {tutors.map((tutor: PublishedTutor) => (
             <TutorCard
               key={tutor.id}

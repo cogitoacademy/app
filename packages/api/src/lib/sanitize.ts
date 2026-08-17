@@ -86,6 +86,19 @@ function sanitizeTag(raw: string, tagName: string): string {
   return cleaned;
 }
 
+/**
+ * Escapes a string for safe interpolation into an HTML email/notification body
+ * (M5: user-supplied reasons must not inject markup). Escapes `&<>"'`.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function sanitizeHtml(input: string): string {
   if (!input) return "";
   let result = "";

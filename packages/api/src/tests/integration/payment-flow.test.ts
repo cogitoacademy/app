@@ -9,7 +9,12 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
-import { ledgerEntry, paymentRecord } from "@cogito-app/db/schema";
+import {
+  ledgerEntry,
+  paymentRecord,
+  notification,
+  notificationDispatch,
+} from "@cogito-app/db/schema";
 
 import { services } from "../../services";
 import { createTestUser } from "../helpers/factories";
@@ -123,6 +128,157 @@ describe("PaymentService", () => {
     expect(methods).not.toContain("cashout");
     expect(methods).not.toContain("convertToRupiah");
     expect(methods).not.toContain("withdraw");
+  });
+
+  test("B6: inserting a duplicate provider_reference is a no-op (unique index + onConflictDoNothing)", async () => {
+    const user = await createTestUser(`b6.${Date.now()}@cogito.test`);
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    // Simulate the check-then-insert race: a second writer inserts the same
+    // provider reference while the row already exists. Must NOT create a
+    // zombie PENDING row.
+    const repo = createPaymentRepo(db);
+    await repo.insertPayment({
+      id: crypto.randomUUID(),
+      userId: user.id,
+      walletId: walletRow.id,
+      provider: "stub",
+      providerReference: intent.providerReference,
+      amountIdr: 430000,
+      marks: 50,
+      status: "PENDING",
+    });
+
+    const rows = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.providerReference, intent.providerReference));
+    expect(rows.length).toBe(1);
+  });
+
+  test("TC-re: FAILED payment can be re-purchased with a fresh intent", async () => {
+    const user = await createTestUser("rerepurchase@cogito.test");
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const first = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: first.providerReference,
+      providerEventId: "evt_rep1",
+      status: "FAILED",
+      failureReason: "declined",
+    });
+
+    const retry = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    expect(retry.paymentId).toBe(first.paymentId);
+    expect(retry.providerReference).toBe(first.providerReference);
+    expect(retry.checkoutUrl).toBeDefined();
+
+    const [record] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, first.paymentId))
+      .limit(1);
+    expect(record!.status).toBe("PENDING");
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: retry.providerReference,
+      providerEventId: "evt_rep2",
+      status: "PAID",
+    });
+
+    const w = await services.wallet.getByUserId(db, user.id);
+    expect(w!.totalBalance).toBe(50);
+  });
+
+  test("TC-notif: webhook credit writes a payment notification (in-app + email) for the payer", async () => {
+    const user = await createTestUser("paynotif@cogito.test");
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: "evt_paynotif",
+      status: "PAID",
+    });
+
+    const [notif] = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.eventKey, `payment.${intent.paymentId}.credited`));
+    expect(notif).toBeDefined();
+    expect(notif!.category).toBe("payment");
+    expect(notif!.userId).toBe(user.id);
+
+    const [dispatch] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.notificationId, notif!.id));
+    expect(dispatch).toBeDefined();
+    expect(dispatch!.status).toBe("queued");
+    expect(dispatch!.recipientEmail).toBe(user.email);
+  });
+
+  test("TC-notif: REFUNDED transition writes a refund notification for the payer", async () => {
+    const user = await createTestUser("refundnotif@cogito.test");
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: "evt_refundnotif1",
+      status: "PAID",
+    });
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: "evt_refundnotif2",
+      status: "REFUNDED",
+    });
+
+    const [notif] = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.eventKey, `payment.${intent.paymentId}.refunded`));
+    expect(notif).toBeDefined();
+    expect(notif!.category).toBe("refund");
+    expect(notif!.userId).toBe(user.id);
+
+    const [dispatch] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.notificationId, notif!.id));
+    expect(dispatch).toBeDefined();
+    expect(dispatch!.status).toBe("queued");
   });
 
   const xenditProvider = createXenditPaymentProvider({

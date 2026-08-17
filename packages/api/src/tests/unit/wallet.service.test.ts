@@ -466,7 +466,13 @@ describe("WalletService", () => {
 
     test("returns not eligible when balance below threshold", async () => {
       const repo = makeRepo({
-        getByUserId: mock(async () => makeWallet({ availableBalance: 20 })),
+        getByUserId: mock(async () =>
+          makeWallet({
+            totalBalance: 20,
+            heldBalance: 10,
+            availableBalance: 10,
+          }),
+        ),
       });
       const service = createWalletService(repo as any, makeDb());
 
@@ -477,13 +483,36 @@ describe("WalletService", () => {
 
     test("returns eligible when balance meets threshold", async () => {
       const repo = makeRepo({
-        getByUserId: mock(async () => makeWallet({ availableBalance: 50 })),
+        getByUserId: mock(async () =>
+          makeWallet({
+            totalBalance: 50,
+            heldBalance: 20,
+            availableBalance: 30,
+          }),
+        ),
       });
       const service = createWalletService(repo as any, makeDb());
 
       const result = await service.knowledgeBankEligible("user1");
       expect(result.eligible).toBe(true);
       expect(result.balance).toBe(50);
+    });
+
+    test("uses total balance, not available balance, for eligibility (U13)", async () => {
+      const repo = makeRepo({
+        getByUserId: mock(async () =>
+          makeWallet({
+            totalBalance: 40,
+            heldBalance: 10,
+            availableBalance: 30,
+          }),
+        ),
+      });
+      const service = createWalletService(repo as any, makeDb());
+
+      const result = await service.knowledgeBankEligible("user1");
+      expect(result.eligible).toBe(true);
+      expect(result.balance).toBe(40);
     });
   });
 

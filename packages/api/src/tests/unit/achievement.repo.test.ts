@@ -16,12 +16,6 @@ function makeUpdateConn(returned: any[] = [{}]) {
   return { update, set, where, returning };
 }
 
-function makeDeleteConn() {
-  const where = mock(async () => undefined);
-  const del = mock(() => ({ where }));
-  return { delete: del, where };
-}
-
 const repo = createAchievementRepo();
 
 describe("listByUserId", () => {
@@ -97,11 +91,12 @@ describe("insert", () => {
 
     expect(conn.values).toHaveBeenCalledWith(
       expect.objectContaining({
-        eventDate: null,
+        awardingDate: null,
         location: null,
         description: null,
         subjects: [],
-        imageUrl: null,
+        evidenceUrl: null,
+        documentationUrl: null,
       }),
     );
   });
@@ -115,20 +110,22 @@ describe("insert", () => {
       category: "art",
       award: "bronze",
       level: "local",
-      eventDate: "2025-01-01",
+      awardingDate: "2025-01-01",
       location: "Jakarta",
       description: "Nice work",
       subjects: ["math", "physics"],
-      imageUrl: "https://img.png",
+      evidenceUrl: "https://img.png",
+      documentationUrl: "https://public.png",
     });
 
     expect(conn.values).toHaveBeenCalledWith(
       expect.objectContaining({
-        eventDate: "2025-01-01",
+        awardingDate: "2025-01-01",
         location: "Jakarta",
         description: "Nice work",
         subjects: ["math", "physics"],
-        imageUrl: "https://img.png",
+        evidenceUrl: "https://img.png",
+        documentationUrl: "https://public.png",
       }),
     );
   });
@@ -192,17 +189,6 @@ describe("update", () => {
     });
 
     expect(result).toBeUndefined();
-  });
-});
-
-describe("deleteRow", () => {
-  test("deletes achievement by id and userId", async () => {
-    const conn = makeDeleteConn() as any;
-
-    await repo.deleteRow(conn, "a1", "u1");
-
-    expect(conn.delete).toHaveBeenCalledTimes(1);
-    expect(conn.where).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -394,7 +380,6 @@ describe("createAchievementRepo", () => {
     expect(r).toHaveProperty("findByIdForUser");
     expect(r).toHaveProperty("update");
     expect(r).toHaveProperty("updateWithVersion");
-    expect(r).toHaveProperty("deleteRow");
     expect(r).toHaveProperty("deleteWithVersion");
     expect(r).toHaveProperty("adminList");
     expect(r).toHaveProperty("getById");
@@ -404,7 +389,6 @@ describe("createAchievementRepo", () => {
     expect(typeof r.findByIdForUser).toBe("function");
     expect(typeof r.update).toBe("function");
     expect(typeof r.updateWithVersion).toBe("function");
-    expect(typeof r.deleteRow).toBe("function");
     expect(typeof r.deleteWithVersion).toBe("function");
     expect(typeof r.adminList).toBe("function");
     expect(typeof r.getById).toBe("function");

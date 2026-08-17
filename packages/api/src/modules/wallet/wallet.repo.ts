@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, lte } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, inArray } from "drizzle-orm";
 import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -56,63 +56,6 @@ export async function getByUserId(
     .where(eq(wallet.userId, userId))
     .limit(1);
   return (w as WalletSnapshot | undefined) ?? null;
-}
-
-/**
- * Inserts a new wallet row.
- *
- * @param conn - the database connection or active transaction
- * @param params - the initial balance values
- * @returns the created wallet snapshot
- */
-export async function insert(
-  conn: DbOrTx,
-  params: {
-    userId: string;
-    totalBalance: number;
-    heldBalance: number;
-    availableBalance: number;
-  },
-): Promise<WalletSnapshot> {
-  const [created] = await conn
-    .insert(wallet)
-    .values({
-      userId: params.userId,
-      totalBalance: params.totalBalance,
-      heldBalance: params.heldBalance,
-      availableBalance: params.availableBalance,
-    })
-    .returning();
-  return created as WalletSnapshot;
-}
-
-/**
- * Directly sets a wallet's balances.
- *
- * @param conn - the database connection or active transaction
- * @param walletId - the wallet id
- * @param balances - the new balance values
- * @returns the updated wallet snapshot
- */
-export async function updateBalances(
-  conn: DbOrTx,
-  walletId: string,
-  balances: {
-    totalBalance: number;
-    heldBalance: number;
-    availableBalance: number;
-  },
-): Promise<WalletSnapshot> {
-  const [updated] = await conn
-    .update(wallet)
-    .set({
-      totalBalance: balances.totalBalance,
-      heldBalance: balances.heldBalance,
-      availableBalance: balances.availableBalance,
-    })
-    .where(eq(wallet.id, walletId))
-    .returning();
-  return updated as WalletSnapshot;
 }
 
 /**
@@ -320,7 +263,7 @@ export async function findLedgerEntries(
     cursor?: string;
     bookingId?: string;
     eventKey?: string;
-    entryType?: string;
+    entryType?: string | string[];
     dateFrom?: string;
     dateTo?: string;
   },
@@ -340,7 +283,10 @@ export async function findLedgerEntries(
     conditions.push(eq(ledgerEntry.eventKey, opts.eventKey));
   }
   if (opts.entryType) {
-    conditions.push(eq(ledgerEntry.entryType, opts.entryType));
+    const types = Array.isArray(opts.entryType)
+      ? opts.entryType
+      : [opts.entryType];
+    conditions.push(inArray(ledgerEntry.entryType, types));
   }
   if (opts.dateFrom) {
     conditions.push(gte(ledgerEntry.createdAt, new Date(opts.dateFrom)));
@@ -364,6 +310,31 @@ export async function findLedgerEntries(
  */
 export async function listActivePackages(conn: DbOrTx) {
   return conn.select().from(markPackage).where(eq(markPackage.isActive, true));
+}
+
+/**
+ * Sums ledger entry amounts for a wallet filtered by entry types.
+ *
+ * @param conn - the database connection or active transaction
+ * @param walletId - the wallet id
+ * @param entryTypes - the entry types to include
+ * @returns the summed amount (0 when no entries match)
+ */
+export async function sumLedgerAmount(
+  conn: DbOrTx,
+  walletId: string,
+  entryTypes: string[],
+) {
+  const [row] = await conn
+    .select({ total: sql<number>`COALESCE(SUM(${ledgerEntry.amount}), 0)` })
+    .from(ledgerEntry)
+    .where(
+      and(
+        eq(ledgerEntry.walletId, walletId),
+        inArray(ledgerEntry.entryType, entryTypes),
+      ),
+    );
+  return row?.total ?? 0;
 }
 
 /**
@@ -395,8 +366,6 @@ export function createWalletRepo() {
     getById,
     getByUserId,
     upsert,
-    insert,
-    updateBalances,
     atomicHold,
     atomicRelease,
     atomicDeduct,
@@ -406,5 +375,6 @@ export function createWalletRepo() {
     insertLedger,
     findLedgerEntries,
     listActivePackages,
+    sumLedgerAmount,
   };
 }

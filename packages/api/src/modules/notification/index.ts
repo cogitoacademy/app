@@ -21,7 +21,9 @@ export function createNotificationModule(deps: {
   email: NotificationEmailPort;
 }) {
   const repo = createNotificationRepo(deps.db);
-  const service = createNotificationService(repo, deps.email);
+  const service = createNotificationService(repo, deps.email, {
+    db: deps.db,
+  });
   const handler = createNotificationHandler({ notificationService: service });
   return { service, handler };
 }

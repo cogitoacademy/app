@@ -4,6 +4,8 @@ import {
   createGroupInput,
   createSeriesInput,
   bookingActionInput,
+  cancelBookingInput,
+  declineBookingInput,
   declineInviteInput,
   proposeRescheduleInput,
   listMineInput,
@@ -142,6 +144,30 @@ describe("Validation bounds — string .max()", () => {
     }
   });
 
+  test("M5: cancellationReason rejects >500 chars", () => {
+    const longReason = "a".repeat(501);
+    const result = cancelBookingInput.safeParse({
+      bookingId: "b1",
+      cancellationReason: longReason,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/<=500/i);
+    }
+  });
+
+  test("M5: tutor decline reason rejects >500 chars", () => {
+    const longReason = "a".repeat(501);
+    const result = declineBookingInput.safeParse({
+      bookingId: "b1",
+      reason: longReason,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/<=500/i);
+    }
+  });
+
   test("Correction reason rejects >2000 chars", () => {
     const result = createCorrectionInput.safeParse({
       walletId: "w1",
@@ -248,7 +274,7 @@ describe("Validation bounds — array .max()", () => {
     const subjects = Array.from({ length: 21 }, (_, i) => `subject-${i}`);
     const result = achievementInput.safeParse({
       eventName: "Test",
-      category: "academic",
+      category: "other",
       award: "Gold",
       level: "national",
       subjects,

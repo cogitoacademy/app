@@ -1,12 +1,13 @@
-import { eq, asc, inArray, gt, and, sql } from "drizzle-orm";
+import { eq, asc, inArray, gt, and, sql, getTableColumns } from "drizzle-orm";
 import {
   booking,
   bookingStateHistory,
   bookingParticipant,
+  bookingSession,
   paymentRecord,
 } from "@cogito-app/db/schema";
 import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
-import { RESPONSE_WINDOW_MS } from "../../shared/constants";
+import { PAYMENT_STATUS, RESPONSE_WINDOW_MS } from "../../shared/constants";
 import type { DbOrTx } from "../../lib/tx";
 
 export type AdminBookingRepo = ReturnType<typeof createAdminBookingRepo>;
@@ -164,7 +165,8 @@ export async function getStateHistory(conn: DbOrTx, bookingId: string) {
  * @param newState - the state to transition to
  * @param reason - the state reason
  * @param overrideMeta - metadata recorded on the booking
- * @returns previousState and updated row, or null when the booking does not exist or the version raced
+ * @returns previousState and updated row; `{ raced: true }` when the booking
+ *   changed concurrently; null when the booking does not exist
  */
 export async function updateBookingWithOverride(
   conn: DbOrTx,
@@ -198,7 +200,7 @@ export async function updateBookingWithOverride(
     )
     .returning();
 
-  if (!result.length) return null;
+  if (!result.length) return { raced: true };
 
   return { previousState: existing.currentState, updated: result[0] };
 }
@@ -249,6 +251,22 @@ export async function findParticipantsByBookingId(
     .where(eq(bookingParticipant.bookingId, bookingId));
 }
 
+export async function findSessionById(conn: DbOrTx, sessionId: string) {
+  const [row] = await conn
+    .select({ ...getTableColumns(bookingSession) })
+    .from(bookingSession)
+    .where(eq(bookingSession.id, sessionId))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function cancelSession(conn: DbOrTx, sessionId: string) {
+  await conn
+    .update(bookingSession)
+    .set({ currentState: "cancelled", holdAmount: 0 })
+    .where(eq(bookingSession.id, sessionId));
+}
+
 /**
  * Finds a payment record by id.
  *
@@ -287,6 +305,35 @@ export async function updatePaymentStatus(
 }
 
 /**
+ * Marks a payment REFUNDED only when it is currently PAID or SETTLED (M6).
+ * The conditional WHERE prevents a stale/out-of-order webhook from flipping
+ * an already-REFUNDED payment back to PAID/SETTLED.
+ *
+ * @param conn - the database connection or active transaction
+ * @param paymentId - the payment id
+ * @returns the updated row, or null when the payment is not refundable
+ */
+export async function updatePaymentStatusIfRefundable(
+  conn: DbOrTx,
+  paymentId: string,
+) {
+  const [updated] = await conn
+    .update(paymentRecord)
+    .set({ status: PAYMENT_STATUS.REFUNDED, updatedAt: new Date() })
+    .where(
+      and(
+        eq(paymentRecord.id, paymentId),
+        inArray(paymentRecord.status, [
+          PAYMENT_STATUS.PAID,
+          PAYMENT_STATUS.SETTLED,
+        ]),
+      ),
+    )
+    .returning();
+  return updated ?? null;
+}
+
+/**
  * Sets a booking's held Marks amount (used after release/compensation).
  *
  * @param conn - the database connection or active transaction
@@ -312,8 +359,31 @@ export function createAdminBookingRepo() {
     updateBookingWithOverride,
     insertStateHistoryEntry,
     findParticipantsByBookingId,
+    findSessionById,
+    cancelSession,
     findPaymentById,
     updatePaymentStatus,
+    updatePaymentStatusIfRefundable,
     updateBookingHoldAmount,
+    updateParticipantHeldAmount,
   };
+}
+
+/**
+ * Sets a booking participant's held Marks (used to reconcile holds after an
+ * override releases or compensates them).
+ *
+ * @param conn - the database connection or active transaction
+ * @param participantId - the booking_participant id
+ * @param heldAmount - the new held amount
+ */
+export async function updateParticipantHeldAmount(
+  conn: DbOrTx,
+  participantId: string,
+  heldAmount: number,
+) {
+  await conn
+    .update(bookingParticipant)
+    .set({ heldAmount })
+    .where(eq(bookingParticipant.id, participantId));
 }

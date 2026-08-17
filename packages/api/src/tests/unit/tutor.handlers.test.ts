@@ -189,6 +189,34 @@ describe("tutorHandlers", () => {
     });
   });
 
+  describe("replaceWeeklyAvailability", () => {
+    test("calls tutor.replaceWeeklyAvailability with the authenticated tutor", async () => {
+      const replaceWeeklyAvailability = mock(async () => [{ id: "slot1" }]);
+      const handler = createTutorHandler({ replaceWeeklyAvailability } as any);
+      const context = { session: { user: { id: "u1" } } } as any;
+      const input = {
+        effectiveFrom: new Date("2026-08-17T00:00:00+07:00"),
+        repeatUntil: new Date("2026-09-17T23:59:59+07:00"),
+        ranges: [
+          {
+            dayOfWeek: 1,
+            startTime: "09:00",
+            endTime: "17:00",
+            modality: "online" as const,
+          },
+        ],
+      };
+
+      const result = await handler.replaceWeeklyAvailability({
+        context,
+        input,
+      });
+
+      expect(replaceWeeklyAvailability).toHaveBeenCalledWith("u1", input);
+      expect(result).toEqual([{ id: "slot1" }]);
+    });
+  });
+
   describe("deleteAvailability", () => {
     test("calls tutor.deleteAvailability with userId and input.id", async () => {
       const deleteAvailability = mock(async () => undefined);

@@ -1,5 +1,8 @@
 import type { DbType } from "../../lib/db";
 import { PAYMENT_STATUS } from "../../shared/constants";
+import { NOTIFICATION_CATEGORY } from "../../shared/constants";
+import { NOTIFICATION_SEVERITY } from "../../shared/constants";
+import type { NotificationWriteParams } from "../notification/notification.service";
 import {
   PackageNotFoundError,
   PaymentNotFoundError,
@@ -53,6 +56,10 @@ export interface ConfirmInput {
 
 export type PaymentService = ReturnType<typeof createPaymentService>;
 
+export interface PaymentNotificationPort {
+  writeBestEffort(params: NotificationWriteParams): Promise<void>;
+}
+
 const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
   PENDING: ["PAID", "FAILED", "EXPIRED", "SETTLED"],
   PAID: ["SETTLED", "REFUNDED"],
@@ -74,8 +81,9 @@ export function createPaymentService(deps: {
   repo: PaymentRepo;
   provider: PaymentProvider;
   providerName: string;
+  notification?: PaymentNotificationPort;
 }) {
-  const { db, wallet, repo, provider, providerName } = deps;
+  const { db, wallet, repo, provider, providerName, notification } = deps;
 
   /**
    * Creates a payment intent for a mark package purchase, reusing pending intents.
@@ -112,13 +120,33 @@ export function createPaymentService(deps: {
           checkoutUrl: existingIntent.checkoutUrl,
         };
       }
+      if (
+        existing.status === PAYMENT_STATUS.FAILED ||
+        existing.status === PAYMENT_STATUS.EXPIRED
+      ) {
+        // Reset to PENDING so the webhook can credit, then re-create the intent.
+        // Xendit allows reusing the reference_id for a fresh payment request.
+        await repo.updatePaymentStatus(existing.id, {
+          status: PAYMENT_STATUS.PENDING,
+        });
+        const freshIntent = await provider.createIntent({
+          paymentId: existing.id,
+          amountIdr: pkg.priceIdr,
+          providerReference: existing.providerReference,
+        });
+        return {
+          paymentId: existing.id,
+          providerReference: existing.providerReference,
+          checkoutUrl: freshIntent.checkoutUrl,
+        };
+      }
       throw new PackageAlreadyPurchasedError(packageCode, userId);
     }
 
     const paymentId = crypto.randomUUID();
     const providerReference = idempotencyKey;
 
-    await repo.insertPayment({
+    const inserted = await repo.insertPayment({
       id: paymentId,
       userId,
       walletId,
@@ -129,6 +157,26 @@ export function createPaymentService(deps: {
       marks: pkg.marks,
       status: PAYMENT_STATUS.PENDING,
     });
+
+    // B6: a concurrent request won the check-then-insert race and its row
+    // was committed first — reuse the existing (PENDING) payment instead of
+    // creating a zombie duplicate.
+    if (!inserted) {
+      const existingRow =
+        await repo.findPaymentByProviderReference(providerReference);
+      if (existingRow) {
+        const existingIntent = await provider.createIntent({
+          paymentId: existingRow.id,
+          amountIdr: pkg.priceIdr,
+          providerReference: existingRow.providerReference,
+        });
+        return {
+          paymentId: existingRow.id,
+          providerReference: existingRow.providerReference,
+          checkoutUrl: existingIntent.checkoutUrl,
+        };
+      }
+    }
 
     try {
       const intent = await provider.createIntent({
@@ -162,11 +210,20 @@ export function createPaymentService(deps: {
       );
 
       if (!record) throw new PaymentNotFoundError(input.providerReference);
-      if (record.status === PAYMENT_STATUS.PAID)
+      // PAID/SETTLED are terminal for idempotency purposes, EXCEPT a REFUNDED
+      // webhook (per ALLOWED_TRANSITIONS PAID/SETTLED -> REFUNDED) which must be
+      // processed so the payment is marked REFUNDED and the payer is notified.
+      if (
+        record.status === PAYMENT_STATUS.PAID &&
+        input.status !== PAYMENT_STATUS.REFUNDED
+      )
         return { status: PAYMENT_STATUS.PAID };
       if (record.status === PAYMENT_STATUS.FAILED)
         return { status: PAYMENT_STATUS.FAILED };
-      if (record.status === PAYMENT_STATUS.SETTLED)
+      if (
+        record.status === PAYMENT_STATUS.SETTLED &&
+        input.status !== PAYMENT_STATUS.REFUNDED
+      )
         return { status: PAYMENT_STATUS.SETTLED };
       if (record.status === PAYMENT_STATUS.EXPIRED)
         return { status: PAYMENT_STATUS.EXPIRED };
@@ -217,16 +274,75 @@ export function createPaymentService(deps: {
             reason: `Purchase: ${record.marks} Marks`,
           });
         }
+
+        if (notification && shouldCredit) {
+          await notification.writeBestEffort({
+            db: tx,
+            userId: record.userId,
+            category: NOTIFICATION_CATEGORY.PAYMENT,
+            severity: NOTIFICATION_SEVERITY.ACTION,
+            title: "Payment received",
+            body: `Your payment of ${record.amountIdr} IDR was received and ${record.marks} Marks were added to your balance.`,
+            eventKey: `payment.${record.id}.credited`,
+            emailRequired: true,
+          });
+        }
       } else {
-        await repo.updatePaymentStatus(
-          record.id,
-          {
-            status: input.status,
-            providerEventId: input.providerEventId,
-            failureReason: input.failureReason ?? null,
-          },
-          tx,
-        );
+        // B2: the REFUNDED webhook may race an admin refund. The status
+        // update is conditional on the row still being in a credit state
+        // (PAID/SETTLED) — if the admin refund already committed, the update
+        // is a no-op and the reversal must NOT run again (double refund).
+        // The compensation only runs when THIS webhook actually transitioned
+        // the row out of a credit state.
+        if (input.status === PAYMENT_STATUS.REFUNDED) {
+          const reversed = await repo.updatePaymentStatusIfInCreditState(
+            record.id,
+            {
+              status: input.status,
+              providerEventId: input.providerEventId,
+              failureReason: input.failureReason ?? null,
+            },
+            tx,
+          );
+
+          if (reversed) {
+            // R5: reverses the marks credited on PAID/SETTLED via the
+            // compensate_deduct primitive — it removes the marks from the
+            // available balance, unlike `deduct` which only releases holds.
+            await wallet.compensate(tx, {
+              walletId: record.walletId,
+              amount: record.marks,
+              eventKey: `refund.${record.id}.reverse`,
+              sourceReference: record.id,
+              actorType: "system",
+              reason: "Refund: reversed credited marks",
+              type: "compensate_deduct",
+            });
+          }
+
+          if (notification && reversed) {
+            await notification.writeBestEffort({
+              db: tx,
+              userId: record.userId,
+              category: NOTIFICATION_CATEGORY.REFUND,
+              severity: NOTIFICATION_SEVERITY.ACTION,
+              title: "Refund processed",
+              body: "Your payment has been refunded to your account.",
+              eventKey: `payment.${record.id}.refunded`,
+              emailRequired: true,
+            });
+          }
+        } else {
+          await repo.updatePaymentStatus(
+            record.id,
+            {
+              status: input.status,
+              providerEventId: input.providerEventId,
+              failureReason: input.failureReason ?? null,
+            },
+            tx,
+          );
+        }
       }
 
       return { status: input.status };

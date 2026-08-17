@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { auth } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
+import { env } from "@cogito-app/env/server";
 import {
   user,
   tutorInvite,
@@ -13,9 +14,33 @@ import {
   INVITE_EXPIRY_DAYS,
   USER_ROLE,
 } from "@cogito-app/api/shared/constants";
+import { hashInviteToken } from "@cogito-app/api/lib/tokens";
 
 const SEED_SUFFIX = "seed";
 const SEED_DISPLAY_TAG = "[seed]";
+
+export function seedAllowed(
+  nodeEnv: string,
+  allowFlag: string | undefined,
+): boolean {
+  if (nodeEnv !== "production") return true;
+  return allowFlag === "true";
+}
+
+export function seedAdminPassword(value: string | undefined): string | null {
+  if (!value || value.length < 12) return null;
+  return value;
+}
+
+function demoPassword(envValue: string | undefined, fallback: string): string {
+  if (!envValue) return fallback;
+  if (envValue.length < 8) {
+    throw new Error(
+      "SEED_TUTOR_PASSWORD / SEED_STUDENT_PASSWORD must be at least 8 characters",
+    );
+  }
+  return envValue;
+}
 
 const PACKAGES = [
   { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 430000 },
@@ -93,11 +118,23 @@ async function seedDemoStudent(email: string, password: string, name: string) {
 }
 
 async function seed() {
+  if (!seedAllowed(env.NODE_ENV, process.env.SEED_ALLOWED_IN_PROD)) {
+    throw new Error(
+      "Refusing to seed in production unless SEED_ALLOWED_IN_PROD=true",
+    );
+  }
+  const adminPassword = seedAdminPassword(process.env.SEED_ADMIN_PASSWORD);
+  if (!adminPassword) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD required (min 12 chars) in this environment",
+    );
+  }
+
   await seedPackages();
 
   const adminEmail = "admin@cogitoacademy.id";
 
-  const admin = await ensureUser(adminEmail, "admin123", "Admin User");
+  const admin = await ensureUser(adminEmail, adminPassword, "Admin User");
   await db
     .update(user)
     .set({ role: USER_ROLE.ADMIN })
@@ -105,9 +142,13 @@ async function seed() {
   console.log("Admin user ready:", admin.id);
 
   const tutorEmail = `tutor.${SEED_SUFFIX}@cogitoacademy.id`;
+  const tutorPassword = demoPassword(
+    process.env.SEED_TUTOR_PASSWORD,
+    "tutor123",
+  );
   const tutorUser = await ensureUser(
     tutorEmail,
-    "tutor123",
+    tutorPassword,
     `${SEED_DISPLAY_TAG} Tutor`,
   );
   await db
@@ -127,7 +168,7 @@ async function seed() {
       .values({
         email: tutorEmail,
         displayName: `${SEED_DISPLAY_TAG} Tutor`,
-        token: crypto.randomUUID(),
+        token: hashInviteToken(crypto.randomUUID()),
         status: "accepted",
         invitedBy: admin.id,
         expiresAt: new Date(
@@ -176,30 +217,37 @@ async function seed() {
 
   await seedDemoStudent(
     `student.${SEED_SUFFIX}@cogitoacademy.id`,
-    "student123",
+    demoPassword(process.env.SEED_STUDENT_PASSWORD, "student123"),
     `${SEED_DISPLAY_TAG} Student`,
+  );
+
+  const friendPassword = demoPassword(
+    process.env.SEED_STUDENT_PASSWORD,
+    "student123",
   );
 
   await Promise.all([
     seedDemoStudent(
       `student.friend1.${SEED_SUFFIX}@cogitoacademy.id`,
-      "student123",
+      friendPassword,
       `${SEED_DISPLAY_TAG} Alya Friend`,
     ),
     seedDemoStudent(
       `student.friend2.${SEED_SUFFIX}@cogitoacademy.id`,
-      "student123",
+      friendPassword,
       `${SEED_DISPLAY_TAG} Bima Friend`,
     ),
     seedDemoStudent(
       `student.friend3.${SEED_SUFFIX}@cogitoacademy.id`,
-      "student123",
+      friendPassword,
       `${SEED_DISPLAY_TAG} Citra Friend`,
     ),
   ]);
 }
 
-seed().catch((err) => {
-  console.error("Seed failed:", err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  seed().catch((err) => {
+    console.error("Seed failed:", err);
+    process.exit(1);
+  });
+}

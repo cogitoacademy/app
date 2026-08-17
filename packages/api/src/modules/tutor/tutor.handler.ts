@@ -6,9 +6,11 @@ import { updateMyProfileInput } from "./tutor.types";
 import {
   upsertAvailabilityInput,
   createWeeklyAvailabilityInput,
+  replaceWeeklyAvailabilityInput,
   deleteAvailabilityInput,
 } from "./availability.types";
 import { mapTutorError } from "./tutor.errors";
+import { getMyPayoutsInput } from "./tutor.types";
 
 type UpdateMyProfileInput = z.infer<typeof updateMyProfileInput>;
 type UpsertAvailabilityInput = z.infer<typeof upsertAvailabilityInput>;
@@ -16,6 +18,10 @@ type CreateWeeklyAvailabilityInput = z.infer<
   typeof createWeeklyAvailabilityInput
 >;
 type DeleteAvailabilityInput = z.infer<typeof deleteAvailabilityInput>;
+type ReplaceWeeklyAvailabilityInput = z.infer<
+  typeof replaceWeeklyAvailabilityInput
+>;
+type GetMyPayoutsInput = z.infer<typeof getMyPayoutsInput>;
 
 export type TutorHandler = ReturnType<typeof createTutorHandler>;
 
@@ -85,6 +91,23 @@ export function createTutorHandler(tutorService: TutorService) {
       );
     },
 
+    replaceWeeklyAvailability: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: ReplaceWeeklyAvailabilityInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          tutorService.replaceWeeklyAvailability(
+            context.session!.user.id,
+            input,
+          ),
+        mapTutorError,
+      );
+    },
+
     deleteAvailability: async ({
       context,
       input,
@@ -98,6 +121,19 @@ export function createTutorHandler(tutorService: TutorService) {
           input.id,
         );
       }, mapTutorError);
+    },
+
+    getMyPayouts: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: GetMyPayoutsInput;
+    }) => {
+      return withDomainMap(
+        () => tutorService.getMyPayouts(context.session!.user.id, input ?? {}),
+        mapTutorError,
+      );
     },
   };
 }

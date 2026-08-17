@@ -10,12 +10,13 @@ export const Route = createFileRoute("/_app/bookings_/$bookingId")({
 function BookingDetailRoute() {
   const { bookingId } = Route.useParams();
   const { session } = Route.useRouteContext();
-  const viewerRole = (session.data?.user as CogitoUser | undefined)?.role;
+  const viewer = session.data?.user as CogitoUser | undefined;
 
   return (
     <BookingDetailPage
       bookingId={bookingId}
-      viewerRole={viewerRole ?? "student"}
+      viewerId={viewer?.id ?? ""}
+      viewerRole={viewer?.role ?? "student"}
     />
   );
 }

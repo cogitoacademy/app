@@ -8,6 +8,12 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Required so the GITHUB_TOKEN can push images to GHCR. Without this the
+    # push fails with "denied: installation not allowed to Create organization
+    # package" (the org must also allow Actions package creation).
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -35,8 +41,10 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
 
       - name: Trigger Coolify deploy
+        # Fail loudly when the webhook secret is unset or the request fails —
+        # a silent no-op deploy is worse than a red build.
         run: |
-          curl -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }} || true
+          curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }}
 
       - name: Health check
         run: |

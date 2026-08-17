@@ -278,7 +278,7 @@ describe("Admin override queue composite-cursor pagination (G8)", () => {
     const rows = [...pending, ...scheduled, ...terminal];
     const itemById = new Map(rows.map((r) => [r.id, r]));
     const expected = [...rows]
-      .sort(
+      .toSorted(
         (a, b) =>
           rankOf(a.currentState) - rankOf(b.currentState) ||
           a.scheduledStartAt.getTime() - b.scheduledStartAt.getTime() ||

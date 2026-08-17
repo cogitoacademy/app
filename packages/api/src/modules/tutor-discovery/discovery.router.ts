@@ -1,10 +1,10 @@
-import { protectedProcedure } from "../../procedures";
+import { studentProcedure } from "../../procedures";
 import { listPublishedInput, getProfileInput } from "./discovery.types";
 import type { DiscoveryHandler } from "./discovery.handler";
 
 export function createDiscoveryRouter(handler: DiscoveryHandler) {
   return {
-    listPublished: protectedProcedure
+    listPublished: studentProcedure
       .route({
         method: "POST",
         path: "/tutors/list",
@@ -16,7 +16,7 @@ export function createDiscoveryRouter(handler: DiscoveryHandler) {
       .input(listPublishedInput)
       .handler(handler.listPublished),
 
-    getProfile: protectedProcedure
+    getProfile: studentProcedure
       .route({
         method: "POST",
         path: "/tutors/profile/get",

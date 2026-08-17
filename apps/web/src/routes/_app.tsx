@@ -24,6 +24,7 @@ const routeTitles: Record<string, string> = {
   "/notifications": "Notifications",
   "/admin-tutors": "Manage Tutors",
   "/admin-achievements": "Achievement Moderation",
+  "/admin-operations": "Operations",
 };
 
 export const Route = createFileRoute("/_app")({

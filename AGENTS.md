@@ -197,3 +197,5 @@ Uses Card + Field + Input + Button pattern with Divider for OAuth options.
 8. Use `!` important modifier only for one-off overrides (rare)
 9. Use `use client` directive on all component files
 10. Reference selia.earth docs for component API details
+11. **Docs follow code — always.** Every PR that changes behavior must update the affected docs in the same PR: `docs/CONTEXT.md` (architecture, modules, known bugs, plans table), `docs/API-REFERENCE.md` (endpoints, inputs, outputs), `docs/MODULE-REFERENCE.md` (services, event keys, business rules), `docs/RUNBOOK.md` (ops/env), and the relevant plan in `docs/plans/` (move completed plans to `completed/`, keep statuses accurate). A PR whose docs are stale is not done.
+12. **RPC facts to remember:** HTTP paths are the oRPC procedure keys with slashes (`/rpc/auth/getProfile`), NOT dotted names; request bodies must be wrapped in the `{"json": <input>}` envelope; responses come back as `{"json": <data>, "meta": [...]}`.

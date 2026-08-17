@@ -8,11 +8,14 @@ export interface InsertAchievementParams {
   category: string;
   award: string;
   level: string;
-  eventDate?: string;
+  issuer?: string;
+  visibility?: boolean;
+  awardingDate?: string;
   location?: string;
   description?: string;
   subjects?: string[];
-  imageUrl?: string;
+  evidenceUrl?: string;
+  documentationUrl?: string;
 }
 
 export interface UpdateAchievementData {
@@ -20,11 +23,14 @@ export interface UpdateAchievementData {
   category?: string;
   award?: string;
   level?: string;
-  eventDate?: string;
+  issuer?: string;
+  visibility?: boolean;
+  awardingDate?: string;
   location?: string;
   description?: string;
   subjects?: string[];
-  imageUrl?: string;
+  evidenceUrl?: string;
+  documentationUrl?: string;
 }
 
 export interface AdminListInput {
@@ -49,6 +55,37 @@ async function listByUserId(conn: DbOrTx, userId: string) {
 }
 
 /**
+ * Lists approved + visible achievements for the public landing (F16), with
+ * the owner's display name attached.
+ */
+export async function listApprovedPublic(conn: DbOrTx) {
+  return conn
+    .select({
+      id: achievement.id,
+      userId: achievement.userId,
+      eventName: achievement.eventName,
+      category: achievement.category,
+      award: achievement.award,
+      level: achievement.level,
+      issuer: achievement.issuer,
+      awardingDate: achievement.awardingDate,
+      location: achievement.location,
+      description: achievement.description,
+      evidenceUrl: achievement.evidenceUrl,
+      documentationUrl: achievement.documentationUrl,
+      createdAt: achievement.createdAt,
+      displayName: user.name,
+    })
+    .from(achievement)
+    .innerJoin(user, eq(user.id, achievement.userId))
+    .where(
+      and(eq(achievement.status, "approved"), eq(achievement.visibility, true)),
+    )
+    .orderBy(desc(achievement.awardingDate), desc(achievement.createdAt))
+    .limit(100);
+}
+
+/**
  * Inserts a new achievement.
  *
  * @param conn - the database connection or active transaction
@@ -64,11 +101,14 @@ async function insert(conn: DbOrTx, params: InsertAchievementParams) {
       category: params.category,
       award: params.award,
       level: params.level,
-      eventDate: params.eventDate ?? null,
+      issuer: params.issuer ?? null,
+      visibility: params.visibility ?? true,
+      awardingDate: params.awardingDate ?? null,
       location: params.location ?? null,
       description: params.description ?? null,
       subjects: params.subjects ?? [],
-      imageUrl: params.imageUrl ?? null,
+      evidenceUrl: params.evidenceUrl ?? null,
+      documentationUrl: params.documentationUrl ?? null,
     })
     .returning();
   return result;
@@ -173,19 +213,6 @@ async function deleteWithVersion(
 }
 
 /**
- * Deletes an achievement scoped to the owning user.
- *
- * @param conn - the database connection or active transaction
- * @param id - the achievement id
- * @param userId - the owning user
- */
-async function deleteRow(conn: DbOrTx, id: string, userId: string) {
-  return conn
-    .delete(achievement)
-    .where(and(eq(achievement.id, id), eq(achievement.userId, userId)));
-}
-
-/**
  * Lists achievements for admin review with pagination and optional status filter.
  *
  * @param conn - the database connection or active transaction
@@ -254,11 +281,11 @@ async function updateStatus(
 export function createAchievementRepo() {
   return {
     listByUserId,
+    listApprovedPublic,
     insert,
     findByIdForUser,
     update,
     updateWithVersion,
-    deleteRow,
     deleteWithVersion,
     adminList,
     getById,

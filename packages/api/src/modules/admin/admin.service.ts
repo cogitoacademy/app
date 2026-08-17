@@ -2,6 +2,7 @@ import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
 import type { AdminAuditPort, AdminWalletPort } from "./index";
+import type { BookingPayoutPort } from "../booking";
 import {
   UserNotFoundError,
   LastAdminError,
@@ -64,13 +65,20 @@ function assertValidDateFilter(value: string, field: string): Date {
   return parsed;
 }
 
+export interface GetTutorPayoutsInput {
+  tutorId: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
   db: DbType;
   wallet: AdminWalletPort;
+  payout: BookingPayoutPort;
 }) {
-  const { adminRepo, auditPort, db, wallet } = deps;
+  const { adminRepo, auditPort, db, wallet, payout } = deps;
 
   async function listUsers(
     input: ListUsersInput = {},
@@ -90,22 +98,20 @@ export function createAdminService(deps: {
     adminId: string,
     input: SetRoleInput,
   ): Promise<UserRow> {
-    const target = await adminRepo.getById(db, input.userId);
-
-    const needsAdminCount =
-      target !== null &&
-      target.role === USER_ROLE.ADMIN &&
-      input.role !== USER_ROLE.ADMIN;
-    const adminCount = needsAdminCount ? await adminRepo.countAdmins(db) : 0;
-
-    const { previousRole } = validateRoleChange(
-      target,
-      input.role,
-      adminCount,
-      input.userId,
-    );
-
     return db.transaction(async (tx) => {
+      const target = await adminRepo.getById(tx, input.userId);
+      if (!target) throw new UserNotFoundError(input.userId);
+      const previousRole = target.role;
+
+      // The last-admin guard must be evaluated inside the transaction after
+      // locking the admin rows: a stale pre-transaction count would let two
+      // concurrent demotions of the last two admins both succeed (H6).
+      if (previousRole === USER_ROLE.ADMIN && input.role !== USER_ROLE.ADMIN) {
+        await adminRepo.lockAdminRows(tx);
+        const adminCount = await adminRepo.countAdmins(tx);
+        if (adminCount <= 1) throw new LastAdminError(input.userId);
+      }
+
       const rows = await adminRepo.updateRoleWithExpected(
         tx,
         input.userId,
@@ -186,7 +192,23 @@ export function createAdminService(deps: {
     });
   }
 
-  return { listUsers, setRole, getWallet, listLedgerEntries };
+  async function getTutorPayouts(input: GetTutorPayoutsInput) {
+    if (input.dateFrom && Number.isNaN(Date.parse(input.dateFrom))) {
+      throw new InvalidLedgerFilterError(
+        "dateFrom must be a valid ISO datetime",
+      );
+    }
+    if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
+      throw new InvalidLedgerFilterError("dateTo must be a valid ISO datetime");
+    }
+    return payout.getTutorPayouts({
+      tutorId: input.tutorId,
+      dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+      dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+    });
+  }
+
+  return { listUsers, setRole, getWallet, listLedgerEntries, getTutorPayouts };
 }
 
 export type AdminService = ReturnType<typeof createAdminService>;

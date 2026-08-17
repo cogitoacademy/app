@@ -11,11 +11,35 @@ describe("Achievement Types (Zod schemas)", () => {
   test("achievementInput validates required fields", () => {
     const result = achievementInput.safeParse({
       eventName: "Olympiad",
-      category: "academic",
+      category: "competition",
       award: "Gold",
       level: "national",
     });
     expect(result.success).toBe(true);
+  });
+
+  test("achievementInput rejects a non-enum category (U10)", () => {
+    const result = achievementInput.safeParse({
+      eventName: "Olympiad",
+      category: "academic",
+      award: "Gold",
+      level: "national",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("achievementInput accepts issuer and visibility (U10)", () => {
+    const result = achievementInput.safeParse({
+      eventName: "Olympiad",
+      category: "award",
+      award: "Gold",
+      level: "national",
+      issuer: "Kemendikbud",
+      visibility: false,
+    });
+    expect(result.success).toBe(true);
+    expect(result.data!.issuer).toBe("Kemendikbud");
+    expect(result.data!.visibility).toBe(false);
   });
 
   test("achievementInput rejects missing required fields", () => {

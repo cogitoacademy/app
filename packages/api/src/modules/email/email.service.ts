@@ -10,6 +10,7 @@ export interface EmailMessage {
     | "override"
     | "invite"
     | "auth";
+  idempotencyKey?: string;
 }
 
 export interface EmailPort {

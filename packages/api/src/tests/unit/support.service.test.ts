@@ -305,4 +305,47 @@ describe("SupportService", () => {
       });
     });
   });
+
+  describe("escalatePastSlaTickets", () => {
+    test("escalates overdue open tickets and records audit entries", async () => {
+      const overdue = [
+        makeTicket({
+          id: "t1",
+          slaDeadline: new Date(Date.now() - 60 * 60 * 1000),
+        }),
+      ];
+      const { service, repo, audit } = createService({
+        repo: {
+          listPastSla: mock(async () => overdue),
+          markEscalated: mock(async () => {}),
+        },
+      });
+
+      const result = await service.escalatePastSlaTickets();
+
+      expect(result.escalated).toBe(1);
+      expect(repo.listPastSla).toHaveBeenCalledTimes(1);
+      expect(repo.markEscalated).toHaveBeenCalledTimes(1);
+      expect(repo.markEscalated.mock.calls[0][1]).toBe("t1");
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(audit.record.mock.calls[0][0]).toMatchObject({
+        actorId: null,
+        actorType: "system",
+        action: "support_ticket_escalated",
+        targetId: "t1",
+        targetType: "support_ticket",
+        afterState: { status: "in_progress" },
+      });
+    });
+
+    test("returns zero when no tickets are overdue", async () => {
+      const { service } = createService({
+        repo: { listPastSla: mock(async () => []) },
+      });
+
+      const result = await service.escalatePastSlaTickets();
+
+      expect(result.escalated).toBe(0);
+    });
+  });
 });

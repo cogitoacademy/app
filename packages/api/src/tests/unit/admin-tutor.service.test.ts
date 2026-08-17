@@ -2,6 +2,7 @@ import { describe, test, expect, mock } from "bun:test";
 import {
   validateReviewAction,
   buildReviewUpdates,
+  buildTutorInviteEmail,
   createAdminTutorService,
   type ReviewAction,
   type TutorProfileSnapshot,
@@ -44,6 +45,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
   return {
     adminTutorRepo: {
       findActiveInviteByEmail: mock(async () => null),
+      findUserAccountsByEmail: mock(async () => undefined),
       insertInvite: mock(async () => invite),
       getInviteById: mock(async () => invite),
       updateInvite: mock(async () => invite),
@@ -53,6 +55,8 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       listTutorProfiles: mock(async () => [profile]),
     },
     auditPort: { record: mock(async () => {}) },
+    emailPort: { send: mock(async () => ({ messageId: "email1" })) },
+    appBaseUrl: "https://app.cogito.test",
     db: {
       transaction: mock(async (fn: any) => {
         const tx = {};
@@ -64,6 +68,41 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe("AdminTutor Service", () => {
+  describe("buildTutorInviteEmail", () => {
+    test("creates a clear, branded invitation with one primary action", () => {
+      const message = buildTutorInviteEmail(
+        makeInvite({ expiresAt: new Date("2026-08-23T12:00:00.000Z") }),
+        "https://app.cogito.test/",
+      );
+
+      expect(message.subject).toBe("You’re invited to teach with Cogito");
+      expect(message.html).toContain("You’re invited to tutor with Cogito");
+      expect(message.html).toContain("background:#e09e06");
+      expect(message.html).toContain("Accept invitation &amp; set up profile");
+      expect(message.html).toContain("23 August 2026 at 12:00 UTC");
+      expect(message.html).toContain(
+        "https://app.cogito.test/invite?token=tok1",
+      );
+      expect(message.html).toContain("tutor@example.com");
+    });
+
+    test("escapes invitee-controlled copy and encodes the token", () => {
+      const message = buildTutorInviteEmail(
+        makeInvite({
+          displayName: '<script>alert("x")</script>',
+          email: "unsafe&email@example.com",
+          token: "token with spaces&symbols",
+        }),
+        "https://app.cogito.test",
+      );
+
+      expect(message.html).not.toContain("<script>");
+      expect(message.html).toContain("&lt;script&gt;");
+      expect(message.html).toContain("unsafe&amp;email@example.com");
+      expect(message.html).toContain("token%20with%20spaces%26symbols");
+    });
+  });
+
   describe("validateReviewAction", () => {
     test("returns profile for valid action with profile", () => {
       const result = validateReviewAction(
@@ -142,6 +181,28 @@ describe("AdminTutor Service", () => {
   });
 
   describe("createAdminTutorService", () => {
+    test("inspectInvitee reports Google and credential providers", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          findUserAccountsByEmail: mock(async () => ({
+            id: "u1",
+            email: "tutor@example.com",
+            name: "Tutor",
+            role: "student",
+            accounts: [{ providerId: "google" }, { providerId: "credential" }],
+          })),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      const result = await service.inspectInvitee({
+        email: "tutor@example.com",
+      });
+      expect(result.exists).toBe(true);
+      expect(result.hasGoogle).toBe(true);
+      expect(result.hasPassword).toBe(true);
+    });
+
     test("createInvite throws DuplicateInviteError when active invite exists", async () => {
       const deps = makeDeps({
         adminTutorRepo: {
@@ -218,6 +279,19 @@ describe("AdminTutor Service", () => {
       expect(deps.adminTutorRepo.insertInvite).toHaveBeenCalled();
     });
 
+    test("createInvite stores a digest and returns the plaintext once (M10)", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.createInvite("admin1", {
+        email: "hash@example.com",
+        displayName: "Hash Tutor",
+      });
+      const inserted = (deps.adminTutorRepo.insertInvite as any).mock
+        .calls[0][1];
+      expect(inserted.token).toMatch(/^[0-9a-f]{64}$/);
+      expect(inserted.token).not.toBe(result.token);
+    });
+
     test("listInvites defaults limit and offset", async () => {
       const deps = makeDeps();
       const service = createAdminTutorService(deps as any);
@@ -227,11 +301,12 @@ describe("AdminTutor Service", () => {
         id: "inv1",
         email: "tutor@example.com",
         displayName: "Tutor",
-        token: "tok1",
         status: "invited",
         invitedBy: "admin1",
         internalNotes: null,
       });
+      // Stored digests are never surfaced in list responses (M10).
+      expect(result[0].token).toBeUndefined();
     });
 
     test("listInvites passes status filter", async () => {
@@ -243,11 +318,11 @@ describe("AdminTutor Service", () => {
         id: "inv1",
         email: "tutor@example.com",
         displayName: "Tutor",
-        token: "tok1",
         status: "invited",
         invitedBy: "admin1",
         internalNotes: null,
       });
+      expect(result[0].token).toBeUndefined();
     });
 
     test("resendInvite throws InviteNotFoundError for missing invite", async () => {
@@ -281,6 +356,16 @@ describe("AdminTutor Service", () => {
       const service = createAdminTutorService(deps as any);
       const result = await service.resendInvite("admin1", "inv1");
       expect(result.id).toBe("inv1");
+      expect(deps.emailPort.send).not.toHaveBeenCalled();
+    });
+
+    test("sendInviteAgain rotates and explicitly sends email", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+      const result = await service.sendInviteAgain("admin1", "inv1");
+      expect(result.id).toBe("inv1");
+      expect(result.emailDelivery).toBe("sent");
+      expect(deps.emailPort.send).toHaveBeenCalledTimes(1);
     });
 
     test("revokeInvite throws InviteNotFoundError for missing invite", async () => {

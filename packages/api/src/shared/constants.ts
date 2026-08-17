@@ -1,24 +1,27 @@
 export const INVITE_EXPIRY_DAYS = 7;
 
+export const MAX_MEETING_RETRY_ATTEMPTS = 3;
+
 export const KNOWLEDGE_BANK_THRESHOLD = 35;
 
 export const RESPONSE_WINDOW_MS = 12 * 60 * 60 * 1000;
+export const OFFLINE_SCHEDULED_GRACE_MS = 2 * 60 * 60 * 1000;
 export const LATE_CANCEL_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 export const LATENESS_TOLERANCE_MS = 15 * 60 * 1000;
 export const SUPPORT_SLA_MS = 12 * 60 * 60 * 1000;
 export const MIN_GROUP_HEADCOUNT = 2;
 export const MIN_SERIES_SESSIONS = 2;
 export const MAX_SERIES_SESSIONS = 4;
+export const SESSION_DURATION_MINUTES = 90;
+export const SESSION_DURATION_MS = SESSION_DURATION_MINUTES * 60 * 1000;
 export const GROUP_SERIES_DISCLAIMER =
   "Group series bookings require attendance at all sessions. Individual sessions cannot be cancelled.";
 export const DEFAULT_SOLO_PRICE = 42;
-export const SESSION_DURATION_MINUTES = 90;
 
 export const DEFAULT_PAGE_LIMIT = 20;
 export const MAX_PAGE_LIMIT = 100;
 export const ADMIN_DEFAULT_PAGE_LIMIT = 50;
 
-export const COGITO_TAKE_RATE = 0.2;
 export const TUTOR_PAYOUT_RATE_IDR = 7000;
 export const EXTRA_TAKE_DIVISOR = 5;
 
@@ -166,21 +169,6 @@ export const ROOM_BOOKING_STATUS = {
 } as const;
 export type RoomBookingStatus =
   (typeof ROOM_BOOKING_STATUS)[keyof typeof ROOM_BOOKING_STATUS];
-
-export const PAYMENT_PROVIDER_NAME = {
-  STUB: "stub",
-  XENDIT: "xendit",
-} as const;
-export type PaymentProviderName =
-  (typeof PAYMENT_PROVIDER_NAME)[keyof typeof PAYMENT_PROVIDER_NAME];
-
-export const MEETING_PROVIDER = {
-  GOOGLE_MEET: "google_meet",
-  MANUAL: "manual",
-  PENDING: "pending",
-} as const;
-export type MeetingProvider =
-  (typeof MEETING_PROVIDER)[keyof typeof MEETING_PROVIDER];
 
 export const ACTOR_TYPE = {
   ADMIN: "admin",

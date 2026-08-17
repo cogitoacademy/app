@@ -1,4 +1,8 @@
-import { protectedProcedure, adminProcedure } from "../../procedures";
+import {
+  publicProcedure,
+  protectedProcedure,
+  adminProcedure,
+} from "../../procedures";
 import {
   achievementInput,
   updateAchievementInput,
@@ -10,6 +14,17 @@ import type { AchievementHandler } from "./achievement.handler";
 
 export function createAchievementRouter(handler: AchievementHandler) {
   return {
+    listApproved: publicProcedure
+      .route({
+        method: "POST",
+        path: "/achievements/listApproved",
+        tags: ["Achievements"],
+        summary: "List approved public achievements",
+        description:
+          "Returns approved + visible achievements for the public landing (F16)",
+      })
+      .handler(handler.listApproved),
+
     list: protectedProcedure
       .route({
         method: "POST",

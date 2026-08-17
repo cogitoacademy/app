@@ -1,9 +1,13 @@
 import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
 import {
   BookingNotFoundError,
+  BookingOverrideConflictError,
   InvalidRefundStateError,
+  RefundSpendExhaustedError,
   TerminalStateOverrideError,
 } from "./admin-booking.errors";
+import { BookingNotEditableError } from "../booking/booking.errors";
+import { BookingStateTransitionError } from "../booking/booking.errors";
 import {
   ACTOR_TYPE,
   DEFAULT_PAGE_LIMIT,
@@ -15,6 +19,7 @@ import {
 } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+import { escapeHtml } from "../../lib/sanitize";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
 import type {
@@ -22,6 +27,7 @@ import type {
   AdminBookingWalletPort,
   AdminBookingRefundPort,
   AdminBookingNotificationPort,
+  AdminBookingMeetingPort,
 } from "./index";
 
 export const OVERRIDE_CATEGORIES = [
@@ -123,8 +129,9 @@ export function createAdminBookingService(deps: {
   wallet: AdminBookingWalletPort;
   refund: AdminBookingRefundPort;
   notification?: AdminBookingNotificationPort;
+  meeting: AdminBookingMeetingPort;
 }) {
-  const { db, repo, auditPort, wallet, refund, notification } = deps;
+  const { db, repo, auditPort, wallet, refund, notification, meeting } = deps;
 
   function projectWalletAfter(
     w: WalletBalances,
@@ -138,17 +145,20 @@ export function createAdminBookingService(deps: {
         availableBalance: w.availableBalance + amount,
       };
     }
+    // Compensate actions first release the participant's hold (held ->
+    // available) and then apply the credit/deduct on top. This reconciles the
+    // held balance instead of leaving it stranded (H7).
     if (action === "compensate_credit") {
       return {
         totalBalance: w.totalBalance + amount,
-        heldBalance: w.heldBalance,
-        availableBalance: w.availableBalance + amount,
+        heldBalance: Math.max(w.heldBalance - amount, 0),
+        availableBalance: w.availableBalance + 2 * amount,
       };
     }
     return {
       totalBalance: w.totalBalance - amount,
-      heldBalance: w.heldBalance,
-      availableBalance: w.availableBalance - amount,
+      heldBalance: Math.max(w.heldBalance - amount, 0),
+      availableBalance: w.availableBalance,
     };
   }
   /**
@@ -194,7 +204,14 @@ export function createAdminBookingService(deps: {
         : [];
 
     const perParticipantImpact: PerParticipantImpact[] = [];
-    if (input.marksAction && bookingRow.holdAmount > 0) {
+    // Gate the money action on actual participant holds (not the booking-level
+    // holdAmount, which can drift from the sum of participant holds) so an
+    // admin's requested action is never a silent no-op (L7).
+    const totalParticipantHeld = participants.reduce(
+      (sum, p) => sum + p.heldAmount,
+      0,
+    );
+    if (input.marksAction && totalParticipantHeld > 0) {
       for (const participant of affectedParts) {
         if (participant.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
@@ -233,7 +250,7 @@ export function createAdminBookingService(deps: {
   }
 
   async function applyOverride(adminId: string, input: OverrideInput) {
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const bookingRow = await repo.findBookingById(tx, input.bookingId);
       if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
 
@@ -247,6 +264,8 @@ export function createAdminBookingService(deps: {
         plan.overrideMeta,
       );
       if (!updateResult) throw new BookingNotFoundError(input.bookingId);
+      if ("raced" in updateResult)
+        throw new BookingOverrideConflictError(input.bookingId);
 
       await repo.insertStateHistoryEntry(tx, {
         bookingId: input.bookingId,
@@ -259,6 +278,7 @@ export function createAdminBookingService(deps: {
       });
 
       let totalReleased = 0;
+      const clearedParticipantIds = new Set<string>();
 
       for (const impact of plan.perParticipantImpact) {
         if (impact.action === "release_holds") {
@@ -273,6 +293,17 @@ export function createAdminBookingService(deps: {
           });
           totalReleased += impact.heldAmount;
         } else if (impact.action === "compensate_credit") {
+          // Release the hold first, then compensate on top (H7): held marks
+          // must not stay stranded after the override.
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: impact.walletId,
+            amount: impact.heldAmount,
+            eventKey: `override.release.${input.bookingId}.${impact.participantId}`,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: `Admin override: ${input.reason}`,
+            bookingId: input.bookingId,
+          });
           // eslint-disable-next-line no-await-in-loop
           await wallet.compensate(tx, {
             walletId: impact.walletId,
@@ -285,6 +316,17 @@ export function createAdminBookingService(deps: {
           });
           totalReleased += impact.heldAmount;
         } else if (impact.action === "compensate_deduct") {
+          // Forfeit semantics: release the hold, then deduct from available
+          // (total -= H, held -= H, available net unchanged).
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: impact.walletId,
+            amount: impact.heldAmount,
+            eventKey: `override.release.${input.bookingId}.${impact.participantId}`,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: `Admin override: ${input.reason}`,
+            bookingId: input.bookingId,
+          });
           // eslint-disable-next-line no-await-in-loop
           await wallet.compensate(tx, {
             walletId: impact.walletId,
@@ -297,10 +339,24 @@ export function createAdminBookingService(deps: {
           });
           totalReleased += impact.heldAmount;
         }
+        // eslint-disable-next-line no-await-in-loop
+        await repo.updateParticipantHeldAmount(tx, impact.participantId, 0);
+        clearedParticipantIds.add(impact.participantId);
       }
 
       if (totalReleased > 0) {
-        await repo.updateBookingHoldAmount(tx, input.bookingId, 0);
+        // Recompute the booking-level hold from the participants that were not
+        // released, instead of blindly zeroing it (H7/M3).
+        const remainingHeld = await repo
+          .findParticipantsByBookingId(tx, input.bookingId)
+          .then((participants) =>
+            participants.reduce(
+              (sum, p) =>
+                clearedParticipantIds.has(p.id) ? sum : sum + p.heldAmount,
+              0,
+            ),
+          );
+        await repo.updateBookingHoldAmount(tx, input.bookingId, remainingHeld);
       }
 
       if (notification) {
@@ -314,9 +370,10 @@ export function createAdminBookingService(deps: {
             severity: NOTIFICATION_SEVERITY.ACTION,
             title: "Your booking was updated by an admin",
             body: `Your booking was updated (${input.category})${
-              input.userNote ? `: ${input.userNote}` : ""
+              input.userNote ? `: ${escapeHtml(input.userNote)}` : ""
             }.`,
             eventKey: `override.applied.${input.bookingId}.${userId}`,
+            emailRequired: true,
           });
         }
       }
@@ -334,11 +391,14 @@ export function createAdminBookingService(deps: {
           overrideMeta: plan.overrideMeta,
         },
       });
-
-      return updateResult.updated;
     });
 
-    return result;
+    // The override tx mutates holdAmount/state after the versioned update, so
+    // re-read the booking so the response reflects the post-override values
+    // (P1-5: the old response carried a stale pre-update holdAmount).
+    const refreshed = await repo.findBookingById(db, input.bookingId);
+    if (!refreshed) throw new BookingNotFoundError(input.bookingId);
+    return refreshed;
   }
 
   /** Returns the projected override outcome without persisting anything. */
@@ -424,23 +484,38 @@ export function createAdminBookingService(deps: {
     adminId: string,
     input: { paymentId: string; reason: string },
   ) {
-    const payment = await repo.findPaymentById(db, input.paymentId);
-    if (!payment) throw new BookingNotFoundError(input.paymentId);
-
-    if (
-      payment.status !== PAYMENT_STATUS.PAID &&
-      payment.status !== PAYMENT_STATUS.SETTLED
-    ) {
-      throw new InvalidRefundStateError(input.paymentId, payment.status);
-    }
-
     return db.transaction(async (tx) => {
+      const payment = await repo.findPaymentById(tx, input.paymentId);
+      if (!payment) throw new BookingNotFoundError(input.paymentId);
+
+      if (
+        payment.status !== PAYMENT_STATUS.PAID &&
+        payment.status !== PAYMENT_STATUS.SETTLED
+      ) {
+        throw new InvalidRefundStateError(input.paymentId, payment.status);
+      }
+
       const participantWallet = await wallet.getByUserId(tx, payment.userId);
       if (!participantWallet) throw new BookingNotFoundError(payment.userId);
 
+      // U8/B9 (TC-39 / Refund Policy prd.tex:687-688): refunds exist for
+      // payment errors, never a blind full refund of already-spent Marks.
+      // Spend = total purchase credits - current total balance; the
+      // refundable amount is this payment's unspent remainder (FIFO). A fully
+      // spent payment is rejected with a clean error.
+      const creditedMarks = await wallet.sumCreditedMarks(
+        tx,
+        participantWallet.id,
+      );
+      const spent = Math.max(0, creditedMarks - participantWallet.totalBalance);
+      const refundableMarks = Math.max(0, payment.marks - spent);
+      if (refundableMarks <= 0) {
+        throw new RefundSpendExhaustedError(input.paymentId);
+      }
+
       await wallet.compensate(tx, {
         walletId: participantWallet.id,
-        amount: payment.marks,
+        amount: refundableMarks,
         eventKey: `refund.${payment.id}`,
         sourceReference: payment.id,
         actorType: ACTOR_TYPE.ADMIN,
@@ -448,20 +523,38 @@ export function createAdminBookingService(deps: {
         type: "compensate_credit",
       });
 
-      await repo.updatePaymentStatus(
+      // Conditional update inside the transaction: a payment can only be
+      // refunded from PAID/SETTLED, so a concurrent SETTLED webhook can never
+      // flip an already-REFUNDED payment back (M6).
+      const updatedPayment = await repo.updatePaymentStatusIfRefundable(
         tx,
         input.paymentId,
-        PAYMENT_STATUS.REFUNDED,
       );
+      if (!updatedPayment) {
+        throw new InvalidRefundStateError(input.paymentId, payment.status);
+      }
 
       await refund.createRefundRecord(tx, {
         paymentId: input.paymentId,
         walletId: participantWallet.id,
         amountIdr: payment.amountIdr ?? 0,
-        marks: payment.marks,
+        marks: refundableMarks,
         reason: input.reason,
         actorId: adminId,
       });
+
+      if (notification) {
+        await notification.writeBestEffort({
+          db: tx,
+          userId: payment.userId,
+          category: NOTIFICATION_CATEGORY.REFUND,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Refund processed",
+          body: `Your payment of ${payment.amountIdr ?? 0} IDR has been refunded to your account by an admin.`,
+          eventKey: `payment.${payment.id}.refunded.admin`,
+          emailRequired: true,
+        });
+      }
 
       await auditPort.record({
         db: tx,
@@ -471,10 +564,224 @@ export function createAdminBookingService(deps: {
         targetId: input.paymentId,
         targetType: "payment_record",
         beforeState: { status: payment.status },
-        afterState: { status: "REFUNDED", reason: input.reason },
+        afterState: {
+          status: "REFUNDED",
+          reason: input.reason,
+          refundedMarks: refundableMarks,
+        },
       });
 
       return { paymentId: input.paymentId, status: "refunded" };
+    });
+  }
+
+  /**
+   * Records an admin-pasted manual meeting URL on a SCHEDULED/CONFIRMED
+   * online booking (U1 / FR-21: "Admin may paste any valid meeting URL as
+   * fallback" when Google Meet generation failed or is disabled).
+   *
+   * @param adminId - the admin actor
+   * @param input - the booking id and the meeting URL
+   * @returns the resulting meeting event
+   * @throws {BookingNotFoundError} if the booking does not exist
+   * @throws {BookingNotEditableError} if the booking is not SCHEDULED/CONFIRMED
+   */
+  async function setMeetingLink(
+    adminId: string,
+    input: { bookingId: string; url: string },
+  ) {
+    return db.transaction(async (tx) => {
+      const bookingRow = await repo.findBookingById(tx, input.bookingId);
+      if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
+      if (
+        bookingRow.currentState !== BOOKING_STATE.SCHEDULED &&
+        bookingRow.currentState !== BOOKING_STATE.CONFIRMED
+      ) {
+        throw new BookingNotEditableError(
+          `Meeting link can only be set on SCHEDULED/CONFIRMED bookings (current: ${bookingRow.currentState})`,
+        );
+      }
+
+      const meetingEventRow = await meeting.setManualLink(
+        input.bookingId,
+        input.url,
+      );
+
+      const allParticipants = await repo.findParticipantsByBookingId(
+        tx,
+        input.bookingId,
+      );
+      const confirmed = allParticipants.filter(
+        (p) =>
+          p.confirmationState === "confirmed" ||
+          p.confirmationState === "reconfirmed",
+      );
+      for (const p of confirmed) {
+        // eslint-disable-next-line no-await-in-loop
+        await notification?.writeBestEffort({
+          db: tx,
+          userId: p.userId,
+          bookingId: input.bookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Meeting link ready",
+          body: "The meeting link for the session is ready.",
+          eventKey: `booking.${input.bookingId}.meeting_link.${p.userId}`,
+          emailRequired: true,
+        });
+      }
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "admin_set_meeting_link",
+        targetId: input.bookingId,
+        targetType: "booking",
+        beforeState: { meetingStatus: "failed-or-manual" },
+        afterState: { provider: "manual", meetingUrl: input.url },
+      });
+
+      return {
+        bookingId: input.bookingId,
+        meetingUrl: meetingEventRow.meetingUrl,
+        status: meetingEventRow.status,
+      };
+    });
+  }
+
+  /**
+   * Cancels one series session with an explicit Marks-handling choice
+   * (U6 / FR-20 TC-31). The session's per-participant hold is released,
+   * forfeited, or partially released per `marksAction`; the session row is
+   * cancelled; audit + participant notifications are recorded.
+   *
+   * @param adminId - the admin actor
+   * @param input - the session and the marks action
+   * @throws {BookingNotFoundError} if the session or booking does not exist
+   * @throws {BookingStateTransitionError} if the session is not scheduled
+   */
+  async function cancelSeriesSession(
+    adminId: string,
+    input: {
+      sessionId: string;
+      marksAction: "release" | "forfeit" | "partial";
+      amount?: number;
+    },
+  ) {
+    return db.transaction(async (tx) => {
+      const session = await repo.findSessionById(tx, input.sessionId);
+      if (!session) throw new BookingNotFoundError(input.sessionId);
+      if (session.currentState !== BOOKING_STATE.SCHEDULED) {
+        throw new BookingStateTransitionError(
+          session.currentState,
+          "cancelSeriesSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
+      const bookingRow = await repo.findBookingById(
+        tx,
+        session.seriesBookingId,
+      );
+      if (!bookingRow) throw new BookingNotFoundError(session.seriesBookingId);
+
+      const participants = await repo.findParticipantsByBookingId(
+        tx,
+        session.seriesBookingId,
+      );
+      const confirmed = participants.filter(
+        (p) =>
+          p.confirmationState === "confirmed" ||
+          p.confirmationState === "reconfirmed",
+      );
+
+      const partialAmount = Math.min(
+        input.amount ?? session.holdAmount,
+        session.holdAmount,
+      );
+
+      for (const p of confirmed) {
+        const effective = Math.min(
+          input.marksAction === "partial" ? partialAmount : session.holdAmount,
+          p.heldAmount,
+        );
+        if (effective <= 0) continue;
+
+        // eslint-disable-next-line no-await-in-loop
+        const w = await wallet.getByUserId(tx, p.userId);
+        if (!w) throw new BookingNotFoundError(p.userId);
+        if (input.marksAction === "forfeit") {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.deduct(tx, {
+            walletId: w.id,
+            amount: effective,
+            eventKey: `booking.${session.seriesBookingId}.session.${session.id}.forfeit.${p.userId}`,
+            sourceReference: session.seriesBookingId,
+            bookingId: session.seriesBookingId,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason: "Session cancelled by admin (marks forfeited)",
+          });
+        } else {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: w.id,
+            amount: effective,
+            eventKey: `booking.${session.seriesBookingId}.session.${session.id}.cancel.${p.userId}`,
+            sourceReference: session.seriesBookingId,
+            bookingId: session.seriesBookingId,
+            actorType: ACTOR_TYPE.ADMIN,
+            reason:
+              input.marksAction === "partial"
+                ? "Session cancelled by admin (partial marks returned)"
+                : "Session cancelled by admin (marks returned)",
+          });
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await repo.updateParticipantHeldAmount(
+          tx,
+          p.id,
+          Math.max(0, p.heldAmount - effective),
+        );
+        // eslint-disable-next-line no-await-in-loop
+        await notification?.writeBestEffort({
+          db: tx,
+          userId: p.userId,
+          bookingId: session.seriesBookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Session cancelled by admin",
+          body:
+            input.marksAction === "forfeit"
+              ? "A session of your series was cancelled and its held marks were forfeited."
+              : "A session of your series was cancelled and its held marks were returned.",
+          eventKey: `booking.${session.seriesBookingId}.session.${session.id}.cancelled.${p.userId}`,
+          emailRequired: true,
+        });
+      }
+
+      await repo.cancelSession(tx, session.id);
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "admin_cancel_series_session",
+        targetId: session.id,
+        targetType: "booking_session",
+        beforeState: { currentState: session.currentState },
+        afterState: {
+          currentState: "cancelled",
+          marksAction: input.marksAction,
+          amount: input.marksAction === "partial" ? partialAmount : undefined,
+        },
+      });
+
+      return {
+        sessionId: session.id,
+        currentState: "cancelled",
+        marksAction: input.marksAction,
+        affectedParticipants: confirmed.length,
+      };
     });
   }
 
@@ -484,5 +791,7 @@ export function createAdminBookingService(deps: {
     listBookings,
     getBookingStateHistory,
     adminRefund,
+    setMeetingLink,
+    cancelSeriesSession,
   };
 }

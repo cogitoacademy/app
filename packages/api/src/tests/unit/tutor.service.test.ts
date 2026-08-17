@@ -7,7 +7,6 @@ import {
 import type { PricingPort } from "../../modules/pricing/pricing.service";
 import {
   TutorProfileNotFoundError,
-  TutorProfileNotEditableError,
   InvalidTutorStatusError,
   TutorProfileIncompleteError,
   InvalidTutorPricingError,
@@ -81,14 +80,14 @@ describe("Tutor Service", () => {
       ).toThrow(TutorProfileNotFoundError);
     });
 
-    test("throws TutorProfileNotEditableError for published profile", () => {
+    test("does not throw for published profile", () => {
       expect(() =>
         validateUpdateInput(
           makeProfile({ onboardingStatus: "published" }),
           { displayName: "X" },
           mockPricingPort,
         ),
-      ).toThrow(TutorProfileNotEditableError);
+      ).not.toThrow();
     });
 
     test("throws InvalidTutorPricingError when pricing validation fails", () => {
@@ -164,12 +163,13 @@ describe("Tutor Service", () => {
           listAvailability: mock(async () => []),
           upsertAvailability: mock(async () => ({ id: "slot1" })),
           deleteAvailability: mock(async () => {}),
+          deactivateFutureRecurringAvailability: mock(async () => {}),
         },
         pricingPort: mockPricingPort,
         auditPort: { record: mock(async () => {}) },
         db: {
           transaction: mock(async (fn: any) => {
-            const tx = {};
+            const tx = { execute: mock(async () => {}) };
             return fn(tx);
           }),
         },
@@ -374,6 +374,83 @@ describe("Tutor Service", () => {
       expect(upsertAvailability).not.toHaveBeenCalled();
     });
 
+    test("replaceWeeklyAvailability atomically replaces recurring windows and preserves overrides", async () => {
+      const deactivateFutureRecurringAvailability = mock(async () => {});
+      const upsertAvailability = mock(
+        async (
+          _db: unknown,
+          _userId: string,
+          input: Record<string, unknown>,
+        ) => ({
+          id: `slot-${String(input.startDate)}`,
+          ...input,
+        }),
+      );
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          deactivateFutureRecurringAvailability,
+          listAvailability: mock(async () => []),
+          upsertAvailability,
+        },
+      });
+      const service = createTutorService(deps as any);
+      const effectiveFrom = new Date("2026-08-17T00:00:00+07:00");
+      const repeatUntil = new Date("2026-08-24T23:59:59+07:00");
+
+      const result = await service.replaceWeeklyAvailability("u1", {
+        effectiveFrom,
+        repeatUntil,
+        ranges: [
+          {
+            dayOfWeek: 1,
+            startTime: "09:00",
+            endTime: "17:00",
+            modality: "online",
+          },
+        ],
+      });
+
+      expect(result).toHaveLength(2);
+      expect(deactivateFutureRecurringAvailability).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        effectiveFrom,
+      );
+      expect(upsertAvailability).toHaveBeenCalledTimes(2);
+    });
+
+    test("one-off override deactivates a conflicting recurring occurrence", async () => {
+      const deleteAvailability = mock(async () => {});
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          deleteAvailability,
+          listAvailability: mock(async () => [
+            {
+              id: "weekly-occurrence",
+              startDate: new Date("2026-09-01T02:00:00Z"),
+              endDate: new Date("2026-09-01T10:00:00Z"),
+              isRecurring: true,
+            },
+          ]),
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.upsertAvailability("u1", {
+        startDate: new Date("2026-09-01T06:00:00Z"),
+        endDate: new Date("2026-09-01T09:00:00Z"),
+        modality: "offline",
+        isRecurring: false,
+      });
+
+      expect(deleteAvailability).toHaveBeenCalledWith(
+        expect.anything(),
+        "weekly-occurrence",
+      );
+    });
+
     test("upsertAvailability allows updating own slot (same id)", async () => {
       const existing = [
         {
@@ -396,6 +473,25 @@ describe("Tutor Service", () => {
         modality: "online",
       });
       expect(result.id).toBe("slot1");
+    });
+
+    test("upsertAvailability rejects updating another tutor's slot (H1)", async () => {
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listAvailability: mock(async () => []),
+          upsertAvailability: mock(async () => undefined),
+        },
+      });
+      const service = createTutorService(deps as any);
+      await expect(
+        service.upsertAvailability("u1", {
+          id: "foreign-slot",
+          startDate: new Date("2026-01-01T10:00:00Z"),
+          endDate: new Date("2026-01-01T11:00:00Z"),
+          modality: "online",
+        }),
+      ).rejects.toThrow(TutorProfileNotFoundError);
     });
 
     test("deleteAvailability throws TutorProfileNotFoundError when slot not found", async () => {

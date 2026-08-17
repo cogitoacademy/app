@@ -63,7 +63,7 @@ describe("createBookingRepo", () => {
     expect(repo).toHaveProperty("insertBooking");
     expect(repo).toHaveProperty("updateBookingCancellationReason");
     expect(repo).toHaveProperty("updateBookingHoldAmount");
-    expect(repo).toHaveProperty("updateBookingConfirmedHeadcount");
+    expect(repo).toHaveProperty("incrementBookingConfirmedHeadcount");
     expect(repo).toHaveProperty("insertParticipant");
     expect(repo).toHaveProperty("updateParticipantState");
     expect(repo).toHaveProperty("insertStateHistory");
@@ -321,17 +321,17 @@ describe("createBookingRepo", () => {
     });
   });
 
-  describe("updateBookingConfirmedHeadcount", () => {
-    test("updates confirmed headcount without returning", async () => {
-      const updateConn = makeUpdateConn();
-      updateConn.where.mockReturnValue(Promise.resolve(undefined));
+  describe("incrementBookingConfirmedHeadcount", () => {
+    test("increments confirmed headcount atomically and returns the row", async () => {
+      const updated = { id: "b1", confirmedHeadcount: 3 };
+      const updateConn = makeUpdateConn([updated]);
       const conn: any = { ...updateConn };
       const repo = makeBookingRepo();
 
-      await repo.updateBookingConfirmedHeadcount(conn, "b1", 3);
+      const result = await repo.incrementBookingConfirmedHeadcount(conn, "b1");
 
       expect(updateConn.update).toHaveBeenCalledTimes(1);
-      expect(updateConn.set).toHaveBeenCalledWith({ confirmedHeadcount: 3 });
+      expect(result).toEqual(updated);
     });
   });
 
@@ -568,7 +568,7 @@ describe("createBookingRepo", () => {
       expect(conn.where).toHaveBeenCalledTimes(1);
     });
 
-    test("applies limit of 500 to prevent OOM", async () => {
+    test("applies limit of 100 to bound each scheduler run", async () => {
       const rows = [{ id: "b1" }];
       const conn: any = { ...makeSelectConn(rows) };
       const repo = makeBookingRepo();
@@ -577,7 +577,7 @@ describe("createBookingRepo", () => {
         "awaiting_participant_confirmation",
       ]);
 
-      expect(conn.limit).toHaveBeenCalledWith(500);
+      expect(conn.limit).toHaveBeenCalledWith(100);
     });
   });
 

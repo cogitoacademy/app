@@ -11,7 +11,7 @@ const repo = createBookingRepo(db);
 type BookingInsert = typeof booking.$inferInsert;
 
 function makeBooking(overrides: Partial<BookingInsert> = {}): BookingInsert {
-  const start = new Date(Date.now() + 2 * 3600_000);
+  const start = new Date(Date.now() + 1 * 3600_000);
   return {
     type: "solo",
     modality: "online",

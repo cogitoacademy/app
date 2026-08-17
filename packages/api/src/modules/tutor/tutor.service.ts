@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import { lockTutorForBooking } from "../../lib/locks";
 import {
   ONBOARDING_STATUS,
   MODALITY,
@@ -7,18 +8,23 @@ import {
 import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
 import type { TutorAuditPort, TutorPricingPort } from "./index";
+import type { BookingPayoutPort } from "../booking";
 import {
   TutorProfileNotFoundError,
-  TutorProfileNotEditableError,
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
   TutorProfileIncompleteError,
   InvalidTutorPricingError,
   OptimisticLockError,
+  InvalidDateRangeError,
   WeeklyAvailabilityRangeError,
 } from "./tutor.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
+
+function utcDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
 
 /**
  * Validates tutor profile update input against status and pricing constraints.
@@ -27,7 +33,6 @@ type TutorProfileRow = typeof tutorProfile.$inferSelect;
  * @param input - the update input to validate
  * @param pricingPort - the pricing port used to validate prices
  * @throws {TutorProfileNotFoundError} if the profile does not exist
- * @throws {TutorProfileNotEditableError} if the profile is published
  * @throws {InvalidTutorPricingError} if prices violate the Cogito floor
  */
 export function validateUpdateInput(
@@ -37,13 +42,6 @@ export function validateUpdateInput(
 ): void {
   if (!profile) {
     throw new TutorProfileNotFoundError("unknown");
-  }
-
-  if (profile.onboardingStatus === ONBOARDING_STATUS.PUBLISHED) {
-    throw new TutorProfileNotEditableError(
-      profile.id,
-      profile.onboardingStatus,
-    );
   }
 
   if (input.prices) {
@@ -127,8 +125,9 @@ export function createTutorService(deps: {
   pricingPort: TutorPricingPort;
   auditPort: TutorAuditPort;
   db: DbType;
+  payout: BookingPayoutPort;
 }) {
-  const { tutorRepo, pricingPort, auditPort, db } = deps;
+  const { tutorRepo, pricingPort, auditPort, db, payout } = deps;
 
   /**
    * Fetches the tutor profile for the requesting user.
@@ -155,11 +154,46 @@ export function createTutorService(deps: {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateUpdateInput(profile, input, pricingPort);
     const { version, ...data } = input;
+    const isPublished =
+      profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
+    const protectedFields = [
+      "displayName",
+      "credentialsSummary",
+      "expertise",
+      "modality",
+      "prices",
+      "proofUrls",
+    ] as const;
+    const directData: Omit<UpdateProfileInput, "version"> & {
+      pendingProfileChanges?: Record<string, unknown>;
+      profileEditStatus?: string;
+      profileEditAdminNote?: null;
+    } = { ...data };
+
+    if (isPublished) {
+      const pendingProfileChanges = {
+        ...(profile!.pendingProfileChanges as Record<string, unknown> | null),
+      };
+      for (const field of protectedFields) {
+        if (
+          data[field] !== undefined &&
+          JSON.stringify(data[field]) !== JSON.stringify(profile![field])
+        ) {
+          pendingProfileChanges[field] = data[field];
+        }
+        delete directData[field];
+      }
+      if (Object.keys(pendingProfileChanges).length > 0) {
+        directData.pendingProfileChanges = pendingProfileChanges;
+        directData.profileEditStatus = "pending_review";
+        directData.profileEditAdminNote = null;
+      }
+    }
     const rows = await tutorRepo.updateProfileWithVersion(
       db,
       userId,
       version,
-      data,
+      directData,
     );
     if (rows.length === 0) throw new OptimisticLockError(profile!.id, version);
     return rows[0];
@@ -231,21 +265,42 @@ export function createTutorService(deps: {
     const start = input.startDate;
     const end = input.endDate;
 
-    const existing = await tutorRepo.listAvailability(db, userId, {
-      from: new Date(),
-    });
-    const overlapping = existing.find((slot) => {
-      if (input.id && slot.id === input.id) return false;
-      return start < slot.endDate && end > slot.startDate;
-    });
-    if (overlapping) {
-      throw new AvailabilitySlotOverlapError(userId);
-    }
+    return db.transaction(async (tx) => {
+      // Serialize overlap checks per tutor so concurrent upserts cannot create
+      // overlapping slots (L6).
+      await lockTutorForBooking(tx, userId);
 
-    return tutorRepo.upsertAvailability(db, userId, {
-      ...input,
-      startDate: start,
-      endDate: end,
+      const existing = await tutorRepo.listAvailability(tx, userId, {
+        from: new Date(),
+      });
+      const overlapping = existing.filter((slot) => {
+        if (input.id && slot.id === input.id) return false;
+        return start < slot.endDate && end > slot.startDate;
+      });
+      const recurringOccurrences = input.isRecurring
+        ? []
+        : overlapping.filter((slot) => slot.isRecurring);
+      await Promise.all(
+        recurringOccurrences.map((occurrence) =>
+          tutorRepo.deleteAvailability(tx, occurrence.id),
+        ),
+      );
+      if (overlapping.some((slot) => !slot.isRecurring)) {
+        throw new AvailabilitySlotOverlapError(userId);
+      }
+
+      const updated = await tutorRepo.upsertAvailability(tx, userId, {
+        ...input,
+        startDate: start,
+        endDate: end,
+      });
+      // Ownership is enforced in the repo UPDATE via the tutorId predicate;
+      // an update that matched no row means the slot does not belong to this
+      // tutor (H1).
+      if (input.id && !updated) {
+        throw new TutorProfileNotFoundError(userId);
+      }
+      return updated;
     });
   }
 
@@ -277,6 +332,7 @@ export function createTutorService(deps: {
     }
 
     return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, userId);
       const existing = await tutorRepo.listAvailability(tx, userId);
       const overlaps = occurrences.some((occurrence, occurrenceIndex) => {
         const overlapsExisting = existing.some(
@@ -310,6 +366,88 @@ export function createTutorService(deps: {
     });
   }
 
+  async function replaceWeeklyAvailability(
+    userId: string,
+    input: {
+      effectiveFrom: Date;
+      repeatUntil: Date;
+      ranges: Array<{
+        dayOfWeek: number;
+        startTime: string;
+        endTime: string;
+        modality: "online" | "offline" | "both";
+      }>;
+    },
+  ) {
+    const occurrences: Array<{
+      startDate: Date;
+      endDate: Date;
+      modality: "online" | "offline" | "both";
+    }> = [];
+    const firstDay = new Date(`${utcDateKey(input.effectiveFrom)}T00:00:00Z`);
+    const lastDay = new Date(`${utcDateKey(input.repeatUntil)}T00:00:00Z`);
+
+    for (
+      let day = firstDay;
+      day <= lastDay;
+      day = new Date(day.getTime() + 24 * 60 * 60 * 1000)
+    ) {
+      for (const range of input.ranges) {
+        if (day.getUTCDay() !== range.dayOfWeek) continue;
+        const key = utcDateKey(day);
+        occurrences.push({
+          startDate: new Date(`${key}T${range.startTime}:00+07:00`),
+          endDate: new Date(`${key}T${range.endTime}:00+07:00`),
+          modality: range.modality,
+        });
+      }
+    }
+
+    const sorted = occurrences.toSorted(
+      (a, b) => a.startDate.getTime() - b.startDate.getTime(),
+    );
+    if (
+      sorted.some(
+        (occurrence, index) =>
+          index > 0 && occurrence.startDate < sorted[index - 1]!.endDate,
+      )
+    ) {
+      throw new AvailabilitySlotOverlapError(userId);
+    }
+
+    return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, userId);
+      await tutorRepo.deactivateFutureRecurringAvailability(
+        tx,
+        userId,
+        input.effectiveFrom,
+      );
+      const existingOverrides = (
+        await tutorRepo.listAvailability(tx, userId, {
+          from: input.effectiveFrom,
+        })
+      ).filter((slot) => !slot.isRecurring);
+      const withoutOverrideConflicts = sorted.filter(
+        (occurrence) =>
+          !existingOverrides.some(
+            (slot) =>
+              occurrence.startDate < slot.endDate &&
+              occurrence.endDate > slot.startDate,
+          ),
+      );
+
+      return Promise.all(
+        withoutOverrideConflicts.map((occurrence) =>
+          tutorRepo.upsertAvailability(tx, userId, {
+            ...occurrence,
+            isRecurring: true,
+            recurrenceRule: "weekly",
+            isActive: true,
+          }),
+        ),
+      );
+    });
+  }
   /**
    * Deactivates an availability slot (soft delete) if it belongs to the tutor.
    *
@@ -326,6 +464,23 @@ export function createTutorService(deps: {
     await tutorRepo.deleteAvailability(db, slotId);
   }
 
+  async function getMyPayouts(
+    userId: string,
+    input: { dateFrom?: string; dateTo?: string },
+  ) {
+    if (input.dateFrom && Number.isNaN(Date.parse(input.dateFrom))) {
+      throw new InvalidDateRangeError("dateFrom");
+    }
+    if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
+      throw new InvalidDateRangeError("dateTo");
+    }
+    return payout.getTutorPayouts({
+      tutorId: userId,
+      dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+      dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+    });
+  }
+
   return {
     getMyProfile,
     updateMyProfile,
@@ -333,7 +488,9 @@ export function createTutorService(deps: {
     listAvailability,
     upsertAvailability,
     createWeeklyAvailability,
+    replaceWeeklyAvailability,
     deleteAvailability,
+    getMyPayouts,
   };
 }
 

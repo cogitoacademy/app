@@ -1,5 +1,27 @@
 import { describe, test, expect } from "bun:test";
-import { sanitizeHtml } from "../../lib/sanitize";
+import { sanitizeHtml, escapeHtml } from "../../lib/sanitize";
+
+describe("escapeHtml", () => {
+  test("escapes HTML metacharacters", () => {
+    expect(escapeHtml(`<script>alert("x")</script>`)).toBe(
+      "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;",
+    );
+  });
+
+  test("escapes ampersands and apostrophes", () => {
+    expect(escapeHtml("a & b 'c'")).toBe("a &amp; b &#39;c&#39;");
+  });
+
+  test("leaves safe text untouched", () => {
+    expect(escapeHtml("plain reason")).toBe("plain reason");
+  });
+
+  test("never emits a raw <script> tag", () => {
+    const out = escapeHtml(`<script>alert(1)</script>`);
+    expect(out).not.toContain("<script>");
+    expect(out).toContain("&lt;script&gt;");
+  });
+});
 
 describe("sanitizeHtml", () => {
   test("strips script tags with their content", () => {

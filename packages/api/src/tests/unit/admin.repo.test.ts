@@ -4,7 +4,6 @@ import {
   countUsers,
   getById,
   countAdmins,
-  updateRole,
   updateRoleWithExpected,
   createAdminRepo,
 } from "../../modules/admin/admin.repo";
@@ -29,14 +28,6 @@ function makeSelectConn(resolvedValue: any) {
   const { chain, promise } = makeQueryChain(resolvedValue);
   const select = mock(() => promise);
   return { select, chain };
-}
-
-function makeUpdateConn(returningRows: any[] = []) {
-  const returning = mock(() => Promise.resolve(returningRows));
-  const where = mock(() => ({ returning }));
-  const set = mock(() => ({ where }));
-  const update = mock(() => ({ set }));
-  return { update, set, where, returning };
 }
 
 describe("listUsers", () => {
@@ -120,20 +111,6 @@ describe("countAdmins", () => {
   });
 });
 
-describe("updateRole", () => {
-  test("updates and returns user row", async () => {
-    const updated = { id: "u1", role: "admin" };
-    const updateConn = makeUpdateConn([updated]);
-    const conn: any = { ...updateConn };
-
-    const result = await updateRole(conn, "u1", "admin");
-
-    expect(result).toEqual(updated);
-    expect(updateConn.update).toHaveBeenCalledTimes(1);
-    expect(updateConn.set).toHaveBeenCalledWith({ role: "admin" });
-  });
-});
-
 describe("createAdminRepo", () => {
   test("returns object with all repo methods", () => {
     const repo = createAdminRepo();
@@ -142,7 +119,6 @@ describe("createAdminRepo", () => {
     expect(repo).toHaveProperty("countUsers");
     expect(repo).toHaveProperty("getById");
     expect(repo).toHaveProperty("countAdmins");
-    expect(repo).toHaveProperty("updateRole");
     expect(repo).toHaveProperty("updateRoleWithExpected");
   });
 });

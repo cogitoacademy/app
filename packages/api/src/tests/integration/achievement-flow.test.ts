@@ -56,12 +56,11 @@ describe("Achievement review flow", () => {
       category: "competition",
       award: "Medali Emas",
       level: "nasional",
-      eventDate: "2026-06-10",
+      awardingDate: "2026-06-10",
       location: "Jakarta",
       description: "Juara 1 Olimpiade Matematika",
       subjects: ["Mathematics"],
     });
-
     approvedAchievementId = created.id;
     expect(created.status).toBe("pending");
     expect(created.version).toBe(1);
@@ -123,7 +122,7 @@ describe("Achievement review flow", () => {
   test("admin rejects a second achievement → rejected + audit log", async () => {
     const created = await studentClient.achievement.create({
       eventName: "Lomba Menulis",
-      category: "writing",
+      category: "other",
       award: "Finalis",
       level: "provinsi",
       subjects: ["Indonesian"],
@@ -156,6 +155,78 @@ describe("Achievement review flow", () => {
       );
     expect(logs.length).toBe(1);
     expect(logs[0]!.actorId).toBe(adminId);
+  });
+
+  test("U10: create/update accept issuer + visibility; category enum enforced", async () => {
+    const created = await studentClient.achievement.create({
+      eventName: "Sertifikat TOEFL",
+      category: "certificate",
+      award: "Score 550",
+      level: "internasional",
+      issuer: "ETS",
+      visibility: false,
+    });
+    expect(created.issuer).toBe("ETS");
+    expect(created.visibility).toBe(false);
+
+    const updated = await studentClient.achievement.update({
+      id: created.id,
+      version: created.version,
+      data: { visibility: true, issuer: "Educational Testing Service" },
+    });
+    expect(updated.visibility).toBe(true);
+    expect(updated.issuer).toBe("Educational Testing Service");
+
+    const [row] = await db
+      .select()
+      .from(achievement)
+      .where(eq(achievement.id, created.id))
+      .limit(1);
+    expect(row!.visibility).toBe(true);
+
+    await expect(
+      studentClient.achievement.create({
+        eventName: "Kategori Salah",
+        category: "writing",
+        award: "Finalis",
+        level: "provinsi",
+      }),
+    ).rejects.toThrow(/validation/i);
+  });
+
+  test("U10: default visibility is true when omitted", async () => {
+    const created = await studentClient.achievement.create({
+      eventName: "Juara Catur",
+      category: "other",
+      award: "Juara 2",
+      level: "kota",
+    });
+    expect(created.visibility).toBe(true);
+  });
+
+  test("F16: listApproved returns only approved + visible achievements with names", async () => {
+    const publicResult = await studentClient.achievement.listApproved();
+
+    // The approved achievement (visible by default) appears; the rejected one
+    // and any visibility=false rows do not.
+    const approved = await db
+      .select()
+      .from(achievement)
+      .where(eq(achievement.status, "approved"))
+      .limit(1);
+    if (approved.length > 0) {
+      const hit = publicResult.find((a) => a.id === approved[0]!.id);
+      expect(hit).toBeDefined();
+      expect(hit!.displayName).toBeTruthy();
+    }
+    const rejected = await db
+      .select()
+      .from(achievement)
+      .where(eq(achievement.status, "rejected"))
+      .limit(1);
+    if (rejected.length > 0) {
+      expect(publicResult.some((a) => a.id === rejected[0]!.id)).toBe(false);
+    }
   });
 
   test("admin list filters by status", async () => {

@@ -39,6 +39,8 @@ import {
   IconSearch,
   IconSelector,
   IconSettings,
+  IconShieldCheck,
+  IconTimelineEventText,
   IconUser,
   IconUserSquare,
   IconUsersGroup,
@@ -58,20 +60,19 @@ const studentNavItems = [
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/onboarding", label: "My Profile", icon: IconUser },
-  { to: "/availability", label: "Availability", icon: IconCalendarEvent },
+  { to: "/availability", label: "Availability", icon: IconTimelineEventText },
   { to: "/tutor-bookings", label: "Bookings", icon: IconCalendarEvent },
-  { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
 
 const adminNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
   { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
   {
     to: "/admin-achievements",
     label: "Review Achievements",
     icon: IconCertificate,
   },
-  { to: "/tutors", label: "Tutors", icon: IconUserSquare },
 ] as const;
 
 const resourceItems = [
@@ -123,7 +124,7 @@ export function AppSidebar({
   return (
     <Sidebar
       size="default"
-      className="border-border bg-background max-lg:border-r xl:bg-transparent"
+      className="border-border bg-background max-xl:border-r xl:bg-transparent"
     >
       <SidebarHeader>
         <SidebarLogo>
