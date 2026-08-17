@@ -1168,10 +1168,15 @@ export function createBookingService(deps: {
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
         if (!w) throw new BookingNotFoundError(p.userId);
+        // L1: after an admin cancelSeriesSession(..., release) the remaining
+        // held amount may be below session.holdAmount — never deduct more than
+        // the participant actually holds (InsufficientBalanceError → a
+        // delivered-but-unpaid session).
+        const deductAmount = Math.min(session.holdAmount, p.heldAmount);
         // eslint-disable-next-line no-await-in-loop
         await wallet.deduct(tx, {
           walletId: w.id,
-          amount: session.holdAmount,
+          amount: deductAmount,
           eventKey: `booking.${bookingId}.session.${session.id}.deduct.${p.userId}`,
           sourceReference: bookingId,
           bookingId,
@@ -1180,16 +1185,29 @@ export function createBookingService(deps: {
         });
         // eslint-disable-next-line no-await-in-loop
         await repo.updateParticipantState(tx, p.id, {
-          heldAmount: Math.max(0, p.heldAmount - session.holdAmount),
+          heldAmount: Math.max(0, p.heldAmount - deductAmount),
         });
-        deductedHoldAmount += session.holdAmount;
+        deductedHoldAmount += deductAmount;
       }
     } else {
       proposerWallet = await wallet.getByUserId(tx, b.proposerId);
       if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+      proposerParticipant = await repo.findParticipant(
+        tx,
+        bookingId,
+        b.proposerId,
+      );
+      // L1: after an admin cancelSeriesSession(..., release) the remaining
+      // held amount may be below the per-session amount — never deduct more
+      // than the participant actually holds (InsufficientBalanceError → a
+      // delivered-but-unpaid session).
+      const deductAmount = Math.min(
+        session.holdAmount,
+        proposerParticipant?.heldAmount ?? proposerWallet.heldBalance,
+      );
       await wallet.deduct(tx, {
         walletId: proposerWallet.id,
-        amount: session.holdAmount,
+        amount: deductAmount,
         eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
         sourceReference: bookingId,
         bookingId,
@@ -1197,21 +1215,16 @@ export function createBookingService(deps: {
         reason: "Series session completed",
       });
 
-      proposerParticipant = await repo.findParticipant(
-        tx,
-        bookingId,
-        b.proposerId,
-      );
       if (proposerParticipant) {
         residualHeld = Math.max(
           0,
-          proposerParticipant.heldAmount - session.holdAmount,
+          proposerParticipant.heldAmount - deductAmount,
         );
         await repo.updateParticipantState(tx, proposerParticipant.id, {
           heldAmount: residualHeld,
         });
       }
-      deductedHoldAmount = session.holdAmount;
+      deductedHoldAmount = deductAmount;
     }
     await repo.updateBookingHoldAmount(
       tx,

@@ -1751,6 +1751,133 @@ describe("BookingService", () => {
       expect(notification.writeBestEffort.mock.calls.length).toBe(2);
     });
 
+    test("L1: series completion deducts at most the remaining held amount after an admin partial cancel", async () => {
+      const booking = makeBooking({
+        type: "series",
+        currentState: "scheduled",
+        holdAmount: 20,
+        originalMarks: 150,
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() - 3600_000),
+        scheduledEndAt: new Date(Date.now() + 3600_000),
+        currentState: "scheduled",
+        holdAmount: 50,
+        priceSnapshot: null,
+      };
+      const sessions = [
+        session,
+        { ...session, id: "s2", currentState: "scheduled" },
+        { ...session, id: "s3", currentState: "scheduled" },
+      ];
+      const refreshed = { ...booking, holdAmount: 20, version: 2 };
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => refreshed)
+            .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => refreshed),
+          findSessionById: mock(async () => session),
+          listSessionsBySeriesId: mock(async () => sessions),
+          findParticipant: mock(async () => ({
+            id: "p1",
+            userId: "student1",
+            heldAmount: 20,
+          })),
+          updateParticipantState: mock(async () => {}),
+          updateBookingHoldAmount: mock(async () => {}),
+          completeSession: mock(async () => {}),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "completed" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.completeSession("b1", "tutor1", "s1");
+
+      // The admin released 130 of the 150-hold via cancelSeriesSession(..., release);
+      // the completion must deduct only the remaining 20, never 50 (would throw
+      // InsufficientBalanceError → delivered-but-unpaid session).
+      expect(wallet.deduct).toHaveBeenCalledTimes(1);
+      expect(wallet.deduct.mock.calls[0][1]).toMatchObject({
+        amount: 20,
+        reason: "Series session completed",
+      });
+      expect(repo.updateParticipantState).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        { heldAmount: 0 },
+      );
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
+      expect(result.currentState).toBe("scheduled");
+    });
+
+    test("L1: group-series completion deducts at most each participant's remaining hold after an admin partial cancel", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "scheduled",
+        holdAmount: 40,
+        originalMarks: 120,
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() - 3600_000),
+        scheduledEndAt: new Date(Date.now() + 3600_000),
+        currentState: "scheduled",
+        holdAmount: 40,
+        priceSnapshot: null,
+      };
+      const sessions = [
+        session,
+        { ...session, id: "s2", currentState: "scheduled" },
+        { ...session, id: "s3", currentState: "scheduled" },
+      ];
+      const refreshed = { ...booking, holdAmount: 40, version: 2 };
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => refreshed)
+            .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => refreshed),
+          findSessionById: mock(async () => session),
+          listSessionsBySeriesId: mock(async () => sessions),
+          findConfirmedParticipants: mock(async () => [
+            { id: "p1", userId: "student1", heldAmount: 20 },
+            { id: "p2", userId: "student2", heldAmount: 20 },
+          ]),
+          updateParticipantState: mock(async () => {}),
+          updateBookingHoldAmount: mock(async () => {}),
+          completeSession: mock(async () => {}),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "completed" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.completeSession("b1", "tutor1", "s1");
+
+      // Each participant holds only 20 of the 40 per-session amount after the
+      // admin released part of their package — never deduct more than held.
+      expect(wallet.deduct).toHaveBeenCalledTimes(2);
+      for (const call of wallet.deduct.mock.calls) {
+        expect(call[1]).toMatchObject({ amount: 20 });
+      }
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
+      expect(result.currentState).toBe("scheduled");
+    });
+
     test("completing the last series session transitions booking to completed (G18)", async () => {
       const booking = makeBooking({
         type: "series",

@@ -134,3 +134,10 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - withdraw regression branch catches InsufficientMarksError from repriceGroupForHeadcount → release remaining holds + zero hold + transition EXPIRED (B5 mirror); other errors propagate.
 - Tests: 2 unit cases (withdraw-branch + G4 reprice test rewritten to expiry semantics).
 - Full API 1890/0; check-types/lint/oxfmt clean.
+
+## P2.16 (M9 + L1) KB student-only + series deduct cap — complete
+
+- M9: `wallet.knowledgeBankEligible` → `studentProcedure`; integration test (student eligible / tutor FORBIDDEN / admin FORBIDDEN / anon UNAUTHORIZED).
+- L1: `completeSeriesSession` deduct capped via `Math.min(session.holdAmount, p.heldAmount)` for solo-series (participant read) and group-series branches.
+- Tests: wallet-knowledge-bank-guard.test.ts (new, 4 cases) + booking.service.test.ts (2 L1 cases).
+- Full API 1896/0; check-types/lint/oxfmt clean.
