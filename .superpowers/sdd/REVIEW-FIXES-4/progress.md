@@ -97,3 +97,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - M1: `planOverride` throws `OverrideMarksParticipantsRequiredError` (400) when marksAction lacks non-empty affectedParticipants.
 - `AdminBookingMeetingPort` + `cancelEvent`; `meeting` dep optional with guard for setMeetingLink.
 - Targeted 53/53 (service + errors) + admin-override/override-preview/admin-meeting-link regressions 70/70; full API 1871/0; server 49/0 (1 known uploads flake on first run, green on rerun); check-types/lint/oxfmt clean.
+
+## P2.10 (M2) expireBookings no-show forfeit — complete
+
+- SCHEDULED→NO_SHOW branch deducts each confirmed participant's held amount (`booking.{id}.no_show.{userId}`) + zeroes participant hold instead of releasing; release stays for EXPIRED/CANCELLED pre-start states. Notification copy "held marks were forfeited".
+- Tests: `booking-expiry-no-show.test.ts` (new), `scheduler-expiry.test.ts` updated (forfeit: available 390/total 460 + ledger deduct), `booking.service.test.ts` unit updated.
+- Batch 184/184; check-types/lint/oxfmt clean.

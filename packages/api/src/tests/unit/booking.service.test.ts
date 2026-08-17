@@ -3174,11 +3174,11 @@ describe("BookingService", () => {
       );
       expect(studentNotif[0].title).toBe("Session marked as no-show");
       expect(studentNotif[0].body).toBe(
-        "The session was marked as no-show and held marks were released.",
+        "The session was marked as a no-show and held marks were forfeited.",
       );
       expect(tutorNotif[0].title).toBe("Session marked as no-show");
       expect(tutorNotif[0].body).toBe(
-        "The session was marked as no-show and held marks were released.",
+        "The session was marked as a no-show and held marks were forfeited.",
       );
     });
 
@@ -4122,7 +4122,7 @@ describe("BookingService", () => {
     });
 
     describe("SCHEDULED expiry → NO_SHOW", () => {
-      test("expires scheduled booking to NO_SHOW and releases holds", async () => {
+      test("expires scheduled booking to NO_SHOW and FORFEITS holds via deduct (M2)", async () => {
         const expiringBooking = makeBooking({
           currentState: "scheduled",
           holdAmount: 42,
@@ -4149,10 +4149,12 @@ describe("BookingService", () => {
         const result = await service.expireBookings();
 
         expect(result).toEqual({ expired: 1, failed: 0 });
-        expect(wallet.release).toHaveBeenCalledTimes(1);
-        expect(wallet.release.mock.calls[0][1]).toMatchObject({
+        expect(wallet.release).not.toHaveBeenCalled();
+        expect(wallet.deduct).toHaveBeenCalledTimes(1);
+        expect(wallet.deduct.mock.calls[0][1]).toMatchObject({
           amount: 42,
           actorType: "system",
+          reason: "No-show forfeit",
         });
         expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
           expect.anything(),

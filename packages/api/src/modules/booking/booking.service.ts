@@ -3331,17 +3331,43 @@ export function createBookingService(deps: {
             }
           }
 
-          await releaseAllParticipantHolds(
-            tx,
-            b.id,
-            "Booking expired",
-            ACTOR_TYPE.SYSTEM,
-          );
-
-          await repo.updateBookingHoldAmount(tx, b.id, 0);
-
           const targetState =
             EXPIRY_TARGET[b.currentState as string] ?? BOOKING_STATE.EXPIRED;
+
+          const noShow = targetState === BOOKING_STATE.NO_SHOW;
+          if (noShow) {
+            // M2: a no-show forfeits the held Marks (PRD: no-show → deduct),
+            // it does not release them — the "forgot to click anything"
+            // default must enforce the forfeit, not hand the money back.
+            const participants = await repo.findConfirmedParticipants(tx, b.id);
+            for (const p of participants) {
+              if (p.heldAmount <= 0) continue;
+              // eslint-disable-next-line no-await-in-loop
+              const w = await wallet.getByUserId(tx, p.userId);
+              if (!w) continue;
+              // eslint-disable-next-line no-await-in-loop
+              await wallet.deduct(tx, {
+                walletId: w.id,
+                amount: p.heldAmount,
+                eventKey: `booking.${b.id}.no_show.${p.userId}`,
+                sourceReference: b.id,
+                bookingId: b.id,
+                actorType: ACTOR_TYPE.SYSTEM,
+                reason: "No-show forfeit",
+              });
+              // eslint-disable-next-line no-await-in-loop
+              await repo.updateParticipantState(tx, p.id, { heldAmount: 0 });
+            }
+          } else {
+            await releaseAllParticipantHolds(
+              tx,
+              b.id,
+              "Booking expired",
+              ACTOR_TYPE.SYSTEM,
+            );
+          }
+
+          await repo.updateBookingHoldAmount(tx, b.id, 0);
 
           await transition(tx, b.id, targetState, {
             actorId: "system",
@@ -3353,7 +3379,6 @@ export function createBookingService(deps: {
             await repo.cancelAllSessions(tx, b.id);
           }
 
-          const noShow = targetState === BOOKING_STATE.NO_SHOW;
           await notification.writeBestEffort({
             db: tx,
             userId: b.proposerId,
@@ -3364,7 +3389,7 @@ export function createBookingService(deps: {
               : NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
             body: noShow
-              ? "The session was marked as no-show and held marks were released."
+              ? "The session was marked as a no-show and held marks were forfeited."
               : "The booking deadline passed and held marks were released.",
             eventKey: `booking.${b.id}.expired.student`,
             emailRequired: noShow,
@@ -3380,7 +3405,7 @@ export function createBookingService(deps: {
               : NOTIFICATION_SEVERITY.INFO,
             title: noShow ? "Session marked as no-show" : "Booking expired",
             body: noShow
-              ? "The session was marked as no-show and held marks were released."
+              ? "The session was marked as a no-show and held marks were forfeited."
               : "The booking expired because its deadline passed.",
             eventKey: `booking.${b.id}.expired.tutor`,
             emailRequired: noShow,
