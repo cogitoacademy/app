@@ -146,7 +146,7 @@ describe("H1: accepted reschedule refreshes the deadline for scheduled/room-appr
     const studentCtx = await createTestContext(studentRes.cookie);
     if (!studentCtx.session?.user) throw new Error("Student session missing");
     studentId = studentCtx.session.user.id;
-    await creditWallet(studentId, 200);
+    await creditWallet(studentId, 500);
     studentClient = createTestClient(
       await createTestContext(studentRes.cookie),
     );
@@ -184,6 +184,27 @@ describe("H1: accepted reschedule refreshes the deadline for scheduled/room-appr
     await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
     const row = await getBookingRow(b.id);
     expect(row.currentState).toBe(BOOKING_STATE.SCHEDULED);
+    return b;
+  }
+
+  async function createOfflineAwaitingRoomApprovalBooking() {
+    seq += 1;
+    const start = new Date(Date.now() + (24 + seq * 2) * 3600_000);
+    const end = new Date(start.getTime() + 3600_000);
+    const b = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "offline",
+      scheduledStartAt: start.toISOString(),
+      scheduledEndAt: end.toISOString(),
+      timezone: "Asia/Jakarta",
+    });
+    // Offline: tutor accept flows CONFIRMED -> AWAITING_ADMIN_ROOM_APPROVAL
+    // (previousState = CONFIRMED), pending admin room assignment.
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+    const row = await getBookingRow(b.id);
+    expect(row.currentState).toBe(BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL);
+    expect(row.previousState).toBe(BOOKING_STATE.CONFIRMED);
     return b;
   }
 
@@ -282,6 +303,46 @@ describe("H1: accepted reschedule refreshes the deadline for scheduled/room-appr
     const after = await getBookingRow(b.id);
     expect(after.currentState).toBe(BOOKING_STATE.SCHEDULED);
     expect(after.holdAmount).toBeGreaterThan(0);
+  });
+
+  test("AWAITING_ADMIN_ROOM_APPROVAL target refresh caps deadline at now+12h (not the proposal's now+24h)", async () => {
+    // Reachability: an offline booking accepted by the tutor sits in
+    // AWAITING_ADMIN_ROOM_APPROVAL with previousState=CONFIRMED; proposing a
+    // reschedule moves it to RESCHEDULE_PROPOSED (previousState becomes
+    // AWAITING_ADMIN_ROOM_APPROVAL); accepting returns it to
+    // AWAITING_ADMIN_ROOM_APPROVAL.
+    const b = await createOfflineAwaitingRoomApprovalBooking();
+
+    const proposedStart = new Date(Date.now() + 18 * DAY);
+    const proposedEnd = new Date(proposedStart.getTime() + SESSION_DURATION_MS);
+    await studentClient.booking.proposeReschedule({
+      bookingId: b.id,
+      proposedStartAt: proposedStart.toISOString(),
+      proposedEndAt: proposedEnd.toISOString(),
+      reason: "Geser sambil nunggu ruangan",
+      availabilitySlotId: slotId,
+    });
+
+    const pendingRow = await getBookingRow(b.id);
+    expect(pendingRow.currentState).toBe(BOOKING_STATE.RESCHEDULE_PROPOSED);
+    expect(pendingRow.previousState).toBe(
+      BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+    );
+
+    const acceptedAt = Date.now();
+    await tutorClient.booking.acceptReschedule({ bookingId: b.id });
+
+    const row = await getBookingRow(b.id);
+    expect(row.currentState).toBe(BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL);
+    expect(row.scheduledStartAt.getTime()).toBe(proposedStart.getTime());
+    const deadlineMs = row.deadlineAt!.getTime();
+    // 18 days out -> the room-approval window (12h) term wins, mirroring the
+    // creation path (booking.service.ts:915-921): deadline = now + 12h, NOT
+    // the proposal-era now+24h.
+    expect(
+      Math.abs(deadlineMs - (acceptedAt + RESPONSE_WINDOW_MS)),
+    ).toBeLessThan(60_000);
+    expect(deadlineMs).toBeLessThan(acceptedAt + 20 * 3600_000);
   });
 
   test("AWAITING_TUTOR_REVIEW target keeps the 12h response window (regression)", async () => {
