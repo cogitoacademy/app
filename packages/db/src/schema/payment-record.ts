@@ -30,6 +30,10 @@ export const paymentRecord = pgTable(
     provider: text("provider").notNull(),
     providerReference: text("provider_reference").notNull(),
     providerEventId: text("provider_event_id"),
+    // X1: the provider-side payment-request id (Xendit `pr-...`), used to
+    // initiate provider refunds. Populated when the 2024-11-11 createIntent
+    // response carries an id.
+    providerRequestId: text("provider_request_id"),
     amountIdr: integer("amount_idr").notNull(),
     marks: integer("marks").notNull(),
     status: text("status").notNull().default("PENDING"),

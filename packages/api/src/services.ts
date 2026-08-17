@@ -234,7 +234,13 @@ function createServices() {
     db,
     audit: audit.service,
     wallet: wallet.service,
-    refund: refund.service,
+    refund: {
+      ...refund.service,
+      // X1: the provider refund runs against the active payment provider
+      // (Xendit real refund / stub mock id).
+      refundWithProvider: (paymentRequestId, amountIdr, reason) =>
+        payment.service.provider.refund(paymentRequestId, amountIdr, reason),
+    },
     notification: notification.service,
     meeting,
   });

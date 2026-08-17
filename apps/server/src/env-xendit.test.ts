@@ -22,6 +22,27 @@ describe("server env schema", () => {
         XENDIT_SECRET_KEY: "sk",
         XENDIT_WEBHOOK_TOKEN: "wh",
       }),
+    ).toThrow();
+  });
+
+  test("P3.7: PAYMENT_PROVIDER=xendit requires success/failure redirect URLs", () => {
+    const base = {
+      ...validEnv,
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+    };
+    const err = serverEnvSchema.safeParse(base);
+    expect(err.success).toBe(false);
+    const paths = (err.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("XENDIT_SUCCESS_REDIRECT_URL");
+    expect(paths).toContain("XENDIT_FAILURE_REDIRECT_URL");
+    expect(() =>
+      serverEnvSchema.parse({
+        ...base,
+        XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+        XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+      }),
     ).not.toThrow();
   });
 

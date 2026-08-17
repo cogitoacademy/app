@@ -310,14 +310,19 @@ describe("PaymentService", () => {
         Promise.resolve(
           new Response(
             JSON.stringify({
-              data: {
-                id: "pr_test",
-                reference_id: "xendit-test",
-                status: "PENDING",
-                actions: [{ url: "https://checkout.xendit.co/test" }],
-              },
+              id: "pr_test",
+              payment_request_id: "pr_test",
+              reference_id: "xendit-test",
+              status: "REQUIRES_ACTION",
+              actions: [
+                {
+                  type: "REDIRECT_CUSTOMER",
+                  value: "https://checkout.xendit.co/test",
+                  descriptor: "WEB_URL",
+                },
+              ],
             }),
-            { status: 200, headers: { "content-type": "application/json" } },
+            { status: 201, headers: { "content-type": "application/json" } },
           ),
         ),
       ) as never;

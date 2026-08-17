@@ -578,6 +578,29 @@ export function createAdminBookingService(deps: {
         throw new InvalidRefundStateError(input.paymentId, payment.status);
       }
 
+      // X1: initiate the provider-side refund (Xendit POST /v3/refunds) using
+      // the stored payment-request id; the returned provider refund id is
+      // stored on the refundRecord row. Best-effort: a provider refund failure
+      // must not roll back the Marks reversal (admin can retry).
+      let providerRefundId: string | undefined;
+      if (refund.refundWithProvider && payment.providerRequestId) {
+        try {
+          const refundResult = await refund.refundWithProvider(
+            payment.providerRequestId,
+            payment.amountIdr ?? 0,
+            "CANCELLATION",
+          );
+          providerRefundId = refundResult.providerRefundId;
+        } catch (refundError) {
+          log({
+            level: "error",
+            action: "admin_refund_provider_failed",
+            paymentId: input.paymentId,
+            error: { message: String(refundError) },
+          });
+        }
+      }
+
       await refund.createRefundRecord(tx, {
         paymentId: input.paymentId,
         walletId: participantWallet.id,
@@ -585,6 +608,7 @@ export function createAdminBookingService(deps: {
         marks: refundableMarks,
         reason: input.reason,
         actorId: adminId,
+        ...(providerRefundId ? { providerEventId: providerRefundId } : {}),
       });
 
       if (notification) {

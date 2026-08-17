@@ -69,6 +69,23 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
         message: "required when PAYMENT_PROVIDER=xendit",
       });
     }
+    // P3.7: the 2024-11-11 payment-request schema requires the success and
+    // failure return URLs (channel_properties) — an empty default would make
+    // every checkout redirect fail.
+    if (!val.XENDIT_SUCCESS_REDIRECT_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["XENDIT_SUCCESS_REDIRECT_URL"],
+        message: "required when PAYMENT_PROVIDER=xendit",
+      });
+    }
+    if (!val.XENDIT_FAILURE_REDIRECT_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["XENDIT_FAILURE_REDIRECT_URL"],
+        message: "required when PAYMENT_PROVIDER=xendit",
+      });
+    }
   }
 });
 

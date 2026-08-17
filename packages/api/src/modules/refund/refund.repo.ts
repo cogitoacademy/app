@@ -20,6 +20,7 @@ async function insertRefundRecord(
     marks: number;
     reason: string;
     actorId?: string;
+    providerEventId?: string;
   },
 ) {
   const [inserted] = await conn
@@ -31,6 +32,7 @@ async function insertRefundRecord(
       marks: record.marks,
       reason: record.reason,
       actorId: record.actorId ?? null,
+      providerEventId: record.providerEventId ?? null,
     })
     .returning();
   return inserted;

@@ -404,10 +404,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `POST /webhooks/payments/:provider` (external)
 
 - **Auth:** Public (non-oRPC route)
-- **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature`, `x-event-id`, `x-timestamp`
+- **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature`, `x-event-id`, `x-timestamp` (timestamp validation is **skipped for xendit** — the API documents only `x-callback-token`, P3.5/L4)
 - **Output:** `{ ok: true }`
-- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min), 403 IP not allowlisted, 500 processing failure
-- **Description:** Provider webhook; verifies signature, validates timestamp, then atomically claims the idempotency key (keyed on the verified payload's event id — released on processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46). A REFUNDED webhook reverses the credited Marks via `compensate_deduct` when the available balance suffices; if the Marks were already spent (`availableBalance < marks`), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4)
+- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min, non-xendit), 403 IP not allowlisted, 500 processing failure
+- **Description:** Provider webhook; verifies signature, validates timestamp (provider-conditional), then atomically claims the idempotency key (keyed on the verified payload's event id — released on processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46). Xendit idempotency keys are derived from `data.payment_id ?? data.payment_request_id` (2024-11-11 webhooks carry no `event_id` — P3.4). A REFUNDED webhook reverses the credited Marks via `compensate_deduct` when the available balance suffices; if the Marks were already spent (`availableBalance < marks`), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4)
+
+### Provider refunds (X1, P3.6)
+
+- `adminRefund` initiates a provider-side refund via the active provider's `refund(paymentRequestId, amountIdr, reason?)` — Xendit `POST /v3/refunds` (`{payment_request_id, currency, amount, reason}` → `{id}`), stub returns `rfd-stub-{paymentRequestId}`. The provider refund is **best-effort**: a provider failure is logged and never rolls back the Marks reversal. The returned refund id is stored on `refund_record.provider_event_id`. The Xendit payment-request id is persisted on `payment_record.provider_request_id` (migration 0025) from the createIntent response.
 
 ---
 

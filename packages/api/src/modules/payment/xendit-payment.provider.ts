@@ -14,6 +14,7 @@ import type {
 } from "./payment.service";
 
 const XENDIT_API_BASE = "https://api.xendit.co/v3";
+const XENDIT_API_VERSION = "2024-11-11";
 
 const xenditCircuitBreaker = new CircuitBreaker({
   failureThreshold: 5,
@@ -23,17 +24,33 @@ const xenditCircuitBreaker = new CircuitBreaker({
 
 type XenditPaymentMethod = "ewallet_ovo" | "qris" | "va_bca";
 
+// 2024-11-11 channel codes (channel_code enum in the Payments API).
 const PAYMENT_METHOD_CONFIG: Record<
   XenditPaymentMethod,
-  { type: string; channel_code?: string }
+  { channel_code: string }
 > = {
-  ewallet_ovo: { type: "EWALLET", channel_code: "ID_OVO" },
-  qris: { type: "QR_CODE", channel_code: "ID_DANA" },
-  va_bca: { type: "VIRTUAL_ACCOUNT", channel_code: "BCA" },
+  ewallet_ovo: { channel_code: "OVO" },
+  qris: { channel_code: "QRIS" },
+  va_bca: { channel_code: "BCA" },
 };
 
+/**
+ * Maps Xendit Payment Request / Payment statuses (api-version 2024-11-11) to
+ * the internal PaymentStatus.
+ *
+ *   SUCCEEDED        -> PAID
+ *   REQUIRES_ACTION  -> PENDING (customer action pending)
+ *   AUTHORIZED       -> PENDING (capture pending)
+ *   CANCELED         -> FAILED
+ *   PENDING/FAILED/EXPIRED/PAID/SETTLED/REFUNDED -> unchanged (legacy webhook
+ *   events and our own stub use these verbatim)
+ */
 export function mapXenditStatus(status: string): PaymentStatus {
   const map: Record<string, PaymentStatus> = {
+    SUCCEEDED: "PAID",
+    REQUIRES_ACTION: "PENDING",
+    AUTHORIZED: "PENDING",
+    CANCELED: "FAILED",
     PENDING: "PENDING",
     PAID: "PAID",
     SETTLED: "SETTLED",
@@ -46,12 +63,20 @@ export function mapXenditStatus(status: string): PaymentStatus {
   return mapped;
 }
 
+export interface XenditCustomer {
+  referenceId: string;
+  givenNames: string;
+  email: string;
+  mobileNumber?: string;
+}
+
 export function createXenditPaymentProvider(opts: {
   secretKey: string;
   webhookToken: string;
   successRedirectUrl: string;
   failureRedirectUrl: string;
   defaultPaymentMethod?: XenditPaymentMethod;
+  customer?: XenditCustomer;
 }): PaymentProvider {
   const authHeader = `Basic ${Buffer.from(`${opts.secretKey}:`).toString("base64")}`;
   const defaultMethod = opts.defaultPaymentMethod ?? "ewallet_ovo";
@@ -61,18 +86,35 @@ export function createXenditPaymentProvider(opts: {
     paymentId: string;
     amountIdr: number;
     providerReference: string;
-  }): Promise<{ checkoutUrl: string }> {
-    const paymentMethodBody: Record<string, unknown> = {
-      type: methodConfig.type,
+  }): Promise<{ checkoutUrl: string; paymentRequestId?: string | null }> {
+    // 2024-11-11 request shape: type:"PAY", country:"ID", currency:"IDR",
+    // request_amount (NOT amount), channel_code (NOT payment_method),
+    // channel_properties.{success_return_url,failure_return_url}, optional
+    // customer + customer_notification_preference (e-wallets).
+    const body: Record<string, unknown> = {
+      reference_id: params.providerReference,
+      type: "PAY",
+      country: "ID",
+      currency: "IDR",
+      request_amount: params.amountIdr,
+      channel_code: methodConfig.channel_code,
+      channel_properties: {
+        success_return_url: opts.successRedirectUrl,
+        failure_return_url: opts.failureRedirectUrl,
+      },
+      metadata: {
+        paymentId: params.paymentId,
+      },
     };
 
-    if (methodConfig.type === "EWALLET") {
-      paymentMethodBody.ewallet = { channel_code: methodConfig.channel_code };
-    } else if (methodConfig.type === "QR_CODE") {
-      paymentMethodBody.qr_code = { channel_code: methodConfig.channel_code };
-    } else if (methodConfig.type === "VIRTUAL_ACCOUNT") {
-      paymentMethodBody.virtual_account = {
-        channel_code: methodConfig.channel_code,
+    if (opts.customer) {
+      body.customer = {
+        reference_id: opts.customer.referenceId,
+        given_names: opts.customer.givenNames,
+        email: opts.customer.email,
+        ...(opts.customer.mobileNumber
+          ? { mobile_number: opts.customer.mobileNumber }
+          : {}),
       };
     }
 
@@ -83,19 +125,10 @@ export function createXenditPaymentProvider(opts: {
             method: "POST",
             headers: {
               "content-type": "application/json",
+              "api-version": XENDIT_API_VERSION,
               authorization: authHeader,
             },
-            body: JSON.stringify({
-              reference_id: params.providerReference,
-              currency: "IDR",
-              amount: params.amountIdr,
-              payment_method: paymentMethodBody,
-              success_redirect_url: opts.successRedirectUrl,
-              failure_redirect_url: opts.failureRedirectUrl,
-              metadata: {
-                paymentId: params.paymentId,
-              },
-            }),
+            body: JSON.stringify(body),
           }),
         {
           maxAttempts: 3,
@@ -121,21 +154,29 @@ export function createXenditPaymentProvider(opts: {
       );
     }
 
+    // 2024-11-11 responses are a TOP-LEVEL object (no `data` wrapper).
     const json = (await res.json()) as {
-      data: {
-        actions?: { url: string }[];
-        payment_method?: { url?: string };
-      };
+      id?: string;
+      payment_request_id?: string;
+      actions?: { type?: string; value?: string; descriptor?: string }[];
     };
 
+    // Actions now carry {type, value, descriptor}: pick the customer redirect
+    // URL first (e-wallets/VA), fall back to a present-to-customer value
+    // (QRIS / VA number).
+    const actions = json.actions ?? [];
     const checkoutUrl =
-      json.data.actions?.[0]?.url ?? json.data.payment_method?.url;
+      actions.find((a) => a.type === "REDIRECT_CUSTOMER")?.value ??
+      actions.find((a) => a.type === "PRESENT_TO_CUSTOMER")?.value;
 
     if (!checkoutUrl) {
       throw internalServerError("Payment provider returned invalid response");
     }
 
-    return { checkoutUrl };
+    // X1: the payment request id (`pr-...`) is what refunds address.
+    const paymentRequestId = json.payment_request_id ?? json.id ?? null;
+
+    return { checkoutUrl, paymentRequestId };
   }
 
   async function verifyWebhook(
@@ -154,14 +195,20 @@ export function createXenditPaymentProvider(opts: {
     }
 
     let body: {
-      event_id?: string;
+      event?: string;
       id?: string;
+      payment_id?: string;
+      payment_request_id?: string;
+      reference_id?: string;
+      status?: string;
+      failure_code?: string;
       data?: {
         id?: string;
+        payment_id?: string;
+        payment_request_id?: string;
         reference_id?: string;
-        status: string;
+        status?: string;
         failure_code?: string;
-        receipt_url?: string;
       };
     };
     try {
@@ -170,22 +217,89 @@ export function createXenditPaymentProvider(opts: {
       throw badRequest("Invalid webhook payload: malformed JSON");
     }
 
-    const data = (body.data ?? body) as {
-      id?: string;
-      reference_id?: string;
-      status: string;
-      failure_code?: string;
-      receipt_url?: string;
-    };
+    const data = body.data ?? body;
+
+    // 2024-11-11 webhooks: data.payment_id (payment events) or
+    // data.payment_request_id (payment_request events) — there is NO event_id,
+    // so deriving the idempotency key from these fields fixes the
+    // `xendit:no-event-id` collision (every payment previously collapsed onto
+    // one key).
+    const providerEventId =
+      data.payment_id ??
+      data.payment_request_id ??
+      data.id ??
+      body.payment_id ??
+      body.id ??
+      "";
 
     return {
       providerReference: data.reference_id ?? data.id ?? "",
-      providerEventId: body.event_id ?? body.id ?? "",
-      status: mapXenditStatus(data.status),
+      providerEventId,
+      status: mapXenditStatus(data.status ?? ""),
       failureReason: data.failure_code ?? null,
-      receiptUrl: data.receipt_url ?? null,
+      receiptUrl: null,
     };
   }
 
-  return { createIntent, verifyWebhook };
+  /**
+   * Initiates a provider-side refund (POST /v3/refunds, api-version 2024-11-11).
+   * Returns the provider refund id (rfd-...) for storage on refundRecord.
+   */
+  async function refund(
+    paymentRequestId: string,
+    amountIdr: number,
+    reason = "CANCELLATION",
+  ): Promise<{ providerRefundId: string }> {
+    const res = await xenditCircuitBreaker.execute(() =>
+      retryWithBackoff(
+        () =>
+          fetchWithTimeout(`${XENDIT_API_BASE}/refunds`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "api-version": XENDIT_API_VERSION,
+              authorization: authHeader,
+            },
+            body: JSON.stringify({
+              payment_request_id: paymentRequestId,
+              currency: "IDR",
+              amount: amountIdr,
+              reason,
+            }),
+          }),
+        {
+          maxAttempts: 3,
+          retryable: (err) =>
+            err instanceof TypeError ||
+            (err instanceof Error &&
+              (err.name === "AbortError" || err.name === "TimeoutError")),
+        },
+      ),
+    );
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      let errCode: string | undefined;
+      try {
+        const errJson = JSON.parse(text);
+        errCode = errJson.error_code;
+      } catch {
+        errCode = undefined;
+      }
+      throw serviceUnavailable(
+        `Payment provider refund error: ${res.status} ${errCode ?? res.statusText}`,
+      );
+    }
+
+    const json = (await res.json()) as { id?: string };
+    if (!json.id) {
+      throw internalServerError(
+        "Payment provider returned invalid refund response",
+      );
+    }
+
+    return { providerRefundId: json.id };
+  }
+
+  return { createIntent, verifyWebhook, refund };
 }

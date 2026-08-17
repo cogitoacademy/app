@@ -148,3 +148,13 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - L3: scheduled notification copy derived from meetingResult.meetingUrl (ready vs pending).
 - Tests: 2 L3 unit cases + createEvent tx-arg assertion; meeting/fallback provider suites green.
 - Full API 1898/0; server 49/0; check-types/lint/oxfmt clean.
+
+## P3 (X1) Xendit provider rewrite 2024-11-11 + refund port — complete
+
+- createIntent: POST /v3/payment_requests with api-version 2024-11-11 header, request_amount/channel_code (OVO/QRIS/BCA)/channel_properties.{success,failure_return_url}/optional customer; top-level response actions[].value (REDIRECT_CUSTOMER → PRESENT_TO_CUSTOMER).
+- mapXenditStatus: SUCCEEDED→PAID, REQUIRES_ACTION/AUTHORIZED→PENDING, CANCELED→FAILED; legacy kept.
+- Webhook: providerEventId from data.payment_id ?? payment_request_id (fixes xendit:no-event-id idempotency collision); event_id/receipt_url dropped.
+- L4: validateWebhookTimestamp(request, provider) skips xendit.
+- P3.6: PaymentProvider.refund() — Xendit POST /v3/refunds; stub rfd-stub-{id}; adminRefund best-effort provider refund → refundRecord.providerEventId; migration 0025 payment_record.provider_request_id.
+- P3.7: env superRefine requires XENDIT_SUCCESS/FAILURE_REDIRECT_URL when PAYMENT_PROVIDER=xendit.
+- Tests: 18 provider unit (rewritten), status tests rewritten, env-xendit + timestamp + refund-flow updated; full API 1911/0; server 51/0; check-types/lint/oxfmt clean.

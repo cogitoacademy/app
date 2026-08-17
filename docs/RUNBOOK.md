@@ -244,16 +244,18 @@ The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet f
 | Google Meet | Manual link fallback | **Silent** — `GOOGLE_MEET_ENABLED=true` with broken creds falls back to manual links, events land on the wrong calendar               | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + boot probe (P4.2)                                        |
 | R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable | All `R2_*` + `R2_PUBLIC_URL` required in production (P4.3)                                                                |
 
+> **P3 status (2026-08-17):** the Xendit provider was rewritten for `api-version: 2024-11-11` — `request_amount`/`channel_code`/`channel_properties`, top-level response with `actions[].value` (REDIRECT_CUSTOMER → PRESENT_TO_CUSTOMER), statuses SUCCEEDED/REQUIRES_ACTION/AUTHORIZED/CANCELED, webhook idempotency keys from `data.payment_id`/`payment_request_id` (fixes the `xendit:no-event-id` collision), and a provider `refund()` port wired into `adminRefund` (refund id stored on `refund_record.provider_event_id`; migration 0025 adds `payment_record.provider_request_id`). Timestamp validation is provider-conditional (skipped for xendit — L4). `XENDIT_SUCCESS/FAILURE_REDIRECT_URL` are required by the env schema when `PAYMENT_PROVIDER=xendit` (P3.7).
+
 ### Xendit sandbox verification checklist (L4)
 
 Steps to validate the Xendit integration against the sandbox before enabling `PAYMENT_PROVIDER=xendit` in production:
 
-1. Set `PAYMENT_PROVIDER=xendit`, `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` to the sandbox values, and `XENDIT_SUCCESS_REDIRECT_URL`/`XENDIT_FAILURE_REDIRECT_URL`.
+1. Set `PAYMENT_PROVIDER=xendit`, `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` to the sandbox values, and `XENDIT_SUCCESS_REDIRECT_URL`/`XENDIT_FAILURE_REDIRECT_URL` (now required by the env schema, P3.7).
 2. Create a purchase with `XENDIT_DEFAULT_PAYMENT_METHOD=ewallet_ovo` → confirm the returned action URL redirects to an OVO sandbox flow.
-3. Verify `STUB_WEBHOOK_ALLOWED=false`; deliver a sandbox webhook with `api-version: 2024-11-11` payload shape (`data.payment_id`, `status=SUCCEEDED`) → confirm the payment transitions to PAID and Marks are credited once.
-4. Check webhook timestamp validation: confirm whether Xendit sends a `Date`/`x-timestamp` header; if not, the check is provider-conditional (P3.5).
+3. Verify `STUB_WEBHOOK_ALLOWED=false`; deliver a sandbox webhook with `api-version: 2024-11-11` payload shape (`data.payment_id`, `status=SUCCEEDED`) → confirm the payment transitions to PAID and Marks are credited once (idempotency key no longer collapses to `xendit:no-event-id`).
+4. Webhook timestamp validation is **skipped for xendit** (the API documents only `x-callback-token`; no `Date`/`x-timestamp` header — P3.5/L4). Revisit if Xendit starts sending a timestamp header.
 5. Test a REFUNDED webhook with spent Marks → payment marked REFUNDED + reconciliation row, no 500/retry loop (P2.7/H4).
-6. Trigger a provider refund from `adminRefund` → `refund_record.provider_refund_id` populated (P3.6).
+6. Trigger a provider refund from `adminRefund` → `refund_record.provider_event_id` populated with the Xendit `rfd-...` id (P3.6); the provider refund is best-effort — the Marks reversal never rolls back on provider refund failure.
 7. Only after the full sandbox E2E passes, enable in production.
 
 ### Google Meet refresh-token acquisition (X3)

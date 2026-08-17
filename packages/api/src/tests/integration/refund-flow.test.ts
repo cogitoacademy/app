@@ -213,6 +213,10 @@ describe("Refund flow", () => {
     expect(records[0]!.marks).toBe(50);
     expect(records[0]!.walletId).toBe(payerWalletId);
     expect(records[0]!.actorId).toBe(adminId);
+    // X1: the stub provider refund returned a mock id stored on the record.
+    expect(records[0]!.providerEventId).toBe(
+      `rfd-stub-pr-stub-${intent.paymentId}`,
+    );
 
     const logs = await db
       .select()
