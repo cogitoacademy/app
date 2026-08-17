@@ -1479,11 +1479,27 @@ export function createBookingService(deps: {
         });
       }
 
+      const isGroup = b.type === BOOKING_TYPE.GROUP;
+      // The forfeited hold no longer lives anywhere: zero the target's row so
+      // a later release (cancel/expire) never double-credits them. Solo and
+      // series keep their existing row bookkeeping.
       await repo.updateParticipantState(tx, participant.id, {
         attendanceState: ATTENDANCE_STATE.ABSENT,
+        ...(isGroup ? { heldAmount: 0 } : {}),
       });
 
-      if (!isSeries) {
+      if (isGroup) {
+        // Group (non-series): only the target participant's hold is forfeited
+        // (deducted above); the booking stays live and the other confirmed
+        // participants' holds are preserved. Recompute the booking hold as the
+        // sum of the remaining confirmed (non-ABSENT) participants' held
+        // amounts — mirroring the group branches in completeSingleSession.
+        const confirmed = await repo.findConfirmedParticipants(tx, bookingId);
+        const holdAmount = confirmed
+          .filter((p) => p.attendanceState !== ATTENDANCE_STATE.ABSENT)
+          .reduce((sum, p) => sum + p.heldAmount, 0);
+        await repo.updateBookingHoldAmount(tx, bookingId, holdAmount);
+      } else if (!isSeries) {
         await repo.updateBookingHoldAmount(tx, bookingId, 0);
         await transition(tx, bookingId, BOOKING_STATE.NO_SHOW, {
           actorId: tutorId,
