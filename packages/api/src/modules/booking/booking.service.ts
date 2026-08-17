@@ -1551,6 +1551,18 @@ export function createBookingService(deps: {
         );
       }
 
+      // Attendance may only be marked within the lateness tolerance of the
+      // scheduled start (bug H2a): a tutor can no longer pre-mark "present"
+      // days early to dodge the lateness check.
+      const now = Date.now();
+      const windowStart = b.scheduledStartAt.getTime() - LATENESS_TOLERANCE_MS;
+      const windowEnd = b.scheduledStartAt.getTime() + LATENESS_TOLERANCE_MS;
+      if (now < windowStart || now > windowEnd) {
+        throw new BookingNotEditableError(
+          "Tutor attendance can only be marked within 15 minutes of the session start",
+        );
+      }
+
       const tutorParticipant = await repo.findTutorParticipant(tx, bookingId);
       if (tutorParticipant) {
         await repo.updateParticipantState(tx, tutorParticipant.id, {
@@ -3451,47 +3463,43 @@ export function createBookingService(deps: {
   }
 
   async function checkTutorLateness(): Promise<{
-    autoCancelled: number;
+    flagged: number;
     failed: number;
   }> {
     const candidates = await repo.findBookingsWithTutorLateness(db);
 
     const outcomes = await mapLimit(candidates, 5, async (b) => {
       try {
-        await db.transaction(async (tx) => {
-          await releaseAllParticipantHolds(
+        const outcome = await db.transaction(async (tx) => {
+          const overrideMeta: Record<string, unknown> = {
+            ...((b.overrideMeta ?? {}) as Record<string, unknown>),
+            category: "tutor_lateness_pending",
+            flaggedAt: new Date().toISOString(),
+          };
+          const updated = await repo.updateBookingVersioned(
             tx,
             b.id,
-            "Tutor no-show: auto-cancelled",
-            ACTOR_TYPE.SYSTEM,
+            b.version,
+            {
+              overrideMeta,
+            },
           );
+          // Another writer changed the booking; skip silently and let the next
+          // sweep re-evaluate it.
+          if (!updated) return "skipped" as const;
 
-          await repo.updateBookingHoldAmount(tx, b.id, 0);
-
-          const tutorParticipant = await repo.findTutorParticipant(tx, b.id);
-          if (tutorParticipant) {
-            await repo.updateParticipantState(tx, tutorParticipant.id, {
-              attendanceState: ATTENDANCE_STATE.ABSENT,
-            });
-          } else {
-            await repo.insertParticipant(tx, {
-              bookingId: b.id,
-              userId: b.tutorId,
-              role: "tutor",
-              confirmationState: CONFIRMATION_STATE.CONFIRMED,
-              heldAmount: 0,
-              attendanceState: ATTENDANCE_STATE.ABSENT,
-            });
-          }
-
-          await transition(tx, b.id, BOOKING_STATE.NO_SHOW, {
-            actorId: "system",
+          await audit.record({
+            db: tx,
+            actorId: null,
             actorType: ACTOR_TYPE.SYSTEM,
-            reason: "Tutor did not join within the lateness window",
-            metadata: {
+            action: "tutor_lateness_pending_review",
+            targetId: b.id,
+            targetType: "booking",
+            details: {
               latenessMinutes: Math.floor(
                 (Date.now() - b.scheduledStartAt.getTime()) / 60_000,
               ),
+              scheduledStartAt: b.scheduledStartAt.toISOString(),
             },
           });
 
@@ -3500,11 +3508,10 @@ export function createBookingService(deps: {
             userId: b.proposerId,
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
-            severity: NOTIFICATION_SEVERITY.ACTION,
-            title: "Session auto-cancelled",
-            body: "The tutor did not join within 15 minutes, so the session was auto-cancelled and held marks were released.",
-            eventKey: `booking.${b.id}.tutor_no_show`,
-            emailRequired: true,
+            severity: NOTIFICATION_SEVERITY.INFO,
+            title: "Session flagged for review",
+            body: "The session was flagged for admin review because tutor attendance was not confirmed.",
+            eventKey: `booking.${b.id}.tutor_lateness_pending`,
           });
 
           await notification.writeBestEffort({
@@ -3513,14 +3520,14 @@ export function createBookingService(deps: {
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
             severity: NOTIFICATION_SEVERITY.INFO,
-            title: "Session auto-cancelled",
-            body: "You did not join the session within 15 minutes, so it was auto-cancelled.",
-            eventKey: `booking.${b.id}.tutor_no_show.tutor`,
+            title: "Session flagged for review",
+            body: "The session was flagged for admin review because tutor attendance was not confirmed.",
+            eventKey: `booking.${b.id}.tutor_lateness_pending.tutor`,
           });
+
+          return "flagged" as const;
         });
-        // Best-effort cleanup of the provider-side event (NO_SHOW is terminal).
-        await meeting.cancelEvent(b.id);
-        return { ok: true };
+        return outcome;
       } catch (error) {
         log({
           level: "error",
@@ -3528,17 +3535,17 @@ export function createBookingService(deps: {
           bookingId: b.id,
           error: { message: String(error) },
         });
-        return { ok: false };
+        return "failed" as const;
       }
     });
 
-    let autoCancelled = 0;
+    let flagged = 0;
     let failed = 0;
     for (const outcome of outcomes) {
-      if (outcome.ok) autoCancelled++;
-      else failed++;
+      if (outcome === "flagged") flagged++;
+      else if (outcome === "failed") failed++;
     }
-    return { autoCancelled, failed };
+    return { flagged, failed };
   }
 
   return {

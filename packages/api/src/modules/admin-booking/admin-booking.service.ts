@@ -427,7 +427,7 @@ export function createAdminBookingService(deps: {
     bookingId?: string;
     limit?: number;
     cursor?: string;
-    category?: OverrideCategory;
+    category?: OverrideCategory | (string & {});
     urgency?: UrgencyLevel;
     escalated?: boolean;
   }) {

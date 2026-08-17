@@ -7,7 +7,7 @@ export interface SchedulerHandlers {
   onExpireBookings: () => Promise<{ expired: number; failed: number }>;
   onReleaseHolds: () => Promise<{ released: number }>;
   onCheckTutorLateness: () => Promise<{
-    autoCancelled: number;
+    flagged: number;
     failed: number;
   }>;
   onSendNotificationEmail: () => Promise<{ sent: number; failed: number }>;
@@ -63,7 +63,7 @@ export function createSchedulerService(
           log({
             level: latenessResult.failed > 0 ? "warn" : "info",
             action: "check_tutor_lateness_complete",
-            message: `Auto-cancelled ${latenessResult.autoCancelled} bookings for tutor lateness, ${latenessResult.failed} failed`,
+            message: `Flagged ${latenessResult.flagged} bookings for tutor lateness review, ${latenessResult.failed} failed`,
             ...latenessResult,
           });
           return latenessResult;

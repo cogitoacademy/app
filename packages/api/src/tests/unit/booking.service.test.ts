@@ -3309,7 +3309,7 @@ describe("BookingService", () => {
   });
 
   describe("checkTutorLateness", () => {
-    test("auto-cancels scheduled booking with unknown tutor attendance", async () => {
+    test("flags scheduled booking with unknown tutor attendance instead of auto-cancelling", async () => {
       const candidate = makeBooking({
         currentState: "scheduled",
         holdAmount: 42,
@@ -3317,16 +3317,11 @@ describe("BookingService", () => {
         tutorId: "tutor1",
         scheduledStartAt: new Date(Date.now() - 20 * 60 * 1000),
       });
-      const { service, repo, notification, wallet } = createService({
+      const { service, repo, notification, wallet, audit } = createService({
         repo: {
           findBookingsWithTutorLateness: mock(async () => [candidate]),
-          findTutorParticipant: mock(async () => null),
-          findBookingById: mock(async () => ({ ...candidate, version: 1 })),
-          findConfirmedParticipants: mock(async () => [
-            makeParticipant({ heldAmount: 42 }),
-          ]),
           updateBookingVersioned: mock(async () => ({
-            updated: { ...candidate, currentState: "no_show" },
+            updated: { ...candidate },
             newVersion: 2,
           })),
         },
@@ -3334,71 +3329,61 @@ describe("BookingService", () => {
 
       const result = await service.checkTutorLateness();
 
-      expect(result).toEqual({ autoCancelled: 1, failed: 0 });
-      expect(repo.insertParticipant).toHaveBeenCalledTimes(1);
-      const insertArg = repo.insertParticipant.mock.calls[0][1];
-      expect(insertArg).toMatchObject({
-        bookingId: "b1",
-        userId: "tutor1",
-        role: "tutor",
-        attendanceState: "absent",
+      expect(result).toEqual({ flagged: 1, failed: 0 });
+      expect(repo.updateBookingVersioned).toHaveBeenCalledTimes(1);
+      const [, bookingId, expectedVersion, updates] =
+        repo.updateBookingVersioned.mock.calls[0]!;
+      expect(bookingId).toBe("b1");
+      expect(expectedVersion).toBe(1);
+      expect(updates).toMatchObject({
+        overrideMeta: {
+          category: "tutor_lateness_pending",
+        },
       });
-      expect(wallet.release).toHaveBeenCalledTimes(1);
-      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
-        expect.anything(),
-        "b1",
-        0,
-      );
-      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
-        expect.anything(),
-        "b1",
-        1,
-        expect.objectContaining({ currentState: "no_show" }),
-      );
+      expect(updates!.overrideMeta!.flaggedAt).toEqual(expect.any(String));
+      expect(repo.insertParticipant).not.toHaveBeenCalled();
+      expect(repo.updateParticipantState).not.toHaveBeenCalled();
+      expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      const auditArg = audit.record.mock.calls[0]![0];
+      expect(auditArg).toMatchObject({
+        actorId: null,
+        actorType: "system",
+        action: "tutor_lateness_pending_review",
+        targetId: "b1",
+        targetType: "booking",
+      });
       expect(notification.writeBestEffort).toHaveBeenCalledTimes(2);
     });
 
-    test("updates existing tutor participant attendance to absent", async () => {
+    test("skips booking when the versioned update races", async () => {
       const candidate = makeBooking({
         currentState: "scheduled",
-        holdAmount: 0,
+        holdAmount: 42,
         proposerId: "student1",
         tutorId: "tutor1",
         scheduledStartAt: new Date(Date.now() - 20 * 60 * 1000),
       });
-      const { service, repo } = createService({
+      const { service, notification, audit } = createService({
         repo: {
           findBookingsWithTutorLateness: mock(async () => [candidate]),
-          findTutorParticipant: mock(async () => ({
-            id: "tp1",
-            bookingId: "b1",
-            userId: "tutor1",
-            role: "tutor",
-            attendanceState: "unknown",
-          })),
-          findConfirmedParticipants: mock(async () => []),
-          updateBookingVersioned: mock(async () => ({
-            updated: { ...candidate, currentState: "no_show" },
-            newVersion: 2,
-          })),
+          updateBookingVersioned: mock(async () => null),
         },
       });
 
-      await service.checkTutorLateness();
+      const result = await service.checkTutorLateness();
 
-      expect(repo.insertParticipant).not.toHaveBeenCalled();
-      expect(repo.updateParticipantState).toHaveBeenCalledWith(
-        expect.anything(),
-        "tp1",
-        expect.objectContaining({ attendanceState: "absent" }),
-      );
+      expect(result).toEqual({ flagged: 0, failed: 0 });
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(notification.writeBestEffort).not.toHaveBeenCalled();
     });
 
     test("returns zero when no candidates", async () => {
       const { service } = createService();
 
       const result = await service.checkTutorLateness();
-      expect(result).toEqual({ autoCancelled: 0, failed: 0 });
+      expect(result).toEqual({ flagged: 0, failed: 0 });
     });
 
     test("continues processing when individual booking fails", async () => {
@@ -3419,34 +3404,28 @@ describe("BookingService", () => {
         scheduledStartAt: new Date(Date.now() - 20 * 60 * 1000),
       });
 
-      let callCount = 0;
       const { service } = createService({
         repo: {
           findBookingsWithTutorLateness: mock(async () => [b1, b2]),
-          findTutorParticipant: mock(async () => null),
-          findBookingById: mock(async () => {
-            callCount++;
-            if (callCount === 1) throw new Error("DB error");
-            return { ...b2, version: 1 };
+          updateBookingVersioned: mock(async () => {
+            throw new Error("DB error");
           }),
-          findConfirmedParticipants: mock(async () => [
-            makeParticipant({ heldAmount: 30 }),
-          ]),
-          updateBookingVersioned: mock(async () => ({
-            updated: { ...b2, currentState: "no_show" },
-            newVersion: 2,
-          })),
         },
       });
 
       const result = await service.checkTutorLateness();
-      expect(result).toEqual({ autoCancelled: 1, failed: 1 });
+      expect(result).toEqual({ flagged: 0, failed: 2 });
     });
   });
 
   describe("markTutorAttendance", () => {
+    const withinWindowStart = () => new Date(Date.now() - 5 * 60 * 1000);
+
     test("throws BookingNotOwnedError when caller is not the booking tutor", async () => {
-      const booking = makeBooking({ currentState: "scheduled" });
+      const booking = makeBooking({
+        currentState: "scheduled",
+        scheduledStartAt: withinWindowStart(),
+      });
       const { service } = createService({
         repo: { findBookingById: mock(async () => booking) },
       });
@@ -3457,7 +3436,10 @@ describe("BookingService", () => {
     });
 
     test("throws BookingStateTransitionError when booking is not scheduled", async () => {
-      const booking = makeBooking({ currentState: "confirmed" });
+      const booking = makeBooking({
+        currentState: "confirmed",
+        scheduledStartAt: withinWindowStart(),
+      });
       const { service } = createService({
         repo: { findBookingById: mock(async () => booking) },
       });
@@ -3467,8 +3449,39 @@ describe("BookingService", () => {
       ).rejects.toThrow(BookingStateTransitionError);
     });
 
+    test("throws BookingNotEditableError when marking before the window", async () => {
+      const booking = makeBooking({
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const { service } = createService({
+        repo: { findBookingById: mock(async () => booking) },
+      });
+
+      await expect(
+        service.markTutorAttendance("b1", "tutor1", "present"),
+      ).rejects.toThrow(BookingNotEditableError);
+    });
+
+    test("throws BookingNotEditableError when marking after the window", async () => {
+      const booking = makeBooking({
+        currentState: "scheduled",
+        scheduledStartAt: new Date(Date.now() - 30 * 60 * 1000),
+      });
+      const { service } = createService({
+        repo: { findBookingById: mock(async () => booking) },
+      });
+
+      await expect(
+        service.markTutorAttendance("b1", "tutor1", "present"),
+      ).rejects.toThrow(BookingNotEditableError);
+    });
+
     test("upserts a tutor participant with present attendance when no row exists", async () => {
-      const booking = makeBooking({ currentState: "scheduled" });
+      const booking = makeBooking({
+        currentState: "scheduled",
+        scheduledStartAt: withinWindowStart(),
+      });
       const { service, repo } = createService({
         repo: {
           findBookingById: mock(async () => booking),
@@ -3499,7 +3512,10 @@ describe("BookingService", () => {
     });
 
     test("updates an existing tutor participant attendance to late", async () => {
-      const booking = makeBooking({ currentState: "scheduled" });
+      const booking = makeBooking({
+        currentState: "scheduled",
+        scheduledStartAt: withinWindowStart(),
+      });
       const existing = makeParticipant({
         id: "tp1",
         userId: "tutor1",
