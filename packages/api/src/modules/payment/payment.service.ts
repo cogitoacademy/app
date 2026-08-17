@@ -1,5 +1,5 @@
 import type { DbType } from "../../lib/db";
-import { PAYMENT_STATUS } from "../../shared/constants";
+import { PAYMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import { NOTIFICATION_CATEGORY } from "../../shared/constants";
 import { NOTIFICATION_SEVERITY } from "../../shared/constants";
 import type { NotificationWriteParams } from "../notification/notification.service";
@@ -10,6 +10,8 @@ import {
   PaymentProviderError,
 } from "./payment.errors";
 import type { PaymentWalletPort } from "./index";
+import type { PaymentAuditPort } from "./index";
+import type { PaymentRefundRecordPort } from "./index";
 import type { PaymentRepo } from "./payment.repo";
 
 export type PaymentStatus =
@@ -82,8 +84,19 @@ export function createPaymentService(deps: {
   provider: PaymentProvider;
   providerName: string;
   notification?: PaymentNotificationPort;
+  audit?: PaymentAuditPort;
+  refundRecord?: PaymentRefundRecordPort;
 }) {
-  const { db, wallet, repo, provider, providerName, notification } = deps;
+  const {
+    db,
+    wallet,
+    repo,
+    provider,
+    providerName,
+    notification,
+    audit,
+    refundRecord,
+  } = deps;
 
   /**
    * Creates a payment intent for a mark package purchase, reusing pending intents.
@@ -305,22 +318,65 @@ export function createPaymentService(deps: {
             tx,
           );
 
+          let didReverse = false;
           if (reversed) {
-            // R5: reverses the marks credited on PAID/SETTLED via the
-            // compensate_deduct primitive — it removes the marks from the
-            // available balance, unlike `deduct` which only releases holds.
-            await wallet.compensate(tx, {
-              walletId: record.walletId,
-              amount: record.marks,
-              eventKey: `refund.${record.id}.reverse`,
-              sourceReference: record.id,
-              actorType: "system",
-              reason: "Refund: reversed credited marks",
-              type: "compensate_deduct",
-            });
+            // H4: if the payer already spent the credited Marks (available
+            // balance below the payment's marks), the compensate_deduct
+            // reversal would throw InsufficientBalanceError inside the tx and
+            // roll back the whole webhook (status stays PAID, provider retries
+            // forever). Instead we mark REFUNDED, record the mismatch for
+            // admin reconciliation (per PRD TC-39), and skip the reversal and
+            // the notification — no throw.
+            const w = await wallet.getOrCreate(record.userId);
+            if (w.availableBalance < record.marks) {
+              if (audit) {
+                await audit.record({
+                  db: tx,
+                  actorId: null,
+                  actorType: ACTOR_TYPE.SYSTEM,
+                  action: "refund_webhook_reconciliation",
+                  targetId: record.id,
+                  targetType: "payment_record",
+                  details: {
+                    paymentId: record.id,
+                    marks: record.marks,
+                    availableBalance: w.availableBalance,
+                    spent: record.marks - w.availableBalance,
+                  },
+                });
+              }
+              if (refundRecord) {
+                await refundRecord.insertRefundRecord(tx, {
+                  paymentId: record.id,
+                  walletId: record.walletId,
+                  amountIdr: record.amountIdr,
+                  marks: record.marks,
+                  reason:
+                    "REFUNDED webhook: marks already spent; manual reconciliation required",
+                });
+              }
+            } else {
+              // R5: reverses the marks credited on PAID/SETTLED via the
+              // compensate_deduct primitive — it removes the marks from the
+              // available balance, unlike `deduct` which only releases holds.
+              await wallet.compensate(tx, {
+                walletId: record.walletId,
+                amount: record.marks,
+                eventKey: `refund.${record.id}.reverse`,
+                sourceReference: record.id,
+                actorType: "system",
+                reason: "Refund: reversed credited marks",
+                type: "compensate_deduct",
+              });
+              didReverse = true;
+            }
           }
 
-          if (notification && reversed) {
+          // The refund notification fires only when the reversal actually ran
+          // (clean case). The reconciliation case is surfaced via the
+          // refundRecord/audit rows for admin, so the payer gets no
+          // "Refund processed" notification.
+          if (notification && reversed && didReverse) {
             await notification.writeBestEffort({
               db: tx,
               userId: record.userId,

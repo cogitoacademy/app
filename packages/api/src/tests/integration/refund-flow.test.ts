@@ -376,6 +376,102 @@ describe("Refund flow", () => {
     expect(pay!.status).toBe("REFUNDED");
   });
 
+  test("H4: REFUNDED webhook with spent marks reconciles instead of throwing (no compensate_deduct, refund_record + audit)", async () => {
+    const { services } = await import("@cogito-app/api/services");
+    const userRes = await signUpAndSignIn(
+      `h4.spent.${ts}@cogito.test`,
+      "Test1234!",
+      "H4 Spent",
+    );
+    const userCtx = await createTestContext(userRes.cookie);
+    if (!userCtx.session?.user) throw new Error("H4 user session missing");
+    const user = { id: userCtx.session.user.id };
+    const w = await creditWallet(user.id, 0);
+
+    const intent = await services.payment.createIntent(
+      user.id,
+      w.id,
+      "starter",
+    );
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: `evt_h4_spent_paid_${ts}`,
+      status: "PAID",
+    });
+
+    const [paid] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, intent.paymentId))
+      .limit(1);
+    expect(paid!.status).toBe("PAID");
+    expect(paid!.marks).toBe(50);
+
+    // The payer spent most of the credited Marks: available balance (10) is
+    // below the payment's marks (50), so the auto-reversal must NOT run.
+    await db
+      .update(wallet)
+      .set({ totalBalance: 10, availableBalance: 10 })
+      .where(eq(wallet.id, w.id));
+
+    const result = await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: intent.providerReference,
+      providerEventId: `evt_h4_spent_refunded_${ts}`,
+      status: "REFUNDED",
+    });
+    expect(result.status).toBe("REFUNDED");
+
+    const [after] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, intent.paymentId))
+      .limit(1);
+    expect(after!.status).toBe("REFUNDED");
+
+    // No compensate_deduct ledger entry — the reversal must not have run.
+    const reversals = await db
+      .select()
+      .from(ledgerEntry)
+      .where(
+        and(
+          eq(ledgerEntry.walletId, w.id),
+          eq(ledgerEntry.entryType, "compensate_deduct"),
+        ),
+      );
+    expect(reversals.length).toBe(0);
+
+    // A refund_record row surfaces the reconciliation for admin.
+    const records = await db
+      .select()
+      .from(refundRecord)
+      .where(eq(refundRecord.paymentId, intent.paymentId));
+    expect(records.length).toBe(1);
+    expect(records[0]!.marks).toBe(50);
+    expect(records[0]!.walletId).toBe(w.id);
+    expect(records[0]!.reason).toContain("manual reconciliation");
+
+    // An audit row records the reconciliation.
+    const logs = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.action, "refund_webhook_reconciliation"),
+          eq(auditLog.targetId, intent.paymentId),
+        ),
+      );
+    expect(logs.length).toBe(1);
+    expect(logs[0]!.actorType).toBe("system");
+    expect(logs[0]!.details).toEqual({
+      paymentId: intent.paymentId,
+      marks: 50,
+      availableBalance: 10,
+      spent: 40,
+    });
+  });
+
   test("U8/B9: adminRefund rejects a fully-spent payment — no blind refund", async () => {
     const { services } = await import("@cogito-app/api/services");
     const userRes = await signUpAndSignIn(

@@ -200,6 +200,12 @@ function createServices() {
     notification: notification.service,
   });
 
+  const refund = createRefundModule({
+    db,
+    audit: audit.service,
+    wallet: wallet.service,
+  });
+
   const payment = createPaymentModule({
     db,
     wallet: wallet.service,
@@ -218,12 +224,8 @@ function createServices() {
         : undefined,
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
     notification: notification.service,
-  });
-
-  const refund = createRefundModule({
-    db,
     audit: audit.service,
-    wallet: wallet.service,
+    refundRecord: refund.repo,
   });
 
   const adminBooking = createAdminBookingModule({
