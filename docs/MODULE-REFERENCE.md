@@ -491,7 +491,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `createRoom({ name, location, capacity })` — Creates a room
 - `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` and notifies tutor + confirmed students (#46, G14)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
-- `relocateRoom(bookingId, roomId, startAt, endAt)` — Moves a booking to a different room, freeing the previous one; notifies tutor + confirmed students (#46)
+- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise) and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6)
 - `cancelRoomBooking(bookingId)` — Cancels the booking's room assignment (booking continues without a room); notifies tutor + confirmed students (#46)
 
 **Dependencies:** `RoomRepo`, `RoomNotificationPort`, `RoomBookingPort` (transition to scheduled)

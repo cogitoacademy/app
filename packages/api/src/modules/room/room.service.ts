@@ -175,6 +175,7 @@ export function createRoomService(
     roomId: string,
     startAt: Date,
     endAt: Date,
+    actorId?: string,
   ) {
     return db.transaction(async (tx) => {
       const roomRow = await repo.findRoomById(tx, roomId);
@@ -213,6 +214,10 @@ export function createRoomService(
         endAt,
         status: ROOM_BOOKING_STATUS.CONFIRMED,
       });
+
+      if (bookingPort && actorId) {
+        await bookingPort.transitionBookingToScheduled(tx, bookingId, actorId);
+      }
 
       await notifyBookingRecipients(
         tx,
