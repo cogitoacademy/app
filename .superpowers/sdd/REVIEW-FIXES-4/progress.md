@@ -46,3 +46,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - README index corrected; RUNBOOK env table + real-provider swap section; infra/.env.prod.example + monitoring.md stale lines.
 - `.superpowers/sdd` disposition (user: keep+commit): .gitignore relaxed, BACKEND-HARDENING (69 files) + BACKEND-HARDENING-PHASE2 (9 files) committed (secret-scanned).
 - oxfmt clean; staged as one commit.
+
+## P2.1 (C1) group no-show — complete
+
+- Commit `f20916c5` (off P1 `697eb33`; review clean).
+- Targeted 5/5; regression batches green; check-types/lint/oxfmt clean.
+- Minor (deferred): tutor-ownership guard not explicitly regression-tested (coverage gap only); degenerate single-survivor GROUP no-show stays live (plan-mandated `type===GROUP` semantics).
