@@ -181,8 +181,17 @@ describe("Support ticket flow", () => {
     expect(t.status).toBe("open");
     expect(t.slaDeadline).toBeDefined();
     const slaMs = new Date(t.slaDeadline).getTime() - Date.now();
-    expect(slaMs).toBeGreaterThanOrEqual(12 * 60 * 60 * 1000 - 60_000);
-    expect(slaMs).toBeLessThanOrEqual(12 * 60 * 60 * 1000 + 60_000);
+    const nowWib = new Date(Date.now() + 7 * 3600_000);
+    const wibHour = nowWib.getUTCHours();
+    const wibDay = nowWib.getUTCDay();
+    const isBusiness = wibDay !== 0 && wibHour >= 9 && wibHour < 21;
+    if (isBusiness) {
+      expect(slaMs).toBeGreaterThanOrEqual(30 * 60 * 1000 - 60_000);
+      expect(slaMs).toBeLessThanOrEqual(30 * 60 * 1000 + 60_000);
+    } else {
+      expect(slaMs).toBeGreaterThanOrEqual(4 * 60 * 60 * 1000 - 60_000);
+      expect(slaMs).toBeLessThanOrEqual(4 * 60 * 60 * 1000 + 60_000);
+    }
   });
 
   test("student reports no-show → ticket created", async () => {
@@ -329,6 +338,13 @@ describe("Support ticket flow", () => {
     expect(audits.length).toBeGreaterThanOrEqual(1);
     expect(audits[0]!.targetId).toBe(t.id);
     expect(audits[0]!.afterState).toEqual({ status: "in_progress" });
+
+    const escNotifs = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.eventKey, `support.${t.id}.escalated`));
+    expect(escNotifs.length).toBe(1);
+    expect(escNotifs[0]!.metadata).toMatchObject({ escalate: true });
   });
 
   test("ticket within SLA deadline is NOT escalated", async () => {

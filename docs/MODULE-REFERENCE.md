@@ -555,18 +555,20 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 **Service Methods:**
 
-- `createTicket(userId, { category, bookingId?, description })` — Lateness/no-show categories (`tutor_late`/`tutor_no_show`) require the reporter to be a participant and the booking to have started > 15 min ago (`LATENESS_TOLERANCE_MS`); sets `slaDeadline` = now + 12h (`SUPPORT_SLA_MS`)
+- `createTicket(userId, { category, bookingId?, description })` — Lateness/no-show categories (`tutor_late`/`tutor_no_show`) require the reporter to be a participant and the booking to have started > 15 min ago (`LATENESS_TOLERANCE_MS`); sets `slaDeadline` via `computeSlaDeadline` (OQ-04: 30 min Mon–Sat 09:00–21:00 WIB, else 4h) and auto-acknowledges the ticket to the reporter (`support.{id}.acknowledged` notification)
 - `listTickets(userId, { status?, limit? })` — The user's own tickets
 - `adminList({ status?, limit?, offset? })` — All tickets sorted by SLA urgency (earliest deadline first)
 - `adminResolveTicket(adminId, { ticketId, resolution })` — Sets `resolved` + assignee, notifies the reporter, records an audit log; throws `SupportTicketAlreadyResolvedError` if already resolved/closed
-- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated and records an audit log (#46)
+- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated, records an audit log, and emits a `support.{id}.escalated` notification row (metadata `whatsappTarget: +6288101190195`, `escalate: true`) as the hook point a future WhatsApp adapter consumes (OQ-04; #46, P2.8)
 
 **Dependencies:** `SupportRepo`, `SupportNotificationPort`, `SupportAuditPort`
 
 **Business Rules:**
 
 - Tickets start `open`; statuses `open`/`in_progress`/`resolved`/`closed`
-- SLA deadline is `created + 12 hours`; auto-escalation job landed in #46 (OQ-04 in-app part). Business-hours SLA windows (30 min / 4 h) + WhatsApp escalation remain open — tracked U9 in `docs/plans/active/PRD-GAPS-PHASE3.md`
+- SLA deadline per OQ-04 (REVIEW-FIXES-4 P2.8): 30 min during business hours (Mon–Sat 09:00–21:00 WIB, UTC+7), 4 h otherwise — wall-clock rule computed by `computeSlaDeadline`
+- Auto-acknowledgement notification on ticket creation (OQ-04)
+- Escalation emits a `support.{id}.escalated` notification row that a future WhatsApp adapter consumes; WhatsApp itself is out of scope until an integration is approved (OQ-04)
 - Lateness reports are time-gated (15 min after scheduled start)
 
 ---

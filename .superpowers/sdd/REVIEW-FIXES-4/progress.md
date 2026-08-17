@@ -79,3 +79,14 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 
 - Commit `ff8eb9a` (off `a2bfbf5`); review clean (2 minors: notification test weak isolation across suite; no unit-level port assertion — acceptable).
 - Targeted 4/4; room/offline-scheduled/expiry regressions 34/34; check-types/lint/oxfmt clean.
+
+## P2.7 (H4) REFUNDED webhook reconciliation — complete
+
+- Commit `155d7d5`; targeted + regressions green (see plan).
+
+## P2.8 (H5) support SLA business-hours WIB — complete
+
+- `isBusinessTimeWib` + `computeSlaDeadline` (30 min Mon–Sat 09:00–21:00 WIB / 4h otherwise, wall-clock per PRD OQ-04); `SUPPORT_SLA_MS` replaced by WIB constants.
+- Auto-ack notification on ticket creation (`support.{id}.acknowledged`); escalation emits `support.{id}.escalated` notification row (metadata `whatsappTarget: +6288101190195`, `escalate: true`) — WhatsApp hook point, adapter NOT built.
+- Docs: CONTEXT H5 row, MODULE-REFERENCE support section, PRD-GAPS-PHASE3 U9 → CLOSED.
+- Targeted 34/34 (support-sla + support.service + support-flow + escalation job); full API 1860/0; server 49/0; check-types/lint/oxfmt clean.
