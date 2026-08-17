@@ -1864,6 +1864,7 @@ describe("BookingService", () => {
         type: "group",
         currentState: "scheduled",
         holdAmount: 105,
+        scheduledStartAt: new Date(Date.now() - 3600_000),
       });
       const participants = [
         { id: "p2", userId: "student2", heldAmount: 35 },
@@ -1931,6 +1932,7 @@ describe("BookingService", () => {
       const booking = makeBooking({
         currentState: "scheduled",
         holdAmount: 42,
+        scheduledStartAt: new Date(Date.now() - 3600_000),
       });
       const { service, wallet, repo, notification } = createService({
         repo: {

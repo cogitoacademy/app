@@ -190,6 +190,10 @@ describe("Tutor payouts (G16)", () => {
     });
 
     await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+    await db
+      .update(bookingTable)
+      .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(bookingTable.id, b.id));
     const updated = await tutorClient.tutorActions.completeSession({
       bookingId: b.id,
     });
@@ -299,7 +303,7 @@ describe("Tutor payouts (G16)", () => {
     const all = await adminClient.admin.getTutorPayouts({ tutorId });
     const narrowed = await adminClient.admin.getTutorPayouts({
       tutorId,
-      dateFrom: new Date(now.getTime() - 1000).toISOString(),
+      dateFrom: new Date(now.getTime() - 24 * 3600_000).toISOString(),
       dateTo: new Date(now.getTime() + 10 * 86400_000).toISOString(),
     });
     expect(narrowed.completedSessions).toBe(all.completedSessions);

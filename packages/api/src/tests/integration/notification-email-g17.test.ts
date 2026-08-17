@@ -223,6 +223,11 @@ describe("Notification email matrix (G17)", () => {
   });
 
   test("info-severity event (session completed) → in-app only, NO email dispatch row", async () => {
+    const { booking: bookingTable } = await import("@cogito-app/db/schema");
+    await db
+      .update(bookingTable)
+      .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(bookingTable.id, bookingId));
     await tutorClient.tutorActions.completeSession({ bookingId });
 
     const [notif] = await db

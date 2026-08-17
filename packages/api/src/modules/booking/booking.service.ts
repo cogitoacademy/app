@@ -1026,6 +1026,10 @@ export function createBookingService(deps: {
       );
     }
 
+    if (b.scheduledStartAt.getTime() > Date.now()) {
+      throw new BookingSessionNotStartedError(bookingId);
+    }
+
     if (b.type === BOOKING_TYPE.GROUP) {
       // After a group repricing the holds live on each remaining
       // participant's wallet (the proposer may have withdrawn and hold 0),

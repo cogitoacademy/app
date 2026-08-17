@@ -275,6 +275,12 @@ describe("G4: group repricing on headcount change", () => {
   });
 
   test("tutor completes → deducts each remaining participant's hold, proposer untouched", async () => {
+    const { booking: bookingTable } = await import("@cogito-app/db/schema");
+    await db
+      .update(bookingTable)
+      .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(bookingTable.id, bookingId));
+
     const completed = await tutorClient.tutorActions.completeSession({
       bookingId,
     });
