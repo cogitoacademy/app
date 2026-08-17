@@ -225,6 +225,65 @@ describe("Tutor lateness flagging flow", () => {
     expect(participant!.attendanceState).toBe("present");
   });
 
+  test("checkTutorLateness is idempotent: repeat sweeps do not re-flag already-flagged bookings", async () => {
+    const start = new Date(Date.now() + 72 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 73 * 3600_000).toISOString();
+    const b = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() - 20 * 60_000),
+        scheduledEndAt: new Date(Date.now() + 70 * 60_000),
+      })
+      .where(eq(booking.id, b.id));
+
+    const first = await services.booking.checkTutorLateness();
+    expect(first).toEqual({ flagged: 1, failed: 0 });
+
+    const second = await services.booking.checkTutorLateness();
+    expect(second.flagged).toBe(0);
+
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.action, "tutor_lateness_pending_review"),
+          eq(auditLog.targetId, b.id),
+        ),
+      );
+    expect(audits.length).toBe(1);
+
+    const proposerNotif = await db
+      .select()
+      .from(notification)
+      .where(
+        eq(notification.eventKey, `booking.${b.id}.tutor_lateness_pending`),
+      );
+    expect(proposerNotif.length).toBe(1);
+
+    const tutorNotif = await db
+      .select()
+      .from(notification)
+      .where(
+        eq(
+          notification.eventKey,
+          `booking.${b.id}.tutor_lateness_pending.tutor`,
+        ),
+      );
+    expect(tutorNotif.length).toBe(1);
+  });
+
   test("checkTutorLateness flags unmarked sessions instead of auto-cancelling", async () => {
     const start = new Date(Date.now() + 48 * 3600_000).toISOString();
     const end = new Date(Date.now() + 49 * 3600_000).toISOString();

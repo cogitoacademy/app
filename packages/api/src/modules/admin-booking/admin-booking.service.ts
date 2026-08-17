@@ -41,6 +41,18 @@ export const OVERRIDE_CATEGORIES = [
 
 export type OverrideCategory = (typeof OVERRIDE_CATEGORIES)[number];
 
+/**
+ * Categories filterable in the admin list/queue. `tutor_lateness_pending` is
+ * produced by the lateness sweep, not by `applyOverride`, so it must NOT be in
+ * OVERRIDE_CATEGORIES (which feeds the exhaustive CATEGORY_STATE_MAP).
+ */
+export const OVERRIDE_LIST_CATEGORIES = [
+  ...OVERRIDE_CATEGORIES,
+  "tutor_lateness_pending",
+] as const;
+
+export type OverrideListCategory = (typeof OVERRIDE_LIST_CATEGORIES)[number];
+
 export const MARKS_ACTIONS = [
   "release_holds",
   "compensate_credit",
@@ -427,7 +439,7 @@ export function createAdminBookingService(deps: {
     bookingId?: string;
     limit?: number;
     cursor?: string;
-    category?: OverrideCategory | (string & {});
+    category?: OverrideListCategory;
     urgency?: UrgencyLevel;
     escalated?: boolean;
   }) {

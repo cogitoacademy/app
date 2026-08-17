@@ -126,12 +126,24 @@ describe("Tutor attendance marking window", () => {
   });
 
   const ts = Date.now();
+  let adminClient: TestClient;
   let studentClient: TestClient;
   let tutorClient: TestClient;
   let tutorId: string;
   let slotId: string;
 
   beforeAll(async () => {
+    const adminRes = await signUpAndSignIn(
+      `admin.window.${ts}@cogito.test`,
+      "Test1234!",
+      "Admin Window",
+    );
+    const adminCtx = await createTestContext(adminRes.cookie);
+    if (adminCtx.session?.user) {
+      await setUserRole(adminCtx.session.user.id, "admin");
+    }
+    adminClient = createTestClient(await createTestContext(adminRes.cookie));
+
     const studentRes = await signUpAndSignIn(
       `student.window.${ts}@cogito.test`,
       "Test1234!",
@@ -180,7 +192,7 @@ describe("Tutor attendance marking window", () => {
     expect(result.flagged).toBe(1);
     expect(result.failed).toBe(0);
 
-    const listed = await services.adminBooking.listBookings({
+    const listed = await adminClient.adminBooking.listBookings({
       category: "tutor_lateness_pending",
     });
     expect(listed.items.some((item) => item.id === b.id)).toBe(true);

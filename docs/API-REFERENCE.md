@@ -593,7 +593,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, attendance }` (`attendance` one of `present`/`late`)
 - **Output:** `{ booking }`
-- **Description:** Marks tutor attendance so the lateness auto-cancel job skips the booking
+- **Description:** Marks tutor attendance; only allowed within ±15 minutes of the scheduled start (`BookingNotEditableError` otherwise, so tutors can't pre-mark to dodge lateness). There is no auto-cancel: an unmarked session is instead surfaced to the admin queue via `adminBooking.listBookings({ category: "tutor_lateness_pending" })`.
 
 ---
 
@@ -691,7 +691,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `adminBooking.listBookings`
 
 - **Auth:** Admin
-- **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }`
+- **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
 - **Output:** `{ items: Booking[], nextCursor }`
 - **Description:** Paginated booking list sorted by urgency
 

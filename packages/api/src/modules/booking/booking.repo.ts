@@ -12,6 +12,7 @@ import {
   gt,
   sql,
   getTableColumns,
+  not,
   notExists,
   exists,
 } from "drizzle-orm";
@@ -672,6 +673,15 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
         eq(booking.currentState, "scheduled"),
         eq(booking.modality, MODALITY.ONLINE),
         lt(booking.scheduledStartAt, cutoff),
+        // Already-flagged bookings stay SCHEDULED with holds intact (admin
+        // queue), so exclude them here to keep flagging idempotent — otherwise
+        // every 5-min sweep re-flags the same booking.
+        not(
+          eq(
+            sql`coalesce(${booking.overrideMeta}->>'category', '')`,
+            "tutor_lateness_pending",
+          ),
+        ),
         notExists(tutorAttended),
       ),
     )

@@ -244,7 +244,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state.
 - `addSessionNote(userId, bookingId, content)` — Adds a sanitized note to a completed session
 - `getSessionNotes(userId, bookingId)` — Lists notes for a completed session
-- `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late so the lateness job skips the booking; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS)
+- `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
 - `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
