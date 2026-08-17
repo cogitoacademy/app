@@ -35,8 +35,22 @@ export interface PaymentProvider {
     paymentId: string;
     amountIdr: number;
     providerReference: string;
-  }): Promise<{ checkoutUrl: string }>;
+  }): Promise<{
+    checkoutUrl: string;
+    // X1: the provider-side payment request id (Xendit `pr-...`), stored on
+    // the payment record so admin refunds can initiate a provider refund.
+    paymentRequestId?: string | null;
+  }>;
   verifyWebhook(rawBody: string, signature: string): Promise<WebhookPayload>;
+  /**
+   * Initiates a provider-side refund (X1). Returns the provider refund id for
+   * storage on refundRecord. Stub providers return a mock id.
+   */
+  refund(
+    paymentRequestId: string,
+    amountIdr: number,
+    reason?: string,
+  ): Promise<{ providerRefundId: string }>;
 }
 
 export type PaymentPort = PaymentProvider;
@@ -127,6 +141,13 @@ export function createPaymentService(deps: {
           amountIdr: pkg.priceIdr,
           providerReference: existing.providerReference,
         });
+        // X1: refresh the provider payment-request id in case it rotated.
+        if (existingIntent.paymentRequestId) {
+          await repo.updatePaymentStatus(existing.id, {
+            status: PAYMENT_STATUS.PENDING,
+            providerRequestId: existingIntent.paymentRequestId,
+          });
+        }
         return {
           paymentId: existing.id,
           providerReference: existing.providerReference,
@@ -147,6 +168,12 @@ export function createPaymentService(deps: {
           amountIdr: pkg.priceIdr,
           providerReference: existing.providerReference,
         });
+        if (freshIntent.paymentRequestId) {
+          await repo.updatePaymentStatus(existing.id, {
+            status: PAYMENT_STATUS.PENDING,
+            providerRequestId: freshIntent.paymentRequestId,
+          });
+        }
         return {
           paymentId: existing.id,
           providerReference: existing.providerReference,
@@ -197,6 +224,13 @@ export function createPaymentService(deps: {
         amountIdr: pkg.priceIdr,
         providerReference,
       });
+      // X1: persist the provider payment-request id for provider refunds.
+      if (intent.paymentRequestId) {
+        await repo.updatePaymentStatus(paymentId, {
+          status: PAYMENT_STATUS.PENDING,
+          providerRequestId: intent.paymentRequestId,
+        });
+      }
       return { paymentId, providerReference, checkoutUrl: intent.checkoutUrl };
     } catch (error) {
       await repo.updatePaymentStatus(paymentId, {

@@ -27,7 +27,15 @@ export function ipAllowed(
   return allowlist.some((entry) => entry === ip);
 }
 
-export function validateWebhookTimestamp(request: Request): void {
+export function validateWebhookTimestamp(
+  request: Request,
+  provider: string,
+): void {
+  // L4: Xendit documents only the `x-callback-token` header on its webhooks —
+  // there is no reliable `Date`/`x-timestamp` header to validate against, so
+  // the timestamp check is skipped for xendit (verified against a real
+  // sandbox event; revisit if Xendit starts sending a timestamp header).
+  if (provider === "xendit") return;
   const timestamp =
     request.headers.get("x-timestamp") ?? request.headers.get("date");
   if (!timestamp) {
@@ -86,7 +94,7 @@ export function paymentsWebhook(app: Elysia) {
           signature,
         );
 
-        validateWebhookTimestamp(request);
+        validateWebhookTimestamp(request, provider);
 
         const idempotencyKey = `${provider}:${payload.providerEventId || "no-event-id"}`;
         // Short 2-minute claim window (R7): a crash mid-processing only blocks

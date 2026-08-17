@@ -17,12 +17,28 @@ function createProvider(opts?: {
   });
 }
 
-describe("mapXenditStatus", () => {
-  test("maps PENDING to PENDING", () => {
+describe("mapXenditStatus (2024-11-11)", () => {
+  test("maps SUCCEEDED to PAID", () => {
+    expect(mapXenditStatus("SUCCEEDED")).toBe("PAID");
+  });
+
+  test("maps REQUIRES_ACTION to PENDING", () => {
+    expect(mapXenditStatus("REQUIRES_ACTION")).toBe("PENDING");
+  });
+
+  test("maps AUTHORIZED to PENDING", () => {
+    expect(mapXenditStatus("AUTHORIZED")).toBe("PENDING");
+  });
+
+  test("maps CANCELED to FAILED", () => {
+    expect(mapXenditStatus("CANCELED")).toBe("FAILED");
+  });
+
+  test("maps PENDING to PENDING (legacy event)", () => {
     expect(mapXenditStatus("PENDING")).toBe("PENDING");
   });
 
-  test("maps PAID to PAID", () => {
+  test("maps PAID to PAID (legacy event)", () => {
     expect(mapXenditStatus("PAID")).toBe("PAID");
   });
 
@@ -47,11 +63,14 @@ describe("mapXenditStatus", () => {
   });
 });
 
-describe("XenditPaymentProvider verifyWebhook", () => {
+describe("XenditPaymentProvider verifyWebhook (2024-11-11)", () => {
   test("rejects empty token", async () => {
     const provider = createProvider();
     await expect(
-      provider.verifyWebhook(JSON.stringify({ data: { status: "PAID" } }), ""),
+      provider.verifyWebhook(
+        JSON.stringify({ data: { status: "SUCCEEDED" } }),
+        "",
+      ),
     ).rejects.toThrow("Invalid webhook token");
   });
 
@@ -59,7 +78,7 @@ describe("XenditPaymentProvider verifyWebhook", () => {
     const provider = createProvider();
     await expect(
       provider.verifyWebhook(
-        JSON.stringify({ data: { status: "PAID" } }),
+        JSON.stringify({ data: { status: "SUCCEEDED" } }),
         "wrong-token",
       ),
     ).rejects.toThrow("Invalid webhook token");
@@ -72,77 +91,81 @@ describe("XenditPaymentProvider verifyWebhook", () => {
     ).rejects.toThrow("Invalid webhook payload");
   });
 
-  test("verifies valid webhook with data wrapper", async () => {
+  test("parses a payment.succeeded webhook (data.payment_id)", async () => {
     const provider = createProvider();
     const payload = JSON.stringify({
-      event_id: "evt_123",
+      event: "payment.succeeded",
       data: {
-        id: "pay_123",
+        id: "py_123",
+        payment_id: "py_123",
+        payment_request_id: "pr_456",
         reference_id: "ref_456",
-        status: "PAID",
+        status: "SUCCEEDED",
         failure_code: null,
-        receipt_url: "https://receipt.example.com",
       },
     });
 
     const result = await provider.verifyWebhook(payload, "test-webhook-token");
 
     expect(result.providerReference).toBe("ref_456");
-    expect(result.providerEventId).toBe("evt_123");
+    expect(result.providerEventId).toBe("py_123");
     expect(result.status).toBe("PAID");
     expect(result.failureReason).toBeNull();
-    expect(result.receiptUrl).toBe("https://receipt.example.com");
   });
 
-  test("verifies valid webhook without data wrapper (top-level)", async () => {
+  test("parses a payment_request.paid webhook (data.payment_request_id)", async () => {
     const provider = createProvider();
     const payload = JSON.stringify({
-      event_id: "evt_456",
-      id: "pay_456",
-      reference_id: "ref_789",
-      status: "FAILED",
-      failure_code: "PAYMENT_DENIED",
-      receipt_url: null,
+      event: "payment_request.paid",
+      data: {
+        id: "pr_456",
+        payment_request_id: "pr_456",
+        reference_id: "ref_789",
+        status: "SUCCEEDED",
+        failure_code: null,
+      },
     });
 
     const result = await provider.verifyWebhook(payload, "test-webhook-token");
 
     expect(result.providerReference).toBe("ref_789");
-    expect(result.providerEventId).toBe("evt_456");
+    expect(result.providerEventId).toBe("pr_456");
+    expect(result.status).toBe("PAID");
+  });
+
+  test("parses a failed webhook with failure_code", async () => {
+    const provider = createProvider();
+    const payload = JSON.stringify({
+      event: "payment.failed",
+      data: {
+        id: "py_789",
+        payment_id: "py_789",
+        reference_id: "ref_000",
+        status: "FAILED",
+        failure_code: "PAYMENT_DENIED",
+      },
+    });
+
+    const result = await provider.verifyWebhook(payload, "test-webhook-token");
+
+    expect(result.providerReference).toBe("ref_000");
     expect(result.status).toBe("FAILED");
     expect(result.failureReason).toBe("PAYMENT_DENIED");
-    expect(result.receiptUrl).toBeNull();
   });
 
-  test("uses id when reference_id is missing", async () => {
+  test("uses body-level payment_id when data is absent", async () => {
     const provider = createProvider();
     const payload = JSON.stringify({
-      event_id: "evt_789",
-      data: {
-        id: "pay_only",
-        status: "PENDING",
-      },
+      event: "payment.succeeded",
+      payment_id: "py_body",
+      reference_id: "ref_body",
+      status: "SUCCEEDED",
     });
 
     const result = await provider.verifyWebhook(payload, "test-webhook-token");
 
-    expect(result.providerReference).toBe("pay_only");
-    expect(result.providerEventId).toBe("evt_789");
-  });
-
-  test("uses event_id when present, falls back to id", async () => {
-    const provider = createProvider();
-    const payload = JSON.stringify({
-      event_id: "evt_priority",
-      id: "pay_fallback",
-      data: {
-        id: "pay_data",
-        status: "EXPIRED",
-      },
-    });
-
-    const result = await provider.verifyWebhook(payload, "test-webhook-token");
-
-    expect(result.providerEventId).toBe("evt_priority");
+    expect(result.providerReference).toBe("ref_body");
+    expect(result.providerEventId).toBe("py_body");
+    expect(result.status).toBe("PAID");
   });
 });

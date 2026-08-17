@@ -9,7 +9,7 @@ describe("validateWebhookTimestamp", () => {
         method: "POST",
       },
     );
-    expect(() => validateWebhookTimestamp(request)).toThrow(
+    expect(() => validateWebhookTimestamp(request, "stub")).toThrow(
       "Webhook timestamp header is required",
     );
   });
@@ -22,7 +22,7 @@ describe("validateWebhookTimestamp", () => {
         headers: { "x-timestamp": "not-a-date" },
       },
     );
-    expect(() => validateWebhookTimestamp(request)).toThrow(
+    expect(() => validateWebhookTimestamp(request, "stub")).toThrow(
       "Invalid webhook timestamp",
     );
   });
@@ -36,7 +36,7 @@ describe("validateWebhookTimestamp", () => {
         headers: { "x-timestamp": staleTime },
       },
     );
-    expect(() => validateWebhookTimestamp(request)).toThrow(
+    expect(() => validateWebhookTimestamp(request, "stub")).toThrow(
       "Webhook timestamp too old or too far in the future",
     );
   });
@@ -50,7 +50,7 @@ describe("validateWebhookTimestamp", () => {
         headers: { "x-timestamp": recentTime },
       },
     );
-    expect(() => validateWebhookTimestamp(request)).not.toThrow();
+    expect(() => validateWebhookTimestamp(request, "stub")).not.toThrow();
   });
 
   test("accepts date header as fallback", () => {
@@ -62,6 +62,16 @@ describe("validateWebhookTimestamp", () => {
         headers: { date: recentTime },
       },
     );
-    expect(() => validateWebhookTimestamp(request)).not.toThrow();
+    expect(() => validateWebhookTimestamp(request, "stub")).not.toThrow();
+  });
+
+  test("L4: skips timestamp validation for xendit (no documented timestamp header)", () => {
+    const request = new Request(
+      "https://example.com/webhooks/payments/xendit",
+      {
+        method: "POST",
+      },
+    );
+    expect(() => validateWebhookTimestamp(request, "xendit")).not.toThrow();
   });
 });

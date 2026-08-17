@@ -40,6 +40,7 @@ export interface PaymentRefundRecordPort {
       marks: number;
       reason: string;
       actorId?: string;
+      providerEventId?: string;
     },
   ): Promise<unknown>;
 }

@@ -134,6 +134,7 @@ export function createRefundService(deps: {
       marks: number;
       reason: string;
       actorId?: string;
+      providerEventId?: string;
     },
   ): Promise<void> {
     await repo.insertRefundRecord(conn, params);

@@ -5,9 +5,10 @@ export async function createIntent(params: {
   paymentId: string;
   amountIdr: number;
   providerReference: string;
-}): Promise<{ checkoutUrl: string }> {
+}): Promise<{ checkoutUrl: string; paymentRequestId?: string | null }> {
   return {
     checkoutUrl: `/webhooks/payments/stub/checkout?ref=${params.providerReference}`,
+    paymentRequestId: `pr-stub-${params.paymentId}`,
   };
 }
 
@@ -36,5 +37,14 @@ export function createStubPaymentProvider(
     return JSON.parse(rawBody) as WebhookPayload;
   }
 
-  return { createIntent, verifyWebhook };
+  // Stub refunds return a deterministic mock id (X1); no real money moves.
+  async function refund(
+    paymentRequestId: string,
+    _amountIdr: number,
+    _reason?: string,
+  ): Promise<{ providerRefundId: string }> {
+    return { providerRefundId: `rfd-stub-${paymentRequestId}` };
+  }
+
+  return { createIntent, verifyWebhook, refund };
 }
