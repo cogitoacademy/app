@@ -209,21 +209,71 @@ Student account name/image editing uses the existing Better Auth session and req
 
 Key environment variables (see `.env.example` for full list):
 
-| Variable                 | Required | Description                                         |
-| ------------------------ | -------- | --------------------------------------------------- |
-| `DATABASE_URL`           | Yes      | PostgreSQL connection string                        |
-| `BETTER_AUTH_SECRET`     | Yes      | Auth secret key                                     |
-| `BETTER_AUTH_URL`        | Yes      | Base URL for auth cookies                           |
-| `CORS_ORIGIN`            | Yes      | Allowed CORS origin                                 |
-| `PAYMENT_WEBHOOK_SECRET` | Yes      | Xendit webhook verification token                   |
-| `REDIS_URL`              | Yes      | Redis URL (required since #48 — mandatory for boot) |
-| `GOOGLE_CLIENT_EMAIL`    | No       | Google service account email                        |
-| `GOOGLE_PRIVATE_KEY`     | No       | Google service account private key                  |
-| `GOOGLE_CALENDAR_ID`     | No       | Google Calendar ID for meeting creation             |
-| `RESEND_API_KEY`         | No       | Resend API key for email delivery                   |
-| `RESEND_FROM_EMAIL`      | No       | Sender email address                                |
-| `XENDIT_SECRET_KEY`      | No       | Xendit API secret key                               |
-| `XENDIT_WEBHOOK_TOKEN`   | No       | Xendit webhook verification token                   |
+| Variable                                                                                      | Required | Description                                                                                   |
+| --------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                  |
+| `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                               |
+| `BETTER_AUTH_URL`                                                                             | Yes      | Base URL for auth cookies                                                                     |
+| `CORS_ORIGIN`                                                                                 | Yes      | Allowed CORS origin                                                                           |
+| `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                               |
+| `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                           |
+| `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                  |
+| `GOOGLE_PRIVATE_KEY`                                                                          | No       | Google service account private key                                                            |
+| `GOOGLE_CALENDAR_ID`                                                                          | No       | Google Calendar ID for meeting creation                                                       |
+| `GOOGLE_IMPERSONATED_USER`                                                                    | No       | SA-mode impersonation address (REVIEW-FIXES-4 P4.2)                                           |
+| `GOOGLE_MEET_ENABLED`                                                                         | No       | Enables Google Meet provider (default false)                                                  |
+| `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                        |
+| `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production — P4.1)                                                |
+| `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod) |
+| `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                               |
+| `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                             |
+| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                |
+| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated)                                                 |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production — P4.3)                                  |
+| `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                  |
+| `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Must be `true` on staging for stub-payment E2E                                                |
+
+## Real-Provider Swap (Resend / Xendit / Google Meet / R2)
+
+The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet fallback, local-disk uploads). Before a production launch these must be swapped for real providers. What fails **loud** vs **silent**, and what each swap requires:
+
+| Provider    | Dev default          | Silent-failure mode if misconfigured                                                                                                  | Prod requirement (fail-loud guard PR)                                                                                     |
+| ----------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Resend      | Stub (no-op email)   | **Silent** — `RESEND_API_KEY` optional, no `NODE_ENV` check; critical emails suppressed with no alert                                 | `RESEND_API_KEY` required when `NODE_ENV=production` + verified `EMAIL_FROM` domain (P4.1)                                |
+| Xendit      | Stub provider        | Webhook 408/500 loops if OTP-paths or status mapping mismatch                                                                         | `XENDIT_SECRET_KEY`+`XENDIT_WEBHOOK_TOKEN`+redirect URLs when `PAYMENT_PROVIDER=xendit`; sandbox E2E before enabling (P3) |
+| Google Meet | Manual link fallback | **Silent** — `GOOGLE_MEET_ENABLED=true` with broken creds falls back to manual links, events land on the wrong calendar               | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + boot probe (P4.2)                                        |
+| R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable | All `R2_*` + `R2_PUBLIC_URL` required in production (P4.3)                                                                |
+
+### Xendit sandbox verification checklist (L4)
+
+Steps to validate the Xendit integration against the sandbox before enabling `PAYMENT_PROVIDER=xendit` in production:
+
+1. Set `PAYMENT_PROVIDER=xendit`, `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` to the sandbox values, and `XENDIT_SUCCESS_REDIRECT_URL`/`XENDIT_FAILURE_REDIRECT_URL`.
+2. Create a purchase with `XENDIT_DEFAULT_PAYMENT_METHOD=ewallet_ovo` → confirm the returned action URL redirects to an OVO sandbox flow.
+3. Verify `STUB_WEBHOOK_ALLOWED=false`; deliver a sandbox webhook with `api-version: 2024-11-11` payload shape (`data.payment_id`, `status=SUCCEEDED`) → confirm the payment transitions to PAID and Marks are credited once.
+4. Check webhook timestamp validation: confirm whether Xendit sends a `Date`/`x-timestamp` header; if not, the check is provider-conditional (P3.5).
+5. Test a REFUNDED webhook with spent Marks → payment marked REFUNDED + reconciliation row, no 500/retry loop (P2.7/H4).
+6. Trigger a provider refund from `adminRefund` → `refund_record.provider_refund_id` populated (P3.6).
+7. Only after the full sandbox E2E passes, enable in production.
+
+### Google Meet refresh-token acquisition (X3)
+
+For the OAuth path (`GOOGLE_MEET_CLIENT_ID` + `GOOGLE_MEET_CLIENT_SECRET` + `GOOGLE_MEET_REFRESH_TOKEN`):
+
+1. Google Cloud Console → credentials for the workspace user → create an OAuth Client (Web).
+2. Use the out-of-band flow to get a one-time code for the scopes: `https://www.googleapis.com/auth/calendar`, `https://www.googleapis.com/auth/calendar.events`.
+3. Exchange the code for tokens (returns `refresh_token`):
+   ```bash
+   curl -X POST https://oauth2.googleapis.com/token \
+     -d client_id=$GOOGLE_MEET_CLIENT_ID \
+     -d client_secret=$GOOGLE_MEET_CLIENT_SECRET \
+     -d code=$CODE \
+     -d grant_type=authorization_code \
+     -d redirect_uri=urn:ietf:wg:oauth:2.0:oob
+   ```
+4. The `refresh_token` (not the access token) goes into `GOOGLE_MEET_REFRESH_TOKEN`; the token cache refreshes access tokens automatically at runtime.
+5. Alternative: service-account mode with domain-wide delegation — set `GOOGLE_CLIENT_EMAIL` (SA), `GOOGLE_PRIVATE_KEY`, `GOOGLE_IMPERSONATED_USER` (delegated attendee), `GOOGLE_MEET_ENABLED=true`. Without `GOOGLE_IMPERSONATED_USER` events land on the SA's own calendar and never produce a Meet URL (P4.2 guard).
+6. Verify the boot probe logs a successful `calendarList.get` before enabling in prod.
 
 ## Deploy Secrets (CD webhooks)
 

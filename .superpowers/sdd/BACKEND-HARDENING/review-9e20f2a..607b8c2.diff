@@ -1,0 +1,5278 @@
+# Review package: 9e20f2a..HEAD
+
+## Commits
+607b8c2 fix(pricing): implement PRD extra-take split rule (G19)
+ad03a80 refactor: remove dead code (middleware, scheduler facade, db-errors, unused env, orphan exports)
+7d6c81b fix(webhooks): add optional IP allowlist for payment webhooks (DEFERRED-OPS 1.5)
+060bf89 docs(api): add JSDoc to public service and repo functions (DEFERRED-OPS 1.7)
+5c04351 refactor(booking): explicit column lists in booking repo (DEFERRED-OPS 1.4)
+41483f8 fix(server): point payment rate limiter at payment.createPurchase
+cb37c2f fix(scheduler): boot BullMQ worker and repeatable jobs on server start
+
+## Files changed
+ .env.example                                       |   9 +-
+ apps/server/.env.example                           |   1 -
+ apps/server/src/index.ts                           |   4 +-
+ apps/server/src/middleware.ts                      |   3 -
+ apps/server/src/rate-limit.test.ts                 |  13 ++
+ apps/server/src/routes.ts                          |   7 +-
+ apps/server/src/scheduler.ts                       |  10 ++
+ apps/server/src/webhooks/allowlist.test.ts         |  38 +++++
+ apps/server/src/webhooks/payments.ts               |  18 ++
+ packages/api/src/lib/db-errors.ts                  |  38 -----
+ .../src/modules/achievement/achievement.repo.ts    |  80 +++++++++
+ .../modules/admin-booking/admin-booking.repo.ts    |  68 ++++++++
+ .../modules/admin-booking/admin-booking.service.ts |  37 ++++
+ .../src/modules/admin-tutor/admin-tutor.repo.ts    |  58 +++++++
+ packages/api/src/modules/admin/admin.repo.ts       |  44 +++++
+ packages/api/src/modules/audit/audit.repo.ts       |   6 +
+ packages/api/src/modules/auth/auth.repo.ts         |  30 ++++
+ packages/api/src/modules/booking/booking.repo.ts   | 189 ++++++++++++++++++++-
+ .../api/src/modules/booking/booking.service.ts     |  57 ++++++-
+ packages/api/src/modules/booking/index.ts          |  12 +-
+ packages/api/src/modules/invite/invite.repo.ts     |  37 ++++
+ .../src/modules/notification/notification.repo.ts  |  78 +++++++++
+ .../modules/notification/notification.service.ts   |  53 +++++-
+ packages/api/src/modules/payment/payment.repo.ts   |  41 +++++
+ .../api/src/modules/payment/payment.service.ts     |  32 ++++
+ .../api/src/modules/pricing/pricing.service.ts     |  86 +++++++++-
+ packages/api/src/modules/refund/refund.repo.ts     |  15 ++
+ packages/api/src/modules/room/room.repo.ts         |  47 +++++
+ packages/api/src/modules/scheduler/index.ts        |  22 ---
+ .../src/modules/tutor-discovery/discovery.repo.ts  |  14 ++
+ packages/api/src/modules/tutor/index.ts            |   6 +-
+ packages/api/src/modules/tutor/tutor.repo.ts       |  46 +++++
+ packages/api/src/modules/tutor/tutor.service.ts    |  69 ++++++++
+ packages/api/src/modules/wallet/wallet.repo.ts     | 104 ++++++++++++
+ packages/api/src/modules/wallet/wallet.service.ts  | 117 ++++++++-----
+ packages/api/src/shared/constants.ts               |  24 +++
+ packages/api/src/tests/unit/booking.repo.test.ts   |  74 +++++++-
+ .../api/src/tests/unit/booking.service.test.ts     |  32 +++-
+ .../src/tests/unit/notification.service.test.ts    |  32 ----
+ .../api/src/tests/unit/pricing.service.test.ts     |  77 ++++++---
+ packages/api/src/tests/unit/tutor.service.test.ts  |  20 ++-
+ packages/api/src/tests/unit/wallet.service.test.ts |  39 -----
+ packages/db/src/schema/booking.ts                  |  10 ++
+ packages/env/src/server.ts                         |   7 +-
+ 44 files changed, 1545 insertions(+), 259 deletions(-)
+
+## Diff
+diff --git a/.env.example b/.env.example
+index bfdb245..4ef6307 100644
+--- a/.env.example
++++ b/.env.example
+@@ -21,24 +21,20 @@ PAYMENT_WEBHOOK_SECRET=change-me-to-a-32-char-secret-minimum
+ # XENDIT_SUCCESS_REDIRECT_URL=
+ # XENDIT_FAILURE_REDIRECT_URL=
+ # XENDIT_DEFAULT_PAYMENT_METHOD=ewallet_ovo
+ 
+ # Server
+ PORT=3001
+ 
+ # Session
+ SESSION_COOKIE_CACHE_MAX_AGE=60
+ 
+-# Sentry (optional)
+-# SENTRY_DSN=
+-# SENTRY_ENVIRONMENT=development
+-
+ # Redis (optional)
+ # REDIS_URL=redis://localhost:6379
+ 
+ # Scheduler
+ SCHEDULER_ENABLED=false
+ 
+ # Google Calendar / Meet (optional)
+ # GOOGLE_CLIENT_EMAIL=
+ # GOOGLE_PRIVATE_KEY=
+ # GOOGLE_CALENDAR_ID=primary
+@@ -51,13 +47,12 @@ GOOGLE_MEET_ENABLED=false
+ # Email
+ # RESEND_API_KEY=
+ EMAIL_FROM=noreply@cogitoacademy.id
+ 
+ # Metrics (optional)
+ # METRICS_TOKEN=
+ 
+ # Database SSL
+ DB_SSL_REJECT_UNAUTHORIZED=true
+ 
+-# Competition / Knowledge Bank URLs
+-COMPETITION_CALENDAR_URL=https://cogitoacademy.id/en/calendar
+-KNOWLEDGE_BANK_URL=https://cogitoacademy.id/knowledge-bank
+\ No newline at end of file
++# Competition Calendar URL
++COMPETITION_CALENDAR_URL=https://cogitoacademy.id/en/calendar
+\ No newline at end of file
+diff --git a/apps/server/.env.example b/apps/server/.env.example
+index 9626672..7821f93 100644
+--- a/apps/server/.env.example
++++ b/apps/server/.env.example
+@@ -10,18 +10,17 @@ BETTER_AUTH_URL=http://localhost:3001
+ 
+ # CORS (frontend URL)
+ CORS_ORIGIN=http://localhost:3000
+ 
+ # Payment
+ PAYMENT_PROVIDER=stub
+ PAYMENT_WEBHOOK_SECRET=replace-with-a-secret-at-least-32-chars-long
+ 
+ # External links
+ COMPETITION_CALENDAR_URL=https://cogitoacademy.id/en/calendar
+-KNOWLEDGE_BANK_URL=https://cogitoacademy.id/knowledge-bank
+ 
+ # Environment
+ NODE_ENV=development
+ 
+ # Google OAuth (optional - leave blank to disable Google login)
+ GOOGLE_CLIENT_ID=
+ GOOGLE_CLIENT_SECRET=
+\ No newline at end of file
+diff --git a/apps/server/src/index.ts b/apps/server/src/index.ts
+index 9767e8e..f6d0676 100644
+--- a/apps/server/src/index.ts
++++ b/apps/server/src/index.ts
+@@ -1,17 +1,17 @@
+ import { initLogger } from "evlog";
+ 
+ import { createServer } from "./routes";
+ import { env } from "@cogito-app/env/server";
+ import { log } from "@cogito-app/api/lib/logger";
+ import { sql } from "drizzle-orm";
+-import { shutdownScheduler } from "./scheduler";
++import { initScheduler, shutdownScheduler } from "./scheduler";
+ 
+ initLogger({
+   env: { service: "cogito-app-server" },
+ });
+ 
+ process.on("unhandledRejection", (reason) => {
+   log({
+     level: "error",
+     action: "unhandled_rejection",
+     error: { message: String(reason) },
+@@ -56,20 +56,22 @@ async function waitForDb(maxAttempts = 10, delayMs = 2000): Promise<void> {
+ 
+ const app = createServer();
+ const port = env.PORT;
+ 
+ await waitForDb();
+ 
+ const server = app.listen(port, () => {
+   log({ level: "info", action: "server_started", url: env.BETTER_AUTH_URL });
+ });
+ 
++await initScheduler();
++
+ async function gracefulShutdown(signal: string) {
+   log({ level: "info", action: "shutdown_signal", signal });
+   server.stop();
+   await shutdownScheduler();
+   try {
+     const { db } = await import("@cogito-app/db");
+     await db.$client.end();
+     log({ level: "info", action: "db_pool_drained" });
+   } catch {
+     log({ level: "info", action: "db_pool_drain_skipped" });
+diff --git a/apps/server/src/middleware.ts b/apps/server/src/middleware.ts
+deleted file mode 100644
+index 5440c99..0000000
+--- a/apps/server/src/middleware.ts
++++ /dev/null
+@@ -1,3 +0,0 @@
+-import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
+-
+-export { identifyUserFromSession };
+diff --git a/apps/server/src/rate-limit.test.ts b/apps/server/src/rate-limit.test.ts
+new file mode 100644
+index 0000000..405416a
+--- /dev/null
++++ b/apps/server/src/rate-limit.test.ts
+@@ -0,0 +1,13 @@
++import { describe, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
++
++describe("payment rate limit path", () => {
++  test("rate limiter targets payment.createPurchase", () => {
++    const routes = readFileSync(
++      new URL("./routes.ts", import.meta.url),
++      "utf-8",
++    );
++    expect(routes).toContain('path === "/rpc/payment.createPurchase"');
++    expect(routes).not.toContain('path === "/rpc/payment.createIntent"');
++  });
++});
+diff --git a/apps/server/src/routes.ts b/apps/server/src/routes.ts
+index 0eb24e4..409a312 100644
+--- a/apps/server/src/routes.ts
++++ b/apps/server/src/routes.ts
+@@ -86,20 +86,25 @@ async function generateOpenAPISpec(request: Request) {
+     tags: openApiTags,
+   });
+ 
+   return enrichOpenAPISpec(spec);
+ }
+ 
+ const apiHandler = new OpenAPIHandler(appRouter, {
+   interceptors: [onError(logRpcError)],
+ });
+ 
++/**
++ * Builds the Elysia HTTP server with auth, RPC, OpenAPI, health, metrics, and webhook routes.
++ *
++ * @returns a configured Elysia instance with security headers, rate limits, and CORS applied
++ */
+ export function createServer() {
+   return new Elysia()
+     .use(evlog())
+     .derive(({ request }) => {
+       const requestId =
+         request.headers.get("x-request-id") || generateRequestId();
+       const startTime = performance.now();
+       return { requestId, startTime };
+     })
+     .onAfterHandle(({ requestId, startTime, request }) => {
+@@ -166,21 +171,21 @@ export function createServer() {
+           return new Response(JSON.stringify({ error: "Too many requests" }), {
+             status: 429,
+             headers: {
+               "Content-Type": "application/json",
+               "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+             },
+           });
+         }
+       }
+ 
+-      if (path === "/rpc/payment.createIntent") {
++      if (path === "/rpc/payment.createPurchase") {
+         const { allowed, retryAfterMs } = await paymentRateLimit(ip);
+         if (!allowed) {
+           return new Response(JSON.stringify({ error: "Too many requests" }), {
+             status: 429,
+             headers: {
+               "Content-Type": "application/json",
+               "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+             },
+           });
+         }
+diff --git a/apps/server/src/scheduler.ts b/apps/server/src/scheduler.ts
+index b49f569..7ed6d36 100644
+--- a/apps/server/src/scheduler.ts
++++ b/apps/server/src/scheduler.ts
+@@ -1,20 +1,25 @@
+ import { env } from "@cogito-app/env/server";
+ import { log } from "@cogito-app/api/lib/logger";
+ import { createSchedulerService } from "@cogito-app/api/modules/scheduler/scheduler.service";
+ import { scheduleBookingExpiryCheck } from "@cogito-app/api/modules/scheduler/jobs/expire-bookings.job";
+ import { scheduleHoldReleaseCheck } from "@cogito-app/api/modules/scheduler/jobs/release-holds.job";
+ import { scheduleSendNotificationEmail } from "@cogito-app/api/modules/scheduler/jobs/send-notification-email.job";
+ import { services } from "@cogito-app/api";
+ 
+ let scheduler: ReturnType<typeof createSchedulerService> = null;
+ 
++/**
++ * Initializes the BullMQ scheduler and repeatable jobs when enabled.
++ *
++ * @returns a promise resolving once the scheduler and repeatable jobs are registered
++ */
+ export async function initScheduler(): Promise<void> {
+   if (!env.SCHEDULER_ENABLED || !env.REDIS_URL) {
+     log({
+       level: "info",
+       action: "scheduler_skip",
+       message: "Scheduler disabled or REDIS_URL not configured",
+     });
+     return;
+   }
+ 
+@@ -89,20 +94,25 @@ export async function initScheduler(): Promise<void> {
+ 
+   log({
+     level: "info",
+     action: "scheduler_initialized",
+     message: "Scheduler initialized with repeatable jobs",
+   });
+ }
+ 
+ const SHUTDOWN_TIMEOUT_MS = 10_000;
+ 
++/**
++ * Gracefully shuts down the scheduler worker and queue, forcing close on timeout.
++ *
++ * @returns a promise resolving once shutdown completes or the timeout forces close
++ */
+ export async function shutdownScheduler(): Promise<void> {
+   if (!scheduler) return;
+ 
+   log({
+     level: "info",
+     action: "scheduler_shutdown_start",
+     message: "Shutting down scheduler...",
+   });
+ 
+   const forceExit = setTimeout(() => {
+diff --git a/apps/server/src/webhooks/allowlist.test.ts b/apps/server/src/webhooks/allowlist.test.ts
+new file mode 100644
+index 0000000..ca0d05d
+--- /dev/null
++++ b/apps/server/src/webhooks/allowlist.test.ts
+@@ -0,0 +1,38 @@
++import { describe, expect, test } from "bun:test";
++
++import { ipAllowed } from "./payments";
++
++describe("ipAllowed", () => {
++  test("allows all IPs when allowlist is empty", () => {
++    const request = new Request("https://example.com/webhook", {
++      headers: { "x-forwarded-for": "203.0.113.9" },
++    });
++    expect(ipAllowed(request, [])).toBe(true);
++  });
++
++  test("allows a listed IP via x-forwarded-for", () => {
++    const request = new Request("https://example.com/webhook", {
++      headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" },
++    });
++    expect(ipAllowed(request, ["203.0.113.9"])).toBe(true);
++  });
++
++  test("allows a listed IP via x-real-ip when x-forwarded-for is absent", () => {
++    const request = new Request("https://example.com/webhook", {
++      headers: { "x-real-ip": "198.51.100.7" },
++    });
++    expect(ipAllowed(request, ["198.51.100.7"])).toBe(true);
++  });
++
++  test("rejects an unlisted IP", () => {
++    const request = new Request("https://example.com/webhook", {
++      headers: { "x-forwarded-for": "192.0.2.55" },
++    });
++    expect(ipAllowed(request, ["203.0.113.9"])).toBe(false);
++  });
++
++  test("rejects when no IP headers are present", () => {
++    const request = new Request("https://example.com/webhook");
++    expect(ipAllowed(request, ["203.0.113.9"])).toBe(false);
++  });
++});
+diff --git a/apps/server/src/webhooks/payments.ts b/apps/server/src/webhooks/payments.ts
+index 8db8c7e..5016b6d 100644
+--- a/apps/server/src/webhooks/payments.ts
++++ b/apps/server/src/webhooks/payments.ts
+@@ -1,18 +1,27 @@
+ import { Elysia, type Context as ElysiaContext } from "elysia";
+ import { services } from "@cogito-app/api";
+ import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
+ import { log } from "@cogito-app/api/lib/logger";
+ import { env } from "@cogito-app/env/server";
+ 
+ const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
+ 
++export function ipAllowed(request: Request, allowlist: string[]): boolean {
++  if (allowlist.length === 0) return true;
++  const ip =
++    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
++    request.headers.get("x-real-ip") ??
++    "";
++  return allowlist.some((entry) => entry === ip);
++}
++
+ function validateWebhookTimestamp(request: Request): void {
+   const timestamp =
+     request.headers.get("x-timestamp") ?? request.headers.get("date");
+   if (!timestamp) {
+     throw new Error("Webhook timestamp header is required");
+   }
+   const webhookTime = new Date(timestamp).getTime();
+   if (Number.isNaN(webhookTime)) {
+     throw new Error("Invalid webhook timestamp");
+   }
+@@ -26,20 +35,29 @@ export function paymentsWebhook(app: Elysia) {
+     "/webhooks/payments/:provider",
+     async ({ request, body, params, set }: ElysiaContext) => {
+       const provider = params.provider as string;
+       const signature =
+         provider === "xendit"
+           ? (request.headers.get("x-callback-token") ?? "")
+           : (request.headers.get("x-webhook-signature") ?? "");
+       const rawBody = typeof body === "string" ? body : JSON.stringify(body);
+       const idempotencyKey = `${provider}:${request.headers.get("x-event-id") ?? crypto.randomUUID()}`;
+ 
++      const allowlist = (env.WEBHOOK_ALLOWED_IPS ?? "")
++        .split(",")
++        .map((s) => s.trim())
++        .filter(Boolean);
++      if (!ipAllowed(request, allowlist)) {
++        set.status = 403;
++        return { error: "Forbidden" };
++      }
++
+       log({
+         level: "info",
+         action: "webhook_received",
+         provider,
+         contentLength: request.headers.get("content-length"),
+         hasSignature: !!signature,
+       });
+ 
+       if (await webhookIdempotency.isProcessed(idempotencyKey)) {
+         set.status = 200;
+diff --git a/packages/api/src/lib/db-errors.ts b/packages/api/src/lib/db-errors.ts
+deleted file mode 100644
+index 9052e10..0000000
+--- a/packages/api/src/lib/db-errors.ts
++++ /dev/null
+@@ -1,38 +0,0 @@
+-import { conflict, badRequest, internalServerError } from "./errors";
+-
+-function getPostgresErrorCode(err: unknown): string | null {
+-  if (err && typeof err === "object" && "code" in err) {
+-    return String((err as { code: unknown }).code);
+-  }
+-  return null;
+-}
+-
+-export function isUniqueViolation(err: unknown): boolean {
+-  return getPostgresErrorCode(err) === "23505";
+-}
+-
+-export function isForeignKeyViolation(err: unknown): boolean {
+-  return getPostgresErrorCode(err) === "23503";
+-}
+-
+-export function isCheckConstraintViolation(err: unknown): boolean {
+-  const code = getPostgresErrorCode(err);
+-  return code === "23514" || code === "23511";
+-}
+-
+-export function classifyDbError(err: unknown, context?: string): never {
+-  const code = getPostgresErrorCode(err);
+-  const msg = context ? `${context}: ${String(err)}` : String(err);
+-
+-  switch (code) {
+-    case "23505":
+-      throw conflict(msg, err);
+-    case "23503":
+-      throw badRequest(msg, err);
+-    case "23514":
+-    case "23511":
+-      throw badRequest(msg, err);
+-    default:
+-      throw internalServerError(msg, err);
+-  }
+-}
+diff --git a/packages/api/src/modules/achievement/achievement.repo.ts b/packages/api/src/modules/achievement/achievement.repo.ts
+index 59a5902..989180e 100644
+--- a/packages/api/src/modules/achievement/achievement.repo.ts
++++ b/packages/api/src/modules/achievement/achievement.repo.ts
+@@ -26,70 +26,111 @@ export interface UpdateAchievementData {
+   subjects?: string[];
+   imageUrl?: string;
+ }
+ 
+ export interface AdminListInput {
+   status?: string;
+   limit: number;
+   offset: number;
+ }
+ 
++/**
++ * Lists achievements for a user, newest first.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the owner of the achievements
++ * @returns the user's achievement rows
++ */
+ async function listByUserId(conn: DbOrTx, userId: string) {
+   return conn
+     .select()
+     .from(achievement)
+     .where(eq(achievement.userId, userId))
+     .orderBy(desc(achievement.createdAt));
+ }
+ 
++/**
++ * Inserts a new achievement.
++ *
++ * @param conn - the database connection or active transaction
++ * @param params - the achievement fields to insert
++ * @returns the inserted achievement row
++ */
+ async function insert(conn: DbOrTx, params: InsertAchievementParams) {
+   const [result] = await conn
+     .insert(achievement)
+     .values({
+       userId: params.userId,
+       eventName: params.eventName,
+       category: params.category,
+       award: params.award,
+       level: params.level,
+       eventDate: params.eventDate ?? null,
+       location: params.location ?? null,
+       description: params.description ?? null,
+       subjects: params.subjects ?? [],
+       imageUrl: params.imageUrl ?? null,
+     })
+     .returning();
+   return result;
+ }
+ 
++/**
++ * Finds an achievement by id, scoped to the owning user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the achievement id
++ * @param userId - the owning user
++ * @returns the achievement row, or null when not found
++ */
+ async function findByIdForUser(conn: DbOrTx, id: string, userId: string) {
+   const [existing] = await conn
+     .select()
+     .from(achievement)
+     .where(and(eq(achievement.id, id), eq(achievement.userId, userId)))
+     .limit(1);
+   return existing;
+ }
+ 
++/**
++ * Updates an achievement scoped to the owning user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the achievement id
++ * @param userId - the owning user
++ * @param data - the fields to update
++ * @returns the updated row, or undefined when the achievement was not found
++ */
+ async function update(
+   conn: DbOrTx,
+   id: string,
+   userId: string,
+   data: UpdateAchievementData,
+ ) {
+   const [updated] = await conn
+     .update(achievement)
+     .set(data)
+     .where(and(eq(achievement.id, id), eq(achievement.userId, userId)))
+     .returning();
+   return updated;
+ }
+ 
++/**
++ * Updates an achievement with optimistic concurrency via version.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the achievement id
++ * @param userId - the owning user
++ * @param expectedVersion - the version the row must currently have
++ * @param data - the fields to update
++ * @returns the updated rows (empty when the version did not match)
++ */
+ async function updateWithVersion(
+   conn: DbOrTx,
+   id: string,
+   userId: string,
+   expectedVersion: number,
+   data: UpdateAchievementData,
+ ) {
+   const rows = await conn
+     .update(achievement)
+     .set({ ...data, version: sql`${achievement.version} + 1` })
+@@ -97,64 +138,103 @@ async function updateWithVersion(
+       and(
+         eq(achievement.id, id),
+         eq(achievement.userId, userId),
+         eq(achievement.version, expectedVersion),
+       ),
+     )
+     .returning();
+   return rows;
+ }
+ 
++/**
++ * Deletes an achievement with optimistic concurrency via version.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the achievement id
++ * @param userId - the owning user
++ * @param expectedVersion - the version the row must currently have
++ * @returns the deleted rows (empty when the version did not match)
++ */
+ async function deleteWithVersion(
+   conn: DbOrTx,
+   id: string,
+   userId: string,
+   expectedVersion: number,
+ ) {
+   return conn
+     .delete(achievement)
+     .where(
+       and(
+         eq(achievement.id, id),
+         eq(achievement.userId, userId),
+         eq(achievement.version, expectedVersion),
+       ),
+     )
+     .returning();
+ }
+ 
++/**
++ * Deletes an achievement scoped to the owning user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the achievement id
++ * @param userId - the owning user
++ */
+ async function deleteRow(conn: DbOrTx, id: string, userId: string) {
+   return conn
+     .delete(achievement)
+     .where(and(eq(achievement.id, id), eq(achievement.userId, userId)));
+ }
+ 
++/**
++ * Lists achievements for admin review with pagination and optional status filter.
++ *
++ * @param conn - the database connection or active transaction
++ * @param input - the admin list input (status, limit, offset)
++ * @returns the matching achievement rows, newest first
++ */
+ async function adminList(conn: DbOrTx, input: AdminListInput) {
+   const { limit, offset, status } = input;
+   return conn
+     .select()
+     .from(achievement)
+     .where(status ? eq(achievement.status, status) : undefined)
+     .orderBy(desc(achievement.createdAt))
+     .limit(limit)
+     .offset(offset);
+ }
+ 
++/**
++ * Finds an achievement by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the achievement id
++ * @returns the achievement row, or null when not found
++ */
+ async function getById(conn: DbOrTx, id: string) {
+   const [existing] = await conn
+     .select()
+     .from(achievement)
+     .where(eq(achievement.id, id))
+     .limit(1);
+   return existing;
+ }
+ 
++/**
++ * Updates an achievement's admin review status and optional admin note.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the achievement id
++ * @param status - the new review status
++ * @param adminNote - optional note from the admin reviewer
++ * @returns the updated row, or undefined when the achievement was not found
++ */
+ async function updateStatus(
+   conn: DbOrTx,
+   id: string,
+   status: string,
+   adminNote?: string | null,
+ ) {
+   const [updated] = await conn
+     .update(achievement)
+     .set({ status, adminNote: adminNote ?? null })
+     .where(eq(achievement.id, id))
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.repo.ts b/packages/api/src/modules/admin-booking/admin-booking.repo.ts
+index 4419de7..d89cddf 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.repo.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.repo.ts
+@@ -2,29 +2,45 @@ import { eq, asc, inArray, gt, and, sql } from "drizzle-orm";
+ import {
+   booking,
+   bookingStateHistory,
+   bookingParticipant,
+   paymentRecord,
+ } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ export type AdminBookingRepo = ReturnType<typeof createAdminBookingRepo>;
+ 
++/**
++ * Finds a booking by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @returns the booking row, or null when not found
++ */
+ export async function findBookingById(conn: DbOrTx, bookingId: string) {
+   const [row] = await conn
+     .select()
+     .from(booking)
+     .where(eq(booking.id, bookingId))
+     .limit(1);
+   return row ?? null;
+ }
+ 
++/**
++ * Lists bookings by state with cursor pagination (fetches limit+1 for nextCursor).
++ *
++ * @param conn - the database connection or active transaction
++ * @param states - states to filter by (empty means all)
++ * @param limit - the max number of rows to return
++ * @param cursor - optional booking id to page after
++ * @returns the matching booking rows ordered by id
++ */
+ export async function listBookingsByState(
+   conn: DbOrTx,
+   states: string[],
+   limit: number,
+   cursor?: string,
+ ) {
+   const conditions = [];
+   if (states.length > 0) {
+     conditions.push(inArray(booking.currentState, states));
+   }
+@@ -33,28 +49,45 @@ export async function listBookingsByState(
+   }
+ 
+   return conn
+     .select()
+     .from(booking)
+     .where(conditions.length > 0 ? and(...conditions) : undefined)
+     .orderBy(asc(booking.id))
+     .limit(limit + 1);
+ }
+ 
++/**
++ * Fetches the chronological state history for a booking.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @returns the state history rows, oldest first
++ */
+ export async function getStateHistory(conn: DbOrTx, bookingId: string) {
+   return conn
+     .select()
+     .from(bookingStateHistory)
+     .where(eq(bookingStateHistory.bookingId, bookingId))
+     .orderBy(asc(bookingStateHistory.createdAt));
+ }
+ 
++/**
++ * Updates a booking's state with optimistic concurrency, returning the previous and new state.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param newState - the state to transition to
++ * @param reason - the state reason
++ * @param overrideMeta - metadata recorded on the booking
++ * @returns previousState and updated row, or null when the booking does not exist or the version raced
++ */
+ export async function updateBookingWithOverride(
+   conn: DbOrTx,
+   bookingId: string,
+   newState: string,
+   reason: string | null,
+   overrideMeta: Record<string, unknown>,
+ ) {
+   const [existing] = await conn
+     .select({
+       currentState: booking.currentState,
+@@ -78,20 +111,26 @@ export async function updateBookingWithOverride(
+     .where(
+       and(eq(booking.id, bookingId), eq(booking.version, existing.version)),
+     )
+     .returning();
+ 
+   if (!result.length) return null;
+ 
+   return { previousState: existing.currentState, updated: result[0] };
+ }
+ 
++/**
++ * Inserts a state history entry for an admin override.
++ *
++ * @param conn - the database connection or active transaction
++ * @param params - the state history entry details
++ */
+ export async function insertStateHistoryEntry(
+   conn: DbOrTx,
+   params: {
+     bookingId: string;
+     fromState: string | null;
+     toState: string;
+     reason: string | null;
+     actorId: string | null;
+     actorType: string;
+     metadata?: Record<string, unknown>;
+@@ -101,52 +140,81 @@ export async function insertStateHistoryEntry(
+     bookingId: params.bookingId,
+     fromState: params.fromState,
+     toState: params.toState,
+     reason: params.reason,
+     actorId: params.actorId,
+     actorType: params.actorType,
+     metadata: params.metadata,
+   });
+ }
+ 
++/**
++ * Finds participants of a booking.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @returns the participant rows
++ */
+ export async function findParticipantsByBookingId(
+   conn: DbOrTx,
+   bookingId: string,
+ ) {
+   return conn
+     .select()
+     .from(bookingParticipant)
+     .where(eq(bookingParticipant.bookingId, bookingId));
+ }
+ 
++/**
++ * Finds a payment record by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param paymentId - the payment id
++ * @returns the payment row, or null when not found
++ */
+ export async function findPaymentById(conn: DbOrTx, paymentId: string) {
+   const [row] = await conn
+     .select()
+     .from(paymentRecord)
+     .where(eq(paymentRecord.id, paymentId))
+     .limit(1);
+   return row ?? null;
+ }
+ 
++/**
++ * Updates a payment record's status.
++ *
++ * @param conn - the database connection or active transaction
++ * @param paymentId - the payment id
++ * @param status - the new status
++ * @returns the updated row, or null when the payment does not exist
++ */
+ export async function updatePaymentStatus(
+   conn: DbOrTx,
+   paymentId: string,
+   status: string,
+ ) {
+   const [updated] = await conn
+     .update(paymentRecord)
+     .set({ status, updatedAt: new Date() })
+     .where(eq(paymentRecord.id, paymentId))
+     .returning();
+   return updated ?? null;
+ }
+ 
++/**
++ * Sets a booking's held Marks amount (used after release/compensation).
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param holdAmount - the new hold amount
++ */
+ export async function updateBookingHoldAmount(
+   conn: DbOrTx,
+   bookingId: string,
+   holdAmount: number,
+ ) {
+   await conn
+     .update(booking)
+     .set({ holdAmount })
+     .where(eq(booking.id, bookingId));
+ }
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.service.ts b/packages/api/src/modules/admin-booking/admin-booking.service.ts
+index 720bbf5..c588527 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.service.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.service.ts
+@@ -41,29 +41,44 @@ const CATEGORY_STATE_MAP: Record<OverrideCategory, string> = {
+   tutor_no_show: BOOKING_STATE.NO_SHOW,
+   medical_emergency: BOOKING_STATE.CANCELLED,
+   technical_failure: BOOKING_STATE.CANCELLED,
+   admin_correction: BOOKING_STATE.CANCELLED,
+   student_no_show: BOOKING_STATE.NO_SHOW,
+   force_cancel: BOOKING_STATE.CANCELLED,
+ };
+ 
+ export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
+ 
++/**
++ * Creates the admin booking service for overrides, listing, history, and refunds.
++ *
++ * @param deps - the dependency ports (db, repo, auditPort, wallet, refund)
++ * @returns an AdminBookingService with applyOverride/listBookings/getBookingStateHistory/adminRefund
++ */
+ export function createAdminBookingService(deps: {
+   db: DbType;
+   repo: AdminBookingRepo;
+   auditPort: AdminBookingAuditPort;
+   wallet: AdminBookingWalletPort;
+   refund: AdminBookingRefundPort;
+ }) {
+   const { db, repo, auditPort, wallet, refund } = deps;
+ 
++  /**
++   * Applies an admin override to a booking, optionally releasing/compensating held Marks.
++   *
++   * @param adminId - the admin applying the override
++   * @param input - the override details (bookingId, category, reason, marksAction, affectedParticipants)
++   * @returns the updated booking
++   * @throws {BookingNotFoundError} if the booking does not exist
++   * @throws {TerminalStateOverrideError} if the booking is in a terminal state
++   */
+   async function applyOverride(
+     adminId: string,
+     input: {
+       bookingId: string;
+       category: OverrideCategory;
+       reason: string;
+       affectedParticipants?: string[];
+       marksAction?: MarksAction;
+       userNote?: string;
+       internalNote?: string;
+@@ -199,43 +214,65 @@ export function createAdminBookingService(deps: {
+         beforeState: { currentState: updateResult.previousState },
+         afterState: { currentState: newState, overrideMeta },
+       });
+ 
+       return updateResult.updated;
+     });
+ 
+     return result;
+   }
+ 
++  /**
++   * Lists bookings for the admin, by bookingId or with cursor pagination.
++   *
++   * @param opts - list options (bookingId, limit, cursor)
++   * @returns the booking items and a nextCursor when more pages exist
++   */
+   async function listBookings(opts?: {
+     bookingId?: string;
+     limit?: number;
+     cursor?: string;
+   }) {
+     if (opts?.bookingId) {
+       const bookingRow = await repo.findBookingById(db, opts.bookingId);
+       return { items: bookingRow ? [bookingRow] : [], nextCursor: null };
+     }
+     const limit = Math.min(opts?.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+     const rows = await repo.listBookingsByState(db, [], limit, opts?.cursor);
+     const items = rows.slice(0, limit);
+     const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+     return { items, nextCursor };
+   }
+ 
++  /**
++   * Fetches the state history for a booking.
++   *
++   * @param bookingId - the booking to inspect
++   * @returns the chronological state history entries
++   * @throws {BookingNotFoundError} if the booking does not exist
++   */
+   async function getBookingStateHistory(bookingId: string) {
+     const bookingRow = await repo.findBookingById(db, bookingId);
+     if (!bookingRow) throw new BookingNotFoundError(bookingId);
+ 
+     return repo.getStateHistory(db, bookingId);
+   }
+ 
++  /**
++   * Processes an admin refund: credits the payer's wallet, marks the payment REFUNDED, and records the refund.
++   *
++   * @param adminId - the admin processing the refund
++   * @param input - the refund details (paymentId, reason)
++   * @returns a confirmation with the payment id and "refunded" status
++   * @throws {BookingNotFoundError} if the payment or payer wallet is not found
++   * @throws {InvalidRefundStateError} if the payment is not PAID or SETTLED
++   */
+   async function adminRefund(
+     adminId: string,
+     input: { paymentId: string; reason: string },
+   ) {
+     const payment = await repo.findPaymentById(db, input.paymentId);
+     if (!payment) throw new BookingNotFoundError(input.paymentId);
+ 
+     if (
+       payment.status !== PAYMENT_STATUS.PAID &&
+       payment.status !== PAYMENT_STATUS.SETTLED
+diff --git a/packages/api/src/modules/admin-tutor/admin-tutor.repo.ts b/packages/api/src/modules/admin-tutor/admin-tutor.repo.ts
+index 7fcae41..5023caf 100644
+--- a/packages/api/src/modules/admin-tutor/admin-tutor.repo.ts
++++ b/packages/api/src/modules/admin-tutor/admin-tutor.repo.ts
+@@ -44,102 +44,160 @@ export interface ListTutorProfilesRepoInput {
+   limit: number;
+   offset: number;
+ }
+ 
+ export interface TutorProfileUpdates {
+   onboardingStatus?: string;
+   adminReviewNote?: string | null;
+   publishedAt?: Date | null;
+ }
+ 
++/**
++ * Finds an active (unexpired, invited) tutor invite by email.
++ *
++ * @param conn - the database connection or active transaction
++ * @param email - the invitee's email
++ * @returns the matching invite, or null
++ */
+ async function findActiveInviteByEmail(
+   conn: DbOrTx,
+   email: string,
+ ): Promise<TutorInviteRow | null> {
+   return (
+     (await conn.query.tutorInvite.findFirst({
+       where: and(
+         eq(tutorInvite.email, email),
+         eq(tutorInvite.status, INVITE_STATUS.INVITED),
+       ),
+     })) ?? null
+   );
+ }
+ 
++/**
++ * Inserts a new tutor invite.
++ *
++ * @param conn - the database connection or active transaction
++ * @param params - the invite details
++ * @returns the inserted invite row
++ */
+ async function insertInvite(
+   conn: DbOrTx,
+   params: InsertInviteParams,
+ ): Promise<TutorInviteRow> {
+   const [row] = await conn.insert(tutorInvite).values(params).returning();
+   return row!;
+ }
+ 
++/**
++ * Fetches an invite by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the invite id
++ * @returns the invite row, or null
++ */
+ async function getInviteById(
+   conn: DbOrTx,
+   id: string,
+ ): Promise<TutorInviteRow | null> {
+   return (
+     (await conn.query.tutorInvite.findFirst({
+       where: eq(tutorInvite.id, id),
+     })) ?? null
+   );
+ }
+ 
++/**
++ * Updates an invite (e.g. status, revocation).
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the invite id
++ * @param updates - the fields to update
++ * @returns the updated invite row
++ */
+ async function updateInvite(
+   conn: DbOrTx,
+   id: string,
+   updates: InviteUpdates,
+ ): Promise<TutorInviteRow> {
+   const [row] = await conn
+     .update(tutorInvite)
+     .set(updates)
+     .where(eq(tutorInvite.id, id))
+     .returning();
+   return row!;
+ }
+ 
++/**
++ * Lists tutor invites with pagination and optional status filter.
++ *
++ * @param conn - the database connection or active transaction
++ * @param input - list options (status, limit, offset)
++ * @returns the matching invite rows, newest first
++ */
+ async function listInvites(
+   conn: DbOrTx,
+   input: ListInvitesRepoInput,
+ ): Promise<TutorInviteRow[]> {
+   return conn.query.tutorInvite.findMany({
+     where: input.status ? eq(tutorInvite.status, input.status) : undefined,
+     orderBy: [desc(tutorInvite.createdAt)],
+     limit: input.limit,
+     offset: input.offset,
+   });
+ }
+ 
++/**
++ * Fetches a tutor profile by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the profile id
++ * @returns the profile row, or null
++ */
+ async function getTutorProfileById(
+   conn: DbOrTx,
+   id: string,
+ ): Promise<TutorProfileRow | null> {
+   return (
+     (await conn.query.tutorProfile.findFirst({
+       where: eq(tutorProfile.id, id),
+     })) ?? null
+   );
+ }
+ 
++/**
++ * Updates a tutor profile's admin-controlled fields.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the profile id
++ * @param updates - the fields to update
++ * @returns the updated profile row
++ */
+ async function updateTutorProfile(
+   conn: DbOrTx,
+   id: string,
+   updates: TutorProfileUpdates,
+ ): Promise<TutorProfileRow> {
+   const [row] = await conn
+     .update(tutorProfile)
+     .set(updates)
+     .where(eq(tutorProfile.id, id))
+     .returning();
+   return row!;
+ }
+ 
++/**
++ * Lists tutor profiles with pagination and optional onboarding status filter, including the user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param input - list options (status, limit, offset)
++ * @returns the matching profile rows with their user, newest first
++ */
+ async function listTutorProfiles(
+   conn: DbOrTx,
+   input: ListTutorProfilesRepoInput,
+ ) {
+   return conn.query.tutorProfile.findMany({
+     where: input.status
+       ? eq(tutorProfile.onboardingStatus, input.status)
+       : undefined,
+     orderBy: [desc(tutorProfile.createdAt)],
+     limit: input.limit,
+diff --git a/packages/api/src/modules/admin/admin.repo.ts b/packages/api/src/modules/admin/admin.repo.ts
+index 9ae8512..09597ca 100644
+--- a/packages/api/src/modules/admin/admin.repo.ts
++++ b/packages/api/src/modules/admin/admin.repo.ts
+@@ -1,69 +1,113 @@
+ import { count, desc, eq, and } from "drizzle-orm";
+ import { user } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ import { USER_ROLE } from "../../shared/constants";
+ 
+ export type UserRole = "student" | "tutor" | "admin";
+ export type UserRow = typeof user.$inferSelect;
+ 
++/**
++ * Lists users with pagination, newest first.
++ *
++ * @param conn - the database connection or active transaction
++ * @param limit - the max number of rows to return
++ * @param offset - the number of rows to skip
++ * @returns the user rows
++ */
+ export async function listUsers(
+   conn: DbOrTx,
+   limit: number,
+   offset: number,
+ ): Promise<UserRow[]> {
+   return conn
+     .select()
+     .from(user)
+     .orderBy(desc(user.createdAt))
+     .limit(limit)
+     .offset(offset);
+ }
+ 
++/**
++ * Counts all users.
++ *
++ * @param conn - the database connection or active transaction
++ * @returns the total user count
++ */
+ export async function countUsers(conn: DbOrTx): Promise<number> {
+   const [row] = await conn.select({ count: count() }).from(user);
+   return row?.count ?? 0;
+ }
+ 
++/**
++ * Fetches a user by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @returns the user row, or null
++ */
+ export async function getById(
+   conn: DbOrTx,
+   userId: string,
+ ): Promise<UserRow | null> {
+   const [row] = await conn
+     .select()
+     .from(user)
+     .where(eq(user.id, userId))
+     .limit(1);
+   return row ?? null;
+ }
+ 
++/**
++ * Counts admin-role users.
++ *
++ * @param conn - the database connection or active transaction
++ * @returns the admin user count
++ */
+ export async function countAdmins(conn: DbOrTx): Promise<number> {
+   const [row] = await conn
+     .select({ count: count() })
+     .from(user)
+     .where(eq(user.role, USER_ROLE.ADMIN));
+   return row?.count ?? 0;
+ }
+ 
++/**
++ * Updates a user's role.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param role - the new role
++ * @returns the updated user row
++ */
+ export async function updateRole(
+   conn: DbOrTx,
+   userId: string,
+   role: UserRole,
+ ): Promise<UserRow> {
+   const [row] = await conn
+     .update(user)
+     .set({ role })
+     .where(eq(user.id, userId))
+     .returning();
+   return row!;
+ }
+ 
++/**
++ * Updates a user's role only when the current role matches expectedRole (optimistic).
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param role - the new role
++ * @param expectedRole - the role the user must currently have
++ * @returns the updated rows (empty when the expected role did not match)
++ */
+ export async function updateRoleWithExpected(
+   conn: DbOrTx,
+   userId: string,
+   role: UserRole,
+   expectedRole: string,
+ ): Promise<UserRow[]> {
+   return conn
+     .update(user)
+     .set({ role })
+     .where(and(eq(user.id, userId), eq(user.role, expectedRole)))
+diff --git a/packages/api/src/modules/audit/audit.repo.ts b/packages/api/src/modules/audit/audit.repo.ts
+index a9a9f21..7f96547 100644
+--- a/packages/api/src/modules/audit/audit.repo.ts
++++ b/packages/api/src/modules/audit/audit.repo.ts
+@@ -1,15 +1,21 @@
+ import { auditLog } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ export type AuditRepo = ReturnType<typeof createAuditRepo>;
+ 
++/**
++ * Inserts an audit log entry.
++ *
++ * @param conn - the database connection or active transaction
++ * @param params - the audit log fields (actor, action, target, before/after state, details)
++ */
+ export async function insertAuditLog(
+   conn: DbOrTx,
+   params: {
+     actorId: string | null;
+     actorType: string;
+     action: string;
+     targetId?: string;
+     targetType: string;
+     beforeState?: Record<string, unknown>;
+     afterState?: Record<string, unknown>;
+diff --git a/packages/api/src/modules/auth/auth.repo.ts b/packages/api/src/modules/auth/auth.repo.ts
+index 044ab59..736ac6a 100644
+--- a/packages/api/src/modules/auth/auth.repo.ts
++++ b/packages/api/src/modules/auth/auth.repo.ts
+@@ -7,55 +7,85 @@ export interface ProfileInput {
+   schoolName?: string;
+   gradeLevel?: string;
+   parentName?: string;
+   parentPhone?: string;
+   parentEmail?: string;
+ }
+ 
+ export type StudentProfileRow = typeof studentProfile.$inferSelect;
+ export type TutorProfileRow = typeof tutorProfile.$inferSelect;
+ 
++/**
++ * Fetches a user's student profile.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @returns the student profile row, or null
++ */
+ async function getStudentProfile(
+   conn: DbOrTx,
+   userId: string,
+ ): Promise<StudentProfileRow | null> {
+   return (
+     (await conn.query.studentProfile.findFirst({
+       where: eq(studentProfile.userId, userId),
+     })) ?? null
+   );
+ }
+ 
++/**
++ * Fetches a user's tutor profile.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @returns the tutor profile row, or null
++ */
+ async function getTutorProfile(
+   conn: DbOrTx,
+   userId: string,
+ ): Promise<TutorProfileRow | null> {
+   return (
+     (await conn.query.tutorProfile.findFirst({
+       where: eq(tutorProfile.userId, userId),
+     })) ?? null
+   );
+ }
+ 
++/**
++ * Updates an existing student profile with the given input.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param input - the profile fields to update
++ * @returns the updated student profile row
++ */
+ async function upsertProfile(
+   conn: DbOrTx,
+   userId: string,
+   input: ProfileInput,
+ ): Promise<StudentProfileRow> {
+   const [updated] = await conn
+     .update(studentProfile)
+     .set(input)
+     .where(eq(studentProfile.userId, userId))
+     .returning();
+   return updated!;
+ }
+ 
++/**
++ * Creates a new student profile for a user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param input - the initial profile fields
++ * @returns the created student profile row
++ */
+ async function createProfile(
+   conn: DbOrTx,
+   userId: string,
+   input: ProfileInput,
+ ): Promise<StudentProfileRow> {
+   const [created] = await conn
+     .insert(studentProfile)
+     .values({ userId, ...input })
+     .returning();
+   return created!;
+diff --git a/packages/api/src/modules/booking/booking.repo.ts b/packages/api/src/modules/booking/booking.repo.ts
+index 18d2328..027f666 100644
+--- a/packages/api/src/modules/booking/booking.repo.ts
++++ b/packages/api/src/modules/booking/booking.repo.ts
+@@ -2,199 +2,294 @@ import {
+   eq,
+   and,
+   gte,
+   desc,
+   inArray,
+   notInArray,
+   ne,
+   lte,
+   lt,
+   sql,
++  getTableColumns,
+ } from "drizzle-orm";
+ import {
+   booking,
+   bookingParticipant,
+   bookingStateHistory,
+   bookingRescheduleProposal,
+   bookingSession,
+   availabilitySlot,
+   tutorProfile,
+   type booking as bookingTable,
+ } from "@cogito-app/db/schema";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import { CONFIRMATION_STATE, ONBOARDING_STATUS } from "../../shared/constants";
+ 
+ type BookingRow = typeof bookingTable.$inferSelect;
+ 
++/**
++ * Finds a booking by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @returns the booking row, or null
++ */
+ async function findBookingById(
+   conn: DbOrTx,
+   bookingId: string,
+ ): Promise<BookingRow | null> {
+   const [b] = await conn
+-    .select()
++    .select({ ...getTableColumns(booking) })
+     .from(booking)
+     .where(eq(booking.id, bookingId))
+     .limit(1);
+   return (b as BookingRow | undefined) ?? null;
+ }
+ 
++/**
++ * Finds a tutor's profile, optionally restricted to published profiles.
++ *
++ * @param conn - the database connection or active transaction
++ * @param tutorId - the tutor's user id
++ * @param opts - options (publishedOnly)
++ * @returns the tutor profile, or null
++ */
+ async function findTutorProfile(
+   conn: DbOrTx,
+   tutorId: string,
+   opts?: { publishedOnly?: boolean },
+ ): Promise<typeof tutorProfile.$inferSelect | null> {
+   const conditions = [eq(tutorProfile.userId, tutorId)];
+   if (opts?.publishedOnly) {
+     conditions.push(
+       eq(tutorProfile.onboardingStatus, ONBOARDING_STATUS.PUBLISHED),
+     );
+   }
+   return (
+     (await conn.query.tutorProfile.findFirst({
+       where: and(...conditions),
+     })) ?? null
+   );
+ }
+ 
++/**
++ * Finds an active availability slot for a tutor, optionally future-only.
++ *
++ * @param conn - the database connection or active transaction
++ * @param slotId - the slot id
++ * @param tutorId - the tutor's user id
++ * @param opts - options (futureOnly)
++ * @returns the availability slot, or null
++ */
+ async function findAvailabilitySlot(
+   conn: DbOrTx,
+   slotId: string,
+   tutorId: string,
+   opts?: { futureOnly?: boolean },
+ ) {
+   const conditions = [
+     eq(availabilitySlot.id, slotId),
+     eq(availabilitySlot.tutorId, tutorId),
+     eq(availabilitySlot.isActive, true),
+   ];
+   if (opts?.futureOnly) {
+     conditions.push(gte(availabilitySlot.startDate, new Date()));
+   }
+   return conn.query.availabilitySlot.findFirst({
+     where: and(...conditions),
+   });
+ }
+ 
++/**
++ * Finds a booking participant by booking and user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param userId - the participant's user id
++ * @returns the participant row, or null
++ */
+ async function findParticipant(
+   conn: DbOrTx,
+   bookingId: string,
+   userId: string,
+ ) {
+   const [participant] = await conn
+-    .select()
++    .select({ ...getTableColumns(bookingParticipant) })
+     .from(bookingParticipant)
+     .where(
+       and(
+         eq(bookingParticipant.bookingId, bookingId),
+         eq(bookingParticipant.userId, userId),
+       ),
+     )
+     .limit(1);
+   return participant ?? null;
+ }
+ 
++/**
++ * Lists confirmed participants for a booking, optionally excluding one user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param excludeUserId - optional user to exclude
++ * @returns the confirmed participant rows
++ */
+ async function findConfirmedParticipants(
+   conn: DbOrTx,
+   bookingId: string,
+   excludeUserId?: string,
+ ) {
+   const conditions = [
+     eq(bookingParticipant.bookingId, bookingId),
+     inArray(bookingParticipant.confirmationState, [
+       CONFIRMATION_STATE.CONFIRMED,
+       CONFIRMATION_STATE.RECONFIRMED,
+     ]),
+   ];
+   if (excludeUserId) {
+     conditions.push(ne(bookingParticipant.userId, excludeUserId));
+   }
+   return conn
+-    .select()
++    .select({ ...getTableColumns(bookingParticipant) })
+     .from(bookingParticipant)
+     .where(and(...conditions));
+ }
+ 
++/**
++ * Lists participants whose confirmation state is RECONFIRMED for a booking.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @returns the reconfirmed participant rows
++ */
+ async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
+   return conn
+-    .select()
++    .select({ ...getTableColumns(bookingParticipant) })
+     .from(bookingParticipant)
+     .where(
+       and(
+         eq(bookingParticipant.bookingId, bookingId),
+         eq(
+           bookingParticipant.confirmationState,
+           CONFIRMATION_STATE.RECONFIRMED,
+         ),
+       ),
+     );
+ }
+ 
++/**
++ * Inserts a booking row.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the booking insert values
++ * @returns the inserted booking row
++ */
+ async function insertBooking(
+   conn: DbOrTx,
+   values: typeof booking.$inferInsert,
+ ) {
+   const [b] = await conn.insert(booking).values(values).returning();
+   return b!;
+ }
+ 
++/**
++ * Sets a booking's cancellation reason.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param reason - the cancellation reason (null to clear)
++ */
+ async function updateBookingCancellationReason(
+   conn: DbOrTx,
+   bookingId: string,
+   reason: string | null,
+ ) {
+   await conn
+     .update(booking)
+     .set({ cancellationReason: reason })
+     .where(eq(booking.id, bookingId));
+ }
+ 
++/**
++ * Sets a booking's held Marks amount.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param holdAmount - the new hold amount
++ */
+ async function updateBookingHoldAmount(
+   conn: DbOrTx,
+   bookingId: string,
+   holdAmount: number,
+ ) {
+   await conn
+     .update(booking)
+     .set({ holdAmount })
+     .where(eq(booking.id, bookingId));
+ }
+ 
++/**
++ * Sets a booking's confirmed headcount.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param confirmedHeadcount - the new headcount
++ */
+ async function updateBookingConfirmedHeadcount(
+   conn: DbOrTx,
+   bookingId: string,
+   confirmedHeadcount: number,
+ ) {
+   await conn
+     .update(booking)
+     .set({ confirmedHeadcount })
+     .where(eq(booking.id, bookingId));
+ }
+ 
++/**
++ * Inserts a booking participant row.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the participant insert values
++ */
+ async function insertParticipant(
+   conn: DbOrTx,
+   values: typeof bookingParticipant.$inferInsert,
+ ) {
+   await conn.insert(bookingParticipant).values(values);
+ }
+ 
++/**
++ * Updates a participant's state fields.
++ *
++ * @param conn - the database connection or active transaction
++ * @param participantId - the participant id
++ * @param values - the fields to update
++ */
+ async function updateParticipantState(
+   conn: DbOrTx,
+   participantId: string,
+   values: Partial<typeof bookingParticipant.$inferInsert>,
+ ) {
+   await conn
+     .update(bookingParticipant)
+     .set(values)
+     .where(eq(bookingParticipant.id, participantId));
+ }
+ 
++/**
++ * Inserts a booking state history entry.
++ *
++ * @param conn - the database connection or active transaction
++ * @param entry - the state history entry details
++ */
+ async function insertStateHistory(
+   conn: DbOrTx,
+   entry: {
+     bookingId: string;
+     fromState: string | null;
+     toState: string;
+     reason?: string | null;
+     actorId: string;
+     actorType: string;
+     metadata?: Record<string, unknown>;
+@@ -204,63 +299,97 @@ async function insertStateHistory(
+     bookingId: entry.bookingId,
+     fromState: entry.fromState,
+     toState: entry.toState,
+     reason: entry.reason ?? null,
+     actorId: entry.actorId,
+     actorType: entry.actorType,
+     metadata: entry.metadata ?? {},
+   });
+ }
+ 
++/**
++ * Inserts a reschedule proposal for a booking.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the proposal details
++ */
+ async function insertRescheduleProposal(
+   conn: DbOrTx,
+   values: {
+     bookingId: string;
+     proposedBy: string;
+     proposedStartAt: Date;
+     proposedEndAt: Date;
+     status: string;
+   },
+ ) {
+   await conn.insert(bookingRescheduleProposal).values(values);
+ }
+ 
++/**
++ * Inserts a session for a series booking.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the session details including the price snapshot
++ */
+ async function insertBookingSession(
+   conn: DbOrTx,
+   values: {
+     seriesBookingId: string;
+     scheduledStartAt: Date;
+     scheduledEndAt: Date;
+     currentState: string;
+     holdAmount: number;
+     priceSnapshot: {
+       perStudent: number;
+       baseline: number;
+       tutorShare: number;
+       cogitoTake: number;
++      baselineCogitoTake: number;
++      baselineTutorShare: number;
++      extraTotal: number;
++      cogitoExtraTake: number;
++      tutorExtraShare: number;
+     };
+   },
+ ) {
+   await conn.insert(bookingSession).values(values);
+ }
+ 
++/**
++ * Lists sessions for a series booking, ordered by start time.
++ *
++ * @param conn - the database connection or active transaction
++ * @param seriesBookingId - the series booking id
++ * @returns the session rows
++ */
+ export async function listSessionsBySeriesId(
+   conn: DbOrTx,
+   seriesBookingId: string,
+ ) {
+   return conn
+-    .select()
++    .select({ ...getTableColumns(bookingSession) })
+     .from(bookingSession)
+     .where(eq(bookingSession.seriesBookingId, seriesBookingId))
+     .orderBy(bookingSession.scheduledStartAt);
+ }
+ 
++/**
++ * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
++ *
++ * @param conn - the database connection or active transaction
++ * @param tutorId - the tutor's user id
++ * @param startAt - window start
++ * @param endAt - window end
++ * @param opts - options (excludeBookingId, excludeStates)
++ * @returns the first overlapping booking id, or empty
++ */
+ async function findOverlappingBookings(
+   conn: DbOrTx,
+   tutorId: string,
+   startAt: Date,
+   endAt: Date,
+   opts?: { excludeBookingId?: string; excludeStates?: string[] },
+ ) {
+   const conditions = [
+     eq(booking.tutorId, tutorId),
+     lte(booking.scheduledStartAt, endAt),
+@@ -272,63 +401,98 @@ async function findOverlappingBookings(
+   if (opts?.excludeBookingId) {
+     conditions.push(ne(booking.id, opts.excludeBookingId));
+   }
+   return conn
+     .select({ id: booking.id })
+     .from(booking)
+     .where(and(...conditions))
+     .limit(1);
+ }
+ 
++/**
++ * Updates a booking's deadline.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param deadlineAt - the new deadline
++ */
+ async function updateBookingDeadline(
+   conn: DbOrTx,
+   bookingId: string,
+   deadlineAt: Date,
+ ) {
+   await conn
+     .update(booking)
+     .set({ deadlineAt, updatedAt: new Date() })
+     .where(eq(booking.id, bookingId));
+ }
+ 
++/**
++ * Finds bookings whose deadline has passed and whose state is in the given set (for expiry).
++ *
++ * @param conn - the database connection or active transaction
++ * @param states - states eligible for expiry
++ * @returns up to 500 matching booking rows
++ */
+ async function findBookingsExpiringByDeadline(conn: DbOrTx, states: string[]) {
+   return conn
+-    .select()
++    .select({ ...getTableColumns(booking) })
+     .from(booking)
+     .where(
+       and(
+         lte(booking.deadlineAt, new Date()),
+         inArray(booking.currentState, states),
+       ),
+     )
+     .limit(500);
+ }
+ 
++/**
++ * Decrements a booking's confirmed headcount (floored at 0).
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ */
+ async function decrementBookingConfirmedHeadcount(
+   conn: DbOrTx,
+   bookingId: string,
+ ) {
+   await conn
+     .update(booking)
+     .set({
+       confirmedHeadcount: sql`GREATEST(${booking.confirmedHeadcount} - 1, 0)`,
+     })
+     .where(eq(booking.id, bookingId));
+ }
+ 
++/**
++ * Marks all sessions of a series booking as cancelled.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the series booking id
++ */
+ async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
+   await conn
+     .update(bookingSession)
+     .set({ currentState: "cancelled" })
+     .where(eq(bookingSession.seriesBookingId, bookingId));
+ }
+ 
++/**
++ * Updates a booking with optimistic concurrency via version, returning the new row and version.
++ *
++ * @param conn - the database connection or active transaction
++ * @param bookingId - the booking id
++ * @param expectedVersion - the version the booking must currently have
++ * @param updates - the fields to update
++ * @returns the updated row and new version, or null when the version did not match
++ */
+ async function updateBookingVersioned(
+   conn: DbOrTx,
+   bookingId: string,
+   expectedVersion: number,
+   updates: Partial<
+     Pick<
+       typeof bookingTable.$inferInsert,
+       | "currentState"
+       | "previousState"
+       | "stateReason"
+@@ -354,32 +518,45 @@ async function updateBookingVersioned(
+ 
+   if (!result.length) return null;
+   const updated = result[0]!;
+   return {
+     updated: updated as typeof bookingTable.$inferSelect,
+     newVersion: expectedVersion + 1,
+   };
+ }
+ 
+ export function createBookingRepo(db: DbType) {
++  /**
++   * Finds a booking with participants, state history, meeting, and room bookings eager-loaded.
++   *
++   * @param bookingId - the booking id
++   * @returns the booking with related data, or null
++   */
+   async function findBookingWithParticipants(bookingId: string) {
+     return db.query.booking.findFirst({
+       where: eq(booking.id, bookingId),
+       with: {
+         participants: { with: { user: true } },
+         stateHistory: true,
+         meeting: true,
+         roomBookings: { with: { room: true } },
+       },
+     });
+   }
+ 
++  /**
++   * Lists a proposer's bookings with cursor pagination and optional state filter.
++   *
++   * @param proposerId - the proposer's user id
++   * @param opts - pagination and state options
++   * @returns the matching bookings with participants, newest first
++   */
+   async function listBookingsByProposer(
+     proposerId: string,
+     opts: { states?: string[]; limit: number; cursor?: string },
+   ) {
+     const conditions = [eq(booking.proposerId, proposerId)];
+     if (opts.states?.length) {
+       conditions.push(inArray(booking.currentState, opts.states));
+     }
+     if (opts.cursor) {
+       conditions.push(lt(booking.scheduledStartAt, new Date(opts.cursor)));
+diff --git a/packages/api/src/modules/booking/booking.service.ts b/packages/api/src/modules/booking/booking.service.ts
+index 0a9f6f4..9e9f403 100644
+--- a/packages/api/src/modules/booking/booking.service.ts
++++ b/packages/api/src/modules/booking/booking.service.ts
+@@ -80,20 +80,26 @@ export interface BookingTransition {
+   fromState: BookingState | null;
+   toState: BookingState;
+   reason?: string;
+   actorId: string;
+   actorType: "student" | "tutor" | "admin" | "system";
+   metadata?: Record<string, unknown>;
+ }
+ 
+ export type BookingService = ReturnType<typeof createBookingService>;
+ 
++/**
++ * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
++ *
++ * @param deps - the dependency ports (db, repo, wallet, pricing, audit, notification, meeting)
++ * @returns a BookingService with create/list/action methods and scheduler helpers
++ */
+ export function createBookingService(deps: {
+   db: DbType;
+   repo: BookingRepo;
+   wallet: BookingWalletPort;
+   pricing: BookingPricingPort;
+   audit: BookingAuditPort;
+   notification: BookingNotificationPort;
+   meeting: BookingMeetingPort;
+ }) {
+   const { db, repo, wallet, pricing, audit, notification, meeting } = deps;
+@@ -216,45 +222,71 @@ export function createBookingService(deps: {
+       }
+       // eslint-disable-next-line no-await-in-loop
+       await repo.updateParticipantState(tx, p.id, {
+         confirmationState: CONFIRMATION_STATE.WITHDRAWN_PRE_H2,
+         withdrawnAt: new Date(),
+         withdrawnReason: reason,
+       });
+     }
+   }
+ 
++  /**
++   * Gets a booking by id, enforcing that the requesting user has access.
++   *
++   * @param bookingId - the booking to fetch
++   * @param userId - the requesting user (proposer, tutor, or participant)
++   * @returns the booking with participants and related data
++   * @throws {BookingNotFoundError} if the booking does not exist
++   * @throws {BookingNotOwnedError} if the user lacks access
++   */
+   async function getById(bookingId: string, userId: string) {
+     const b = await repo.findBookingWithParticipants(bookingId);
+     if (!b) throw new BookingNotFoundError(bookingId);
+     await assertBookingAccess(b, userId, db, bookingId);
+     return b;
+   }
+ 
++  /**
++   * Lists bookings where the user is the proposer, with cursor pagination.
++   *
++   * @param userId - the proposer user
++   * @param opts - pagination and state filter options
++   * @returns the bookings and a nextCursor when more pages exist
++   */
+   async function listMine(
+     userId: string,
+     opts: { cursor?: string; limit?: number; states?: string[] } = {},
+   ) {
+     const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+     const rows = await repo.listBookingsByProposer(userId, {
+       states: opts.states,
+       limit,
+       cursor: opts.cursor,
+     });
+     const items = rows.slice(0, limit);
+     const nextCursor =
+       rows.length > limit
+         ? items[items.length - 1]!.scheduledStartAt.toISOString()
+         : null;
+     return { items, nextCursor };
+   }
+ 
++  /**
++   * Creates a solo booking, holds Marks, and notifies the tutor.
++   *
++   * @param proposerId - the student creating the booking
++   * @param input - the solo booking details
++   * @returns the created booking
++   * @throws {BookingNotFoundError} if the tutor profile or slot is invalid
++   * @throws {InsufficientMarksError} if the student cannot cover the hold
++   * @throws {BookingConflictError} if the tutor already has an overlapping booking
++   */
+   async function createSolo(proposerId: string, input: CreateSoloInput) {
+     const profile = await repo.findTutorProfile(db, input.tutorId, {
+       publishedOnly: true,
+     });
+     if (!profile) throw new BookingNotFoundError(input.tutorId);
+ 
+     const slot = await repo.findAvailabilitySlot(
+       db,
+       input.availabilitySlotId,
+       input.tutorId,
+@@ -264,24 +296,25 @@ export function createBookingService(deps: {
+ 
+     const modality = input.modality;
+     if (modality === MODALITY.OFFLINE && profile.modality === MODALITY.ONLINE) {
+       throw new BookingNotEditableError(input.tutorId);
+     }
+     if (modality === MODALITY.ONLINE && profile.modality === MODALITY.OFFLINE) {
+       throw new BookingNotEditableError(input.tutorId);
+     }
+ 
+     const priceSnapshot = pricing.computeSplit(
++      modality,
+       (profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE) as number,
+       1,
+     );
+-    const totalMarks = priceSnapshot.baseline;
++    const totalMarks = priceSnapshot.perStudent * 1;
+ 
+     const w = await wallet.getByUserId(db, proposerId);
+     if (!w) throw new BookingNotFoundError(proposerId);
+     if (w.availableBalance < totalMarks) {
+       throw new InsufficientMarksError(totalMarks, w.availableBalance);
+     }
+ 
+     const bookingId = crypto.randomUUID();
+     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
+ 
+@@ -366,20 +399,29 @@ export function createBookingService(deps: {
+         severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "New booking request",
+         body: "A student has requested a solo session with you.",
+         eventKey: `booking.${bookingId}.tutor_request`,
+       });
+ 
+       return b;
+     });
+   }
+ 
++  /**
++   * Cancels a booking, releasing held Marks (late cancellations become LATE_CANCELLED).
++   *
++   * @param userId - the user cancelling (must have access)
++   * @param bookingId - the booking to cancel
++   * @param cancellationReason - optional reason for the cancellation
++   * @returns the updated booking
++   * @throws {BookingStateTransitionError} if the booking is in a terminal state
++   */
+   async function cancel(
+     userId: string,
+     bookingId: string,
+     cancellationReason?: string,
+   ) {
+     return db.transaction(async (tx) => {
+       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
+       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
+         throw new BookingStateTransitionError(
+           b.currentState,
+@@ -685,24 +727,25 @@ export function createBookingService(deps: {
+       input.availabilitySlotId,
+       input.tutorId,
+       { futureOnly: true },
+     );
+     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
+ 
+     const size = input.targetGroupSize;
+     const pricePerStudent = (profile.prices?.[String(size)] ??
+       DEFAULT_SOLO_PRICE) as number;
+     const priceSnapshot = pricing.computeSplit(
+-      pricePerStudent * size,
++      input.modality,
++      pricePerStudent,
+       size as 1 | 2 | 3 | 4 | 5 | 6,
+     );
+-    const totalMarks = priceSnapshot.baseline;
++    const totalMarks = priceSnapshot.perStudent * size;
+ 
+     const w = await wallet.getByUserId(db, proposerId);
+     if (!w) throw new BookingNotFoundError(proposerId);
+     if (w.availableBalance < totalMarks) {
+       throw new InsufficientMarksError(totalMarks, w.availableBalance);
+     }
+ 
+     const bookingId = crypto.randomUUID();
+     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
+ 
+@@ -1059,22 +1102,26 @@ export function createBookingService(deps: {
+     const slot = await repo.findAvailabilitySlot(
+       db,
+       input.availabilitySlotId,
+       input.tutorId,
+       { futureOnly: true },
+     );
+     if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
+ 
+     const pricePerStudent = (profile.prices?.["1"] ??
+       DEFAULT_SOLO_PRICE) as number;
+-    const priceSnapshot = pricing.computeSplit(pricePerStudent, 1);
+-    const perSession = priceSnapshot.baseline;
++    const priceSnapshot = pricing.computeSplit(
++      input.modality,
++      pricePerStudent,
++      1,
++    );
++    const perSession = priceSnapshot.perStudent;
+     const totalMarks = perSession * input.sessions.length;
+ 
+     const w = await wallet.getByUserId(db, proposerId);
+     if (!w) throw new BookingNotFoundError(proposerId);
+     if (w.availableBalance < totalMarks) {
+       throw new InsufficientMarksError(totalMarks, w.availableBalance);
+     }
+ 
+     const bookingId = crypto.randomUUID();
+     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
+diff --git a/packages/api/src/modules/booking/index.ts b/packages/api/src/modules/booking/index.ts
+index d098586..e39ac49 100644
+--- a/packages/api/src/modules/booking/index.ts
++++ b/packages/api/src/modules/booking/index.ts
+@@ -1,15 +1,19 @@
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import type { MeetingEvent } from "../meeting/meeting.types";
+ import type { AuditRecordParams } from "../audit/audit.service";
+-import type { GroupSize, PriceSnapshot } from "../pricing/pricing.service";
++import type {
++  GroupSize,
++  Modality,
++  PriceSnapshot,
++} from "../pricing/pricing.service";
+ import type { NotificationWriteParams } from "../notification/notification.service";
+ import type {
+   WalletSnapshot,
+   HoldParams,
+   ReleaseParams,
+   DeductParams,
+ } from "../wallet/wallet.service";
+ import { createBookingRepo } from "./booking.repo";
+ import { createBookingService } from "./booking.service";
+ import {
+@@ -22,21 +26,25 @@ import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
+ export type BookingModule = ReturnType<typeof createBookingModule>;
+ 
+ export interface BookingWalletPort {
+   hold(db: DbOrTx, params: HoldParams): Promise<WalletSnapshot>;
+   release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
+   deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
+   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
+ }
+ 
+ export interface BookingPricingPort {
+-  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
++  computeSplit(
++    modality: Modality,
++    tutorPricePerStudent: number,
++    confirmedHeadcount: GroupSize,
++  ): PriceSnapshot;
+ }
+ 
+ export interface BookingAuditPort {
+   record(params: AuditRecordParams): Promise<void>;
+ }
+ 
+ export interface BookingNotificationPort {
+   write(params: NotificationWriteParams): Promise<void>;
+   writeBestEffort(params: NotificationWriteParams): Promise<void>;
+ }
+diff --git a/packages/api/src/modules/invite/invite.repo.ts b/packages/api/src/modules/invite/invite.repo.ts
+index 24590c9..82ae713 100644
+--- a/packages/api/src/modules/invite/invite.repo.ts
++++ b/packages/api/src/modules/invite/invite.repo.ts
+@@ -2,30 +2,46 @@ import { eq, and, gt } from "drizzle-orm";
+ import { tutorInvite, tutorProfile, user } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ import { INVITE_STATUS, ONBOARDING_STATUS } from "../../shared/constants";
+ 
+ export interface InsertTutorProfileParams {
+   userId: string;
+   inviteId: string;
+   displayName: string;
+ }
+ 
++/**
++ * Finds a valid (unexpired, invited) invite by token.
++ *
++ * @param conn - the database connection or active transaction
++ * @param token - the invite token
++ * @returns the invite, or null
++ */
+ export async function findInviteByToken(conn: DbOrTx, token: string) {
+   return conn.query.tutorInvite.findFirst({
+     where: and(
+       eq(tutorInvite.token, token),
+       eq(tutorInvite.status, INVITE_STATUS.INVITED),
+       gt(tutorInvite.expiresAt, new Date()),
+     ),
+   });
+ }
+ 
++/**
++ * Updates an invite's status when it matches the given conditions (status and unexpired).
++ *
++ * @param conn - the database connection or active transaction
++ * @param inviteId - the invite id
++ * @param updates - the fields to update (status, acceptance)
++ * @param conditions - the required current state (status, expiresAt)
++ * @returns the updated rows (empty when conditions did not match)
++ */
+ export async function updateInviteStatus(
+   conn: DbOrTx,
+   inviteId: string,
+   updates: {
+     status: string;
+     acceptedBy?: string | null;
+     acceptedAt?: Date | null;
+   },
+   conditions: { status: string; expiresAt: Date },
+ ) {
+@@ -35,44 +51,65 @@ export async function updateInviteStatus(
+     .where(
+       and(
+         eq(tutorInvite.id, inviteId),
+         eq(tutorInvite.status, conditions.status),
+         gt(tutorInvite.expiresAt, conditions.expiresAt),
+       ),
+     )
+     .returning();
+ }
+ 
++/**
++ * Finds a tutor profile by user id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @returns the tutor profile, or null
++ */
+ export async function findTutorProfileByUserId(conn: DbOrTx, userId: string) {
+   return conn.query.tutorProfile.findFirst({
+     where: eq(tutorProfile.userId, userId),
+   });
+ }
+ 
++/**
++ * Creates a draft tutor profile for an accepted invitee.
++ *
++ * @param conn - the database connection or active transaction
++ * @param params - the initial profile fields (userId, inviteId, displayName)
++ * @returns the created tutor profile
++ */
+ export async function insertTutorProfile(
+   conn: DbOrTx,
+   params: InsertTutorProfileParams,
+ ) {
+   const [profile] = await conn
+     .insert(tutorProfile)
+     .values({
+       userId: params.userId,
+       inviteId: params.inviteId,
+       displayName: params.displayName,
+       expertise: [],
+       proofUrls: [],
+       onboardingStatus: ONBOARDING_STATUS.DRAFT,
+     })
+     .returning();
+   return profile;
+ }
+ 
++/**
++ * Updates a user's role (used when an invite is accepted).
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param role - the new role
++ */
+ export async function updateUserRole(
+   conn: DbOrTx,
+   userId: string,
+   role: string,
+ ) {
+   await conn.update(user).set({ role }).where(eq(user.id, userId));
+ }
+ 
+ export function createInviteRepo() {
+   return {
+diff --git a/packages/api/src/modules/notification/notification.repo.ts b/packages/api/src/modules/notification/notification.repo.ts
+index 88e5d93..84c70f0 100644
+--- a/packages/api/src/modules/notification/notification.repo.ts
++++ b/packages/api/src/modules/notification/notification.repo.ts
+@@ -2,45 +2,67 @@ import { eq, and, desc, lt, count } from "drizzle-orm";
+ import {
+   notification,
+   notificationDispatch,
+   user,
+ } from "@cogito-app/db/schema";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ export type NotificationRepo = ReturnType<typeof createNotificationRepo>;
+ 
++/**
++ * Finds a notification by id, scoped to the owning user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the notification id
++ * @param userId - the owning user
++ * @returns a row with the notification id, or null
++ */
+ export async function findNotificationByIdForUser(
+   conn: DbOrTx,
+   id: string,
+   userId: string,
+ ) {
+   const [row] = await conn
+     .select({ id: notification.id })
+     .from(notification)
+     .where(and(eq(notification.id, id), eq(notification.userId, userId)))
+     .limit(1);
+   return row ?? null;
+ }
+ 
++/**
++ * Finds a notification by eventKey (for idempotency/deduplication).
++ *
++ * @param conn - the database connection or active transaction
++ * @param eventKey - the event key
++ * @returns a row with the notification id, or null
++ */
+ export async function findNotificationByEventKey(
+   conn: DbOrTx,
+   eventKey: string,
+ ) {
+   const [row] = await conn
+     .select({ id: notification.id })
+     .from(notification)
+     .where(eq(notification.eventKey, eventKey))
+     .limit(1);
+   return row ?? null;
+ }
+ 
++/**
++ * Inserts a notification row.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the notification fields
++ * @returns the inserted notification row
++ */
+ export async function insertNotification(
+   conn: DbOrTx,
+   values: {
+     userId: string;
+     bookingId: string | null;
+     category: string;
+     title: string;
+     body: string;
+     severity: string;
+     eventKey: string;
+@@ -56,57 +78,85 @@ export async function insertNotification(
+       title: values.title,
+       body: values.body,
+       severity: values.severity,
+       eventKey: values.eventKey,
+       metadata: values.metadata,
+     })
+     .returning();
+   return inserted;
+ }
+ 
++/**
++ * Looks up a user's email address.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @returns the email, or an empty string when not found
++ */
+ export async function findUserEmail(conn: DbOrTx, userId: string) {
+   const [row] = await conn
+     .select({ email: user.email })
+     .from(user)
+     .where(eq(user.id, userId))
+     .limit(1);
+   return row?.email ?? "";
+ }
+ 
++/**
++ * Inserts a dispatch (email delivery) row for a notification.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the dispatch fields
++ */
+ export async function insertDispatch(
+   conn: DbOrTx,
+   values: {
+     notificationId: string;
+     channel: string;
+     recipientEmail: string;
+     status: string;
+   },
+ ) {
+   await conn.insert(notificationDispatch).values({
+     notificationId: values.notificationId,
+     channel: values.channel,
+     recipientEmail: values.recipientEmail,
+     status: values.status,
+   });
+ }
+ 
++/**
++ * Updates a notification dispatch status.
++ *
++ * @param conn - the database connection or active transaction
++ * @param notificationId - the notification id
++ * @param status - the new dispatch status
++ */
+ export async function updateDispatchStatus(
+   conn: DbOrTx,
+   notificationId: string,
+   status: string,
+ ) {
+   await conn
+     .update(notificationDispatch)
+     .set({ status })
+     .where(eq(notificationDispatch.notificationId, notificationId));
+ }
+ 
++/**
++ * Lists a user's notifications with cursor pagination and optional unread filter.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param opts - list options (unreadOnly, cursor, limit)
++ * @returns up to limit+1 rows for nextCursor determination
++ */
+ export async function listNotifications(
+   conn: DbOrTx,
+   userId: string,
+   opts: { unreadOnly?: boolean; cursor?: string; limit: number },
+ ) {
+   const conditions = [eq(notification.userId, userId)];
+   if (opts.unreadOnly) {
+     conditions.push(eq(notification.isRead, false));
+   }
+   if (opts.cursor) {
+@@ -116,51 +166,79 @@ export async function listNotifications(
+   const rows = await conn
+     .select()
+     .from(notification)
+     .where(and(...conditions))
+     .orderBy(desc(notification.createdAt))
+     .limit(opts.limit + 1);
+ 
+   return rows;
+ }
+ 
++/**
++ * Counts a user's unread notifications.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @returns the number of unread notifications
++ */
+ export async function countUnread(conn: DbOrTx, userId: string) {
+   const [row] = await conn
+     .select({ value: count() })
+     .from(notification)
+     .where(
+       and(eq(notification.userId, userId), eq(notification.isRead, false)),
+     );
+   return Number(row?.value ?? 0);
+ }
+ 
++/**
++ * Sets a notification's read status, scoped to the owning user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the notification id
++ * @param userId - the owning user
++ * @param read - whether the notification is read
++ */
+ export async function updateReadStatus(
+   conn: DbOrTx,
+   id: string,
+   userId: string,
+   read: boolean,
+ ) {
+   await conn
+     .update(notification)
+     .set({ isRead: read, readAt: read ? new Date() : null })
+     .where(and(eq(notification.id, id), eq(notification.userId, userId)));
+ }
+ 
++/**
++ * Marks all of a user's notifications as read.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ */
+ export async function markAllRead(conn: DbOrTx, userId: string) {
+   await conn
+     .update(notification)
+     .set({ isRead: true, readAt: new Date() })
+     .where(
+       and(eq(notification.userId, userId), eq(notification.isRead, false)),
+     );
+ }
+ 
++/**
++ * Finds the dispatch row for a notification.
++ *
++ * @param conn - the database connection or active transaction
++ * @param notificationId - the notification id
++ * @returns the dispatch row, or null
++ */
+ export async function findDispatch(conn: DbOrTx, notificationId: string) {
+   const [row] = await conn
+     .select()
+     .from(notificationDispatch)
+     .where(eq(notificationDispatch.notificationId, notificationId))
+     .limit(1);
+   return row ?? null;
+ }
+ 
+ export function createNotificationRepo(db: DbType) {
+diff --git a/packages/api/src/modules/notification/notification.service.ts b/packages/api/src/modules/notification/notification.service.ts
+index 2d465f4..ac84e9c 100644
+--- a/packages/api/src/modules/notification/notification.service.ts
++++ b/packages/api/src/modules/notification/notification.service.ts
+@@ -85,26 +85,31 @@ export interface InAppNotificationPort {
+ const EMAIL_SUPPORTED_CATEGORIES: Set<string> = new Set([
+   "booking",
+   "payment",
+   "refund",
+   "schedule",
+   "override",
+ ]);
+ 
+ export type NotificationService = ReturnType<typeof createNotificationService>;
+ 
++/**
++ * Creates the notification service for in-app and best-effort email notifications.
++ *
++ * @param repo - the notification repository
++ * @param emailPort - optional email sender used for action/critical severity notifications
++ * @returns an InAppNotificationPort with write/list/read-status methods
++ */
+ export function createNotificationService(
+   repo: NotificationRepo,
+   emailPort?: NotificationEmailPort,
+-): InAppNotificationPort & {
+-  dispatchStatus: (notificationId: string) => Promise<unknown>;
+-} {
++): InAppNotificationPort {
+   async function writeInternal(params: NotificationWriteParams): Promise<void> {
+     const conn = params.db;
+ 
+     if (params.eventKey) {
+       const existing = await repo.findNotificationByEventKey(
+         conn,
+         params.eventKey,
+       );
+       if (existing) return;
+     }
+@@ -169,76 +174,108 @@ export function createNotificationService(
+           level: "debug",
+           action: "notification_email_skipped_category",
+           category: params.category,
+           notificationId: inserted.id,
+           userId: params.userId,
+         });
+       }
+     }
+   }
+ 
++  /**
++   * Writes a notification (deduplicated by eventKey), dispatching email for action/critical severity.
++   *
++   * @param params - the notification write parameters (db, userId, category, title, body, eventKey)
++   * @returns a promise resolving when the notification is recorded
++   */
+   async function write(params: NotificationWriteParams): Promise<void> {
+     await writeInternal(params);
+   }
+ 
++  /**
++   * Writes a notification best-effort, logging failures without throwing.
++   *
++   * @param params - the notification write parameters
++   * @returns a promise that never rejects
++   */
+   async function writeBestEffort(
+     params: NotificationWriteParams,
+   ): Promise<void> {
+     await writeInternal(params).catch((error) => {
+       log({
+         level: "error",
+         action: "notification_write_failed",
+         error: { message: String(error) },
+         userId: params.userId,
+         category: params.category,
+       });
+     });
+   }
+ 
++  /**
++   * Lists notifications for a user with optional unread filter and cursor pagination.
++   *
++   * @param userId - the user to list notifications for
++   * @param opts - list options (unreadOnly, limit, cursor)
++   * @returns the notification items and a nextCursor when more pages exist
++   */
+   async function list(
+     userId: string,
+     opts: NotificationListInput = {},
+   ): Promise<NotificationListResult> {
+     const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+     const rows = await repo.listNotifications(userId, {
+       unreadOnly: opts.unreadOnly,
+       cursor: opts.cursor,
+       limit,
+     });
+ 
+     const items = rows.slice(0, limit) as NotificationListItem[];
+     const nextCursor =
+       rows.length > limit
+         ? items[items.length - 1]!.createdAt.toISOString()
+         : null;
+ 
+     return { items, nextCursor };
+   }
+ 
++  /**
++   * Counts unread notifications for a user.
++   *
++   * @param userId - the user to count for
++   * @returns the number of unread notifications
++   */
+   async function getUnreadCount(userId: string): Promise<number> {
+     return repo.countUnread(userId);
+   }
+ 
++  /**
++   * Marks a single notification as read, verifying ownership.
++   *
++   * @param userId - the owning user
++   * @param id - the notification id
++   * @throws {NotificationNotFoundError} if the notification does not exist for the user
++   */
+   async function markAsRead(userId: string, id: string): Promise<void> {
+     const existing = await repo.findNotificationByIdForUser(id, userId);
+     if (!existing) throw new NotificationNotFoundError(id);
+     await repo.updateReadStatus(id, userId, true);
+   }
+ 
++  /**
++   * Marks all of a user's notifications as read.
++   *
++   * @param userId - the user to update
++   */
+   async function markAllAsRead(userId: string): Promise<void> {
+     await repo.markAllRead(userId);
+   }
+ 
+-  async function dispatchStatus(notificationId: string) {
+-    return repo.findDispatch(notificationId);
+-  }
+-
+   return {
+     write,
+     writeBestEffort,
+     list,
+     getUnreadCount,
+     markAsRead,
+     markAllAsRead,
+-    dispatchStatus,
+   };
+ }
+diff --git a/packages/api/src/modules/payment/payment.repo.ts b/packages/api/src/modules/payment/payment.repo.ts
+index 91f9468..0c59169 100644
+--- a/packages/api/src/modules/payment/payment.repo.ts
++++ b/packages/api/src/modules/payment/payment.repo.ts
+@@ -1,66 +1,107 @@
+ import { eq } from "drizzle-orm";
+ import { paymentRecord, markPackage } from "@cogito-app/db/schema";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ export type PaymentRepo = ReturnType<typeof createPaymentRepo>;
+ 
++/**
++ * Finds a mark package by its code.
++ *
++ * @param conn - the database connection or active transaction
++ * @param code - the package code
++ * @returns the package row, or null
++ */
+ export async function findPackageByCode(conn: DbOrTx, code: string) {
+   const [pkg] = await conn
+     .select()
+     .from(markPackage)
+     .where(eq(markPackage.code, code))
+     .limit(1);
+   return pkg ?? null;
+ }
+ 
++/**
++ * Finds a payment by its provider reference (used for idempotency).
++ *
++ * @param conn - the database connection or active transaction
++ * @param providerReference - the provider's reference
++ * @returns the payment row, or null
++ */
+ export async function findPaymentByProviderReference(
+   conn: DbOrTx,
+   providerReference: string,
+ ) {
+   const [record] = await conn
+     .select()
+     .from(paymentRecord)
+     .where(eq(paymentRecord.providerReference, providerReference))
+     .limit(1);
+   return record ?? null;
+ }
+ 
++/**
++ * Finds a payment by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the payment id
++ * @returns the payment row, or null
++ */
+ export async function findPaymentById(conn: DbOrTx, id: string) {
+   const [record] = await conn
+     .select()
+     .from(paymentRecord)
+     .where(eq(paymentRecord.id, id))
+     .limit(1);
+   return record ?? null;
+ }
+ 
++/**
++ * Finds a payment by provider event id (for webhook deduplication).
++ *
++ * @param conn - the database connection or active transaction
++ * @param providerEventId - the provider's event id
++ * @returns the payment row, or null
++ */
+ export async function findPaymentByProviderEventId(
+   conn: DbOrTx,
+   providerEventId: string,
+ ) {
+   const [record] = await conn
+     .select()
+     .from(paymentRecord)
+     .where(eq(paymentRecord.providerEventId, providerEventId))
+     .limit(1);
+   return record ?? null;
+ }
+ 
++/**
++ * Inserts a payment record.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the payment fields
++ */
+ export async function insertPayment(
+   conn: DbOrTx,
+   values: typeof paymentRecord.$inferInsert,
+ ) {
+   await conn.insert(paymentRecord).values(values);
+ }
+ 
++/**
++ * Updates a payment's status and related webhook fields.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the payment id
++ * @param data - the status and optional receipt/failure fields
++ */
+ export async function updatePaymentStatus(
+   conn: DbOrTx,
+   id: string,
+   data: {
+     status: string;
+     providerEventId?: string;
+     receiptUrl?: string | null;
+     failureReason?: string | null;
+   },
+ ) {
+diff --git a/packages/api/src/modules/payment/payment.service.ts b/packages/api/src/modules/payment/payment.service.ts
+index 432a5d9..29e9557 100644
+--- a/packages/api/src/modules/payment/payment.service.ts
++++ b/packages/api/src/modules/payment/payment.service.ts
+@@ -55,29 +55,46 @@ export type PaymentService = ReturnType<typeof createPaymentService>;
+ 
+ const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
+   PENDING: ["PAID", "FAILED", "EXPIRED", "SETTLED"],
+   PAID: ["SETTLED", "REFUNDED"],
+   SETTLED: ["REFUNDED"],
+   FAILED: [],
+   EXPIRED: [],
+   REFUNDED: [],
+ };
+ 
++/**
++ * Creates the payment service for purchase intents, webhook confirmation, and purchase lookups.
++ *
++ * @param deps - the dependency ports (db, wallet, repo, provider, providerName)
++ * @returns a PaymentPort with createIntent, confirmFromWebhook, getPurchase and the provider
++ */
+ export function createPaymentService(deps: {
+   db: DbType;
+   wallet: PaymentWalletPort;
+   repo: PaymentRepo;
+   provider: PaymentProvider;
+   providerName: string;
+ }) {
+   const { db, wallet, repo, provider, providerName } = deps;
+ 
++  /**
++   * Creates a payment intent for a mark package purchase, reusing pending intents.
++   *
++   * @param userId - the purchasing student
++   * @param walletId - the student's wallet to credit on confirmation
++   * @param packageCode - the mark package code to purchase
++   * @returns the payment id, provider reference, and checkout URL
++   * @throws {PackageNotFoundError} if the package is missing or inactive
++   * @throws {PackageAlreadyPurchasedError} if the user already has a non-pending purchase
++   * @throws {PaymentProviderError} if the provider rejects intent creation
++   */
+   async function createIntent(
+     userId: string,
+     walletId: string,
+     packageCode: string,
+   ): Promise<CreateIntentResult> {
+     const pkg = await repo.findPackageByCode(packageCode);
+     if (!pkg || !pkg.isActive) throw new PackageNotFoundError(packageCode);
+ 
+     const idempotencyKey = `${providerName}:${userId}:${packageCode}`;
+     const existing = await repo.findPaymentByProviderReference(idempotencyKey);
+@@ -121,20 +138,27 @@ export function createPaymentService(deps: {
+       });
+       return { paymentId, providerReference, checkoutUrl: intent.checkoutUrl };
+     } catch (error) {
+       await repo.updatePaymentStatus(paymentId, {
+         status: PAYMENT_STATUS.EXPIRED,
+       });
+       throw new PaymentProviderError(providerName, error);
+     }
+   }
+ 
++  /**
++   * Confirms a provider webhook, crediting the wallet on PAID/SETTLED and enforcing idempotency.
++   *
++   * @param input - the webhook confirmation details (provider, references, status, receipt)
++   * @returns the resulting payment status
++   * @throws {PaymentNotFoundError} if no payment matches the provider reference
++   */
+   async function confirmFromWebhook(
+     input: ConfirmInput,
+   ): Promise<{ status: string }> {
+     return db.transaction(async (tx) => {
+       const record = await repo.findPaymentByProviderReference(
+         input.providerReference,
+         tx,
+       );
+ 
+       if (!record) throw new PaymentNotFoundError(input.providerReference);
+@@ -202,19 +226,27 @@ export function createPaymentService(deps: {
+             failureReason: input.failureReason ?? null,
+           },
+           tx,
+         );
+       }
+ 
+       return { status: input.status };
+     });
+   }
+ 
++  /**
++   * Fetches a payment record, verifying the requesting user owns it.
++   *
++   * @param paymentId - the payment to fetch
++   * @param userId - the requesting user
++   * @returns the payment record
++   * @throws {PaymentNotFoundError} if the payment does not exist or belongs to another user
++   */
+   async function getPurchase(paymentId: string, userId: string) {
+     const record = await repo.findPaymentById(paymentId);
+     if (!record || record.userId !== userId)
+       throw new PaymentNotFoundError(paymentId);
+     return record;
+   }
+ 
+   return { createIntent, confirmFromWebhook, getPurchase, provider };
+ }
+diff --git a/packages/api/src/modules/pricing/pricing.service.ts b/packages/api/src/modules/pricing/pricing.service.ts
+index 18fa7ca..18baa79 100644
+--- a/packages/api/src/modules/pricing/pricing.service.ts
++++ b/packages/api/src/modules/pricing/pricing.service.ts
+@@ -1,50 +1,69 @@
+ import {
+   ONLINE_FLOOR_PRICES,
+   OFFLINE_FLOOR_PRICES,
+-  COGITO_TAKE_RATE,
++  ONLINE_BASELINE_SPLIT,
++  OFFLINE_BASELINE_SPLIT,
++  EXTRA_TAKE_DIVISOR,
+   MODALITY,
+ } from "../../shared/constants";
+ 
+ export type GroupSize = 1 | 2 | 3 | 4 | 5 | 6;
+ export type Modality = "online" | "offline" | "both";
+ 
+ export interface PriceSnapshot {
+   perStudent: number;
+   baseline: number;
+   tutorShare: number;
+   cogitoTake: number;
++  baselineCogitoTake: number;
++  baselineTutorShare: number;
++  extraTotal: number;
++  cogitoExtraTake: number;
++  tutorExtraShare: number;
+ }
+ 
+ export interface PricingPort {
+   validatePrices(
+     prices: Record<string, number>,
+     modality: Modality,
+   ): string | null;
+-  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
++  computeSplit(
++    modality: Modality,
++    tutorPricePerStudent: number,
++    confirmedHeadcount: GroupSize,
++  ): PriceSnapshot;
+ }
+ 
+ export type PricingService = ReturnType<typeof createPricingService>;
+ 
+ function getFloorPrices(modality: Modality): Record<number, number> {
+   if (modality === MODALITY.ONLINE) return ONLINE_FLOOR_PRICES;
+   if (modality === MODALITY.OFFLINE) return OFFLINE_FLOOR_PRICES;
+   const higher: Record<number, number> = {};
+   for (const size of [1, 2, 3, 4, 5, 6]) {
+     higher[size] = Math.max(
+       ONLINE_FLOOR_PRICES[size]!,
+       OFFLINE_FLOOR_PRICES[size]!,
+     );
+   }
+   return higher;
+ }
+ 
++/**
++ * Validates tutor-set prices against the Cogito floor for each group size.
++ *
++ * @param prices - map of group size (as string) to price in Marks
++ * @param modality - online/offline/both (both takes the max floor)
++ * @returns an error message string, or null when all prices are valid
++ * @throws {never} - returns a string instead of throwing
++ */
+ function validatePrices(
+   prices: Record<string, number>,
+   modality: Modality,
+ ): string | null {
+   if (!prices || Object.keys(prices).length === 0) {
+     return "Prices are required";
+   }
+ 
+   const floorPrices = getFloorPrices(modality);
+ 
+@@ -59,25 +78,78 @@ function validatePrices(
+ 
+     const floor = floorPrices[groupSize];
+     if (floor !== undefined && price < floor) {
+       return `Price for class size ${size} must be at least ${floor} Marks (floor price)`;
+     }
+   }
+ 
+   return null;
+ }
+ 
+-function computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot {
+-  const perStudent = Math.floor(totalMarks / groupSize);
+-  const cogitoTake = Math.floor(totalMarks * COGITO_TAKE_RATE);
+-  const tutorShare = totalMarks - cogitoTake;
++/**
++ * Returns the baseline split (tutor share + Cogito take) for a modality
++ * and group size, per the PRD floor pricing tables.
++ *
++ * @param modality - the session modality (online/offline; both uses online)
++ * @param size - the group size (1-6)
++ * @returns the baseline tutor share and Cogito take in Marks
++ */
++function getBaselineSplit(modality: Modality, size: GroupSize) {
++  const table =
++    modality === MODALITY.OFFLINE
++      ? OFFLINE_BASELINE_SPLIT
++      : ONLINE_BASELINE_SPLIT;
++  return table[size];
++}
++
++/**
++ * Computes the price split for a group session using the PRD extra-take rule.
++ *
++ * Baseline split comes from the modality/group-size tables. Any amount above
++ * the baseline total is split by the extra-take rule: Cogito takes 1 Mark per
++ * full 5 Marks of extra total, the remainder goes to the tutor.
++ *
++ * @param modality - the session modality (online/offline)
++ * @param tutorPricePerStudent - the tutor-set per-student price in Marks
++ * @param confirmedHeadcount - the confirmed number of students (1-6)
++ * @returns the PriceSnapshot with baseline, tutor share, and Cogito take breakdown
++ */
++function computeSplit(
++  modality: Modality,
++  tutorPricePerStudent: number,
++  confirmedHeadcount: GroupSize,
++): PriceSnapshot {
++  const perStudent = Math.floor(tutorPricePerStudent);
++  const tutorTotal = perStudent * confirmedHeadcount;
++  const baseline = getBaselineSplit(modality, confirmedHeadcount);
++  const baselineTotal = baseline.tutor + baseline.cogito;
++  const extraTotal = tutorTotal - baselineTotal;
++  const cogitoExtraTake =
++    extraTotal > 0 ? Math.floor(extraTotal / EXTRA_TAKE_DIVISOR) : 0;
++  const tutorExtraShare = extraTotal - cogitoExtraTake;
++
++  const baselineCogitoTake = baseline.cogito;
++  const baselineTutorShare = baseline.tutor;
++  const cogitoTake = baselineCogitoTake + cogitoExtraTake;
++  const tutorShare = baselineTutorShare + tutorExtraShare;
++
+   return {
+     perStudent,
+-    baseline: totalMarks,
++    baseline: baselineTotal,
+     tutorShare,
+     cogitoTake,
++    baselineCogitoTake,
++    baselineTutorShare,
++    extraTotal,
++    cogitoExtraTake,
++    tutorExtraShare,
+   };
+ }
+ 
++/**
++ * Creates the pricing service with price validation and split computation.
++ *
++ * @returns a PricingPort with validatePrices and computeSplit
++ */
+ export function createPricingService(): PricingPort {
+   return { validatePrices, computeSplit };
+ }
+diff --git a/packages/api/src/modules/refund/refund.repo.ts b/packages/api/src/modules/refund/refund.repo.ts
+index d11718d..2059edc 100644
+--- a/packages/api/src/modules/refund/refund.repo.ts
++++ b/packages/api/src/modules/refund/refund.repo.ts
+@@ -1,16 +1,23 @@
+ import { eq } from "drizzle-orm";
+ import { paymentRecord, refundRecord } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ export type RefundRepo = ReturnType<typeof createRefundRepo>;
+ 
++/**
++ * Inserts a refund record.
++ *
++ * @param conn - the database connection or active transaction
++ * @param record - the refund fields
++ * @returns the inserted refund row
++ */
+ async function insertRefundRecord(
+   conn: DbOrTx,
+   record: {
+     paymentId: string | null;
+     walletId: string;
+     amountIdr: number;
+     marks: number;
+     reason: string;
+     actorId?: string;
+   },
+@@ -22,20 +29,28 @@ async function insertRefundRecord(
+       walletId: record.walletId,
+       amountIdr: record.amountIdr,
+       marks: record.marks,
+       reason: record.reason,
+       actorId: record.actorId ?? null,
+     })
+     .returning();
+   return inserted;
+ }
+ 
++/**
++ * Updates a payment record's status.
++ *
++ * @param conn - the database connection or active transaction
++ * @param paymentId - the payment id
++ * @param status - the new status
++ * @returns the updated row, or null
++ */
+ async function updatePaymentStatus(
+   conn: DbOrTx,
+   paymentId: string,
+   status: string,
+ ) {
+   const [updated] = await conn
+     .update(paymentRecord)
+     .set({ status, updatedAt: new Date() })
+     .where(eq(paymentRecord.id, paymentId))
+     .returning();
+diff --git a/packages/api/src/modules/room/room.repo.ts b/packages/api/src/modules/room/room.repo.ts
+index 9191bfe..bde6c1c 100644
+--- a/packages/api/src/modules/room/room.repo.ts
++++ b/packages/api/src/modules/room/room.repo.ts
+@@ -1,35 +1,65 @@
+ import { eq, and, gte, lte, ne } from "drizzle-orm";
+ import { room, roomBooking } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ import { ROOM_BOOKING_STATUS } from "../../shared/constants";
+ 
+ export type RoomRepo = ReturnType<typeof createRoomRepo>;
+ 
++/**
++ * Lists all active rooms.
++ *
++ * @param conn - the database connection or active transaction
++ * @returns the active room rows
++ */
+ export async function findActiveRooms(conn: DbOrTx) {
+   return conn.select().from(room).where(eq(room.isActive, true));
+ }
+ 
++/**
++ * Inserts a new room.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the room fields (name, location, capacity)
++ * @returns the inserted room row
++ */
+ export async function insertRoom(
+   conn: DbOrTx,
+   values: { name: string; location: string; capacity: number },
+ ) {
+   const [row] = await conn.insert(room).values(values).returning();
+   return row!;
+ }
+ 
++/**
++ * Finds an active room by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param roomId - the room id
++ * @returns the room row, or null
++ */
+ export async function findRoomById(conn: DbOrTx, roomId: string) {
+   return conn.query.room.findFirst({
+     where: and(eq(room.id, roomId), eq(room.isActive, true)),
+   });
+ }
+ 
++/**
++ * Finds a confirmed room booking overlapping the given window, optionally excluding a booking.
++ *
++ * @param conn - the database connection or active transaction
++ * @param roomId - the room id
++ * @param startAt - window start
++ * @param endAt - window end
++ * @param excludeBookingId - optional booking to exclude
++ * @returns the first overlapping booking, or empty
++ */
+ export async function findRoomBookings(
+   conn: DbOrTx,
+   roomId: string,
+   startAt: Date,
+   endAt: Date,
+   excludeBookingId?: string,
+ ) {
+   const conditions = [
+     eq(roomBooking.roomId, roomId),
+     eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
+@@ -39,20 +69,30 @@ export async function findRoomBookings(
+   if (excludeBookingId) {
+     conditions.push(ne(roomBooking.bookingId, excludeBookingId));
+   }
+   return conn
+     .select()
+     .from(roomBooking)
+     .where(and(...conditions))
+     .limit(1);
+ }
+ 
++/**
++ * Like findRoomBookings but locks matching rows FOR UPDATE to prevent concurrent booking.
++ *
++ * @param conn - the database connection or active transaction
++ * @param roomId - the room id
++ * @param startAt - window start
++ * @param endAt - window end
++ * @param excludeBookingId - optional booking to exclude
++ * @returns the first overlapping booking row locked for update
++ */
+ export async function findRoomBookingsForUpdate(
+   conn: DbOrTx,
+   roomId: string,
+   startAt: Date,
+   endAt: Date,
+   excludeBookingId?: string,
+ ) {
+   const conditions = [
+     eq(roomBooking.roomId, roomId),
+     eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
+@@ -63,20 +103,27 @@ export async function findRoomBookingsForUpdate(
+     conditions.push(ne(roomBooking.bookingId, excludeBookingId));
+   }
+   return conn
+     .select()
+     .from(roomBooking)
+     .where(and(...conditions))
+     .for("update")
+     .limit(1);
+ }
+ 
++/**
++ * Inserts a room booking row.
++ *
++ * @param conn - the database connection or active transaction
++ * @param values - the room booking fields
++ * @returns the inserted room booking row
++ */
+ export async function insertRoomBooking(
+   conn: DbOrTx,
+   values: {
+     roomId: string;
+     bookingId: string;
+     startAt: Date;
+     endAt: Date;
+     status: string;
+   },
+ ) {
+diff --git a/packages/api/src/modules/scheduler/index.ts b/packages/api/src/modules/scheduler/index.ts
+deleted file mode 100644
+index 59243b7..0000000
+--- a/packages/api/src/modules/scheduler/index.ts
++++ /dev/null
+@@ -1,22 +0,0 @@
+-import { createSchedulerService } from "./scheduler.service";
+-import type { SchedulerService } from "./scheduler.service";
+-
+-export type SchedulerModule = ReturnType<typeof createSchedulerModule>;
+-
+-export interface SchedulerHandlers {
+-  onExpireBookings: () => Promise<{ expired: number; failed: number }>;
+-  onReleaseHolds: () => Promise<{ released: number }>;
+-  onSendNotificationEmail: (data: {
+-    notificationId: string;
+-    userId: string;
+-  }) => Promise<void>;
+-}
+-
+-export function createSchedulerModule(deps: {
+-  redisUrl: string;
+-  handlers: SchedulerHandlers;
+-}): SchedulerService | null {
+-  return createSchedulerService(deps.redisUrl, deps.handlers);
+-}
+-
+-export type { SchedulerService };
+diff --git a/packages/api/src/modules/tutor-discovery/discovery.repo.ts b/packages/api/src/modules/tutor-discovery/discovery.repo.ts
+index 46f73c6..84fa1fe 100644
+--- a/packages/api/src/modules/tutor-discovery/discovery.repo.ts
++++ b/packages/api/src/modules/tutor-discovery/discovery.repo.ts
+@@ -4,20 +4,27 @@ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ export interface ListPublishedInput {
+   search?: string;
+   expertise?: string;
+   modality?: "online" | "offline" | "both";
+   limit: number;
+   offset: number;
+ }
+ 
++/**
++ * Lists published tutor profiles with search/expertise/modality filters and pagination.
++ *
++ * @param conn - the database connection or active transaction
++ * @param input - the list options (search, expertise, modality, limit, offset)
++ * @returns the matching profiles with their user, newest published first
++ */
+ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
+   const conditions: SQL<unknown>[] = [
+     eq(tutorProfile.onboardingStatus, "published"),
+   ];
+ 
+   if (input.modality) {
+     conditions.push(eq(tutorProfile.modality, input.modality));
+   }
+ 
+   if (input.search) {
+@@ -39,20 +46,27 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
+ 
+   return conn.query.tutorProfile.findMany({
+     where: and(...conditions),
+     orderBy: [desc(tutorProfile.publishedAt)],
+     limit: input.limit,
+     offset: input.offset,
+     with: { user: true },
+   });
+ }
+ 
++/**
++ * Fetches a published tutor profile by id with its user.
++ *
++ * @param conn - the database connection or active transaction
++ * @param tutorId - the profile id
++ * @returns the published profile, or null
++ */
+ async function getProfileById(conn: DbOrTx, tutorId: string) {
+   return conn.query.tutorProfile.findFirst({
+     where: and(
+       eq(tutorProfile.id, tutorId),
+       eq(tutorProfile.onboardingStatus, "published"),
+     ),
+     with: { user: true },
+   });
+ }
+ 
+diff --git a/packages/api/src/modules/tutor/index.ts b/packages/api/src/modules/tutor/index.ts
+index 0d7a3a2..c975070 100644
+--- a/packages/api/src/modules/tutor/index.ts
++++ b/packages/api/src/modules/tutor/index.ts
+@@ -11,21 +11,25 @@ import { createTutorHandler } from "./tutor.handler";
+ import type { TutorService } from "./tutor.service";
+ import type { TutorHandler } from "./tutor.handler";
+ 
+ export type TutorModule = ReturnType<typeof createTutorModule>;
+ 
+ export interface TutorPricingPort {
+   validatePrices(
+     prices: Record<string, number>,
+     modality: Modality,
+   ): string | null;
+-  computeSplit(totalMarks: number, groupSize: GroupSize): PriceSnapshot;
++  computeSplit(
++    modality: Modality,
++    tutorPricePerStudent: number,
++    confirmedHeadcount: GroupSize,
++  ): PriceSnapshot;
+ }
+ 
+ export interface TutorAuditPort {
+   record(params: AuditRecordParams): Promise<void>;
+ }
+ 
+ export function createTutorModule(deps: {
+   db: DbType;
+   pricing: TutorPricingPort;
+   audit: TutorAuditPort;
+diff --git a/packages/api/src/modules/tutor/tutor.repo.ts b/packages/api/src/modules/tutor/tutor.repo.ts
+index 7fb01a9..85b9769 100644
+--- a/packages/api/src/modules/tutor/tutor.repo.ts
++++ b/packages/api/src/modules/tutor/tutor.repo.ts
+@@ -17,76 +17,116 @@ export interface UpdateProfileInput {
+ export interface UpsertAvailabilityInput {
+   id?: string;
+   startDate: Date;
+   endDate: Date;
+   modality: "online" | "offline" | "both";
+   isRecurring?: boolean;
+   recurrenceRule?: string;
+   isActive?: boolean;
+ }
+ 
++/**
++ * Fetches a tutor's profile by user id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @returns the tutor profile, or null
++ */
+ export async function getByUserId(conn: DbOrTx, userId: string) {
+   return conn.query.tutorProfile.findFirst({
+     where: eq(tutorProfile.userId, userId),
+   });
+ }
+ 
++/**
++ * Updates a tutor profile with optimistic concurrency via version.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param expectedVersion - the version the profile must currently have
++ * @param input - the fields to update
++ * @returns the updated rows (empty when the version did not match)
++ */
+ export async function updateProfileWithVersion(
+   conn: DbOrTx,
+   userId: string,
+   expectedVersion: number,
+   input: Omit<UpdateProfileInput, "version">,
+ ) {
+   const rows = await conn
+     .update(tutorProfile)
+     .set({ ...input, version: sql`${tutorProfile.version} + 1` })
+     .where(
+       and(
+         eq(tutorProfile.userId, userId),
+         eq(tutorProfile.version, expectedVersion),
+       ),
+     )
+     .returning();
+   return rows;
+ }
+ 
++/**
++ * Updates a tutor profile's onboarding status.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param status - the new onboarding status
++ * @returns the updated profile row, or undefined when not found
++ */
+ export async function updateStatus(
+   conn: DbOrTx,
+   userId: string,
+   status: string,
+ ) {
+   const [updated] = await conn
+     .update(tutorProfile)
+     .set({ onboardingStatus: status })
+     .where(eq(tutorProfile.userId, userId))
+     .returning();
+   return updated;
+ }
+ 
++/**
++ * Lists a tutor's active availability slots, optionally from a start date.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param opts - options (from date filter)
++ * @returns the matching availability slot rows
++ */
+ export async function listAvailability(
+   conn: DbOrTx,
+   userId: string,
+   opts?: { from?: Date },
+ ) {
+   const conditions = [
+     eq(availabilitySlot.tutorId, userId),
+     eq(availabilitySlot.isActive, true),
+   ];
+   if (opts?.from) {
+     conditions.push(gte(availabilitySlot.startDate, opts.from));
+   }
+   return conn
+     .select()
+     .from(availabilitySlot)
+     .where(and(...conditions));
+ }
+ 
++/**
++ * Creates or updates an availability slot (by id when provided, else inserts).
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @param input - the slot details
++ * @returns the created or updated slot row
++ */
+ export async function upsertAvailability(
+   conn: DbOrTx,
+   userId: string,
+   input: UpsertAvailabilityInput,
+ ) {
+   if (input.id) {
+     const [updated] = await conn
+       .update(availabilitySlot)
+       .set({
+         startDate: input.startDate,
+@@ -108,20 +148,26 @@ export async function upsertAvailability(
+       endDate: input.endDate,
+       modality: input.modality,
+       isRecurring: input.isRecurring ?? false,
+       recurrenceRule: input.recurrenceRule ?? null,
+       isActive: input.isActive ?? true,
+     })
+     .returning();
+   return created;
+ }
+ 
++/**
++ * Soft-deletes an availability slot by setting isActive to false.
++ *
++ * @param conn - the database connection or active transaction
++ * @param slotId - the slot id
++ */
+ export async function deleteAvailability(conn: DbOrTx, slotId: string) {
+   await conn
+     .update(availabilitySlot)
+     .set({ isActive: false })
+     .where(eq(availabilitySlot.id, slotId));
+ }
+ 
+ export function createTutorRepo() {
+   return {
+     getByUserId,
+diff --git a/packages/api/src/modules/tutor/tutor.service.ts b/packages/api/src/modules/tutor/tutor.service.ts
+index 3f69652..8aa0635 100644
+--- a/packages/api/src/modules/tutor/tutor.service.ts
++++ b/packages/api/src/modules/tutor/tutor.service.ts
+@@ -12,20 +12,30 @@ import {
+   TutorProfileNotEditableError,
+   InvalidTutorStatusError,
+   AvailabilitySlotOverlapError,
+   TutorProfileIncompleteError,
+   InvalidTutorPricingError,
+   OptimisticLockError,
+ } from "./tutor.errors";
+ 
+ type TutorProfileRow = typeof tutorProfile.$inferSelect;
+ 
++/**
++ * Validates tutor profile update input against status and pricing constraints.
++ *
++ * @param profile - the existing tutor profile (undefined means not found)
++ * @param input - the update input to validate
++ * @param pricingPort - the pricing port used to validate prices
++ * @throws {TutorProfileNotFoundError} if the profile does not exist
++ * @throws {TutorProfileNotEditableError} if the profile is published
++ * @throws {InvalidTutorPricingError} if prices violate the Cogito floor
++ */
+ export function validateUpdateInput(
+   profile: TutorProfileRow | undefined,
+   input: UpdateProfileInput,
+   pricingPort: TutorPricingPort,
+ ): void {
+   if (!profile) {
+     throw new TutorProfileNotFoundError("unknown");
+   }
+ 
+   if (profile.onboardingStatus === ONBOARDING_STATUS.PUBLISHED) {
+@@ -40,20 +50,30 @@ export function validateUpdateInput(
+       | "online"
+       | "offline"
+       | "both";
+     const error = pricingPort.validatePrices(input.prices, modality);
+     if (error) {
+       throw new InvalidTutorPricingError(profile.id, error);
+     }
+   }
+ }
+ 
++/**
++ * Validates a tutor profile for submission to review (draft/changes_requested, required fields, pricing).
++ *
++ * @param profile - the existing tutor profile (undefined means not found)
++ * @param pricingPort - the pricing port used to validate prices
++ * @throws {TutorProfileNotFoundError} if the profile does not exist
++ * @throws {InvalidTutorStatusError} if the profile is not in a submittable state
++ * @throws {TutorProfileIncompleteError} if required fields are missing
++ * @throws {InvalidTutorPricingError} if prices violate the Cogito floor
++ */
+ export function validateSubmitForReview(
+   profile: TutorProfileRow | undefined,
+   pricingPort: TutorPricingPort,
+ ): void {
+   if (!profile) {
+     throw new TutorProfileNotFoundError("unknown");
+   }
+ 
+   if (
+     profile.onboardingStatus !== ONBOARDING_STATUS.DRAFT &&
+@@ -88,48 +108,76 @@ export function validateSubmitForReview(
+     const error = pricingPort.validatePrices(
+       profile.prices as Record<string, number>,
+       modality,
+     );
+     if (error) {
+       throw new InvalidTutorPricingError(profile.id, error);
+     }
+   }
+ }
+ 
++/**
++ * Creates the tutor service for profile and availability management.
++ *
++ * @param deps - the dependency ports (tutorRepo, pricingPort, auditPort, db)
++ * @returns a TutorService with profile and availability methods
++ */
+ export function createTutorService(deps: {
+   tutorRepo: TutorRepo;
+   pricingPort: TutorPricingPort;
+   auditPort: TutorAuditPort;
+   db: DbType;
+ }) {
+   const { tutorRepo, pricingPort, auditPort, db } = deps;
+ 
++  /**
++   * Fetches the tutor profile for the requesting user.
++   *
++   * @param userId - the tutor user
++   * @returns the tutor profile
++   * @throws {TutorProfileNotFoundError} if the profile does not exist
++   */
+   async function getMyProfile(userId: string) {
+     const profile = await tutorRepo.getByUserId(db, userId);
+     if (!profile) throw new TutorProfileNotFoundError(userId);
+     return profile;
+   }
+ 
++  /**
++   * Updates the tutor profile with optimistic concurrency via version.
++   *
++   * @param userId - the tutor user
++   * @param input - the update input including the expected version
++   * @returns the updated tutor profile
++   * @throws {OptimisticLockError} if the version does not match
++   */
+   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
+     const profile = await tutorRepo.getByUserId(db, userId);
+     validateUpdateInput(profile, input, pricingPort);
+     const { version, ...data } = input;
+     const rows = await tutorRepo.updateProfileWithVersion(
+       db,
+       userId,
+       version,
+       data,
+     );
+     if (rows.length === 0) throw new OptimisticLockError(profile!.id, version);
+     return rows[0];
+   }
+ 
++  /**
++   * Submits the tutor profile for admin review, recording an audit entry.
++   *
++   * @param userId - the tutor user
++   * @returns the updated tutor profile
++   * @throws {TutorProfileNotFoundError} if the profile does not exist
++   */
+   async function submitForReview(userId: string) {
+     const profile = await tutorRepo.getByUserId(db, userId);
+     validateSubmitForReview(profile, pricingPort);
+ 
+     return db.transaction(async (tx) => {
+       const row = await tutorRepo.updateStatus(
+         tx,
+         userId,
+         ONBOARDING_STATUS.PENDING_REVIEW,
+       );
+@@ -142,24 +190,38 @@ export function createTutorService(deps: {
+         targetId: profile!.id,
+         targetType: "tutor_profile",
+         beforeState: { onboardingStatus: profile!.onboardingStatus },
+         afterState: { onboardingStatus: ONBOARDING_STATUS.PENDING_REVIEW },
+       });
+ 
+       return row;
+     });
+   }
+ 
++  /**
++   * Lists the tutor's future availability slots.
++   *
++   * @param userId - the tutor user
++   * @returns the active future availability slots
++   */
+   async function listAvailability(userId: string) {
+     return tutorRepo.listAvailability(db, userId, { from: new Date() });
+   }
+ 
++  /**
++   * Creates or updates an availability slot, rejecting overlaps.
++   *
++   * @param userId - the tutor user
++   * @param input - the slot details (id when updating an existing slot)
++   * @returns the created or updated slot
++   * @throws {AvailabilitySlotOverlapError} if the slot overlaps an existing one
++   */
+   async function upsertAvailability(
+     userId: string,
+     input: {
+       id?: string;
+       startDate: Date;
+       endDate: Date;
+       modality: "online" | "offline" | "both";
+       isRecurring?: boolean;
+       recurrenceRule?: string;
+       isActive?: boolean;
+@@ -179,20 +241,27 @@ export function createTutorService(deps: {
+       throw new AvailabilitySlotOverlapError(userId);
+     }
+ 
+     return tutorRepo.upsertAvailability(db, userId, {
+       ...input,
+       startDate: start,
+       endDate: end,
+     });
+   }
+ 
++  /**
++   * Deactivates an availability slot (soft delete) if it belongs to the tutor.
++   *
++   * @param userId - the tutor user
++   * @param slotId - the slot to deactivate
++   * @throws {TutorProfileNotFoundError} if the slot does not exist
++   */
+   async function deleteAvailability(userId: string, slotId: string) {
+     const slots = await tutorRepo.listAvailability(db, userId, {
+       from: new Date(),
+     });
+     const found = slots.find((s) => s.id === slotId);
+     if (!found) throw new TutorProfileNotFoundError(userId);
+     await tutorRepo.deleteAvailability(db, slotId);
+   }
+ 
+   return {
+diff --git a/packages/api/src/modules/wallet/wallet.repo.ts b/packages/api/src/modules/wallet/wallet.repo.ts
+index f64443c..ff52429 100644
+--- a/packages/api/src/modules/wallet/wallet.repo.ts
++++ b/packages/api/src/modules/wallet/wallet.repo.ts
+@@ -13,44 +13,65 @@ export const WALLET_COLUMNS = {
+   createdAt: wallet.createdAt,
+   updatedAt: wallet.updatedAt,
+ };
+ 
+ export type AtomicResult =
+   | { success: true; wallet: WalletSnapshot }
+   | { success: false; reason: "insufficient_balance" | "insufficient_held" };
+ 
+ export type WalletRepo = ReturnType<typeof createWalletRepo>;
+ 
++/**
++ * Fetches a wallet by id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @returns the wallet snapshot, or null
++ */
+ export async function getById(
+   conn: DbOrTx,
+   walletId: string,
+ ): Promise<WalletSnapshot | null> {
+   const [w] = await conn
+     .select(WALLET_COLUMNS)
+     .from(wallet)
+     .where(eq(wallet.id, walletId))
+     .limit(1);
+   return (w as WalletSnapshot | undefined) ?? null;
+ }
+ 
++/**
++ * Fetches a wallet by user id.
++ *
++ * @param conn - the database connection or active transaction
++ * @param userId - the user id
++ * @returns the wallet snapshot, or null
++ */
+ export async function getByUserId(
+   conn: DbOrTx,
+   userId: string,
+ ): Promise<WalletSnapshot | null> {
+   const [w] = await conn
+     .select(WALLET_COLUMNS)
+     .from(wallet)
+     .where(eq(wallet.userId, userId))
+     .limit(1);
+   return (w as WalletSnapshot | undefined) ?? null;
+ }
+ 
++/**
++ * Inserts a new wallet row.
++ *
++ * @param conn - the database connection or active transaction
++ * @param params - the initial balance values
++ * @returns the created wallet snapshot
++ */
+ export async function insert(
+   conn: DbOrTx,
+   params: {
+     userId: string;
+     totalBalance: number;
+     heldBalance: number;
+     availableBalance: number;
+   },
+ ): Promise<WalletSnapshot> {
+   const [created] = await conn
+@@ -58,20 +79,28 @@ export async function insert(
+     .values({
+       userId: params.userId,
+       totalBalance: params.totalBalance,
+       heldBalance: params.heldBalance,
+       availableBalance: params.availableBalance,
+     })
+     .returning();
+   return created as WalletSnapshot;
+ }
+ 
++/**
++ * Directly sets a wallet's balances.
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @param balances - the new balance values
++ * @returns the updated wallet snapshot
++ */
+ export async function updateBalances(
+   conn: DbOrTx,
+   walletId: string,
+   balances: {
+     totalBalance: number;
+     heldBalance: number;
+     availableBalance: number;
+   },
+ ): Promise<WalletSnapshot> {
+   const [updated] = await conn
+@@ -79,122 +108,176 @@ export async function updateBalances(
+     .set({
+       totalBalance: balances.totalBalance,
+       heldBalance: balances.heldBalance,
+       availableBalance: balances.availableBalance,
+     })
+     .where(eq(wallet.id, walletId))
+     .returning();
+   return updated as WalletSnapshot;
+ }
+ 
++/**
++ * Atomically moves Marks from available to held, guarded by sufficient available balance.
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @param amount - the amount to hold
++ * @returns success with the updated wallet, or failure with a reason
++ */
+ export async function atomicHold(
+   conn: DbOrTx,
+   walletId: string,
+   amount: number,
+ ): Promise<AtomicResult> {
+   const rows = await conn
+     .update(wallet)
+     .set({
+       heldBalance: sql`${wallet.heldBalance} + ${amount}`,
+       availableBalance: sql`${wallet.availableBalance} - ${amount}`,
+     })
+     .where(and(eq(wallet.id, walletId), gte(wallet.availableBalance, amount)))
+     .returning();
+   if (!rows.length) return { success: false, reason: "insufficient_balance" };
+   return { success: true, wallet: rows[0] as WalletSnapshot };
+ }
+ 
++/**
++ * Atomically moves Marks from held back to available, guarded by sufficient held balance.
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @param amount - the amount to release
++ * @returns success with the updated wallet, or failure with a reason
++ */
+ export async function atomicRelease(
+   conn: DbOrTx,
+   walletId: string,
+   amount: number,
+ ): Promise<AtomicResult> {
+   const rows = await conn
+     .update(wallet)
+     .set({
+       heldBalance: sql`GREATEST(${wallet.heldBalance} - ${amount}, 0)`,
+       availableBalance: sql`${wallet.availableBalance} + ${amount}`,
+     })
+     .where(and(eq(wallet.id, walletId), gte(wallet.heldBalance, amount)))
+     .returning();
+   if (!rows.length) return { success: false, reason: "insufficient_held" };
+   return { success: true, wallet: rows[0] as WalletSnapshot };
+ }
+ 
++/**
++ * Atomically consumes held Marks, reducing total and held balance.
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @param amount - the amount to deduct
++ * @returns success with the updated wallet, or failure with a reason
++ */
+ export async function atomicDeduct(
+   conn: DbOrTx,
+   walletId: string,
+   amount: number,
+ ): Promise<AtomicResult> {
+   const rows = await conn
+     .update(wallet)
+     .set({
+       heldBalance: sql`GREATEST(${wallet.heldBalance} - ${amount}, 0)`,
+       totalBalance: sql`${wallet.totalBalance} - ${amount}`,
+     })
+     .where(
+       and(eq(wallet.id, walletId), sql`${wallet.heldBalance} >= ${amount}`),
+     )
+     .returning();
+   if (!rows.length) return { success: false, reason: "insufficient_held" };
+   return { success: true, wallet: rows[0] as WalletSnapshot };
+ }
+ 
++/**
++ * Atomically credits Marks to total and available balance.
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @param amount - the amount to credit
++ * @returns the updated wallet snapshot
++ */
+ export async function atomicCredit(
+   conn: DbOrTx,
+   walletId: string,
+   amount: number,
+ ): Promise<WalletSnapshot> {
+   const [updated] = await conn
+     .update(wallet)
+     .set({
+       totalBalance: sql`${wallet.totalBalance} + ${amount}`,
+       availableBalance: sql`${wallet.availableBalance} + ${amount}`,
+     })
+     .where(eq(wallet.id, walletId))
+     .returning();
+   return updated as WalletSnapshot;
+ }
+ 
++/**
++ * Atomically credits total and available balance for a compensation credit.
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @param amount - the amount to credit
++ * @returns the updated wallet snapshot
++ */
+ export async function atomicCompensateCredit(
+   conn: DbOrTx,
+   walletId: string,
+   amount: number,
+ ): Promise<WalletSnapshot> {
+   const [updated] = await conn
+     .update(wallet)
+     .set({
+       totalBalance: sql`${wallet.totalBalance} + ${amount}`,
+       availableBalance: sql`${wallet.availableBalance} + ${amount}`,
+     })
+     .where(eq(wallet.id, walletId))
+     .returning();
+   return updated as WalletSnapshot;
+ }
+ 
++/**
++ * Atomically reduces total and available balance for a compensation deduct.
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @param amount - the amount to deduct
++ * @returns success with the updated wallet, or failure with a reason
++ */
+ export async function atomicCompensateDeduct(
+   conn: DbOrTx,
+   walletId: string,
+   amount: number,
+ ): Promise<AtomicResult> {
+   const rows = await conn
+     .update(wallet)
+     .set({
+       totalBalance: sql`${wallet.totalBalance} - ${amount}`,
+       availableBalance: sql`${wallet.availableBalance} - ${amount}`,
+     })
+     .where(and(eq(wallet.id, walletId), gte(wallet.availableBalance, amount)))
+     .returning();
+   if (!rows.length) return { success: false, reason: "insufficient_balance" };
+   return { success: true, wallet: rows[0] as WalletSnapshot };
+ }
+ 
++/**
++ * Inserts a ledger entry recording a wallet balance mutation.
++ *
++ * @param conn - the database connection or active transaction
++ * @param params - the ledger entry fields
++ */
+ export async function insertLedger(
+   conn: DbOrTx,
+   params: {
+     walletId: string;
+     entryType: string;
+     actorType: string;
+     amount: number;
+     eventKey: string;
+     sourceReference?: string;
+     reason?: string;
+@@ -214,20 +297,28 @@ export async function insertLedger(
+     sourceReference: params.sourceReference ?? null,
+     reason: params.reason,
+     beforeBalance: params.beforeBalance,
+     afterBalance: params.afterBalance,
+     balanceAfterWalletTotal: params.balanceAfterTotal,
+     balanceAfterWalletHeld: params.balanceAfterHeld,
+     bookingId: params.bookingId ?? null,
+   });
+ }
+ 
++/**
++ * Lists ledger entries for a wallet with optional filters, newest first (fetches limit+1).
++ *
++ * @param conn - the database connection or active transaction
++ * @param walletId - the wallet id
++ * @param opts - list options (limit, cursor, bookingId, eventKey)
++ * @returns the matching ledger rows
++ */
+ export async function findLedgerEntries(
+   conn: DbOrTx,
+   walletId: string,
+   opts: {
+     limit: number;
+     cursor?: string;
+     bookingId?: string;
+     eventKey?: string;
+   },
+ ) {
+@@ -239,24 +330,37 @@ export async function findLedgerEntries(
+     conditions.push(eq(ledgerEntry.eventKey, opts.eventKey));
+   }
+   return conn
+     .select()
+     .from(ledgerEntry)
+     .where(and(...conditions))
+     .orderBy(desc(ledgerEntry.createdAt))
+     .limit(opts.limit + 1);
+ }
+ 
++/**
++ * Lists all active mark packages.
++ *
++ * @param conn - the database connection or active transaction
++ * @returns the active package rows
++ */
+ export async function listActivePackages(conn: DbOrTx) {
+   return conn.select().from(markPackage).where(eq(markPackage.isActive, true));
+ }
+ 
++/**
++ * Inserts a wallet only if one does not already exist for the user.
++ *
++ * @param db - the database connection
++ * @param values - the initial balance values
++ * @returns the created wallet, or null when the user already has a wallet
++ */
+ export async function upsert(
+   db: DbType,
+   values: {
+     userId: string;
+     totalBalance: number;
+     heldBalance: number;
+     availableBalance: number;
+   },
+ ): Promise<WalletSnapshot | null> {
+   const [created] = await db
+diff --git a/packages/api/src/modules/wallet/wallet.service.ts b/packages/api/src/modules/wallet/wallet.service.ts
+index 0916da7..66c423a 100644
+--- a/packages/api/src/modules/wallet/wallet.service.ts
++++ b/packages/api/src/modules/wallet/wallet.service.ts
+@@ -1,12 +1,10 @@
+-import { eq, and, inArray, sum } from "drizzle-orm";
+-import { wallet, ledgerEntry } from "@cogito-app/db/schema";
+ import { KNOWLEDGE_BANK_THRESHOLD } from "../../shared/constants";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import type { WalletRepo, AtomicResult } from "./wallet.repo";
+ import { WalletNotFoundError, InsufficientBalanceError } from "./wallet.errors";
+ 
+ export type EntryType =
+   | "credit"
+   | "hold"
+   | "release"
+@@ -103,63 +101,82 @@ export interface WalletPort {
+       id: string;
+       code: string;
+       name: string;
+       marks: number;
+       priceIdr: number;
+       isActive: boolean;
+       createdAt: Date;
+       updatedAt: Date;
+     }[]
+   >;
+-  reconcile(query?: {
+-    walletId?: string;
+-  }): Promise<{ expected: number; actual: number; drift: number }>;
+ }
+ 
+ export type WalletService = ReturnType<typeof createWalletService>;
+ 
+-/** Wallet service providing atomic balance operations with ledger tracking. */
++/**
++ * Creates the wallet service providing atomic balance operations with ledger tracking.
++ *
++ * @param repo - the wallet repository providing atomic balance mutations
++ * @param db - the database connection used for standalone (non-transaction) operations
++ * @returns a WalletPort with hold/release/deduct/credit/compensate and read operations
++ */
+ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+   async function runInTx<T>(conn: DbOrTx, fn: (tx: DbOrTx) => Promise<T>) {
+     if (conn === db) return db.transaction(fn);
+     return fn(conn);
+   }
+ 
+   async function getById(
+     conn: DbOrTx,
+     walletId: string,
+   ): Promise<WalletSnapshot | null> {
+     return repo.getById(conn, walletId);
+   }
+ 
+   async function getByUserId(
+     conn: DbOrTx,
+     userId: string,
+   ): Promise<WalletSnapshot | null> {
+     return repo.getByUserId(conn, userId);
+   }
+ 
++  /**
++   * Gets or creates the wallet for a user.
++   *
++   * @param userId - the user to look up (and create a wallet for if absent)
++   * @returns the user's wallet snapshot with zeroed balances when newly created
++   * @throws {WalletNotFoundError} if the wallet cannot be created or found after an upsert race
++   */
+   async function getOrCreate(userId: string): Promise<WalletSnapshot> {
+     const existing = await repo.getByUserId(db, userId);
+     if (existing) return existing;
+     const created = await repo.upsert(db, {
+       userId,
+       totalBalance: 0,
+       heldBalance: 0,
+       availableBalance: 0,
+     });
+     if (created) return created;
+     const afterConflict = await repo.getByUserId(db, userId);
+     if (!afterConflict) throw new WalletNotFoundError(userId);
+     return afterConflict;
+   }
+ 
++  /**
++   * Moves Marks from available to held balance atomically, with a ledger entry.
++   *
++   * @param conn - the database connection or active transaction
++   * @param params - hold details (wallet, amount, eventKey, actor, reason)
++   * @returns the updated wallet snapshot
++   * @throws {WalletNotFoundError} if the wallet does not exist
++   * @throws {InsufficientBalanceError} if the available balance is too low
++   */
+   async function hold(
+     conn: DbOrTx,
+     params: HoldParams,
+   ): Promise<WalletSnapshot> {
+     return runInTx(conn, async (tx) => {
+       const w = await repo.getById(tx, params.walletId);
+       if (!w) throw new WalletNotFoundError(params.walletId);
+       const result: AtomicResult = await repo.atomicHold(
+         tx,
+         params.walletId,
+@@ -179,20 +196,29 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+         beforeBalance: w.totalBalance,
+         afterBalance: updated.totalBalance,
+         balanceAfterTotal: updated.totalBalance,
+         balanceAfterHeld: updated.heldBalance,
+         bookingId: params.bookingId,
+       });
+       return updated;
+     });
+   }
+ 
++  /**
++   * Moves Marks from held back to available balance atomically, with a ledger entry.
++   *
++   * @param conn - the database connection or active transaction
++   * @param params - release details (wallet, amount, eventKey, actor, reason)
++   * @returns the updated wallet snapshot
++   * @throws {WalletNotFoundError} if the wallet does not exist
++   * @throws {InsufficientBalanceError} if the held balance is too low
++   */
+   async function release(
+     conn: DbOrTx,
+     params: ReleaseParams,
+   ): Promise<WalletSnapshot> {
+     return runInTx(conn, async (tx) => {
+       const w = await repo.getById(tx, params.walletId);
+       if (!w) throw new WalletNotFoundError(params.walletId);
+       const result: AtomicResult = await repo.atomicRelease(
+         tx,
+         params.walletId,
+@@ -213,20 +239,29 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+         beforeBalance: w.totalBalance,
+         afterBalance: updated.totalBalance,
+         balanceAfterTotal: updated.totalBalance,
+         balanceAfterHeld: updated.heldBalance,
+         bookingId: params.bookingId,
+       });
+       return updated;
+     });
+   }
+ 
++  /**
++   * Consumes held Marks as payment, reducing total and held balance atomically.
++   *
++   * @param conn - the database connection or active transaction
++   * @param params - deduct details (wallet, amount, eventKey, actor, reason)
++   * @returns the updated wallet snapshot
++   * @throws {WalletNotFoundError} if the wallet does not exist
++   * @throws {InsufficientBalanceError} if the held balance is too low
++   */
+   async function deduct(
+     conn: DbOrTx,
+     params: DeductParams,
+   ): Promise<WalletSnapshot> {
+     return runInTx(conn, async (tx) => {
+       const w = await repo.getById(tx, params.walletId);
+       if (!w) throw new WalletNotFoundError(params.walletId);
+       const result: AtomicResult = await repo.atomicDeduct(
+         tx,
+         params.walletId,
+@@ -246,20 +281,28 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+         beforeBalance: w.totalBalance,
+         afterBalance: updated.totalBalance,
+         balanceAfterTotal: updated.totalBalance,
+         balanceAfterHeld: updated.heldBalance,
+         bookingId: params.bookingId,
+       });
+       return updated;
+     });
+   }
+ 
++  /**
++   * Credits Marks to the wallet (e.g. package purchase), atomically.
++   *
++   * @param conn - the database connection or active transaction
++   * @param params - credit details (wallet, amount, eventKey, actor, reason)
++   * @returns the updated wallet snapshot
++   * @throws {WalletNotFoundError} if the wallet does not exist
++   */
+   async function credit(
+     conn: DbOrTx,
+     params: CreditParams,
+   ): Promise<WalletSnapshot> {
+     return runInTx(conn, async (tx) => {
+       const w = await repo.getById(tx, params.walletId);
+       if (!w) throw new WalletNotFoundError(params.walletId);
+       const updated = await repo.atomicCredit(
+         tx,
+         params.walletId,
+@@ -276,20 +319,29 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+         beforeBalance: w.totalBalance,
+         afterBalance: updated.totalBalance,
+         balanceAfterTotal: updated.totalBalance,
+         balanceAfterHeld: updated.heldBalance,
+         bookingId: params.bookingId,
+       });
+       return updated;
+     });
+   }
+ 
++  /**
++   * Applies an admin/refund compensation credit or deduct atomically.
++   *
++   * @param conn - the database connection or active transaction
++   * @param params - compensate details including the compensation type
++   * @returns the updated wallet snapshot
++   * @throws {WalletNotFoundError} if the wallet does not exist
++   * @throws {InsufficientBalanceError} if compensating a deduct and the available balance is too low
++   */
+   async function compensate(
+     conn: DbOrTx,
+     params: CompensateParams,
+   ): Promise<WalletSnapshot> {
+     return runInTx(conn, async (tx) => {
+       const w = await repo.getById(tx, params.walletId);
+       if (!w) throw new WalletNotFoundError(params.walletId);
+       const result =
+         params.type === "compensate_credit"
+           ? await repo.atomicCompensateCredit(
+@@ -324,92 +376,75 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+         beforeBalance: w.totalBalance,
+         afterBalance: updated.totalBalance,
+         balanceAfterTotal: updated.totalBalance,
+         balanceAfterHeld: updated.heldBalance,
+         bookingId: params.bookingId,
+       });
+       return updated;
+     });
+   }
+ 
++  /**
++   * Lists ledger entries for a wallet with pagination.
++   *
++   * @param walletId - the wallet to query
++   * @param opts - pagination/filter options (cursor, limit, bookingId, eventKey)
++   * @returns the ledger items and a nextCursor when more pages exist
++   */
+   async function listLedger(walletId: string, opts?: LedgerQueryOptions) {
+     const limit = Math.min(opts?.limit ?? 20, 100);
+     const rows = await repo.findLedgerEntries(db, walletId, {
+       limit,
+       cursor: opts?.cursor,
+       bookingId: opts?.bookingId,
+       eventKey: opts?.eventKey,
+     });
+     const items = rows.slice(0, limit);
+     const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+     return { items, nextCursor };
+   }
+ 
++  /**
++   * Checks whether a user's available balance meets the Knowledge Bank threshold.
++   *
++   * @param userId - the user to check
++   * @returns eligibility, the available balance, and the threshold
++   */
+   async function knowledgeBankEligible(userId: string) {
+     const w = await repo.getByUserId(db, userId);
+     if (!w) {
+       return {
+         eligible: false,
+         balance: 0,
+         threshold: KNOWLEDGE_BANK_THRESHOLD,
+       };
+     }
+     return {
+       eligible: w.availableBalance >= KNOWLEDGE_BANK_THRESHOLD,
+       balance: w.availableBalance,
+       threshold: KNOWLEDGE_BANK_THRESHOLD,
+     };
+   }
+ 
++  /**
++   * Lists all active mark packages available for purchase.
++   *
++   * @returns the active mark packages
++   */
+   async function listActivePackages() {
+     return repo.listActivePackages(db);
+   }
+ 
+-  async function reconcile(query?: { walletId?: string }) {
+-    const ADD_TYPES = ["credit", "compensate_credit"];
+-    const SUB_TYPES = ["deduct", "compensate_deduct"];
+-
+-    const walletCondition = query?.walletId
+-      ? eq(ledgerEntry.walletId, query.walletId)
+-      : undefined;
+-
+-    const [addRow] = await db
+-      .select({ total: sum(ledgerEntry.amount) })
+-      .from(ledgerEntry)
+-      .where(and(walletCondition, inArray(ledgerEntry.entryType, ADD_TYPES)));
+-    const [subRow] = await db
+-      .select({ total: sum(ledgerEntry.amount) })
+-      .from(ledgerEntry)
+-      .where(and(walletCondition, inArray(ledgerEntry.entryType, SUB_TYPES)));
+-
+-    const expected = Number(addRow?.total ?? 0) - Number(subRow?.total ?? 0);
+-
+-    const walletRows = query?.walletId
+-      ? await db
+-          .select()
+-          .from(wallet)
+-          .where(eq(wallet.id, query.walletId))
+-          .limit(1000)
+-      : await db.select().from(wallet).limit(1000);
+-    const actual = walletRows.reduce(
+-      (acc, w) => acc + (w.totalBalance ?? 0),
+-      0,
+-    );
+-
+-    return { expected, actual, drift: actual - expected };
+-  }
+-
+   return {
+     hold,
+     release,
+     deduct,
+     credit,
+     compensate,
+     getById,
+     getByUserId,
+     getOrCreate,
+     listLedger,
+     knowledgeBankEligible,
+     listActivePackages,
+-    reconcile,
+   };
+ }
+diff --git a/packages/api/src/shared/constants.ts b/packages/api/src/shared/constants.ts
+index dc1fe49..c9c07db 100644
+--- a/packages/api/src/shared/constants.ts
++++ b/packages/api/src/shared/constants.ts
+@@ -11,20 +11,44 @@ export const DEFAULT_SOLO_PRICE = 42;
+ export const SESSION_DURATION_MINUTES = 90;
+ 
+ export const DEFAULT_PAGE_LIMIT = 20;
+ export const MAX_PAGE_LIMIT = 100;
+ export const ADMIN_DEFAULT_PAGE_LIMIT = 50;
+ 
+ export const COGITO_TAKE_RATE = 0.2;
+ export const TUTOR_PAYOUT_RATE_IDR = 7000;
+ export const EXTRA_TAKE_DIVISOR = 5;
+ 
++export const ONLINE_BASELINE_SPLIT: Record<
++  number,
++  { tutor: number; cogito: number }
++> = {
++  1: { tutor: 30, cogito: 12 },
++  2: { tutor: 54, cogito: 16 },
++  3: { tutor: 64, cogito: 20 },
++  4: { tutor: 74, cogito: 22 },
++  5: { tutor: 81, cogito: 24 },
++  6: { tutor: 88, cogito: 26 },
++};
++
++export const OFFLINE_BASELINE_SPLIT: Record<
++  number,
++  { tutor: number; cogito: number }
++> = {
++  1: { tutor: 35, cogito: 15 },
++  2: { tutor: 70, cogito: 20 },
++  3: { tutor: 95, cogito: 25 },
++  4: { tutor: 115, cogito: 25 },
++  5: { tutor: 120, cogito: 30 },
++  6: { tutor: 127, cogito: 35 },
++};
++
+ export const ONLINE_FLOOR_PRICES: Record<number, number> = {
+   1: 42,
+   2: 35,
+   3: 28,
+   4: 24,
+   5: 21,
+   6: 19,
+ };
+ 
+ export const OFFLINE_FLOOR_PRICES: Record<number, number> = {
+diff --git a/packages/api/src/tests/unit/booking.repo.test.ts b/packages/api/src/tests/unit/booking.repo.test.ts
+index d1f49db..da8b00d 100644
+--- a/packages/api/src/tests/unit/booking.repo.test.ts
++++ b/packages/api/src/tests/unit/booking.repo.test.ts
+@@ -69,27 +69,44 @@ describe("createBookingRepo", () => {
+     expect(repo).toHaveProperty("insertRescheduleProposal");
+     expect(repo).toHaveProperty("insertBookingSession");
+     expect(repo).toHaveProperty("listSessionsBySeriesId");
+     expect(repo).toHaveProperty("findBookingsExpiringByDeadline");
+     expect(repo).toHaveProperty("findOverlappingBookings");
+     expect(repo).toHaveProperty("updateBookingVersioned");
+   });
+ 
+   describe("findBookingById", () => {
+     test("returns row when found", async () => {
+-      const row = { id: "b1", currentState: "confirmed" };
++      const row = {
++        id: "b1",
++        currentState: "confirmed",
++        priceSnapshot: {
++          perStudent: 42000,
++          baseline: 42000,
++          tutorShare: 33600,
++          cogitoTake: 8400,
++          baselineCogitoTake: 12000,
++          baselineTutorShare: 30000,
++          extraTotal: 0,
++          cogitoExtraTake: 0,
++          tutorExtraShare: 0,
++        },
++      };
+       const conn: any = { ...makeSelectConn([row]) };
+       const repo = makeBookingRepo();
+ 
+       const result = await repo.findBookingById(conn, "b1");
+ 
+       expect(result).toEqual(row);
++      expect(result?.id).toBe("b1");
++      expect(result?.currentState).toBe("confirmed");
++      expect(result?.priceSnapshot).toEqual(row.priceSnapshot);
+       expect(conn.from).toHaveBeenCalledTimes(1);
+       expect(conn.where).toHaveBeenCalledTimes(1);
+     });
+ 
+     test("returns null when not found", async () => {
+       const conn: any = { ...makeSelectConn([]) };
+       const repo = makeBookingRepo();
+ 
+       const result = await repo.findBookingById(conn, "missing");
+ 
+@@ -158,27 +175,36 @@ describe("createBookingRepo", () => {
+         futureOnly: true,
+       });
+ 
+       expect(result).toEqual(slot);
+       expect(findFirst).toHaveBeenCalledTimes(1);
+     });
+   });
+ 
+   describe("findParticipant", () => {
+     test("returns participant when found", async () => {
+-      const participant = { id: "p1", bookingId: "b1", userId: "u1" };
++      const participant = {
++        id: "p1",
++        bookingId: "b1",
++        userId: "u1",
++        confirmationState: "pending",
++      };
+       const conn: any = { ...makeSelectConn([participant]) };
+       const repo = makeBookingRepo();
+ 
+       const result = await repo.findParticipant(conn, "b1", "u1");
+ 
+       expect(result).toEqual(participant);
++      expect(result?.id).toBe("p1");
++      expect(result?.bookingId).toBe("b1");
++      expect(result?.userId).toBe("u1");
++      expect(result?.confirmationState).toBe("pending");
+       expect(conn.from).toHaveBeenCalledTimes(1);
+     });
+ 
+     test("returns null when not found", async () => {
+       const conn: any = { ...makeSelectConn([]) };
+       const repo = makeBookingRepo();
+ 
+       const result = await repo.findParticipant(conn, "b1", "unknown");
+ 
+       expect(result).toBeNull();
+@@ -187,46 +213,56 @@ describe("createBookingRepo", () => {
+ 
+   describe("findConfirmedParticipants", () => {
+     test("returns confirmed and reconfirmed participants", async () => {
+       const rows = [
+         { id: "p1", confirmationState: "confirmed" },
+         { id: "p2", confirmationState: "reconfirmed" },
+       ];
+       const conn: any = { ...makeSelectConn(rows) };
+       const repo = makeBookingRepo();
+ 
+-      await repo.findConfirmedParticipants(conn, "b1");
++      const result = await repo.findConfirmedParticipants(conn, "b1");
+ 
++      expect(result).toEqual(rows);
++      expect(result[0]).toHaveProperty("id", "p1");
++      expect(result[0]).toHaveProperty("confirmationState", "confirmed");
++      expect(result[1]).toHaveProperty("confirmationState", "reconfirmed");
+       expect(conn.from).toHaveBeenCalledTimes(1);
+       expect(conn.where).toHaveBeenCalledTimes(1);
+     });
+ 
+     test("excludes specified user when excludeUserId provided", async () => {
+       const rows = [{ id: "p2", confirmationState: "confirmed" }];
+       const conn: any = { ...makeSelectConn(rows) };
+       const repo = makeBookingRepo();
+ 
+-      await repo.findConfirmedParticipants(conn, "b1", "u1");
++      const result = await repo.findConfirmedParticipants(conn, "b1", "u1");
+ 
++      expect(result).toEqual(rows);
++      expect(result[0]).toHaveProperty("id", "p2");
++      expect(result[0]).toHaveProperty("confirmationState", "confirmed");
+       expect(conn.from).toHaveBeenCalledTimes(1);
+       expect(conn.where).toHaveBeenCalledTimes(1);
+     });
+   });
+ 
+   describe("findReconfirmedParticipants", () => {
+     test("returns reconfirmed participants", async () => {
+       const rows = [{ id: "p1", confirmationState: "reconfirmed" }];
+       const conn: any = { ...makeSelectConn(rows) };
+       const repo = makeBookingRepo();
+ 
+-      await repo.findReconfirmedParticipants(conn, "b1");
++      const result = await repo.findReconfirmedParticipants(conn, "b1");
+ 
++      expect(result).toEqual(rows);
++      expect(result[0]).toHaveProperty("id", "p1");
++      expect(result[0]).toHaveProperty("confirmationState", "reconfirmed");
+       expect(conn.from).toHaveBeenCalledTimes(1);
+       expect(conn.where).toHaveBeenCalledTimes(1);
+     });
+   });
+ 
+   describe("insertBooking", () => {
+     test("inserts and returns the booking row", async () => {
+       const row = { id: "b1", currentState: "draft" };
+       const { insert, values } = makeInsertConn([row]);
+       const conn: any = { insert };
+@@ -401,36 +437,47 @@ describe("createBookingRepo", () => {
+         seriesBookingId: "sb1",
+         scheduledStartAt: new Date("2026-01-01"),
+         scheduledEndAt: new Date("2026-01-01T01:30:00"),
+         currentState: "scheduled",
+         holdAmount: 50000,
+         priceSnapshot: {
+           perStudent: 42000,
+           baseline: 42000,
+           tutorShare: 33600,
+           cogitoTake: 8400,
++          baselineCogitoTake: 12000,
++          baselineTutorShare: 30000,
++          extraTotal: 0,
++          cogitoExtraTake: 0,
++          tutorExtraShare: 0,
+         },
+       });
+ 
+       expect(insert).toHaveBeenCalledTimes(1);
+       expect(values).toHaveBeenCalledTimes(1);
+     });
+   });
+ 
+   describe("listSessionsBySeriesId", () => {
+     test("returns sessions ordered by scheduledStartAt", async () => {
+-      const rows = [{ id: "s1" }, { id: "s2" }];
++      const rows = [
++        { id: "s1", currentState: "scheduled" },
++        { id: "s2", currentState: "scheduled" },
++      ];
+       const conn: any = { ...makeSelectConn(rows) };
+       const repo = makeBookingRepo();
+ 
+-      await repo.listSessionsBySeriesId(conn, "sb1");
++      const result = await repo.listSessionsBySeriesId(conn, "sb1");
+ 
++      expect(result).toEqual(rows);
++      expect(result[0]).toHaveProperty("id", "s1");
++      expect(result[0]).toHaveProperty("currentState", "scheduled");
+       expect(conn.from).toHaveBeenCalledTimes(1);
+       expect(conn.where).toHaveBeenCalledTimes(1);
+       expect(conn.orderBy).toHaveBeenCalledTimes(1);
+     });
+   });
+ 
+   describe("findOverlappingBookings", () => {
+     test("finds overlapping bookings without excluding booking id", async () => {
+       const rows = [{ id: "b2" }];
+       const conn: any = { ...makeSelectConn(rows) };
+@@ -492,28 +539,37 @@ describe("createBookingRepo", () => {
+         { excludeBookingId: "b1", excludeStates: ["declined", "cancelled"] },
+       );
+ 
+       expect(conn.from).toHaveBeenCalledTimes(1);
+       expect(conn.where).toHaveBeenCalledTimes(1);
+     });
+   });
+ 
+   describe("findBookingsExpiringByDeadline", () => {
+     test("finds bookings past deadline with given states", async () => {
+-      const rows = [{ id: "b1" }, { id: "b2" }];
++      const rows = [
++        { id: "b1", currentState: "awaiting_participant_confirmation" },
++        { id: "b2", currentState: "awaiting_participant_confirmation" },
++      ];
+       const conn: any = { ...makeSelectConn(rows) };
+       const repo = makeBookingRepo();
+ 
+-      await repo.findBookingsExpiringByDeadline(conn, [
++      const result = await repo.findBookingsExpiringByDeadline(conn, [
+         "awaiting_participant_confirmation",
+       ]);
+ 
++      expect(result).toEqual(rows);
++      expect(result[0]).toHaveProperty("id", "b1");
++      expect(result[0]).toHaveProperty(
++        "currentState",
++        "awaiting_participant_confirmation",
++      );
+       expect(conn.from).toHaveBeenCalledTimes(1);
+       expect(conn.where).toHaveBeenCalledTimes(1);
+     });
+ 
+     test("applies limit of 500 to prevent OOM", async () => {
+       const rows = [{ id: "b1" }];
+       const conn: any = { ...makeSelectConn(rows) };
+       const repo = makeBookingRepo();
+ 
+       await repo.findBookingsExpiringByDeadline(conn, [
+diff --git a/packages/api/src/tests/unit/booking.service.test.ts b/packages/api/src/tests/unit/booking.service.test.ts
+index 6ad8b7c..1cd2dd4 100644
+--- a/packages/api/src/tests/unit/booking.service.test.ts
++++ b/packages/api/src/tests/unit/booking.service.test.ts
+@@ -93,25 +93,30 @@ function makeWallet(overrides: Record<string, unknown> = {}) {
+       totalBalance: 500,
+       heldBalance: 0,
+       availableBalance: 500,
+     })),
+     ...overrides,
+   };
+ }
+ 
+ function makePricing() {
+   return {
+-    computeSplit: mock((_total: number, _size: number) => ({
++    computeSplit: mock((_modality: string, _price: number, _size: number) => ({
+       perStudent: 42,
+       baseline: 42,
+       tutorShare: 33.6,
+       cogitoTake: 8.4,
++      baselineCogitoTake: 12,
++      baselineTutorShare: 30,
++      extraTotal: 0,
++      cogitoExtraTake: 0,
++      tutorExtraShare: 0,
+     })),
+     validatePrices: mock(() => null),
+   };
+ }
+ 
+ function makeAudit() {
+   return { record: mock(async () => {}) };
+ }
+ 
+ function makeNotification() {
+@@ -144,20 +149,25 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
+     confirmedHeadcount: 1,
+     currentState: "awaiting_tutor_review",
+     previousState: null,
+     holdAmount: 42,
+     originalMarks: 42,
+     priceSnapshot: {
+       perStudent: 42,
+       baseline: 42,
+       tutorShare: 33.6,
+       cogitoTake: 8.4,
++      baselineCogitoTake: 12,
++      baselineTutorShare: 30,
++      extraTotal: 0,
++      cogitoExtraTake: 0,
++      tutorExtraShare: 0,
+     },
+     scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+     scheduledEndAt: new Date(Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000),
+     timezone: "Asia/Jakarta",
+     version: 1,
+     cancellationReason: null,
+     deadlineAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
+     ...overrides,
+   };
+ }
+@@ -1207,20 +1217,25 @@ describe("BookingService", () => {
+     test("confirms invite and holds marks for invitee", async () => {
+       const booking = makeBooking({
+         currentState: "awaiting_participant_confirmation",
+         targetGroupSize: 3,
+         confirmedHeadcount: 1,
+         priceSnapshot: {
+           perStudent: 42,
+           baseline: 42,
+           tutorShare: 33.6,
+           cogitoTake: 8.4,
++          baselineCogitoTake: 12,
++          baselineTutorShare: 30,
++          extraTotal: 0,
++          cogitoExtraTake: 0,
++          tutorExtraShare: 0,
+         },
+       });
+       const { service, wallet, repo } = createService({
+         repo: {
+           findBookingById: mock(async () => booking),
+           findParticipant: mock(async () =>
+             makeParticipant({
+               role: "invitee",
+               confirmationState: "pending",
+               heldAmount: 0,
+@@ -1250,20 +1265,25 @@ describe("BookingService", () => {
+     test("transitions to awaiting_tutor_review when headcount reaches target", async () => {
+       const booking = makeBooking({
+         currentState: "awaiting_participant_confirmation",
+         targetGroupSize: 2,
+         confirmedHeadcount: 1,
+         priceSnapshot: {
+           perStudent: 42,
+           baseline: 42,
+           tutorShare: 33.6,
+           cogitoTake: 8.4,
++          baselineCogitoTake: 12,
++          baselineTutorShare: 30,
++          extraTotal: 0,
++          cogitoExtraTake: 0,
++          tutorExtraShare: 0,
+         },
+       });
+       const { service } = createService({
+         repo: {
+           findBookingById: mock(async () => booking),
+           findParticipant: mock(async () =>
+             makeParticipant({
+               role: "invitee",
+               confirmationState: "pending",
+               heldAmount: 0,
+@@ -2110,20 +2130,25 @@ describe("BookingService", () => {
+ 
+   describe("confirmInvite — insufficient marks", () => {
+     test("throws InsufficientMarksError when invitee has insufficient balance", async () => {
+       const booking = makeBooking({
+         currentState: "awaiting_participant_confirmation",
+         priceSnapshot: {
+           perStudent: 42,
+           baseline: 42,
+           tutorShare: 33.6,
+           cogitoTake: 8.4,
++          baselineCogitoTake: 12,
++          baselineTutorShare: 30,
++          extraTotal: 0,
++          cogitoExtraTake: 0,
++          tutorExtraShare: 0,
+         },
+       });
+       const { service } = createService({
+         repo: {
+           findBookingById: mock(async () => booking),
+           findParticipant: mock(async () =>
+             makeParticipant({
+               role: "invitee",
+               confirmationState: "pending",
+               heldAmount: 0,
+@@ -2147,20 +2172,25 @@ describe("BookingService", () => {
+     });
+ 
+     test("throws BookingNotFoundError when invitee wallet not found", async () => {
+       const booking = makeBooking({
+         currentState: "awaiting_participant_confirmation",
+         priceSnapshot: {
+           perStudent: 42,
+           baseline: 42,
+           tutorShare: 33.6,
+           cogitoTake: 8.4,
++          baselineCogitoTake: 12,
++          baselineTutorShare: 30,
++          extraTotal: 0,
++          cogitoExtraTake: 0,
++          tutorExtraShare: 0,
+         },
+       });
+       const { service } = createService({
+         repo: {
+           findBookingById: mock(async () => booking),
+           findParticipant: mock(async () =>
+             makeParticipant({
+               role: "invitee",
+               confirmationState: "pending",
+               heldAmount: 0,
+diff --git a/packages/api/src/tests/unit/notification.service.test.ts b/packages/api/src/tests/unit/notification.service.test.ts
+index 2b1e528..3ec887e 100644
+--- a/packages/api/src/tests/unit/notification.service.test.ts
++++ b/packages/api/src/tests/unit/notification.service.test.ts
+@@ -360,21 +360,20 @@ describe("NotificationService (unit)", () => {
+   test("service exposes expected methods", async () => {
+     const repo = makeRepo();
+     const service = createNotificationService(repo);
+ 
+     expect(typeof service.write).toBe("function");
+     expect(typeof service.writeBestEffort).toBe("function");
+     expect(typeof service.list).toBe("function");
+     expect(typeof service.getUnreadCount).toBe("function");
+     expect(typeof service.markAsRead).toBe("function");
+     expect(typeof service.markAllAsRead).toBe("function");
+-    expect(typeof service.dispatchStatus).toBe("function");
+   });
+ 
+   test("writeInternal does not dispatch email for info severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_info" })),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+@@ -565,51 +564,20 @@ describe("NotificationService (unit)", () => {
+ 
+   test("markAllAsRead delegates to repo", async () => {
+     const repo = makeRepo();
+ 
+     const service = createNotificationService(repo);
+     await service.markAllAsRead("user1");
+ 
+     expect(repo.markAllRead).toHaveBeenCalledWith("user1");
+   });
+ 
+-  test("dispatchStatus delegates to repo and returns result when found", async () => {
+-    const dispatchRecord = {
+-      id: "d1",
+-      notificationId: "n1",
+-      channel: "email",
+-      recipientEmail: "user@example.com",
+-      status: "sent",
+-      createdAt: new Date(),
+-    };
+-
+-    const repo = makeRepo({
+-      findDispatch: mock(async () => dispatchRecord),
+-    });
+-
+-    const service = createNotificationService(repo);
+-    const result = await service.dispatchStatus("n1");
+-
+-    expect(result).toEqual(dispatchRecord);
+-  });
+-
+-  test("dispatchStatus returns null when not found", async () => {
+-    const repo = makeRepo({
+-      findDispatch: mock(async () => null),
+-    });
+-
+-    const service = createNotificationService(repo);
+-    const result = await service.dispatchStatus("nonexistent");
+-
+-    expect(result).toBeNull();
+-  });
+-
+   test("writeInternal dispatches email for refund category with action severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_refund" })),
+       findUserEmail: mock(async () => "refund@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+diff --git a/packages/api/src/tests/unit/pricing.service.test.ts b/packages/api/src/tests/unit/pricing.service.test.ts
+index 443317d..86e2567 100644
+--- a/packages/api/src/tests/unit/pricing.service.test.ts
++++ b/packages/api/src/tests/unit/pricing.service.test.ts
+@@ -53,43 +53,74 @@ describe("Pricing Service", () => {
+       const result = pricing.validatePrices({ "1": -5 }, "online");
+       expect(result).toContain("Invalid price");
+     });
+ 
+     test("returns error for zero group size", () => {
+       const result = pricing.validatePrices({ "0": 50 }, "online");
+       expect(result).toContain("Invalid group size");
+     });
+   });
+ 
+-  describe("computeSplit", () => {
+-    test("splits 50 marks for solo (1 student)", () => {
+-      const result = pricing.computeSplit(50, 1);
+-      expect(result.perStudent).toBe(50);
+-      expect(result.baseline).toBe(50);
+-      expect(result.cogitoTake).toBe(10);
+-      expect(result.tutorShare).toBe(40);
+-    });
+-
+-    test("splits 100 marks for group of 2", () => {
+-      const result = pricing.computeSplit(100, 2);
+-      expect(result.perStudent).toBe(50);
+-      expect(result.baseline).toBe(100);
+-      expect(result.cogitoTake).toBe(20);
+-      expect(result.tutorShare).toBe(80);
+-    });
+-
+-    test("cogito take is always 20%", () => {
+-      for (const size of [1, 2, 3, 4, 5, 6] as const) {
+-        const result = pricing.computeSplit(200, size);
+-        expect(result.cogitoTake).toBe(40);
+-        expect(result.tutorShare).toBe(160);
+-      }
++  describe("computeSplit (extra-take rule)", () => {
++    test("online class for 1 at floor (42) → tutor 30, Cogito 12", () => {
++      const r = pricing.computeSplit("online", 42, 1);
++      expect(r.tutorShare).toBe(30);
++      expect(r.cogitoTake).toBe(12);
++      expect(r.extraTotal).toBe(0);
++      expect(r.cogitoExtraTake).toBe(0);
++    });
++
++    test("online class for 1 at 50 → tutor 37, Cogito 13 (extra 8, Cogito extra 1)", () => {
++      const r = pricing.computeSplit("online", 50, 1);
++      expect(r.extraTotal).toBe(8);
++      expect(r.cogitoExtraTake).toBe(1);
++      expect(r.tutorExtraShare).toBe(7);
++      expect(r.tutorShare).toBe(37);
++      expect(r.cogitoTake).toBe(13);
++    });
++
++    test("online class for 3 at floor (28) → tutor 64, Cogito 20", () => {
++      const r = pricing.computeSplit("online", 28, 3);
++      expect(r.tutorShare).toBe(64);
++      expect(r.cogitoTake).toBe(20);
++    });
++
++    test("online class for 3 at 32 → tutor 74, Cogito 22 (extra 12, Cogito extra 2)", () => {
++      const r = pricing.computeSplit("online", 32, 3);
++      expect(r.extraTotal).toBe(12);
++      expect(r.cogitoExtraTake).toBe(2);
++      expect(r.tutorShare).toBe(74);
++      expect(r.cogitoTake).toBe(22);
++    });
++
++    test("offline class for 2 at floor (45) → tutor 70, Cogito 20", () => {
++      const r = pricing.computeSplit("offline", 45, 2);
++      expect(r.tutorShare).toBe(70);
++      expect(r.cogitoTake).toBe(20);
++    });
++
++    test("extra total of 4 → Cogito extra 0, all to tutor", () => {
++      const r = pricing.computeSplit("online", 46, 1); // baseline 42, extra 4
++      expect(r.cogitoExtraTake).toBe(0);
++      expect(r.tutorShare).toBe(34);
++    });
++
++    test("extra total of 5 → Cogito extra 1, 4 to tutor", () => {
++      const r = pricing.computeSplit("online", 47, 1); // baseline 42, extra 5
++      expect(r.cogitoExtraTake).toBe(1);
++      expect(r.tutorShare).toBe(34);
++    });
++
++    test("perStudent is floored and baseline total is the floor total", () => {
++      const r = pricing.computeSplit("online", 32.5, 3);
++      expect(r.perStudent).toBe(32);
++      expect(r.baseline).toBe(84);
+     });
+   });
+ 
+   describe("floor price tables", () => {
+     test("online floor prices have entries for sizes 1-6", () => {
+       for (let i = 1; i <= 6; i++) {
+         expect(ONLINE_FLOOR_PRICES[i]).toBeDefined();
+         expect(ONLINE_FLOOR_PRICES[i]).toBeGreaterThan(0);
+       }
+     });
+diff --git a/packages/api/src/tests/unit/tutor.service.test.ts b/packages/api/src/tests/unit/tutor.service.test.ts
+index 1427c1a..f7d730b 100644
+--- a/packages/api/src/tests/unit/tutor.service.test.ts
++++ b/packages/api/src/tests/unit/tutor.service.test.ts
+@@ -25,26 +25,34 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
+     prices: { "1": 50 },
+     expertise: ["math"],
+     onboardingStatus: "draft",
+     publishedAt: null,
+     ...overrides,
+   } as any;
+ }
+ 
+ const mockPricingPort: PricingPort = {
+   validatePrices: () => null,
+-  computeSplit: (total: number, size: number) => ({
+-    perStudent: Math.floor(total / size),
+-    baseline: total,
+-    tutorShare: Math.floor(total * 0.8),
+-    cogitoTake: Math.floor(total * 0.2),
+-  }),
++  computeSplit: (modality: string, pricePerStudent: number, size: number) => {
++    const perStudent = Math.floor(pricePerStudent);
++    return {
++      perStudent,
++      baseline: perStudent * size,
++      tutorShare: Math.floor(perStudent * size * 0.8),
++      cogitoTake: Math.floor(perStudent * size * 0.2),
++      baselineCogitoTake: Math.floor(perStudent * size * 0.2),
++      baselineTutorShare: Math.floor(perStudent * size * 0.8),
++      extraTotal: 0,
++      cogitoExtraTake: 0,
++      tutorExtraShare: 0,
++    };
++  },
+ };
+ 
+ const failPricingPort: PricingPort = {
+   ...mockPricingPort,
+   validatePrices: () => "Prices are invalid",
+ };
+ 
+ describe("Tutor Service", () => {
+   describe("validateUpdateInput", () => {
+     test("does not throw for draft profile with valid input", () => {
+diff --git a/packages/api/src/tests/unit/wallet.service.test.ts b/packages/api/src/tests/unit/wallet.service.test.ts
+index 5379463..1d1c43e 100644
+--- a/packages/api/src/tests/unit/wallet.service.test.ts
++++ b/packages/api/src/tests/unit/wallet.service.test.ts
+@@ -614,50 +614,11 @@ describe("WalletService", () => {
+         amount: 10,
+         eventKey: "hold.1",
+         actorType: "system",
+       });
+ 
+       expect(result).toEqual(updated);
+       expect(db.transaction).not.toHaveBeenCalled();
+       expect(outerTx.atomicHold).toHaveBeenCalledWith(outerTx, "wallet1", 10);
+     });
+   });
+-
+-  describe("reconcile", () => {
+-    test("returns expected, actual, and drift", async () => {
+-      let selectCallCount = 0;
+-      const db = {
+-        select: mock(() => {
+-          selectCallCount++;
+-          if (selectCallCount === 1) {
+-            return {
+-              from: mock(() => ({
+-                where: mock(async () => [{ total: 150 }]),
+-              })),
+-            };
+-          }
+-          if (selectCallCount === 2) {
+-            return {
+-              from: mock(() => ({
+-                where: mock(async () => [{ total: 50 }]),
+-              })),
+-            };
+-          }
+-          return {
+-            from: mock(() => ({
+-              limit: mock(async () => [{ totalBalance: 80 }]),
+-            })),
+-          };
+-        }),
+-      } as any;
+-
+-      const repo = makeRepo();
+-      const service = createWalletService(repo as any, db);
+-
+-      const result = await service.reconcile();
+-
+-      expect(result.expected).toBe(100);
+-      expect(result.actual).toBe(80);
+-      expect(result.drift).toBe(-20);
+-    });
+-  });
+ });
+diff --git a/packages/db/src/schema/booking.ts b/packages/db/src/schema/booking.ts
+index 76b22b5..2fa33e1 100644
+--- a/packages/db/src/schema/booking.ts
++++ b/packages/db/src/schema/booking.ts
+@@ -63,20 +63,25 @@ export const booking = pgTable(
+     scheduledEndAt: timestamp("scheduled_end_at", {
+       withTimezone: true,
+     }).notNull(),
+     timezone: text("timezone").notNull().default("Asia/Jakarta"), // TODO(production-readiness): use timezone in deadline calculations instead of server time
+     roomId: text("room_id"),
+     priceSnapshot: jsonb("price_snapshot").$type<{
+       perStudent: number;
+       baseline: number;
+       tutorShare: number;
+       cogitoTake: number;
++      baselineCogitoTake: number;
++      baselineTutorShare: number;
++      extraTotal: number;
++      cogitoExtraTake: number;
++      tutorExtraShare: number;
+     }>(),
+     originalMarks: integer("original_marks").notNull(),
+     holdAmount: integer("hold_amount").notNull().default(0),
+     refundedAmount: integer("refunded_amount").notNull().default(0),
+     version: integer("version").default(1).notNull(),
+     cancellationReason: text("cancellation_reason"),
+     rescheduleMeta: jsonb("reschedule_meta"),
+     overrideMeta: jsonb("override_meta"),
+     notificationFlags:
+       jsonb("notification_flags").$type<Record<string, boolean>>(),
+@@ -253,20 +258,25 @@ export const bookingSession = pgTable(
+     scheduledEndAt: timestamp("scheduled_end_at", {
+       withTimezone: true,
+     }).notNull(),
+     currentState: text("current_state").notNull().default("scheduled"),
+     holdAmount: integer("hold_amount").notNull().default(0),
+     priceSnapshot: jsonb("price_snapshot").$type<{
+       perStudent: number;
+       baseline: number;
+       tutorShare: number;
+       cogitoTake: number;
++      baselineCogitoTake: number;
++      baselineTutorShare: number;
++      extraTotal: number;
++      cogitoExtraTake: number;
++      tutorExtraShare: number;
+     }>(),
+     createdAt: timestamp("created_at").defaultNow().notNull(),
+     updatedAt: timestamp("updated_at")
+       .defaultNow()
+       .$onUpdate(() => new Date())
+       .notNull(),
+   },
+   (table) => [
+     check(
+       "booking_session_state_check",
+diff --git a/packages/env/src/server.ts b/packages/env/src/server.ts
+index 0571bcc..175a045 100644
+--- a/packages/env/src/server.ts
++++ b/packages/env/src/server.ts
+@@ -11,37 +11,32 @@ export const env = createEnv({
+     CORS_ORIGIN: z.url(),
+     NODE_ENV: z
+       .enum(["development", "production", "test"])
+       .default("development"),
+     PAYMENT_PROVIDER: z.enum(["stub", "xendit"]).default("stub"),
+     PAYMENT_WEBHOOK_SECRET: z.string().min(32),
+     COMPETITION_CALENDAR_URL: z
+       .string()
+       .url()
+       .default("https://cogitoacademy.id/en/calendar"),
+-    KNOWLEDGE_BANK_URL: z
+-      .string()
+-      .url()
+-      .default("https://cogitoacademy.id/knowledge-bank"),
++    WEBHOOK_ALLOWED_IPS: z.string().optional(),
+     XENDIT_SECRET_KEY: z.string().min(1).optional(),
+     XENDIT_WEBHOOK_TOKEN: z.string().min(1).optional(),
+     XENDIT_SUCCESS_REDIRECT_URL: z.string().url().optional(),
+     XENDIT_FAILURE_REDIRECT_URL: z.string().url().optional(),
+     XENDIT_DEFAULT_PAYMENT_METHOD: z
+       .enum(["ewallet_ovo", "qris", "va_bca"])
+       .default("ewallet_ovo"),
+     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+     PORT: z.coerce.number().default(3001),
+     SESSION_COOKIE_CACHE_MAX_AGE: z.coerce.number().default(60),
+-    SENTRY_DSN: z.string().url().optional(),
+-    SENTRY_ENVIRONMENT: z.string().default("development"),
+     REDIS_URL: z.string().url().optional(),
+     SCHEDULER_ENABLED: z.coerce.boolean().default(false),
+     GOOGLE_CLIENT_EMAIL: z.string().email().optional(),
+     GOOGLE_PRIVATE_KEY: z.string().optional(),
+     GOOGLE_CALENDAR_ID: z.string().optional(),
+     GOOGLE_MEET_ENABLED: z.coerce.boolean().default(false),
+     RESEND_API_KEY: z.string().optional(),
+     EMAIL_FROM: z.string().default("noreply@cogitoacademy.id"),
+     METRICS_TOKEN: z.string().optional(),
+     DB_SSL_REJECT_UNAUTHORIZED: z.coerce.boolean().default(true),

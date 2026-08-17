@@ -1,0 +1,4382 @@
+# Review package: feat/prd-gaps-meeting-room..HEAD
+
+## Commits
+9c4dece test(booking): G18 series completion unit tests and formatting
+0b80f85 feat(booking): series session completion (G18)
+3d3853b feat(notification): event-level email routing per PRD matrix (G17)
+a04eab3 feat(payout): tutor payout calculations (G16)
+4617e29 test(booking): series disclaimer on booking get response (G15)
+
+## Files changed
+ .../src/modules/achievement/achievement.service.ts |  47 ++-
+ packages/api/src/modules/achievement/index.ts      |   7 +
+ .../modules/admin-booking/admin-booking.service.ts |   1 +
+ packages/api/src/modules/admin/admin.handler.ts    |  18 +-
+ packages/api/src/modules/admin/admin.router.ts     |  13 +
+ packages/api/src/modules/admin/admin.service.ts    |  28 +-
+ packages/api/src/modules/admin/admin.types.ts      |   6 +
+ packages/api/src/modules/admin/index.ts            |   3 +
+ packages/api/src/modules/booking/booking.errors.ts |  24 ++
+ .../api/src/modules/booking/booking.handler.ts     |   6 +-
+ packages/api/src/modules/booking/booking.repo.ts   |  32 ++
+ .../api/src/modules/booking/booking.service.ts     | 404 ++++++++++++++++++---
+ packages/api/src/modules/booking/booking.types.ts  |   1 +
+ packages/api/src/modules/booking/index.ts          |  14 +
+ .../modules/notification/notification.service.ts   |   7 +
+ packages/api/src/modules/tutor/index.ts            |   3 +
+ packages/api/src/modules/tutor/tutor.errors.ts     |  10 +
+ packages/api/src/modules/tutor/tutor.handler.ts    |  15 +
+ packages/api/src/modules/tutor/tutor.router.ts     |  16 +-
+ packages/api/src/modules/tutor/tutor.service.ts    |  23 +-
+ packages/api/src/modules/tutor/tutor.types.ts      |   5 +
+ packages/api/src/services.ts                       |  27 +-
+ .../api/src/tests/integration/booking-g5.test.ts   |  39 ++
+ .../tests/integration/booking-payout-g16.test.ts   | 330 +++++++++++++++++
+ .../tests/integration/booking-series-g18.test.ts   | 288 +++++++++++++++
+ .../integration/notification-email-g17.test.ts     | 238 ++++++++++++
+ .../api/src/tests/unit/achievement.handler.test.ts |  82 +++++
+ .../api/src/tests/unit/booking.handlers.test.ts    |   6 +-
+ .../api/src/tests/unit/booking.service.test.ts     | 204 ++++++++++-
+ .../src/tests/unit/notification.service.test.ts    | 130 +++++++
+ 30 files changed, 1939 insertions(+), 88 deletions(-)
+
+## Diff
+diff --git a/packages/api/src/modules/achievement/achievement.service.ts b/packages/api/src/modules/achievement/achievement.service.ts
+index 3d23395..7bc70e9 100644
+--- a/packages/api/src/modules/achievement/achievement.service.ts
++++ b/packages/api/src/modules/achievement/achievement.service.ts
+@@ -1,25 +1,33 @@
+ import type { achievement } from "@cogito-app/db/schema";
+ import type { DbType } from "../../lib/db";
+ import {
+   AchievementNotFoundError,
+   AchievementNotEditableError,
+   OptimisticLockError,
+ } from "./achievement.errors";
+-import { ACHIEVEMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
++import {
++  ACHIEVEMENT_STATUS,
++  ACTOR_TYPE,
++  NOTIFICATION_CATEGORY,
++  NOTIFICATION_SEVERITY,
++} from "../../shared/constants";
+ import type {
+   AchievementRepo,
+   InsertAchievementParams,
+   UpdateAchievementData,
+   AdminListInput,
+ } from "./achievement.repo";
+-import type { AchievementAuditPort } from "./index";
++import type {
++  AchievementAuditPort,
++  AchievementNotificationPort,
++} from "./index";
+ 
+ type AchievementRow = typeof achievement.$inferSelect;
+ 
+ export interface UpdateAchievementInput {
+   id: string;
+   version: number;
+   data: UpdateAchievementData;
+ }
+ 
+ export interface AdminReviewInput {
+@@ -36,33 +44,46 @@ export function validateUpdate(existing: AchievementRow | undefined): void {
+ 
+ export function validateDelete(existing: AchievementRow | undefined): void {
+   if (!existing || existing.status !== ACHIEVEMENT_STATUS.PENDING) {
+     throw new AchievementNotEditableError(existing?.id ?? "unknown");
+   }
+ }
+ 
+ export function createAchievementService(deps: {
+   achievementRepo: AchievementRepo;
+   auditPort: AchievementAuditPort;
++  notificationPort: AchievementNotificationPort;
+   db: DbType;
+ }) {
+-  const { achievementRepo, auditPort, db } = deps;
++  const { achievementRepo, auditPort, notificationPort, db } = deps;
+ 
+   async function list(userId: string) {
+     return achievementRepo.listByUserId(db, userId);
+   }
+ 
+   async function create(
+     userId: string,
+     input: Omit<InsertAchievementParams, "userId">,
+   ) {
+-    return achievementRepo.insert(db, { ...input, userId });
++    const created = await achievementRepo.insert(db, { ...input, userId });
++    if (created) {
++      await notificationPort.writeBestEffort({
++        db,
++        userId,
++        category: NOTIFICATION_CATEGORY.ACHIEVEMENT,
++        severity: NOTIFICATION_SEVERITY.INFO,
++        title: "Achievement submitted",
++        body: `Your achievement "${created.eventName}" was submitted for review.`,
++        eventKey: `achievement.${created.id}.submitted`,
++      });
++    }
++    return created;
+   }
+ 
+   async function update(userId: string, input: UpdateAchievementInput) {
+     const existing = await achievementRepo.findByIdForUser(
+       db,
+       input.id,
+       userId,
+     );
+     validateUpdate(existing);
+     const rows = await achievementRepo.updateWithVersion(
+@@ -103,20 +124,38 @@ export function createAchievementService(deps: {
+     if (!existing) throw new AchievementNotFoundError(input.achievementId);
+ 
+     return db.transaction(async (tx) => {
+       const updated = await achievementRepo.updateStatus(
+         tx,
+         input.achievementId,
+         input.status,
+         input.adminNote,
+       );
+ 
++      await notificationPort.writeBestEffort({
++        db: tx,
++        userId: existing.userId,
++        category: NOTIFICATION_CATEGORY.ACHIEVEMENT,
++        severity: NOTIFICATION_SEVERITY.INFO,
++        title:
++          input.status === "approved"
++            ? "Achievement approved"
++            : "Achievement rejected",
++        body:
++          input.status === "approved"
++            ? `Your achievement "${existing.eventName}" was approved.`
++            : `Your achievement "${existing.eventName}" was rejected.${
++                input.adminNote ? ` ${input.adminNote}` : ""
++              }`,
++        eventKey: `achievement.${input.achievementId}.reviewed`,
++      });
++
+       await auditPort.record({
+         db: tx,
+         actorId: adminId,
+         actorType: ACTOR_TYPE.ADMIN,
+         action: `achievement_${input.status}`,
+         targetId: input.achievementId,
+         targetType: "achievement",
+         details: {
+           adminNote: input.adminNote,
+           previousStatus: existing.status,
+diff --git a/packages/api/src/modules/achievement/index.ts b/packages/api/src/modules/achievement/index.ts
+index 16d3101..4ae6be6 100644
+--- a/packages/api/src/modules/achievement/index.ts
++++ b/packages/api/src/modules/achievement/index.ts
+@@ -1,29 +1,36 @@
+ import type { DbType } from "../../lib/db";
+ import type { AuditRecordParams } from "../audit/audit.service";
++import type { NotificationWriteParams } from "../notification/notification.service";
+ import { createAchievementRepo } from "./achievement.repo";
+ import { createAchievementService } from "./achievement.service";
+ import { createAchievementHandler } from "./achievement.handler";
+ import type { AchievementService } from "./achievement.service";
+ import type { AchievementHandler } from "./achievement.handler";
+ 
+ export type AchievementModule = ReturnType<typeof createAchievementModule>;
+ 
+ export interface AchievementAuditPort {
+   record(params: AuditRecordParams): Promise<void>;
+ }
+ 
++export interface AchievementNotificationPort {
++  writeBestEffort(params: NotificationWriteParams): Promise<void>;
++}
++
+ export function createAchievementModule(deps: {
+   db: DbType;
+   audit: AchievementAuditPort;
++  notification: AchievementNotificationPort;
+ }) {
+   const repo = createAchievementRepo();
+   const service = createAchievementService({
+     achievementRepo: repo,
+     auditPort: deps.audit,
++    notificationPort: deps.notification,
+     db: deps.db,
+   });
+   const handler = createAchievementHandler({ achievementService: service });
+   return { service, handler };
+ }
+ 
+ export type { AchievementService, AchievementHandler };
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.service.ts b/packages/api/src/modules/admin-booking/admin-booking.service.ts
+index 597c40f..d92c17c 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.service.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.service.ts
+@@ -305,20 +305,21 @@ export function createAdminBookingService(deps: {
+             db: tx,
+             userId,
+             bookingId: input.bookingId,
+             category: NOTIFICATION_CATEGORY.OVERRIDE,
+             severity: NOTIFICATION_SEVERITY.ACTION,
+             title: "Your booking was updated by an admin",
+             body: `Your booking was updated (${input.category})${
+               input.userNote ? `: ${input.userNote}` : ""
+             }.`,
+             eventKey: `override.applied.${input.bookingId}.${userId}`,
++            emailRequired: true,
+           });
+         }
+       }
+ 
+       await auditPort.record({
+         db: tx,
+         actorId: adminId,
+         actorType: ACTOR_TYPE.ADMIN,
+         action: "booking_override",
+         targetId: input.bookingId,
+diff --git a/packages/api/src/modules/admin/admin.handler.ts b/packages/api/src/modules/admin/admin.handler.ts
+index 2867bd2..f10aa92 100644
+--- a/packages/api/src/modules/admin/admin.handler.ts
++++ b/packages/api/src/modules/admin/admin.handler.ts
+@@ -1,34 +1,37 @@
+ import type { Context } from "../../context";
+ import { z } from "zod";
+ import { withDomainMap } from "../../lib/handler-utils";
+ import { mapAdminError } from "./admin.errors";
+ import type {
+   AdminService,
+   ListUsersInput,
+   ListUsersResult,
++  GetTutorPayoutsInput,
+ } from "./admin.service";
+ import type {
+   listUsersInput,
+   setRoleInput,
+   adminGetWalletInput,
+   adminListLedgerEntriesInput,
++  adminGetTutorPayoutsInput,
+ } from "./admin.types";
+ 
+ type ListUsersInputZod = z.infer<typeof listUsersInput>;
+ type SetRoleInputZod = z.infer<typeof setRoleInput>;
+ type AdminGetWalletInputZod = z.infer<typeof adminGetWalletInput>;
+ type AdminListLedgerEntriesInputZod = z.infer<
+   typeof adminListLedgerEntriesInput
+ >;
++type AdminGetTutorPayoutsInputZod = z.infer<typeof adminGetTutorPayoutsInput>;
+ 
+-export type { ListUsersInput, ListUsersResult };
++export type { ListUsersInput, ListUsersResult, GetTutorPayoutsInput };
+ 
+ export type AdminHandler = ReturnType<typeof createAdminHandler>;
+ 
+ export function createAdminHandler(adminService: AdminService) {
+   return {
+     listUsers: async ({
+       context: _context,
+       input,
+     }: {
+       context: Context;
+@@ -68,12 +71,25 @@ export function createAdminHandler(adminService: AdminService) {
+       input,
+     }: {
+       context: Context;
+       input: AdminListLedgerEntriesInputZod;
+     }) => {
+       return withDomainMap(
+         () => adminService.listLedgerEntries(input),
+         mapAdminError,
+       );
+     },
++
++    getTutorPayouts: async ({
++      context: _context,
++      input,
++    }: {
++      context: Context;
++      input: AdminGetTutorPayoutsInputZod;
++    }) => {
++      return withDomainMap(
++        () => adminService.getTutorPayouts(input),
++        mapAdminError,
++      );
++    },
+   };
+ }
+diff --git a/packages/api/src/modules/admin/admin.router.ts b/packages/api/src/modules/admin/admin.router.ts
+index 3a517e5..f414082 100644
+--- a/packages/api/src/modules/admin/admin.router.ts
++++ b/packages/api/src/modules/admin/admin.router.ts
+@@ -1,16 +1,17 @@
+ import { adminProcedure } from "../../procedures";
+ import {
+   listUsersInput,
+   setRoleInput,
+   adminGetWalletInput,
+   adminListLedgerEntriesInput,
++  adminGetTutorPayoutsInput,
+ } from "./admin.types";
+ import type { AdminHandler } from "./admin.handler";
+ 
+ export function createAdminRouter(handler: AdminHandler) {
+   return {
+     listUsers: adminProcedure
+       .route({
+         method: "POST",
+         path: "/admin/users/list",
+         tags: ["Admin"],
+@@ -47,12 +48,24 @@ export function createAdminRouter(handler: AdminHandler) {
+       .route({
+         method: "POST",
+         path: "/admin/wallet/ledger",
+         tags: ["Admin"],
+         summary: "List ledger entries for any wallet",
+         description:
+           "Paginated ledger entries filtered by entry type, date range, or booking",
+       })
+       .input(adminListLedgerEntriesInput)
+       .handler(handler.listLedgerEntries),
++
++    getTutorPayouts: adminProcedure
++      .route({
++        method: "POST",
++        path: "/admin/payouts/tutor",
++        tags: ["Admin"],
++        summary: "Get tutor payout summary",
++        description:
++          "Returns a tutor's payout summary from completed bookings in a date range",
++      })
++      .input(adminGetTutorPayoutsInput)
++      .handler(handler.getTutorPayouts),
+   };
+ }
+diff --git a/packages/api/src/modules/admin/admin.service.ts b/packages/api/src/modules/admin/admin.service.ts
+index dd01423..10c3718 100644
+--- a/packages/api/src/modules/admin/admin.service.ts
++++ b/packages/api/src/modules/admin/admin.service.ts
+@@ -1,14 +1,15 @@
+ import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
+ import type { DbType } from "../../lib/db";
+ import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
+ import type { AdminAuditPort, AdminWalletPort } from "./index";
++import type { BookingPayoutPort } from "../booking";
+ import {
+   UserNotFoundError,
+   LastAdminError,
+   OptimisticLockError,
+   WalletNotFoundError,
+   InvalidLedgerFilterError,
+ } from "./admin.errors";
+ 
+ export interface ListUsersInput {
+   limit?: number;
+@@ -57,27 +58,34 @@ export function validateRoleChange(
+ }
+ 
+ function assertValidDateFilter(value: string, field: string): Date {
+   const parsed = new Date(value);
+   if (Number.isNaN(parsed.getTime())) {
+     throw new InvalidLedgerFilterError(`${field} must be a valid ISO datetime`);
+   }
+   return parsed;
+ }
+ 
++export interface GetTutorPayoutsInput {
++  tutorId: string;
++  dateFrom?: string;
++  dateTo?: string;
++}
++
+ export function createAdminService(deps: {
+   adminRepo: AdminRepo;
+   auditPort: AdminAuditPort;
+   db: DbType;
+   wallet: AdminWalletPort;
++  payout: BookingPayoutPort;
+ }) {
+-  const { adminRepo, auditPort, db, wallet } = deps;
++  const { adminRepo, auditPort, db, wallet, payout } = deps;
+ 
+   async function listUsers(
+     input: ListUsersInput = {},
+   ): Promise<ListUsersResult> {
+     const limit = input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT;
+     const offset = input.offset ?? 0;
+ 
+     const [users, total] = await Promise.all([
+       adminRepo.listUsers(db, limit, offset),
+       adminRepo.countUsers(db),
+@@ -179,14 +187,30 @@ export function createAdminService(deps: {
+     return wallet.listLedger(walletId, {
+       limit: input.limit,
+       cursor: input.cursor,
+       bookingId: input.bookingId,
+       entryType: input.entryType,
+       dateFrom: dateFrom?.toISOString(),
+       dateTo: dateTo?.toISOString(),
+     });
+   }
+ 
+-  return { listUsers, setRole, getWallet, listLedgerEntries };
++  async function getTutorPayouts(input: GetTutorPayoutsInput) {
++    if (input.dateFrom && Number.isNaN(Date.parse(input.dateFrom))) {
++      throw new InvalidLedgerFilterError(
++        "dateFrom must be a valid ISO datetime",
++      );
++    }
++    if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
++      throw new InvalidLedgerFilterError("dateTo must be a valid ISO datetime");
++    }
++    return payout.getTutorPayouts({
++      tutorId: input.tutorId,
++      dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
++      dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
++    });
++  }
++
++  return { listUsers, setRole, getWallet, listLedgerEntries, getTutorPayouts };
+ }
+ 
+ export type AdminService = ReturnType<typeof createAdminService>;
+diff --git a/packages/api/src/modules/admin/admin.types.ts b/packages/api/src/modules/admin/admin.types.ts
+index 7307ca2..2e7867a 100644
+--- a/packages/api/src/modules/admin/admin.types.ts
++++ b/packages/api/src/modules/admin/admin.types.ts
+@@ -10,20 +10,26 @@ export const listUsersInput = z
+ export const setRoleInput = z.object({
+   userId: z.string().max(100),
+   role: z.enum(["student", "tutor", "admin"]),
+   expectedRole: z.enum(["student", "tutor", "admin"]),
+ });
+ 
+ export const adminGetWalletInput = z.object({
+   userId: z.string().max(100),
+ });
+ 
++export const adminGetTutorPayoutsInput = z.object({
++  tutorId: z.string().max(100),
++  dateFrom: z.string().max(100).optional(),
++  dateTo: z.string().max(100).optional(),
++});
++
+ export const adminListLedgerEntriesInput = z.object({
+   walletId: z.string().max(100).optional(),
+   userId: z.string().max(100).optional(),
+   limit: z.number().min(1).max(100).optional(),
+   cursor: z.string().max(100).optional(),
+   bookingId: z.string().max(100).optional(),
+   entryType: z
+     .enum([
+       "credit",
+       "hold",
+diff --git a/packages/api/src/modules/admin/index.ts b/packages/api/src/modules/admin/index.ts
+index 67b2506..aba31bc 100644
+--- a/packages/api/src/modules/admin/index.ts
++++ b/packages/api/src/modules/admin/index.ts
+@@ -4,42 +4,45 @@ import type { AuditRecordParams } from "../audit/audit.service";
+ import type {
+   WalletSnapshot,
+   LedgerEntryRow,
+   LedgerQueryOptions,
+ } from "../wallet/wallet.service";
+ import { createAdminRepo } from "./admin.repo";
+ import { createAdminService } from "./admin.service";
+ import { createAdminHandler } from "./admin.handler";
+ import type { AdminService } from "./admin.service";
+ import type { AdminHandler } from "./admin.handler";
++import type { BookingPayoutPort } from "../booking";
+ 
+ export type AdminModule = ReturnType<typeof createAdminModule>;
+ 
+ export interface AdminAuditPort {
+   record(params: AuditRecordParams): Promise<void>;
+ }
+ 
+ export interface AdminWalletPort {
+   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
+   listLedger(
+     walletId: string,
+     opts?: LedgerQueryOptions,
+   ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }>;
+ }
+ 
+ export function createAdminModule(deps: {
+   db: DbType;
+   audit: AdminAuditPort;
+   wallet: AdminWalletPort;
++  payout: BookingPayoutPort;
+ }) {
+   const repo = createAdminRepo();
+   const service = createAdminService({
+     adminRepo: repo,
+     auditPort: deps.audit,
+     db: deps.db,
+     wallet: deps.wallet,
++    payout: deps.payout,
+   });
+   const handler = createAdminHandler(service);
+   return { service, handler };
+ }
+ 
+ export type { AdminService, AdminHandler };
+diff --git a/packages/api/src/modules/booking/booking.errors.ts b/packages/api/src/modules/booking/booking.errors.ts
+index 8404964..37442c8 100644
+--- a/packages/api/src/modules/booking/booking.errors.ts
++++ b/packages/api/src/modules/booking/booking.errors.ts
+@@ -212,20 +212,40 @@ export class BookingCancelledError extends DomainError {
+   }
+ }
+ 
+ export class BookingSessionNotFoundError extends DomainError {
+   readonly domain = "booking";
+   constructor(id: string) {
+     super("BOOKING_SESSION_NOT_FOUND", "Series session not found", { id });
+   }
+ }
+ 
++export class BookingSessionRequiredError extends DomainError {
++  readonly domain = "booking";
++  constructor(id: string) {
++    super(
++      "BOOKING_SESSION_REQUIRED",
++      "A series session id is required to complete a series",
++      { id },
++    );
++  }
++}
++
++export class BookingSessionNotStartedError extends DomainError {
++  readonly domain = "booking";
++  constructor(id: string) {
++    super("BOOKING_SESSION_NOT_STARTED", "Series session has not started yet", {
++      id,
++    });
++  }
++}
++
+ export class BookingSessionNotCancellableError extends DomainError {
+   readonly domain = "booking";
+   constructor(id: string) {
+     super(
+       "BOOKING_SESSION_NOT_CANCELLABLE",
+       "This series session cannot be cancelled",
+       { id },
+     );
+   }
+ }
+@@ -240,20 +260,24 @@ export class BookingNotCompletedError extends DomainError {
+ export function mapBookingError(
+   err: DomainError,
+ ): ORPCError<string, undefined> {
+   if (err instanceof BookingNotFoundError) return notFound(err.message, err);
+   if (err instanceof BookingRescheduleNotFoundError)
+     return notFound(err.message, err);
+   if (err instanceof BookingParticipantNotFoundError)
+     return notFound(err.message, err);
+   if (err instanceof BookingSessionNotFoundError)
+     return notFound(err.message, err);
++  if (err instanceof BookingSessionRequiredError)
++    return badRequest(err.message, err);
++  if (err instanceof BookingSessionNotStartedError)
++    return badRequest(err.message, err);
+   if (err instanceof BookingTutorNotAssignedError)
+     return notFound(err.message, err);
+   if (err instanceof BookingNotOwnedError) return forbidden(err.message, err);
+   if (err instanceof BookingConflictError) return conflict(err.message, err);
+   if (err instanceof BookingAlreadyConfirmedError)
+     return conflict(err.message, err);
+   if (err instanceof BookingDuplicateHoldError)
+     return conflict(err.message, err);
+   if (err instanceof BookingStateTransitionError)
+     return conflict(err.message, err);
+diff --git a/packages/api/src/modules/booking/booking.handler.ts b/packages/api/src/modules/booking/booking.handler.ts
+index bfb85bf..bd805d4 100644
+--- a/packages/api/src/modules/booking/booking.handler.ts
++++ b/packages/api/src/modules/booking/booking.handler.ts
+@@ -378,21 +378,25 @@ export function createTutorActionsHandler(booking: BookingService) {
+ 
+     completeSession: async ({
+       context,
+       input,
+     }: {
+       context: Context;
+       input: CompleteSessionInput;
+     }) => {
+       return withDomainMap(
+         () =>
+-          booking.completeSession(input.bookingId, context.session!.user.id),
++          booking.completeSession(
++            input.bookingId,
++            context.session!.user.id,
++            input.sessionId,
++          ),
+         mapBookingError,
+       );
+     },
+ 
+     markAttendance: async ({
+       context,
+       input,
+     }: {
+       context: Context;
+       input: MarkAttendanceInput;
+diff --git a/packages/api/src/modules/booking/booking.repo.ts b/packages/api/src/modules/booking/booking.repo.ts
+index c283f34..2d2dbec 100644
+--- a/packages/api/src/modules/booking/booking.repo.ts
++++ b/packages/api/src/modules/booking/booking.repo.ts
+@@ -25,20 +25,21 @@ import {
+   type booking as bookingTable,
+ } from "@cogito-app/db/schema";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import {
+   CONFIRMATION_STATE,
+   ONBOARDING_STATUS,
+   LATENESS_TOLERANCE_MS,
+   MODALITY,
+ } from "../../shared/constants";
++import { BOOKING_STATE } from "./booking-state.types";
+ 
+ type BookingRow = typeof bookingTable.$inferSelect;
+ 
+ async function findBookingById(
+   conn: DbOrTx,
+   bookingId: string,
+ ): Promise<BookingRow | null> {
+   const [b] = await conn
+     .select()
+     .from(booking)
+@@ -325,20 +326,27 @@ async function findSessionById(conn: DbOrTx, sessionId: string) {
+   return session ?? null;
+ }
+ 
+ async function cancelSession(conn: DbOrTx, sessionId: string) {
+   await conn
+     .update(bookingSession)
+     .set({ currentState: "cancelled", holdAmount: 0 })
+     .where(eq(bookingSession.id, sessionId));
+ }
+ 
++async function completeSession(conn: DbOrTx, sessionId: string) {
++  await conn
++    .update(bookingSession)
++    .set({ currentState: BOOKING_STATE.COMPLETED })
++    .where(eq(bookingSession.id, sessionId));
++}
++
+ async function insertSessionNote(
+   conn: DbOrTx,
+   values: { bookingId: string; authorId: string; content: string },
+ ) {
+   const [note] = await conn.insert(sessionNote).values(values).returning();
+   return note!;
+ }
+ 
+ async function listSessionNotes(conn: DbOrTx, bookingId: string) {
+   return conn
+@@ -464,20 +472,42 @@ async function decrementBookingConfirmedHeadcount(
+     .where(eq(booking.id, bookingId));
+ }
+ 
+ async function cancelAllSessions(conn: DbOrTx, bookingId: string) {
+   await conn
+     .update(bookingSession)
+     .set({ currentState: "cancelled" })
+     .where(eq(bookingSession.seriesBookingId, bookingId));
+ }
+ 
++async function findCompletedBookingsByTutor(
++  conn: DbOrTx,
++  tutorId: string,
++  dateFrom?: Date,
++  dateTo?: Date,
++): Promise<BookingRow[]> {
++  const conditions = [
++    eq(booking.tutorId, tutorId),
++    eq(booking.currentState, BOOKING_STATE.COMPLETED),
++  ];
++  if (dateFrom) {
++    conditions.push(gte(booking.scheduledStartAt, dateFrom));
++  }
++  if (dateTo) {
++    conditions.push(lte(booking.scheduledStartAt, dateTo));
++  }
++  return conn
++    .select()
++    .from(booking)
++    .where(and(...conditions));
++}
++
+ async function updateBookingVersioned(
+   conn: DbOrTx,
+   bookingId: string,
+   expectedVersion: number,
+   updates: Partial<
+     Pick<
+       typeof bookingTable.$inferInsert,
+       | "currentState"
+       | "previousState"
+       | "stateReason"
+@@ -568,27 +598,29 @@ export function createBookingRepo(db: DbType) {
+     updateBookingConfirmedHeadcount,
+     insertParticipant,
+     updateParticipantState,
+     insertStateHistory,
+     insertRescheduleProposal,
+     findPendingRescheduleProposal,
+     updateRescheduleProposal,
+     insertBookingSession,
+     findSessionById,
+     cancelSession,
++    completeSession,
+     insertSessionNote,
+     listSessionNotes,
+     listSessionsBySeriesId,
+     updateBookingPriceSnapshot,
+     updateBookingSchedule,
+     findBookingsExpiringByDeadline,
+     findBookingsWithTutorLateness,
+     findTutorParticipant,
+     findOverlappingBookings,
+     updateBookingVersioned,
+     updateBookingDeadline,
+     decrementBookingConfirmedHeadcount,
+     cancelAllSessions,
++    findCompletedBookingsByTutor,
+   };
+ }
+ 
+ export type BookingRepo = ReturnType<typeof createBookingRepo>;
+diff --git a/packages/api/src/modules/booking/booking.service.ts b/packages/api/src/modules/booking/booking.service.ts
+index f1d99c7..95aa25f 100644
+--- a/packages/api/src/modules/booking/booking.service.ts
++++ b/packages/api/src/modules/booking/booking.service.ts
+@@ -8,20 +8,21 @@ import {
+   ATTENDANCE_STATE,
+   RESPONSE_WINDOW_MS,
+   LATE_CANCEL_THRESHOLD_MS,
+   MIN_GROUP_HEADCOUNT,
+   MIN_SERIES_SESSIONS,
+   MAX_SERIES_SESSIONS,
+   DEFAULT_SOLO_PRICE,
+   DEFAULT_PAGE_LIMIT,
+   MAX_PAGE_LIMIT,
+   GROUP_SERIES_DISCLAIMER,
++  TUTOR_PAYOUT_RATE_IDR,
+ } from "../../shared/constants";
+ import type { GroupSize } from "../pricing/pricing.service";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import {
+   BookingNotFoundError,
+   BookingNotOwnedError,
+   BookingConflictError,
+   BookingStateTransitionError,
+   BookingNotEditableError,
+@@ -29,20 +30,22 @@ import {
+   BookingNotAwaitingConfirmationError,
+   BookingNotAwaitingReconfirmationError,
+   BookingNotAwaitingReviewError,
+   BookingSeriesSizeError,
+   BookingParticipantNotFoundError,
+   BookingParticipantAlreadyConfirmedError,
+   BookingCancelledError,
+   BookingCancellationDeadlinePassedError,
+   BookingSessionNotFoundError,
+   BookingSessionNotCancellableError,
++  BookingSessionRequiredError,
++  BookingSessionNotStartedError,
+   BookingRescheduleNotFoundError,
+   BookingRescheduleNotPendingError,
+   BookingNotCompletedError,
+ } from "./booking.errors";
+ import { sanitizeHtml } from "../../lib/sanitize";
+ import { log } from "../../lib/logger";
+ import {
+   BOOKING_STATE,
+   TERMINAL_STATES,
+   type BookingState,
+@@ -78,20 +81,28 @@ export interface CreateGroupInput {
+ }
+ 
+ export interface CreateSeriesInput {
+   tutorId: string;
+   availabilitySlotId: string;
+   modality: "online" | "offline";
+   sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
+   timezone: string;
+ }
+ 
++export interface TutorPayoutResult {
++  completedSessions: number;
++  totalMarks: number;
++  cogitoTake: number;
++  tutorPayout: number;
++  tutorPayoutIdr: number;
++}
++
+ export interface BookingTransition {
+   bookingId: string;
+   fromState: BookingState | null;
+   toState: BookingState;
+   reason?: string;
+   actorId: string | null;
+   actorType: "student" | "tutor" | "admin" | "system";
+   metadata?: Record<string, unknown>;
+ }
+ 
+@@ -113,20 +124,24 @@ function computeMeetingInfo(b: {
+     return { meetingStatus: "pending", meetingUrl: null };
+   }
+   if (event.status === "failed") {
+     return { meetingStatus: "failed", meetingUrl: null };
+   }
+   return { meetingStatus: "ready", meetingUrl: event.meetingUrl };
+ }
+ 
+ export type BookingService = ReturnType<typeof createBookingService>;
+ 
++type BookingRow = NonNullable<
++  Awaited<ReturnType<BookingRepo["findBookingById"]>>
++>;
++
+ export function createBookingService(deps: {
+   db: DbType;
+   repo: BookingRepo;
+   wallet: BookingWalletPort;
+   pricing: BookingPricingPort;
+   audit: BookingAuditPort;
+   notification: BookingNotificationPort;
+   meeting: BookingMeetingPort;
+ }) {
+   const { db, repo, wallet, pricing, audit, notification, meeting } = deps;
+@@ -351,24 +366,25 @@ export function createBookingService(deps: {
+       holdAmount: newSnapshot.baseline,
+     });
+ 
+     for (const p of remaining) {
+       // eslint-disable-next-line no-await-in-loop
+       await notification.writeBestEffort({
+         db: tx,
+         userId: p.userId,
+         bookingId: b.id,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+-        severity: NOTIFICATION_SEVERITY.INFO,
++        severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "Group price updated",
+         body: `Your group's per-student price changed to ${newPerStudent} Marks because the headcount changed.`,
+         eventKey: `booking.${b.id}.reprice.${p.userId}`,
++        emailRequired: true,
+       });
+     }
+   }
+ 
+   function computeDisclaimer(b: {
+     type: string;
+     targetGroupSize: number;
+   }): string | null {
+     if (b.type !== BOOKING_TYPE.SERIES) return null;
+     if (b.targetGroupSize > 1) return GROUP_SERIES_DISCLAIMER;
+@@ -520,20 +536,21 @@ export function createBookingService(deps: {
+ 
+       await notification.writeBestEffort({
+         db: tx,
+         userId: input.tutorId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+         severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "New booking request",
+         body: "A student has requested a solo session with you.",
+         eventKey: `booking.${bookingId}.tutor_request`,
++        emailRequired: true,
+       });
+ 
+       return b;
+     });
+   }
+ 
+   async function cancel(
+     userId: string,
+     bookingId: string,
+     cancellationReason?: string,
+@@ -580,26 +597,49 @@ export function createBookingService(deps: {
+         tx,
+         bookingId,
+         cancellationReason ?? null,
+       );
+ 
+       await notification.writeBestEffort({
+         db: tx,
+         userId: b.tutorId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+-        severity: NOTIFICATION_SEVERITY.INFO,
++        severity: NOTIFICATION_SEVERITY.ACTION,
+         title: `Booking ${toState}`,
+         body: `A student has ${toState} the booking.`,
+         eventKey: `booking.${bookingId}.${toState}`,
++        emailRequired: true,
+       });
+ 
++      if (b.type === BOOKING_TYPE.GROUP || b.type === BOOKING_TYPE.SERIES) {
++        const participants = await repo.findConfirmedParticipants(
++          tx,
++          bookingId,
++          userId,
++        );
++        for (const p of participants) {
++          // eslint-disable-next-line no-await-in-loop
++          await notification.writeBestEffort({
++            db: tx,
++            userId: p.userId,
++            bookingId,
++            category: NOTIFICATION_CATEGORY.BOOKING,
++            severity: NOTIFICATION_SEVERITY.ACTION,
++            title: `Booking ${toState}`,
++            body: `A participant ${toState} the booking.`,
++            eventKey: `booking.${bookingId}.${toState}.${p.userId}`,
++            emailRequired: true,
++          });
++        }
++      }
++
+       return updated;
+     });
+   }
+ 
+   async function tutorAccept(bookingId: string, tutorId: string) {
+     const result = await db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+       if (b.tutorId !== tutorId)
+         throw new BookingNotOwnedError(bookingId, tutorId);
+@@ -644,20 +684,48 @@ export function createBookingService(deps: {
+               actorId: tutorId,
+               actorType: ACTOR_TYPE.TUTOR,
+               reason: "Meeting created automatically",
+             });
+ 
+             await repo.updateBookingDeadline(
+               tx,
+               bookingId,
+               new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+             );
++
++            await notification.writeBestEffort({
++              db: tx,
++              userId: b.tutorId,
++              bookingId,
++              category: NOTIFICATION_CATEGORY.BOOKING,
++              severity: NOTIFICATION_SEVERITY.ACTION,
++              title: "Meeting link ready",
++              body: "The meeting link for the session is ready.",
++              eventKey: `booking.${bookingId}.scheduled.tutor`,
++              emailRequired: true,
++            });
++
++            for (const p of participants) {
++              if (p.userId === b.proposerId) continue;
++              // eslint-disable-next-line no-await-in-loop
++              await notification.writeBestEffort({
++                db: tx,
++                userId: p.userId,
++                bookingId,
++                category: NOTIFICATION_CATEGORY.BOOKING,
++                severity: NOTIFICATION_SEVERITY.ACTION,
++                title: "Meeting link ready",
++                body: "The meeting link for your group session is ready.",
++                eventKey: `booking.${bookingId}.scheduled.${p.userId}`,
++                emailRequired: true,
++              });
++            }
+           }
+         } catch {
+           updated = await repo.findBookingById(tx, bookingId);
+         }
+       } else {
+         await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
+           actorId: tutorId,
+           actorType: ACTOR_TYPE.TUTOR,
+         });
+ 
+@@ -680,20 +748,21 @@ export function createBookingService(deps: {
+         db: tx,
+         userId: b.proposerId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+         severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "Booking accepted",
+         body: isOffline
+           ? "Tutor accepted. Waiting for admin room approval."
+           : "Tutor accepted. Session scheduled.",
+         eventKey: `booking.${bookingId}.accepted`,
++        emailRequired: true,
+       });
+ 
+       return { updated, isOffline, b };
+     });
+ 
+     return result.updated!;
+   }
+ 
+   async function tutorDecline(
+     bookingId: string,
+@@ -722,105 +791,235 @@ export function createBookingService(deps: {
+         actorId: tutorId,
+         actorType: ACTOR_TYPE.TUTOR,
+         reason,
+       });
+ 
+       await notification.writeBestEffort({
+         db: tx,
+         userId: b.proposerId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+-        severity: NOTIFICATION_SEVERITY.INFO,
++        severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "Booking declined",
+         body: `Tutor declined the booking. ${reason ?? ""}`,
+         eventKey: `booking.${bookingId}.declined`,
++        emailRequired: true,
+       });
+ 
+       return updated;
+     });
+   }
+ 
+-  async function completeSession(bookingId: string, tutorId: string) {
++  async function completeSession(
++    bookingId: string,
++    tutorId: string,
++    sessionId?: string,
++  ) {
+     return db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+       if (b.tutorId !== tutorId)
+         throw new BookingNotOwnedError(bookingId, tutorId);
+-      if (b.type === BOOKING_TYPE.SERIES) {
+-        throw new BookingNotEditableError(bookingId);
+-      }
+-      if (b.currentState !== BOOKING_STATE.SCHEDULED) {
+-        throw new BookingStateTransitionError(
+-          b.currentState,
+-          "complete",
+-          BOOKING_STATE.COMPLETED,
+-        );
++
++      if (b.type !== BOOKING_TYPE.SERIES) {
++        return completeSingleSession(tx, b, bookingId, tutorId);
+       }
+ 
+-      if (b.type === BOOKING_TYPE.GROUP) {
+-        // After a group repricing the holds live on each remaining
+-        // participant's wallet (the proposer may have withdrawn and hold 0),
+-        // so deduct from each confirmed participant individually.
+-        const participants = await repo.findConfirmedParticipants(
+-          tx,
+-          bookingId,
+-        );
+-        for (const p of participants) {
+-          if (p.heldAmount <= 0) continue;
+-          // eslint-disable-next-line no-await-in-loop
+-          const w = await wallet.getByUserId(tx, p.userId);
+-          if (!w) throw new BookingNotFoundError(p.userId);
+-          // eslint-disable-next-line no-await-in-loop
+-          await wallet.deduct(tx, {
+-            walletId: w.id,
+-            amount: p.heldAmount,
+-            eventKey: `booking.${bookingId}.complete.${p.userId}`,
+-            sourceReference: bookingId,
+-            bookingId,
+-            actorType: ACTOR_TYPE.TUTOR,
+-            reason: "Session completed",
+-          });
+-        }
+-      } else {
+-        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+-        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
++      return completeSeriesSession(tx, b, bookingId, tutorId, sessionId);
++    });
++  }
++
++  async function completeSingleSession(
++    tx: DbOrTx,
++    b: BookingRow,
++    bookingId: string,
++    tutorId: string,
++  ) {
++    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
++      throw new BookingStateTransitionError(
++        b.currentState,
++        "complete",
++        BOOKING_STATE.COMPLETED,
++      );
++    }
++
++    if (b.type === BOOKING_TYPE.GROUP) {
++      // After a group repricing the holds live on each remaining
++      // participant's wallet (the proposer may have withdrawn and hold 0),
++      // so deduct from each confirmed participant individually.
++      const participants = await repo.findConfirmedParticipants(tx, bookingId);
++      for (const p of participants) {
++        if (p.heldAmount <= 0) continue;
++        // eslint-disable-next-line no-await-in-loop
++        const w = await wallet.getByUserId(tx, p.userId);
++        if (!w) throw new BookingNotFoundError(p.userId);
++        // eslint-disable-next-line no-await-in-loop
+         await wallet.deduct(tx, {
+-          walletId: proposerWallet.id,
+-          amount: b.holdAmount,
+-          eventKey: `booking.${bookingId}.deduct`,
++          walletId: w.id,
++          amount: p.heldAmount,
++          eventKey: `booking.${bookingId}.complete.${p.userId}`,
+           sourceReference: bookingId,
+           bookingId,
+           actorType: ACTOR_TYPE.TUTOR,
+           reason: "Session completed",
+         });
+       }
+-
+-      const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
+-        actorId: tutorId,
++    } else {
++      const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
++      if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
++      await wallet.deduct(tx, {
++        walletId: proposerWallet.id,
++        amount: b.holdAmount,
++        eventKey: `booking.${bookingId}.deduct`,
++        sourceReference: bookingId,
++        bookingId,
+         actorType: ACTOR_TYPE.TUTOR,
++        reason: "Session completed",
+       });
++    }
+ 
+-      await repo.updateBookingHoldAmount(tx, bookingId, 0);
++    const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
++      actorId: tutorId,
++      actorType: ACTOR_TYPE.TUTOR,
++    });
+ 
+-      await notification.writeBestEffort({
+-        db: tx,
+-        userId: b.proposerId,
+-        bookingId,
+-        category: NOTIFICATION_CATEGORY.BOOKING,
+-        severity: NOTIFICATION_SEVERITY.INFO,
+-        title: "Session completed",
+-        body: "Tutor marked the session as completed. Marks deducted.",
+-        eventKey: `booking.${bookingId}.completed`,
++    await repo.updateBookingHoldAmount(tx, bookingId, 0);
++
++    await notification.writeBestEffort({
++      db: tx,
++      userId: b.proposerId,
++      bookingId,
++      category: NOTIFICATION_CATEGORY.BOOKING,
++      severity: NOTIFICATION_SEVERITY.INFO,
++      title: "Session completed",
++      body: "Tutor marked the session as completed. Marks deducted.",
++      eventKey: `booking.${bookingId}.completed`,
++    });
++
++    return updated;
++  }
++
++  async function completeSeriesSession(
++    tx: DbOrTx,
++    b: BookingRow,
++    bookingId: string,
++    tutorId: string,
++    sessionId?: string,
++  ) {
++    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
++      throw new BookingStateTransitionError(
++        b.currentState,
++        "complete",
++        BOOKING_STATE.COMPLETED,
++      );
++    }
++    if (!sessionId) throw new BookingSessionRequiredError(bookingId);
++
++    const session = await repo.findSessionById(tx, sessionId);
++    if (!session || session.seriesBookingId !== bookingId) {
++      throw new BookingSessionNotFoundError(sessionId);
++    }
++    if (session.currentState !== BOOKING_STATE.SCHEDULED) {
++      throw new BookingStateTransitionError(
++        session.currentState,
++        "completeSession",
++        BOOKING_STATE.COMPLETED,
++      );
++    }
++    if (session.scheduledStartAt.getTime() > Date.now()) {
++      throw new BookingSessionNotStartedError(sessionId);
++    }
++
++    const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
++    if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
++    await wallet.deduct(tx, {
++      walletId: proposerWallet.id,
++      amount: session.holdAmount,
++      eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
++      sourceReference: bookingId,
++      bookingId,
++      actorType: ACTOR_TYPE.TUTOR,
++      reason: "Series session completed",
++    });
++
++    const participant = await repo.findParticipant(tx, bookingId, b.proposerId);
++    if (participant) {
++      await repo.updateParticipantState(tx, participant.id, {
++        heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
+       });
++    }
++    await repo.updateBookingHoldAmount(
++      tx,
++      bookingId,
++      Math.max(0, b.holdAmount - session.holdAmount),
++    );
+ 
+-      return updated;
++    await repo.completeSession(tx, session.id);
++
++    await notification.writeBestEffort({
++      db: tx,
++      userId: b.proposerId,
++      bookingId,
++      category: NOTIFICATION_CATEGORY.BOOKING,
++      severity: NOTIFICATION_SEVERITY.INFO,
++      title: "Session completed",
++      body: "One session of your series was marked as completed.",
++      eventKey: `booking.${bookingId}.session.${session.id}.completed.student`,
++    });
++    await notification.writeBestEffort({
++      db: tx,
++      userId: b.tutorId,
++      bookingId,
++      category: NOTIFICATION_CATEGORY.BOOKING,
++      severity: NOTIFICATION_SEVERITY.INFO,
++      title: "Session completed",
++      body: "One session of the series was marked as completed.",
++      eventKey: `booking.${bookingId}.session.${session.id}.completed.tutor`,
+     });
++
++    const sessions = await repo.listSessionsBySeriesId(tx, bookingId);
++    const allCompleted = sessions.every(
++      (s) => s.currentState === BOOKING_STATE.COMPLETED,
++    );
++    if (!allCompleted) {
++      return b;
++    }
++
++    await repo.updateBookingHoldAmount(tx, bookingId, 0);
++    const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
++      actorId: tutorId,
++      actorType: ACTOR_TYPE.TUTOR,
++      reason: "All series sessions completed",
++    });
++
++    await notification.writeBestEffort({
++      db: tx,
++      userId: b.proposerId,
++      bookingId,
++      category: NOTIFICATION_CATEGORY.BOOKING,
++      severity: NOTIFICATION_SEVERITY.INFO,
++      title: "Series completed",
++      body: "All sessions in your series are completed. Remaining holds released.",
++      eventKey: `booking.${bookingId}.series_completed.student`,
++    });
++    await notification.writeBestEffort({
++      db: tx,
++      userId: b.tutorId,
++      bookingId,
++      category: NOTIFICATION_CATEGORY.BOOKING,
++      severity: NOTIFICATION_SEVERITY.INFO,
++      title: "Series completed",
++      body: "All sessions in the series are completed.",
++      eventKey: `booking.${bookingId}.series_completed.tutor`,
++    });
++
++    return updated;
+   }
+ 
+   async function cancelSession(userId: string, sessionId: string) {
+     return db.transaction(async (tx) => {
+       const session = await repo.findSessionById(tx, sessionId);
+       if (!session) throw new BookingSessionNotFoundError(sessionId);
+       const b = await repo.findBookingById(tx, session.seriesBookingId);
+       if (!b) throw new BookingNotFoundError(session.seriesBookingId);
+       await assertBookingAccess(b, userId, tx, session.seriesBookingId);
+ 
+@@ -1005,20 +1204,21 @@ export function createBookingService(deps: {
+ 
+       await notification.write({
+         db: tx,
+         userId: b.proposerId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+         severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "Reschedule proposed",
+         body: "Tutor proposed a new time for the booking.",
+         eventKey: `booking.${bookingId}.reschedule_proposed`,
++        emailRequired: true,
+       });
+ 
+       return updated;
+     });
+   }
+ 
+   async function acceptReschedule(userId: string, bookingId: string) {
+     return db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+@@ -1064,20 +1264,21 @@ export function createBookingService(deps: {
+ 
+       await notification.write({
+         db: tx,
+         userId: b.tutorId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+         severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "Reschedule accepted",
+         body: "The student accepted the proposed new time.",
+         eventKey: `booking.${bookingId}.reschedule_accepted`,
++        emailRequired: true,
+       });
+ 
+       return updated;
+     });
+   }
+ 
+   async function rejectReschedule(userId: string, bookingId: string) {
+     return db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+@@ -1116,24 +1317,25 @@ export function createBookingService(deps: {
+         actorId: userId,
+         actorType: ACTOR_TYPE.STUDENT,
+         reason: "Student rejected the reschedule proposal",
+       });
+ 
+       await notification.write({
+         db: tx,
+         userId: b.tutorId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+-        severity: NOTIFICATION_SEVERITY.INFO,
++        severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "Reschedule rejected",
+         body: "The student declined the proposed new time.",
+         eventKey: `booking.${bookingId}.reschedule_rejected`,
++        emailRequired: true,
+       });
+ 
+       return updated;
+     });
+   }
+ 
+   async function createGroup(proposerId: string, input: CreateGroupInput) {
+     const profile = await repo.findTutorProfile(db, input.tutorId, {
+       publishedOnly: true,
+     });
+@@ -1230,20 +1432,21 @@ export function createBookingService(deps: {
+         // eslint-disable-next-line no-await-in-loop
+         await notification.write({
+           db: tx,
+           userId: inviteeId,
+           bookingId,
+           category: NOTIFICATION_CATEGORY.BOOKING,
+           severity: NOTIFICATION_SEVERITY.ACTION,
+           title: "Group booking invitation",
+           body: "You have been invited to a group session. Confirm within 12 hours.",
+           eventKey: `booking.${bookingId}.invite.${inviteeId}`,
++          emailRequired: true,
+         });
+       }
+ 
+       await recordTransition(tx, {
+         bookingId,
+         fromState: null,
+         toState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+         actorId: proposerId,
+         actorType: ACTOR_TYPE.STUDENT,
+       });
+@@ -1309,20 +1512,21 @@ export function createBookingService(deps: {
+         });
+         await notification.write({
+           db: tx,
+           userId: b.tutorId,
+           bookingId,
+           category: NOTIFICATION_CATEGORY.BOOKING,
+           severity: NOTIFICATION_SEVERITY.ACTION,
+           title: "Group booking ready",
+           body: "All participants confirmed. Review the booking.",
+           eventKey: `booking.${bookingId}.full_headcount`,
++          emailRequired: true,
+         });
+       }
+ 
+       return { confirmedHeadcount: newHeadcount, targetGroupSize: size };
+     });
+   }
+ 
+   async function declineInvite(
+     userId: string,
+     bookingId: string,
+@@ -1614,33 +1818,105 @@ export function createBookingService(deps: {
+       }
+ 
+       await recordTransition(tx, {
+         bookingId,
+         fromState: null,
+         toState: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+         actorId: proposerId,
+         actorType: ACTOR_TYPE.STUDENT,
+       });
+ 
++      await notification.writeBestEffort({
++        db: tx,
++        userId: input.tutorId,
++        bookingId,
++        category: NOTIFICATION_CATEGORY.BOOKING,
++        severity: NOTIFICATION_SEVERITY.ACTION,
++        title: "New series request",
++        body: `A student requested a ${input.sessions.length}-session series with you.`,
++        eventKey: `booking.${bookingId}.tutor_request`,
++        emailRequired: true,
++      });
++
+       return { ...b, disclaimer: computeDisclaimer(b) };
+     });
+   }
+ 
+   async function listSessions(bookingId: string, userId: string) {
+     const b = await repo.findBookingById(db, bookingId);
+     if (!b) throw new BookingNotFoundError(bookingId);
+     await assertBookingAccess(b, userId, db, bookingId);
+     if (b.type !== BOOKING_TYPE.SERIES)
+       throw new BookingNotEditableError(bookingId);
+     return repo.listSessionsBySeriesId(db, bookingId);
+   }
+ 
++  /**
++   * Aggregates tutor earnings from COMPLETED bookings in a date range.
++   *
++   * The stored per-booking `priceSnapshot` (G19-correct tutorShare/cogitoTake)
++   * is authoritative — no flat-rate recomputation. For series bookings the
++   * per-session snapshots are summed so a completed series pays out every
++   * session; a series completed without session rows falls back to its
++   * booking-level snapshot.
++   */
++  async function getTutorPayouts(input: {
++    tutorId: string;
++    dateFrom?: Date;
++    dateTo?: Date;
++  }): Promise<TutorPayoutResult> {
++    const bookings = await repo.findCompletedBookingsByTutor(
++      db,
++      input.tutorId,
++      input.dateFrom,
++      input.dateTo,
++    );
++
++    let completedSessions = 0;
++    let totalMarks = 0;
++    let cogitoTake = 0;
++    let tutorPayout = 0;
++
++    for (const b of bookings) {
++      if (b.type === BOOKING_TYPE.SERIES) {
++        // eslint-disable-next-line no-await-in-loop
++        const sessions = await repo.listSessionsBySeriesId(db, b.id);
++        const completed = sessions.filter(
++          (s) => s.currentState === BOOKING_STATE.COMPLETED,
++        );
++        if (completed.length > 0) {
++          for (const s of completed) {
++            completedSessions++;
++            const snap = s.priceSnapshot ?? b.priceSnapshot;
++            totalMarks += snap?.baseline ?? 0;
++            cogitoTake += snap?.cogitoTake ?? 0;
++            tutorPayout += snap?.tutorShare ?? 0;
++          }
++          continue;
++        }
++      }
++      completedSessions++;
++      const snap = b.priceSnapshot;
++      totalMarks += snap?.baseline ?? 0;
++      cogitoTake += snap?.cogitoTake ?? 0;
++      tutorPayout += snap?.tutorShare ?? 0;
++    }
++
++    return {
++      completedSessions,
++      totalMarks,
++      cogitoTake,
++      tutorPayout,
++      tutorPayoutIdr: Math.round(tutorPayout * TUTOR_PAYOUT_RATE_IDR),
++    };
++  }
++
+   async function expireBookings() {
+     const candidates = await repo.findBookingsExpiringByDeadline(db, [
+       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+       BOOKING_STATE.AWAITING_RECONFIRMATION,
+       BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+       BOOKING_STATE.RESCHEDULE_PROPOSED,
+       BOOKING_STATE.SCHEDULED,
+       BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+     ]);
+ 
+@@ -1677,39 +1953,45 @@ export function createBookingService(deps: {
+           if (b.type === BOOKING_TYPE.SERIES) {
+             await repo.cancelAllSessions(tx, b.id);
+           }
+ 
+           const noShow = targetState === BOOKING_STATE.NO_SHOW;
+           await notification.writeBestEffort({
+             db: tx,
+             userId: b.proposerId,
+             bookingId: b.id,
+             category: NOTIFICATION_CATEGORY.BOOKING,
+-            severity: NOTIFICATION_SEVERITY.INFO,
++            severity: noShow
++              ? NOTIFICATION_SEVERITY.ACTION
++              : NOTIFICATION_SEVERITY.INFO,
+             title: noShow ? "Session marked as no-show" : "Booking expired",
+             body: noShow
+               ? "The session was marked as no-show and held marks were released."
+               : "The booking deadline passed and held marks were released.",
+             eventKey: `booking.${b.id}.expired.student`,
++            emailRequired: noShow,
+           });
+ 
+           await notification.writeBestEffort({
+             db: tx,
+             userId: b.tutorId,
+             bookingId: b.id,
+             category: NOTIFICATION_CATEGORY.BOOKING,
+-            severity: NOTIFICATION_SEVERITY.INFO,
++            severity: noShow
++              ? NOTIFICATION_SEVERITY.ACTION
++              : NOTIFICATION_SEVERITY.INFO,
+             title: noShow ? "Session marked as no-show" : "Booking expired",
+             body: noShow
+               ? "The session was marked as no-show and held marks were released."
+               : "The booking expired because its deadline passed.",
+             eventKey: `booking.${b.id}.expired.tutor`,
++            emailRequired: noShow,
+           });
+         });
+         succeeded++;
+       } catch (error) {
+         failed++;
+         log({
+           level: "error",
+           action: "expire_booking_failed",
+           bookingId: b.id,
+           error: { message: String(error) },
+@@ -1817,20 +2099,21 @@ export function createBookingService(deps: {
+ 
+           await notification.writeBestEffort({
+             db: tx,
+             userId: b.proposerId,
+             bookingId: b.id,
+             category: NOTIFICATION_CATEGORY.BOOKING,
+             severity: NOTIFICATION_SEVERITY.ACTION,
+             title: "Session auto-cancelled",
+             body: "The tutor did not join within 15 minutes, so the session was auto-cancelled and held marks were released.",
+             eventKey: `booking.${b.id}.tutor_no_show`,
++            emailRequired: true,
+           });
+ 
+           await notification.writeBestEffort({
+             db: tx,
+             userId: b.tutorId,
+             bookingId: b.id,
+             category: NOTIFICATION_CATEGORY.BOOKING,
+             severity: NOTIFICATION_SEVERITY.INFO,
+             title: "Session auto-cancelled",
+             body: "You did not join the session within 15 minutes, so it was auto-cancelled.",
+@@ -1866,17 +2149,18 @@ export function createBookingService(deps: {
+     tutorDecline,
+     completeSession,
+     markTutorAttendance,
+     proposeReschedule,
+     acceptReschedule,
+     rejectReschedule,
+     cancelSession,
+     addSessionNote,
+     getSessionNotes,
+     listSessions,
++    getTutorPayouts,
+     expireBookings,
+     releaseExpiredHolds,
+     checkTutorLateness,
+     transition,
+     canTransition,
+   };
+ }
+diff --git a/packages/api/src/modules/booking/booking.types.ts b/packages/api/src/modules/booking/booking.types.ts
+index 877a455..049e862 100644
+--- a/packages/api/src/modules/booking/booking.types.ts
++++ b/packages/api/src/modules/booking/booking.types.ts
+@@ -97,20 +97,21 @@ export const proposeRescheduleInput = z
+       .refine((d) => d > new Date(), "Must be in the future"),
+     reason: z.string().max(2000).optional(),
+   })
+   .refine((d) => d.proposedEndAt > d.proposedStartAt, {
+     message: "proposedEndAt must be after proposedStartAt",
+     path: ["proposedEndAt"],
+   });
+ 
+ export const completeSessionInput = z.object({
+   bookingId: z.string().max(100),
++  sessionId: z.string().max(100).optional(),
+ });
+ 
+ export const cancelSessionInput = z.object({
+   sessionId: z.string().max(100),
+ });
+ 
+ export const acceptRescheduleInput = bookingActionInput;
+ export const rejectRescheduleInput = bookingActionInput;
+ 
+ export const addSessionNoteInput = z.object({
+diff --git a/packages/api/src/modules/booking/index.ts b/packages/api/src/modules/booking/index.ts
+index 3e9ec93..6520260 100644
+--- a/packages/api/src/modules/booking/index.ts
++++ b/packages/api/src/modules/booking/index.ts
+@@ -43,20 +43,34 @@ export interface BookingNotificationPort {
+ 
+ export interface BookingMeetingPort {
+   createEvent(
+     bookingId: string,
+     scheduledStartAt?: Date,
+     scheduledEndAt?: Date,
+     attendees?: MeetingAttendee[],
+   ): Promise<MeetingEvent>;
+ }
+ 
++export interface BookingPayoutPort {
++  getTutorPayouts(input: {
++    tutorId: string;
++    dateFrom?: Date;
++    dateTo?: Date;
++  }): Promise<{
++    completedSessions: number;
++    totalMarks: number;
++    cogitoTake: number;
++    tutorPayout: number;
++    tutorPayoutIdr: number;
++  }>;
++}
++
+ export function createBookingModule(deps: {
+   db: DbType;
+   wallet: BookingWalletPort;
+   pricing: BookingPricingPort;
+   audit: BookingAuditPort;
+   notification: BookingNotificationPort;
+   meeting: BookingMeetingPort;
+ }) {
+   const repo = createBookingRepo(deps.db);
+   const service = createBookingService({
+diff --git a/packages/api/src/modules/notification/notification.service.ts b/packages/api/src/modules/notification/notification.service.ts
+index 2d465f4..6459abf 100644
+--- a/packages/api/src/modules/notification/notification.service.ts
++++ b/packages/api/src/modules/notification/notification.service.ts
+@@ -31,20 +31,26 @@ export type NotificationSeverity = "info" | "action" | "critical";
+ export interface NotificationWriteParams {
+   db: DbOrTx;
+   userId: string;
+   bookingId?: string;
+   category: NotificationCategory;
+   title: string;
+   body: string;
+   severity?: NotificationSeverity;
+   eventKey: string;
+   metadata?: Record<string, unknown>;
++  /**
++   * Opt-in per-event email flag (PRD notification matrix). Defaults to false —
++   * only call sites that explicitly require an email dispatch set this true.
++   * Email is still gated by severity >= action and the category backstop.
++   */
++  emailRequired?: boolean;
+ }
+ 
+ export interface NotificationListItem {
+   id: string;
+   userId: string;
+   bookingId: string | null;
+   category: string;
+   title: string;
+   body: string;
+   severity: string;
+@@ -115,20 +121,21 @@ export function createNotificationService(
+       category: params.category,
+       title: params.title,
+       body: params.body,
+       severity: params.severity ?? NOTIFICATION_SEVERITY.INFO,
+       eventKey: params.eventKey,
+       metadata: params.metadata ?? {},
+     });
+ 
+     if (
+       inserted &&
++      params.emailRequired === true &&
+       (params.severity === NOTIFICATION_SEVERITY.ACTION ||
+         params.severity === NOTIFICATION_SEVERITY.CRITICAL)
+     ) {
+       const recipientEmail = await repo.findUserEmail(conn, params.userId);
+ 
+       if (
+         emailPort &&
+         recipientEmail &&
+         EMAIL_SUPPORTED_CATEGORIES.has(params.category)
+       ) {
+diff --git a/packages/api/src/modules/tutor/index.ts b/packages/api/src/modules/tutor/index.ts
+index 0d7a3a2..c8646a0 100644
+--- a/packages/api/src/modules/tutor/index.ts
++++ b/packages/api/src/modules/tutor/index.ts
+@@ -1,17 +1,18 @@
+ import type { DbType } from "../../lib/db";
+ import type { AuditRecordParams } from "../audit/audit.service";
+ import type {
+   GroupSize,
+   Modality,
+   PriceSnapshot,
+ } from "../pricing/pricing.service";
++import type { BookingPayoutPort } from "../booking";
+ import { createTutorRepo } from "./tutor.repo";
+ import { createTutorService } from "./tutor.service";
+ import { createTutorHandler } from "./tutor.handler";
+ import type { TutorService } from "./tutor.service";
+ import type { TutorHandler } from "./tutor.handler";
+ 
+ export type TutorModule = ReturnType<typeof createTutorModule>;
+ 
+ export interface TutorPricingPort {
+   validatePrices(
+@@ -22,23 +23,25 @@ export interface TutorPricingPort {
+ }
+ 
+ export interface TutorAuditPort {
+   record(params: AuditRecordParams): Promise<void>;
+ }
+ 
+ export function createTutorModule(deps: {
+   db: DbType;
+   pricing: TutorPricingPort;
+   audit: TutorAuditPort;
++  payout: BookingPayoutPort;
+ }) {
+   const repo = createTutorRepo();
+   const service = createTutorService({
+     tutorRepo: repo,
+     pricingPort: deps.pricing,
+     auditPort: deps.audit,
+     db: deps.db,
++    payout: deps.payout,
+   });
+   const handler = createTutorHandler(service);
+   return { service, handler };
+ }
+ 
+ export type { TutorService, TutorHandler };
+diff --git a/packages/api/src/modules/tutor/tutor.errors.ts b/packages/api/src/modules/tutor/tutor.errors.ts
+index 520f9f3..1240dc3 100644
+--- a/packages/api/src/modules/tutor/tutor.errors.ts
++++ b/packages/api/src/modules/tutor/tutor.errors.ts
+@@ -69,25 +69,35 @@ export class InvalidTutorPricingError extends DomainError {
+ export class OptimisticLockError extends DomainError {
+   readonly domain = "tutor";
+   constructor(id: string, expectedVersion: number) {
+     super("OPTIMISTIC_LOCK", "Resource was modified by another transaction", {
+       id,
+       expectedVersion,
+     });
+   }
+ }
+ 
++export class InvalidDateRangeError extends DomainError {
++  readonly domain = "tutor";
++  constructor(field: string) {
++    super("INVALID_DATE_RANGE", `${field} must be a valid ISO datetime`, {
++      field,
++    });
++  }
++}
++
+ export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
+   if (err instanceof TutorProfileNotFoundError)
+     return notFound(err.message, err);
+   if (err instanceof TutorProfileNotEditableError)
+     return badRequest(err.message, err);
+   if (err instanceof InvalidTutorStatusError) return conflict(err.message, err);
+   if (err instanceof AvailabilitySlotOverlapError)
+     return conflict(err.message, err);
+   if (err instanceof TutorProfileIncompleteError)
+     return badRequest(err.message, err);
+   if (err instanceof InvalidTutorPricingError)
+     return badRequest(err.message, err);
+   if (err instanceof OptimisticLockError) return conflict(err.message, err);
++  if (err instanceof InvalidDateRangeError) return badRequest(err.message, err);
+   return internalServerError(err.message, err);
+ }
+diff --git a/packages/api/src/modules/tutor/tutor.handler.ts b/packages/api/src/modules/tutor/tutor.handler.ts
+index 1c43918..abda372 100644
+--- a/packages/api/src/modules/tutor/tutor.handler.ts
++++ b/packages/api/src/modules/tutor/tutor.handler.ts
+@@ -1,24 +1,26 @@
+ import type { Context } from "../../context";
+ import { z } from "zod";
+ import { withDomainMap } from "../../lib/handler-utils";
+ import type { TutorService } from "./tutor.service";
+ import { updateMyProfileInput } from "./tutor.types";
+ import {
+   upsertAvailabilityInput,
+   deleteAvailabilityInput,
+ } from "./availability.types";
+ import { mapTutorError } from "./tutor.errors";
++import { getMyPayoutsInput } from "./tutor.types";
+ 
+ type UpdateMyProfileInput = z.infer<typeof updateMyProfileInput>;
+ type UpsertAvailabilityInput = z.infer<typeof upsertAvailabilityInput>;
+ type DeleteAvailabilityInput = z.infer<typeof deleteAvailabilityInput>;
++type GetMyPayoutsInput = z.infer<typeof getMyPayoutsInput>;
+ 
+ export type TutorHandler = ReturnType<typeof createTutorHandler>;
+ 
+ export function createTutorHandler(tutorService: TutorService) {
+   return {
+     getMyProfile: async ({ context }: { context: Context }) => {
+       return withDomainMap(
+         () => tutorService.getMyProfile(context.session!.user.id),
+         mapTutorError,
+       );
+@@ -71,12 +73,25 @@ export function createTutorHandler(tutorService: TutorService) {
+       context: Context;
+       input: DeleteAvailabilityInput;
+     }) => {
+       return withDomainMap(async () => {
+         await tutorService.deleteAvailability(
+           context.session!.user.id,
+           input.id,
+         );
+       }, mapTutorError);
+     },
++
++    getMyPayouts: async ({
++      context,
++      input,
++    }: {
++      context: Context;
++      input: GetMyPayoutsInput;
++    }) => {
++      return withDomainMap(
++        () => tutorService.getMyPayouts(context.session!.user.id, input ?? {}),
++        mapTutorError,
++      );
++    },
+   };
+ }
+diff --git a/packages/api/src/modules/tutor/tutor.router.ts b/packages/api/src/modules/tutor/tutor.router.ts
+index 9958f9b..7273afa 100644
+--- a/packages/api/src/modules/tutor/tutor.router.ts
++++ b/packages/api/src/modules/tutor/tutor.router.ts
+@@ -1,14 +1,14 @@
+ import { z } from "zod";
+ 
+-import { protectedProcedure } from "../../procedures";
+-import { updateMyProfileInput } from "./tutor.types";
++import { protectedProcedure, tutorProcedure } from "../../procedures";
++import { updateMyProfileInput, getMyPayoutsInput } from "./tutor.types";
+ import {
+   upsertAvailabilityInput,
+   deleteAvailabilityInput,
+ } from "./availability.types";
+ import type { TutorHandler } from "./tutor.handler";
+ 
+ export function createTutorRouter(handler: TutorHandler) {
+   return {
+     getMyProfile: protectedProcedure
+       .route({
+@@ -69,12 +69,24 @@ export function createTutorRouter(handler: TutorHandler) {
+     deleteAvailability: protectedProcedure
+       .route({
+         method: "POST",
+         path: "/tutor/availability/delete",
+         tags: ["Tutor"],
+         summary: "Delete availability",
+         description: "Deletes a tutor availability window",
+       })
+       .input(deleteAvailabilityInput)
+       .handler(handler.deleteAvailability),
++
++    getMyPayouts: tutorProcedure
++      .route({
++        method: "POST",
++        path: "/tutor/payouts/get",
++        tags: ["Tutor"],
++        summary: "Get my payout summary",
++        description:
++          "Returns the authenticated tutor's payout summary from completed bookings",
++      })
++      .input(getMyPayoutsInput)
++      .handler(handler.getMyPayouts),
+   };
+ }
+diff --git a/packages/api/src/modules/tutor/tutor.service.ts b/packages/api/src/modules/tutor/tutor.service.ts
+index 3f69652..7d5f95d 100644
+--- a/packages/api/src/modules/tutor/tutor.service.ts
++++ b/packages/api/src/modules/tutor/tutor.service.ts
+@@ -1,27 +1,29 @@
+ import type { DbType } from "../../lib/db";
+ import {
+   ONBOARDING_STATUS,
+   MODALITY,
+   ACTOR_TYPE,
+ } from "../../shared/constants";
+ import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
+ import type { tutorProfile } from "@cogito-app/db/schema";
+ import type { TutorAuditPort, TutorPricingPort } from "./index";
++import type { BookingPayoutPort } from "../booking";
+ import {
+   TutorProfileNotFoundError,
+   TutorProfileNotEditableError,
+   InvalidTutorStatusError,
+   AvailabilitySlotOverlapError,
+   TutorProfileIncompleteError,
+   InvalidTutorPricingError,
+   OptimisticLockError,
++  InvalidDateRangeError,
+ } from "./tutor.errors";
+ 
+ type TutorProfileRow = typeof tutorProfile.$inferSelect;
+ 
+ export function validateUpdateInput(
+   profile: TutorProfileRow | undefined,
+   input: UpdateProfileInput,
+   pricingPort: TutorPricingPort,
+ ): void {
+   if (!profile) {
+@@ -93,22 +95,23 @@ export function validateSubmitForReview(
+       throw new InvalidTutorPricingError(profile.id, error);
+     }
+   }
+ }
+ 
+ export function createTutorService(deps: {
+   tutorRepo: TutorRepo;
+   pricingPort: TutorPricingPort;
+   auditPort: TutorAuditPort;
+   db: DbType;
++  payout: BookingPayoutPort;
+ }) {
+-  const { tutorRepo, pricingPort, auditPort, db } = deps;
++  const { tutorRepo, pricingPort, auditPort, db, payout } = deps;
+ 
+   async function getMyProfile(userId: string) {
+     const profile = await tutorRepo.getByUserId(db, userId);
+     if (!profile) throw new TutorProfileNotFoundError(userId);
+     return profile;
+   }
+ 
+   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
+     const profile = await tutorRepo.getByUserId(db, userId);
+     validateUpdateInput(profile, input, pricingPort);
+@@ -188,21 +191,39 @@ export function createTutorService(deps: {
+ 
+   async function deleteAvailability(userId: string, slotId: string) {
+     const slots = await tutorRepo.listAvailability(db, userId, {
+       from: new Date(),
+     });
+     const found = slots.find((s) => s.id === slotId);
+     if (!found) throw new TutorProfileNotFoundError(userId);
+     await tutorRepo.deleteAvailability(db, slotId);
+   }
+ 
++  async function getMyPayouts(
++    userId: string,
++    input: { dateFrom?: string; dateTo?: string },
++  ) {
++    if (input.dateFrom && Number.isNaN(Date.parse(input.dateFrom))) {
++      throw new InvalidDateRangeError("dateFrom");
++    }
++    if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
++      throw new InvalidDateRangeError("dateTo");
++    }
++    return payout.getTutorPayouts({
++      tutorId: userId,
++      dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
++      dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
++    });
++  }
++
+   return {
+     getMyProfile,
+     updateMyProfile,
+     submitForReview,
+     listAvailability,
+     upsertAvailability,
+     deleteAvailability,
++    getMyPayouts,
+   };
+ }
+ 
+ export type TutorService = ReturnType<typeof createTutorService>;
+diff --git a/packages/api/src/modules/tutor/tutor.types.ts b/packages/api/src/modules/tutor/tutor.types.ts
+index 91c6eed..93178bf 100644
+--- a/packages/api/src/modules/tutor/tutor.types.ts
++++ b/packages/api/src/modules/tutor/tutor.types.ts
+@@ -4,10 +4,15 @@ export const updateMyProfileInput = z.object({
+   version: z.number().int(),
+   displayName: z.string().min(1).max(255).optional(),
+   shortBio: z.string().max(2000).optional(),
+   credentialsSummary: z.string().max(2000).optional(),
+   expertise: z.array(z.string().max(255)).max(20).optional(),
+   modality: z.enum(["online", "offline", "both"]).optional(),
+   prices: z.record(z.string(), z.number()).optional(),
+   availabilitySummary: z.string().max(2000).optional(),
+   proofUrls: z.array(z.string().url().max(2048)).max(10).optional(),
+ });
++
++export const getMyPayoutsInput = z.object({
++  dateFrom: z.string().max(100).optional(),
++  dateTo: z.string().max(100).optional(),
++});
+diff --git a/packages/api/src/services.ts b/packages/api/src/services.ts
+index d122111..c0253e4 100644
+--- a/packages/api/src/services.ts
++++ b/packages/api/src/services.ts
+@@ -123,62 +123,67 @@ function createServices() {
+             privateKey: env.GOOGLE_PRIVATE_KEY!,
+             calendarId: env.GOOGLE_CALENDAR_ID ?? "primary",
+           }
+         : undefined,
+     redis,
+   });
+ 
+   // Core modules
+   const wallet = createWalletModule({ db });
+   const auth = createAuthModule({ db, wallet: wallet.service });
++  const notification = createNotificationModule({ db, email: email.service });
++  const booking = createBookingModule({
++    db,
++    wallet: wallet.service,
++    pricing: pricing.service,
++    audit: audit.service,
++    notification: notification.service,
++    meeting,
++  });
+   const admin = createAdminModule({
+     db,
+     audit: audit.service,
+     wallet: wallet.service,
++    payout: booking.service,
+   });
+   const adminTutor = createAdminTutorModule({ db, audit: audit.service });
+   const tutor = createTutorModule({
+     db,
+     pricing: pricing.service,
+     audit: audit.service,
++    payout: booking.service,
+   });
+   const discovery = createDiscoveryModule({ db });
+   const invite = createInviteModule({ db, audit: audit.service });
+-  const achievement = createAchievementModule({ db, audit: audit.service });
+-  const notification = createNotificationModule({ db, email: email.service });
++  const achievement = createAchievementModule({
++    db,
++    audit: audit.service,
++    notification: notification.service,
++  });
+   const room = createRoomModule({ db });
+ 
+   const payment = createPaymentModule({
+     db,
+     wallet: wallet.service,
+     xenditConfig:
+       env.XENDIT_SECRET_KEY && env.XENDIT_WEBHOOK_TOKEN
+         ? {
+             secretKey: env.XENDIT_SECRET_KEY!,
+             webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
+             successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL ?? "",
+             failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL ?? "",
+             defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,
+           }
+         : undefined,
+     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
+   });
+ 
+-  const booking = createBookingModule({
+-    db,
+-    wallet: wallet.service,
+-    pricing: pricing.service,
+-    audit: audit.service,
+-    notification: notification.service,
+-    meeting,
+-  });
+-
+   const refund = createRefundModule({
+     db,
+     audit: audit.service,
+     wallet: wallet.service,
+   });
+ 
+   const adminBooking = createAdminBookingModule({
+     db,
+     audit: audit.service,
+     wallet: wallet.service,
+diff --git a/packages/api/src/tests/integration/booking-g5.test.ts b/packages/api/src/tests/integration/booking-g5.test.ts
+index f66f128..68dd6fd 100644
+--- a/packages/api/src/tests/integration/booking-g5.test.ts
++++ b/packages/api/src/tests/integration/booking-g5.test.ts
+@@ -10,20 +10,21 @@ import {
+ } from "@cogito-app/db/schema";
+ 
+ import {
+   createTestContext,
+   createTestClient,
+   signUpAndSignIn,
+   setUserRole,
+   resetDatabase,
+   type TestClient,
+ } from "../helpers/test-client";
++import { GROUP_SERIES_DISCLAIMER } from "../../shared/constants";
+ 
+ async function creditWallet(userId: string, amount: number) {
+   const { services } = await import("@cogito-app/api/services");
+   const w = await services.wallet.getOrCreate(userId);
+   await db
+     .update(wallet)
+     .set({ totalBalance: amount, availableBalance: amount })
+     .where(eq(wallet.id, w.id));
+ }
+ 
+@@ -243,11 +244,49 @@ describe("G5: series session cancellation rules", () => {
+           tutorShare: 32,
+           cogitoTake: 8,
+         },
+       })
+       .returning();
+ 
+     await expect(
+       studentClient.booking.cancelSession({ sessionId: session!.id }),
+     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+   });
++
++  test("group series get response includes the disclaimer (G15)", async () => {
++    const { booking: bookingTable } = await import("@cogito-app/db/schema");
++    const start = new Date(Date.now() + 48 * 3600_000);
++    const priceSnapshot = {
++      perStudent: 40,
++      baseline: 120,
++      tutorShare: 96,
++      cogitoTake: 24,
++    };
++
++    const [groupSeries] = await db
++      .insert(bookingTable)
++      .values({
++        id: crypto.randomUUID(),
++        type: "series",
++        modality: "online",
++        tutorId,
++        proposerId: studentId,
++        targetGroupSize: 3,
++        minConfirmedHeadcount: 2,
++        confirmedHeadcount: 3,
++        currentState: "scheduled",
++        scheduledStartAt: start,
++        scheduledEndAt: new Date(start.getTime() + 3600_000),
++        timezone: "Asia/Jakarta",
++        priceSnapshot,
++        originalMarks: 120,
++        holdAmount: 120,
++        deadlineAt: new Date(Date.now() + 86400000),
++      })
++      .returning();
++
++    const b = await studentClient.booking.get({
++      bookingId: groupSeries!.id,
++    });
++    expect(b.disclaimer).toBe(GROUP_SERIES_DISCLAIMER);
++  });
+ });
+diff --git a/packages/api/src/tests/integration/booking-payout-g16.test.ts b/packages/api/src/tests/integration/booking-payout-g16.test.ts
+new file mode 100644
+index 0000000..5bac20e
+--- /dev/null
++++ b/packages/api/src/tests/integration/booking-payout-g16.test.ts
+@@ -0,0 +1,330 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++  booking as bookingTable,
++  bookingSession,
++} from "@cogito-app/db/schema";
++import { TUTOR_PAYOUT_RATE_IDR } from "../../shared/constants";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(email: string, ts: number) {
++  const res = await signUpAndSignIn(email, "Test1234!", "Prof Payout");
++  const signupCtx = await createTestContext(res.cookie);
++  const tutorId = signupCtx.session!.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const tutorCookie = await signInAndGetCookie(email, "Test1234!");
++  const tutorClient = createTestClient(
++    await createTestContext(tutorCookie ?? ""),
++  );
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Payout",
++      token: `token-pay-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Payout",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({ tutorId, startDate: start, endDate: end, modality: "both" })
++    .returning();
++
++  return { tutorId, tutorClient, slotId: slot!.id };
++}
++
++async function insertBookingRow(
++  overrides: Partial<typeof bookingTable.$inferInsert>,
++) {
++  const [row] = await db
++    .insert(bookingTable)
++    .values({
++      id: crypto.randomUUID(),
++      type: "solo",
++      modality: "online",
++      tutorId: overrides.tutorId!,
++      proposerId: overrides.proposerId!,
++      targetGroupSize: 1,
++      minConfirmedHeadcount: 1,
++      confirmedHeadcount: 1,
++      currentState: "completed",
++      scheduledStartAt: new Date(Date.now() + 48 * 3600_000),
++      scheduledEndAt: new Date(Date.now() + 48 * 3600_000 + 3600_000),
++      timezone: "Asia/Jakarta",
++      priceSnapshot: {
++        perStudent: 50,
++        baseline: 50,
++        tutorShare: 40,
++        cogitoTake: 10,
++      },
++      originalMarks: 50,
++      holdAmount: 0,
++      deadlineAt: new Date(Date.now() + 86400000),
++      ...overrides,
++    })
++    .returning();
++  return row!;
++}
++
++describe("Tutor payouts (G16)", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const studentEmail = `student.pay.${ts}@cogito.test`;
++  const tutorEmail = `tutor.pay.${ts}@cogito.test`;
++  const adminEmail = `admin.pay.${ts}@cogito.test`;
++
++  let studentClient: TestClient;
++  let tutorClient: TestClient;
++  let adminClient: TestClient;
++  let studentId: string;
++  let tutorId: string;
++  let slotId: string;
++
++  beforeAll(async () => {
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student Payout",
++    );
++    studentClient = createTestClient(
++      await createTestContext(studentRes.cookie),
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    studentId = studentCtx.session!.user.id;
++    await creditWallet(studentId, 500);
++
++    const tutorData = await createPublishedTutor(tutorEmail, ts);
++    tutorId = tutorData.tutorId;
++    tutorClient = tutorData.tutorClient;
++    slotId = tutorData.slotId;
++
++    const adminRes = await signUpAndSignIn(
++      adminEmail,
++      "Test1234!",
++      "Admin Payout",
++    );
++    const adminCtx = await createTestContext(adminRes.cookie);
++    await setUserRole(adminCtx.session!.user.id, "admin");
++    adminClient = createTestClient(
++      await createTestContext(
++        (await signInAndGetCookie(adminEmail, "Test1234!")) ?? "",
++      ),
++    );
++  });
++
++  test("solo booking flows to completed with snapshot 50/40/10", async () => {
++    const start = new Date(Date.now() + 48 * 3600_000).toISOString();
++    const end = new Date(Date.now() + 49 * 3600_000).toISOString();
++
++    const b = await studentClient.booking.createSolo({
++      tutorId,
++      availabilitySlotId: slotId,
++      modality: "online",
++      scheduledStartAt: start,
++      scheduledEndAt: end,
++      timezone: "Asia/Jakarta",
++    });
++
++    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
++    const updated = await tutorClient.tutorActions.completeSession({
++      bookingId: b.id,
++    });
++    expect(updated.currentState).toBe("completed");
++
++    const [row] = await db
++      .select()
++      .from(bookingTable)
++      .where(eq(bookingTable.id, b.id));
++    expect(row!.priceSnapshot).toMatchObject({
++      baseline: 50,
++      tutorShare: 40,
++      cogitoTake: 10,
++    });
++  });
++
++  test("completed group + cancelled + completed series bookings seeded", async () => {
++    await insertBookingRow({
++      type: "group",
++      tutorId,
++      proposerId: studentId,
++      targetGroupSize: 3,
++      minConfirmedHeadcount: 2,
++      confirmedHeadcount: 3,
++      priceSnapshot: {
++        perStudent: 50,
++        baseline: 150,
++        tutorShare: 120,
++        cogitoTake: 30,
++      },
++      originalMarks: 150,
++    });
++
++    await insertBookingRow({
++      type: "solo",
++      tutorId,
++      proposerId: studentId,
++      currentState: "cancelled",
++      priceSnapshot: {
++        perStudent: 50,
++        baseline: 50,
++        tutorShare: 40,
++        cogitoTake: 10,
++      },
++      originalMarks: 50,
++    });
++
++    const series = await insertBookingRow({
++      type: "series",
++      tutorId,
++      proposerId: studentId,
++      priceSnapshot: {
++        perStudent: 50,
++        baseline: 50,
++        tutorShare: 40,
++        cogitoTake: 10,
++      },
++      originalMarks: 100,
++    });
++
++    const s1 = new Date(Date.now() + 72 * 3600_000);
++    const s2 = new Date(Date.now() + 96 * 3600_000);
++    await db.insert(bookingSession).values([
++      {
++        seriesBookingId: series.id,
++        scheduledStartAt: s1,
++        scheduledEndAt: new Date(s1.getTime() + 3600_000),
++        currentState: "completed",
++        holdAmount: 50,
++        priceSnapshot: {
++          perStudent: 50,
++          baseline: 50,
++          tutorShare: 40,
++          cogitoTake: 10,
++        },
++      },
++      {
++        seriesBookingId: series.id,
++        scheduledStartAt: s2,
++        scheduledEndAt: new Date(s2.getTime() + 3600_000),
++        currentState: "completed",
++        holdAmount: 50,
++        priceSnapshot: {
++          perStudent: 50,
++          baseline: 50,
++          tutorShare: 40,
++          cogitoTake: 10,
++        },
++      },
++    ]);
++  });
++
++  test("admin.getTutorPayouts sums tutorShare/cogitoTake from completed bookings only", async () => {
++    const result = await adminClient.admin.getTutorPayouts({ tutorId });
++
++    // solo (1) + group (1) + series (2 sessions) = 4 completed sessions
++    expect(result.completedSessions).toBe(4);
++    expect(result.totalMarks).toBe(300);
++    expect(result.cogitoTake).toBe(60);
++    expect(result.tutorPayout).toBe(240);
++    expect(result.tutorPayoutIdr).toBe(240 * TUTOR_PAYOUT_RATE_IDR);
++  });
++
++  test("admin.getTutorPayouts respects date range", async () => {
++    const now = new Date();
++    const all = await adminClient.admin.getTutorPayouts({ tutorId });
++    const narrowed = await adminClient.admin.getTutorPayouts({
++      tutorId,
++      dateFrom: new Date(now.getTime() - 1000).toISOString(),
++      dateTo: new Date(now.getTime() + 10 * 86400_000).toISOString(),
++    });
++    expect(narrowed.completedSessions).toBe(all.completedSessions);
++
++    const empty = await adminClient.admin.getTutorPayouts({
++      tutorId,
++      dateFrom: new Date(now.getTime() + 30 * 86400_000).toISOString(),
++      dateTo: new Date(now.getTime() + 40 * 86400_000).toISOString(),
++    });
++    expect(empty.completedSessions).toBe(0);
++    expect(empty.tutorPayout).toBe(0);
++  });
++
++  test("tutor.getMyPayouts returns own scoped summary", async () => {
++    const result = await tutorClient.tutor.getMyPayouts({});
++    expect(result.completedSessions).toBe(4);
++    expect(result.tutorPayout).toBe(240);
++    expect(result.cogitoTake).toBe(60);
++  });
++
++  test("tutor.getMyPayouts excludes other tutors' bookings", async () => {
++    const otherTutorEmail = `tutor.pay.other.${ts}@cogito.test`;
++    const other = await createPublishedTutor(otherTutorEmail, ts + 1);
++
++    const result = await other.tutorClient.tutor.getMyPayouts({});
++    expect(result.completedSessions).toBe(0);
++    expect(result.tutorPayout).toBe(0);
++  });
++});
+diff --git a/packages/api/src/tests/integration/booking-series-g18.test.ts b/packages/api/src/tests/integration/booking-series-g18.test.ts
+new file mode 100644
+index 0000000..999d22a
+--- /dev/null
++++ b/packages/api/src/tests/integration/booking-series-g18.test.ts
+@@ -0,0 +1,288 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++  booking as bookingTable,
++  bookingParticipant,
++  bookingSession,
++  notification as notificationTable,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(email: string, ts: number) {
++  const res = await signUpAndSignIn(email, "Test1234!", "Prof Series");
++  const signupCtx = await createTestContext(res.cookie);
++  const tutorId = signupCtx.session!.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const tutorCookie = await signInAndGetCookie(email, "Test1234!");
++  const tutorClient = createTestClient(
++    await createTestContext(tutorCookie ?? ""),
++  );
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Series",
++      token: `token-s18-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Series",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({ tutorId, startDate: start, endDate: end, modality: "both" })
++    .returning();
++
++  return { tutorId, tutorClient, slotId: slot!.id };
++}
++
++describe("Series session completion (G18)", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const studentEmail = `student.s18.${ts}@cogito.test`;
++  const tutorEmail = `tutor.s18.${ts}@cogito.test`;
++
++  let studentClient: TestClient;
++  let tutorClient: TestClient;
++  let studentId: string;
++  let tutorId: string;
++  let slotId: string;
++  let bookingId: string;
++  let sessionIds: string[] = [];
++  const perSession = 50;
++
++  beforeAll(async () => {
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student Series18",
++    );
++    studentClient = createTestClient(
++      await createTestContext(studentRes.cookie),
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    studentId = studentCtx.session!.user.id;
++    await creditWallet(studentId, 500);
++
++    const tutorData = await createPublishedTutor(tutorEmail, ts);
++    tutorId = tutorData.tutorId;
++    tutorClient = tutorData.tutorClient;
++    slotId = tutorData.slotId;
++  });
++
++  test("create 3-session series and accept → scheduled with 150 held", async () => {
++    const sessions = [
++      {
++        scheduledStartAt: new Date(Date.now() + 48 * 3600_000).toISOString(),
++        scheduledEndAt: new Date(Date.now() + 49 * 3600_000).toISOString(),
++      },
++      {
++        scheduledStartAt: new Date(Date.now() + 72 * 3600_000).toISOString(),
++        scheduledEndAt: new Date(Date.now() + 73 * 3600_000).toISOString(),
++      },
++      {
++        scheduledStartAt: new Date(Date.now() + 96 * 3600_000).toISOString(),
++        scheduledEndAt: new Date(Date.now() + 97 * 3600_000).toISOString(),
++      },
++    ];
++
++    const b = await studentClient.booking.createSeries({
++      tutorId,
++      availabilitySlotId: slotId,
++      modality: "online",
++      sessions,
++      timezone: "Asia/Jakarta",
++    });
++    bookingId = b.id;
++    expect(b.holdAmount).toBe(3 * perSession);
++
++    const updated = await tutorClient.tutorActions.acceptBooking({ bookingId });
++    expect(updated.currentState).toBe("scheduled");
++
++    const w = await studentClient.wallet.get({});
++    expect(w.heldBalance).toBe(3 * perSession);
++
++    const listed = await studentClient.booking.listSessions({ bookingId });
++    sessionIds = listed.map((s) => s.id);
++    expect(sessionIds.length).toBe(3);
++  });
++
++  test("attempt to complete a future session → rejected", async () => {
++    await expect(
++      tutorClient.tutorActions.completeSession({
++        bookingId,
++        sessionId: sessionIds[0]!,
++      }),
++    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
++  });
++
++  test("completing session 1 of 3 → session completed, perSession deducted, booking still scheduled", async () => {
++    await db
++      .update(bookingSession)
++      .set({ scheduledStartAt: new Date(Date.now() - 3600_000) })
++      .where(eq(bookingSession.id, sessionIds[0]!));
++
++    const result = await tutorClient.tutorActions.completeSession({
++      bookingId,
++      sessionId: sessionIds[0]!,
++    });
++    expect(result.currentState).toBe("scheduled");
++
++    const [session] = await db
++      .select()
++      .from(bookingSession)
++      .where(eq(bookingSession.id, sessionIds[0]!));
++    expect(session!.currentState).toBe("completed");
++
++    const w = await studentClient.wallet.get({});
++    expect(w.heldBalance).toBe(2 * perSession);
++
++    const [booking] = await db
++      .select()
++      .from(bookingTable)
++      .where(eq(bookingTable.id, bookingId));
++    expect(booking!.holdAmount).toBe(2 * perSession);
++
++    const [participant] = await db
++      .select()
++      .from(bookingParticipant)
++      .where(eq(bookingParticipant.bookingId, bookingId));
++    expect(participant!.heldAmount).toBe(2 * perSession);
++  });
++
++  test("double-completing session 1 → rejected", async () => {
++    await expect(
++      tutorClient.tutorActions.completeSession({
++        bookingId,
++        sessionId: sessionIds[0]!,
++      }),
++    ).rejects.toMatchObject({ code: "CONFLICT" });
++  });
++
++  test("completing sessions 2 and 3 → booking completed, remainder released", async () => {
++    await db
++      .update(bookingSession)
++      .set({ scheduledStartAt: new Date(Date.now() - 3600_000) })
++      .where(eq(bookingSession.seriesBookingId, bookingId));
++
++    const r2 = await tutorClient.tutorActions.completeSession({
++      bookingId,
++      sessionId: sessionIds[1]!,
++    });
++    expect(r2.currentState).toBe("scheduled");
++
++    const r3 = await tutorClient.tutorActions.completeSession({
++      bookingId,
++      sessionId: sessionIds[2]!,
++    });
++    expect(r3.currentState).toBe("completed");
++
++    const [booking] = await db
++      .select()
++      .from(bookingTable)
++      .where(eq(bookingTable.id, bookingId));
++    expect(booking!.currentState).toBe("completed");
++    expect(booking!.holdAmount).toBe(0);
++
++    const w = await studentClient.wallet.get({});
++    expect(w.heldBalance).toBe(0);
++
++    const [participant] = await db
++      .select()
++      .from(bookingParticipant)
++      .where(eq(bookingParticipant.bookingId, bookingId));
++    expect(participant!.heldAmount).toBe(0);
++
++    const allSessions = await db
++      .select()
++      .from(bookingSession)
++      .where(eq(bookingSession.seriesBookingId, bookingId));
++    expect(allSessions.every((s) => s.currentState === "completed")).toBe(true);
++  });
++
++  test("series completion writes per-session and final notifications", async () => {
++    const perSessionNotifs = await db
++      .select()
++      .from(notificationTable)
++      .where(
++        eq(
++          notificationTable.eventKey,
++          `booking.${bookingId}.session.${sessionIds[0]!}.completed.student`,
++        ),
++      );
++    expect(perSessionNotifs.length).toBe(1);
++
++    const finalNotifs = await db
++      .select()
++      .from(notificationTable)
++      .where(
++        eq(
++          notificationTable.eventKey,
++          `booking.${bookingId}.series_completed.student`,
++        ),
++      );
++    expect(finalNotifs.length).toBe(1);
++  });
++});
+diff --git a/packages/api/src/tests/integration/notification-email-g17.test.ts b/packages/api/src/tests/integration/notification-email-g17.test.ts
+new file mode 100644
+index 0000000..07df7c7
+--- /dev/null
++++ b/packages/api/src/tests/integration/notification-email-g17.test.ts
+@@ -0,0 +1,238 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++  notification as notificationTable,
++  notificationDispatch,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(email: string, ts: number) {
++  const res = await signUpAndSignIn(email, "Test1234!", "Prof Notif");
++  const signupCtx = await createTestContext(res.cookie);
++  const tutorId = signupCtx.session!.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const tutorCookie = await signInAndGetCookie(email, "Test1234!");
++  const tutorClient = createTestClient(
++    await createTestContext(tutorCookie ?? ""),
++  );
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Notif",
++      token: `token-notif-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Notif",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({ tutorId, startDate: start, endDate: end, modality: "both" })
++    .returning();
++
++  return { tutorId, tutorClient, slotId: slot!.id };
++}
++
++describe("Notification email matrix (G17)", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const studentEmail = `student.notifmail.${ts}@cogito.test`;
++  const tutorEmail = `tutor.notifmail.${ts}@cogito.test`;
++
++  let studentClient: TestClient;
++  let tutorClient: TestClient;
++  let studentId: string;
++  let tutorId: string;
++  let slotId: string;
++  let bookingId: string;
++
++  beforeAll(async () => {
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student NotifMail",
++    );
++    studentClient = createTestClient(
++      await createTestContext(studentRes.cookie),
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    studentId = studentCtx.session!.user.id;
++    await creditWallet(studentId, 500);
++
++    const tutorData = await createPublishedTutor(tutorEmail, ts);
++    tutorId = tutorData.tutorId;
++    tutorClient = tutorData.tutorClient;
++    slotId = tutorData.slotId;
++  });
++
++  test("booking request → tutor notification row + email dispatch row", async () => {
++    const start = new Date(Date.now() + 48 * 3600_000).toISOString();
++    const end = new Date(Date.now() + 49 * 3600_000).toISOString();
++
++    const b = await studentClient.booking.createSolo({
++      tutorId,
++      availabilitySlotId: slotId,
++      modality: "online",
++      scheduledStartAt: start,
++      scheduledEndAt: end,
++      timezone: "Asia/Jakarta",
++    });
++    bookingId = b.id;
++
++    const [notif] = await db
++      .select()
++      .from(notificationTable)
++      .where(
++        eq(notificationTable.eventKey, `booking.${bookingId}.tutor_request`),
++      );
++    expect(notif).toBeDefined();
++    expect(notif!.severity).toBe("action");
++
++    const [dispatch] = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.notificationId, notif!.id));
++    expect(dispatch).toBeDefined();
++    expect(dispatch!.channel).toBe("email");
++    expect(dispatch!.recipientEmail).toBe(tutorEmail);
++  });
++
++  test("booking accept → student notification row + email dispatch row", async () => {
++    await tutorClient.tutorActions.acceptBooking({ bookingId });
++
++    const [notif] = await db
++      .select()
++      .from(notificationTable)
++      .where(eq(notificationTable.eventKey, `booking.${bookingId}.accepted`));
++    expect(notif).toBeDefined();
++    expect(notif!.userId).toBe(studentId);
++    expect(notif!.severity).toBe("action");
++
++    const [dispatch] = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.notificationId, notif!.id));
++    expect(dispatch).toBeDefined();
++    expect(dispatch!.recipientEmail).toBe(studentEmail);
++
++    const [tutorScheduled] = await db
++      .select()
++      .from(notificationTable)
++      .where(
++        eq(notificationTable.eventKey, `booking.${bookingId}.scheduled.tutor`),
++      );
++    expect(tutorScheduled).toBeDefined();
++    const [tutorDispatch] = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.notificationId, tutorScheduled!.id));
++    expect(tutorDispatch).toBeDefined();
++    expect(tutorDispatch!.recipientEmail).toBe(tutorEmail);
++  });
++
++  test("achievement submit → in-app notification row, NO email dispatch row", async () => {
++    const created = await studentClient.achievement.create({
++      eventName: "Math Olympiad",
++      category: "academic",
++      award: "Gold",
++      level: "national",
++      description: "Won gold in the national olympiad",
++    });
++
++    const [notif] = await db
++      .select()
++      .from(notificationTable)
++      .where(
++        eq(notificationTable.eventKey, `achievement.${created.id}.submitted`),
++      );
++    expect(notif).toBeDefined();
++    expect(notif!.category).toBe("achievement");
++    expect(notif!.severity).toBe("info");
++
++    const dispatches = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.notificationId, notif!.id));
++    expect(dispatches.length).toBe(0);
++  });
++
++  test("info-severity event (session completed) → in-app only, NO email dispatch row", async () => {
++    await tutorClient.tutorActions.completeSession({ bookingId });
++
++    const [notif] = await db
++      .select()
++      .from(notificationTable)
++      .where(eq(notificationTable.eventKey, `booking.${bookingId}.completed`));
++    expect(notif).toBeDefined();
++    expect(notif!.severity).toBe("info");
++
++    const dispatches = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.notificationId, notif!.id));
++    expect(dispatches.length).toBe(0);
++  });
++});
+diff --git a/packages/api/src/tests/unit/achievement.handler.test.ts b/packages/api/src/tests/unit/achievement.handler.test.ts
+index e693dda..d874ab5 100644
+--- a/packages/api/src/tests/unit/achievement.handler.test.ts
++++ b/packages/api/src/tests/unit/achievement.handler.test.ts
+@@ -45,35 +45,40 @@ function makeAchievementRepo(overrides: Record<string, unknown> = {}) {
+       status: "approved",
+     })),
+     ...overrides,
+   };
+ }
+ 
+ function makeAuditPort() {
+   return { record: mock(async () => {}) };
+ }
+ 
++function makeNotificationPort() {
++  return { writeBestEffort: mock(async () => {}) };
++}
++
+ function makeContext(userId = "u1") {
+   return { session: { user: { id: userId } } } as any;
+ }
+ 
+ describe("AchievementHandler", () => {
+   describe("list", () => {
+     test("delegates to achievementService.list", async () => {
+       const repo = makeAchievementRepo({
+         listByUserId: mock(async () => [{ id: "a1" }]),
+       });
+       const auditPort = makeAuditPort();
+       const db = makeDb();
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: auditPort as any,
++        notificationPort: makeNotificationPort() as any,
+         db,
+       });
+       const handler = createAchievementHandler({ achievementService: service });
+ 
+       const result = await handler.list({ context: makeContext() });
+ 
+       expect(result).toEqual([{ id: "a1" }]);
+     });
+   });
+ 
+@@ -82,20 +87,21 @@ describe("AchievementHandler", () => {
+       const repo = makeAchievementRepo({
+         insert: mock(async () => ({
+           id: "a1",
+           userId: "u1",
+           eventName: "Test",
+         })),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+       const handler = createAchievementHandler({ achievementService: service });
+ 
+       const input = {
+         eventName: "Test",
+         category: "cat",
+         award: "1st",
+         level: "regional",
+       };
+@@ -104,39 +110,41 @@ describe("AchievementHandler", () => {
+       expect(result.userId).toBe("u1");
+     });
+   });
+ 
+   describe("update", () => {
+     test("delegates to achievementService.update", async () => {
+       const repo = makeAchievementRepo();
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+       const handler = createAchievementHandler({ achievementService: service });
+ 
+       const result = await handler.update({
+         context: makeContext(),
+         input: { id: "a1", version: 1, data: { eventName: "Updated" } },
+       });
+ 
+       expect(result.id).toBe("a1");
+     });
+   });
+ 
+   describe("remove", () => {
+     test("delegates to achievementService.remove", async () => {
+       const repo = makeAchievementRepo();
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+       const handler = createAchievementHandler({ achievementService: service });
+ 
+       await handler.remove({
+         context: makeContext(),
+         input: { id: "a1", version: 1 },
+       });
+ 
+       expect(repo.deleteWithVersion).toHaveBeenCalled();
+@@ -144,40 +152,42 @@ describe("AchievementHandler", () => {
+   });
+ 
+   describe("adminList", () => {
+     test("delegates to achievementService.adminList", async () => {
+       const repo = makeAchievementRepo({
+         adminList: mock(async () => [{ id: "a1" }]),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+       const handler = createAchievementHandler({ achievementService: service });
+ 
+       const result = await handler.adminList({
+         context: makeContext(),
+         input: { limit: 50, offset: 0 },
+       });
+ 
+       expect(result).toEqual([{ id: "a1" }]);
+     });
+   });
+ 
+   describe("adminReview", () => {
+     test("delegates to achievementService.adminReview", async () => {
+       const repo = makeAchievementRepo();
+       const auditPort = makeAuditPort();
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: auditPort as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+       const handler = createAchievementHandler({ achievementService: service });
+ 
+       const result = await handler.adminReview({
+         context: makeContext("admin1"),
+         input: {
+           achievementId: "a1",
+           status: "approved",
+         },
+@@ -190,72 +200,102 @@ describe("AchievementHandler", () => {
+ 
+ describe("AchievementService", () => {
+   describe("list", () => {
+     test("delegates to achievementRepo.listByUserId", async () => {
+       const repo = makeAchievementRepo({
+         listByUserId: mock(async () => [{ id: "a1" }]),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       const result = await service.list("u1");
+ 
+       expect(repo.listByUserId).toHaveBeenCalledWith(expect.anything(), "u1");
+       expect(result).toEqual([{ id: "a1" }]);
+     });
+   });
+ 
+   describe("create", () => {
+     test("passes input with userId to repo.insert", async () => {
+       const repo = makeAchievementRepo({
+         insert: mock(async (params: any) => ({ id: "a1", ...params })),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       const input = {
+         eventName: "Test",
+         category: "cat",
+         award: "1st",
+         level: "regional",
+       };
+       await service.create("u1", input);
+ 
+       expect(repo.insert).toHaveBeenCalledWith(expect.anything(), {
+         ...input,
+         userId: "u1",
+       });
+     });
++
++    test("writes an in-app notification without email on submit (G17)", async () => {
++      const repo = makeAchievementRepo({
++        insert: mock(async (params: any) => ({ id: "a1", ...params })),
++      });
++      const notificationPort = makeNotificationPort();
++      const service = createAchievementService({
++        achievementRepo: repo as any,
++        auditPort: makeAuditPort() as any,
++        notificationPort: notificationPort as any,
++        db: makeDb(),
++      });
++
++      await service.create("u1", {
++        eventName: "Test",
++        category: "cat",
++        award: "1st",
++        level: "regional",
++      });
++
++      expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(1);
++      const params = notificationPort.writeBestEffort.mock.calls[0][0];
++      expect(params.category).toBe("achievement");
++      expect(params.userId).toBe("u1");
++      expect(params.emailRequired).toBeUndefined();
++      expect(params.eventKey).toBe("achievement.a1.submitted");
++    });
+   });
+ 
+   describe("update", () => {
+     test("updates when existing achievement is pending", async () => {
+       const repo = makeAchievementRepo({
+         findByIdForUser: mock(async () => ({
+           id: "a1",
+           userId: "u1",
+           status: ACHIEVEMENT_STATUS.PENDING,
+           version: 1,
+         })),
+         updateWithVersion: mock(async () => [
+           { id: "a1", eventName: "Updated" },
+         ]),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       const result = await service.update("u1", {
+         id: "a1",
+         version: 1,
+         data: { eventName: "Updated" },
+       });
+ 
+       expect(repo.updateWithVersion).toHaveBeenCalledWith(
+@@ -268,20 +308,21 @@ describe("AchievementService", () => {
+       expect(result.id).toBe("a1");
+     });
+ 
+     test("throws AchievementNotEditableError when achievement not found", async () => {
+       const repo = makeAchievementRepo({
+         findByIdForUser: mock(async () => undefined),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       try {
+         await service.update("u1", {
+           id: "a1",
+           version: 1,
+           data: { eventName: "X" },
+         });
+         expect(true).toBe(false);
+@@ -295,20 +336,21 @@ describe("AchievementService", () => {
+         findByIdForUser: mock(async () => ({
+           id: "a1",
+           userId: "u1",
+           status: ACHIEVEMENT_STATUS.APPROVED,
+           version: 1,
+         })),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       try {
+         await service.update("u1", {
+           id: "a1",
+           version: 1,
+           data: { eventName: "X" },
+         });
+         expect(true).toBe(false);
+@@ -325,40 +367,42 @@ describe("AchievementService", () => {
+           id: "a1",
+           userId: "u1",
+           status: ACHIEVEMENT_STATUS.PENDING,
+           version: 1,
+         })),
+         deleteWithVersion: mock(async () => [{ id: "a1" }]),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       await service.remove("u1", "a1", 1);
+ 
+       expect(repo.deleteWithVersion).toHaveBeenCalledWith(
+         expect.anything(),
+         "a1",
+         "u1",
+         1,
+       );
+     });
+ 
+     test("throws AchievementNotEditableError when achievement not found", async () => {
+       const repo = makeAchievementRepo({
+         findByIdForUser: mock(async () => undefined),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       try {
+         await service.remove("u1", "a1", 1);
+         expect(true).toBe(false);
+       } catch (e: any) {
+         expect(e).toBeInstanceOf(AchievementNotEditableError);
+       }
+     });
+@@ -368,80 +412,84 @@ describe("AchievementService", () => {
+         findByIdForUser: mock(async () => ({
+           id: "a1",
+           userId: "u1",
+           status: ACHIEVEMENT_STATUS.REJECTED,
+           version: 1,
+         })),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       try {
+         await service.remove("u1", "a1", 1);
+         expect(true).toBe(false);
+       } catch (e: any) {
+         expect(e).toBeInstanceOf(AchievementNotEditableError);
+       }
+     });
+   });
+ 
+   describe("adminList", () => {
+     test("delegates to repo with input", async () => {
+       const repo = makeAchievementRepo({
+         adminList: mock(async () => [{ id: "a1" }]),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       const input = { status: "pending_review", limit: 10 };
+       await service.adminList(input);
+ 
+       expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
+         status: "pending_review",
+         limit: 10,
+         offset: 0,
+       });
+     });
+ 
+     test("uses default empty object when no input", async () => {
+       const repo = makeAchievementRepo({
+         adminList: mock(async () => []),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       await service.adminList();
+ 
+       expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
+         limit: 50,
+         offset: 0,
+       });
+     });
+   });
+ 
+   describe("adminReview", () => {
+     test("throws AchievementNotFoundError when achievement does not exist", async () => {
+       const repo = makeAchievementRepo({
+         getById: mock(async () => undefined),
+       });
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: makeAuditPort() as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       try {
+         await service.adminReview("admin1", {
+           achievementId: "nonexistent",
+           status: "approved",
+         });
+         expect(true).toBe(false);
+       } catch (e: any) {
+@@ -453,20 +501,21 @@ describe("AchievementService", () => {
+       const existing = { id: "a1", status: ACHIEVEMENT_STATUS.PENDING_REVIEW };
+       const updated = { id: "a1", status: "approved" };
+       const repo = makeAchievementRepo({
+         getById: mock(async () => existing),
+         updateStatus: mock(async () => updated),
+       });
+       const auditPort = makeAuditPort();
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: auditPort as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       const result = await service.adminReview("admin1", {
+         achievementId: "a1",
+         status: "approved",
+         adminNote: "Looks good",
+       });
+ 
+       expect(result.id).toBe("a1");
+@@ -483,34 +532,67 @@ describe("AchievementService", () => {
+       const existing = { id: "a1", status: ACHIEVEMENT_STATUS.PENDING_REVIEW };
+       const updated = { id: "a1", status: "rejected" };
+       const repo = makeAchievementRepo({
+         getById: mock(async () => existing),
+         updateStatus: mock(async () => updated),
+       });
+       const auditPort = makeAuditPort();
+       const service = createAchievementService({
+         achievementRepo: repo as any,
+         auditPort: auditPort as any,
++        notificationPort: makeNotificationPort() as any,
+         db: makeDb(),
+       });
+ 
+       await service.adminReview("admin1", {
+         achievementId: "a1",
+         status: "rejected",
+       });
+ 
+       expect(auditPort.record).toHaveBeenCalledWith(
+         expect.objectContaining({
+           action: "achievement_rejected",
+         }),
+       );
+     });
++
++    test("writes an in-app review notification to the achievement owner without email (G17)", async () => {
++      const existing = {
++        id: "a1",
++        userId: "owner1",
++        eventName: "Olympiad",
++        status: ACHIEVEMENT_STATUS.PENDING_REVIEW,
++      };
++      const repo = makeAchievementRepo({
++        getById: mock(async () => existing),
++        updateStatus: mock(async () => ({ id: "a1", status: "approved" })),
++      });
++      const notificationPort = makeNotificationPort();
++      const service = createAchievementService({
++        achievementRepo: repo as any,
++        auditPort: makeAuditPort() as any,
++        notificationPort: notificationPort as any,
++        db: makeDb(),
++      });
++
++      await service.adminReview("admin1", {
++        achievementId: "a1",
++        status: "approved",
++      });
++
++      expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(1);
++      const params = notificationPort.writeBestEffort.mock.calls[0][0];
++      expect(params.userId).toBe("owner1");
++      expect(params.category).toBe("achievement");
++      expect(params.emailRequired).toBeUndefined();
++      expect(params.eventKey).toBe("achievement.a1.reviewed");
++    });
+   });
+ });
+ 
+ describe("AchievementService validation", () => {
+   describe("validateUpdate", () => {
+     test("does not throw for pending achievement", () => {
+       expect(() =>
+         validateUpdate({
+           id: "a1",
+           userId: "u1",
+diff --git a/packages/api/src/tests/unit/booking.handlers.test.ts b/packages/api/src/tests/unit/booking.handlers.test.ts
+index 9e66104..aebdafa 100644
+--- a/packages/api/src/tests/unit/booking.handlers.test.ts
++++ b/packages/api/src/tests/unit/booking.handlers.test.ts
+@@ -487,32 +487,32 @@ describe("tutorActionsHandler", () => {
+       expect(booking.tutorDecline).toHaveBeenCalledWith(
+         "b1",
+         "t1",
+         "unavailable",
+       );
+       expect(result).toEqual({ id: "b1", currentState: "declined" });
+     });
+   });
+ 
+   describe("completeSession", () => {
+-    test("calls booking.completeSession with bookingId and session user id", async () => {
++    test("calls booking.completeSession with bookingId, session user id, and optional sessionId", async () => {
+       const booking = makeBookingService();
+       const handler = createTutorActionsHandler(booking as any);
+       const context = makeContext("t1");
+-      const input = { bookingId: "b1", sessionNote: "Great session" };
++      const input = { bookingId: "b1", sessionId: "s1" };
+ 
+       const result = await handler.completeSession({
+         context: context as any,
+         input: input as any,
+       });
+ 
+-      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1");
++      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1", "s1");
+       expect(result).toEqual({ id: "b1", currentState: "completed" });
+     });
+   });
+ 
+   describe("markAttendance", () => {
+     test("calls booking.markTutorAttendance with bookingId, session user id, and attendance", async () => {
+       const booking = makeBookingService();
+       const handler = createTutorActionsHandler(booking as any);
+       const context = makeContext("t1");
+       const input = { bookingId: "b1", attendance: "present" };
+diff --git a/packages/api/src/tests/unit/booking.service.test.ts b/packages/api/src/tests/unit/booking.service.test.ts
+index 94f2f07..fb421f2 100644
+--- a/packages/api/src/tests/unit/booking.service.test.ts
++++ b/packages/api/src/tests/unit/booking.service.test.ts
+@@ -10,20 +10,22 @@ import {
+   BookingNotAwaitingConfirmationError,
+   BookingNotAwaitingReconfirmationError,
+   BookingNotAwaitingReviewError,
+   BookingSeriesSizeError,
+   BookingParticipantNotFoundError,
+   BookingParticipantAlreadyConfirmedError,
+   BookingCancelledError,
+   BookingCancellationDeadlinePassedError,
+   BookingSessionNotFoundError,
+   BookingSessionNotCancellableError,
++  BookingSessionRequiredError,
++  BookingSessionNotStartedError,
+   BookingRescheduleNotFoundError,
+   BookingRescheduleNotPendingError,
+   BookingNotCompletedError,
+ } from "../../modules/booking/booking.errors";
+ 
+ function makeDb() {
+   return {
+     transaction: mock(async (fn: any) => {
+       const tx = { ...makeDb(), ...mockRepo() };
+       return fn(tx);
+@@ -1167,30 +1169,226 @@ describe("BookingService", () => {
+         repo: {
+           findBookingById: mock(async () => makeBooking({ tutorId: "other" })),
+         },
+       });
+ 
+       await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
+         BookingNotOwnedError,
+       );
+     });
+ 
+-    test("throws BookingNotEditableError for series bookings", async () => {
++    test("throws BookingSessionRequiredError for series bookings without sessionId", async () => {
+       const { service } = createService({
+         repo: {
+-          findBookingById: mock(async () => makeBooking({ type: "series" })),
++          findBookingById: mock(async () =>
++            makeBooking({ type: "series", currentState: "scheduled" }),
++          ),
+         },
+       });
+ 
+       await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
+-        BookingNotEditableError,
++        BookingSessionRequiredError,
++      );
++    });
++
++    test("series session completion deducts perSession, marks session completed, keeps booking scheduled (G18)", async () => {
++      const booking = makeBooking({
++        type: "series",
++        currentState: "scheduled",
++        holdAmount: 150,
++        originalMarks: 150,
++      });
++      const session = {
++        id: "s1",
++        seriesBookingId: "b1",
++        scheduledStartAt: new Date(Date.now() - 3600_000),
++        scheduledEndAt: new Date(Date.now() + 3600_000),
++        currentState: "scheduled",
++        holdAmount: 50,
++        priceSnapshot: null,
++      };
++      const sessions = [
++        session,
++        { ...session, id: "s2", currentState: "scheduled" },
++        { ...session, id: "s3", currentState: "scheduled" },
++      ];
++      const { service, wallet, repo, notification } = createService({
++        repo: {
++          findBookingById: mock(async () => booking),
++          findSessionById: mock(async () => session),
++          listSessionsBySeriesId: mock(async () => sessions),
++          findParticipant: mock(async () => ({
++            id: "p1",
++            userId: "student1",
++            heldAmount: 150,
++          })),
++          updateParticipantState: mock(async () => {}),
++          updateBookingHoldAmount: mock(async () => {}),
++          completeSession: mock(async () => {}),
++          updateBookingVersioned: mock(async () => ({
++            updated: { ...booking, currentState: "completed" },
++            newVersion: 2,
++          })),
++        },
++      });
++
++      const result = await service.completeSession("b1", "tutor1", "s1");
++
++      expect(wallet.deduct).toHaveBeenCalledTimes(1);
++      expect(wallet.deduct.mock.calls[0][1]).toMatchObject({
++        walletId: "w1",
++        amount: 50,
++        reason: "Series session completed",
++      });
++      expect(repo.completeSession).toHaveBeenCalledWith(
++        expect.anything(),
++        "s1",
++      );
++      expect(repo.updateParticipantState).toHaveBeenCalledWith(
++        expect.anything(),
++        "p1",
++        { heldAmount: 100 },
++      );
++      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
++        expect.anything(),
++        "b1",
++        100,
++      );
++      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
++      expect(result.currentState).toBe("scheduled");
++      expect(notification.writeBestEffort.mock.calls.length).toBe(2);
++    });
++
++    test("completing the last series session transitions booking to completed (G18)", async () => {
++      const booking = makeBooking({
++        type: "series",
++        currentState: "scheduled",
++        holdAmount: 50,
++        originalMarks: 150,
++      });
++      const sessions = [
++        {
++          id: "s1",
++          seriesBookingId: "b1",
++          scheduledStartAt: new Date(Date.now() - 3600_000),
++          scheduledEndAt: new Date(Date.now() + 3600_000),
++          currentState: "completed",
++          holdAmount: 50,
++          priceSnapshot: null,
++        },
++        {
++          id: "s2",
++          seriesBookingId: "b1",
++          scheduledStartAt: new Date(Date.now() - 3600_000),
++          scheduledEndAt: new Date(Date.now() + 3600_000),
++          currentState: "completed",
++          holdAmount: 50,
++          priceSnapshot: null,
++        },
++        {
++          id: "s3",
++          seriesBookingId: "b1",
++          scheduledStartAt: new Date(Date.now() - 3600_000),
++          scheduledEndAt: new Date(Date.now() + 3600_000),
++          currentState: "scheduled",
++          holdAmount: 50,
++          priceSnapshot: null,
++        },
++      ];
++      const { service, repo, notification } = createService({
++        repo: {
++          findBookingById: mock(async () => booking),
++          findSessionById: mock(async () => sessions[2]),
++          listSessionsBySeriesId: mock(async () => [
++            ...sessions.slice(0, 2),
++            { ...sessions[2]!, currentState: "completed" },
++          ]),
++          findParticipant: mock(async () => ({
++            id: "p1",
++            userId: "student1",
++            heldAmount: 50,
++          })),
++          updateParticipantState: mock(async () => {}),
++          updateBookingHoldAmount: mock(async () => {}),
++          completeSession: mock(async () => {}),
++          updateBookingVersioned: mock(async () => ({
++            updated: { ...booking, currentState: "completed" },
++            newVersion: 2,
++          })),
++        },
++      });
++
++      const result = await service.completeSession("b1", "tutor1", "s3");
++
++      expect(repo.updateBookingVersioned).toHaveBeenCalledTimes(1);
++      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
++        expect.anything(),
++        "b1",
++        0,
+       );
++      expect(result.currentState).toBe("completed");
++      // 2 per-session notifications + 2 series-completed notifications
++      expect(notification.writeBestEffort.mock.calls.length).toBe(4);
++    });
++
++    test("series future session completion is rejected (G18)", async () => {
++      const booking = makeBooking({
++        type: "series",
++        currentState: "scheduled",
++        holdAmount: 150,
++      });
++      const session = {
++        id: "s1",
++        seriesBookingId: "b1",
++        scheduledStartAt: new Date(Date.now() + 48 * 3600_000),
++        scheduledEndAt: new Date(Date.now() + 48 * 3600_000 + 3600_000),
++        currentState: "scheduled",
++        holdAmount: 50,
++        priceSnapshot: null,
++      };
++      const { service } = createService({
++        repo: {
++          findBookingById: mock(async () => booking),
++          findSessionById: mock(async () => session),
++        },
++      });
++
++      await expect(
++        service.completeSession("b1", "tutor1", "s1"),
++      ).rejects.toThrow(BookingSessionNotStartedError);
++    });
++
++    test("series already-completed session completion is rejected (G18)", async () => {
++      const booking = makeBooking({
++        type: "series",
++        currentState: "scheduled",
++        holdAmount: 150,
++      });
++      const session = {
++        id: "s1",
++        seriesBookingId: "b1",
++        scheduledStartAt: new Date(Date.now() - 3600_000),
++        scheduledEndAt: new Date(Date.now() + 3600_000),
++        currentState: "completed",
++        holdAmount: 50,
++        priceSnapshot: null,
++      };
++      const { service } = createService({
++        repo: {
++          findBookingById: mock(async () => booking),
++          findSessionById: mock(async () => session),
++        },
++      });
++
++      await expect(
++        service.completeSession("b1", "tutor1", "s1"),
++      ).rejects.toThrow(BookingStateTransitionError);
+     });
+ 
+     test("throws BookingStateTransitionError when not in scheduled state", async () => {
+       const { service } = createService({
+         repo: {
+           findBookingById: mock(async () =>
+             makeBooking({ currentState: "confirmed" }),
+           ),
+         },
+       });
+diff --git a/packages/api/src/tests/unit/notification.service.test.ts b/packages/api/src/tests/unit/notification.service.test.ts
+index 2b1e528..ba19c4a 100644
+--- a/packages/api/src/tests/unit/notification.service.test.ts
++++ b/packages/api/src/tests/unit/notification.service.test.ts
+@@ -110,20 +110,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "Booking Confirmed",
+       body: "Your booking is confirmed",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+     expect(emailPort.send).toHaveBeenCalledWith({
+       to: "user@example.com",
+       subject: "Booking Confirmed",
+       html: "Your booking is confirmed",
+       category: "booking",
+     });
+     expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
+@@ -139,20 +140,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "payment",
+       title: "Payment Required",
+       body: "Payment is due",
+       severity: "critical",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+     expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("writeInternal updates dispatch status to failed when email send fails", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_fail" })),
+@@ -166,20 +168,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "Booking Failed",
+       body: "Email dispatch will fail",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+     expect(repo.updateDispatchStatus).toHaveBeenCalledWith(
+       expect.anything(),
+       "n_fail",
+       "failed",
+     );
+ 
+     const errorCalls = logCaptures.filter(
+@@ -198,20 +201,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "No Email",
+       body: "No email body",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
+   });
+ 
+   test("writeInternal skips email dispatch when recipient email is undefined (no user row)", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_no_user" })),
+       findUserEmail: mock(async () => ""),
+@@ -220,20 +224,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "No User",
+       body: "No user row",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
+   });
+ 
+   test("writeInternal logs debug for unsupported category (achievement) with emailPort and recipient email", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_achievement" })),
+       findUserEmail: mock(async () => "user@example.com"),
+@@ -242,20 +247,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "achievement",
+       title: "Achievement Unlocked",
+       body: "You earned a badge!",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
+ 
+     const debugCalls = logCaptures.filter(
+       (c: any) => c.action === "notification_email_skipped_category",
+     );
+     expect(debugCalls.length).toBeGreaterThanOrEqual(1);
+   });
+ 
+@@ -269,20 +275,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "system",
+       title: "System Notice",
+       body: "System notice body",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
+ 
+     const debugCalls = logCaptures.filter(
+       (c: any) => c.action === "notification_email_skipped_category",
+     );
+     expect(debugCalls.length).toBeGreaterThanOrEqual(1);
+   });
+ 
+@@ -297,20 +304,21 @@ describe("NotificationService (unit)", () => {
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "New Booking",
+       body: "New booking body",
+       severity: "action",
+       eventKey: "booking.b1.new",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+     expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("writeBestEffort catches and logs errors", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => {
+         throw new Error("db error");
+@@ -379,40 +387,42 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "Info Notification",
+       body: "Just info",
+       severity: "info",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
+   });
+ 
+   test("writeInternal without emailPort does not attempt email dispatch even for action severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_no_port" })),
+     });
+ 
+     const service = createNotificationService(repo, undefined as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "No email port",
+       body: "No email port body",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(true).toBe(true);
+   });
+ 
+   test("list returns paginated results with nextCursor when rows exceed limit", async () => {
+     const items = Array.from({ length: 6 }, (_, i) => ({
+       id: `n${i}`,
+       userId: "user1",
+       category: "booking",
+@@ -613,20 +623,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "refund",
+       title: "Refund Processed",
+       body: "Your refund has been processed",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("writeInternal dispatches email for schedule category with critical severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_schedule" })),
+       findUserEmail: mock(async () => "schedule@example.com"),
+@@ -635,20 +646,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "schedule",
+       title: "Schedule Changed",
+       body: "Your schedule has been updated",
+       severity: "critical",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("writeInternal dispatches email for override category with action severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_override" })),
+       findUserEmail: mock(async () => "override@example.com"),
+@@ -657,20 +669,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "override",
+       title: "Override Applied",
+       body: "An override was applied",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("writeInternal dispatches email for payment category with action severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_payment" })),
+       findUserEmail: mock(async () => "payment@example.com"),
+@@ -679,20 +692,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "payment",
+       title: "Payment Received",
+       body: "Your payment was received",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("skips email dispatch for unsupported categories (achievement) with emailPort", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_achievement" })),
+       findUserEmail: mock(async () => "user@example.com"),
+@@ -701,20 +715,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "achievement",
+       title: "Achievement Unlocked",
+       body: "You earned a badge!",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
+ 
+     const debugCalls = logCaptures.filter(
+       (c: any) => c.action === "notification_email_skipped_category",
+     );
+     expect(debugCalls.length).toBeGreaterThanOrEqual(1);
+   });
+ 
+@@ -728,20 +743,21 @@ describe("NotificationService (unit)", () => {
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "Booking Confirmed",
+       body: "Your booking is confirmed",
+       severity: "action",
++      emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("getUnreadCount is exposed as a function", async () => {
+     const repo = makeRepo();
+     const service = createNotificationService(repo);
+     expect(typeof service.getUnreadCount).toBe("function");
+   });
+@@ -819,10 +835,124 @@ describe("write vs writeBestEffort", () => {
+     expect(errorLog).toBeDefined();
+     expect(errorLog.error.message).toContain("DB insert failed");
+   });
+ 
+   test("writeBestEffort succeeds when writeInternal succeeds", async () => {
+     const repo = makeTestRepo();
+     const service = createNotificationService(repo);
+     await expect(service.writeBestEffort(baseParams)).resolves.toBeUndefined();
+   });
+ });
++
++describe("NotificationService email routing decision (G17)", () => {
++  function makeRoutingRepo(
++    overrides: Partial<NotificationRepo> = {},
++  ): NotificationRepo {
++    return {
++      findNotificationByEventKey: mock(async () => null),
++      findNotificationByIdForUser: mock(async () => ({ id: "n1" })),
++      insertNotification: mock(async () => ({ id: "n_email" })),
++      findUserEmail: mock(async () => "user@example.com"),
++      insertDispatch: mock(async () => {}),
++      updateDispatchStatus: mock(async () => {}),
++      listNotifications: mock(async () => []),
++      countUnread: mock(async () => 0),
++      updateReadStatus: mock(async () => {}),
++      markAllRead: mock(async () => {}),
++      findDispatch: mock(async () => null),
++      ...overrides,
++    } as any;
++  }
++
++  const baseParams = {
++    db: {} as any,
++    userId: "user1",
++    category: "booking" as const,
++    title: "Test",
++    body: "Test body",
++    severity: "action" as const,
++    eventKey: "test.key",
++  };
++
++  test("emailRequired true + action severity + supported category → email dispatched and status sent", async () => {
++    const repo = makeRoutingRepo();
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++    const service = createNotificationService(repo, emailPort as any);
++
++    await service.write({ ...baseParams, emailRequired: true });
++
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
++    expect(repo.insertDispatch).toHaveBeenCalledWith(
++      expect.anything(),
++      expect.objectContaining({
++        notificationId: "n_email",
++        channel: "email",
++        recipientEmail: "user@example.com",
++        status: "queued",
++      }),
++    );
++    expect(emailPort.send).toHaveBeenCalledTimes(1);
++    expect(repo.updateDispatchStatus).toHaveBeenCalledWith(
++      expect.anything(),
++      "n_email",
++      "sent",
++    );
++  });
++
++  test("emailRequired default false + action severity + supported category → no email", async () => {
++    const repo = makeRoutingRepo();
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++    const service = createNotificationService(repo, emailPort as any);
++
++    await service.write({ ...baseParams });
++
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++  });
++
++  test("emailRequired true + info severity + supported category → no email (severity gate)", async () => {
++    const repo = makeRoutingRepo();
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++    const service = createNotificationService(repo, emailPort as any);
++
++    await service.write({
++      ...baseParams,
++      severity: "info",
++      emailRequired: true,
++    });
++
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++  });
++
++  test("emailRequired true + achievement category → no email (category backstop), in-app row kept", async () => {
++    const repo = makeRoutingRepo();
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++    const service = createNotificationService(repo, emailPort as any);
++
++    await service.write({
++      ...baseParams,
++      category: "achievement",
++      emailRequired: true,
++    });
++
++    expect(repo.insertNotification).toHaveBeenCalledTimes(1);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++  });
++
++  test("achievement in-app only: emailRequired false → notification row, no dispatch", async () => {
++    const repo = makeRoutingRepo();
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++    const service = createNotificationService(repo, emailPort as any);
++
++    await service.write({
++      ...baseParams,
++      category: "achievement",
++      severity: "info",
++    });
++
++    expect(repo.insertNotification).toHaveBeenCalledTimes(1);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++  });
++});

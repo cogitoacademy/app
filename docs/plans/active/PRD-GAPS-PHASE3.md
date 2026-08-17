@@ -1,36 +1,36 @@
 # Cogito Backend — PRD Gaps Phase 3 Specification
 
-| Field      | Value                                                                 |
-| ---------- | --------------------------------------------------------------------- |
-| Status     | Active — all U-items closed (U1–U14 implemented; verified 2026-08-16) |
-| Branch     | main (future PRs)                                                     |
-| Created    | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)                    |
-| Depends on | #36/#39–#43 (G1–G20) + #46 (BACKEND-HARDENING-PHASE2) merged to main  |
-| Next       | After this spec: `BACKEND-CLEANUP.md`, then FRONTEND-GAPS-SPEC        |
-| Scope      | Backend-only                                                          |
+| Field      | Value                                                                   |
+| ---------- | ----------------------------------------------------------------------- |
+| Status     | Active — all U-items closed except **U9 partial** (verified 2026-08-17) |
+| Branch     | main (future PRs)                                                       |
+| Created    | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)                      |
+| Depends on | #36/#39–#43 (G1–G20) + #46 (BACKEND-HARDENING-PHASE2) merged to main    |
+| Next       | After this spec: `BACKEND-CLEANUP.md`, then FRONTEND-GAPS-SPEC          |
+| Scope      | Backend-only                                                            |
 
-This spec catalogs the PRD requirements the backend **does not yet implement** that were found by the 2026-08-14 PRD-vs-code audit (read `docs/prd.tex` FR/DL/TC references and compare against code at HEAD `ec8b16c`). Statuses re-verified against code at `7375b9d` (2026-08-16): U4/U13 implemented by REVIEW-FIXES-2 PR F, U11 closed by BACKEND-REVIEW-HARDENING M4 (#48). The remaining open items (U1/U2/U3/U5/U6/U7/U8/U10/U14) are tracked for execution in `docs/plans/active/REVIEW-FIXES-3.md` (P3/P5).
+This spec catalogs the PRD requirements the backend **does not yet implement** that were found by the 2026-08-14 PRD-vs-code audit (read `docs/prd.tex` FR/DL/TC references and compare against code at HEAD `ec8b16c`). Statuses re-verified against code at `6c80391` (2026-08-17): **U9 (support SLA business-hours) is the only remaining Partial** — the in-app escalation job exists but the business-hours WIB SLA computation + WhatsApp escalation hook are not implemented; aligned to `REVIEW-FIXES-4.md` P2.8 (H5). Every other U-item is closed/implemented (U1–U8, U10–U14), the last tranche by `REVIEW-FIXES-3.md` P5 (merged via #64) and `P6` (#65).
 
 > **Rule:** the PRD (`docs/prd.tex`) is the source of truth. If a requirement in this spec conflicts with the PRD, the PRD wins.
 
 ## Gap Summary
 
-| #   | Requirement                                                                 | PRD Ref                   | Severity | Module        | Status                                                                                                       |
-| --- | --------------------------------------------------------------------------- | ------------------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------ |
-| U1  | Admin manual meeting-link entry                                             | FR-21, TC-36              | Medium   | meeting       | **Implemented (REVIEW-FIXES-3 P5)** — `adminBooking.setMeetingLink` + participant notification               |
-| U2  | Student self-service reschedule before H-2                                  | FR-14, TC-15              | Medium   | booking       | **Implemented (REVIEW-FIXES-3 P5)** — `booking.rescheduleSelf` + `tutorActions.approveReschedule`            |
-| U3  | Reconfirmation-deadline repricing for still-valid partial headcount         | FR-16, TC-18              | High     | booking       | **Implemented (REVIEW-FIXES-3 P3.8)** — reprices again at every 12h deadline; <2 headcount still expires     |
-| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | **Implemented (REVIEW-FIXES-2 PR F)**                                                                        |
-| U5  | Per-participant no-show marking for series sessions                         | FR-20, TC-30              | Medium   | booking       | **Implemented (REVIEW-FIXES-3 P5)** — `tutorActions.markParticipantNoShow` + hold forfeit                    |
-| U6  | Admin per-session series cancel with Marks-return choice                    | FR-20, TC-31              | Medium   | admin-booking | **Implemented (REVIEW-FIXES-3 P5)** — `adminBooking.cancelSeriesSession` (release/forfeit/partial)           |
-| U7  | Per-session tutor reschedule within a series                                | FR-20, TC-33              | Low      | booking       | **Implemented (REVIEW-FIXES-3 P5)** — `proposeReschedule` sessionId + sibling-overlap guard (migration 0021) |
-| U8  | Payment-error refund reconciliation guard (no blind full refund)            | TC-39, Refund Policy      | High     | admin-booking | **Implemented (REVIEW-FIXES-3 P3.8)** — refund capped at unspent remainder; fully-spent rejected             |
-| U9  | Support SLA business-hours windows (30 min / 4 h) + WhatsApp escalation     | OQ-04                     | Medium   | support       | Partial (in-app escalation job exists, #46)                                                                  |
-| U10 | Achievement submission fields match PRD (issuer, visibility, enum category) | FR-18 (prd.tex:1004-1014) | Low      | achievement   | **Implemented (REVIEW-FIXES-3 P5)** — issuer/visibility columns + category enum (migration 0020)             |
-| U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | **Closed** — implemented by BACKEND-REVIEW-HARDENING M4 (#48; branch merged, code on main)                   |
-| U12 | Offline room approval deadline rule (12h window)                            | DL-25 (prd.tex:853)       | Low      | booking       | **Closed** — `min(now + 12h, scheduledStartAt)` per DL-25 + SCHEDULED grace bump (REVIEW-FIXES-3 P3.1)       |
-| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | **Implemented (REVIEW-FIXES-2 PR F)**                                                                        |
-| U14 | Offline room availability integrated into booking creation (G13)            | FR-22, TC-20              | Low      | room/booking  | **Implemented (REVIEW-FIXES-3 P5)** — `requestedRoomId` + requested roomBooking row + conflict flag          |
+| #   | Requirement                                                                 | PRD Ref                   | Severity | Module        | Status                                                                                                                    |
+| --- | --------------------------------------------------------------------------- | ------------------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| U1  | Admin manual meeting-link entry                                             | FR-21, TC-36              | Medium   | meeting       | **Implemented (REVIEW-FIXES-3 P5)** — `adminBooking.setMeetingLink` + participant notification                            |
+| U2  | Student self-service reschedule before H-2                                  | FR-14, TC-15              | Medium   | booking       | **Implemented (REVIEW-FIXES-3 P5)** — `booking.proposeReschedule` (student) + `booking.acceptReschedule`                  |
+| U3  | Reconfirmation-deadline repricing for still-valid partial headcount         | FR-16, TC-18              | High     | booking       | **Implemented (REVIEW-FIXES-3 P3.8)** — reprices again at every 12h deadline; <2 headcount still expires                  |
+| U4  | Group-series full-series withdrawal not blocked (no opt-out)                | FR-20, TC-24              | Medium   | booking       | **Implemented (REVIEW-FIXES-2 PR F)**                                                                                     |
+| U5  | Per-participant no-show marking for series sessions                         | FR-20, TC-30              | Medium   | booking       | **Implemented (REVIEW-FIXES-3 P5)** — `tutorActions.markParticipantNoShow` + hold forfeit                                 |
+| U6  | Admin per-session series cancel with Marks-return choice                    | FR-20, TC-31              | Medium   | admin-booking | **Implemented (REVIEW-FIXES-3 P5)** — `adminBooking.cancelSeriesSession` (release/forfeit/partial)                        |
+| U7  | Per-session tutor reschedule within a series                                | FR-20, TC-33              | Low      | booking       | **Implemented (REVIEW-FIXES-3 P5)** — `proposeReschedule` sessionId + sibling-overlap guard (migration 0020)              |
+| U8  | Payment-error refund reconciliation guard (no blind full refund)            | TC-39, Refund Policy      | High     | admin-booking | **Implemented (REVIEW-FIXES-3 P3.8)** — refund capped at unspent remainder; fully-spent rejected                          |
+| U9  | Support SLA business-hours windows (30 min / 4 h) + WhatsApp escalation     | OQ-04                     | Medium   | support       | **Partial** — in-app escalation job exists (#46); business-hours WIB SLA + escalation hook → **REVIEW-FIXES-4 P2.8 (H5)** |
+| U10 | Achievement submission fields match PRD (issuer, visibility, enum category) | FR-18 (prd.tex:1004-1014) | Low      | achievement   | **Implemented (REVIEW-FIXES-3 P5)** — issuer/visibility columns + category enum (migration 0023)                          |
+| U11 | Group (non-series) invitee "registered user" validation                     | DL-19                     | Low      | booking       | **Closed** — implemented by BACKEND-REVIEW-HARDENING M4 (#48; branch merged, code on main)                                |
+| U12 | Offline room approval deadline rule (12h window)                            | DL-25 (prd.tex:853)       | Low      | booking       | **Closed** — `min(now + 12h, scheduledStartAt)` per DL-25 + SCHEDULED grace bump (REVIEW-FIXES-3 P3.1)                    |
+| U13 | Knowledge Bank eligibility uses total balance (B4)                          | DL-16, FR-12              | Medium   | wallet        | **Implemented (REVIEW-FIXES-2 PR F)**                                                                                     |
+| U14 | Offline room availability integrated into booking creation (G13)            | FR-22, TC-20              | Low      | room/booking  | **Implemented (REVIEW-FIXES-3 P5)** — `requestedRoomId` + requested roomBooking row + conflict flag                       |
 
 ---
 
@@ -61,7 +61,7 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 **Required:**
 
-1. `booking.rescheduleSelf` (protected, student proposer) — input `{ bookingId, newStartAt, newEndAt }`, gated to `now + 2h < newStartAt` (before H-2) and the existing slot-overlap checks.
+1. `booking.proposeReschedule` (studentProcedure — the documented phantom name `rescheduleSelf` never existed; verified 2026-08-17) — input `{ bookingId, newStartAt, newEndAt }`, gated to `now + 2h < newStartAt` (before H-2) and the existing slot-overlap checks.
 2. Transitions the booking (solo/confirmed or awaiting states) to a reschedule flow that requires tutor approval (`RESCHEDULE_PROPOSED` direction student→tutor), or direct transition for states where no tutor consent is needed per PRD. **Decide with the PRD** which states allow direct student reschedule vs. tutor approval.
 3. Notifies the tutor + affected participants (matrix row "Tutor reschedule proposed / approved").
 
@@ -198,9 +198,11 @@ This spec catalogs the PRD requirements the backend **does not yet implement** t
 
 ## U9: Support SLA business-hours windows + WhatsApp (OQ-04)
 
+**Status: PARTIAL → tracked in `REVIEW-FIXES-4.md` P2.8 (H5).** The in-app `escalate-support-tickets` job (15 min) exists (#46); the business-hours WIB SLA computation (30 min Mon–Sat 09:00–21:00 WIB / 4 h otherwise) and the WhatsApp escalation hook are **not implemented** — the flat `SUPPORT_SLA_MS = 12h` remains (REVIEW-FIXES-4 P2.8 replaces it).
+
 **PRD OQ-04:** admin SLA escalation via WhatsApp (+62 881-0119-90195) — 30 min during business hours (Mon–Sat 09:00–21:00 WIB), 4 hours otherwise.
 
-**Current state:** flat `SUPPORT_SLA_MS = 12h` (`constants.ts:8`, `support.service.ts:69`); the in-app `escalate-support-tickets` job (15 min) exists (#46). No WhatsApp integration, no business-hours SLA computation.
+**Current state:** flat `SUPPORT_SLA_MS = 12h` (`constants.ts:11`, `support.service.ts:76,114-137`); the in-app `escalate-support-tickets` job (15 min) exists (#46). No WhatsApp integration, no business-hours SLA computation.
 
 **Required:**
 

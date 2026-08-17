@@ -26,7 +26,7 @@ Error entries include: `error.message`, `error.stack`, `error.cause`.
 }
 ```
 
-The Redis health check is owned by the production-readiness branch.
+The Redis health check is implemented in the server's `db-health.ts` (added by DEFERRED-OPS 1.6) — the server pings Redis alongside the DB `SELECT 1` and reports both in `/health`.
 
 ## Docker Log Rotation
 

@@ -1,0 +1,2829 @@
+# Review package: 9e20f2a..HEAD
+
+## Commits
+b059b30 test: add room, refund, achievement, and admin-override happy-path integration tests
+a7e6c75 test: fix process-wide module-mock pollution that broke the suite
+11d1f0a fix(booking): zero participant heldAmount when holds are released
+bfefd76 fix(booking): null actor_id for system transitions so expireBookings works
+ee84baa test: scheduler expiry and hold-release integration tests
+38bb482 fix(redis): declare ioredis as a runtime dependency of packages/api
+947fe80 test: real-Redis integration tests for idempotency, rate limit, circuit breaker
+f0244c7 style: apply oxfmt to real-DB repo tests
+22c64ff test: real-DB repo tests for wallet and booking
+
+## Files changed
+ bun.lock                                           |  13 +
+ packages/api/package.json                          |   1 +
+ packages/api/src/lib/db-health.ts                  |   5 +-
+ packages/api/src/modules/booking/booking.repo.ts   |   2 +-
+ .../api/src/modules/booking/booking.service.ts     |   5 +-
+ .../src/tests/integration/achievement-flow.test.ts | 173 +++++++++
+ .../src/tests/integration/admin-override.test.ts   | 238 ++++++++++++-
+ .../api/src/tests/integration/redis-real.test.ts   | 212 +++++++++++
+ .../api/src/tests/integration/refund-flow.test.ts  | 233 ++++++++++++
+ .../api/src/tests/integration/repo-booking.test.ts | 200 +++++++++++
+ .../api/src/tests/integration/repo-wallet.test.ts  | 223 ++++++++++++
+ .../api/src/tests/integration/room-flow.test.ts    | 294 +++++++++++++++
+ .../src/tests/integration/scheduler-expiry.test.ts | 396 +++++++++++++++++++++
+ .../src/tests/integration/scheduler-holds.test.ts  | 252 +++++++++++++
+ packages/api/src/tests/unit/db-health.test.ts      |  62 +---
+ packages/api/src/tests/unit/db.test.ts             |  43 ---
+ .../src/tests/unit/google-meeting.provider.test.ts |  11 -
+ 17 files changed, 2259 insertions(+), 104 deletions(-)
+
+## Diff
+diff --git a/bun.lock b/bun.lock
+index 117e178..8bfe7a2 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -93,20 +93,21 @@
+         "@cogito-app/env": "workspace:*",
+         "@orpc/server": "catalog:",
+         "bullmq": "^6",
+         "drizzle-orm": "catalog:",
+         "googleapis": "^174.0.1",
+         "zod": "catalog:",
+       },
+       "devDependencies": {
+         "@cogito-app/config": "workspace:*",
+         "elysia": "catalog:",
++        "ioredis": "^6.0.0",
+         "typescript": "catalog:",
+       },
+     },
+     "packages/auth": {
+       "name": "@cogito-app/auth",
+       "dependencies": {
+         "@cogito-app/db": "workspace:*",
+         "@cogito-app/env": "workspace:*",
+         "better-auth": "catalog:",
+         "dotenv": "catalog:",
+@@ -352,20 +353,22 @@
+     "@floating-ui/core": ["@floating-ui/core@1.7.5", "", { "dependencies": { "@floating-ui/utils": "^0.2.11" } }, "sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ=="],
+ 
+     "@floating-ui/dom": ["@floating-ui/dom@1.7.6", "", { "dependencies": { "@floating-ui/core": "^1.7.5", "@floating-ui/utils": "^0.2.11" } }, "sha512-9gZSAI5XM36880PPMm//9dfiEngYoC6Am2izES1FF406YFsjvyBMmeJ2g4SAju3xWwtuynNRFL2s9hgxpLI5SQ=="],
+ 
+     "@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.8", "", { "dependencies": { "@floating-ui/dom": "^1.7.6" }, "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-cC52bHwM/n/CxS87FH0yWdngEZrjdtLW/qVruo68qg+prK7ZQ4YGdut2GyDVpoGeAYe/h899rVeOVm6Oi40k2A=="],
+ 
+     "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg=="],
+ 
+     "@fontsource-variable/inter": ["@fontsource-variable/inter@5.2.8", "", {}, "sha512-kOfP2D+ykbcX/P3IFnokOhVRNoTozo5/JxhAIVYLpea/UBmCQ/YWPBfWIDuBImXX/15KH+eKh4xpEUyS2sQQGQ=="],
+ 
++    "@ioredis/commands": ["@ioredis/commands@2.0.0", "", {}, "sha512-vrx0AE/T0h7cRZwfo1M39Cr+ZhZrkf0V8mQN75wucKCxCLD9l/VX6no3gFvrLqD1IlG/1LtzWovqEw3t0Vr9zg=="],
++
+     "@isaacs/cliui": ["@isaacs/cliui@8.0.2", "", { "dependencies": { "string-width": "^5.1.2", "string-width-cjs": "npm:string-width@^4.2.0", "strip-ansi": "^7.0.1", "strip-ansi-cjs": "npm:strip-ansi@^6.0.1", "wrap-ansi": "^8.1.0", "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0" } }, "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA=="],
+ 
+     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
+ 
+     "@jridgewell/remapping": ["@jridgewell/remapping@2.3.5", "", { "dependencies": { "@jridgewell/gen-mapping": "^0.3.5", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-LI9u/+laYG4Ds1TDKSJW2YPrIlcVYOwi2fUC6xB43lueCjgxV4lffOCZCtYFiH6TNOX+tQKXx97T4IKHbhyHEQ=="],
+ 
+     "@jridgewell/resolve-uri": ["@jridgewell/resolve-uri@3.1.2", "", {}, "sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw=="],
+ 
+     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
+ 
+@@ -768,20 +771,22 @@
+     "call-bound": ["call-bound@1.0.4", "", { "dependencies": { "call-bind-apply-helpers": "^1.0.2", "get-intrinsic": "^1.3.0" } }, "sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg=="],
+ 
+     "caniuse-lite": ["caniuse-lite@1.0.30001793", "", {}, "sha512-iwSsYWaCOoh26cV8NwNRViHlrfUvYsHDfRVcbtmw0Kg6PJIZZXwMkj1442FYLBGkeUf1juAsU3DTfxW579mrPA=="],
+ 
+     "chokidar": ["chokidar@5.0.0", "", { "dependencies": { "readdirp": "^5.0.0" } }, "sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw=="],
+ 
+     "class-variance-authority": ["class-variance-authority@0.7.1", "", { "dependencies": { "clsx": "^2.1.1" } }, "sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg=="],
+ 
+     "clsx": ["clsx@2.1.1", "", {}, "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="],
+ 
++    "cluster-key-slot": ["cluster-key-slot@1.1.1", "", {}, "sha512-rwHwUfXL40Chm1r08yrhU3qpUvdVlgkKNeyeGPOxnW8/SyVDvgRaed/Uz54AqWNaTCAThlj6QAs3TZcKI0xDEw=="],
++
+     "color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, "sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ=="],
+ 
+     "color-name": ["color-name@1.1.4", "", {}, "sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA=="],
+ 
+     "content-disposition": ["content-disposition@1.1.0", "", {}, "sha512-5jRCH9Z/+DRP7rkvY83B+yGIGX96OYdJmzngqnw2SBSxqCFPd0w2km3s5iawpGX8krnwSGmF0FW5Nhr0Hfai3g=="],
+ 
+     "content-type": ["content-type@1.0.5", "", {}, "sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA=="],
+ 
+     "convert-source-map": ["convert-source-map@2.0.0", "", {}, "sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg=="],
+ 
+@@ -822,20 +827,22 @@
+     "data-uri-to-buffer": ["data-uri-to-buffer@4.0.1", "", {}, "sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A=="],
+ 
+     "date-fns": ["date-fns@4.4.0", "", {}, "sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w=="],
+ 
+     "debug": ["debug@4.4.3", "", { "dependencies": { "ms": "^2.1.3" }, "peerDependencies": { "supports-color": "*" }, "optionalPeers": ["supports-color"] }, "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA=="],
+ 
+     "decimal.js-light": ["decimal.js-light@2.5.1", "", {}, "sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg=="],
+ 
+     "defu": ["defu@6.1.7", "", {}, "sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ=="],
+ 
++    "denque": ["denque@2.1.0", "", {}, "sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw=="],
++
+     "depd": ["depd@2.0.0", "", {}, "sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw=="],
+ 
+     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
+ 
+     "diff": ["diff@8.0.4", "", {}, "sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw=="],
+ 
+     "dotenv": ["dotenv@17.4.2", "", {}, "sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw=="],
+ 
+     "drizzle-kit": ["drizzle-kit@0.31.10", "", { "dependencies": { "@drizzle-team/brocli": "^0.10.2", "@esbuild-kit/esm-loader": "^2.5.5", "esbuild": "^0.25.4", "tsx": "^4.21.0" }, "bin": { "drizzle-kit": "bin.cjs" } }, "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw=="],
+ 
+@@ -962,20 +969,22 @@
+     "ieee754": ["ieee754@1.2.1", "", {}, "sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA=="],
+ 
+     "immer": ["immer@10.2.0", "", {}, "sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw=="],
+ 
+     "import-without-cache": ["import-without-cache@0.4.0", "", {}, "sha512-NkJQA7oZ4YHQhd2+H3BoRFKF3d/XNsiKpHZCQEMH9pDX27hQQLsTyOocyRgaIVtf8gHX3Nt3LPkR4e5EdtPAGQ=="],
+ 
+     "inherits": ["inherits@2.0.4", "", {}, "sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ=="],
+ 
+     "internmap": ["internmap@2.0.3", "", {}, "sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg=="],
+ 
++    "ioredis": ["ioredis@6.0.0", "", { "dependencies": { "@ioredis/commands": "2.0.0", "cluster-key-slot": "1.1.1", "debug": "4.4.3", "denque": "2.1.0", "redis-errors": "1.2.0", "standard-as-callback": "2.1.0" } }, "sha512-f+Dtubxfpf6KYFq7WVXJoOLn0bk4TJrMrN9SzeE+jrWrCWj7XX3fA6vkryafhADX+GMymRxgDJDOI33COkJc0w=="],
++
+     "ipaddr.js": ["ipaddr.js@1.9.1", "", {}, "sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g=="],
+ 
+     "is-fullwidth-code-point": ["is-fullwidth-code-point@3.0.0", "", {}, "sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg=="],
+ 
+     "is-promise": ["is-promise@4.0.0", "", {}, "sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ=="],
+ 
+     "isbot": ["isbot@5.1.40", "", {}, "sha512-yNeeynhhtIVRBk12tBV4eHNxwB42HzR4Q3Ea7vCOiJhImGaAIdIMrbJtacQlBizGLjUPw+akkFI5Dn9T70XoVQ=="],
+ 
+     "isexe": ["isexe@2.0.0", "", {}, "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="],
+ 
+@@ -1176,20 +1185,22 @@
+     "react-dom": ["react-dom@19.2.7", "", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.7" } }, "sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ=="],
+ 
+     "react-is": ["react-is@19.2.7", "", {}, "sha512-kZFnouyVv7eP/Phmrlo9FK+zcAdriZJvzxXHF1Sl1P377WSGe2G/JxVolhTrB/jeV47lKImhNUsijjHAAbcl/A=="],
+ 
+     "react-redux": ["react-redux@9.3.0", "", { "dependencies": { "@types/use-sync-external-store": "^0.0.6", "use-sync-external-store": "^1.4.0" }, "peerDependencies": { "@types/react": "^18.2.25 || ^19", "react": "^18.0 || ^19", "redux": "^5.0.0" }, "optionalPeers": ["@types/react", "redux"] }, "sha512-KQopgqFo/p/fgmAs5qz6p5RWaNAzq40WAu7fJIXnQpYxFPbJYtsJPWvGeF2rOBaY/kEuV77AVsX8TsQzKm+A/g=="],
+ 
+     "readdirp": ["readdirp@5.0.0", "", {}, "sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ=="],
+ 
+     "recharts": ["recharts@3.8.1", "", { "dependencies": { "@reduxjs/toolkit": "^1.9.0 || 2.x.x", "clsx": "^2.1.1", "decimal.js-light": "^2.5.1", "es-toolkit": "^1.39.3", "eventemitter3": "^5.0.1", "immer": "^10.1.1", "react-redux": "8.x.x || 9.x.x", "reselect": "5.1.1", "tiny-invariant": "^1.3.3", "use-sync-external-store": "^1.2.2", "victory-vendor": "^37.0.2" }, "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-dom": "^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-is": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-mwzmO1s9sFL0TduUpwndxCUNoXsBw3u3E/0+A+cLcrSfQitSG62L32N69GhqUrrT5qKcAE3pCGVINC6pqkBBQg=="],
+ 
++    "redis-errors": ["redis-errors@1.2.0", "", {}, "sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w=="],
++
+     "redux": ["redux@5.0.1", "", {}, "sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w=="],
+ 
+     "redux-thunk": ["redux-thunk@3.1.0", "", { "peerDependencies": { "redux": "^5.0.0" } }, "sha512-NW2r5T6ksUKXCabzhL9z+h206HQw/NJkcLm1GPImRQ8IzfXwRGqjVhKJGauHirT0DAuyy6hjdnMZaRoAcy0Klw=="],
+ 
+     "reselect": ["reselect@5.1.1", "", {}, "sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w=="],
+ 
+     "resolve-pkg-maps": ["resolve-pkg-maps@1.0.0", "", {}, "sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw=="],
+ 
+     "rimraf": ["rimraf@5.0.10", "", { "dependencies": { "glob": "^10.3.7" }, "bin": { "rimraf": "dist/esm/bin.mjs" } }, "sha512-l0OE8wL34P4nJH/H2ffoaniAokM2qSmrtXHmlpvYr5AVVX8msAyW0l8NVJFDxlSK4u3Uh/f41cQheDVdnYijwQ=="],
+ 
+@@ -1240,20 +1251,22 @@
+     "sonner": ["sonner@2.0.8", "", { "peerDependencies": { "@types/react": "^18.0.0 || ^19.0.0", "react": "^18.0.0 || ^19.0.0 || ^19.0.0-rc", "react-dom": "^18.0.0 || ^19.0.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-UM/ByIoFra8yzV75n1o0Puu0bw5U/9UNnDacrJNspekBewIfsQ3D6ez1nvlWpt7aTsO6rujQtifBpycwIivqlg=="],
+ 
+     "source-map": ["source-map@0.6.1", "", {}, "sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g=="],
+ 
+     "source-map-js": ["source-map-js@1.2.1", "", {}, "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA=="],
+ 
+     "source-map-support": ["source-map-support@0.5.21", "", { "dependencies": { "buffer-from": "^1.0.0", "source-map": "^0.6.0" } }, "sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w=="],
+ 
+     "split2": ["split2@4.2.0", "", {}, "sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg=="],
+ 
++    "standard-as-callback": ["standard-as-callback@2.1.0", "", {}, "sha512-qoRRSyROncaz1z0mvYqIE4lCd9p2R90i6GxW3uZv5ucSu8tU7B5HXUP1gG8pVZsYNVaXjk8ClXHPttLyxAL48A=="],
++
+     "statuses": ["statuses@2.0.2", "", {}, "sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw=="],
+ 
+     "string-width": ["string-width@5.1.2", "", { "dependencies": { "eastasianwidth": "^0.2.0", "emoji-regex": "^9.2.2", "strip-ansi": "^7.0.1" } }, "sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA=="],
+ 
+     "string-width-cjs": ["string-width@4.2.3", "", { "dependencies": { "emoji-regex": "^8.0.0", "is-fullwidth-code-point": "^3.0.0", "strip-ansi": "^6.0.1" } }, "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g=="],
+ 
+     "strip-ansi": ["strip-ansi@7.2.0", "", { "dependencies": { "ansi-regex": "^6.2.2" } }, "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w=="],
+ 
+     "strip-ansi-cjs": ["strip-ansi@6.0.1", "", { "dependencies": { "ansi-regex": "^5.0.1" } }, "sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A=="],
+ 
+diff --git a/packages/api/package.json b/packages/api/package.json
+index b748f2f..172125a 100644
+--- a/packages/api/package.json
++++ b/packages/api/package.json
+@@ -16,18 +16,19 @@
+     "test": "bun test --env-file ../../apps/server/.env"
+   },
+   "dependencies": {
+     "@cogito-app/auth": "workspace:*",
+     "@cogito-app/db": "workspace:*",
+     "@cogito-app/env": "workspace:*",
+     "@orpc/server": "catalog:",
+     "bullmq": "^6",
+     "drizzle-orm": "catalog:",
+     "googleapis": "^174.0.1",
++    "ioredis": "^6.0.0",
+     "zod": "catalog:"
+   },
+   "devDependencies": {
+     "@cogito-app/config": "workspace:*",
+     "elysia": "catalog:",
+     "typescript": "catalog:"
+   }
+ }
+diff --git a/packages/api/src/lib/db-health.ts b/packages/api/src/lib/db-health.ts
+index 8aa2a0a..a76103c 100644
+--- a/packages/api/src/lib/db-health.ts
++++ b/packages/api/src/lib/db-health.ts
+@@ -1,15 +1,16 @@
+-import { db } from "@cogito-app/db";
++import { db as defaultDb } from "@cogito-app/db";
+ import { sql } from "drizzle-orm";
+ import type { RedisClient } from "./redis";
++import type { DbType } from "./db";
+ 
+-export async function healthCheck(redis?: RedisClient) {
++export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
+   const checks: Record<string, "ok" | "degraded" | "error"> = {};
+ 
+   try {
+     const start = performance.now();
+     await db.execute(sql`SELECT 1`);
+     const durationMs = performance.now() - start;
+     checks.database = durationMs < 1000 ? "ok" : "degraded";
+   } catch {
+     checks.database = "error";
+   }
+diff --git a/packages/api/src/modules/booking/booking.repo.ts b/packages/api/src/modules/booking/booking.repo.ts
+index 18d2328..1436a91 100644
+--- a/packages/api/src/modules/booking/booking.repo.ts
++++ b/packages/api/src/modules/booking/booking.repo.ts
+@@ -188,21 +188,21 @@ async function updateParticipantState(
+     .where(eq(bookingParticipant.id, participantId));
+ }
+ 
+ async function insertStateHistory(
+   conn: DbOrTx,
+   entry: {
+     bookingId: string;
+     fromState: string | null;
+     toState: string;
+     reason?: string | null;
+-    actorId: string;
++    actorId: string | null;
+     actorType: string;
+     metadata?: Record<string, unknown>;
+   },
+ ) {
+   await conn.insert(bookingStateHistory).values({
+     bookingId: entry.bookingId,
+     fromState: entry.fromState,
+     toState: entry.toState,
+     reason: entry.reason ?? null,
+     actorId: entry.actorId,
+diff --git a/packages/api/src/modules/booking/booking.service.ts b/packages/api/src/modules/booking/booking.service.ts
+index 0a9f6f4..1f7aef0 100644
+--- a/packages/api/src/modules/booking/booking.service.ts
++++ b/packages/api/src/modules/booking/booking.service.ts
+@@ -73,21 +73,21 @@ export interface CreateSeriesInput {
+   modality: "online" | "offline";
+   sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
+   timezone: string;
+ }
+ 
+ export interface BookingTransition {
+   bookingId: string;
+   fromState: BookingState | null;
+   toState: BookingState;
+   reason?: string;
+-  actorId: string;
++  actorId: string | null;
+   actorType: "student" | "tutor" | "admin" | "system";
+   metadata?: Record<string, unknown>;
+ }
+ 
+ export type BookingService = ReturnType<typeof createBookingService>;
+ 
+ export function createBookingService(deps: {
+   db: DbType;
+   repo: BookingRepo;
+   wallet: BookingWalletPort;
+@@ -171,21 +171,21 @@ export function createBookingService(deps: {
+         "version_conflict",
+         toState,
+       );
+     }
+ 
+     await recordTransition(conn, {
+       bookingId,
+       fromState,
+       toState,
+       reason: params.reason,
+-      actorId: params.actorId,
++      actorId: params.actorType === "system" ? null : params.actorId,
+       actorType: params.actorType,
+       metadata: params.metadata,
+     });
+ 
+     return versioned.updated;
+   }
+ 
+   async function releaseAllParticipantHolds(
+     tx: DbOrTx,
+     bookingId: string,
+@@ -212,20 +212,21 @@ export function createBookingService(deps: {
+             actorType,
+             reason,
+           });
+         }
+       }
+       // eslint-disable-next-line no-await-in-loop
+       await repo.updateParticipantState(tx, p.id, {
+         confirmationState: CONFIRMATION_STATE.WITHDRAWN_PRE_H2,
+         withdrawnAt: new Date(),
+         withdrawnReason: reason,
++        heldAmount: 0,
+       });
+     }
+   }
+ 
+   async function getById(bookingId: string, userId: string) {
+     const b = await repo.findBookingWithParticipants(bookingId);
+     if (!b) throw new BookingNotFoundError(bookingId);
+     await assertBookingAccess(b, userId, db, bookingId);
+     return b;
+   }
+diff --git a/packages/api/src/tests/integration/achievement-flow.test.ts b/packages/api/src/tests/integration/achievement-flow.test.ts
+new file mode 100644
+index 0000000..6f74e29
+--- /dev/null
++++ b/packages/api/src/tests/integration/achievement-flow.test.ts
+@@ -0,0 +1,173 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq, and } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import { achievement, auditLog } from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++describe("Achievement review flow", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const studentEmail = `student.ach.${ts}@cogito.test`;
++  const adminEmail = `admin.ach.${ts}@cogito.test`;
++
++  let studentClient: TestClient;
++  let adminClient: TestClient;
++  let studentId: string;
++  let adminId: string;
++  let approvedAchievementId: string;
++
++  beforeAll(async () => {
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student Achieve",
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    if (!studentCtx.session?.user) throw new Error("Student session missing");
++    studentId = studentCtx.session.user.id;
++    studentClient = createTestClient(studentCtx);
++
++    const adminRes = await signUpAndSignIn(
++      adminEmail,
++      "Test1234!",
++      "Admin Achieve",
++    );
++    const adminCtx = await createTestContext(adminRes.cookie);
++    if (!adminCtx.session?.user) throw new Error("Admin session missing");
++    adminId = adminCtx.session.user.id;
++    await setUserRole(adminId, "admin");
++    adminClient = createTestClient(await createTestContext(adminRes.cookie));
++  });
++
++  test("student creates an achievement → pending", async () => {
++    const created = await studentClient.achievement.create({
++      eventName: "Olimpiade Matematika Nasional",
++      category: "competition",
++      award: "Medali Emas",
++      level: "nasional",
++      eventDate: "2026-06-10",
++      location: "Jakarta",
++      description: "Juara 1 Olimpiade Matematika",
++      subjects: ["Mathematics"],
++    });
++
++    approvedAchievementId = created.id;
++    expect(created.status).toBe("pending");
++    expect(created.version).toBe(1);
++    expect(created.userId).toBe(studentId);
++
++    const [row] = await db
++      .select()
++      .from(achievement)
++      .where(eq(achievement.id, created.id))
++      .limit(1);
++    expect(row).toBeDefined();
++    expect(row!.status).toBe("pending");
++    expect(row!.eventName).toBe("Olimpiade Matematika Nasional");
++  });
++
++  test("student list returns the pending achievement", async () => {
++    const list = await studentClient.achievement.list({});
++    expect(list.length).toBe(1);
++    expect(list[0]!.id).toBe(approvedAchievementId);
++    expect(list[0]!.status).toBe("pending");
++  });
++
++  test("admin approves → approved + audit log", async () => {
++    const updated = await adminClient.achievement.adminReview({
++      achievementId: approvedAchievementId,
++      status: "approved",
++      adminNote: "Bukti sudah diverifikasi",
++    });
++    expect(updated.status).toBe("approved");
++    expect(updated.adminNote).toBe("Bukti sudah diverifikasi");
++
++    const [row] = await db
++      .select()
++      .from(achievement)
++      .where(eq(achievement.id, approvedAchievementId))
++      .limit(1);
++    expect(row!.status).toBe("approved");
++    expect(row!.adminNote).toBe("Bukti sudah diverifikasi");
++
++    const logs = await db
++      .select()
++      .from(auditLog)
++      .where(
++        and(
++          eq(auditLog.action, "achievement_approved"),
++          eq(auditLog.targetId, approvedAchievementId),
++        ),
++      );
++    expect(logs.length).toBe(1);
++    expect(logs[0]!.actorId).toBe(adminId);
++    expect(logs[0]!.actorType).toBe("admin");
++    expect(logs[0]!.targetType).toBe("achievement");
++    expect(logs[0]!.details).toMatchObject({
++      previousStatus: "pending",
++      adminNote: "Bukti sudah diverifikasi",
++    });
++  });
++
++  test("admin rejects a second achievement → rejected + audit log", async () => {
++    const created = await studentClient.achievement.create({
++      eventName: "Lomba Menulis",
++      category: "writing",
++      award: "Finalis",
++      level: "provinsi",
++      subjects: ["Indonesian"],
++    });
++    expect(created.status).toBe("pending");
++
++    const updated = await adminClient.achievement.adminReview({
++      achievementId: created.id,
++      status: "rejected",
++      adminNote: "Sertifikat tidak terbaca",
++    });
++    expect(updated.status).toBe("rejected");
++    expect(updated.adminNote).toBe("Sertifikat tidak terbaca");
++
++    const [row] = await db
++      .select()
++      .from(achievement)
++      .where(eq(achievement.id, created.id))
++      .limit(1);
++    expect(row!.status).toBe("rejected");
++
++    const logs = await db
++      .select()
++      .from(auditLog)
++      .where(
++        and(
++          eq(auditLog.action, "achievement_rejected"),
++          eq(auditLog.targetId, created.id),
++        ),
++      );
++    expect(logs.length).toBe(1);
++    expect(logs[0]!.actorId).toBe(adminId);
++  });
++
++  test("admin list filters by status", async () => {
++    const approved = await adminClient.achievement.adminList({
++      status: "approved",
++    });
++    expect(approved.length).toBe(1);
++    expect(approved[0]!.id).toBe(approvedAchievementId);
++
++    const rejected = await adminClient.achievement.adminList({
++      status: "rejected",
++    });
++    expect(rejected.length).toBe(1);
++  });
++});
+diff --git a/packages/api/src/tests/integration/admin-override.test.ts b/packages/api/src/tests/integration/admin-override.test.ts
+index 37d101c..e4c41b1 100644
+--- a/packages/api/src/tests/integration/admin-override.test.ts
++++ b/packages/api/src/tests/integration/admin-override.test.ts
+@@ -1,14 +1,114 @@
+ import { describe, expect, test, beforeAll } from "bun:test";
++import { eq, and } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  ledgerEntry,
++  booking,
++  bookingStateHistory,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++} from "@cogito-app/db/schema";
+ 
+ import { services } from "../../services";
+-import { resetDatabase } from "../helpers/test-client";
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(
++  email: string,
++  ts: number,
++): Promise<{ tutorId: string; tutorClient: TestClient }> {
++  await signUpAndSignIn(email, "Test1234!", "Tutor Override");
++  const tutorCookie = await signInAndGetCookie(email, "Test1234!");
++  const tutorCtx = await createTestContext(tutorCookie ?? "");
++  if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
++  const tutorId = tutorCtx.session.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Override",
++      token: `token-ovr-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Override",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "online",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({
++      tutorId,
++      startDate: start,
++      endDate: end,
++      modality: "online",
++    })
++    .returning();
++
++  return {
++    tutorId,
++    tutorClient: createTestClient(await createTestContext(tutorCookie ?? "")),
++    slotId: slot!.id,
++  };
++}
+ 
+ describe("Admin Override", () => {
+   beforeAll(async () => {
+     await resetDatabase();
+   });
+ 
+   test("override on non-existent booking returns not found", async () => {
+     try {
+       await services.adminBooking.applyOverride("admin-test-1", {
+         bookingId: "nonexistent-booking-id",
+@@ -42,10 +142,146 @@ describe("Admin Override", () => {
+       await services.adminBooking.adminRefund("admin-test-2", {
+         paymentId: "nonexistent-payment",
+         reason: "Test refund",
+       });
+       expect.unreachable("Should have thrown");
+     } catch (err: any) {
+       expect(err.message).toContain("not found");
+     }
+   });
+ });
++
++describe("Admin Override happy path", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const adminEmail = `admin.ovr.${ts}@cogito.test`;
++  const studentEmail = `student.ovr.${ts}@cogito.test`;
++  const tutorEmail = `tutor.ovr.${ts}@cogito.test`;
++
++  let adminClient: TestClient;
++  let adminId: string;
++  let studentClient: TestClient;
++  let studentId: string;
++  let bookingId: string;
++
++  beforeAll(async () => {
++    const adminRes = await signUpAndSignIn(adminEmail, "Test1234!", "Admin");
++    const adminCtx = await createTestContext(adminRes.cookie);
++    if (!adminCtx.session?.user) throw new Error("Admin session missing");
++    adminId = adminCtx.session.user.id;
++    await setUserRole(adminId, "admin");
++    adminClient = createTestClient(await createTestContext(adminRes.cookie));
++
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student",
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    if (!studentCtx.session?.user) throw new Error("Student session missing");
++    studentId = studentCtx.session.user.id;
++    await creditWallet(studentId, 200);
++    studentClient = createTestClient(studentCtx);
++
++    const tutor = await createPublishedTutor(tutorEmail, ts);
++    const start = new Date(Date.now() + 24 * 3600_000).toISOString();
++    const end = new Date(Date.now() + 25 * 3600_000).toISOString();
++    const b = await studentClient.booking.createSolo({
++      tutorId: tutor.tutorId,
++      availabilitySlotId: (
++        await db
++          .select()
++          .from(availabilitySlot)
++          .where(eq(availabilitySlot.tutorId, tutor.tutorId))
++          .limit(1)
++      )[0]!.id,
++      modality: "online",
++      scheduledStartAt: start,
++      scheduledEndAt: end,
++      timezone: "Asia/Jakarta",
++    });
++    bookingId = b.id;
++  });
++
++  test("override with force_cancel + release_holds transitions the booking", async () => {
++    const [before] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, bookingId));
++    expect(before!.currentState).toBe("awaiting_tutor_review");
++    expect(before!.holdAmount).toBeGreaterThan(0);
++
++    const updated = await adminClient.adminBooking.applyOverride({
++      bookingId,
++      category: "force_cancel",
++      reason: "Dibatalkan oleh admin",
++      affectedParticipants: [studentId],
++      marksAction: "release_holds",
++      userNote: "Hubungi admin",
++    });
++    expect(updated.currentState).toBe("cancelled");
++    expect(updated.previousState).toBe("awaiting_tutor_review");
++    expect(updated.overrideMeta).toMatchObject({ category: "force_cancel" });
++
++    const [after] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, bookingId));
++    expect(after!.currentState).toBe("cancelled");
++    expect(after!.previousState).toBe("awaiting_tutor_review");
++    expect(after!.holdAmount).toBe(0);
++    expect(after!.stateReason).toBe("Dibatalkan oleh admin");
++  });
++
++  test("bookingStateHistory row records the admin override", async () => {
++    const history = await db
++      .select()
++      .from(bookingStateHistory)
++      .where(
++        and(
++          eq(bookingStateHistory.bookingId, bookingId),
++          eq(bookingStateHistory.toState, "cancelled"),
++          eq(bookingStateHistory.actorType, "admin"),
++        ),
++      );
++    expect(history.length).toBe(1);
++    expect(history[0]!.fromState).toBe("awaiting_tutor_review");
++    expect(history[0]!.reason).toBe("Dibatalkan oleh admin");
++    expect(history[0]!.actorId).toBe(adminId);
++    expect(history[0]!.metadata).toMatchObject({ category: "force_cancel" });
++  });
++
++  test("student wallet hold is released and ledger entry written", async () => {
++    const [w] = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.userId, studentId));
++    expect(w!.heldBalance).toBe(0);
++    expect(w!.availableBalance).toBe(200);
++    expect(w!.totalBalance).toBe(200);
++
++    const entries = await db
++      .select()
++      .from(ledgerEntry)
++      .where(eq(ledgerEntry.bookingId, bookingId));
++    const release = entries.find((e) => e.entryType === "release");
++    expect(release).toBeDefined();
++    expect(release!.actorType).toBe("admin");
++    expect(release!.eventKey).toContain(`override.release.${bookingId}`);
++    expect(release!.afterBalance).toBe(200);
++  });
++
++  test("override cannot be applied twice to a terminal booking", async () => {
++    await expect(
++      adminClient.adminBooking.applyOverride({
++        bookingId,
++        category: "tutor_no_show",
++        reason: "Double override",
++        affectedParticipants: [studentId],
++        marksAction: "release_holds",
++      }),
++    ).rejects.toThrow();
++  });
++});
+diff --git a/packages/api/src/tests/integration/redis-real.test.ts b/packages/api/src/tests/integration/redis-real.test.ts
+new file mode 100644
+index 0000000..aeb92d9
+--- /dev/null
++++ b/packages/api/src/tests/integration/redis-real.test.ts
+@@ -0,0 +1,212 @@
++import {
++  afterAll,
++  beforeAll,
++  beforeEach,
++  describe,
++  expect,
++  test,
++} from "bun:test";
++import { CircuitBreaker } from "../../lib/circuit-breaker";
++import type { CircuitBreakerOptions } from "../../lib/circuit-breaker";
++import { IdempotencyStore } from "../../lib/idempotency";
++import { rateLimit } from "../../lib/rate-limit";
++import { COGITO_NS, initRedis } from "../../lib/redis";
++import type { RedisClient } from "../../lib/redis";
++
++const hasRedis = !!process.env.REDIS_URL;
++const maybe = hasRedis ? describe : describe.skip;
++
++const TEST_NS = "cogito:test";
++const CLEANUP_PATTERNS = [
++  `${TEST_NS}:*`,
++  `${COGITO_NS.RATE_LIMIT}:${TEST_NS}:*`,
++  `${COGITO_NS.CIRCUIT_BREAKER}:test-*`,
++];
++
++const DELETE_BY_PATTERN_LUA = `
++  local cursor = "0"
++  local keys = {}
++  repeat
++    local result = redis.call("SCAN", cursor, "MATCH", ARGV[1], "COUNT", 100)
++    cursor = result[1]
++    for _, k in ipairs(result[2]) do
++      keys[#keys + 1] = k
++    end
++  until cursor == "0"
++  if #keys > 0 then
++    return redis.call("DEL", unpack(keys))
++  end
++  return 0
++`;
++
++async function clearTestKeys(redis: RedisClient): Promise<void> {
++  await Promise.all(
++    CLEANUP_PATTERNS.map((pattern) =>
++      redis.eval(DELETE_BY_PATTERN_LUA, [], [pattern]),
++    ),
++  );
++}
++
++const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
++const uuid = () => crypto.randomUUID().replaceAll("-", "");
++const fail = () => Promise.reject(new Error("upstream down"));
++
++maybe("redis (real) — distributed primitives", () => {
++  let redis: RedisClient;
++
++  beforeAll(async () => {
++    redis = initRedis(process.env.REDIS_URL);
++    await redis.ping();
++  });
++
++  beforeEach(async () => {
++    await clearTestKeys(redis);
++  });
++
++  afterAll(async () => {
++    await clearTestKeys(redis);
++    await redis.quit();
++  });
++
++  describe("IdempotencyStore", () => {
++    test("getOrSet executes the factory once under concurrent calls", async () => {
++      const store = new IdempotencyStore({
++        redis,
++        prefix: `${TEST_NS}:idem:${uuid()}`,
++      });
++      let calls = 0;
++      const factory = async () => {
++        calls += 1;
++        await sleep(25);
++        return { id: uuid() };
++      };
++
++      const [first, second] = await Promise.all([
++        store.getOrSet("booking:1", factory),
++        store.getOrSet("booking:1", factory),
++      ]);
++
++      expect(calls).toBe(1);
++      expect(first).toEqual(second);
++    });
++
++    test("getOrSet serves the Redis-cached result across store instances", async () => {
++      const prefix = `${TEST_NS}:idem:${uuid()}`;
++      const first = new IdempotencyStore({ redis, prefix });
++      let calls = 0;
++      const factory = async () => {
++        calls += 1;
++        return { ok: true };
++      };
++
++      await first.getOrSet("key", factory);
++      expect(calls).toBe(1);
++
++      const second = new IdempotencyStore({ redis, prefix });
++      const cached = await second.getOrSet("key", factory);
++      expect(cached).toEqual({ ok: true });
++      expect(calls).toBe(1);
++    });
++  });
++
++  describe("rateLimit", () => {
++    test("allows within the threshold and blocks once exceeded", async () => {
++      const limiter = rateLimit({
++        windowMs: 60_000,
++        maxRequests: 3,
++        keyPrefix: `${TEST_NS}:rl:${uuid()}`,
++        redis,
++      });
++
++      expect((await limiter("client-1")).allowed).toBe(true);
++      expect((await limiter("client-1")).allowed).toBe(true);
++      expect((await limiter("client-1")).allowed).toBe(true);
++
++      const blocked = await limiter("client-1");
++      expect(blocked.allowed).toBe(false);
++      expect(blocked.retryAfterMs).toBeGreaterThan(0);
++    });
++
++    test("gives independent counters to different identifiers", async () => {
++      const limiter = rateLimit({
++        windowMs: 60_000,
++        maxRequests: 2,
++        keyPrefix: `${TEST_NS}:rl:${uuid()}`,
++        redis,
++      });
++
++      expect((await limiter("a")).allowed).toBe(true);
++      expect((await limiter("a")).allowed).toBe(true);
++      expect((await limiter("a")).allowed).toBe(false);
++      expect((await limiter("b")).allowed).toBe(true);
++    });
++
++    test("allows again after the window expires", async () => {
++      const limiter = rateLimit({
++        windowMs: 1_000,
++        maxRequests: 1,
++        keyPrefix: `${TEST_NS}:rl:${uuid()}`,
++        redis,
++      });
++
++      expect((await limiter("client-2")).allowed).toBe(true);
++      const blocked = await limiter("client-2");
++      expect(blocked.allowed).toBe(false);
++      expect(blocked.retryAfterMs).toBeGreaterThan(0);
++
++      await sleep(1_200);
++      expect((await limiter("client-2")).allowed).toBe(true);
++    });
++  });
++
++  describe("CircuitBreaker", () => {
++    function makeBreaker(
++      overrides: Partial<CircuitBreakerOptions> = {},
++    ): CircuitBreaker {
++      return new CircuitBreaker({
++        failureThreshold: 2,
++        resetTimeoutMs: 1_000,
++        halfOpenMaxAttempts: 1,
++        name: `test-cb-${uuid()}`,
++        redis,
++        ...overrides,
++      });
++    }
++
++    test("opens after the failure threshold and rejects while open", async () => {
++      const cb = makeBreaker();
++
++      await expect(cb.execute(fail)).rejects.toThrow("upstream down");
++      await expect(cb.execute(fail)).rejects.toThrow("upstream down");
++      expect(cb.getState()).toBe("open");
++
++      await expect(cb.execute(fail)).rejects.toThrow("Circuit breaker is open");
++    });
++
++    test("goes half-open after cooldown and recovers on success", async () => {
++      const cb = makeBreaker();
++
++      await expect(cb.execute(fail)).rejects.toThrow("upstream down");
++      await expect(cb.execute(fail)).rejects.toThrow("upstream down");
++      expect(cb.getState()).toBe("open");
++
++      await sleep(1_200);
++
++      const result = await cb.execute(() => Promise.resolve("recovered"));
++      expect(result).toBe("recovered");
++      expect(cb.getState()).toBe("closed");
++    });
++
++    test("reopens when the half-open attempt fails", async () => {
++      const cb = makeBreaker();
++
++      await expect(cb.execute(fail)).rejects.toThrow("upstream down");
++      await expect(cb.execute(fail)).rejects.toThrow("upstream down");
++
++      await sleep(1_200);
++
++      await expect(cb.execute(fail)).rejects.toThrow("upstream down");
++      expect(cb.getState()).toBe("open");
++    });
++  });
++});
+diff --git a/packages/api/src/tests/integration/refund-flow.test.ts b/packages/api/src/tests/integration/refund-flow.test.ts
+new file mode 100644
+index 0000000..4af2c8b
+--- /dev/null
++++ b/packages/api/src/tests/integration/refund-flow.test.ts
+@@ -0,0 +1,233 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq, and } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  ledgerEntry,
++  refundRecord,
++  paymentRecord,
++  auditLog,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++  return w;
++}
++
++describe("Refund flow", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const adminEmail = `admin.refund.${ts}@cogito.test`;
++  const studentEmail = `student.refund.${ts}@cogito.test`;
++  const payerEmail = `payer.refund.${ts}@cogito.test`;
++
++  let adminClient: TestClient;
++  let adminId: string;
++  let walletId: string;
++  let payerWalletId: string;
++  let payerUserId: string;
++
++  beforeAll(async () => {
++    const adminRes = await signUpAndSignIn(
++      adminEmail,
++      "Test1234!",
++      "Admin Refund",
++    );
++    const adminCtx = await createTestContext(adminRes.cookie);
++    if (!adminCtx.session?.user) throw new Error("Admin session missing");
++    adminId = adminCtx.session.user.id;
++    await setUserRole(adminId, "admin");
++    adminClient = createTestClient(await createTestContext(adminRes.cookie));
++
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student Refund",
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    if (!studentCtx.session?.user) throw new Error("Student session missing");
++    const w = await creditWallet(studentCtx.session.user.id, 200);
++    walletId = w.id;
++
++    const payerRes = await signUpAndSignIn(
++      payerEmail,
++      "Test1234!",
++      "Payer Refund",
++    );
++    const payerCtx = await createTestContext(payerRes.cookie);
++    if (!payerCtx.session?.user) throw new Error("Payer session missing");
++    payerUserId = payerCtx.session.user.id;
++    const pw = await creditWallet(payerUserId, 0);
++    payerWalletId = pw.id;
++  });
++
++  test("admin creates a compensate_credit correction → ledger + refundRecord + audit", async () => {
++    const result = await adminClient.refund.createCorrection({
++      walletId,
++      amount: 25,
++      type: "compensate_credit",
++      reason: "Sesi offline dibatalkan oleh tutor",
++    });
++    expect(result.walletId).toBe(walletId);
++    expect(result.type).toBe("compensate_credit");
++    expect(result.amount).toBe(25);
++
++    const entries = await db
++      .select()
++      .from(ledgerEntry)
++      .where(eq(ledgerEntry.walletId, walletId));
++    const correction = entries.find((e) => e.entryType === "compensate_credit");
++    expect(correction).toBeDefined();
++    expect(correction!.amount).toBe(25);
++    expect(correction!.actorType).toBe("admin");
++    expect(correction!.eventKey).toContain("correction.compensate_credit");
++    expect(correction!.beforeBalance).toBe(200);
++    expect(correction!.afterBalance).toBe(225);
++
++    const [w] = await db.select().from(wallet).where(eq(wallet.id, walletId));
++    expect(w!.totalBalance).toBe(225);
++    expect(w!.availableBalance).toBe(225);
++
++    const records = await db
++      .select()
++      .from(refundRecord)
++      .where(eq(refundRecord.walletId, walletId));
++    const record = records.find((r) => r.marks === 25);
++    expect(record).toBeDefined();
++    expect(record!.paymentId).toBeNull();
++    expect(record!.reason).toBe("Sesi offline dibatalkan oleh tutor");
++    expect(record!.actorId).toBe(adminId);
++
++    const logs = await db
++      .select()
++      .from(auditLog)
++      .where(
++        and(
++          eq(auditLog.action, "correction_compensate_credit"),
++          eq(auditLog.targetId, walletId),
++        ),
++      );
++    expect(logs.length).toBe(1);
++    expect(logs[0]!.actorId).toBe(adminId);
++    expect(logs[0]!.actorType).toBe("admin");
++    expect(logs[0]!.beforeState).toEqual({
++      totalBalance: 200,
++      heldBalance: 0,
++      availableBalance: 200,
++    });
++    expect(logs[0]!.afterState).toEqual({
++      totalBalance: 225,
++      heldBalance: 0,
++      availableBalance: 225,
++    });
++  });
++
++  test("listCorrections returns only compensating entries", async () => {
++    const result = await adminClient.refund.listCorrections({
++      walletId,
++    });
++    expect(result.items.length).toBe(1);
++    expect(result.items[0]!.entryType).toBe("compensate_credit");
++    expect(result.items[0]!.amount).toBe(25);
++  });
++
++  test("admin refunds a paid payment → payment REFUNDED + wallet credit + refundRecord", async () => {
++    const { services } = await import("@cogito-app/api/services");
++    const intent = await services.payment.createIntent(
++      payerUserId,
++      payerWalletId,
++      "starter",
++    );
++    await services.payment.confirmFromWebhook({
++      provider: "stub",
++      providerReference: intent.providerReference,
++      providerEventId: `evt_refund_${ts}`,
++      status: "PAID",
++    });
++
++    const [paid] = await db
++      .select()
++      .from(paymentRecord)
++      .where(eq(paymentRecord.id, intent.paymentId))
++      .limit(1);
++    expect(paid!.status).toBe("PAID");
++    expect(paid!.marks).toBe(50);
++
++    const result = await adminClient.adminBooking.adminRefund({
++      paymentId: intent.paymentId,
++      reason: "Pembayaran ganda",
++    });
++    expect(result.paymentId).toBe(intent.paymentId);
++    expect(result.status).toBe("refunded");
++
++    const [after] = await db
++      .select()
++      .from(paymentRecord)
++      .where(eq(paymentRecord.id, intent.paymentId))
++      .limit(1);
++    expect(after!.status).toBe("REFUNDED");
++
++    const entries = await db
++      .select()
++      .from(ledgerEntry)
++      .where(eq(ledgerEntry.walletId, payerWalletId));
++    const refundEntry = entries.find(
++      (e) => e.entryType === "compensate_credit",
++    );
++    expect(refundEntry).toBeDefined();
++    expect(refundEntry!.amount).toBe(50);
++    expect(refundEntry!.actorType).toBe("admin");
++    expect(refundEntry!.sourceReference).toBe(intent.paymentId);
++    expect(refundEntry!.reason).toContain("Pembayaran ganda");
++
++    const [w] = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.id, payerWalletId));
++    expect(w!.totalBalance).toBe(100);
++    expect(w!.availableBalance).toBe(100);
++
++    const records = await db
++      .select()
++      .from(refundRecord)
++      .where(eq(refundRecord.paymentId, intent.paymentId));
++    expect(records.length).toBe(1);
++    expect(records[0]!.marks).toBe(50);
++    expect(records[0]!.walletId).toBe(payerWalletId);
++    expect(records[0]!.actorId).toBe(adminId);
++
++    const logs = await db
++      .select()
++      .from(auditLog)
++      .where(
++        and(
++          eq(auditLog.action, "admin_refund"),
++          eq(auditLog.targetId, intent.paymentId),
++        ),
++      );
++    expect(logs.length).toBe(1);
++    expect(logs[0]!.actorId).toBe(adminId);
++    expect(logs[0]!.beforeState).toEqual({ status: "PAID" });
++    expect(logs[0]!.afterState).toEqual({
++      status: "REFUNDED",
++      reason: "Pembayaran ganda",
++    });
++  });
++});
+diff --git a/packages/api/src/tests/integration/repo-booking.test.ts b/packages/api/src/tests/integration/repo-booking.test.ts
+new file mode 100644
+index 0000000..442f1e3
+--- /dev/null
++++ b/packages/api/src/tests/integration/repo-booking.test.ts
+@@ -0,0 +1,200 @@
++import { describe, expect, test, beforeAll } from "bun:test";
++import { db } from "@cogito-app/db";
++import { booking } from "@cogito-app/db/schema";
++
++import { resetDatabase } from "../helpers/test-client";
++import { createTestUser } from "../helpers/factories";
++import { createBookingRepo } from "../../modules/booking/booking.repo";
++
++const repo = createBookingRepo(db);
++
++type BookingInsert = typeof booking.$inferInsert;
++
++function makeBooking(overrides: Partial<BookingInsert> = {}): BookingInsert {
++  const start = new Date(Date.now() + 2 * 3600_000);
++  return {
++    type: "solo",
++    modality: "online",
++    targetGroupSize: 1,
++    scheduledStartAt: start,
++    scheduledEndAt: new Date(start.getTime() + 3600_000),
++    originalMarks: 100,
++    ...overrides,
++  } as BookingInsert;
++}
++
++describe("booking repo (real DB)", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  let tutorId: string;
++  let proposerId: string;
++
++  beforeAll(async () => {
++    const tutor = await createTestUser(
++      `repo.tutor.${crypto.randomUUID()}@cogito.test`,
++      "tutor",
++    );
++    const proposer = await createTestUser(
++      `repo.proposer.${crypto.randomUUID()}@cogito.test`,
++    );
++    tutorId = tutor.id;
++    proposerId = proposer.id;
++  });
++
++  test("insertBooking + findBookingById round-trips explicit columns", async () => {
++    const start = new Date(Date.now() + 2 * 3600_000);
++    const b = await repo.insertBooking(
++      db,
++      makeBooking({
++        tutorId,
++        proposerId,
++        scheduledStartAt: start,
++        scheduledEndAt: new Date(start.getTime() + 3600_000),
++        currentState: "awaiting_tutor_review",
++        holdAmount: 50,
++        confirmedHeadcount: 0,
++      }),
++    );
++
++    const found = await repo.findBookingById(db, b.id);
++    expect(found).not.toBeNull();
++    expect(found!.id).toBe(b.id);
++    expect(found!.type).toBe("solo");
++    expect(found!.modality).toBe("online");
++    expect(found!.tutorId).toBe(tutorId);
++    expect(found!.proposerId).toBe(proposerId);
++    expect(found!.targetGroupSize).toBe(1);
++    expect(found!.originalMarks).toBe(100);
++    expect(found!.holdAmount).toBe(50);
++    expect(found!.confirmedHeadcount).toBe(0);
++    expect(found!.version).toBe(1);
++    expect(found!.currentState).toBe("awaiting_tutor_review");
++    expect(new Date(found!.scheduledStartAt).getTime()).toBe(start.getTime());
++  });
++
++  test("updateBookingVersioned rejects a stale version", async () => {
++    const b = await repo.insertBooking(
++      db,
++      makeBooking({ tutorId, proposerId }),
++    );
++    const stale = await repo.updateBookingVersioned(db, b.id, 99, {
++      currentState: "confirmed",
++    });
++    expect(stale).toBeNull();
++  });
++
++  test("updateBookingVersioned updates and bumps the version on a matching version", async () => {
++    const b = await repo.insertBooking(
++      db,
++      makeBooking({ tutorId, proposerId }),
++    );
++    const result = await repo.updateBookingVersioned(db, b.id, 1, {
++      currentState: "confirmed",
++    });
++    expect(result).not.toBeNull();
++    expect(result!.newVersion).toBe(2);
++    expect(result!.updated.version).toBe(2);
++    expect(result!.updated.currentState).toBe("confirmed");
++
++    const again = await repo.updateBookingVersioned(db, b.id, 2, {
++      currentState: "completed",
++      previousState: "confirmed",
++    });
++    expect(again).not.toBeNull();
++    expect(again!.newVersion).toBe(3);
++    expect(again!.updated.currentState).toBe("completed");
++    expect(again!.updated.previousState).toBe("confirmed");
++  });
++
++  test("findOverlappingBookings detects overlapping time ranges", async () => {
++    const base = Date.now() + 24 * 3600_000;
++    const start = new Date(base);
++    const b1 = await repo.insertBooking(
++      db,
++      makeBooking({
++        tutorId,
++        proposerId,
++        scheduledStartAt: start,
++        scheduledEndAt: new Date(base + 3600_000),
++      }),
++    );
++
++    const overlapping = await repo.findOverlappingBookings(
++      db,
++      tutorId,
++      new Date(base + 1800_000),
++      new Date(base + 5400_000),
++    );
++    expect(overlapping.some((r) => r.id === b1.id)).toBe(true);
++  });
++
++  test("findOverlappingBookings returns none for non-overlapping ranges", async () => {
++    const base = Date.now() + 24 * 3600_000;
++    const start = new Date(base);
++    await repo.insertBooking(
++      db,
++      makeBooking({
++        tutorId,
++        proposerId,
++        scheduledStartAt: start,
++        scheduledEndAt: new Date(base + 3600_000),
++      }),
++    );
++
++    const none = await repo.findOverlappingBookings(
++      db,
++      tutorId,
++      new Date(base + 7200_000),
++      new Date(base + 10800_000),
++    );
++    expect(none).toEqual([]);
++  });
++
++  test("listBookingsByProposer cursor pagination returns disjoint pages", async () => {
++    const proposer = await createTestUser(
++      `repo.proposer.page.${crypto.randomUUID()}@cogito.test`,
++    );
++    const base = Date.now() + 48 * 3600_000;
++    const times = [0, 1, 2].map((h) => new Date(base + h * 3600_000));
++    const ids: string[] = [];
++    for (const t of times) {
++      const b = await repo.insertBooking(
++        db,
++        makeBooking({
++          tutorId,
++          proposerId: proposer.id,
++          scheduledStartAt: t,
++          scheduledEndAt: new Date(t.getTime() + 3600_000),
++        }),
++      );
++      ids.push(b.id);
++    }
++
++    const page1Rows = await repo.listBookingsByProposer(proposer.id, {
++      limit: 2,
++    });
++    expect(page1Rows.length).toBe(3);
++    const page1 = page1Rows.slice(0, 2);
++    const nextCursor =
++      page1Rows.length > 2 ? page1[1]!.scheduledStartAt.toISOString() : null;
++    expect(nextCursor).not.toBeNull();
++
++    const page1Ids = page1.map((r) => r.id);
++    expect(new Set(page1Ids).size).toBe(2);
++    expect(page1Rows[0]!.id).toBe(ids[2]!);
++    expect(page1Rows[1]!.id).toBe(ids[1]!);
++
++    const page2Rows = await repo.listBookingsByProposer(proposer.id, {
++      limit: 2,
++      cursor: nextCursor!,
++    });
++    const page2 = page2Rows.slice(0, 2);
++    const page2Ids = page2.map((r) => r.id);
++    expect(page2Ids).toContain(ids[0]!);
++    for (const id of page2Ids) {
++      expect(page1Ids).not.toContain(id);
++    }
++  });
++});
+diff --git a/packages/api/src/tests/integration/repo-wallet.test.ts b/packages/api/src/tests/integration/repo-wallet.test.ts
+new file mode 100644
+index 0000000..7283236
+--- /dev/null
++++ b/packages/api/src/tests/integration/repo-wallet.test.ts
+@@ -0,0 +1,223 @@
++import { describe, expect, test, beforeAll } from "bun:test";
++import { eq, and } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import { wallet, ledgerEntry } from "@cogito-app/db/schema";
++
++import { resetDatabase } from "../helpers/test-client";
++import { createTestUser } from "../helpers/factories";
++import { createWalletRepo } from "../../modules/wallet/wallet.repo";
++import { createWalletService } from "../../modules/wallet/wallet.service";
++import { InsufficientBalanceError } from "../../modules/wallet/wallet.errors";
++
++const repo = createWalletRepo();
++const service = createWalletService(repo, db);
++
++async function seedWallet(balance: number) {
++  const u = await createTestUser(
++    `repo.wallet.${crypto.randomUUID()}@cogito.test`,
++  );
++  const w = await service.getOrCreate(u.id);
++  if (balance > 0) {
++    await service.credit(db, {
++      walletId: w.id,
++      amount: balance,
++      eventKey: `seed.credit.${crypto.randomUUID()}`,
++      sourceReference: `seed-${crypto.randomUUID()}`,
++      actorType: "system",
++    });
++  }
++  return w;
++}
++
++describe("wallet repo (real DB)", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  test("getOrCreate inserts a zeroed wallet for a new user", async () => {
++    const u = await createTestUser(
++      `repo.wallet.zero.${crypto.randomUUID()}@cogito.test`,
++    );
++    const w = await service.getOrCreate(u.id);
++    expect(w.totalBalance).toBe(0);
++    expect(w.heldBalance).toBe(0);
++    expect(w.availableBalance).toBe(0);
++  });
++
++  test("getOrCreate returns the existing wallet without inserting a duplicate", async () => {
++    const u = await createTestUser(
++      `repo.wallet.existing.${crypto.randomUUID()}@cogito.test`,
++    );
++    const first = await service.getOrCreate(u.id);
++    const second = await service.getOrCreate(u.id);
++    expect(second.id).toBe(first.id);
++    const rows = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.userId, u.id))
++      .limit(5);
++    expect(rows.length).toBe(1);
++    expect(rows[0]!.id).toBe(first.id);
++  });
++
++  test("atomicHold moves available to held and writes a hold ledger entry", async () => {
++    const w = await seedWallet(100);
++    const updated = await service.hold(db, {
++      walletId: w.id,
++      amount: 30,
++      eventKey: `hold.${crypto.randomUUID()}`,
++      sourceReference: `hold-${crypto.randomUUID()}`,
++      actorType: "system",
++    });
++    expect(updated.totalBalance).toBe(100);
++    expect(updated.heldBalance).toBe(30);
++    expect(updated.availableBalance).toBe(70);
++    expect(updated.totalBalance).toBe(
++      updated.heldBalance + updated.availableBalance,
++    );
++
++    const entries = await db
++      .select()
++      .from(ledgerEntry)
++      .where(
++        and(eq(ledgerEntry.walletId, w.id), eq(ledgerEntry.entryType, "hold")),
++      );
++    expect(entries.length).toBe(1);
++    expect(entries[0]!.amount).toBe(30);
++  });
++
++  test("atomicRelease moves held back to available and writes a release ledger entry", async () => {
++    const w = await seedWallet(100);
++    await service.hold(db, {
++      walletId: w.id,
++      amount: 40,
++      eventKey: `hold.${crypto.randomUUID()}`,
++      sourceReference: `hold-${crypto.randomUUID()}`,
++      actorType: "system",
++    });
++    const updated = await service.release(db, {
++      walletId: w.id,
++      amount: 25,
++      eventKey: `release.${crypto.randomUUID()}`,
++      sourceReference: `release-${crypto.randomUUID()}`,
++      actorType: "system",
++    });
++    expect(updated.totalBalance).toBe(100);
++    expect(updated.heldBalance).toBe(15);
++    expect(updated.availableBalance).toBe(85);
++    expect(updated.totalBalance).toBe(
++      updated.heldBalance + updated.availableBalance,
++    );
++
++    const entries = await db
++      .select()
++      .from(ledgerEntry)
++      .where(
++        and(
++          eq(ledgerEntry.walletId, w.id),
++          eq(ledgerEntry.entryType, "release"),
++        ),
++      );
++    expect(entries.length).toBe(1);
++    expect(entries[0]!.amount).toBe(25);
++  });
++
++  test("atomicDeduct reduces total and held and writes a deduct ledger entry", async () => {
++    const w = await seedWallet(100);
++    await service.hold(db, {
++      walletId: w.id,
++      amount: 40,
++      eventKey: `hold.${crypto.randomUUID()}`,
++      sourceReference: `hold-${crypto.randomUUID()}`,
++      actorType: "system",
++    });
++    const updated = await service.deduct(db, {
++      walletId: w.id,
++      amount: 30,
++      eventKey: `deduct.${crypto.randomUUID()}`,
++      sourceReference: `deduct-${crypto.randomUUID()}`,
++      actorType: "system",
++    });
++    expect(updated.totalBalance).toBe(70);
++    expect(updated.heldBalance).toBe(10);
++    expect(updated.availableBalance).toBe(60);
++    expect(updated.totalBalance).toBe(
++      updated.heldBalance + updated.availableBalance,
++    );
++
++    const entries = await db
++      .select()
++      .from(ledgerEntry)
++      .where(
++        and(
++          eq(ledgerEntry.walletId, w.id),
++          eq(ledgerEntry.entryType, "deduct"),
++        ),
++      );
++    expect(entries.length).toBe(1);
++    expect(entries[0]!.amount).toBe(30);
++  });
++
++  test("atomicHold rejects hold larger than available and leaves balance unchanged", async () => {
++    const w = await seedWallet(10);
++    const res = await repo.atomicHold(db, w.id, 100);
++    expect(res).toEqual({ success: false, reason: "insufficient_balance" });
++    const [row] = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.id, w.id))
++      .limit(1);
++    expect(row!.availableBalance).toBe(10);
++    expect(row!.heldBalance).toBe(0);
++  });
++
++  test("service.hold throws InsufficientBalanceError when available is exceeded", async () => {
++    const w = await seedWallet(50);
++    await expect(
++      service.hold(db, {
++        walletId: w.id,
++        amount: 100,
++        eventKey: `hold.${crypto.randomUUID()}`,
++        sourceReference: `hold-${crypto.randomUUID()}`,
++        actorType: "system",
++      }),
++    ).rejects.toThrow(InsufficientBalanceError);
++  });
++
++  test("deducting more than held is rejected", async () => {
++    const w = await seedWallet(100);
++    await expect(
++      service.deduct(db, {
++        walletId: w.id,
++        amount: 50,
++        eventKey: `deduct.${crypto.randomUUID()}`,
++        sourceReference: `deduct-${crypto.randomUUID()}`,
++        actorType: "system",
++      }),
++    ).rejects.toThrow(InsufficientBalanceError);
++  });
++
++  test("duplicate eventKey+sourceReference ledger insert raises a unique violation", async () => {
++    const w = await seedWallet(0);
++    const params = {
++      walletId: w.id,
++      entryType: "credit",
++      actorType: "system",
++      amount: 10,
++      eventKey: `dup.${crypto.randomUUID()}`,
++      sourceReference: "dup-src-1",
++      beforeBalance: 0,
++      afterBalance: 10,
++      balanceAfterTotal: 10,
++      balanceAfterHeld: 0,
++    } as const;
++    await repo.insertLedger(db, { ...params });
++    let error: unknown = null;
++    try {
++      await repo.insertLedger(db, { ...params });
++    } catch (err) {
++      error = err;
++    }
++    expect(error).not.toBeNull();
++  });
++});
+diff --git a/packages/api/src/tests/integration/room-flow.test.ts b/packages/api/src/tests/integration/room-flow.test.ts
+new file mode 100644
+index 0000000..c60ac53
+--- /dev/null
++++ b/packages/api/src/tests/integration/room-flow.test.ts
+@@ -0,0 +1,294 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq, and } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++  room,
++  roomBooking,
++  booking,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(
++  email: string,
++  ts: number,
++): Promise<{ tutorId: string; tutorClient: TestClient; slotId: string }> {
++  await signUpAndSignIn(email, "Test1234!", "Tutor Room");
++  const tutorCookie = await signInAndGetCookie(email, "Test1234!");
++  const tutorCtx = await createTestContext(tutorCookie ?? "");
++  if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
++  const tutorId = tutorCtx.session.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Room",
++      token: `token-room-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Room",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({
++      tutorId,
++      startDate: start,
++      endDate: end,
++      modality: "both",
++    })
++    .returning();
++
++  return {
++    tutorId,
++    tutorClient: createTestClient(await createTestContext(tutorCookie ?? "")),
++    slotId: slot!.id,
++  };
++}
++
++describe("Room assignment flow", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const adminEmail = `admin.room.${ts}@cogito.test`;
++  const student1Email = `student.room1.${ts}@cogito.test`;
++  const student2Email = `student.room2.${ts}@cogito.test`;
++  const tutor1Email = `tutor.room1.${ts}@cogito.test`;
++  const tutor2Email = `tutor.room2.${ts}@cogito.test`;
++
++  let adminClient: TestClient;
++  let student1Client: TestClient;
++  let student2Client: TestClient;
++  let tutor1Client: TestClient;
++  let tutor2Client: TestClient;
++  let tutor1Id: string;
++  let tutor2Id: string;
++  let roomId: string;
++  let booking1Id: string;
++  let booking2Id: string;
++
++  const startISO = new Date(Date.now() + 24 * 3600_000).toISOString();
++  const endISO = new Date(Date.now() + 25 * 3600_000).toISOString();
++
++  beforeAll(async () => {
++    const adminRes = await signUpAndSignIn(
++      adminEmail,
++      "Test1234!",
++      "Admin Room",
++    );
++    const adminCtx = await createTestContext(adminRes.cookie);
++    if (!adminCtx.session?.user) throw new Error("Admin session missing");
++    await setUserRole(adminCtx.session.user.id, "admin");
++    adminClient = createTestClient(await createTestContext(adminRes.cookie));
++
++    const student1Res = await signUpAndSignIn(
++      student1Email,
++      "Test1234!",
++      "Student Room1",
++    );
++    student1Client = createTestClient(
++      await createTestContext(student1Res.cookie),
++    );
++    const student1Ctx = await createTestContext(student1Res.cookie);
++    if (student1Ctx.session?.user) {
++      await creditWallet(student1Ctx.session.user.id, 200);
++    }
++
++    const student2Res = await signUpAndSignIn(
++      student2Email,
++      "Test1234!",
++      "Student Room2",
++    );
++    student2Client = createTestClient(
++      await createTestContext(student2Res.cookie),
++    );
++    const student2Ctx = await createTestContext(student2Res.cookie);
++    if (student2Ctx.session?.user) {
++      await creditWallet(student2Ctx.session.user.id, 200);
++    }
++
++    const tutor1 = await createPublishedTutor(tutor1Email, ts);
++    tutor1Id = tutor1.tutorId;
++    tutor1Client = tutor1.tutorClient;
++
++    const tutor2 = await createPublishedTutor(tutor2Email, ts + 1000);
++    tutor2Id = tutor2.tutorId;
++    tutor2Client = tutor2.tutorClient;
++  });
++
++  test("admin creates a room", async () => {
++    const r = await adminClient.room.create({
++      name: "Sesi A",
++      location: "Lantai 2",
++      capacity: 12,
++    });
++    expect(r.id).toBeDefined();
++    expect(r.isActive).toBe(true);
++    roomId = r.id;
++
++    const [row] = await db.select().from(room).where(eq(room.id, roomId));
++    expect(row).toBeDefined();
++    expect(row!.name).toBe("Sesi A");
++    expect(row!.capacity).toBe(12);
++  });
++
++  test("student1 creates an offline booking → awaiting_tutor_review", async () => {
++    const b = await student1Client.booking.createSolo({
++      tutorId: tutor1Id,
++      availabilitySlotId: (
++        await db
++          .select()
++          .from(availabilitySlot)
++          .where(eq(availabilitySlot.tutorId, tutor1Id))
++          .limit(1)
++      )[0]!.id,
++      modality: "offline",
++      scheduledStartAt: startISO,
++      scheduledEndAt: endISO,
++      timezone: "Asia/Jakarta",
++    });
++    booking1Id = b.id;
++    expect(b.currentState).toBe("awaiting_tutor_review");
++    expect(b.holdAmount).toBeGreaterThan(0);
++  });
++
++  test("tutor1 accepts offline booking → awaiting_admin_room_approval", async () => {
++    const updated = await tutor1Client.tutorActions.acceptBooking({
++      bookingId: booking1Id,
++    });
++    expect(updated.currentState).toBe("awaiting_admin_room_approval");
++  });
++
++  test("student2 creates a second offline booking with the same slot", async () => {
++    const b = await student2Client.booking.createSolo({
++      tutorId: tutor2Id,
++      availabilitySlotId: (
++        await db
++          .select()
++          .from(availabilitySlot)
++          .where(eq(availabilitySlot.tutorId, tutor2Id))
++          .limit(1)
++      )[0]!.id,
++      modality: "offline",
++      scheduledStartAt: startISO,
++      scheduledEndAt: endISO,
++      timezone: "Asia/Jakarta",
++    });
++    booking2Id = b.id;
++    expect(b.currentState).toBe("awaiting_tutor_review");
++  });
++
++  test("tutor2 accepts offline booking → awaiting_admin_room_approval", async () => {
++    const updated = await tutor2Client.tutorActions.acceptBooking({
++      bookingId: booking2Id,
++    });
++    expect(updated.currentState).toBe("awaiting_admin_room_approval");
++  });
++
++  test("admin assigns room to booking1 → roomBooking row confirmed", async () => {
++    const rb = await adminClient.room.assign({
++      bookingId: booking1Id,
++      roomId,
++      startAt: startISO,
++      endAt: endISO,
++    });
++    expect(rb.status).toBe("confirmed");
++
++    const rows = await db
++      .select()
++      .from(roomBooking)
++      .where(
++        and(
++          eq(roomBooking.roomId, roomId),
++          eq(roomBooking.bookingId, booking1Id),
++        ),
++      );
++    expect(rows.length).toBe(1);
++    expect(rows[0]!.status).toBe("confirmed");
++    expect(rows[0]!.startAt.toISOString()).toBe(startISO);
++    expect(rows[0]!.endAt.toISOString()).toBe(endISO);
++  });
++
++  test("conflicting assign to overlapping slot is rejected", async () => {
++    await expect(
++      adminClient.room.assign({
++        bookingId: booking2Id,
++        roomId,
++        startAt: startISO,
++        endAt: endISO,
++      }),
++    ).rejects.toThrow(/already booked/i);
++
++    const [booking2Row] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, booking2Id));
++    expect(booking2Row).toBeDefined();
++    expect(booking2Row!.currentState).toBe("awaiting_admin_room_approval");
++
++    const conflicting = await db
++      .select()
++      .from(roomBooking)
++      .where(eq(roomBooking.bookingId, booking2Id));
++    expect(conflicting.length).toBe(0);
++  });
++});
+diff --git a/packages/api/src/tests/integration/scheduler-expiry.test.ts b/packages/api/src/tests/integration/scheduler-expiry.test.ts
+new file mode 100644
+index 0000000..3aca822
+--- /dev/null
++++ b/packages/api/src/tests/integration/scheduler-expiry.test.ts
+@@ -0,0 +1,396 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq, and } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  booking,
++  ledgerEntry,
++  notification,
++  bookingStateHistory,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++} from "@cogito-app/db/schema";
++
++import { services } from "@cogito-app/api/services";
++import { resetDatabase } from "../helpers/test-client";
++import {
++  createTestUser,
++  createTestWallet,
++  getWalletByUserId,
++} from "../helpers/factories";
++import { createBookingRepo } from "../../modules/booking/booking.repo";
++import {
++  ACTOR_TYPE,
++  BOOKING_TYPE,
++  MODALITY,
++  ENTRY_TYPE,
++  RESPONSE_WINDOW_MS,
++} from "../../shared/constants";
++import { BOOKING_STATE } from "../../modules/booking/booking-state.types";
++
++const repo = createBookingRepo(db);
++
++async function createPublishedTutor(email: string, ts: number) {
++  const tutor = await createTestUser(email, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Expiry",
++      token: `token-expiry-${ts}`,
++      status: "accepted",
++      invitedBy: tutor.id,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutor.id,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db.insert(tutorProfile).values({
++    userId: tutor.id,
++    inviteId: invite!.id,
++    displayName: "Prof Expiry",
++    shortBio: "Bio",
++    credentialsSummary: "Creds",
++    expertise: ["Mathematics"],
++    modality: "both",
++    prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++    availabilitySummary: "Flexible",
++    onboardingStatus: "published",
++    publishedAt: new Date(),
++  });
++
++  const start = new Date(Date.now() + 24 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({
++      tutorId: tutor.id,
++      startDate: start,
++      endDate: new Date(start.getTime() + 2 * 3600_000),
++      modality: "both",
++    })
++    .returning();
++
++  return { tutorId: tutor.id, slotId: slot!.id };
++}
++
++async function seedExpiringBooking(params: {
++  tutorId: string;
++  proposerId: string;
++  state: string;
++  holdAmount: number;
++}) {
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const b = await repo.insertBooking(db, {
++    id: crypto.randomUUID(),
++    type: BOOKING_TYPE.SOLO,
++    modality: MODALITY.ONLINE,
++    tutorId: params.tutorId,
++    proposerId: params.proposerId,
++    targetGroupSize: 1,
++    minConfirmedHeadcount: 1,
++    confirmedHeadcount: 1,
++    currentState: params.state,
++    scheduledStartAt: start,
++    scheduledEndAt: new Date(start.getTime() + 3600_000),
++    timezone: "Asia/Jakarta",
++    priceSnapshot: {
++      perStudent: params.holdAmount,
++      baseline: params.holdAmount,
++      tutorShare: params.holdAmount * 0.8,
++      cogitoTake: params.holdAmount * 0.2,
++    },
++    originalMarks: params.holdAmount,
++    holdAmount: params.holdAmount,
++    deadlineAt: new Date(Date.now() - 60_000),
++  });
++
++  await repo.insertParticipant(db, {
++    bookingId: b.id,
++    userId: params.proposerId,
++    role: "proposer",
++    confirmationState: "confirmed",
++    heldAmount: params.holdAmount,
++  });
++
++  const w = await getWalletByUserId(params.proposerId);
++  if (!w) throw new Error(`wallet missing for ${params.proposerId}`);
++  await services.wallet.hold(db, {
++    walletId: w.id,
++    amount: params.holdAmount,
++    eventKey: `booking.${b.id}.hold`,
++    sourceReference: b.id,
++    bookingId: b.id,
++    actorType: ACTOR_TYPE.STUDENT,
++    reason: "Hold Marks for seeded booking",
++  });
++
++  return b;
++}
++
++describe("Scheduler: expireBookings against real Postgres", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  let tutorId: string;
++  let slotId: string;
++  let studentA: { id: string };
++  let studentB: { id: string };
++  let soloBookingId: string;
++
++  beforeAll(async () => {
++    const tutor = await createPublishedTutor(
++      `tutor.expiry.${ts}@cogito.test`,
++      ts,
++    );
++    tutorId = tutor.tutorId;
++    slotId = tutor.slotId;
++
++    studentA = await createTestUser(`student.expiry.a.${ts}@cogito.test`);
++    await createTestWallet(studentA.id, 200);
++
++    studentB = await createTestUser(`student.expiry.b.${ts}@cogito.test`);
++    await createTestWallet(studentB.id, 500);
++  });
++
++  test("seed: createSolo booking is expiry-eligible with a past deadline and a held hold", async () => {
++    const start = new Date(Date.now() + 24 * 3600_000);
++    const b = await services.booking.createSolo(studentA.id, {
++      tutorId,
++      availabilitySlotId: slotId,
++      modality: "online",
++      scheduledStartAt: start,
++      scheduledEndAt: new Date(start.getTime() + 3600_000),
++      timezone: "Asia/Jakarta",
++    });
++    soloBookingId = b.id;
++    expect(b.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
++    expect(b.holdAmount).toBeGreaterThan(0);
++
++    await db
++      .update(booking)
++      .set({ deadlineAt: new Date(Date.now() - 60_000) })
++      .where(eq(booking.id, b.id));
++
++    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
++    expect(new Date(row!.deadlineAt!).getTime()).toBeLessThan(Date.now());
++
++    const w = await getWalletByUserId(studentA.id);
++    expect(w!.heldBalance).toBeGreaterThan(0);
++
++    const holds = await db
++      .select()
++      .from(ledgerEntry)
++      .where(
++        and(
++          eq(ledgerEntry.bookingId, b.id),
++          eq(ledgerEntry.entryType, ENTRY_TYPE.HOLD),
++        ),
++      );
++    expect(holds.length).toBe(1);
++  });
++
++  test("expireBookings expires an eligible booking, releases the hold, and records state history", async () => {
++    const result = await services.booking.expireBookings();
++    expect(result.expired).toBe(1);
++    expect(result.failed).toBe(0);
++
++    const [b] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, soloBookingId));
++    expect(b!.currentState).toBe(BOOKING_STATE.EXPIRED);
++    expect(b!.holdAmount).toBe(0);
++
++    const w = await getWalletByUserId(studentA.id);
++    expect(w!.heldBalance).toBe(0);
++    expect(w!.availableBalance).toBe(200);
++
++    const releases = await db
++      .select()
++      .from(ledgerEntry)
++      .where(
++        and(
++          eq(ledgerEntry.bookingId, soloBookingId),
++          eq(ledgerEntry.entryType, ENTRY_TYPE.RELEASE),
++        ),
++      );
++    expect(releases.length).toBe(1);
++
++    const history = await db
++      .select()
++      .from(bookingStateHistory)
++      .where(
++        and(
++          eq(bookingStateHistory.bookingId, soloBookingId),
++          eq(bookingStateHistory.toState, BOOKING_STATE.EXPIRED),
++        ),
++      );
++    expect(history.length).toBe(1);
++    expect(history[0]!.actorType).toBe(ACTOR_TYPE.SYSTEM);
++    expect(history[0]!.actorId).toBeNull();
++  });
++
++  test("every eligible state transitions to its expiry target (mapping applied)", async () => {
++    const cases = [
++      {
++        state: BOOKING_STATE.SCHEDULED,
++        target: BOOKING_STATE.NO_SHOW,
++        holdAmount: 40,
++      },
++      {
++        state: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
++        target: BOOKING_STATE.EXPIRED,
++        holdAmount: 50,
++      },
++      {
++        state: BOOKING_STATE.AWAITING_RECONFIRMATION,
++        target: BOOKING_STATE.EXPIRED,
++        holdAmount: 60,
++      },
++      {
++        state: BOOKING_STATE.RESCHEDULE_PROPOSED,
++        target: BOOKING_STATE.EXPIRED,
++        holdAmount: 70,
++      },
++      {
++        state: BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
++        target: BOOKING_STATE.CANCELLED,
++        holdAmount: 80,
++      },
++    ];
++    const ids: string[] = [];
++    for (const c of cases) {
++      const b = await seedExpiringBooking({
++        tutorId,
++        proposerId: studentB.id,
++        state: c.state,
++        holdAmount: c.holdAmount,
++      });
++      ids.push(b.id);
++    }
++
++    const result = await services.booking.expireBookings();
++    expect(result.expired).toBeGreaterThanOrEqual(5);
++    expect(result.failed).toBe(0);
++
++    for (const c of cases) {
++      const id = ids[cases.indexOf(c)]!;
++      const [row] = await db.select().from(booking).where(eq(booking.id, id));
++      expect(row!.currentState).toBe(c.target);
++      expect(row!.holdAmount).toBe(0);
++    }
++
++    const wB = await getWalletByUserId(studentB.id);
++    expect(wB!.heldBalance).toBe(0);
++    expect(wB!.availableBalance).toBe(500);
++  });
++
++  test("differential: releaseExpiredHolds is a no-op once expireBookings released the holds", async () => {
++    const result = await services.booking.releaseExpiredHolds();
++    expect(result.released).toBe(0);
++
++    const wA = await getWalletByUserId(studentA.id);
++    expect(wA!.heldBalance).toBe(0);
++    expect(wA!.availableBalance).toBe(200);
++
++    const wB = await getWalletByUserId(studentB.id);
++    expect(wB!.heldBalance).toBe(0);
++    expect(wB!.availableBalance).toBe(500);
++
++    const releases = await db
++      .select()
++      .from(ledgerEntry)
++      .where(eq(ledgerEntry.entryType, ENTRY_TYPE.RELEASE));
++    expect(releases.some((r) => r.bookingId === soloBookingId)).toBe(true);
++
++    const [solo] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, soloBookingId));
++    expect(solo!.currentState).toBe(BOOKING_STATE.EXPIRED);
++  });
++
++  test("no expiry notification is emitted for the affected user (PRD gap, not part of this fix)", async () => {
++    const notifs = await db
++      .select()
++      .from(notification)
++      .where(eq(notification.bookingId, soloBookingId));
++    const expiryNotifs = notifs.filter((n) =>
++      /expir/i.test(`${n.title} ${n.body}`),
++    );
++    expect(expiryNotifs.length).toBe(0);
++  });
++});
++
++describe("Scheduler: expireBookings candidate selection", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now() + 1000;
++  let tutorId: string;
++  let studentId: string;
++
++  beforeAll(async () => {
++    const tutor = await createPublishedTutor(
++      `tutor.expiry.skip.${ts}@cogito.test`,
++      ts,
++    );
++    tutorId = tutor.tutorId;
++    const student = await createTestUser(
++      `student.expiry.skip.${ts}@cogito.test`,
++    );
++    studentId = student.id;
++    await createTestWallet(student.id, 200);
++  });
++
++  test("terminal and future-deadline bookings are not selected as candidates", async () => {
++    const start = new Date(Date.now() + 48 * 3600_000);
++    await repo.insertBooking(db, {
++      id: crypto.randomUUID(),
++      type: BOOKING_TYPE.SOLO,
++      modality: MODALITY.ONLINE,
++      tutorId,
++      proposerId: studentId,
++      targetGroupSize: 1,
++      minConfirmedHeadcount: 1,
++      confirmedHeadcount: 1,
++      currentState: BOOKING_STATE.EXPIRED,
++      scheduledStartAt: start,
++      scheduledEndAt: new Date(start.getTime() + 3600_000),
++      timezone: "Asia/Jakarta",
++      originalMarks: 42,
++      holdAmount: 42,
++      deadlineAt: new Date(Date.now() - 60_000),
++    });
++
++    await repo.insertBooking(db, {
++      id: crypto.randomUUID(),
++      type: BOOKING_TYPE.SOLO,
++      modality: MODALITY.ONLINE,
++      tutorId,
++      proposerId: studentId,
++      targetGroupSize: 1,
++      minConfirmedHeadcount: 1,
++      confirmedHeadcount: 1,
++      currentState: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
++      scheduledStartAt: start,
++      scheduledEndAt: new Date(start.getTime() + 3600_000),
++      timezone: "Asia/Jakarta",
++      originalMarks: 42,
++      holdAmount: 42,
++      deadlineAt: new Date(Date.now() + RESPONSE_WINDOW_MS),
++    });
++
++    const result = await services.booking.expireBookings();
++    expect(result.expired).toBe(0);
++    expect(result.failed).toBe(0);
++
++    const rows = await db.select().from(booking);
++    expect(rows.every((r) => r.holdAmount === 42)).toBe(true);
++  });
++});
+diff --git a/packages/api/src/tests/integration/scheduler-holds.test.ts b/packages/api/src/tests/integration/scheduler-holds.test.ts
+new file mode 100644
+index 0000000..7614c98
+--- /dev/null
++++ b/packages/api/src/tests/integration/scheduler-holds.test.ts
+@@ -0,0 +1,252 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq, and, inArray } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  booking,
++  ledgerEntry,
++  bookingParticipant,
++  bookingStateHistory,
++} from "@cogito-app/db/schema";
++
++import { services } from "@cogito-app/api/services";
++import { resetDatabase } from "../helpers/test-client";
++import {
++  createTestUser,
++  createTestWallet,
++  getWalletByUserId,
++} from "../helpers/factories";
++import { createBookingRepo } from "../../modules/booking/booking.repo";
++import {
++  ACTOR_TYPE,
++  BOOKING_TYPE,
++  MODALITY,
++  ENTRY_TYPE,
++  RESPONSE_WINDOW_MS,
++} from "../../shared/constants";
++import { BOOKING_STATE } from "../../modules/booking/booking-state.types";
++
++const repo = createBookingRepo(db);
++
++async function seedBookingWithHold(params: {
++  tutorId: string;
++  proposerId: string;
++  state: string;
++  holdAmount: number;
++  deadlineOffsetMs: number;
++}) {
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const b = await repo.insertBooking(db, {
++    id: crypto.randomUUID(),
++    type: BOOKING_TYPE.SOLO,
++    modality: MODALITY.ONLINE,
++    tutorId: params.tutorId,
++    proposerId: params.proposerId,
++    targetGroupSize: 1,
++    minConfirmedHeadcount: 1,
++    confirmedHeadcount: 1,
++    currentState: params.state,
++    scheduledStartAt: start,
++    scheduledEndAt: new Date(start.getTime() + 3600_000),
++    timezone: "Asia/Jakarta",
++    priceSnapshot: {
++      perStudent: params.holdAmount,
++      baseline: params.holdAmount,
++      tutorShare: params.holdAmount * 0.8,
++      cogitoTake: params.holdAmount * 0.2,
++    },
++    originalMarks: params.holdAmount,
++    holdAmount: params.holdAmount,
++    deadlineAt: new Date(Date.now() + params.deadlineOffsetMs),
++  });
++
++  await repo.insertParticipant(db, {
++    bookingId: b.id,
++    userId: params.proposerId,
++    role: "proposer",
++    confirmationState: "confirmed",
++    heldAmount: params.holdAmount,
++  });
++
++  const w = await getWalletByUserId(params.proposerId);
++  if (!w) throw new Error(`wallet missing for ${params.proposerId}`);
++  await services.wallet.hold(db, {
++    walletId: w.id,
++    amount: params.holdAmount,
++    eventKey: `booking.${b.id}.hold`,
++    sourceReference: b.id,
++    bookingId: b.id,
++    actorType: ACTOR_TYPE.STUDENT,
++    reason: "Hold Marks for seeded booking",
++  });
++
++  return b;
++}
++
++describe("Scheduler: releaseExpiredHolds (real DB)", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  let tutorId: string;
++  let studentId: string;
++  let expiredAId: string;
++  let expiredBId: string;
++  let futureId: string;
++
++  beforeAll(async () => {
++    const tutor = await createTestUser(
++      `tutor.holds.${ts}@cogito.test`,
++      "tutor",
++    );
++    tutorId = tutor.id;
++    const student = await createTestUser(`student.holds.${ts}@cogito.test`);
++    studentId = student.id;
++    await createTestWallet(student.id, 300);
++  });
++
++  test("seed: two overdue holdings and one in-window control", async () => {
++    const a = await seedBookingWithHold({
++      tutorId,
++      proposerId: studentId,
++      state: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
++      holdAmount: 42,
++      deadlineOffsetMs: -60_000,
++    });
++    expiredAId = a.id;
++
++    const b = await seedBookingWithHold({
++      tutorId,
++      proposerId: studentId,
++      state: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
++      holdAmount: 100,
++      deadlineOffsetMs: -2 * 60_000,
++    });
++    expiredBId = b.id;
++
++    const c = await seedBookingWithHold({
++      tutorId,
++      proposerId: studentId,
++      state: BOOKING_STATE.AWAITING_TUTOR_REVIEW,
++      holdAmount: 50,
++      deadlineOffsetMs: RESPONSE_WINDOW_MS,
++    });
++    futureId = c.id;
++
++    const w = await getWalletByUserId(studentId);
++    expect(w!.heldBalance).toBe(192);
++    expect(w!.availableBalance).toBe(108);
++  });
++
++  test("releaseExpiredHolds releases only past-deadline holds", async () => {
++    const result = await services.booking.releaseExpiredHolds();
++    expect(result.released).toBe(2);
++
++    const rows = await db
++      .select()
++      .from(booking)
++      .where(inArray(booking.id, [expiredAId, expiredBId, futureId]));
++
++    const byId = new Map(rows.map((r) => [r.id, r]));
++    expect(byId.get(expiredAId)!.holdAmount).toBe(0);
++    expect(byId.get(expiredAId)!.currentState).toBe(
++      BOOKING_STATE.AWAITING_TUTOR_REVIEW,
++    );
++    expect(byId.get(expiredBId)!.holdAmount).toBe(0);
++    expect(byId.get(futureId)!.holdAmount).toBe(50);
++    expect(byId.get(futureId)!.currentState).toBe(
++      BOOKING_STATE.AWAITING_TUTOR_REVIEW,
++    );
++  });
++
++  test("wallet shows held reduced and available restored", async () => {
++    const w = await getWalletByUserId(studentId);
++    expect(w!.heldBalance).toBe(50);
++    expect(w!.availableBalance).toBe(250);
++    expect(w!.totalBalance).toBe(300);
++  });
++
++  test("release ledger entries recorded for the released bookings", async () => {
++    const entries = await db
++      .select()
++      .from(ledgerEntry)
++      .where(
++        and(
++          inArray(ledgerEntry.bookingId, [expiredAId, expiredBId, futureId]),
++          eq(ledgerEntry.entryType, ENTRY_TYPE.RELEASE),
++        ),
++      );
++    const bookingIds = new Set(entries.map((e) => e.bookingId));
++    expect(bookingIds.has(expiredAId)).toBe(true);
++    expect(bookingIds.has(expiredBId)).toBe(true);
++    expect(bookingIds.has(futureId)).toBe(false);
++    for (const entry of entries) {
++      expect(entry.actorType).toBe(ACTOR_TYPE.SYSTEM);
++      expect(entry.amount).toBeGreaterThan(0);
++    }
++  });
++
++  test("participants of released bookings are marked withdrawn_pre_h2", async () => {
++    const participants = await db
++      .select()
++      .from(bookingParticipant)
++      .where(
++        and(
++          inArray(bookingParticipant.bookingId, [
++            expiredAId,
++            expiredBId,
++            futureId,
++          ]),
++          eq(bookingParticipant.userId, studentId),
++        ),
++      );
++    const byBooking = new Map(participants.map((p) => [p.bookingId, p]));
++    expect(byBooking.get(expiredAId)!.confirmationState).toBe(
++      "withdrawn_pre_h2",
++    );
++    expect(byBooking.get(expiredAId)!.withdrawnReason).toBe(
++      "Hold released: deadline passed",
++    );
++    expect(byBooking.get(expiredAId)!.withdrawnAt).not.toBeNull();
++    expect(byBooking.get(expiredBId)!.confirmationState).toBe(
++      "withdrawn_pre_h2",
++    );
++    expect(byBooking.get(futureId)!.confirmationState).toBe("confirmed");
++    expect(byBooking.get(futureId)!.heldAmount).toBe(50);
++  });
++
++  test("release zeroes participant.heldAmount along with the wallet hold", async () => {
++    const participants = await db
++      .select()
++      .from(bookingParticipant)
++      .where(
++        and(
++          inArray(bookingParticipant.bookingId, [expiredAId, expiredBId]),
++          eq(bookingParticipant.userId, studentId),
++        ),
++      );
++    const byBooking = new Map(participants.map((p) => [p.bookingId, p]));
++    expect(byBooking.get(expiredAId)!.heldAmount).toBe(0);
++    expect(byBooking.get(expiredBId)!.heldAmount).toBe(0);
++  });
++
++  test("booking state is left untouched (holds-only sweeper)", async () => {
++    const [a] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, expiredAId));
++    expect(a!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
++    expect(a!.stateReason).toBeNull();
++
++    const history = await db
++      .select()
++      .from(bookingStateHistory)
++      .where(eq(bookingStateHistory.bookingId, expiredAId));
++    expect(history.length).toBe(0);
++  });
++
++  test("re-running releaseExpiredHolds is a no-op", async () => {
++    const result = await services.booking.releaseExpiredHolds();
++    expect(result.released).toBe(0);
++  });
++});
+diff --git a/packages/api/src/tests/unit/db-health.test.ts b/packages/api/src/tests/unit/db-health.test.ts
+index ba44775..963a0cd 100644
+--- a/packages/api/src/tests/unit/db-health.test.ts
++++ b/packages/api/src/tests/unit/db-health.test.ts
+@@ -1,79 +1,53 @@
+-import { describe, test, expect, mock, afterEach } from "bun:test";
++import { describe, test, expect } from "bun:test";
+ import { InMemoryRedis } from "../../lib/redis";
+-
+-mock.module("@cogito-app/env/server", () => ({
+-  env: {
+-    DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+-    NODE_ENV: "test",
+-    DB_SSL_REJECT_UNAUTHORIZED: false,
+-  },
+-}));
+-
+-mock.module("postgres", () => ({
+-  default: () => ({}),
+-}));
+-
+-mock.module("drizzle-orm/postgres-js", () => ({
+-  drizzle: (_client: any, opts: any) => ({
+-    schema: opts?.schema,
+-    select: () => {},
+-  }),
+-}));
+-
+-const mockExecute = mock(async () => [{ result: 1 }]);
+-mock.module("@cogito-app/db", () => ({
+-  db: { execute: mockExecute },
+-}));
++import { healthCheck } from "../../lib/db-health";
++
++function makeDb(behavior: { ok?: boolean; ms?: number } = {}) {
++  const { ok = true, ms = 5 } = behavior;
++  return {
++    execute: async () => {
++      if (!ok) throw new Error("connection refused");
++      await new Promise((r) => setTimeout(r, ms));
++      return [{ result: 1 }];
++    },
++  };
++}
+ 
+ describe("healthCheck", () => {
+-  afterEach(() => {
+-    mock.restore();
+-  });
+-
+   test("returns ok when database responds quickly", async () => {
+-    mockExecute.mockResolvedValue([{ result: 1 }]);
+-    const { healthCheck } = await import("../../lib/db-health");
+-    const result = await healthCheck();
++    const result = await healthCheck(undefined, makeDb({ ms: 5 }));
+     expect(result.checks.database).toBe("ok");
+     expect(result.status).toBe("ok");
+     expect(result.timestamp).toBeDefined();
+   });
+ 
+   test("returns error when database throws", async () => {
+-    mockExecute.mockRejectedValue(new Error("connection refused"));
+-    const { healthCheck } = await import("../../lib/db-health");
+-    const result = await healthCheck();
++    const result = await healthCheck(undefined, makeDb({ ok: false }));
+     expect(result.checks.database).toBe("error");
+     expect(result.status).toBe("error");
+   });
+ 
+   test("includes redis status when redis client is provided", async () => {
+-    mockExecute.mockResolvedValue([{ result: 1 }]);
+     const redis = new InMemoryRedis();
+-    const { healthCheck } = await import("../../lib/db-health");
+-    const result = await healthCheck(redis);
++    const result = await healthCheck(redis, makeDb({ ms: 5 }));
+     expect(result.checks).toHaveProperty("database");
+     expect(result.checks).toHaveProperty("redis");
+     expect(result.checks.redis).toBe("ok");
+   });
+ 
+   test("reports error when redis ping fails", async () => {
+-    mockExecute.mockResolvedValue([{ result: 1 }]);
+     const failingRedis = {
+       ...new InMemoryRedis(),
+       ping: async () => {
+         throw new Error("connection refused");
+       },
+     };
+-    const { healthCheck } = await import("../../lib/db-health");
+-    const result = await healthCheck(failingRedis);
++    const result = await healthCheck(failingRedis, makeDb({ ms: 5 }));
+     expect(result.checks.redis).toBe("error");
+   });
+ 
+   test("omits redis status when no redis client provided", async () => {
+-    mockExecute.mockResolvedValue([{ result: 1 }]);
+-    const { healthCheck } = await import("../../lib/db-health");
+-    const result = await healthCheck();
++    const result = await healthCheck(undefined, makeDb({ ms: 5 }));
+     expect(result.checks).not.toHaveProperty("redis");
+   });
+ });
+diff --git a/packages/api/src/tests/unit/db.test.ts b/packages/api/src/tests/unit/db.test.ts
+deleted file mode 100644
+index ac99a02..0000000
+--- a/packages/api/src/tests/unit/db.test.ts
++++ /dev/null
+@@ -1,43 +0,0 @@
+-import { describe, test, expect, mock } from "bun:test";
+-
+-mock.module("@cogito-app/env/server", () => ({
+-  env: {
+-    DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+-    NODE_ENV: "test",
+-    DB_SSL_REJECT_UNAUTHORIZED: false,
+-  },
+-}));
+-
+-function mockPostgres() {
+-  return {};
+-}
+-
+-mock.module("postgres", () => ({
+-  default: mockPostgres,
+-}));
+-
+-mock.module("drizzle-orm/postgres-js", () => ({
+-  drizzle: (_client: any, opts: any) => ({
+-    schema: opts?.schema,
+-    select: () => {},
+-  }),
+-}));
+-
+-describe("db", () => {
+-  test("exports createDb function", async () => {
+-    const { createDb } = await import("@cogito-app/db");
+-    expect(typeof createDb).toBe("function");
+-  });
+-
+-  test("createDb returns a drizzle instance", async () => {
+-    const { createDb } = await import("@cogito-app/db");
+-    const db = createDb();
+-    expect(db).toBeDefined();
+-    expect(typeof db.select).toBe("function");
+-  });
+-
+-  test("exports db singleton", async () => {
+-    const mod = await import("@cogito-app/db");
+-    expect(mod.db).toBeDefined();
+-  });
+-});
+diff --git a/packages/api/src/tests/unit/google-meeting.provider.test.ts b/packages/api/src/tests/unit/google-meeting.provider.test.ts
+index ec00775..4491056 100644
+--- a/packages/api/src/tests/unit/google-meeting.provider.test.ts
++++ b/packages/api/src/tests/unit/google-meeting.provider.test.ts
+@@ -60,31 +60,20 @@ mock.module("googleapis", () => ({
+       },
+     },
+     calendar: () => ({
+       events: {
+         insert: mockCalendarEventsInsert,
+       },
+     }),
+   },
+ }));
+ 
+-mock.module("@cogito-app/db/schema", () => ({
+-  meetingEvent: {
+-    bookingId: "bookingId",
+-    provider: "provider",
+-    status: "status",
+-    meetingUrl: "meetingUrl",
+-    externalEventId: "externalEventId",
+-    errorReason: "errorReason",
+-  },
+-}));
+-
+ import {
+   createGoogleMeetingProvider,
+   createGoogleMeetingProviderWithFallback,
+ } from "../../modules/meeting/google-meeting.provider";
+ 
+ describe("createGoogleMeetingProvider", () => {
+   const config = {
+     clientEmail: "test@example.com",
+     privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+     calendarId: "primary",

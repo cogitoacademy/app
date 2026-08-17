@@ -1,0 +1,2929 @@
+# Review package: feat/prd-gaps-booking..HEAD
+
+## Commits
+f061ba0 style: hoist pure helpers to module scope
+d5792d8 style: apply oxfmt to phase3 gap files
+f15f4a7 feat(admin-booking): before/after override preview (G10)
+c4ce47a feat(admin): admin wallet and ledger views (G9)
+7705e8c feat(admin-booking): urgency-sorted override queue with SLA + filters (G8)
+
+## Files changed
+ .../modules/admin-booking/admin-booking.handler.ts |  22 ++
+ .../modules/admin-booking/admin-booking.repo.ts    |  89 ++++-
+ .../modules/admin-booking/admin-booking.router.ts  |  12 +
+ .../modules/admin-booking/admin-booking.service.ts | 371 +++++++++++++++------
+ .../modules/admin-booking/admin-booking.types.ts   |   3 +
+ packages/api/src/modules/admin-booking/index.ts    |   7 +
+ packages/api/src/modules/admin/admin.errors.ts     |  24 +-
+ packages/api/src/modules/admin/admin.handler.ts    |  34 +-
+ packages/api/src/modules/admin/admin.router.ts     |  30 +-
+ packages/api/src/modules/admin/admin.service.ts    |  72 +++-
+ packages/api/src/modules/admin/admin.types.ts      |  24 ++
+ packages/api/src/modules/admin/index.ts            |  21 +-
+ packages/api/src/modules/wallet/wallet.repo.ts     |  23 +-
+ packages/api/src/modules/wallet/wallet.service.ts  |  17 +-
+ packages/api/src/services.ts                       |   7 +-
+ .../tests/integration/admin-override-queue.test.ts | 181 ++++++++++
+ .../api/src/tests/integration/admin-wallet.test.ts | 148 ++++++++
+ .../src/tests/integration/override-preview.test.ts | 259 ++++++++++++++
+ .../src/tests/unit/admin-booking.service.test.ts   | 295 +++++++++++++++-
+ packages/api/src/tests/unit/admin.handler.test.ts  |  16 +
+ packages/api/src/tests/unit/admin.service.test.ts  | 165 ++++++++-
+ 21 files changed, 1693 insertions(+), 127 deletions(-)
+
+## Diff
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.handler.ts b/packages/api/src/modules/admin-booking/admin-booking.handler.ts
+index ca70f33..3ebe9c6 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.handler.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.handler.ts
+@@ -36,20 +36,42 @@ export function createAdminBookingHandler(
+             reason: input.reason,
+             affectedParticipants: input.affectedParticipants,
+             marksAction: input.marksAction,
+             userNote: input.userNote,
+             internalNote: input.internalNote,
+           }),
+         mapAdminBookingError,
+       );
+     },
+ 
++    previewOverride: async ({
++      context: _context,
++      input,
++    }: {
++      context: Context;
++      input: ApplyOverrideInput;
++    }) => {
++      return withDomainMap(
++        () =>
++          adminBookingService.previewOverride({
++            bookingId: input.bookingId,
++            category: input.category,
++            reason: input.reason,
++            affectedParticipants: input.affectedParticipants,
++            marksAction: input.marksAction,
++            userNote: input.userNote,
++            internalNote: input.internalNote,
++          }),
++        mapAdminBookingError,
++      );
++    },
++
+     listBookings: async ({
+       context: _context,
+       input,
+     }: {
+       context: Context;
+       input: ListOverridesInput;
+     }) => {
+       return withDomainMap(
+         () => adminBookingService.listBookings(input),
+         mapAdminBookingError,
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.repo.ts b/packages/api/src/modules/admin-booking/admin-booking.repo.ts
+index 4419de7..cdff8da 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.repo.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.repo.ts
+@@ -1,49 +1,134 @@
+ import { eq, asc, inArray, gt, and, sql } from "drizzle-orm";
+ import {
+   booking,
+   bookingStateHistory,
+   bookingParticipant,
+   paymentRecord,
+ } from "@cogito-app/db/schema";
++import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
++import { RESPONSE_WINDOW_MS } from "../../shared/constants";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ export type AdminBookingRepo = ReturnType<typeof createAdminBookingRepo>;
+ 
++export type UrgencyLevel = "high" | "medium" | "low";
++
++/**
++ * Urgency bands used to sort the admin override queue.
++ * Band 0 (pending action) first, band 1 (scheduled/confirmed) second,
++ * band 2 (terminal) last. Within a band, bookings are ordered by
++ * scheduledStartAt ascending (soonest first).
++ */
++export const URGENCY_BANDS: Record<UrgencyLevel, readonly string[]> = {
++  high: [
++    BOOKING_STATE.AWAITING_TUTOR_REVIEW,
++    BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
++    BOOKING_STATE.AWAITING_RECONFIRMATION,
++    BOOKING_STATE.RESCHEDULE_PROPOSED,
++    BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
++  ],
++  medium: [BOOKING_STATE.CONFIRMED, BOOKING_STATE.SCHEDULED],
++  low: [...TERMINAL_STATES],
++};
++
++/**
++ * State -> urgency rank lookup used to build the composite queue cursor.
++ * Any state not listed here falls back to rank 2 (terminal).
++ * Keep in sync with URGENCY_RANK_EXPR.
++ */
++export const URGENCY_RANK: Record<string, number> = {
++  [BOOKING_STATE.AWAITING_TUTOR_REVIEW]: 0,
++  [BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION]: 0,
++  [BOOKING_STATE.AWAITING_RECONFIRMATION]: 0,
++  [BOOKING_STATE.RESCHEDULE_PROPOSED]: 0,
++  [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: 0,
++  [BOOKING_STATE.CONFIRMED]: 1,
++  [BOOKING_STATE.SCHEDULED]: 1,
++};
++
++const URGENCY_RANK_EXPR = sql`CASE ${booking.currentState}
++  WHEN 'awaiting_tutor_review' THEN 0
++  WHEN 'awaiting_participant_confirmation' THEN 0
++  WHEN 'awaiting_reconfirmation' THEN 0
++  WHEN 'reschedule_proposed' THEN 0
++  WHEN 'awaiting_admin_room_approval' THEN 0
++  WHEN 'confirmed' THEN 1
++  WHEN 'scheduled' THEN 1
++  ELSE 2
++END`;
++
++export interface ListOverridesQueryOptions {
++  /** Matches booking.override_meta.category. */
++  category?: string;
++  urgency?: UrgencyLevel;
++  /** True = override record older than the 12h response window. */
++  escalated?: boolean;
++}
++
+ export async function findBookingById(conn: DbOrTx, bookingId: string) {
+   const [row] = await conn
+     .select()
+     .from(booking)
+     .where(eq(booking.id, bookingId))
+     .limit(1);
+   return row ?? null;
+ }
+ 
+ export async function listBookingsByState(
+   conn: DbOrTx,
+   states: string[],
+   limit: number,
+   cursor?: string,
++  opts?: ListOverridesQueryOptions,
+ ) {
+   const conditions = [];
+   if (states.length > 0) {
+     conditions.push(inArray(booking.currentState, states));
+   }
+   if (cursor) {
+-    conditions.push(gt(booking.id, cursor));
++    // Composite cursor: "<rank>~<scheduledStartAt ISO>~<id>". Falls back to a
++    // legacy plain-id cursor (id > cursor) for backward compatibility.
++    const parts = cursor.split("~");
++    if (parts.length === 3) {
++      const rank = Number(parts[0]);
++      const start = new Date(parts[1]!);
++      if (Number.isInteger(rank) && !Number.isNaN(start.getTime())) {
++        conditions.push(
++          sql`(${URGENCY_RANK_EXPR}, ${booking.scheduledStartAt}, ${booking.id}) > (${rank}, ${start}, ${parts[2]})`,
++        );
++      } else {
++        conditions.push(gt(booking.id, cursor));
++      }
++    } else {
++      conditions.push(gt(booking.id, cursor));
++    }
++  }
++  if (opts?.category) {
++    conditions.push(
++      sql`${booking.overrideMeta}->>'category' = ${opts.category}`,
++    );
++  }
++  if (opts?.urgency) {
++    conditions.push(inArray(booking.currentState, URGENCY_BANDS[opts.urgency]));
++  }
++  if (opts?.escalated === true) {
++    conditions.push(
++      sql`${booking.overrideMeta}->>'overriddenAt' < ${new Date(Date.now() - RESPONSE_WINDOW_MS).toISOString()}`,
++    );
+   }
+ 
+   return conn
+     .select()
+     .from(booking)
+     .where(conditions.length > 0 ? and(...conditions) : undefined)
+-    .orderBy(asc(booking.id))
++    .orderBy(URGENCY_RANK_EXPR, asc(booking.scheduledStartAt), asc(booking.id))
+     .limit(limit + 1);
+ }
+ 
+ export async function getStateHistory(conn: DbOrTx, bookingId: string) {
+   return conn
+     .select()
+     .from(bookingStateHistory)
+     .where(eq(bookingStateHistory.bookingId, bookingId))
+     .orderBy(asc(bookingStateHistory.createdAt));
+ }
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.router.ts b/packages/api/src/modules/admin-booking/admin-booking.router.ts
+index d398d38..9ee0aeb 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.router.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.router.ts
+@@ -14,20 +14,32 @@ export function createAdminBookingRouter(handler: AdminBookingHandler) {
+         method: "POST",
+         path: "/admin/booking/override",
+         tags: ["Admin Booking"],
+         summary: "Apply admin override to a booking",
+         description:
+           "Override a booking state with an admin action, optionally adjusting held Marks",
+       })
+       .input(applyOverrideInput)
+       .handler(handler.applyOverride),
+ 
++    previewOverride: adminProcedure
++      .route({
++        method: "POST",
++        path: "/admin/booking/override/preview",
++        tags: ["Admin Booking"],
++        summary: "Preview an admin override before applying",
++        description:
++          "Returns the projected booking state and wallet impact without persisting anything",
++      })
++      .input(applyOverrideInput)
++      .handler(handler.previewOverride),
++
+     listBookings: adminProcedure
+       .route({
+         method: "POST",
+         path: "/admin/booking/list",
+         tags: ["Admin Booking"],
+         summary: "List bookings for admin review",
+         description: "Returns paginated booking list sorted by urgency",
+       })
+       .input(listOverridesInput)
+       .handler(handler.listBookings),
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.service.ts b/packages/api/src/modules/admin-booking/admin-booking.service.ts
+index 720bbf5..597c40f 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.service.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.service.ts
+@@ -1,28 +1,34 @@
+ import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
+ import {
+   BookingNotFoundError,
+   InvalidRefundStateError,
+   TerminalStateOverrideError,
+ } from "./admin-booking.errors";
+ import {
+   ACTOR_TYPE,
+   DEFAULT_PAGE_LIMIT,
+   MAX_PAGE_LIMIT,
++  NOTIFICATION_CATEGORY,
++  NOTIFICATION_SEVERITY,
+   PAYMENT_STATUS,
++  RESPONSE_WINDOW_MS,
+ } from "../../shared/constants";
+ import type { DbType } from "../../lib/db";
++import type { DbOrTx } from "../../lib/tx";
+ import type { AdminBookingRepo } from "./admin-booking.repo";
++import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
+ import type {
+   AdminBookingAuditPort,
+   AdminBookingWalletPort,
+   AdminBookingRefundPort,
++  AdminBookingNotificationPort,
+ } from "./index";
+ 
+ export const OVERRIDE_CATEGORIES = [
+   "tutor_no_show",
+   "medical_emergency",
+   "technical_failure",
+   "admin_correction",
+   "student_no_show",
+   "force_cancel",
+ ] as const;
+@@ -39,193 +45,352 @@ export type MarksAction = (typeof MARKS_ACTIONS)[number];
+ 
+ const CATEGORY_STATE_MAP: Record<OverrideCategory, string> = {
+   tutor_no_show: BOOKING_STATE.NO_SHOW,
+   medical_emergency: BOOKING_STATE.CANCELLED,
+   technical_failure: BOOKING_STATE.CANCELLED,
+   admin_correction: BOOKING_STATE.CANCELLED,
+   student_no_show: BOOKING_STATE.NO_SHOW,
+   force_cancel: BOOKING_STATE.CANCELLED,
+ };
+ 
++export interface WalletBalances {
++  totalBalance: number;
++  heldBalance: number;
++  availableBalance: number;
++}
++
++export interface PerParticipantImpact {
++  userId: string;
++  participantId: string;
++  heldAmount: number;
++  walletId: string;
++  action: MarksAction;
++  before: WalletBalances;
++  after: WalletBalances;
++}
++
++export interface OverrideInput {
++  bookingId: string;
++  category: OverrideCategory;
++  reason: string;
++  affectedParticipants?: string[];
++  marksAction?: MarksAction;
++  userNote?: string;
++  internalNote?: string;
++}
++
+ export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
+ 
++/**
++ * A booking is escalated when it carries an active override record whose
++ * overriddenAt timestamp is older than the 12h SLA response window. Computed
++ * from booking.override_meta (no column added).
++ */
++function computeEscalated(overrideMeta: unknown): boolean {
++  if (typeof overrideMeta !== "object" || overrideMeta === null) return false;
++  const overriddenAt = (overrideMeta as Record<string, unknown>).overriddenAt;
++  if (typeof overriddenAt !== "string") return false;
++  const appliedAt = Date.parse(overriddenAt);
++  if (Number.isNaN(appliedAt)) return false;
++  return Date.now() - appliedAt > RESPONSE_WINDOW_MS;
++}
++
++function toOverrideQueueItem<T extends { overrideMeta: unknown }>(
++  row: T,
++): T & { escalated: boolean } {
++  return { ...row, escalated: computeEscalated(row.overrideMeta) };
++}
++
++/** Composite keyset cursor: rank, scheduledStartAt, id. */
++function toOverrideCursor(row: {
++  id: string;
++  currentState: string;
++  scheduledStartAt: Date;
++}): string {
++  const rank = URGENCY_RANK[row.currentState] ?? 2;
++  return `${rank}~${row.scheduledStartAt.toISOString()}~${row.id}`;
++}
++
++function projectWalletAfter(
++  w: WalletBalances,
++  action: MarksAction,
++  amount: number,
++): WalletBalances {
++  if (action === "release_holds") {
++    return {
++      totalBalance: w.totalBalance,
++      heldBalance: Math.max(w.heldBalance - amount, 0),
++      availableBalance: w.availableBalance + amount,
++    };
++  }
++  if (action === "compensate_credit") {
++    return {
++      totalBalance: w.totalBalance + amount,
++      heldBalance: w.heldBalance,
++      availableBalance: w.availableBalance + amount,
++    };
++  }
++  return {
++    totalBalance: w.totalBalance - amount,
++    heldBalance: w.heldBalance,
++    availableBalance: w.availableBalance - amount,
++  };
++}
++
+ export function createAdminBookingService(deps: {
+   db: DbType;
+   repo: AdminBookingRepo;
+   auditPort: AdminBookingAuditPort;
+   wallet: AdminBookingWalletPort;
+   refund: AdminBookingRefundPort;
++  notification?: AdminBookingNotificationPort;
+ }) {
+-  const { db, repo, auditPort, wallet, refund } = deps;
+-
+-  async function applyOverride(
+-    adminId: string,
+-    input: {
+-      bookingId: string;
+-      category: OverrideCategory;
+-      reason: string;
+-      affectedParticipants?: string[];
+-      marksAction?: MarksAction;
+-      userNote?: string;
+-      internalNote?: string;
+-    },
++  const { db, repo, auditPort, wallet, refund, notification } = deps;
++
++  /**
++   * Pure planning for an override: computes the projected target state and per
++   * participant wallet impact WITHOUT writing anything. Shared by applyOverride
++   * (which executes the plan) and previewOverride (which only reports it).
++   */
++  async function planOverride(
++    conn: DbOrTx,
++    bookingRow: { id: string; currentState: string; holdAmount: number },
++    input: OverrideInput,
+   ) {
+     const newState = CATEGORY_STATE_MAP[input.category];
+ 
++    if (
++      (TERMINAL_STATES as readonly string[]).includes(bookingRow.currentState)
++    ) {
++      throw new TerminalStateOverrideError(
++        input.bookingId,
++        bookingRow.currentState,
++      );
++    }
++
+     const overrideMeta: Record<string, unknown> = {
+       category: input.category,
+       reason: input.reason,
+       marksAction: input.marksAction,
+       affectedParticipants: input.affectedParticipants,
+       userNote: input.userNote,
+       internalNote: input.internalNote,
+       overriddenAt: new Date().toISOString(),
+     };
+ 
++    const participants = await repo.findParticipantsByBookingId(
++      conn,
++      input.bookingId,
++    );
++    const affectedParts =
++      input.affectedParticipants && input.affectedParticipants.length > 0
++        ? participants.filter((p) =>
++            input.affectedParticipants!.includes(p.userId),
++          )
++        : [];
++
++    const perParticipantImpact: PerParticipantImpact[] = [];
++    if (input.marksAction && bookingRow.holdAmount > 0) {
++      for (const participant of affectedParts) {
++        if (participant.heldAmount <= 0) continue;
++        // eslint-disable-next-line no-await-in-loop
++        const participantWallet = await wallet.getByUserId(
++          conn,
++          participant.userId,
++        );
++        if (!participantWallet) continue;
++        perParticipantImpact.push({
++          userId: participant.userId,
++          participantId: participant.id,
++          heldAmount: participant.heldAmount,
++          walletId: participantWallet.id,
++          action: input.marksAction,
++          before: {
++            totalBalance: participantWallet.totalBalance,
++            heldBalance: participantWallet.heldBalance,
++            availableBalance: participantWallet.availableBalance,
++          },
++          after: projectWalletAfter(
++            participantWallet,
++            input.marksAction,
++            participant.heldAmount,
++          ),
++        });
++      }
++    }
++
++    return {
++      newState,
++      affectedParticipantIds: affectedParts.map((p) => p.userId),
++      projectedMarksAction: input.marksAction ?? null,
++      perParticipantImpact,
++      overrideMeta,
++    };
++  }
++
++  async function applyOverride(adminId: string, input: OverrideInput) {
+     const result = await db.transaction(async (tx) => {
+       const bookingRow = await repo.findBookingById(tx, input.bookingId);
+       if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
+ 
+-      if (
+-        (TERMINAL_STATES as readonly string[]).includes(bookingRow.currentState)
+-      ) {
+-        throw new TerminalStateOverrideError(
+-          input.bookingId,
+-          bookingRow.currentState,
+-        );
+-      }
++      const plan = await planOverride(tx, bookingRow, input);
+ 
+       const updateResult = await repo.updateBookingWithOverride(
+         tx,
+         input.bookingId,
+-        newState,
++        plan.newState,
+         input.reason,
+-        overrideMeta,
++        plan.overrideMeta,
+       );
+       if (!updateResult) throw new BookingNotFoundError(input.bookingId);
+ 
+       await repo.insertStateHistoryEntry(tx, {
+         bookingId: input.bookingId,
+         fromState: updateResult.previousState,
+-        toState: newState,
++        toState: plan.newState,
+         reason: input.reason,
+         actorId: adminId,
+         actorType: ACTOR_TYPE.ADMIN,
+-        metadata: overrideMeta,
++        metadata: plan.overrideMeta,
+       });
+ 
+-      if (
+-        input.marksAction &&
+-        bookingRow.holdAmount > 0 &&
+-        input.affectedParticipants &&
+-        input.affectedParticipants.length > 0
+-      ) {
+-        const participants = await repo.findParticipantsByBookingId(
+-          tx,
+-          input.bookingId,
+-        );
+-        const affectedParts = participants.filter((p) =>
+-          input.affectedParticipants!.includes(p.userId),
+-        );
+-
+-        let totalReleased = 0;
++      let totalReleased = 0;
+ 
+-        for (const participant of affectedParts) {
++      for (const impact of plan.perParticipantImpact) {
++        if (impact.action === "release_holds") {
+           // eslint-disable-next-line no-await-in-loop
+-          const participantWallet = await wallet.getByUserId(
+-            tx,
+-            participant.userId,
+-          );
+-          if (!participantWallet) continue;
+-
+-          if (
+-            input.marksAction === "release_holds" &&
+-            participant.heldAmount > 0
+-          ) {
+-            // eslint-disable-next-line no-await-in-loop
+-            await wallet.release(tx, {
+-              walletId: participantWallet.id,
+-              amount: participant.heldAmount,
+-              eventKey: `override.release.${input.bookingId}.${participant.id}`,
+-              actorType: ACTOR_TYPE.ADMIN,
+-              reason: `Admin override: ${input.reason}`,
+-              bookingId: input.bookingId,
+-            });
+-            totalReleased += participant.heldAmount;
+-          } else if (
+-            input.marksAction === "compensate_credit" &&
+-            participant.heldAmount > 0
+-          ) {
+-            // eslint-disable-next-line no-await-in-loop
+-            await wallet.compensate(tx, {
+-              walletId: participantWallet.id,
+-              amount: participant.heldAmount,
+-              eventKey: `override.compensate_credit.${input.bookingId}.${participant.id}`,
+-              actorType: ACTOR_TYPE.ADMIN,
+-              reason: `Admin override credit: ${input.reason}`,
+-              type: "compensate_credit",
+-              bookingId: input.bookingId,
+-            });
+-            totalReleased += participant.heldAmount;
+-          } else if (
+-            input.marksAction === "compensate_deduct" &&
+-            participant.heldAmount > 0
+-          ) {
+-            // eslint-disable-next-line no-await-in-loop
+-            await wallet.compensate(tx, {
+-              walletId: participantWallet.id,
+-              amount: participant.heldAmount,
+-              eventKey: `override.compensate_deduct.${input.bookingId}.${participant.id}`,
+-              actorType: ACTOR_TYPE.ADMIN,
+-              reason: `Admin override deduct: ${input.reason}`,
+-              type: "compensate_deduct",
+-              bookingId: input.bookingId,
+-            });
+-            totalReleased += participant.heldAmount;
+-          }
++          await wallet.release(tx, {
++            walletId: impact.walletId,
++            amount: impact.heldAmount,
++            eventKey: `override.release.${input.bookingId}.${impact.participantId}`,
++            actorType: ACTOR_TYPE.ADMIN,
++            reason: `Admin override: ${input.reason}`,
++            bookingId: input.bookingId,
++          });
++          totalReleased += impact.heldAmount;
++        } else if (impact.action === "compensate_credit") {
++          // eslint-disable-next-line no-await-in-loop
++          await wallet.compensate(tx, {
++            walletId: impact.walletId,
++            amount: impact.heldAmount,
++            eventKey: `override.compensate_credit.${input.bookingId}.${impact.participantId}`,
++            actorType: ACTOR_TYPE.ADMIN,
++            reason: `Admin override credit: ${input.reason}`,
++            type: "compensate_credit",
++            bookingId: input.bookingId,
++          });
++          totalReleased += impact.heldAmount;
++        } else if (impact.action === "compensate_deduct") {
++          // eslint-disable-next-line no-await-in-loop
++          await wallet.compensate(tx, {
++            walletId: impact.walletId,
++            amount: impact.heldAmount,
++            eventKey: `override.compensate_deduct.${input.bookingId}.${impact.participantId}`,
++            actorType: ACTOR_TYPE.ADMIN,
++            reason: `Admin override deduct: ${input.reason}`,
++            type: "compensate_deduct",
++            bookingId: input.bookingId,
++          });
++          totalReleased += impact.heldAmount;
+         }
++      }
+ 
+-        if (totalReleased > 0) {
+-          await repo.updateBookingHoldAmount(tx, input.bookingId, 0);
++      if (totalReleased > 0) {
++        await repo.updateBookingHoldAmount(tx, input.bookingId, 0);
++      }
++
++      if (notification) {
++        for (const userId of plan.affectedParticipantIds) {
++          // eslint-disable-next-line no-await-in-loop
++          await notification.writeBestEffort({
++            db: tx,
++            userId,
++            bookingId: input.bookingId,
++            category: NOTIFICATION_CATEGORY.OVERRIDE,
++            severity: NOTIFICATION_SEVERITY.ACTION,
++            title: "Your booking was updated by an admin",
++            body: `Your booking was updated (${input.category})${
++              input.userNote ? `: ${input.userNote}` : ""
++            }.`,
++            eventKey: `override.applied.${input.bookingId}.${userId}`,
++          });
+         }
+       }
+ 
+       await auditPort.record({
+         db: tx,
+         actorId: adminId,
+         actorType: ACTOR_TYPE.ADMIN,
+         action: "booking_override",
+         targetId: input.bookingId,
+         targetType: "booking",
+         beforeState: { currentState: updateResult.previousState },
+-        afterState: { currentState: newState, overrideMeta },
++        afterState: {
++          currentState: plan.newState,
++          overrideMeta: plan.overrideMeta,
++        },
+       });
+ 
+       return updateResult.updated;
+     });
+ 
+     return result;
+   }
+ 
++  /** Returns the projected override outcome without persisting anything. */
++  async function previewOverride(input: OverrideInput) {
++    const bookingRow = await repo.findBookingById(db, input.bookingId);
++    if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
++
++    const plan = await planOverride(db, bookingRow, input);
++
++    return {
++      bookingId: input.bookingId,
++      currentState: bookingRow.currentState,
++      projectedState: plan.newState,
++      affectedParticipants: plan.affectedParticipantIds,
++      marksAction: plan.projectedMarksAction,
++      perParticipantImpact: plan.perParticipantImpact,
++    };
++  }
++
+   async function listBookings(opts?: {
+     bookingId?: string;
+     limit?: number;
+     cursor?: string;
++    category?: OverrideCategory;
++    urgency?: UrgencyLevel;
++    escalated?: boolean;
+   }) {
+     if (opts?.bookingId) {
+       const bookingRow = await repo.findBookingById(db, opts.bookingId);
+-      return { items: bookingRow ? [bookingRow] : [], nextCursor: null };
++      return {
++        items: bookingRow ? [toOverrideQueueItem(bookingRow)] : [],
++        nextCursor: null,
++      };
+     }
+     const limit = Math.min(opts?.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+-    const rows = await repo.listBookingsByState(db, [], limit, opts?.cursor);
+-    const items = rows.slice(0, limit);
+-    const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
++    const filters = {
++      category: opts?.category,
++      urgency: opts?.urgency,
++      escalated: opts?.escalated,
++    };
++    const hasFilters =
++      filters.category !== undefined ||
++      filters.urgency !== undefined ||
++      filters.escalated !== undefined;
++    const rows = hasFilters
++      ? await repo.listBookingsByState(db, [], limit, opts?.cursor, filters)
++      : await repo.listBookingsByState(db, [], limit, opts?.cursor);
++    const items = rows.slice(0, limit).map(toOverrideQueueItem);
++    const nextCursor =
++      rows.length > limit ? toOverrideCursor(items[items.length - 1]!) : null;
+     return { items, nextCursor };
+   }
+ 
+   async function getBookingStateHistory(bookingId: string) {
+     const bookingRow = await repo.findBookingById(db, bookingId);
+     if (!bookingRow) throw new BookingNotFoundError(bookingId);
+ 
+     return repo.getStateHistory(db, bookingId);
+   }
+ 
+@@ -280,12 +445,18 @@ export function createAdminBookingService(deps: {
+         targetId: input.paymentId,
+         targetType: "payment_record",
+         beforeState: { status: payment.status },
+         afterState: { status: "REFUNDED", reason: input.reason },
+       });
+ 
+       return { paymentId: input.paymentId, status: "refunded" };
+     });
+   }
+ 
+-  return { applyOverride, listBookings, getBookingStateHistory, adminRefund };
++  return {
++    applyOverride,
++    previewOverride,
++    listBookings,
++    getBookingStateHistory,
++    adminRefund,
++  };
+ }
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.types.ts b/packages/api/src/modules/admin-booking/admin-booking.types.ts
+index 406f517..a645ecc 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.types.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.types.ts
+@@ -8,20 +8,23 @@ export const applyOverrideInput = z.object({
+   affectedParticipants: z.array(z.string().max(100)).max(6).optional(),
+   marksAction: z.enum(MARKS_ACTIONS).optional(),
+   userNote: z.string().max(2000).optional(),
+   internalNote: z.string().max(2000).optional(),
+ });
+ 
+ export const listOverridesInput = z.object({
+   bookingId: z.string().max(100).optional(),
+   limit: z.number().min(1).max(100).optional(),
+   cursor: z.string().max(100).optional(),
++  category: z.enum(OVERRIDE_CATEGORIES).optional(),
++  urgency: z.enum(["high", "medium", "low"]).optional(),
++  escalated: z.boolean().optional(),
+ });
+ 
+ export const getBookingStateHistoryInput = z.object({
+   bookingId: z.string().max(100),
+ });
+ 
+ export const adminRefundInput = z.object({
+   paymentId: z.string().max(100),
+   reason: z.string().min(1).max(2000),
+ });
+diff --git a/packages/api/src/modules/admin-booking/index.ts b/packages/api/src/modules/admin-booking/index.ts
+index 1db04da..f1624ca 100644
+--- a/packages/api/src/modules/admin-booking/index.ts
++++ b/packages/api/src/modules/admin-booking/index.ts
+@@ -1,13 +1,14 @@
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import type { AuditRecordParams } from "../audit/audit.service";
++import type { NotificationWriteParams } from "../notification/notification.service";
+ import type {
+   WalletSnapshot,
+   ReleaseParams,
+   CompensateParams,
+ } from "../wallet/wallet.service";
+ import { createAdminBookingRepo } from "./admin-booking.repo";
+ import { createAdminBookingService } from "./admin-booking.service";
+ import { createAdminBookingHandler } from "./admin-booking.handler";
+ import type { AdminBookingService } from "./admin-booking.service";
+ import type { AdminBookingHandler } from "./admin-booking.handler";
+@@ -31,29 +32,35 @@ export interface AdminBookingRefundPort {
+       paymentId: string | null;
+       walletId: string;
+       amountIdr: number;
+       marks: number;
+       reason: string;
+       actorId?: string;
+     },
+   ): Promise<void>;
+ }
+ 
++export interface AdminBookingNotificationPort {
++  writeBestEffort(params: NotificationWriteParams): Promise<void>;
++}
++
+ export function createAdminBookingModule(deps: {
+   db: DbType;
+   audit: AdminBookingAuditPort;
+   wallet: AdminBookingWalletPort;
+   refund: AdminBookingRefundPort;
++  notification?: AdminBookingNotificationPort;
+ }) {
+   const repo = createAdminBookingRepo();
+   const service = createAdminBookingService({
+     db: deps.db,
+     repo,
+     auditPort: deps.audit,
+     wallet: deps.wallet,
+     refund: deps.refund,
++    notification: deps.notification,
+   });
+   const handler = createAdminBookingHandler(service);
+   return { service, handler };
+ }
+ 
+ export type { AdminBookingService, AdminBookingHandler };
+diff --git a/packages/api/src/modules/admin/admin.errors.ts b/packages/api/src/modules/admin/admin.errors.ts
+index f7f3eb9..2d19849 100644
+--- a/packages/api/src/modules/admin/admin.errors.ts
++++ b/packages/api/src/modules/admin/admin.errors.ts
+@@ -1,13 +1,18 @@
+ import { ORPCError } from "@orpc/server";
+ import { DomainError } from "../../lib/domain-errors";
+-import { notFound, conflict, internalServerError } from "../../lib/errors";
++import {
++  notFound,
++  conflict,
++  badRequest,
++  internalServerError,
++} from "../../lib/errors";
+ 
+ export class UserNotFoundError extends DomainError {
+   readonly domain = "admin";
+   constructor(id: string) {
+     super("USER_NOT_FOUND", "User not found", { id });
+   }
+ }
+ 
+ export class LastAdminError extends DomainError {
+   readonly domain = "admin";
+@@ -19,16 +24,33 @@ export class LastAdminError extends DomainError {
+ export class OptimisticLockError extends DomainError {
+   readonly domain = "admin";
+   constructor(id: string, expectedRole: string) {
+     super("OPTIMISTIC_LOCK", "Resource was modified by another transaction", {
+       id,
+       expectedRole,
+     });
+   }
+ }
+ 
++export class WalletNotFoundError extends DomainError {
++  readonly domain = "admin";
++  constructor(userId: string) {
++    super("WALLET_NOT_FOUND", "Wallet not found for user", { userId });
++  }
++}
++
++export class InvalidLedgerFilterError extends DomainError {
++  readonly domain = "admin";
++  constructor(message: string) {
++    super("INVALID_LEDGER_FILTER", message);
++  }
++}
++
+ export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
+   if (err instanceof UserNotFoundError) return notFound(err.message, err);
++  if (err instanceof WalletNotFoundError) return notFound(err.message, err);
+   if (err instanceof LastAdminError) return conflict(err.message, err);
+   if (err instanceof OptimisticLockError) return conflict(err.message, err);
++  if (err instanceof InvalidLedgerFilterError)
++    return badRequest(err.message, err);
+   return internalServerError(err.message, err);
+ }
+diff --git a/packages/api/src/modules/admin/admin.handler.ts b/packages/api/src/modules/admin/admin.handler.ts
+index 11eee3d..2867bd2 100644
+--- a/packages/api/src/modules/admin/admin.handler.ts
++++ b/packages/api/src/modules/admin/admin.handler.ts
+@@ -1,23 +1,32 @@
+ import type { Context } from "../../context";
+ import { z } from "zod";
+ import { withDomainMap } from "../../lib/handler-utils";
+ import { mapAdminError } from "./admin.errors";
+ import type {
+   AdminService,
+   ListUsersInput,
+   ListUsersResult,
+ } from "./admin.service";
+-import type { listUsersInput, setRoleInput } from "./admin.types";
++import type {
++  listUsersInput,
++  setRoleInput,
++  adminGetWalletInput,
++  adminListLedgerEntriesInput,
++} from "./admin.types";
+ 
+ type ListUsersInputZod = z.infer<typeof listUsersInput>;
+ type SetRoleInputZod = z.infer<typeof setRoleInput>;
++type AdminGetWalletInputZod = z.infer<typeof adminGetWalletInput>;
++type AdminListLedgerEntriesInputZod = z.infer<
++  typeof adminListLedgerEntriesInput
++>;
+ 
+ export type { ListUsersInput, ListUsersResult };
+ 
+ export type AdminHandler = ReturnType<typeof createAdminHandler>;
+ 
+ export function createAdminHandler(adminService: AdminService) {
+   return {
+     listUsers: async ({
+       context: _context,
+       input,
+@@ -36,12 +45,35 @@ export function createAdminHandler(adminService: AdminService) {
+       input,
+     }: {
+       context: Context;
+       input: SetRoleInputZod;
+     }) => {
+       return withDomainMap(
+         () => adminService.setRole(context.session!.user.id, input),
+         mapAdminError,
+       );
+     },
++
++    getWallet: async ({
++      context: _context,
++      input,
++    }: {
++      context: Context;
++      input: AdminGetWalletInputZod;
++    }) => {
++      return withDomainMap(() => adminService.getWallet(input), mapAdminError);
++    },
++
++    listLedgerEntries: async ({
++      context: _context,
++      input,
++    }: {
++      context: Context;
++      input: AdminListLedgerEntriesInputZod;
++    }) => {
++      return withDomainMap(
++        () => adminService.listLedgerEntries(input),
++        mapAdminError,
++      );
++    },
+   };
+ }
+diff --git a/packages/api/src/modules/admin/admin.router.ts b/packages/api/src/modules/admin/admin.router.ts
+index c315fda..3a517e5 100644
+--- a/packages/api/src/modules/admin/admin.router.ts
++++ b/packages/api/src/modules/admin/admin.router.ts
+@@ -1,12 +1,17 @@
+ import { adminProcedure } from "../../procedures";
+-import { listUsersInput, setRoleInput } from "./admin.types";
++import {
++  listUsersInput,
++  setRoleInput,
++  adminGetWalletInput,
++  adminListLedgerEntriesInput,
++} from "./admin.types";
+ import type { AdminHandler } from "./admin.handler";
+ 
+ export function createAdminRouter(handler: AdminHandler) {
+   return {
+     listUsers: adminProcedure
+       .route({
+         method: "POST",
+         path: "/admin/users/list",
+         tags: ["Admin"],
+         summary: "List users",
+@@ -19,12 +24,35 @@ export function createAdminRouter(handler: AdminHandler) {
+       .route({
+         method: "POST",
+         path: "/admin/users/set-role",
+         tags: ["Admin"],
+         summary: "Set user role",
+         description:
+           "Updates a user's role with audit trail and last-admin guard",
+       })
+       .input(setRoleInput)
+       .handler(handler.setRole),
++
++    getWallet: adminProcedure
++      .route({
++        method: "POST",
++        path: "/admin/wallet/get",
++        tags: ["Admin"],
++        summary: "Get any user's wallet",
++        description: "Returns balance, held, and available Marks for a user",
++      })
++      .input(adminGetWalletInput)
++      .handler(handler.getWallet),
++
++    listLedgerEntries: adminProcedure
++      .route({
++        method: "POST",
++        path: "/admin/wallet/ledger",
++        tags: ["Admin"],
++        summary: "List ledger entries for any wallet",
++        description:
++          "Paginated ledger entries filtered by entry type, date range, or booking",
++      })
++      .input(adminListLedgerEntriesInput)
++      .handler(handler.listLedgerEntries),
+   };
+ }
+diff --git a/packages/api/src/modules/admin/admin.service.ts b/packages/api/src/modules/admin/admin.service.ts
+index b64010c..dd01423 100644
+--- a/packages/api/src/modules/admin/admin.service.ts
++++ b/packages/api/src/modules/admin/admin.service.ts
+@@ -1,18 +1,20 @@
+ import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
+ import type { DbType } from "../../lib/db";
+ import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
+-import type { AdminAuditPort } from "./index";
++import type { AdminAuditPort, AdminWalletPort } from "./index";
+ import {
+   UserNotFoundError,
+   LastAdminError,
+   OptimisticLockError,
++  WalletNotFoundError,
++  InvalidLedgerFilterError,
+ } from "./admin.errors";
+ 
+ export interface ListUsersInput {
+   limit?: number;
+   offset?: number;
+ }
+ 
+ export interface ListUsersResult {
+   users: UserRow[];
+   total: number;
+@@ -47,26 +49,35 @@ export function validateRoleChange(
+     previousRole === USER_ROLE.ADMIN &&
+     newRole !== USER_ROLE.ADMIN &&
+     adminCount <= 1
+   ) {
+     throw new LastAdminError(target.id);
+   }
+ 
+   return { previousRole };
+ }
+ 
++function assertValidDateFilter(value: string, field: string): Date {
++  const parsed = new Date(value);
++  if (Number.isNaN(parsed.getTime())) {
++    throw new InvalidLedgerFilterError(`${field} must be a valid ISO datetime`);
++  }
++  return parsed;
++}
++
+ export function createAdminService(deps: {
+   adminRepo: AdminRepo;
+   auditPort: AdminAuditPort;
+   db: DbType;
++  wallet: AdminWalletPort;
+ }) {
+-  const { adminRepo, auditPort, db } = deps;
++  const { adminRepo, auditPort, db, wallet } = deps;
+ 
+   async function listUsers(
+     input: ListUsersInput = {},
+   ): Promise<ListUsersResult> {
+     const limit = input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT;
+     const offset = input.offset ?? 0;
+ 
+     const [users, total] = await Promise.all([
+       adminRepo.listUsers(db, limit, offset),
+       adminRepo.countUsers(db),
+@@ -113,14 +124,69 @@ export function createAdminService(deps: {
+         targetId: input.userId,
+         targetType: "user",
+         beforeState: { role: previousRole },
+         afterState: { role: input.role },
+       });
+ 
+       return row;
+     });
+   }
+ 
+-  return { listUsers, setRole };
++  async function getWallet(input: { userId: string }) {
++    const w = await wallet.getByUserId(db, input.userId);
++    if (!w) throw new WalletNotFoundError(input.userId);
++    return {
++      id: w.id,
++      totalBalance: w.totalBalance,
++      heldBalance: w.heldBalance,
++      availableBalance: w.availableBalance,
++    };
++  }
++
++  async function listLedgerEntries(input: {
++    walletId?: string;
++    userId?: string;
++    limit?: number;
++    cursor?: string;
++    bookingId?: string;
++    entryType?: string;
++    dateFrom?: string;
++    dateTo?: string;
++  }) {
++    if (input.walletId && input.userId) {
++      throw new InvalidLedgerFilterError(
++        "Provide either walletId or userId, not both",
++      );
++    }
++    let walletId = input.walletId;
++    if (!walletId && input.userId) {
++      const w = await wallet.getByUserId(db, input.userId);
++      if (!w) throw new WalletNotFoundError(input.userId);
++      walletId = w.id;
++    }
++    if (!walletId) {
++      throw new InvalidLedgerFilterError("walletId or userId is required");
++    }
++    const dateFrom = input.dateFrom
++      ? assertValidDateFilter(input.dateFrom, "dateFrom")
++      : undefined;
++    const dateTo = input.dateTo
++      ? assertValidDateFilter(input.dateTo, "dateTo")
++      : undefined;
++    if (dateFrom && dateTo && dateFrom.getTime() > dateTo.getTime()) {
++      throw new InvalidLedgerFilterError("dateFrom must not be after dateTo");
++    }
++
++    return wallet.listLedger(walletId, {
++      limit: input.limit,
++      cursor: input.cursor,
++      bookingId: input.bookingId,
++      entryType: input.entryType,
++      dateFrom: dateFrom?.toISOString(),
++      dateTo: dateTo?.toISOString(),
++    });
++  }
++
++  return { listUsers, setRole, getWallet, listLedgerEntries };
+ }
+ 
+ export type AdminService = ReturnType<typeof createAdminService>;
+diff --git a/packages/api/src/modules/admin/admin.types.ts b/packages/api/src/modules/admin/admin.types.ts
+index da24ead..7307ca2 100644
+--- a/packages/api/src/modules/admin/admin.types.ts
++++ b/packages/api/src/modules/admin/admin.types.ts
+@@ -5,10 +5,34 @@ export const listUsersInput = z
+     limit: z.number().min(1).max(100).default(50),
+     offset: z.number().min(0).default(0),
+   })
+   .optional();
+ 
+ export const setRoleInput = z.object({
+   userId: z.string().max(100),
+   role: z.enum(["student", "tutor", "admin"]),
+   expectedRole: z.enum(["student", "tutor", "admin"]),
+ });
++
++export const adminGetWalletInput = z.object({
++  userId: z.string().max(100),
++});
++
++export const adminListLedgerEntriesInput = z.object({
++  walletId: z.string().max(100).optional(),
++  userId: z.string().max(100).optional(),
++  limit: z.number().min(1).max(100).optional(),
++  cursor: z.string().max(100).optional(),
++  bookingId: z.string().max(100).optional(),
++  entryType: z
++    .enum([
++      "credit",
++      "hold",
++      "release",
++      "deduct",
++      "compensate_credit",
++      "compensate_deduct",
++    ])
++    .optional(),
++  dateFrom: z.string().max(100).optional(),
++  dateTo: z.string().max(100).optional(),
++});
+diff --git a/packages/api/src/modules/admin/index.ts b/packages/api/src/modules/admin/index.ts
+index 0d6dd52..67b2506 100644
+--- a/packages/api/src/modules/admin/index.ts
++++ b/packages/api/src/modules/admin/index.ts
+@@ -1,26 +1,45 @@
+ import type { DbType } from "../../lib/db";
++import type { DbOrTx } from "../../lib/tx";
+ import type { AuditRecordParams } from "../audit/audit.service";
++import type {
++  WalletSnapshot,
++  LedgerEntryRow,
++  LedgerQueryOptions,
++} from "../wallet/wallet.service";
+ import { createAdminRepo } from "./admin.repo";
+ import { createAdminService } from "./admin.service";
+ import { createAdminHandler } from "./admin.handler";
+ import type { AdminService } from "./admin.service";
+ import type { AdminHandler } from "./admin.handler";
+ 
+ export type AdminModule = ReturnType<typeof createAdminModule>;
+ 
+ export interface AdminAuditPort {
+   record(params: AuditRecordParams): Promise<void>;
+ }
+ 
+-export function createAdminModule(deps: { db: DbType; audit: AdminAuditPort }) {
++export interface AdminWalletPort {
++  getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
++  listLedger(
++    walletId: string,
++    opts?: LedgerQueryOptions,
++  ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }>;
++}
++
++export function createAdminModule(deps: {
++  db: DbType;
++  audit: AdminAuditPort;
++  wallet: AdminWalletPort;
++}) {
+   const repo = createAdminRepo();
+   const service = createAdminService({
+     adminRepo: repo,
+     auditPort: deps.audit,
+     db: deps.db,
++    wallet: deps.wallet,
+   });
+   const handler = createAdminHandler(service);
+   return { service, handler };
+ }
+ 
+ export type { AdminService, AdminHandler };
+diff --git a/packages/api/src/modules/wallet/wallet.repo.ts b/packages/api/src/modules/wallet/wallet.repo.ts
+index f64443c..d155c88 100644
+--- a/packages/api/src/modules/wallet/wallet.repo.ts
++++ b/packages/api/src/modules/wallet/wallet.repo.ts
+@@ -1,11 +1,11 @@
+-import { eq, desc, sql, and, gte } from "drizzle-orm";
++import { eq, desc, sql, and, gte, lte } from "drizzle-orm";
+ import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import type { WalletSnapshot } from "./wallet.service";
+ 
+ export const WALLET_COLUMNS = {
+   id: wallet.id,
+   userId: wallet.userId,
+   totalBalance: wallet.totalBalance,
+   heldBalance: wallet.heldBalance,
+@@ -222,34 +222,53 @@ export async function insertLedger(
+ }
+ 
+ export async function findLedgerEntries(
+   conn: DbOrTx,
+   walletId: string,
+   opts: {
+     limit: number;
+     cursor?: string;
+     bookingId?: string;
+     eventKey?: string;
++    entryType?: string;
++    dateFrom?: string;
++    dateTo?: string;
+   },
+ ) {
+   const conditions = [eq(ledgerEntry.walletId, walletId)];
++  if (opts.cursor) {
++    conditions.push(
++      sql`(${ledgerEntry.createdAt}, ${ledgerEntry.id}) < (
++        SELECT created_at, id FROM ledger_entry WHERE id = ${opts.cursor}
++      )`,
++    );
++  }
+   if (opts.bookingId) {
+     conditions.push(eq(ledgerEntry.bookingId, opts.bookingId));
+   }
+   if (opts.eventKey) {
+     conditions.push(eq(ledgerEntry.eventKey, opts.eventKey));
+   }
++  if (opts.entryType) {
++    conditions.push(eq(ledgerEntry.entryType, opts.entryType));
++  }
++  if (opts.dateFrom) {
++    conditions.push(gte(ledgerEntry.createdAt, new Date(opts.dateFrom)));
++  }
++  if (opts.dateTo) {
++    conditions.push(lte(ledgerEntry.createdAt, new Date(opts.dateTo)));
++  }
+   return conn
+     .select()
+     .from(ledgerEntry)
+     .where(and(...conditions))
+-    .orderBy(desc(ledgerEntry.createdAt))
++    .orderBy(desc(ledgerEntry.createdAt), desc(ledgerEntry.id))
+     .limit(opts.limit + 1);
+ }
+ 
+ export async function listActivePackages(conn: DbOrTx) {
+   return conn.select().from(markPackage).where(eq(markPackage.isActive, true));
+ }
+ 
+ export async function upsert(
+   db: DbType,
+   values: {
+diff --git a/packages/api/src/modules/wallet/wallet.service.ts b/packages/api/src/modules/wallet/wallet.service.ts
+index 0916da7..61fb925 100644
+--- a/packages/api/src/modules/wallet/wallet.service.ts
++++ b/packages/api/src/modules/wallet/wallet.service.ts
+@@ -66,40 +66,45 @@ export interface CompensateParams {
+   bookingId?: string;
+ }
+ 
+ export interface WalletSnapshot {
+   id: string;
+   totalBalance: number;
+   heldBalance: number;
+   availableBalance: number;
+ }
+ 
++export type LedgerEntryRow = typeof ledgerEntry.$inferSelect;
++
+ export interface LedgerQueryOptions {
+   cursor?: string;
+   limit?: number;
+   bookingId?: string;
+   eventKey?: string;
++  entryType?: string;
++  dateFrom?: string;
++  dateTo?: string;
+ }
+ 
+ export interface WalletPort {
+   hold(db: DbOrTx, params: HoldParams): Promise<WalletSnapshot>;
+   release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
+   deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
+   credit(db: DbOrTx, params: CreditParams): Promise<WalletSnapshot>;
+   compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
+   getById(db: DbOrTx, walletId: string): Promise<WalletSnapshot | null>;
+   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
+   getOrCreate(userId: string): Promise<WalletSnapshot>;
+   listLedger(
+     walletId: string,
+     opts?: LedgerQueryOptions,
+-  ): Promise<{ items: unknown[]; nextCursor: string | null }>;
++  ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }>;
+   knowledgeBankEligible(userId: string): Promise<{
+     eligible: boolean;
+     balance: number;
+     threshold: number;
+   }>;
+   listActivePackages(): Promise<
+     {
+       id: string;
+       code: string;
+       name: string;
+@@ -324,29 +329,35 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+         beforeBalance: w.totalBalance,
+         afterBalance: updated.totalBalance,
+         balanceAfterTotal: updated.totalBalance,
+         balanceAfterHeld: updated.heldBalance,
+         bookingId: params.bookingId,
+       });
+       return updated;
+     });
+   }
+ 
+-  async function listLedger(walletId: string, opts?: LedgerQueryOptions) {
++  async function listLedger(
++    walletId: string,
++    opts?: LedgerQueryOptions,
++  ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }> {
+     const limit = Math.min(opts?.limit ?? 20, 100);
+     const rows = await repo.findLedgerEntries(db, walletId, {
+       limit,
+       cursor: opts?.cursor,
+       bookingId: opts?.bookingId,
+       eventKey: opts?.eventKey,
++      entryType: opts?.entryType,
++      dateFrom: opts?.dateFrom,
++      dateTo: opts?.dateTo,
+     });
+-    const items = rows.slice(0, limit);
++    const items = rows.slice(0, limit) as LedgerEntryRow[];
+     const nextCursor = rows.length > limit ? items[items.length - 1]!.id : null;
+     return { items, nextCursor };
+   }
+ 
+   async function knowledgeBankEligible(userId: string) {
+     const w = await repo.getByUserId(db, userId);
+     if (!w) {
+       return {
+         eligible: false,
+         balance: 0,
+diff --git a/packages/api/src/services.ts b/packages/api/src/services.ts
+index 54f751f..d122111 100644
+--- a/packages/api/src/services.ts
++++ b/packages/api/src/services.ts
+@@ -123,21 +123,25 @@ function createServices() {
+             privateKey: env.GOOGLE_PRIVATE_KEY!,
+             calendarId: env.GOOGLE_CALENDAR_ID ?? "primary",
+           }
+         : undefined,
+     redis,
+   });
+ 
+   // Core modules
+   const wallet = createWalletModule({ db });
+   const auth = createAuthModule({ db, wallet: wallet.service });
+-  const admin = createAdminModule({ db, audit: audit.service });
++  const admin = createAdminModule({
++    db,
++    audit: audit.service,
++    wallet: wallet.service,
++  });
+   const adminTutor = createAdminTutorModule({ db, audit: audit.service });
+   const tutor = createTutorModule({
+     db,
+     pricing: pricing.service,
+     audit: audit.service,
+   });
+   const discovery = createDiscoveryModule({ db });
+   const invite = createInviteModule({ db, audit: audit.service });
+   const achievement = createAchievementModule({ db, audit: audit.service });
+   const notification = createNotificationModule({ db, email: email.service });
+@@ -172,20 +176,21 @@ function createServices() {
+     db,
+     audit: audit.service,
+     wallet: wallet.service,
+   });
+ 
+   const adminBooking = createAdminBookingModule({
+     db,
+     audit: audit.service,
+     wallet: wallet.service,
+     refund: refund.service,
++    notification: notification.service,
+   });
+ 
+   const support = createSupportModule({
+     db,
+     audit: audit.service,
+     notification: notification.service,
+   });
+ 
+   const services: ServiceRegistry = {
+     audit: audit.service,
+diff --git a/packages/api/src/tests/integration/admin-override-queue.test.ts b/packages/api/src/tests/integration/admin-override-queue.test.ts
+new file mode 100644
+index 0000000..e4cf6e8
+--- /dev/null
++++ b/packages/api/src/tests/integration/admin-override-queue.test.ts
+@@ -0,0 +1,181 @@
++import { describe, expect, test, beforeAll } from "bun:test";
++import { db } from "@cogito-app/db";
++import { booking } from "@cogito-app/db/schema";
++
++import { services } from "../../services";
++import {
++  createTestContext,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++} from "../helpers/test-client";
++
++async function createUser(
++  email: string,
++  name: string,
++  role: string,
++): Promise<string> {
++  const res = await signUpAndSignIn(email, "Test1234!", name);
++  const ctx = await createTestContext(res.cookie);
++  const userId = ctx.session!.user!.id;
++  await setUserRole(userId, role);
++  return userId;
++}
++
++async function insertBooking(
++  tutorId: string,
++  proposerId: string,
++  overrides: Omit<
++    Partial<typeof booking.$inferInsert>,
++    "type" | "modality" | "tutorId" | "proposerId" | "targetGroupSize"
++  > & {
++    currentState: string;
++    scheduledStartAt: Date;
++  },
++) {
++  const { scheduledStartAt } = overrides;
++  const [row] = await db
++    .insert(booking)
++    .values({
++      type: "solo",
++      modality: "online",
++      tutorId,
++      proposerId,
++      targetGroupSize: 1,
++      minConfirmedHeadcount: 1,
++      confirmedHeadcount: 1,
++      currentState: "confirmed",
++      scheduledStartAt,
++      scheduledEndAt: new Date(scheduledStartAt.getTime() + 90 * 60 * 1000),
++      timezone: "Asia/Jakarta",
++      originalMarks: 42,
++      holdAmount: 42,
++      refundedAmount: 0,
++      version: 1,
++      ...overrides,
++    })
++    .returning();
++  return row!;
++}
++
++describe("Admin override queue (G8)", () => {
++  const ts = Date.now();
++
++  let studentId: string;
++  let tutorId: string;
++
++  beforeAll(async () => {
++    await resetDatabase();
++    await createUser(`g8.admin.${ts}@cogito.test`, "G8 Admin", "admin");
++    studentId = await createUser(
++      `g8.student.${ts}@cogito.test`,
++      "G8 Student",
++      "student",
++    );
++    tutorId = await createUser(
++      `g8.tutor.${ts}@cogito.test`,
++      "G8 Tutor",
++      "tutor",
++    );
++  });
++
++  test("listBookings sorts by urgency: pending-action first, then scheduled, terminal last, soonest session first within band", async () => {
++    const now = Date.now();
++    const ids = {
++      awaiting: (await insertBooking(tutorId, studentId, {
++        currentState: "awaiting_tutor_review",
++        scheduledStartAt: new Date(now + 7 * 3600_000),
++      }))!.id,
++      scheduledSoon: (await insertBooking(tutorId, studentId, {
++        currentState: "scheduled",
++        scheduledStartAt: new Date(now + 8 * 3600_000),
++      }))!.id,
++      scheduledLater: (await insertBooking(tutorId, studentId, {
++        currentState: "scheduled",
++        scheduledStartAt: new Date(now + 10 * 3600_000),
++      }))!.id,
++      completed: (await insertBooking(tutorId, studentId, {
++        currentState: "completed",
++        scheduledStartAt: new Date(now + 5 * 3600_000),
++      }))!.id,
++    };
++
++    const result = await services.adminBooking.listBookings({ limit: 20 });
++    const order = result.items.map((i) => i.id);
++    expect(order).toEqual([
++      ids.awaiting,
++      ids.scheduledSoon,
++      ids.scheduledLater,
++      ids.completed,
++    ]);
++    expect(order.length).toBe(4);
++  });
++
++  test("escalated flag is true for stale override requests (overriddenAt older than 12h)", async () => {
++    const staleId = (await insertBooking(tutorId, studentId, {
++      currentState: "confirmed",
++      scheduledStartAt: new Date(Date.now() + 6 * 3600_000),
++      overrideMeta: {
++        category: "force_cancel",
++        overriddenAt: new Date(Date.now() - 13 * 3600_000).toISOString(),
++      },
++    }))!.id;
++    const freshId = (await insertBooking(tutorId, studentId, {
++      currentState: "scheduled",
++      scheduledStartAt: new Date(Date.now() + 9 * 3600_000),
++      overrideMeta: {
++        category: "medical_emergency",
++        overriddenAt: new Date().toISOString(),
++      },
++    }))!.id;
++
++    const result = await services.adminBooking.listBookings({ limit: 20 });
++    const byId = Object.fromEntries(result.items.map((i) => [i.id, i]));
++    expect(byId[staleId]!.escalated).toBe(true);
++    expect(byId[freshId]!.escalated).toBe(false);
++    expect(byId[staleId]!.overrideMeta).toMatchObject({
++      category: "force_cancel",
++    });
++  });
++
++  test("filter by override category returns only matching bookings", async () => {
++    const result = await services.adminBooking.listBookings({
++      limit: 20,
++      category: "force_cancel",
++    });
++    expect(result.items.length).toBeGreaterThan(0);
++    for (const item of result.items) {
++      expect(
++        (item.overrideMeta as Record<string, unknown> | null)?.category,
++      ).toBe("force_cancel");
++    }
++  });
++
++  test("filter by urgency level returns only bookings in that band", async () => {
++    const result = await services.adminBooking.listBookings({
++      limit: 20,
++      urgency: "high",
++    });
++    expect(result.items.length).toBeGreaterThan(0);
++    for (const item of result.items) {
++      expect([
++        "awaiting_tutor_review",
++        "awaiting_participant_confirmation",
++        "awaiting_reconfirmation",
++        "reschedule_proposed",
++        "awaiting_admin_room_approval",
++      ]).toContain(item.currentState);
++    }
++  });
++
++  test("filter by escalated=true returns only escalated bookings", async () => {
++    const result = await services.adminBooking.listBookings({
++      limit: 20,
++      escalated: true,
++    });
++    expect(result.items.length).toBeGreaterThan(0);
++    for (const item of result.items) {
++      expect(item.escalated).toBe(true);
++    }
++  });
++});
+diff --git a/packages/api/src/tests/integration/admin-wallet.test.ts b/packages/api/src/tests/integration/admin-wallet.test.ts
+new file mode 100644
+index 0000000..c8d4fd2
+--- /dev/null
++++ b/packages/api/src/tests/integration/admin-wallet.test.ts
+@@ -0,0 +1,148 @@
++import { describe, expect, test, beforeAll } from "bun:test";
++import { db } from "@cogito-app/db";
++
++import { services } from "../../services";
++import {
++  createTestClient,
++  createTestContext,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++describe("Admin wallet and ledger views (G9)", () => {
++  const ts = Date.now();
++  const adminEmail = `g9.admin.${ts}@cogito.test`;
++  const studentEmail = `g9.student.${ts}@cogito.test`;
++
++  let adminClient: TestClient;
++  let studentClient: TestClient;
++  let studentId: string;
++  let walletId: string;
++
++  beforeAll(async () => {
++    await resetDatabase();
++
++    const adminRes = await signUpAndSignIn(adminEmail, "Test1234!", "G9 Admin");
++    const adminCtx = await createTestContext(adminRes.cookie);
++    await setUserRole(adminCtx.session!.user!.id, "admin");
++    adminClient = createTestClient(await createTestContext(adminRes.cookie));
++
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "G9 Student",
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    studentId = studentCtx.session!.user!.id;
++    studentClient = createTestClient(studentCtx);
++
++    const w = await services.wallet.getOrCreate(studentId);
++    walletId = w.id;
++
++    await services.wallet.credit(db, {
++      walletId,
++      amount: 100,
++      eventKey: `g9.credit.${ts}`,
++      actorType: "admin",
++      reason: "G9 test credit",
++    });
++    await services.wallet.hold(db, {
++      walletId,
++      amount: 40,
++      eventKey: `g9.hold.${ts}`,
++      actorType: "system",
++      reason: "G9 test hold",
++      bookingId: "g9-booking-1",
++    });
++    await services.wallet.release(db, {
++      walletId,
++      amount: 10,
++      eventKey: `g9.release.${ts}`,
++      actorType: "system",
++      reason: "G9 test release",
++      bookingId: "g9-booking-1",
++    });
++  });
++
++  test("admin getWallet returns balance, held, and available", async () => {
++    const w = await adminClient.admin.getWallet({ userId: studentId });
++    expect(w.id).toBe(walletId);
++    expect(w.totalBalance).toBe(100);
++    expect(w.heldBalance).toBe(30);
++    expect(w.availableBalance).toBe(70);
++  });
++
++  test("admin getWallet for user without wallet returns not found", async () => {
++    await expect(
++      adminClient.admin.getWallet({ userId: "no-such-user" }),
++    ).rejects.toMatchObject({ code: "NOT_FOUND" });
++  });
++
++  test("admin listLedgerEntries returns paginated entries for a wallet", async () => {
++    const page1 = await adminClient.admin.listLedgerEntries({
++      walletId,
++      limit: 2,
++    });
++    expect(page1.items.length).toBe(2);
++    expect(page1.nextCursor).not.toBeNull();
++
++    const page2 = await adminClient.admin.listLedgerEntries({
++      walletId,
++      limit: 2,
++      cursor: page1.nextCursor ?? undefined,
++    });
++    expect(page2.items.length).toBe(1);
++    expect(page2.nextCursor).toBeNull();
++
++    const seen = [...page1.items, ...page2.items].map((i) => i.id);
++    expect(new Set(seen).size).toBe(3);
++  });
++
++  test("admin listLedgerEntries filters by entry type", async () => {
++    const result = await adminClient.admin.listLedgerEntries({
++      walletId,
++      entryType: "hold",
++    });
++    expect(result.items.length).toBe(1);
++    expect(result.items[0]!.entryType).toBe("hold");
++    expect(result.items[0]!.amount).toBe(40);
++  });
++
++  test("admin listLedgerEntries filters by date range", async () => {
++    const dateTo = new Date(Date.now() + 3600_000).toISOString();
++    const result = await adminClient.admin.listLedgerEntries({
++      walletId,
++      dateFrom: new Date(Date.now() - 3600_000).toISOString(),
++      dateTo,
++    });
++    expect(result.items.length).toBe(3);
++  });
++
++  test("admin listLedgerEntries by userId and bookingId filter", async () => {
++    const result = await adminClient.admin.listLedgerEntries({
++      userId: studentId,
++      bookingId: "g9-booking-1",
++    });
++    expect(result.items.length).toBe(2);
++    for (const item of result.items) {
++      expect(item.bookingId).toBe("g9-booking-1");
++    }
++  });
++
++  test("admin listLedgerEntries requires walletId or userId", async () => {
++    await expect(adminClient.admin.listLedgerEntries({})).rejects.toMatchObject(
++      { code: "BAD_REQUEST" },
++    );
++  });
++
++  test("non-admin gets 403 on admin wallet endpoints", async () => {
++    await expect(
++      studentClient.admin.getWallet({ userId: studentId }),
++    ).rejects.toMatchObject({ code: "FORBIDDEN" });
++    await expect(
++      studentClient.admin.listLedgerEntries({ walletId }),
++    ).rejects.toMatchObject({ code: "FORBIDDEN" });
++  });
++});
+diff --git a/packages/api/src/tests/integration/override-preview.test.ts b/packages/api/src/tests/integration/override-preview.test.ts
+new file mode 100644
+index 0000000..c543c9b
+--- /dev/null
++++ b/packages/api/src/tests/integration/override-preview.test.ts
+@@ -0,0 +1,259 @@
++import { describe, expect, test, beforeAll } from "bun:test";
++import { eq, and } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  booking,
++  bookingStateHistory,
++  ledgerEntry,
++  auditLog,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++} from "@cogito-app/db/schema";
++
++import { services } from "../../services";
++import {
++  createTestClient,
++  createTestContext,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++describe("Admin override preview (G10)", () => {
++  const ts = Date.now();
++  const adminEmail = `g10.admin.${ts}@cogito.test`;
++  const studentEmail = `g10.student.${ts}@cogito.test`;
++  const tutorEmail = `g10.tutor.${ts}@cogito.test`;
++
++  let adminClient: TestClient;
++  let adminId: string;
++  let studentId: string;
++  let bookingId: string;
++
++  beforeAll(async () => {
++    await resetDatabase();
++
++    const adminRes = await signUpAndSignIn(
++      adminEmail,
++      "Test1234!",
++      "G10 Admin",
++    );
++    const adminCtx = await createTestContext(adminRes.cookie);
++    adminId = adminCtx.session!.user!.id;
++    await setUserRole(adminId, "admin");
++    adminClient = createTestClient(await createTestContext(adminRes.cookie));
++
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "G10 Student",
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    studentId = studentCtx.session!.user!.id;
++    await creditWallet(studentId, 200);
++
++    const tutorRes = await signUpAndSignIn(
++      tutorEmail,
++      "Test1234!",
++      "G10 Tutor",
++    );
++    const tutorCtx = await createTestContext(tutorRes.cookie);
++    const tutorId = tutorCtx.session!.user!.id;
++    await setUserRole(tutorId, "tutor");
++
++    const [invite] = await db
++      .insert(tutorInvite)
++      .values({
++        email: tutorEmail,
++        displayName: "G10 Tutor",
++        token: `token-g10-${ts}`,
++        status: "accepted",
++        invitedBy: tutorId,
++        expiresAt: new Date(Date.now() + 86400000),
++        acceptedBy: tutorId,
++        acceptedAt: new Date(),
++      })
++      .returning();
++
++    await db
++      .insert(tutorProfile)
++      .values({
++        userId: tutorId,
++        inviteId: invite!.id,
++        displayName: "G10 Tutor",
++        shortBio: "Bio",
++        credentialsSummary: "Creds",
++        expertise: ["Mathematics"],
++        modality: "online",
++        prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++        availabilitySummary: "Flexible",
++        onboardingStatus: "published",
++        publishedAt: new Date(),
++      })
++      .execute();
++
++    const slotStart = new Date(Date.now() + 48 * 3600_000);
++    const slotEnd = new Date(Date.now() + 49 * 3600_000);
++    await db
++      .insert(availabilitySlot)
++      .values({
++        tutorId,
++        startDate: slotStart,
++        endDate: slotEnd,
++        modality: "online",
++      })
++      .execute();
++
++    const start = new Date(Date.now() + 24 * 3600_000).toISOString();
++    const end = new Date(Date.now() + 25 * 3600_000).toISOString();
++    const studentClient = createTestClient(studentCtx);
++    const b = await studentClient.booking.createSolo({
++      tutorId,
++      availabilitySlotId: (
++        await db
++          .select()
++          .from(availabilitySlot)
++          .where(eq(availabilitySlot.tutorId, tutorId))
++          .limit(1)
++      )[0]!.id,
++      modality: "online",
++      scheduledStartAt: start,
++      scheduledEndAt: end,
++      timezone: "Asia/Jakarta",
++    });
++    bookingId = b.id;
++  });
++
++  test("preview returns projected state and wallet impact", async () => {
++    const [before] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, bookingId));
++    expect(before!.currentState).toBe("awaiting_tutor_review");
++
++    const preview = await adminClient.adminBooking.previewOverride({
++      bookingId,
++      category: "force_cancel",
++      reason: "Preview force cancel",
++      affectedParticipants: [studentId],
++      marksAction: "release_holds",
++    });
++
++    expect(preview.bookingId).toBe(bookingId);
++    expect(preview.currentState).toBe("awaiting_tutor_review");
++    expect(preview.projectedState).toBe("cancelled");
++    expect(preview.affectedParticipants).toEqual([studentId]);
++    expect(preview.marksAction).toBe("release_holds");
++    expect(preview.perParticipantImpact).toHaveLength(1);
++    expect(preview.perParticipantImpact[0]!.userId).toBe(studentId);
++    expect(preview.perParticipantImpact[0]!.action).toBe("release_holds");
++    expect(preview.perParticipantImpact[0]!.heldAmount).toBeGreaterThan(0);
++    expect(preview.perParticipantImpact[0]!.before.heldBalance).toBeGreaterThan(
++      0,
++    );
++  });
++
++  test("preview writes NOTHING: booking state, wallet, history, audit, ledger all unchanged", async () => {
++    const [bookingBefore] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, bookingId));
++    const [walletBefore] = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.userId, studentId));
++    const historyCountBefore = (
++      await db
++        .select()
++        .from(bookingStateHistory)
++        .where(eq(bookingStateHistory.bookingId, bookingId))
++    ).length;
++    const auditCountBefore = (
++      await db
++        .select()
++        .from(auditLog)
++        .where(
++          and(
++            eq(auditLog.targetId, bookingId),
++            eq(auditLog.targetType, "booking"),
++          ),
++        )
++    ).length;
++    const ledgerCountBefore = (
++      await db
++        .select()
++        .from(ledgerEntry)
++        .where(eq(ledgerEntry.bookingId, bookingId))
++    ).length;
++
++    await adminClient.adminBooking.previewOverride({
++      bookingId,
++      category: "force_cancel",
++      reason: "Preview again",
++      affectedParticipants: [studentId],
++      marksAction: "release_holds",
++    });
++
++    const [bookingAfter] = await db
++      .select()
++      .from(booking)
++      .where(eq(booking.id, bookingId));
++    const [walletAfter] = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.userId, studentId));
++    const historyCountAfter = (
++      await db
++        .select()
++        .from(bookingStateHistory)
++        .where(eq(bookingStateHistory.bookingId, bookingId))
++    ).length;
++    const auditCountAfter = (
++      await db
++        .select()
++        .from(auditLog)
++        .where(
++          and(
++            eq(auditLog.targetId, bookingId),
++            eq(auditLog.targetType, "booking"),
++          ),
++        )
++    ).length;
++    const ledgerCountAfter = (
++      await db
++        .select()
++        .from(ledgerEntry)
++        .where(eq(ledgerEntry.bookingId, bookingId))
++    ).length;
++
++    expect(bookingAfter!.currentState).toBe(bookingBefore!.currentState);
++    expect(bookingAfter!.overrideMeta).toBeNull();
++    expect(walletAfter!.totalBalance).toBe(walletBefore!.totalBalance);
++    expect(walletAfter!.heldBalance).toBe(walletBefore!.heldBalance);
++    expect(walletAfter!.availableBalance).toBe(walletBefore!.availableBalance);
++    expect(historyCountAfter).toBe(historyCountBefore);
++    expect(auditCountAfter).toBe(auditCountBefore);
++    expect(ledgerCountAfter).toBe(ledgerCountBefore);
++  });
++
++  test("preview on non-existent booking returns not found", async () => {
++    await expect(
++      adminClient.adminBooking.previewOverride({
++        bookingId: "nonexistent",
++        category: "force_cancel",
++        reason: "Preview",
++      }),
++    ).rejects.toMatchObject({ code: "NOT_FOUND" });
++  });
++});
+diff --git a/packages/api/src/tests/unit/admin-booking.service.test.ts b/packages/api/src/tests/unit/admin-booking.service.test.ts
+index b7ef285..3aeab9f 100644
+--- a/packages/api/src/tests/unit/admin-booking.service.test.ts
++++ b/packages/api/src/tests/unit/admin-booking.service.test.ts
+@@ -81,20 +81,26 @@ function makeWalletPort(overrides: Record<string, unknown> = {}) {
+     ...overrides,
+   };
+ }
+ 
+ function makeRefundPort() {
+   return {
+     createRefundRecord: mock(async () => {}),
+   };
+ }
+ 
++function makeNotificationPort() {
++  return {
++    writeBestEffort: mock(async () => {}),
++  };
++}
++
+ describe("AdminBookingService", () => {
+   describe("applyOverride", () => {
+     test("throws BookingNotFoundError when booking does not exist", async () => {
+       const repo = mockRepo({
+         findBookingById: mock(async () => null),
+       });
+       const service = createAdminBookingService({
+         db: makeDb(),
+         repo,
+         auditPort: makeAuditPort(),
+@@ -434,20 +440,199 @@ describe("AdminBookingService", () => {
+         reason: "No hold amount on booking",
+         marksAction: "release_holds",
+         affectedParticipants: ["u1"],
+       });
+ 
+       expect(wallet.release).not.toHaveBeenCalled();
+       expect(wallet.compensate).not.toHaveBeenCalled();
+     });
+   });
+ 
++  describe("previewOverride", () => {
++    test("returns projected state and wallet impact without writing anything", async () => {
++      const repo = mockRepo({
++        findBookingById: mock(async () => ({
++          id: "b1",
++          currentState: "confirmed",
++          holdAmount: 100,
++        })),
++        findParticipantsByBookingId: mock(async () => [
++          { id: "p1", userId: "u1", heldAmount: 50 },
++        ]),
++      });
++      const service = createAdminBookingService({
++        db: makeDb(),
++        repo,
++        auditPort: makeAuditPort(),
++        wallet: makeWalletPort() as any,
++        refund: makeRefundPort(),
++      });
++
++      const result = await service.previewOverride({
++        bookingId: "b1",
++        category: "tutor_no_show",
++        reason: "Preview",
++        marksAction: "release_holds",
++        affectedParticipants: ["u1"],
++      });
++
++      expect(result.bookingId).toBe("b1");
++      expect(result.currentState).toBe("confirmed");
++      expect(result.projectedState).toBe("no_show");
++      expect(result.affectedParticipants).toEqual(["u1"]);
++      expect(result.marksAction).toBe("release_holds");
++      expect(result.perParticipantImpact).toHaveLength(1);
++      expect(result.perParticipantImpact[0]).toMatchObject({
++        userId: "u1",
++        participantId: "p1",
++        heldAmount: 50,
++        walletId: "w1",
++        action: "release_holds",
++        before: { totalBalance: 200, heldBalance: 0, availableBalance: 200 },
++        after: { totalBalance: 200, heldBalance: 0, availableBalance: 250 },
++      });
++      expect(repo.updateBookingWithOverride).not.toHaveBeenCalled();
++      expect(repo.insertStateHistoryEntry).not.toHaveBeenCalled();
++    });
++
++    test("throws BookingNotFoundError for missing booking", async () => {
++      const repo = mockRepo({
++        findBookingById: mock(async () => null),
++      });
++      const service = createAdminBookingService({
++        db: makeDb(),
++        repo,
++        auditPort: makeAuditPort(),
++        wallet: makeWalletPort() as any,
++        refund: makeRefundPort(),
++      });
++
++      try {
++        await service.previewOverride({
++          bookingId: "missing",
++          category: "force_cancel",
++          reason: "Preview",
++        });
++        expect(true).toBe(false);
++      } catch (e: any) {
++        expect(e).toBeInstanceOf(BookingNotFoundError);
++      }
++    });
++
++    test("throws TerminalStateOverrideError for terminal booking", async () => {
++      const repo = mockRepo({
++        findBookingById: mock(async () => ({
++          id: "b1",
++          currentState: "completed",
++          holdAmount: 0,
++        })),
++      });
++      const service = createAdminBookingService({
++        db: makeDb(),
++        repo,
++        auditPort: makeAuditPort(),
++        wallet: makeWalletPort() as any,
++        refund: makeRefundPort(),
++      });
++
++      try {
++        await service.previewOverride({
++          bookingId: "b1",
++          category: "force_cancel",
++          reason: "Preview",
++        });
++        expect(true).toBe(false);
++      } catch (e: any) {
++        expect(e).toBeInstanceOf(TerminalStateOverrideError);
++      }
++    });
++
++    test("no marksAction returns empty impact and null marksAction", async () => {
++      const repo = mockRepo();
++      const service = createAdminBookingService({
++        db: makeDb(),
++        repo,
++        auditPort: makeAuditPort(),
++        wallet: makeWalletPort() as any,
++        refund: makeRefundPort(),
++      });
++
++      const result = await service.previewOverride({
++        bookingId: "b1",
++        category: "admin_correction",
++        reason: "Preview",
++      });
++      expect(result.marksAction).toBeNull();
++      expect(result.perParticipantImpact).toEqual([]);
++    });
++  });
++
++  describe("applyOverride notifications", () => {
++    test("writes best-effort notification to affected participants", async () => {
++      const notification = makeNotificationPort();
++      const repo = mockRepo({
++        findParticipantsByBookingId: mock(async () => [
++          { id: "p1", userId: "u1", heldAmount: 50 },
++          { id: "p2", userId: "u2", heldAmount: 0 },
++        ]),
++      });
++      const service = createAdminBookingService({
++        db: makeDb(),
++        repo,
++        auditPort: makeAuditPort(),
++        wallet: makeWalletPort() as any,
++        refund: makeRefundPort(),
++        notification: notification as any,
++      });
++
++      await service.applyOverride("admin1", {
++        bookingId: "b1",
++        category: "force_cancel",
++        reason: "Notify",
++        affectedParticipants: ["u1", "u2"],
++      });
++
++      expect(notification.writeBestEffort).toHaveBeenCalledTimes(2);
++      const first = notification.writeBestEffort.mock.calls[0][0];
++      expect(first).toMatchObject({
++        userId: "u1",
++        bookingId: "b1",
++        category: "override",
++        severity: "action",
++      });
++      expect(first.eventKey).toBe("override.applied.b1.u1");
++    });
++
++    test("skips notifications when no port provided", async () => {
++      const repo = mockRepo({
++        findParticipantsByBookingId: mock(async () => [
++          { id: "p1", userId: "u1", heldAmount: 50 },
++        ]),
++      });
++      const service = createAdminBookingService({
++        db: makeDb(),
++        repo,
++        auditPort: makeAuditPort(),
++        wallet: makeWalletPort() as any,
++        refund: makeRefundPort(),
++      });
++
++      await service.applyOverride("admin1", {
++        bookingId: "b1",
++        category: "force_cancel",
++        reason: "No notify",
++        affectedParticipants: ["u1"],
++      });
++      expect(repo.updateBookingWithOverride).toHaveBeenCalledTimes(1);
++    });
++  });
++
+   describe("listBookings", () => {
+     test("returns empty list when no bookings found", async () => {
+       const repo = mockRepo();
+       const service = createAdminBookingService({
+         db: makeDb(),
+         repo,
+         auditPort: makeAuditPort(),
+         wallet: makeWalletPort() as any,
+         refund: makeRefundPort(),
+       });
+@@ -463,96 +648,184 @@ describe("AdminBookingService", () => {
+       });
+       const service = createAdminBookingService({
+         db: makeDb(),
+         repo,
+         auditPort: makeAuditPort(),
+         wallet: makeWalletPort() as any,
+         refund: makeRefundPort(),
+       });
+ 
+       const result = await service.listBookings({ bookingId: "b1" });
+-      expect(result.items).toEqual([booking]);
++      expect(result.items).toEqual([{ ...booking, escalated: false }]);
+     });
+ 
+     test("returns empty list when bookingId provided but not found", async () => {
+       const repo = mockRepo({
+         findBookingById: mock(async () => null),
+       });
+       const service = createAdminBookingService({
+         db: makeDb(),
+         repo,
+         auditPort: makeAuditPort(),
+         wallet: makeWalletPort() as any,
+         refund: makeRefundPort(),
+       });
+ 
+       const result = await service.listBookings({ bookingId: "nonexistent" });
+       expect(result.items).toEqual([]);
+     });
+ 
+     test("returns bookings with limit from repo", async () => {
+       const bookings = [
+-        { id: "b1", currentState: "confirmed" },
+-        { id: "b2", currentState: "pending" },
+-        { id: "b3", currentState: "completed" },
++        { id: "b1", currentState: "confirmed", scheduledStartAt: new Date() },
++        { id: "b2", currentState: "pending", scheduledStartAt: new Date() },
++        { id: "b3", currentState: "completed", scheduledStartAt: new Date() },
+       ];
+       const repo = mockRepo({
+         listBookingsByState: mock(async () => bookings),
+       });
+       const service = createAdminBookingService({
+         db: makeDb(),
+         repo,
+         auditPort: makeAuditPort(),
+         wallet: makeWalletPort() as any,
+         refund: makeRefundPort(),
+       });
+ 
+       const result = await service.listBookings({ limit: 2 });
+       expect(result.items).toEqual([
+-        { id: "b1", currentState: "confirmed" },
+-        { id: "b2", currentState: "pending" },
++        {
++          id: "b1",
++          currentState: "confirmed",
++          scheduledStartAt: expect.any(Date),
++          escalated: false,
++        },
++        {
++          id: "b2",
++          currentState: "pending",
++          scheduledStartAt: expect.any(Date),
++          escalated: false,
++        },
+       ]);
+       expect(repo.listBookingsByState).toHaveBeenCalledWith(
+         expect.anything(),
+         [],
+         2,
+         undefined,
+       );
+     });
+ 
+     test("passes cursor to repo for pagination", async () => {
+       const bookings = [
+-        { id: "b10", currentState: "confirmed" },
+-        { id: "b11", currentState: "confirmed" },
+-        { id: "b12", currentState: "confirmed" },
++        { id: "b10", currentState: "confirmed", scheduledStartAt: new Date() },
++        { id: "b11", currentState: "confirmed", scheduledStartAt: new Date() },
++        { id: "b12", currentState: "confirmed", scheduledStartAt: new Date() },
+       ];
+       const repo = mockRepo({
+         listBookingsByState: mock(async () => bookings),
+       });
+       const service = createAdminBookingService({
+         db: makeDb(),
+         repo,
+         auditPort: makeAuditPort(),
+         wallet: makeWalletPort() as any,
+         refund: makeRefundPort(),
+       });
+ 
+       const result = await service.listBookings({ limit: 2, cursor: "b9" });
+       expect(repo.listBookingsByState).toHaveBeenCalledWith(
+         expect.anything(),
+         [],
+         2,
+         "b9",
+       );
+       expect(result.items).toEqual([
+-        { id: "b10", currentState: "confirmed" },
+-        { id: "b11", currentState: "confirmed" },
++        {
++          id: "b10",
++          currentState: "confirmed",
++          scheduledStartAt: expect.any(Date),
++          escalated: false,
++        },
++        {
++          id: "b11",
++          currentState: "confirmed",
++          scheduledStartAt: expect.any(Date),
++          escalated: false,
++        },
++      ]);
++    });
++
++    test("passes category/urgency/escalated filters to repo as 5th arg", async () => {
++      const repo = mockRepo({
++        listBookingsByState: mock(async () => []),
++      });
++      const service = createAdminBookingService({
++        db: makeDb(),
++        repo,
++        auditPort: makeAuditPort(),
++        wallet: makeWalletPort() as any,
++        refund: makeRefundPort(),
++      });
++
++      await service.listBookings({
++        limit: 2,
++        category: "force_cancel",
++        urgency: "high",
++        escalated: true,
++      });
++      expect(repo.listBookingsByState).toHaveBeenCalledWith(
++        expect.anything(),
++        [],
++        2,
++        undefined,
++        { category: "force_cancel", urgency: "high", escalated: true },
++      );
++    });
++
++    test("flags booking as escalated when overrideMeta.overriddenAt is stale", async () => {
++      const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
++      const fresh = new Date().toISOString();
++      const repo = mockRepo({
++        listBookingsByState: mock(async () => [
++          {
++            id: "b1",
++            currentState: "confirmed",
++            scheduledStartAt: new Date(),
++            overrideMeta: { overriddenAt: stale },
++          },
++          {
++            id: "b2",
++            currentState: "scheduled",
++            scheduledStartAt: new Date(),
++            overrideMeta: { overriddenAt: fresh },
++          },
++          {
++            id: "b3",
++            currentState: "confirmed",
++            scheduledStartAt: new Date(),
++            overrideMeta: null,
++          },
++        ]),
++      });
++      const service = createAdminBookingService({
++        db: makeDb(),
++        repo,
++        auditPort: makeAuditPort(),
++        wallet: makeWalletPort() as any,
++        refund: makeRefundPort(),
++      });
++
++      const result = await service.listBookings({ limit: 5 });
++      expect(result.items.map((i) => i.escalated)).toEqual([
++        true,
++        false,
++        false,
+       ]);
+     });
+   });
+ 
+   describe("getBookingStateHistory", () => {
+     test("throws BookingNotFoundError when booking does not exist", async () => {
+       const repo = mockRepo({
+         findBookingById: mock(async () => null),
+       });
+       const service = createAdminBookingService({
+diff --git a/packages/api/src/tests/unit/admin.handler.test.ts b/packages/api/src/tests/unit/admin.handler.test.ts
+index edd4e9d..7519e10 100644
+--- a/packages/api/src/tests/unit/admin.handler.test.ts
++++ b/packages/api/src/tests/unit/admin.handler.test.ts
+@@ -35,30 +35,38 @@ function makeAdminRepo(overrides: Record<string, unknown> = {}) {
+     })),
+     updateRoleWithExpected: mock(async () => [{ id: "u1", role: "tutor" }]),
+     ...overrides,
+   };
+ }
+ 
+ function makeAuditPort() {
+   return { record: mock(async () => {}) };
+ }
+ 
++function makeWalletPort() {
++  return {
++    getByUserId: mock(async () => null),
++    listLedger: mock(async () => ({ items: [], nextCursor: null })),
++  };
++}
++
+ describe("AdminHandler", () => {
+   describe("listUsers", () => {
+     test("calls adminService.listUsers with input from handler", async () => {
+       const repo = makeAdminRepo();
+       const auditPort = makeAuditPort();
+       const db = makeDb();
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: auditPort as any,
+         db,
++        wallet: makeWalletPort() as any,
+       });
+       const handler = createAdminHandler(service);
+       const context = {
+         session: { user: { id: "admin1" } },
+       } as any;
+       const input = { limit: 10, offset: 0 };
+ 
+       const result = await handler.listUsers({ context, input });
+ 
+       expect(result.users).toEqual([{ id: "u1", role: "student" }]);
+@@ -68,20 +76,21 @@ describe("AdminHandler", () => {
+ 
+   describe("setRole", () => {
+     test("calls adminService.setRole with session user id and input", async () => {
+       const repo = makeAdminRepo();
+       const auditPort = makeAuditPort();
+       const db = makeDb();
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: auditPort as any,
+         db,
++        wallet: makeWalletPort() as any,
+       });
+       const handler = createAdminHandler(service);
+       const context = {
+         session: { user: { id: "admin1" } },
+       } as any;
+       const input = { userId: "u1", role: "tutor", expectedRole: "student" };
+ 
+       const result = await handler.setRole({ context, input });
+ 
+       expect(result.id).toBe("u1");
+@@ -93,40 +102,42 @@ describe("AdminService", () => {
+   describe("listUsers", () => {
+     test("returns users and total with default limit and offset", async () => {
+       const repo = makeAdminRepo({
+         listUsers: mock(async () => [{ id: "u1" }]),
+         countUsers: mock(async () => 5),
+       });
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: makeAuditPort() as any,
+         db: makeDb(),
++        wallet: makeWalletPort() as any,
+       });
+ 
+       const result = await service.listUsers({});
+ 
+       expect(result.users).toEqual([{ id: "u1" }]);
+       expect(result.total).toBe(5);
+       expect(result.limit).toBe(50);
+       expect(result.offset).toBe(0);
+       expect(repo.listUsers).toHaveBeenCalledWith(expect.anything(), 50, 0);
+     });
+ 
+     test("uses provided limit and offset", async () => {
+       const repo = makeAdminRepo({
+         listUsers: mock(async () => []),
+         countUsers: mock(async () => 0),
+       });
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: makeAuditPort() as any,
+         db: makeDb(),
++        wallet: makeWalletPort() as any,
+       });
+ 
+       const result = await service.listUsers({ limit: 10, offset: 20 });
+ 
+       expect(result.limit).toBe(10);
+       expect(result.offset).toBe(20);
+       expect(repo.listUsers).toHaveBeenCalledWith(expect.anything(), 10, 20);
+     });
+ 
+     test("runs listUsers and countUsers in parallel", async () => {
+@@ -139,38 +150,40 @@ describe("AdminService", () => {
+         }),
+         countUsers: mock(async () => {
+           countCalled = true;
+           return 0;
+         }),
+       });
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: makeAuditPort() as any,
+         db: makeDb(),
++        wallet: makeWalletPort() as any,
+       });
+ 
+       await service.listUsers({});
+ 
+       expect(listCalled).toBe(true);
+       expect(countCalled).toBe(true);
+     });
+   });
+ 
+   describe("setRole", () => {
+     test("throws UserNotFoundError when target user does not exist", async () => {
+       const repo = makeAdminRepo({
+         getById: mock(async () => null),
+       });
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: makeAuditPort() as any,
+         db: makeDb(),
++        wallet: makeWalletPort() as any,
+       });
+ 
+       try {
+         await service.setRole("admin1", {
+           userId: "u1",
+           role: "tutor",
+           expectedRole: "student",
+         });
+         expect(true).toBe(false);
+       } catch (e: any) {
+@@ -184,20 +197,21 @@ describe("AdminService", () => {
+         getById: mock(async () => ({
+           id: "u1",
+           role: USER_ROLE.ADMIN,
+         })),
+         countAdmins: mock(async () => 1),
+       });
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: makeAuditPort() as any,
+         db: makeDb(),
++        wallet: makeWalletPort() as any,
+       });
+ 
+       try {
+         await service.setRole("admin1", {
+           userId: "u1",
+           role: "student",
+           expectedRole: "admin",
+         });
+         expect(true).toBe(false);
+       } catch (e: any) {
+@@ -213,20 +227,21 @@ describe("AdminService", () => {
+           id: "u1",
+           role: "student",
+         })),
+         updateRoleWithExpected: mock(async () => [updatedUser]),
+       });
+       const auditPort = makeAuditPort();
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: auditPort as any,
+         db: makeDb(),
++        wallet: makeWalletPort() as any,
+       });
+ 
+       const result = await service.setRole("admin1", {
+         userId: "u1",
+         role: "tutor",
+         expectedRole: "student",
+       });
+ 
+       expect(result.role).toBe("tutor");
+       expect(auditPort.record).toHaveBeenCalledWith(
+@@ -247,20 +262,21 @@ describe("AdminService", () => {
+           role: USER_ROLE.ADMIN,
+         })),
+         countAdmins: mock(async () => 3),
+         updateRoleWithExpected: mock(async () => [updatedUser]),
+       });
+       const auditPort = makeAuditPort();
+       const service = createAdminService({
+         adminRepo: repo as any,
+         auditPort: auditPort as any,
+         db: makeDb(),
++        wallet: makeWalletPort() as any,
+       });
+ 
+       const result = await service.setRole("admin1", {
+         userId: "u1",
+         role: "student",
+         expectedRole: "admin",
+       });
+ 
+       expect(result.role).toBe("student");
+     });
+diff --git a/packages/api/src/tests/unit/admin.service.test.ts b/packages/api/src/tests/unit/admin.service.test.ts
+index 7204c72..4303391 100644
+--- a/packages/api/src/tests/unit/admin.service.test.ts
++++ b/packages/api/src/tests/unit/admin.service.test.ts
+@@ -1,18 +1,21 @@
+-import { describe, test, expect } from "bun:test";
++import { describe, test, expect, mock } from "bun:test";
+ import {
+   validateRoleChange,
++  createAdminService,
+   type TargetUser,
+ } from "../../modules/admin/admin.service";
+ import {
+   UserNotFoundError,
+   LastAdminError,
++  WalletNotFoundError,
++  InvalidLedgerFilterError,
+ } from "../../modules/admin/admin.errors";
+ 
+ function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
+   return { id: "u1", role: "student", ...overrides };
+ }
+ 
+ describe("Admin Service", () => {
+   describe("validateRoleChange", () => {
+     test("returns previousRole for changing student to tutor", () => {
+       const result = validateRoleChange(
+@@ -59,11 +62,171 @@ describe("Admin Service", () => {
+     test("returns previousRole when demoting admin with other admins present", () => {
+       const result = validateRoleChange(
+         makeTarget({ role: "admin" }),
+         "student",
+         3,
+         "u1",
+       );
+       expect(result.previousRole).toBe("admin");
+     });
+   });
++
++  describe("getWallet", () => {
++    function makeService(wallet: any) {
++      return createAdminService({
++        adminRepo: {} as any,
++        auditPort: {} as any,
++        db: {} as any,
++        wallet,
++      });
++    }
++
++    test("returns wallet snapshot for a user", async () => {
++      const wallet = {
++        getByUserId: mock(async () => ({
++          id: "w1",
++          totalBalance: 100,
++          heldBalance: 30,
++          availableBalance: 70,
++        })),
++        listLedger: mock(async () => ({ items: [], nextCursor: null })),
++      };
++      const service = makeService(wallet);
++      const result = await service.getWallet({ userId: "u1" });
++      expect(result).toEqual({
++        id: "w1",
++        totalBalance: 100,
++        heldBalance: 30,
++        availableBalance: 70,
++      });
++    });
++
++    test("throws WalletNotFoundError when user has no wallet", async () => {
++      const wallet = {
++        getByUserId: mock(async () => null),
++        listLedger: mock(async () => ({ items: [], nextCursor: null })),
++      };
++      const service = makeService(wallet);
++      try {
++        await service.getWallet({ userId: "missing" });
++        expect(true).toBe(false);
++      } catch (e: any) {
++        expect(e).toBeInstanceOf(WalletNotFoundError);
++      }
++    });
++  });
++
++  describe("listLedgerEntries", () => {
++    function makeService(wallet: any) {
++      return createAdminService({
++        adminRepo: {} as any,
++        auditPort: {} as any,
++        db: {} as any,
++        wallet,
++      });
++    }
++
++    test("resolves userId to wallet and lists ledger entries", async () => {
++      const wallet = {
++        getByUserId: mock(async () => ({
++          id: "w1",
++          totalBalance: 0,
++          heldBalance: 0,
++          availableBalance: 0,
++        })),
++        listLedger: mock(async () => ({
++          items: [{ id: "l1", walletId: "w1" }],
++          nextCursor: null,
++        })),
++      };
++      const service = makeService(wallet);
++      const result = await service.listLedgerEntries({ userId: "u1" });
++      expect(wallet.getByUserId).toHaveBeenCalledWith(expect.anything(), "u1");
++      expect(wallet.listLedger).toHaveBeenCalledWith("w1", {
++        limit: undefined,
++        cursor: undefined,
++        bookingId: undefined,
++        entryType: undefined,
++        dateFrom: undefined,
++        dateTo: undefined,
++      });
++      expect(result.items).toEqual([{ id: "l1", walletId: "w1" }]);
++    });
++
++    test("throws InvalidLedgerFilterError when both walletId and userId given", async () => {
++      const wallet = {
++        getByUserId: mock(async () => null),
++        listLedger: mock(async () => ({ items: [], nextCursor: null })),
++      };
++      const service = makeService(wallet);
++      try {
++        await service.listLedgerEntries({ walletId: "w1", userId: "u1" });
++        expect(true).toBe(false);
++      } catch (e: any) {
++        expect(e).toBeInstanceOf(InvalidLedgerFilterError);
++      }
++    });
++
++    test("throws InvalidLedgerFilterError when neither walletId nor userId given", async () => {
++      const wallet = {
++        getByUserId: mock(async () => null),
++        listLedger: mock(async () => ({ items: [], nextCursor: null })),
++      };
++      const service = makeService(wallet);
++      try {
++        await service.listLedgerEntries({});
++        expect(true).toBe(false);
++      } catch (e: any) {
++        expect(e).toBeInstanceOf(InvalidLedgerFilterError);
++      }
++    });
++
++    test("throws WalletNotFoundError when userId has no wallet", async () => {
++      const wallet = {
++        getByUserId: mock(async () => null),
++        listLedger: mock(async () => ({ items: [], nextCursor: null })),
++      };
++      const service = makeService(wallet);
++      try {
++        await service.listLedgerEntries({ userId: "missing" });
++        expect(true).toBe(false);
++      } catch (e: any) {
++        expect(e).toBeInstanceOf(WalletNotFoundError);
++      }
++    });
++
++    test("rejects invalid date filters", async () => {
++      const wallet = {
++        getByUserId: mock(async () => null),
++        listLedger: mock(async () => ({ items: [], nextCursor: null })),
++      };
++      const service = makeService(wallet);
++      try {
++        await service.listLedgerEntries({
++          walletId: "w1",
++          dateFrom: "not-a-date",
++        });
++        expect(true).toBe(false);
++      } catch (e: any) {
++        expect(e).toBeInstanceOf(InvalidLedgerFilterError);
++      }
++    });
++
++    test("rejects dateFrom after dateTo", async () => {
++      const wallet = {
++        getByUserId: mock(async () => null),
++        listLedger: mock(async () => ({ items: [], nextCursor: null })),
++      };
++      const service = makeService(wallet);
++      try {
++        await service.listLedgerEntries({
++          walletId: "w1",
++          dateFrom: "2026-01-02T00:00:00.000Z",
++          dateTo: "2026-01-01T00:00:00.000Z",
++        });
++        expect(true).toBe(false);
++      } catch (e: any) {
++        expect(e).toBeInstanceOf(InvalidLedgerFilterError);
++      }
++    });
++  });
+ });

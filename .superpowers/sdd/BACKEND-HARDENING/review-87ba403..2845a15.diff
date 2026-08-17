@@ -1,0 +1,604 @@
+# Review package: 87ba403..HEAD
+
+## Commits
+2845a15 fix(booking): reject reschedule reverts to exact prior state (G6)
+e871baf fix(booking): deduct per-participant holds on group completion (G4)
+
+## Files changed
+ packages/api/src/lib/sanitize.ts                   |   3 +-
+ .../api/src/modules/booking/booking-transitions.ts |   6 +-
+ .../api/src/modules/booking/booking.service.ts     |  74 +++++++++---
+ .../api/src/tests/integration/booking-g4.test.ts   |  42 +++++++
+ .../api/src/tests/unit/booking-transitions.test.ts |   3 +
+ .../api/src/tests/unit/booking.service.test.ts     | 130 +++++++++++++++++++++
+ packages/api/src/tests/unit/sanitize.test.ts       |  18 +++
+ 7 files changed, 255 insertions(+), 21 deletions(-)
+
+## Diff
+diff --git a/packages/api/src/lib/sanitize.ts b/packages/api/src/lib/sanitize.ts
+index 8d84b08..e2b7cb1 100644
+--- a/packages/api/src/lib/sanitize.ts
++++ b/packages/api/src/lib/sanitize.ts
+@@ -59,21 +59,22 @@ const DISALLOWED_TAGS = new Set([
+   "label",
+   "template",
+   "slot",
+ ]);
+ 
+ const DANGEROUS_URL = /^\s*(?:javascript:|vbscript:|data:\s*text\/html)/i;
+ 
+ function sanitizeAttributeValue(prefix: string, rawValue: string): string {
+   const value = rawValue.trim().replace(/^["']|["']$/g, "");
+   if (DANGEROUS_URL.test(value)) {
+-    return `${prefix}=""`;
++    // `prefix` already ends with `=`, so empty the attribute value directly.
++    return `${prefix}""`;
+   }
+   return prefix + rawValue;
+ }
+ 
+ function sanitizeTag(raw: string, tagName: string): string {
+   const stripped = raw.replace(
+     /\s+on[a-zA-Z][a-zA-Z0-9]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi,
+     "",
+   );
+   const cleaned = stripped.replace(
+diff --git a/packages/api/src/modules/booking/booking-transitions.ts b/packages/api/src/modules/booking/booking-transitions.ts
+index 8dc0a8d..9a45af1 100644
+--- a/packages/api/src/modules/booking/booking-transitions.ts
++++ b/packages/api/src/modules/booking/booking-transitions.ts
+@@ -16,21 +16,25 @@ const TRANSITIONS: Record<
+     ],
+   },
+   [BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION]: {
+     to: [
+       BOOKING_STATE.AWAITING_RECONFIRMATION,
+       BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+       BOOKING_STATE.EXPIRED,
+     ],
+   },
+   [BOOKING_STATE.AWAITING_RECONFIRMATION]: {
+-    to: [BOOKING_STATE.CONFIRMED, BOOKING_STATE.EXPIRED],
++    to: [
++      BOOKING_STATE.AWAITING_TUTOR_REVIEW,
++      BOOKING_STATE.CONFIRMED,
++      BOOKING_STATE.EXPIRED,
++    ],
+   },
+   [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: {
+     to: [
+       BOOKING_STATE.SCHEDULED,
+       BOOKING_STATE.RESCHEDULE_PROPOSED,
+       BOOKING_STATE.CANCELLED,
+     ],
+   },
+   [BOOKING_STATE.CONFIRMED]: {
+     to: [
+diff --git a/packages/api/src/modules/booking/booking.service.ts b/packages/api/src/modules/booking/booking.service.ts
+index 744d6c2..4a63066 100644
+--- a/packages/api/src/modules/booking/booking.service.ts
++++ b/packages/api/src/modules/booking/booking.service.ts
+@@ -40,21 +40,21 @@ import {
+   BookingRescheduleNotPendingError,
+   BookingNotCompletedError,
+ } from "./booking.errors";
+ import { sanitizeHtml } from "../../lib/sanitize";
+ import { log } from "../../lib/logger";
+ import {
+   BOOKING_STATE,
+   TERMINAL_STATES,
+   type BookingState,
+ } from "./booking-state.types";
+-import { canTransition } from "./booking-transitions";
++import { canTransition, TRANSITIONS } from "./booking-transitions";
+ import type { BookingRepo } from "./booking.repo";
+ import type {
+   BookingWalletPort,
+   BookingPricingPort,
+   BookingAuditPort,
+   BookingNotificationPort,
+   BookingMeetingPort,
+ } from "./index";
+ 
+ export interface CreateSoloInput {
+@@ -704,31 +704,57 @@ export function createBookingService(deps: {
+         throw new BookingNotEditableError(bookingId);
+       }
+       if (b.currentState !== BOOKING_STATE.SCHEDULED) {
+         throw new BookingStateTransitionError(
+           b.currentState,
+           "complete",
+           BOOKING_STATE.COMPLETED,
+         );
+       }
+ 
+-      const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+-      if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+-      await wallet.deduct(tx, {
+-        walletId: proposerWallet.id,
+-        amount: b.holdAmount,
+-        eventKey: `booking.${bookingId}.deduct`,
+-        sourceReference: bookingId,
+-        bookingId,
+-        actorType: ACTOR_TYPE.TUTOR,
+-        reason: "Session completed",
+-      });
++      if (b.type === BOOKING_TYPE.GROUP) {
++        // After a group repricing the holds live on each remaining
++        // participant's wallet (the proposer may have withdrawn and hold 0),
++        // so deduct from each confirmed participant individually.
++        const participants = await repo.findConfirmedParticipants(
++          tx,
++          bookingId,
++        );
++        for (const p of participants) {
++          if (p.heldAmount <= 0) continue;
++          // eslint-disable-next-line no-await-in-loop
++          const w = await wallet.getByUserId(tx, p.userId);
++          if (!w) throw new BookingNotFoundError(p.userId);
++          // eslint-disable-next-line no-await-in-loop
++          await wallet.deduct(tx, {
++            walletId: w.id,
++            amount: p.heldAmount,
++            eventKey: `booking.${bookingId}.complete.${p.userId}`,
++            sourceReference: bookingId,
++            bookingId,
++            actorType: ACTOR_TYPE.TUTOR,
++            reason: "Session completed",
++          });
++        }
++      } else {
++        const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
++        if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
++        await wallet.deduct(tx, {
++          walletId: proposerWallet.id,
++          amount: b.holdAmount,
++          eventKey: `booking.${bookingId}.deduct`,
++          sourceReference: bookingId,
++          bookingId,
++          actorType: ACTOR_TYPE.TUTOR,
++          reason: "Session completed",
++        });
++      }
+ 
+       const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
+         actorId: tutorId,
+         actorType: ACTOR_TYPE.TUTOR,
+       });
+ 
+       await repo.updateBookingHoldAmount(tx, bookingId, 0);
+ 
+       await notification.writeBestEffort({
+         db: tx,
+@@ -746,20 +772,24 @@ export function createBookingService(deps: {
+   }
+ 
+   async function cancelSession(userId: string, sessionId: string) {
+     return db.transaction(async (tx) => {
+       const session = await repo.findSessionById(tx, sessionId);
+       if (!session) throw new BookingSessionNotFoundError(sessionId);
+       const b = await repo.findBookingById(tx, session.seriesBookingId);
+       if (!b) throw new BookingNotFoundError(session.seriesBookingId);
+       await assertBookingAccess(b, userId, tx, session.seriesBookingId);
+ 
++      if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
++        throw new BookingCancelledError(session.seriesBookingId);
++      }
++
+       if (b.type !== BOOKING_TYPE.SERIES) {
+         throw new BookingNotEditableError(session.seriesBookingId);
+       }
+       if (b.targetGroupSize > 1) {
+         throw new BookingSessionNotCancellableError(sessionId);
+       }
+       if (session.currentState !== BOOKING_STATE.SCHEDULED) {
+         throw new BookingStateTransitionError(
+           session.currentState,
+           "cancelSession",
+@@ -1013,30 +1043,36 @@ export function createBookingService(deps: {
+       }
+ 
+       const proposal = await repo.findPendingRescheduleProposal(tx, bookingId);
+       if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
+ 
+       await repo.updateRescheduleProposal(tx, proposal.id, {
+         status: "rejected",
+         decidedAt: new Date(),
+       });
+ 
+-      const revertStates: BookingState[] = [
+-        BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+-        BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+-        BOOKING_STATE.AWAITING_RECONFIRMATION,
+-      ];
++      // The only legal states a booking can enter reschedule_proposed from are
++      // the sources in the transitions table, so derive the revert set from it
++      // to guarantee the booking returns to its exact prior state.
++      const rescheduleSources = (
++        Object.entries(TRANSITIONS) as [BookingState, { to: BookingState[] }][]
++      )
++        .filter(([, t]) => t.to.includes(BOOKING_STATE.RESCHEDULE_PROPOSED))
++        .map(([state]) => state);
+       const previous = b.previousState as BookingState | null;
+       const revertTarget =
+-        previous && revertStates.includes(previous)
++        previous && rescheduleSources.includes(previous)
+           ? previous
+-          : BOOKING_STATE.AWAITING_RECONFIRMATION;
++          : // Unreachable given the current transitions table; kept as a
++            // defensive fallback if a future legal source is added without a
++            // matching revert target.
++            BOOKING_STATE.AWAITING_RECONFIRMATION;
+ 
+       const updated = await transition(tx, bookingId, revertTarget, {
+         actorId: userId,
+         actorType: ACTOR_TYPE.STUDENT,
+         reason: "Student rejected the reschedule proposal",
+       });
+ 
+       await notification.write({
+         db: tx,
+         userId: b.tutorId,
+diff --git a/packages/api/src/tests/integration/booking-g4.test.ts b/packages/api/src/tests/integration/booking-g4.test.ts
+index e8b0646..08b8464 100644
+--- a/packages/api/src/tests/integration/booking-g4.test.ts
++++ b/packages/api/src/tests/integration/booking-g4.test.ts
+@@ -104,32 +104,35 @@ describe("G4: group repricing on headcount change", () => {
+   const tutorEmail = `tutor.g4.${ts}@cogito.test`;
+   const proposerEmail = `proposer.g4.${ts}@cogito.test`;
+   const i1Email = `invitee1.g4.${ts}@cogito.test`;
+   const i2Email = `invitee2.g4.${ts}@cogito.test`;
+   const i3Email = `invitee3.g4.${ts}@cogito.test`;
+ 
+   let proposerClient: TestClient;
+   let i1Client: TestClient;
+   let i2Client: TestClient;
+   let i3Client: TestClient;
++  let tutorClient: TestClient;
+   let tutorId: string;
+   let slotId: string;
+   let bookingId: string;
+   let proposerId: string;
+   let i1Id: string;
+   let i2Id: string;
+   let i3Id: string;
+ 
+   beforeAll(async () => {
+     const tutorData = await createPublishedTutor(tutorEmail, ts);
+     tutorId = tutorData.tutorId;
+     slotId = tutorData.slotId;
++    const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
++    tutorClient = createTestClient(await createTestContext(tutorCookie ?? ""));
+ 
+     const proposerRes = await signUpAndSignIn(
+       proposerEmail,
+       "Test1234!",
+       "Proposer G4",
+     );
+     proposerClient = createTestClient(
+       await createTestContext(proposerRes.cookie),
+     );
+     const proposerCtx = await createTestContext(proposerRes.cookie);
+@@ -232,11 +235,50 @@ describe("G4: group repricing on headcount change", () => {
+   test("remaining participants receive reprice notifications", async () => {
+     for (const id of [i1Id, i2Id, i3Id]) {
+       const notifs = await db
+         .select()
+         .from(notification)
+         .where(eq(notification.eventKey, `booking.${bookingId}.reprice.${id}`));
+       expect(notifs.length).toBe(1);
+       expect(notifs[0]!.title).toBe("Group price updated");
+     }
+   });
++
++  test("all remaining participants reconfirm → awaiting_tutor_review → tutor accepts → scheduled", async () => {
++    await i1Client.booking.reconfirm({ bookingId, accept: true });
++    await i2Client.booking.reconfirm({ bookingId, accept: true });
++    const r = await i3Client.booking.reconfirm({ bookingId, accept: true });
++    expect(r.reconfirmed).toBe(true);
++
++    const b = await i1Client.booking.get({ bookingId });
++    expect(b.currentState).toBe("awaiting_tutor_review");
++    expect(b.confirmedHeadcount).toBe(3);
++
++    const scheduled = await tutorClient.tutorActions.acceptBooking({
++      bookingId,
++    });
++    expect(scheduled.currentState).toBe("scheduled");
++  });
++
++  test("tutor completes → deducts each remaining participant's hold, proposer untouched", async () => {
++    const completed = await tutorClient.tutorActions.completeSession({
++      bookingId,
++    });
++    expect(completed.currentState).toBe("completed");
++
++    for (const id of [i1Id, i2Id, i3Id]) {
++      const [w] = await db.select().from(wallet).where(eq(wallet.userId, id));
++      expect(w!.heldBalance).toBe(0);
++      expect(w!.totalBalance).toBe(200 - 35);
++    }
++
++    const [proposerWallet] = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.userId, proposerId));
++    expect(proposerWallet!.totalBalance).toBe(200);
++    expect(proposerWallet!.heldBalance).toBe(0);
++
++    const b = await i1Client.booking.get({ bookingId });
++    expect(b.holdAmount).toBe(0);
++  });
+ });
+diff --git a/packages/api/src/tests/unit/booking-transitions.test.ts b/packages/api/src/tests/unit/booking-transitions.test.ts
+index 23fc306..0608220 100644
+--- a/packages/api/src/tests/unit/booking-transitions.test.ts
++++ b/packages/api/src/tests/unit/booking-transitions.test.ts
+@@ -88,20 +88,23 @@ describe("Booking State Transitions", () => {
+     );
+     expect(
+       canTransition("awaiting_participant_confirmation", "confirmed"),
+     ).toBe(false);
+   });
+ 
+   test("awaiting_reconfirmation transitions", () => {
+     expect(canTransition("awaiting_reconfirmation", "confirmed")).toBe(true);
+     expect(canTransition("awaiting_reconfirmation", "expired")).toBe(true);
+     expect(canTransition("awaiting_reconfirmation", "cancelled")).toBe(false);
++    expect(
++      canTransition("awaiting_reconfirmation", "awaiting_tutor_review"),
++    ).toBe(true);
+   });
+ 
+   test("awaiting_admin_room_approval transitions", () => {
+     expect(canTransition("awaiting_admin_room_approval", "scheduled")).toBe(
+       true,
+     );
+     expect(
+       canTransition("awaiting_admin_room_approval", "reschedule_proposed"),
+     ).toBe(true);
+     expect(canTransition("awaiting_admin_room_approval", "cancelled")).toBe(
+diff --git a/packages/api/src/tests/unit/booking.service.test.ts b/packages/api/src/tests/unit/booking.service.test.ts
+index 516089f..2897594 100644
+--- a/packages/api/src/tests/unit/booking.service.test.ts
++++ b/packages/api/src/tests/unit/booking.service.test.ts
+@@ -1114,20 +1114,88 @@ describe("BookingService", () => {
+             makeBooking({ currentState: "confirmed" }),
+           ),
+         },
+       });
+ 
+       await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
+         BookingStateTransitionError,
+       );
+     });
+ 
++    test("group booking after proposer withdrawal deducts each confirmed participant's hold", async () => {
++      const booking = makeBooking({
++        type: "group",
++        currentState: "scheduled",
++        holdAmount: 105,
++      });
++      const participants = [
++        { id: "p2", userId: "student2", heldAmount: 35 },
++        { id: "p3", userId: "student3", heldAmount: 35 },
++        { id: "p4", userId: "student4", heldAmount: 35 },
++      ];
++      const { service, wallet, repo, notification } = createService({
++        repo: {
++          findBookingById: mock(async () => booking),
++          findConfirmedParticipants: mock(async () => participants),
++          updateBookingVersioned: mock(async () => ({
++            updated: { ...booking, currentState: "completed" },
++            newVersion: 2,
++          })),
++        },
++        wallet: {
++          getByUserId: mock(async (_conn: any, userId: string) => ({
++            id: `w-${userId}`,
++            totalBalance: 500,
++            heldBalance: 0,
++            availableBalance: 500,
++          })),
++        },
++      });
++
++      await service.completeSession("b1", "tutor1");
++
++      expect(repo.findConfirmedParticipants).toHaveBeenCalledTimes(1);
++      expect(wallet.deduct).toHaveBeenCalledTimes(3);
++      const deductCalls = wallet.deduct.mock.calls.map((c) => c[1]);
++      expect(deductCalls).toEqual([
++        expect.objectContaining({
++          walletId: "w-student2",
++          amount: 35,
++          eventKey: "booking.b1.complete.student2",
++        }),
++        expect.objectContaining({
++          walletId: "w-student3",
++          amount: 35,
++          eventKey: "booking.b1.complete.student3",
++        }),
++        expect.objectContaining({
++          walletId: "w-student4",
++          amount: 35,
++          eventKey: "booking.b1.complete.student4",
++        }),
++      ]);
++      expect(wallet.getByUserId.mock.calls.map((c) => c[1])).toEqual([
++        "student2",
++        "student3",
++        "student4",
++      ]);
++      expect(wallet.getByUserId.mock.calls.map((c) => c[1])).not.toContain(
++        "student1",
++      );
++      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
++        expect.anything(),
++        "b1",
++        0,
++      );
++      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
++    });
++
+     test("completes session, deducts marks, sets holdAmount to 0", async () => {
+       const booking = makeBooking({
+         currentState: "scheduled",
+         holdAmount: 42,
+       });
+       const { service, wallet, repo, notification } = createService({
+         repo: {
+           findBookingById: mock(async () => booking),
+           updateBookingVersioned: mock(async () => ({
+             updated: { ...booking, currentState: "completed" },
+@@ -3159,20 +3227,48 @@ describe("BookingService", () => {
+         },
+       });
+ 
+       await service.withdraw("student1", "b1");
+ 
+       expect(repo.updateBookingPriceSnapshot).not.toHaveBeenCalled();
+     });
+   });
+ 
+   describe("G5 series session cancellation", () => {
++    test("rejects session cancellation when the parent booking is terminal", async () => {
++      const booking = makeBooking({
++        type: "series",
++        targetGroupSize: 1,
++        currentState: "cancelled",
++        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
++      });
++      const session = {
++        id: "s1",
++        seriesBookingId: "b1",
++        scheduledStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
++        scheduledEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
++        currentState: "scheduled",
++        holdAmount: 42,
++      };
++      const { service, repo } = createService({
++        repo: {
++          findSessionById: mock(async () => session),
++          findBookingById: mock(async () => booking),
++        },
++      });
++
++      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
++        BookingCancelledError,
++      );
++      expect(repo.cancelSession).not.toHaveBeenCalled();
++    });
++
+     test("cancels a solo series session before H-2 and releases its hold", async () => {
+       const booking = makeBooking({
+         type: "series",
+         targetGroupSize: 1,
+         holdAmount: 84,
+         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+       });
+       const session = {
+         id: "s1",
+         seriesBookingId: "b1",
+@@ -3452,20 +3548,54 @@ describe("BookingService", () => {
+         "r1",
+         expect.objectContaining({ status: "rejected" }),
+       );
+       expect(repo.updateBookingSchedule).not.toHaveBeenCalled();
+       expect(notification.write).toHaveBeenCalledTimes(1);
+       expect(notification.write.mock.calls[0][0]).toMatchObject({
+         userId: "tutor1",
+         title: "Reschedule rejected",
+       });
+     });
++
++    test("rejectReschedule reverts to awaiting_admin_room_approval when that was the prior state", async () => {
++      const booking = makeRescheduleBooking({
++        previousState: "awaiting_admin_room_approval",
++      });
++      const proposal = {
++        id: "r1",
++        bookingId: "b1",
++        proposedBy: "tutor1",
++        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
++        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
++        status: "pending",
++      };
++      const { service, repo } = createService({
++        repo: {
++          findBookingById: mock(async () => ({ ...booking, version: 1 })),
++          findPendingRescheduleProposal: mock(async () => proposal),
++          updateBookingVersioned: mock(
++            async (_conn: any, _id: any, ver: number, updates: any) => ({
++              updated: { ...booking, ...updates, version: ver + 1 },
++              newVersion: ver + 1,
++            }),
++          ),
++        },
++      });
++
++      const result = await service.rejectReschedule("student1", "b1");
++
++      expect(result.currentState).toBe("awaiting_admin_room_approval");
++      const transitionCall = repo.updateBookingVersioned.mock.calls[0][3];
++      expect(transitionCall).toMatchObject({
++        currentState: "awaiting_admin_room_approval",
++      });
++    });
+   });
+ 
+   describe("G7 session notes", () => {
+     test("addSessionNote rejects when booking is not completed", async () => {
+       const booking = makeBooking({ currentState: "scheduled" });
+       const { service } = createService({
+         repo: {
+           findBookingById: mock(async () => booking),
+         },
+       });
+diff --git a/packages/api/src/tests/unit/sanitize.test.ts b/packages/api/src/tests/unit/sanitize.test.ts
+index c79c481..b2302b3 100644
+--- a/packages/api/src/tests/unit/sanitize.test.ts
++++ b/packages/api/src/tests/unit/sanitize.test.ts
+@@ -15,24 +15,42 @@ describe("sanitizeHtml", () => {
+     );
+     expect(out).toBe('<a href="https://x.test">click</a>');
+     expect(out).not.toContain("onclick");
+     expect(out).not.toContain("onmouseover");
+   });
+ 
+   test("neutralizes javascript: and vbscript: URLs", () => {
+     const out = sanitizeHtml(
+       '<a href="javascript:alert(1)">x</a><a href="vbscript:msgbox(1)">y</a>',
+     );
++    expect(out).toBe('<a href="">x</a><a href="">y</a>');
+     expect(out).not.toContain("javascript:");
+     expect(out).not.toContain("vbscript:");
+   });
+ 
++  test("neutralizes data:text/html URLs", () => {
++    const out = sanitizeHtml(
++      '<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">x</a>',
++    );
++    expect(out).toBe('<a href="">x</a>');
++    expect(out).not.toContain("data:");
++  });
++
++  test("neutralizes data:text/html URLs that embed markup", () => {
++    const out = sanitizeHtml(
++      '<a href="data:text/html,<script>alert(1)</script>">x</a>',
++    );
++    expect(out).not.toContain("data:");
++    expect(out).not.toContain("<script>");
++    expect(out).toMatch(/^<a href="">/);
++  });
++
+   test("drops disallowed embed/image tags", () => {
+     const out = sanitizeHtml(
+       '<img src="x" onerror="alert(1)"><iframe src="http://evil"></iframe>text',
+     );
+     expect(out).toBe("text");
+     expect(out).not.toContain("<img");
+     expect(out).not.toContain("<iframe");
+   });
+ 
+   test("strips style blocks with content", () => {

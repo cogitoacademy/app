@@ -1,0 +1,6 @@
+*
+!**/
+!.gitignore
+!**/progress.md
+!BACKEND-HARDENING/**
+!BACKEND-HARDENING-PHASE2/**
