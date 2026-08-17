@@ -11,22 +11,24 @@ Created 2026-08-17 by the wave-4 auditor (docs/plans + `.superpowers/sdd` reconc
 
 ## Status
 
-| PR  | Tasks                       | Status | Notes |
-| --- | --------------------------- | ------ | ----- |
-| P1  | Docs/planning reconciliation (D1–D10) | pending | Docs-only + `.superpowers/sdd` disposition |
-| P2  | Money-correctness C1–C3, H1–H6, M1–M9, L1–L5 (TDD) | pending | Booking/payment/room/support/wallet |
-| P3  | Xendit provider rewrite 2024-11-11 + refund port | pending | Needs user-provided sandbox keys |
-| P4  | Fail-loud guards Resend/Meet/R2 + ops docs | pending | + G2 email verification (scoped) |
+| PR  | Tasks                                              | Status  | Notes                                      |
+| --- | -------------------------------------------------- | ------- | ------------------------------------------ |
+| P1  | Docs/planning reconciliation (D1–D10)              | pending | Docs-only + `.superpowers/sdd` disposition |
+| P2  | Money-correctness C1–C3, H1–H6, M1–M9, L1–L5 (TDD) | pending | Booking/payment/room/support/wallet        |
+| P3  | Xendit provider rewrite 2024-11-11 + refund port   | pending | Needs user-provided sandbox keys           |
+| P4  | Fail-loud guards Resend/Meet/R2 + ops docs         | pending | + G2 email verification (scoped)           |
 
 ## Key audit facts (verified 2026-08-17)
 
 See the plan's Concern Inventory for full evidence (file:line). Highlights:
+
 - C1 group no-show strands other participants' holds (`booking.service.ts:1486-1493`)
 - C2 H-2 reschedule bypass (`booking.service.ts:1576-1604`)
 - C3 completeSession missing start guard (`booking.service.ts:1015-1027`)
 - H1 reschedule-accept stale deadline → auto expire (`booking.service.ts:1780-1786`, `:3263-3299`)
 - H4 REFUNDED webhook wedges on spent marks (`payment.service.ts:297-321`)
 - X1 Xendit provider is legacy v3; current API needs `api-version: 2024-11-11` schema, `SUCCEEDED` statuses, `actions[].value`, `data.payment_id` webhook field, and a provider refund port.
+
 ## Worktree baseline (verified 2026-08-17 by executing agent)
 
 - Worktree: `/Users/miapalovaara/cogito/wt-review-fixes4`, branch `fix/review-fixes-4`, off `main` (= origin/main at `6c80391`).
