@@ -428,6 +428,13 @@ describe("Booking group series flow (FR-20)", () => {
       invitee1Client.booking.withdraw({ bookingId }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
+    // M3: the proposer's cancel() is equally blocked once the group series is
+    // past participant confirmation — the package holds are committed and the
+    // escape hatch is an admin override.
+    await expect(
+      proposerClient.booking.cancel({ bookingId, reason: "Change of plans" }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
     const sessions = await proposerClient.booking.listSessions({ bookingId });
     expect(sessions.length).toBe(3);
 

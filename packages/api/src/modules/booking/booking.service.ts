@@ -749,14 +749,35 @@ export function createBookingService(deps: {
         );
       }
 
+      // M3: once a group series is past participant confirmation, the proposer
+      // cannot pull the whole class — the participants' package holds are
+      // committed (U4 no-opt-out applies to cancel too, not just withdraw).
+      // Admin overrides remain the escape hatch (require admin override
+      // otherwise). Cancelling before confirmation is still allowed.
+      if (
+        b.type === BOOKING_TYPE.SERIES &&
+        b.targetGroupSize > 1 &&
+        b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION
+      ) {
+        throw new BookingSeriesNoOptOutError(bookingId);
+      }
+
       const now = new Date();
       const h2 = new Date(
         b.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
       const isLate = now > h2;
-      const toState: BookingState = isLate
-        ? BOOKING_STATE.LATE_CANCELLED
-        : BOOKING_STATE.CANCELLED;
+      // CANCELLED is not reachable from AWAITING_PARTICIPANT_CONFIRMATION /
+      // AWAITING_RECONFIRMATION (mirrors withdraw's cancelTarget fallback) —
+      // use EXPIRED there so the cancel is never rolled back by the guard.
+      const toState: BookingState = canTransition(
+        b.currentState as BookingState,
+        isLate ? BOOKING_STATE.LATE_CANCELLED : BOOKING_STATE.CANCELLED,
+      )
+        ? isLate
+          ? BOOKING_STATE.LATE_CANCELLED
+          : BOOKING_STATE.CANCELLED
+        : BOOKING_STATE.EXPIRED;
 
       if (b.type === BOOKING_TYPE.SERIES) {
         await repo.cancelAllSessions(tx, bookingId);

@@ -103,3 +103,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - SCHEDULED→NO_SHOW branch deducts each confirmed participant's held amount (`booking.{id}.no_show.{userId}`) + zeroes participant hold instead of releasing; release stays for EXPIRED/CANCELLED pre-start states. Notification copy "held marks were forfeited".
 - Tests: `booking-expiry-no-show.test.ts` (new), `scheduler-expiry.test.ts` updated (forfeit: available 390/total 460 + ledger deduct), `booking.service.test.ts` unit updated.
 - Batch 184/184; check-types/lint/oxfmt clean.
+
+## P2.11 (M3) group-series cancel guard — complete
+
+- `cancel()` throws `BookingSeriesNoOptOutError` for `type === SERIES && targetGroupSize > 1` past `AWAITING_PARTICIPANT_CONFIRMATION`; pre-confirmation cancel still works with EXPIRED fallback where CANCELLED unreachable.
+- Tests: unit (4 new cases) + integration `booking-group-series.test.ts` (proposer cancel → CONFLICT).
+- Full API 1873/0; check-types/lint/oxfmt clean.

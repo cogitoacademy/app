@@ -1173,6 +1173,110 @@ describe("BookingService", () => {
 
       expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
     });
+
+    test("throws BookingSeriesNoOptOutError when cancelling a confirmed group series (M3)", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => makeParticipant()),
+        },
+      });
+
+      await expect(
+        service.cancel("student1", "b1", "changed mind"),
+      ).rejects.toThrow(BookingSeriesNoOptOutError);
+
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(repo.cancelAllSessions).not.toHaveBeenCalled();
+    });
+
+    test("throws BookingSeriesNoOptOutError when cancelling a group series awaiting tutor review (M3)", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "awaiting_tutor_review",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => makeParticipant()),
+        },
+      });
+
+      await expect(service.cancel("student1", "b1")).rejects.toThrow(
+        BookingSeriesNoOptOutError,
+      );
+    });
+
+    test("allows cancelling a group series still awaiting participant confirmation (M3)", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "awaiting_participant_confirmation",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => makeParticipant()),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "expired" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      // Pre-confirmation the group can still be pulled (no opt-out has
+      // happened yet); CANCELLED is not reachable from this state, so the
+      // terminal target is EXPIRED (mirroring withdraw's cancelTarget logic).
+      await service.cancel("student1", "b1", "not enough interest");
+
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(repo.cancelAllSessions).toHaveBeenCalledTimes(1);
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "expired" }),
+      );
+    });
+
+    test("solo-series cancel still works (targetGroupSize 1 is not a group series) (M3)", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 1,
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const { service, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => makeParticipant()),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "cancelled" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.cancel("student1", "b1");
+
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("tutorAccept", () => {
