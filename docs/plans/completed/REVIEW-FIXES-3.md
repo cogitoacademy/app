@@ -1,6 +1,10 @@
 # Backend Review Fixes 3 — Wave-3 Audit Plan
 
-> **STATUS: COMPLETED — all PRs merged to main (2026-08-16): #60 (P1 docs), #61 (P2 blocker report), #62 (P3 money fixes), #63 (P4 CI/CD), #64 (P5 U-items), #65 (P6 frontend + auth).** G2 (email verification) remains deferred (pre-existing; depends on Resend wiring + frontend route); J2/F18-withdraw tracked in FRONTEND-GAPS-SPEC.
+> **STATUS: COMPLETED — all PRs merged to main (#59–#65, 2026-08-17).** Wave-3 findings from the 2026-08-16 full audit (docs/plans reconciliation, open PR #55 blockers, backend money-correctness bugs, CI/CD hardening, remaining U-items and F-items). Verified at git HEAD `7375b9d` (post-#58), executed against `6c80391`.
+>
+> **Merged PRs:** #59 (P1 docs reconciliation) · #60 (P1 follow-up) · #61 (P2 blocker report) · #62 (P3 backend money fixes B1–B9/U3/U8/U12) · #63 (P4 CI/CD hardening C1–C9) · #64 (P5 backend U-items U1–U7/U10/U14) · #65 (P6 frontend F-items F8/F13/F14/F16 + password policy C6).
+>
+> **Only open item:** **G2 (email verification) remains deferred** — better-auth `emailVerification` plugin + Resend wiring + UI. Tracked in `REVIEW-FIXES-4.md` P4.1/P4.4 (requires a working production Resend sender per P4.1).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -158,7 +162,7 @@
 
 **Files:** migration 0022, `payment.service.ts:146-159`.
 
-- [x] **Step 1:** Migration `CREATE UNIQUE INDEX` on `payment_record.provider_reference`; service `onConflictDoNothing`/reuse. — migration 0019 on main (PR #55's 0019–0021 not merged; plan's '0022' numbering assumed #55 landed)
+- [x] **Step 1:** Migration `CREATE UNIQUE INDEX` on `payment_record.provider_reference`; service `onConflictDoNothing`/reuse. — migration **0019** on main (PR #55's 0019–0021 not merged; the plan's '0022' numbering assumed #55 landed — corrected 2026-08-17)
 - [x] **Step 2:** Test duplicate `createPurchase` concurrency → single PENDING row. — `payment-flow.test.ts` B6 + repo/service unit tests
 - [x] **Step 3:** Commit `fix(payment): unique provider reference prevents zombie pending payments (B6)`.
 
@@ -237,11 +241,11 @@
 ## PR P5 — Remaining backend U-items
 
 - [x] **5.1 (U1)** admin manual meeting-link entry — new admin RPC (`adminBooking.setMeetingLink` or meeting module port) + interplay with `retry-failed-meetings` (stop retrying once manual link set). — `setMeetingLink` on `MeetingPort` + `adminBooking.setMeetingLink` RPC; status `created` excludes it from the retry job; `admin-meeting-link.test.ts`
-- [x] **5.2 (U2)** student self-reschedule pre-H-2 — proposer-initiated reschedule reusing the proposal flow, H-2 guard, repricing rules. — `booking.rescheduleSelf` (SCHEDULED/CONFIRMED/AWAITING_ADMIN_ROOM_APPROVAL, H-2 gate, overlap checks) + `tutorActions.approveReschedule`; `reschedule-self-u2.test.ts`
+- [x] **5.2 (U2)** student self-reschedule pre-H-2 — proposer-initiated reschedule reusing the proposal flow, H-2 guard, repricing rules. — `booking.proposeReschedule` (studentProcedure) + `booking.acceptReschedule` (protected; the documented `rescheduleSelf`/`approveReschedule` names never existed — actual surface verified 2026-08-17); `reschedule-self-u2.test.ts`
 - [x] **5.3 (U5)** per-participant no-show marking — admin/tutor surface; forfeit the participant's hold per PRD. — `tutorActions.markParticipantNoShow` (solo → NO_SHOW; series → session forfeit); `tutor-no-show-u5.test.ts`
 - [x] **5.4 (U6)** admin per-session series cancel with Marks-return choice (mirror override `marksAction`). — `adminBooking.cancelSeriesSession` with release/forfeit/partial; `admin-series-cancel-u6.test.ts`
-- [x] **5.5 (U7)** per-session tutor reschedule within a series (extend `proposeReschedule` with `sessionId` — coordinate with PR #55's per-session work). — proposal `session_id` column (migration 0021) + accept moves only the session + sibling-overlap guard; `session-reschedule-u7.test.ts`
-- [x] **5.6 (U10)** achievement field parity — `issuer`, `visibility`, category enum (coordinate with PR #55 migration 0020 rename; do schema first). — migration 0020 (main numbering) + zod enum + web form; `achievement-flow.test.ts`
+- [x] **5.5 (U7)** per-session tutor reschedule within a series (extend `proposeReschedule` with `sessionId` — coordinate with PR #55's per-session work). — proposal `session_id` column (migration **0020**, not 0021 — corrected 2026-08-17) + accept moves only the session + sibling-overlap guard; `session-reschedule-u7.test.ts`
+- [x] **5.6 (U10)** achievement field parity — `issuer`, `visibility`, category enum (coordinate with PR #55 migration 0020 rename; do schema first). — migration **0023** (main numbering — corrected 2026-08-17) + zod enum + web form; `achievement-flow.test.ts`
 - [x] **5.7 (U14)** room availability in booking creation — `requestedRoomId` on createSolo/createGroup input + availability check + room booking row. — `requestRoomForBooking` port (two-phase DI wiring); `booking-u14-room-request.test.ts`
 - [x] **5.8 (hygiene)** convert 7 bare `.select()` in `booking.repo.ts`; remove unused `BookingTransition` in `booking-state.types.ts:35`.
 - Each TDD; docs per PR (PRD-GAPS-PHASE3 statuses; CONTEXT).

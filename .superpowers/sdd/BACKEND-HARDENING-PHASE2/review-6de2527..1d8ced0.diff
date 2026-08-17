@@ -1,0 +1,3022 @@
+# Review package: 6de2527..1d8ced0
+
+## Commits
+1d8ced0 style: oxfmt formatting for webhooks and support SLA
+d3f0d41 feat(support): SLA auto-escalation job for overdue support tickets
+9581d88 fix(webhooks): honor TRUST_PROXY in IP allowlist to block spoofed XFF
+6bc8017 fix(payment): honor PAYMENT_PROVIDER env — no silent stub fallback
+a6348b0 fix(payment): write payment/refund notifications to satisfy the notification matrix
+9d35f09 fix(payment): allow re-purchase after FAILED or EXPIRED payment
+d6f396f style(notification): oxfmt formatting for outbox consumer
+54d737b fix(notification): outbox pattern — queue dispatch rows, scheduler sends emails
+
+## Files changed
+ apps/server/src/scheduler.ts                       |  56 +----
+ apps/server/src/webhooks/allowlist.test.ts         |  37 +++-
+ apps/server/src/webhooks/payments.ts               |  15 +-
+ packages/api/src/modules/notification/index.ts     |   4 +-
+ .../src/modules/notification/notification.repo.ts  |  77 ++++++-
+ .../modules/notification/notification.service.ts   | 124 ++++++++---
+ packages/api/src/modules/payment/index.ts          |  19 +-
+ .../api/src/modules/payment/payment.service.ts     |  69 +++++-
+ .../scheduler/jobs/escalate-support-tickets.job.ts |  26 +++
+ .../scheduler/jobs/send-notification-email.job.ts  |   5 +
+ .../api/src/modules/scheduler/scheduler.service.ts |  25 ++-
+ packages/api/src/modules/support/support.repo.ts   |  36 ++-
+ .../api/src/modules/support/support.service.ts     |  41 +++-
+ packages/api/src/services.ts                       |   6 +-
+ .../integration/notification-email-g17.test.ts     |  24 ++
+ .../api/src/tests/integration/payment-flow.test.ts | 126 ++++++++++-
+ .../api/src/tests/integration/support-flow.test.ts |  61 ++++++
+ .../unit/escalate-support-tickets.job.test.ts      |  24 ++
+ .../api/src/tests/unit/notification.repo.test.ts   |  76 +++++++
+ .../src/tests/unit/notification.service.test.ts    | 243 ++++++++++++++++-----
+ packages/api/src/tests/unit/payment-module.test.ts |  42 ++++
+ .../api/src/tests/unit/payment.service.test.ts     | 175 +++++++++++++++
+ .../api/src/tests/unit/scheduler.service.test.ts   |  72 ++++--
+ .../api/src/tests/unit/support.service.test.ts     |  43 ++++
+ 24 files changed, 1244 insertions(+), 182 deletions(-)
+
+## Diff
+diff --git a/apps/server/src/scheduler.ts b/apps/server/src/scheduler.ts
+index 53f6753..07b5eb7 100644
+--- a/apps/server/src/scheduler.ts
++++ b/apps/server/src/scheduler.ts
+@@ -1,17 +1,18 @@
+ import { env } from "@cogito-app/env/server";
+ import { log } from "@cogito-app/api/lib/logger";
+ import { createSchedulerService } from "@cogito-app/api/modules/scheduler/scheduler.service";
+ import { scheduleBookingExpiryCheck } from "@cogito-app/api/modules/scheduler/jobs/expire-bookings.job";
+ import { scheduleHoldReleaseCheck } from "@cogito-app/api/modules/scheduler/jobs/release-holds.job";
+ import { scheduleCheckTutorLateness } from "@cogito-app/api/modules/scheduler/jobs/check-tutor-lateness.job";
+ import { scheduleSendNotificationEmail } from "@cogito-app/api/modules/scheduler/jobs/send-notification-email.job";
++import { scheduleEscalateSupportTickets } from "@cogito-app/api/modules/scheduler/jobs/escalate-support-tickets.job";
+ import { services } from "@cogito-app/api";
+ 
+ let scheduler: ReturnType<typeof createSchedulerService> = null;
+ 
+ /**
+  * Initializes the BullMQ scheduler and repeatable jobs when enabled.
+  *
+  * @returns a promise resolving once the scheduler and repeatable jobs are registered
+  */
+ export async function initScheduler(): Promise<void> {
+@@ -21,86 +22,39 @@ export async function initScheduler(): Promise<void> {
+       action: "scheduler_skip",
+       message: "Scheduler disabled or REDIS_URL not configured",
+     });
+     return;
+   }
+ 
+   scheduler = createSchedulerService(env.REDIS_URL!, {
+     onExpireBookings: () => services.booking.expireBookings(),
+     onReleaseHolds: () => services.booking.releaseExpiredHolds(),
+     onCheckTutorLateness: () => services.booking.checkTutorLateness(),
+-    onSendNotificationEmail: async (data) => {
+-      try {
+-        const db = (await import("@cogito-app/db")).db;
+-        const { notification: notificationTable, user: userTable } =
+-          await import("@cogito-app/db/schema");
+-        const { eq } = await import("drizzle-orm");
+-        const [notifRow] = await db
+-          .select()
+-          .from(notificationTable)
+-          .where(eq(notificationTable.id, data.notificationId))
+-          .limit(1);
+-        if (!notifRow) return;
+-
+-        const [userRow] = await db
+-          .select({ email: userTable.email })
+-          .from(userTable)
+-          .where(eq(userTable.id, data.userId))
+-          .limit(1);
+-        if (!userRow?.email) return;
+-
+-        const emailCategory =
+-          (notifRow.category as string) === "booking"
+-            ? "booking"
+-            : (notifRow.category as string) === "payment"
+-              ? "payment"
+-              : (notifRow.category as string) === "refund"
+-                ? "refund"
+-                : (notifRow.category as string) === "schedule"
+-                  ? "schedule"
+-                  : "override";
+-
+-        await services.email.send({
+-          to: userRow.email,
+-          subject: notifRow.title,
+-          html: notifRow.body,
+-          category: emailCategory as
+-            | "booking"
+-            | "payment"
+-            | "refund"
+-            | "schedule"
+-            | "override",
+-        });
+-      } catch (error) {
+-        log({
+-          level: "error",
+-          action: "scheduler_email_dispatch_failed",
+-          error: { message: String(error) },
+-          data,
+-        });
+-      }
+-    },
++    onSendNotificationEmail: () =>
++      services.notification.dispatchQueuedEmails(50),
++    onEscalateSupportTickets: () => services.support.escalatePastSlaTickets(),
+   });
+ 
+   if (!scheduler) {
+     log({
+       level: "warn",
+       action: "scheduler_init_failed",
+       message: "Failed to initialize scheduler",
+     });
+     return;
+   }
+ 
+   await scheduleBookingExpiryCheck(scheduler.queue);
+   await scheduleHoldReleaseCheck(scheduler.queue);
+   await scheduleCheckTutorLateness(scheduler.queue);
+   await scheduleSendNotificationEmail(scheduler.queue);
++  await scheduleEscalateSupportTickets(scheduler.queue);
+ 
+   log({
+     level: "info",
+     action: "scheduler_initialized",
+     message: "Scheduler initialized with repeatable jobs",
+   });
+ }
+ 
+ const SHUTDOWN_TIMEOUT_MS = 10_000;
+ 
+diff --git a/apps/server/src/webhooks/allowlist.test.ts b/apps/server/src/webhooks/allowlist.test.ts
+index ca0d05d..b6f5c5e 100644
+--- a/apps/server/src/webhooks/allowlist.test.ts
++++ b/apps/server/src/webhooks/allowlist.test.ts
+@@ -1,38 +1,63 @@
+ import { describe, expect, test } from "bun:test";
+ 
+ import { ipAllowed } from "./payments";
+ 
+ describe("ipAllowed", () => {
+   test("allows all IPs when allowlist is empty", () => {
+     const request = new Request("https://example.com/webhook", {
+       headers: { "x-forwarded-for": "203.0.113.9" },
+     });
+-    expect(ipAllowed(request, [])).toBe(true);
++    expect(ipAllowed(request, [], false)).toBe(true);
++    expect(ipAllowed(request, [], true)).toBe(true);
+   });
+ 
+-  test("allows a listed IP via x-forwarded-for", () => {
++  test("allows a listed IP via x-forwarded-for when trusting proxy", () => {
+     const request = new Request("https://example.com/webhook", {
+       headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" },
+     });
+-    expect(ipAllowed(request, ["203.0.113.9"])).toBe(true);
++    expect(ipAllowed(request, ["203.0.113.9"], true)).toBe(true);
+   });
+ 
+   test("allows a listed IP via x-real-ip when x-forwarded-for is absent", () => {
+     const request = new Request("https://example.com/webhook", {
+       headers: { "x-real-ip": "198.51.100.7" },
+     });
+-    expect(ipAllowed(request, ["198.51.100.7"])).toBe(true);
++    expect(ipAllowed(request, ["198.51.100.7"], false)).toBe(true);
++    expect(ipAllowed(request, ["198.51.100.7"], true)).toBe(true);
+   });
+ 
+   test("rejects an unlisted IP", () => {
+     const request = new Request("https://example.com/webhook", {
+       headers: { "x-forwarded-for": "192.0.2.55" },
+     });
+-    expect(ipAllowed(request, ["203.0.113.9"])).toBe(false);
++    expect(ipAllowed(request, ["203.0.113.9"], true)).toBe(false);
+   });
+ 
+   test("rejects when no IP headers are present", () => {
+     const request = new Request("https://example.com/webhook");
+-    expect(ipAllowed(request, ["203.0.113.9"])).toBe(false);
++    expect(ipAllowed(request, ["203.0.113.9"], false)).toBe(false);
++    expect(ipAllowed(request, ["203.0.113.9"], true)).toBe(false);
++  });
++
++  test("blocks a spoofed x-forwarded-for header when not trusting proxy", () => {
++    const request = new Request("https://example.com/webhook", {
++      headers: { "x-forwarded-for": "203.0.113.9", "x-real-ip": "6.6.6.6" },
++    });
++    expect(ipAllowed(request, ["203.0.113.9"], false)).toBe(false);
++  });
++
++  test("allows the real x-real-ip when not trusting proxy", () => {
++    const request = new Request("https://example.com/webhook", {
++      headers: { "x-forwarded-for": "203.0.113.9", "x-real-ip": "203.0.113.9" },
++    });
++    expect(ipAllowed(request, ["203.0.113.9"], false)).toBe(true);
++  });
++
++  test("honors the first x-forwarded-for hop when trusting proxy", () => {
++    const request = new Request("https://example.com/webhook", {
++      headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" },
++    });
++    expect(ipAllowed(request, ["203.0.113.9"], true)).toBe(true);
++    expect(ipAllowed(request, ["10.0.0.1"], true)).toBe(false);
+   });
+ });
+diff --git a/apps/server/src/webhooks/payments.ts b/apps/server/src/webhooks/payments.ts
+index c286c52..9de72f1 100644
+--- a/apps/server/src/webhooks/payments.ts
++++ b/apps/server/src/webhooks/payments.ts
+@@ -1,34 +1,35 @@
+ import { Elysia, type Context as ElysiaContext } from "elysia";
+ import { services } from "@cogito-app/api";
+ import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
+ import { log } from "@cogito-app/api/lib/logger";
+-import { readBodyWithLimit } from "@cogito-app/api/lib/request-id";
++import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
+ import { env } from "@cogito-app/env/server";
+ 
+ const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
+ const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+ 
+ export function stubCheckoutEnabled(
+   nodeEnv: string,
+   provider: string,
+   allowed: boolean,
+ ): boolean {
+   return nodeEnv !== "production" && provider === "stub" && allowed === true;
+ }
+ 
+-export function ipAllowed(request: Request, allowlist: string[]): boolean {
++export function ipAllowed(
++  request: Request,
++  allowlist: string[],
++  trustProxy: boolean,
++): boolean {
+   if (allowlist.length === 0) return true;
+-  const ip =
+-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+-    request.headers.get("x-real-ip") ??
+-    "";
++  const ip = getClientIp(request, trustProxy);
+   return allowlist.some((entry) => entry === ip);
+ }
+ 
+ function validateWebhookTimestamp(request: Request): void {
+   const timestamp =
+     request.headers.get("x-timestamp") ?? request.headers.get("date");
+   if (!timestamp) {
+     throw new Error("Webhook timestamp header is required");
+   }
+   const webhookTime = new Date(timestamp).getTime();
+@@ -56,21 +57,21 @@ export function paymentsWebhook(app: Elysia) {
+       );
+       if (tooLarge) {
+         set.status = 413;
+         return { error: "Request body too large" };
+       }
+ 
+       const allowlist = (env.WEBHOOK_ALLOWED_IPS ?? "")
+         .split(",")
+         .map((s) => s.trim())
+         .filter(Boolean);
+-      if (!ipAllowed(request, allowlist)) {
++      if (!ipAllowed(request, allowlist, env.TRUST_PROXY)) {
+         set.status = 403;
+         return { error: "Forbidden" };
+       }
+ 
+       log({
+         level: "info",
+         action: "webhook_received",
+         provider,
+         contentLength: request.headers.get("content-length"),
+         hasSignature: !!signature,
+diff --git a/packages/api/src/modules/notification/index.ts b/packages/api/src/modules/notification/index.ts
+index df5d1ec..c56fb84 100644
+--- a/packages/api/src/modules/notification/index.ts
++++ b/packages/api/src/modules/notification/index.ts
+@@ -14,16 +14,18 @@ interface NotificationEmailPort {
+     html: string;
+     category: "booking" | "payment" | "refund" | "schedule" | "override";
+   }): Promise<{ messageId: string } | { skipped: true }>;
+ }
+ 
+ export function createNotificationModule(deps: {
+   db: DbType;
+   email: NotificationEmailPort;
+ }) {
+   const repo = createNotificationRepo(deps.db);
+-  const service = createNotificationService(repo, deps.email);
++  const service = createNotificationService(repo, deps.email, {
++    db: deps.db,
++  });
+   const handler = createNotificationHandler({ notificationService: service });
+   return { service, handler };
+ }
+ 
+ export type { NotificationService, NotificationHandler };
+diff --git a/packages/api/src/modules/notification/notification.repo.ts b/packages/api/src/modules/notification/notification.repo.ts
+index 84c70f0..0f53cac 100644
+--- a/packages/api/src/modules/notification/notification.repo.ts
++++ b/packages/api/src/modules/notification/notification.repo.ts
+@@ -1,11 +1,11 @@
+-import { eq, and, desc, lt, count } from "drizzle-orm";
++import { eq, and, asc, desc, lt, count, sql } from "drizzle-orm";
+ import {
+   notification,
+   notificationDispatch,
+   user,
+ } from "@cogito-app/db/schema";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ export type NotificationRepo = ReturnType<typeof createNotificationRepo>;
+ 
+@@ -135,20 +135,91 @@ export async function updateDispatchStatus(
+   conn: DbOrTx,
+   notificationId: string,
+   status: string,
+ ) {
+   await conn
+     .update(notificationDispatch)
+     .set({ status })
+     .where(eq(notificationDispatch.notificationId, notificationId));
+ }
+ 
++/**
++ * Updates a dispatch row's status by its own id (used by the outbox consumer).
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the dispatch row id
++ * @param status - the new dispatch status
++ */
++export async function updateDispatchStatusById(
++  conn: DbOrTx,
++  id: string,
++  status: string,
++) {
++  await conn
++    .update(notificationDispatch)
++    .set({ status })
++    .where(eq(notificationDispatch.id, id));
++}
++
++/**
++ * Lists queued dispatch rows for the email outbox consumer, oldest first.
++ *
++ * @param conn - the database connection or active transaction
++ * @param limit - the maximum number of rows to return
++ * @returns the queued dispatch rows
++ */
++export async function listQueuedDispatches(conn: DbOrTx, limit = 50) {
++  return conn
++    .select()
++    .from(notificationDispatch)
++    .where(eq(notificationDispatch.status, "queued"))
++    .orderBy(asc(notificationDispatch.createdAt))
++    .limit(limit);
++}
++
++/**
++ * Increments a dispatch row's attempt counter and records the last error.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the dispatch row id
++ * @param lastError - the error message from the last failed send, or null
++ */
++export async function incrementDispatchAttempts(
++  conn: DbOrTx,
++  id: string,
++  lastError?: string | null,
++) {
++  await conn
++    .update(notificationDispatch)
++    .set({
++      attempts: sql`${notificationDispatch.attempts} + 1`,
++      lastError: lastError ?? null,
++    })
++    .where(eq(notificationDispatch.id, id));
++}
++
++/**
++ * Finds a notification by id (used by the email outbox consumer).
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the notification id
++ * @returns the full notification row, or null
++ */
++export async function findNotificationById(conn: DbOrTx, id: string) {
++  const [row] = await conn
++    .select()
++    .from(notification)
++    .where(eq(notification.id, id))
++    .limit(1);
++  return row ?? null;
++}
++
+ /**
+  * Lists a user's notifications with cursor pagination and optional unread filter.
+  *
+  * @param conn - the database connection or active transaction
+  * @param userId - the user id
+  * @param opts - list options (unreadOnly, cursor, limit)
+  * @returns up to limit+1 rows for nextCursor determination
+  */
+ export async function listNotifications(
+   conn: DbOrTx,
+@@ -243,20 +314,24 @@ export async function findDispatch(conn: DbOrTx, notificationId: string) {
+ 
+ export function createNotificationRepo(db: DbType) {
+   return {
+     findNotificationByEventKey,
+     findNotificationByIdForUser: (id: string, userId: string) =>
+       findNotificationByIdForUser(db, id, userId),
+     insertNotification,
+     findUserEmail,
+     insertDispatch,
+     updateDispatchStatus,
++    updateDispatchStatusById,
++    listQueuedDispatches,
++    incrementDispatchAttempts,
++    findNotificationById,
+     listNotifications: (
+       userId: string,
+       opts: { unreadOnly?: boolean; cursor?: string; limit: number },
+     ) => listNotifications(db, userId, opts),
+     countUnread: (userId: string) => countUnread(db, userId),
+     updateReadStatus: (id: string, userId: string, read: boolean) =>
+       updateReadStatus(db, id, userId, read),
+     markAllRead: (userId: string) => markAllRead(db, userId),
+     findDispatch: (notificationId: string) => findDispatch(db, notificationId),
+   };
+diff --git a/packages/api/src/modules/notification/notification.service.ts b/packages/api/src/modules/notification/notification.service.ts
+index 73ab085..903cd99 100644
+--- a/packages/api/src/modules/notification/notification.service.ts
++++ b/packages/api/src/modules/notification/notification.service.ts
+@@ -1,11 +1,12 @@
+ import type { DbOrTx } from "../../lib/tx";
++import type { DbType } from "../../lib/db";
+ import type { NotificationRepo } from "./notification.repo";
+ import { NotificationNotFoundError } from "./notification.errors";
+ import {
+   NOTIFICATION_SEVERITY,
+   DEFAULT_PAGE_LIMIT,
+   MAX_PAGE_LIMIT,
+ } from "../../shared/constants";
+ import { log } from "../../lib/logger";
+ 
+ interface NotificationEmailPort {
+@@ -91,31 +92,42 @@ export interface InAppNotificationPort {
+ const EMAIL_SUPPORTED_CATEGORIES: Set<string> = new Set([
+   "booking",
+   "payment",
+   "refund",
+   "schedule",
+   "override",
+ ]);
+ 
+ export type NotificationService = ReturnType<typeof createNotificationService>;
+ 
++export interface DispatchResult {
++  sent: number;
++  failed: number;
++}
++
++export type DispatchConsumer = (limit?: number) => Promise<DispatchResult>;
++
+ /**
+- * Creates the notification service for in-app and best-effort email notifications.
++ * Creates the notification service for in-app and outbox-based email notifications.
+  *
+  * @param repo - the notification repository
+- * @param emailPort - optional email sender used for action/critical severity notifications
+- * @returns an InAppNotificationPort with write/list/read-status methods
++ * @param emailPort - optional email sender used by the dispatch consumer
++ * @param opts - optional deps; `db` is required by the `dispatchQueuedEmails` consumer
++ * @returns an InAppNotificationPort with write/list/read-status methods plus the outbox consumer
+  */
+ export function createNotificationService(
+   repo: NotificationRepo,
+   emailPort?: NotificationEmailPort,
+-): InAppNotificationPort {
++  opts?: { db?: DbType },
++): InAppNotificationPort & { dispatchQueuedEmails: DispatchConsumer } {
++  const db = opts?.db;
++
+   async function writeInternal(params: NotificationWriteParams): Promise<void> {
+     const conn = params.db;
+ 
+     if (params.eventKey) {
+       const existing = await repo.findNotificationByEventKey(
+         conn,
+         params.eventKey,
+       );
+       if (existing) return;
+     }
+@@ -132,58 +144,28 @@ export function createNotificationService(
+     });
+ 
+     if (
+       inserted &&
+       params.emailRequired === true &&
+       (params.severity === NOTIFICATION_SEVERITY.ACTION ||
+         params.severity === NOTIFICATION_SEVERITY.CRITICAL)
+     ) {
+       const recipientEmail = await repo.findUserEmail(conn, params.userId);
+ 
+-      if (
+-        emailPort &&
+-        recipientEmail &&
+-        EMAIL_SUPPORTED_CATEGORIES.has(params.category)
+-      ) {
++      if (recipientEmail && EMAIL_SUPPORTED_CATEGORIES.has(params.category)) {
+         await repo.insertDispatch(conn, {
+           notificationId: inserted.id,
+           channel: "email",
+           recipientEmail,
+           status: "queued",
+         });
+-
+-        await emailPort
+-          .send({
+-            to: recipientEmail,
+-            subject: params.title,
+-            html: params.body,
+-            category: params.category as
+-              | "booking"
+-              | "payment"
+-              | "refund"
+-              | "schedule"
+-              | "override",
+-          })
+-          .then(async () => {
+-            await repo.updateDispatchStatus(conn, inserted.id, "sent");
+-          })
+-          .catch(async (error) => {
+-            await repo.updateDispatchStatus(conn, inserted.id, "failed");
+-            log({
+-              level: "error",
+-              action: "notification_email_dispatch_failed",
+-              error: { message: String(error) },
+-              notificationId: inserted.id,
+-              userId: params.userId,
+-            });
+-          });
+-      } else if (emailPort && recipientEmail) {
++      } else if (recipientEmail) {
+         log({
+           level: "debug",
+           action: "notification_email_skipped_category",
+           category: params.category,
+           notificationId: inserted.id,
+           userId: params.userId,
+         });
+       }
+     }
+   }
+@@ -211,20 +193,89 @@ export function createNotificationService(
+       log({
+         level: "error",
+         action: "notification_write_failed",
+         error: { message: String(error) },
+         userId: params.userId,
+         category: params.category,
+       });
+     });
+   }
+ 
++  /**
++   * Consumes queued email dispatch rows, sending each via the email port.
++   *
++   * Runs outside any DB transaction: each queued row is sent best-effort and its
++   * status is updated to sent/suppressed on success or failed (with an incremented
++   * attempt count) on error.
++   *
++   * @param limit - the maximum number of queued rows to process in one run
++   * @returns a summary of sent and failed dispatches
++   */
++  async function dispatchQueuedEmails(
++    limit = 50,
++  ): Promise<{ sent: number; failed: number }> {
++    if (!db) {
++      log({
++        level: "error",
++        action: "notification_email_dispatch_no_db",
++        message: "dispatchQueuedEmails requires a db connection",
++      });
++      return { sent: 0, failed: 0 };
++    }
++
++    const rows = await repo.listQueuedDispatches(db, limit);
++    let sent = 0;
++    let failed = 0;
++
++    for (const row of rows) {
++      if (!emailPort) {
++        failed++;
++        continue;
++      }
++      try {
++        const notif = await repo.findNotificationById(db, row.notificationId);
++        if (!notif) {
++          await repo.updateDispatchStatusById(db, row.id, "suppressed");
++          continue;
++        }
++        const res = await emailPort.send({
++          to: row.recipientEmail,
++          subject: notif.title,
++          html: notif.body,
++          category: notif.category as
++            | "booking"
++            | "payment"
++            | "refund"
++            | "schedule"
++            | "override",
++        });
++        if ("skipped" in res && res.skipped) {
++          await repo.updateDispatchStatusById(db, row.id, "suppressed");
++        } else {
++          await repo.updateDispatchStatusById(db, row.id, "sent");
++          sent++;
++        }
++      } catch (error) {
++        failed++;
++        await repo.incrementDispatchAttempts(db, row.id, String(error));
++        log({
++          level: "error",
++          action: "notification_email_dispatch_failed",
++          error: { message: String(error) },
++          dispatchId: row.id,
++        });
++      }
++    }
++
++    return { sent, failed };
++  }
++
+   /**
+    * Lists notifications for a user with optional unread filter and cursor pagination.
+    *
+    * @param userId - the user to list notifications for
+    * @param opts - list options (unreadOnly, limit, cursor)
+    * @returns the notification items and a nextCursor when more pages exist
+    */
+   async function list(
+     userId: string,
+     opts: NotificationListInput = {},
+@@ -277,12 +328,13 @@ export function createNotificationService(
+     await repo.markAllRead(userId);
+   }
+ 
+   return {
+     write,
+     writeBestEffort,
+     list,
+     getUnreadCount,
+     markAsRead,
+     markAllAsRead,
++    dispatchQueuedEmails,
+   };
+ }
+diff --git a/packages/api/src/modules/payment/index.ts b/packages/api/src/modules/payment/index.ts
+index cee5a51..2a50b7d 100644
+--- a/packages/api/src/modules/payment/index.ts
++++ b/packages/api/src/modules/payment/index.ts
+@@ -1,42 +1,56 @@
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import type { CreditParams, WalletSnapshot } from "../wallet/wallet.service";
+-import type { PaymentProvider } from "./payment.service";
++import type {
++  PaymentProvider,
++  PaymentNotificationPort,
++} from "./payment.service";
+ import { createPaymentService } from "./payment.service";
+ import { createPaymentHandler } from "./payment.handler";
+ import { createPaymentRepo } from "./payment.repo";
+ import { createStubPaymentProvider } from "./stub-payment.provider";
+ import { createXenditPaymentProvider } from "./xendit-payment.provider";
+ import type { PaymentService } from "./payment.service";
+ import type { PaymentHandler } from "./payment.handler";
+ 
+ export type PaymentModule = ReturnType<typeof createPaymentModule>;
+ 
+ export interface PaymentWalletPort {
+   getOrCreate(userId: string): Promise<WalletSnapshot>;
+   credit(db: DbOrTx, params: CreditParams): Promise<WalletSnapshot>;
+ }
+ 
+ export function createPaymentModule(deps: {
+   db: DbType;
+   wallet: PaymentWalletPort;
++  provider: "xendit" | "stub";
+   xenditConfig?: {
+     secretKey: string;
+     webhookToken: string;
+     successRedirectUrl: string;
+     failureRedirectUrl: string;
+     defaultPaymentMethod?: string;
+   };
+   webhookSecret: string;
++  notification?: PaymentNotificationPort;
+ }) {
+-  const useXendit = !!deps.xenditConfig;
++  const useXendit = deps.provider === "xendit";
++  if (useXendit && !deps.xenditConfig) {
++    throw new Error(
++      "PAYMENT_PROVIDER=xendit but Xendit credentials are missing — refusing to silently fall back to the stub provider",
++    );
++  }
++  if (!useXendit && deps.provider !== "stub") {
++    throw new Error(`Unknown payment provider: ${deps.provider}`);
++  }
++
+   const provider: PaymentProvider = useXendit
+     ? createXenditPaymentProvider({
+         secretKey: deps.xenditConfig!.secretKey,
+         webhookToken: deps.xenditConfig!.webhookToken,
+         successRedirectUrl: deps.xenditConfig!.successRedirectUrl,
+         failureRedirectUrl: deps.xenditConfig!.failureRedirectUrl,
+         defaultPaymentMethod: deps.xenditConfig!.defaultPaymentMethod as
+           | "ewallet_ovo"
+           | "qris"
+           | "va_bca"
+@@ -45,16 +59,17 @@ export function createPaymentModule(deps: {
+     : createStubPaymentProvider(deps.webhookSecret);
+   const providerName = useXendit ? "xendit" : "stub";
+ 
+   const repo = createPaymentRepo(deps.db);
+   const service = createPaymentService({
+     db: deps.db,
+     wallet: deps.wallet,
+     repo,
+     provider,
+     providerName,
++    notification: deps.notification,
+   });
+   const handler = createPaymentHandler(service, deps.wallet);
+   return { service, handler };
+ }
+ 
+ export type { PaymentService, PaymentHandler };
+diff --git a/packages/api/src/modules/payment/payment.service.ts b/packages/api/src/modules/payment/payment.service.ts
+index 29e9557..bf31e22 100644
+--- a/packages/api/src/modules/payment/payment.service.ts
++++ b/packages/api/src/modules/payment/payment.service.ts
+@@ -1,12 +1,15 @@
+ import type { DbType } from "../../lib/db";
+ import { PAYMENT_STATUS } from "../../shared/constants";
++import { NOTIFICATION_CATEGORY } from "../../shared/constants";
++import { NOTIFICATION_SEVERITY } from "../../shared/constants";
++import type { NotificationWriteParams } from "../notification/notification.service";
+ import {
+   PackageNotFoundError,
+   PaymentNotFoundError,
+   PackageAlreadyPurchasedError,
+   PaymentProviderError,
+ } from "./payment.errors";
+ import type { PaymentWalletPort } from "./index";
+ import type { PaymentRepo } from "./payment.repo";
+ 
+ export type PaymentStatus =
+@@ -46,20 +49,24 @@ export interface ConfirmInput {
+   provider: string;
+   providerReference: string;
+   providerEventId: string;
+   status: PaymentStatus;
+   receiptUrl?: string | null;
+   failureReason?: string | null;
+ }
+ 
+ export type PaymentService = ReturnType<typeof createPaymentService>;
+ 
++export interface PaymentNotificationPort {
++  writeBestEffort(params: NotificationWriteParams): Promise<void>;
++}
++
+ const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
+   PENDING: ["PAID", "FAILED", "EXPIRED", "SETTLED"],
+   PAID: ["SETTLED", "REFUNDED"],
+   SETTLED: ["REFUNDED"],
+   FAILED: [],
+   EXPIRED: [],
+   REFUNDED: [],
+ };
+ 
+ /**
+@@ -67,22 +74,23 @@ const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
+  *
+  * @param deps - the dependency ports (db, wallet, repo, provider, providerName)
+  * @returns a PaymentPort with createIntent, confirmFromWebhook, getPurchase and the provider
+  */
+ export function createPaymentService(deps: {
+   db: DbType;
+   wallet: PaymentWalletPort;
+   repo: PaymentRepo;
+   provider: PaymentProvider;
+   providerName: string;
++  notification?: PaymentNotificationPort;
+ }) {
+-  const { db, wallet, repo, provider, providerName } = deps;
++  const { db, wallet, repo, provider, providerName, notification } = deps;
+ 
+   /**
+    * Creates a payment intent for a mark package purchase, reusing pending intents.
+    *
+    * @param userId - the purchasing student
+    * @param walletId - the student's wallet to credit on confirmation
+    * @param packageCode - the mark package code to purchase
+    * @returns the payment id, provider reference, and checkout URL
+    * @throws {PackageNotFoundError} if the package is missing or inactive
+    * @throws {PackageAlreadyPurchasedError} if the user already has a non-pending purchase
+@@ -105,20 +113,40 @@ export function createPaymentService(deps: {
+           paymentId: existing.id,
+           amountIdr: pkg.priceIdr,
+           providerReference: existing.providerReference,
+         });
+         return {
+           paymentId: existing.id,
+           providerReference: existing.providerReference,
+           checkoutUrl: existingIntent.checkoutUrl,
+         };
+       }
++      if (
++        existing.status === PAYMENT_STATUS.FAILED ||
++        existing.status === PAYMENT_STATUS.EXPIRED
++      ) {
++        // Reset to PENDING so the webhook can credit, then re-create the intent.
++        // Xendit allows reusing the reference_id for a fresh payment request.
++        await repo.updatePaymentStatus(existing.id, {
++          status: PAYMENT_STATUS.PENDING,
++        });
++        const freshIntent = await provider.createIntent({
++          paymentId: existing.id,
++          amountIdr: pkg.priceIdr,
++          providerReference: existing.providerReference,
++        });
++        return {
++          paymentId: existing.id,
++          providerReference: existing.providerReference,
++          checkoutUrl: freshIntent.checkoutUrl,
++        };
++      }
+       throw new PackageAlreadyPurchasedError(packageCode, userId);
+     }
+ 
+     const paymentId = crypto.randomUUID();
+     const providerReference = idempotencyKey;
+ 
+     await repo.insertPayment({
+       id: paymentId,
+       userId,
+       walletId,
+@@ -155,25 +183,34 @@ export function createPaymentService(deps: {
+   async function confirmFromWebhook(
+     input: ConfirmInput,
+   ): Promise<{ status: string }> {
+     return db.transaction(async (tx) => {
+       const record = await repo.findPaymentByProviderReference(
+         input.providerReference,
+         tx,
+       );
+ 
+       if (!record) throw new PaymentNotFoundError(input.providerReference);
+-      if (record.status === PAYMENT_STATUS.PAID)
++      // PAID/SETTLED are terminal for idempotency purposes, EXCEPT a REFUNDED
++      // webhook (per ALLOWED_TRANSITIONS PAID/SETTLED -> REFUNDED) which must be
++      // processed so the payment is marked REFUNDED and the payer is notified.
++      if (
++        record.status === PAYMENT_STATUS.PAID &&
++        input.status !== PAYMENT_STATUS.REFUNDED
++      )
+         return { status: PAYMENT_STATUS.PAID };
+       if (record.status === PAYMENT_STATUS.FAILED)
+         return { status: PAYMENT_STATUS.FAILED };
+-      if (record.status === PAYMENT_STATUS.SETTLED)
++      if (
++        record.status === PAYMENT_STATUS.SETTLED &&
++        input.status !== PAYMENT_STATUS.REFUNDED
++      )
+         return { status: PAYMENT_STATUS.SETTLED };
+       if (record.status === PAYMENT_STATUS.EXPIRED)
+         return { status: PAYMENT_STATUS.EXPIRED };
+       if (record.status === PAYMENT_STATUS.REFUNDED)
+         return { status: PAYMENT_STATUS.REFUNDED };
+ 
+       const allowed = ALLOWED_TRANSITIONS[record.status] ?? [];
+       if (!allowed.includes(input.status)) {
+         return { status: record.status };
+       }
+@@ -210,30 +247,56 @@ export function createPaymentService(deps: {
+         if (shouldCredit) {
+           await wallet.credit(tx, {
+             walletId: record.walletId,
+             actorType: "student",
+             amount: record.marks,
+             eventKey: `purchase.${record.id}`,
+             sourceReference: record.id,
+             reason: `Purchase: ${record.marks} Marks`,
+           });
+         }
++
++        if (notification && shouldCredit) {
++          await notification.writeBestEffort({
++            db: tx,
++            userId: record.userId,
++            category: NOTIFICATION_CATEGORY.PAYMENT,
++            severity: NOTIFICATION_SEVERITY.ACTION,
++            title: "Payment received",
++            body: `Your payment of ${record.amountIdr} IDR was received and ${record.marks} Marks were added to your balance.`,
++            eventKey: `payment.${record.id}.credited`,
++            emailRequired: true,
++          });
++        }
+       } else {
+         await repo.updatePaymentStatus(
+           record.id,
+           {
+             status: input.status,
+             providerEventId: input.providerEventId,
+             failureReason: input.failureReason ?? null,
+           },
+           tx,
+         );
++
++        if (notification && input.status === PAYMENT_STATUS.REFUNDED) {
++          await notification.writeBestEffort({
++            db: tx,
++            userId: record.userId,
++            category: NOTIFICATION_CATEGORY.REFUND,
++            severity: NOTIFICATION_SEVERITY.ACTION,
++            title: "Refund processed",
++            body: "Your payment has been refunded to your account.",
++            eventKey: `payment.${record.id}.refunded`,
++            emailRequired: true,
++          });
++        }
+       }
+ 
+       return { status: input.status };
+     });
+   }
+ 
+   /**
+    * Fetches a payment record, verifying the requesting user owns it.
+    *
+    * @param paymentId - the payment to fetch
+diff --git a/packages/api/src/modules/scheduler/jobs/escalate-support-tickets.job.ts b/packages/api/src/modules/scheduler/jobs/escalate-support-tickets.job.ts
+new file mode 100644
+index 0000000..e8b32d7
+--- /dev/null
++++ b/packages/api/src/modules/scheduler/jobs/escalate-support-tickets.job.ts
+@@ -0,0 +1,26 @@
++import type { Queue } from "bullmq";
++
++const JOB_NAME = "escalate-support-tickets";
++const REPEAT_INTERVAL_MS = 15 * 60 * 1000;
++
++/**
++ * Registers the repeatable support-ticket SLA escalation job. The job carries no
++ * data: the worker calls the support service's `escalatePastSlaTickets`, which
++ * marks tickets past `slaDeadline` as escalated (in_progress) and audits each.
++ */
++export async function scheduleEscalateSupportTickets(
++  queue: Queue,
++): Promise<void> {
++  await queue.upsertJobScheduler(
++    JOB_NAME,
++    { every: REPEAT_INTERVAL_MS },
++    {
++      name: JOB_NAME,
++      data: {},
++      opts: {
++        attempts: 3,
++        backoff: { type: "exponential", delay: 1000 },
++      },
++    },
++  );
++}
+diff --git a/packages/api/src/modules/scheduler/jobs/send-notification-email.job.ts b/packages/api/src/modules/scheduler/jobs/send-notification-email.job.ts
+index f3dcf70..f617e43 100644
+--- a/packages/api/src/modules/scheduler/jobs/send-notification-email.job.ts
++++ b/packages/api/src/modules/scheduler/jobs/send-notification-email.job.ts
+@@ -1,15 +1,20 @@
+ import type { Queue } from "bullmq";
+ 
+ const JOB_NAME = "send-notification-email";
+ const REPEAT_INTERVAL_MS = 60_000;
+ 
++/**
++ * Registers the repeatable email-outbox consumer job. The job carries no data:
++ * the worker calls the notification service's `dispatchQueuedEmails` consumer,
++ * which picks up queued dispatch rows from the database.
++ */
+ export async function scheduleSendNotificationEmail(
+   queue: Queue,
+ ): Promise<void> {
+   await queue.upsertJobScheduler(
+     JOB_NAME,
+     { every: REPEAT_INTERVAL_MS },
+     {
+       name: JOB_NAME,
+       data: {},
+       opts: {
+diff --git a/packages/api/src/modules/scheduler/scheduler.service.ts b/packages/api/src/modules/scheduler/scheduler.service.ts
+index 91a5cc0..b31edf6 100644
+--- a/packages/api/src/modules/scheduler/scheduler.service.ts
++++ b/packages/api/src/modules/scheduler/scheduler.service.ts
+@@ -3,24 +3,22 @@ import { log } from "../../lib/logger";
+ 
+ const QUEUE_NAME = "cogito-jobs";
+ 
+ export interface SchedulerHandlers {
+   onExpireBookings: () => Promise<{ expired: number; failed: number }>;
+   onReleaseHolds: () => Promise<{ released: number }>;
+   onCheckTutorLateness: () => Promise<{
+     autoCancelled: number;
+     failed: number;
+   }>;
+-  onSendNotificationEmail: (data: {
+-    notificationId: string;
+-    userId: string;
+-  }) => Promise<void>;
++  onSendNotificationEmail: () => Promise<{ sent: number; failed: number }>;
++  onEscalateSupportTickets: () => Promise<{ escalated: number }>;
+ }
+ 
+ export interface SchedulerService {
+   queue: Queue;
+   worker: Worker;
+ }
+ 
+ export function createSchedulerService(
+   redisUrl: string,
+   handlers: SchedulerHandlers,
+@@ -62,22 +60,37 @@ export function createSchedulerService(
+         case "check-tutor-lateness":
+           const latenessResult = await handlers.onCheckTutorLateness();
+           log({
+             level: latenessResult.failed > 0 ? "warn" : "info",
+             action: "check_tutor_lateness_complete",
+             message: `Auto-cancelled ${latenessResult.autoCancelled} bookings for tutor lateness, ${latenessResult.failed} failed`,
+             ...latenessResult,
+           });
+           return latenessResult;
+         case "send-notification-email":
+-          await handlers.onSendNotificationEmail(job.data);
+-          break;
++          const sendResult = await handlers.onSendNotificationEmail();
++          log({
++            level: "info",
++            action: "send_notification_email_complete",
++            message: `Dispatched ${sendResult.sent} emails, ${sendResult.failed} failed`,
++            ...sendResult,
++          });
++          return sendResult;
++        case "escalate-support-tickets":
++          const escalateResult = await handlers.onEscalateSupportTickets();
++          log({
++            level: "info",
++            action: "escalate_support_tickets_complete",
++            message: `Escalated ${escalateResult.escalated} support tickets past SLA`,
++            ...escalateResult,
++          });
++          return escalateResult;
+         default:
+           log({
+             level: "warn",
+             action: "scheduler_unknown_job",
+             message: `Unknown job: ${job.name}`,
+           });
+       }
+     },
+     { connection },
+   );
+diff --git a/packages/api/src/modules/support/support.repo.ts b/packages/api/src/modules/support/support.repo.ts
+index d8f9b12..958bfdd 100644
+--- a/packages/api/src/modules/support/support.repo.ts
++++ b/packages/api/src/modules/support/support.repo.ts
+@@ -1,11 +1,11 @@
+-import { eq, and, asc, desc } from "drizzle-orm";
++import { eq, and, lt, asc, desc } from "drizzle-orm";
+ import {
+   supportTicket,
+   booking,
+   bookingParticipant,
+   type supportTicket as supportTicketTable,
+ } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ 
+ type SupportTicketRow = typeof supportTicketTable.$inferSelect;
+ 
+@@ -127,22 +127,56 @@ async function findBookingForReporter(
+     .where(
+       and(
+         eq(bookingParticipant.bookingId, bookingId),
+         eq(bookingParticipant.userId, userId),
+       ),
+     )
+     .limit(1);
+   return participant.length > 0 ? b : null;
+ }
+ 
++/**
++ * Lists open tickets whose SLA deadline has passed (candidates for escalation).
++ *
++ * @param conn - the database connection or active transaction
++ * @returns the overdue open tickets, oldest SLA deadline first
++ */
++async function listPastSla(conn: DbOrTx): Promise<SupportTicketRow[]> {
++  return conn
++    .select()
++    .from(supportTicket)
++    .where(
++      and(
++        eq(supportTicket.status, "open"),
++        lt(supportTicket.slaDeadline, new Date()),
++      ),
++    )
++    .orderBy(asc(supportTicket.slaDeadline));
++}
++
++/**
++ * Marks a ticket escalated by moving it to in_progress.
++ *
++ * @param conn - the database connection or active transaction
++ * @param id - the support ticket id
++ */
++async function markEscalated(conn: DbOrTx, id: string): Promise<void> {
++  await conn
++    .update(supportTicket)
++    .set({ status: "in_progress" })
++    .where(eq(supportTicket.id, id));
++}
++
+ export function createSupportRepo() {
+   return {
+     insert,
+     listByReporter,
+     adminList,
+     findById,
+     updateResolution,
+     findBookingForReporter,
++    listPastSla,
++    markEscalated,
+   };
+ }
+ 
+ export type SupportRepo = ReturnType<typeof createSupportRepo>;
+diff --git a/packages/api/src/modules/support/support.service.ts b/packages/api/src/modules/support/support.service.ts
+index f63b02a..378d40d 100644
+--- a/packages/api/src/modules/support/support.service.ts
++++ b/packages/api/src/modules/support/support.service.ts
+@@ -89,20 +89,53 @@ export function createSupportService(deps: {
+       input.limit ?? ADMIN_DEFAULT_PAGE_LIMIT,
+       MAX_PAGE_LIMIT,
+     );
+     return supportRepo.adminList(db, {
+       status: input.status,
+       limit,
+       offset: input.offset ?? 0,
+     });
+   }
+ 
++  /**
++   * Auto-escalates open support tickets whose SLA deadline has passed.
++   *
++   * Called by the `escalate-support-tickets` scheduler job. Each overdue ticket
++   * is moved to `in_progress` and an audit entry records the escalation.
++   *
++   * @returns the number of tickets escalated
++   */
++  async function escalatePastSlaTickets(): Promise<{ escalated: number }> {
++    const overdue = await supportRepo.listPastSla(db);
++    let escalated = 0;
++
++    for (const ticket of overdue) {
++      await db.transaction(async (tx) => {
++        await supportRepo.markEscalated(tx, ticket.id);
++        await audit.record({
++          db: tx,
++          actorId: null,
++          actorType: ACTOR_TYPE.SYSTEM,
++          action: "support_ticket_escalated",
++          targetId: ticket.id,
++          targetType: "support_ticket",
++          beforeState: { status: ticket.status },
++          afterState: { status: "in_progress" },
++          details: { slaDeadline: ticket.slaDeadline.toISOString() },
++        });
++      });
++      escalated++;
++    }
++
++    return { escalated };
++  }
++
+   async function adminResolveTicket(adminId: string, input: AdminResolveInput) {
+     const existing = await supportRepo.findById(db, input.ticketId);
+     if (!existing) throw new SupportTicketNotFoundError(input.ticketId);
+     if (RESOLVED_STATUSES.has(existing.status)) {
+       throw new SupportTicketAlreadyResolvedError(input.ticketId);
+     }
+ 
+     return db.transaction(async (tx) => {
+       const updated = await supportRepo.updateResolution(tx, input.ticketId, {
+         status: "resolved",
+@@ -131,14 +164,20 @@ export function createSupportService(deps: {
+         details: {
+           previousStatus: existing.status,
+           resolution: input.resolution,
+         },
+       });
+ 
+       return updated;
+     });
+   }
+ 
+-  return { createTicket, listTickets, adminList, adminResolveTicket };
++  return {
++    createTicket,
++    listTickets,
++    adminList,
++    adminResolveTicket,
++    escalatePastSlaTickets,
++  };
+ }
+ 
+ export type SupportService = ReturnType<typeof createSupportService>;
+diff --git a/packages/api/src/services.ts b/packages/api/src/services.ts
+index 6c18ff5..636fab8 100644
+--- a/packages/api/src/services.ts
++++ b/packages/api/src/services.ts
+@@ -169,31 +169,35 @@ function createServices() {
+   const achievement = createAchievementModule({
+     db,
+     audit: audit.service,
+     notification: notification.service,
+   });
+   const room = createRoomModule({ db, bookingPort: booking.service });
+ 
+   const payment = createPaymentModule({
+     db,
+     wallet: wallet.service,
++    provider: env.PAYMENT_PROVIDER,
+     xenditConfig:
+-      env.XENDIT_SECRET_KEY && env.XENDIT_WEBHOOK_TOKEN
++      env.PAYMENT_PROVIDER === "xendit" &&
++      env.XENDIT_SECRET_KEY &&
++      env.XENDIT_WEBHOOK_TOKEN
+         ? {
+             secretKey: env.XENDIT_SECRET_KEY!,
+             webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
+             successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL ?? "",
+             failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL ?? "",
+             defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,
+           }
+         : undefined,
+     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
++    notification: notification.service,
+   });
+ 
+   const refund = createRefundModule({
+     db,
+     audit: audit.service,
+     wallet: wallet.service,
+   });
+ 
+   const adminBooking = createAdminBookingModule({
+     db,
+diff --git a/packages/api/src/tests/integration/notification-email-g17.test.ts b/packages/api/src/tests/integration/notification-email-g17.test.ts
+index 07df7c7..134c4c3 100644
+--- a/packages/api/src/tests/integration/notification-email-g17.test.ts
++++ b/packages/api/src/tests/integration/notification-email-g17.test.ts
+@@ -151,53 +151,56 @@ describe("Notification email matrix (G17)", () => {
+     expect(notif).toBeDefined();
+     expect(notif!.severity).toBe("action");
+ 
+     const [dispatch] = await db
+       .select()
+       .from(notificationDispatch)
+       .where(eq(notificationDispatch.notificationId, notif!.id));
+     expect(dispatch).toBeDefined();
+     expect(dispatch!.channel).toBe("email");
+     expect(dispatch!.recipientEmail).toBe(tutorEmail);
++    expect(dispatch!.status).toBe("queued");
+   });
+ 
+   test("booking accept → student notification row + email dispatch row", async () => {
+     await tutorClient.tutorActions.acceptBooking({ bookingId });
+ 
+     const [notif] = await db
+       .select()
+       .from(notificationTable)
+       .where(eq(notificationTable.eventKey, `booking.${bookingId}.accepted`));
+     expect(notif).toBeDefined();
+     expect(notif!.userId).toBe(studentId);
+     expect(notif!.severity).toBe("action");
+ 
+     const [dispatch] = await db
+       .select()
+       .from(notificationDispatch)
+       .where(eq(notificationDispatch.notificationId, notif!.id));
+     expect(dispatch).toBeDefined();
+     expect(dispatch!.recipientEmail).toBe(studentEmail);
++    expect(dispatch!.status).toBe("queued");
+ 
+     const [tutorScheduled] = await db
+       .select()
+       .from(notificationTable)
+       .where(
+         eq(notificationTable.eventKey, `booking.${bookingId}.scheduled.tutor`),
+       );
+     expect(tutorScheduled).toBeDefined();
+     const [tutorDispatch] = await db
+       .select()
+       .from(notificationDispatch)
+       .where(eq(notificationDispatch.notificationId, tutorScheduled!.id));
+     expect(tutorDispatch).toBeDefined();
+     expect(tutorDispatch!.recipientEmail).toBe(tutorEmail);
++    expect(tutorDispatch!.status).toBe("queued");
+   });
+ 
+   test("achievement submit → in-app notification row, NO email dispatch row", async () => {
+     const created = await studentClient.achievement.create({
+       eventName: "Math Olympiad",
+       category: "academic",
+       award: "Gold",
+       level: "national",
+       description: "Won gold in the national olympiad",
+     });
+@@ -228,11 +231,32 @@ describe("Notification email matrix (G17)", () => {
+       .where(eq(notificationTable.eventKey, `booking.${bookingId}.completed`));
+     expect(notif).toBeDefined();
+     expect(notif!.severity).toBe("info");
+ 
+     const dispatches = await db
+       .select()
+       .from(notificationDispatch)
+       .where(eq(notificationDispatch.notificationId, notif!.id));
+     expect(dispatches.length).toBe(0);
+   });
++
++  test("dispatchQueuedEmails consumes queued dispatch rows (outbox)", async () => {
++    const { services } = await import("@cogito-app/api/services");
++
++    const [queued] = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.status, "queued"))
++      .limit(1);
++    expect(queued).toBeDefined();
++
++    const result = await services.notification.dispatchQueuedEmails(50);
++
++    const [after] = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.id, queued!.id));
++    expect(after!.status).not.toBe("queued");
++    expect(result).toHaveProperty("sent");
++    expect(result).toHaveProperty("failed");
++  });
+ });
+diff --git a/packages/api/src/tests/integration/payment-flow.test.ts b/packages/api/src/tests/integration/payment-flow.test.ts
+index e1e95b6..098e68e 100644
+--- a/packages/api/src/tests/integration/payment-flow.test.ts
++++ b/packages/api/src/tests/integration/payment-flow.test.ts
+@@ -2,21 +2,26 @@ import {
+   afterEach,
+   beforeAll,
+   beforeEach,
+   describe,
+   expect,
+   mock,
+   test,
+ } from "bun:test";
+ import { eq } from "drizzle-orm";
+ import { db } from "@cogito-app/db";
+-import { ledgerEntry, paymentRecord } from "@cogito-app/db/schema";
++import {
++  ledgerEntry,
++  paymentRecord,
++  notification,
++  notificationDispatch,
++} from "@cogito-app/db/schema";
+ 
+ import { services } from "../../services";
+ import { createTestUser } from "../helpers/factories";
+ import { resetDatabase } from "../helpers/test-client";
+ import { createXenditPaymentProvider } from "../../modules/payment/xendit-payment.provider";
+ import { createPaymentService } from "../../modules/payment/payment.service";
+ import { createPaymentRepo } from "../../modules/payment/payment.repo";
+ import { createWalletRepo } from "../../modules/wallet/wallet.repo";
+ import { createWalletService } from "../../modules/wallet/wallet.service";
+ 
+@@ -118,20 +123,139 @@ describe("PaymentService", () => {
+     expect(record[0]!.failureReason).toBe("declined");
+   });
+ 
+   test("TC-35: no cashout/convert/withdraw methods exist", () => {
+     const methods = Object.keys(services.payment);
+     expect(methods).not.toContain("cashout");
+     expect(methods).not.toContain("convertToRupiah");
+     expect(methods).not.toContain("withdraw");
+   });
+ 
++  test("TC-re: FAILED payment can be re-purchased with a fresh intent", async () => {
++    const user = await createTestUser("rerepurchase@cogito.test");
++    const walletRow = await services.wallet.getOrCreate(user.id);
++
++    const first = await services.payment.createIntent(
++      user.id,
++      walletRow.id,
++      "starter",
++    );
++
++    await services.payment.confirmFromWebhook({
++      provider: "stub",
++      providerReference: first.providerReference,
++      providerEventId: "evt_rep1",
++      status: "FAILED",
++      failureReason: "declined",
++    });
++
++    const retry = await services.payment.createIntent(
++      user.id,
++      walletRow.id,
++      "starter",
++    );
++
++    expect(retry.paymentId).toBe(first.paymentId);
++    expect(retry.providerReference).toBe(first.providerReference);
++    expect(retry.checkoutUrl).toBeDefined();
++
++    const [record] = await db
++      .select()
++      .from(paymentRecord)
++      .where(eq(paymentRecord.id, first.paymentId))
++      .limit(1);
++    expect(record!.status).toBe("PENDING");
++
++    await services.payment.confirmFromWebhook({
++      provider: "stub",
++      providerReference: retry.providerReference,
++      providerEventId: "evt_rep2",
++      status: "PAID",
++    });
++
++    const w = await services.wallet.getByUserId(db, user.id);
++    expect(w!.totalBalance).toBe(50);
++  });
++
++  test("TC-notif: webhook credit writes a payment notification (in-app + email) for the payer", async () => {
++    const user = await createTestUser("paynotif@cogito.test");
++    const walletRow = await services.wallet.getOrCreate(user.id);
++
++    const intent = await services.payment.createIntent(
++      user.id,
++      walletRow.id,
++      "starter",
++    );
++
++    await services.payment.confirmFromWebhook({
++      provider: "stub",
++      providerReference: intent.providerReference,
++      providerEventId: "evt_paynotif",
++      status: "PAID",
++    });
++
++    const [notif] = await db
++      .select()
++      .from(notification)
++      .where(eq(notification.eventKey, `payment.${intent.paymentId}.credited`));
++    expect(notif).toBeDefined();
++    expect(notif!.category).toBe("payment");
++    expect(notif!.userId).toBe(user.id);
++
++    const [dispatch] = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.notificationId, notif!.id));
++    expect(dispatch).toBeDefined();
++    expect(dispatch!.status).toBe("queued");
++    expect(dispatch!.recipientEmail).toBe(user.email);
++  });
++
++  test("TC-notif: REFUNDED transition writes a refund notification for the payer", async () => {
++    const user = await createTestUser("refundnotif@cogito.test");
++    const walletRow = await services.wallet.getOrCreate(user.id);
++
++    const intent = await services.payment.createIntent(
++      user.id,
++      walletRow.id,
++      "starter",
++    );
++
++    await services.payment.confirmFromWebhook({
++      provider: "stub",
++      providerReference: intent.providerReference,
++      providerEventId: "evt_refundnotif1",
++      status: "PAID",
++    });
++    await services.payment.confirmFromWebhook({
++      provider: "stub",
++      providerReference: intent.providerReference,
++      providerEventId: "evt_refundnotif2",
++      status: "REFUNDED",
++    });
++
++    const [notif] = await db
++      .select()
++      .from(notification)
++      .where(eq(notification.eventKey, `payment.${intent.paymentId}.refunded`));
++    expect(notif).toBeDefined();
++    expect(notif!.category).toBe("refund");
++    expect(notif!.userId).toBe(user.id);
++
++    const [dispatch] = await db
++      .select()
++      .from(notificationDispatch)
++      .where(eq(notificationDispatch.notificationId, notif!.id));
++    expect(dispatch).toBeDefined();
++    expect(dispatch!.status).toBe("queued");
++  });
++
+   const xenditProvider = createXenditPaymentProvider({
+     secretKey: "xnd_development_test",
+     webhookToken: "wh_token_test",
+     successRedirectUrl: "http://localhost:3000/balance?status=success",
+     failureRedirectUrl: "http://localhost:3000/balance?status=failed",
+   });
+ 
+   const xenditWallet = createWalletService(createWalletRepo(), db);
+   const xenditPayment = createPaymentService({
+     db,
+diff --git a/packages/api/src/tests/integration/support-flow.test.ts b/packages/api/src/tests/integration/support-flow.test.ts
+index 960d873..7078812 100644
+--- a/packages/api/src/tests/integration/support-flow.test.ts
++++ b/packages/api/src/tests/integration/support-flow.test.ts
+@@ -3,20 +3,21 @@ import { eq } from "drizzle-orm";
+ import { db } from "@cogito-app/db";
+ import {
+   booking,
+   wallet,
+   tutorInvite,
+   tutorProfile,
+   availabilitySlot,
+   notification,
+   supportTicket,
+   user,
++  auditLog,
+ } from "@cogito-app/db/schema";
+ 
+ import {
+   createTestContext,
+   createTestClient,
+   signUpAndSignIn,
+   setUserRole,
+   resetDatabase,
+   type TestClient,
+ } from "../helpers/test-client";
+@@ -290,11 +291,71 @@ describe("Support ticket flow", () => {
+   });
+ 
+   test("admin cannot resolve an already resolved ticket", async () => {
+     await expect(
+       adminClient.support.adminResolveTicket({
+         ticketId: latenessTicketId,
+         resolution: "Resolved twice",
+       }),
+     ).rejects.toThrow();
+   });
++
++  test("ticket past SLA deadline is auto-escalated by the scheduler consumer", async () => {
++    const { services } = await import("@cogito-app/api/services");
++
++    const t = await studentClient.support.createTicket({
++      category: "technical",
++      description: "SLA escalation test",
++    });
++    expect(t.status).toBe("open");
++
++    await db
++      .update(supportTicket)
++      .set({ slaDeadline: new Date(Date.now() - 60 * 60 * 1000) })
++      .where(eq(supportTicket.id, t.id));
++
++    const result = await services.support.escalatePastSlaTickets();
++    expect(result.escalated).toBeGreaterThanOrEqual(1);
++
++    const [row] = await db
++      .select()
++      .from(supportTicket)
++      .where(eq(supportTicket.id, t.id));
++    expect(row!.status).toBe("in_progress");
++
++    const audits = await db
++      .select()
++      .from(auditLog)
++      .where(eq(auditLog.action, "support_ticket_escalated"));
++    expect(audits.length).toBeGreaterThanOrEqual(1);
++    expect(audits[0]!.targetId).toBe(t.id);
++    expect(audits[0]!.afterState).toEqual({ status: "in_progress" });
++  });
++
++  test("ticket within SLA deadline is NOT escalated", async () => {
++    const { services } = await import("@cogito-app/api/services");
++
++    const t = await studentClient.support.createTicket({
++      category: "technical",
++      description: "Within SLA",
++    });
++
++    const before = await db
++      .select()
++      .from(auditLog)
++      .where(eq(auditLog.action, "support_ticket_escalated"));
++
++    await services.support.escalatePastSlaTickets();
++
++    const [row] = await db
++      .select()
++      .from(supportTicket)
++      .where(eq(supportTicket.id, t.id));
++    expect(row!.status).toBe("open");
++
++    const after = await db
++      .select()
++      .from(auditLog)
++      .where(eq(auditLog.action, "support_ticket_escalated"));
++    expect(after.length).toBe(before.length);
++  });
+ });
+diff --git a/packages/api/src/tests/unit/escalate-support-tickets.job.test.ts b/packages/api/src/tests/unit/escalate-support-tickets.job.test.ts
+new file mode 100644
+index 0000000..aa69b3f
+--- /dev/null
++++ b/packages/api/src/tests/unit/escalate-support-tickets.job.test.ts
+@@ -0,0 +1,24 @@
++import { describe, expect, mock, test } from "bun:test";
++import { scheduleEscalateSupportTickets } from "../../modules/scheduler/jobs/escalate-support-tickets.job";
++
++describe("scheduleEscalateSupportTickets", () => {
++  test("upserts a repeatable scheduler with retry and backoff options", async () => {
++    const upsertJobScheduler = mock(async () => ({}));
++    const queue = { upsertJobScheduler } as any;
++
++    await scheduleEscalateSupportTickets(queue);
++
++    expect(upsertJobScheduler).toHaveBeenCalledWith(
++      "escalate-support-tickets",
++      { every: 15 * 60 * 1000 },
++      {
++        name: "escalate-support-tickets",
++        data: {},
++        opts: {
++          attempts: 3,
++          backoff: { type: "exponential", delay: 1000 },
++        },
++      },
++    );
++  });
++});
+diff --git a/packages/api/src/tests/unit/notification.repo.test.ts b/packages/api/src/tests/unit/notification.repo.test.ts
+index 8ee2e5f..230c50b 100644
+--- a/packages/api/src/tests/unit/notification.repo.test.ts
++++ b/packages/api/src/tests/unit/notification.repo.test.ts
+@@ -1,18 +1,22 @@
+ import { describe, test, expect, mock } from "bun:test";
+ import {
+   findNotificationByEventKey,
+   findNotificationByIdForUser,
+   insertNotification,
+   findUserEmail,
+   insertDispatch,
+   updateDispatchStatus,
++  updateDispatchStatusById,
++  listQueuedDispatches,
++  incrementDispatchAttempts,
++  findNotificationById,
+   listNotifications,
+   countUnread,
+   updateReadStatus,
+   markAllRead,
+   findDispatch,
+   createNotificationRepo,
+ } from "../../modules/notification/notification.repo";
+ 
+ describe("findNotificationByEventKey", () => {
+   test("returns row when found", async () => {
+@@ -140,20 +144,92 @@ describe("updateDispatchStatus", () => {
+     const conn = { update: updateFn } as any;
+ 
+     await updateDispatchStatus(conn, "n1", "sent");
+ 
+     expect(updateFn).toHaveBeenCalledTimes(1);
+     expect(set).toHaveBeenCalledTimes(1);
+     expect(where).toHaveBeenCalledTimes(1);
+   });
+ });
+ 
++describe("updateDispatchStatusById", () => {
++  test("updates dispatch status by row id", async () => {
++    const where = mock(async () => {});
++    const set = mock(() => ({ where }));
++    const updateFn = mock(() => ({ set }));
++    const conn = { update: updateFn } as any;
++
++    await updateDispatchStatusById(conn, "d1", "sent");
++
++    expect(updateFn).toHaveBeenCalledTimes(1);
++    expect(set).toHaveBeenCalledTimes(1);
++    expect(where).toHaveBeenCalledTimes(1);
++  });
++});
++
++describe("listQueuedDispatches", () => {
++  test("returns queued rows ordered oldest first with a limit", async () => {
++    const rows = [{ id: "d1" }, { id: "d2" }];
++    const limit = mock(async () => rows);
++    const orderBy = mock(() => ({ limit }));
++    const where = mock(() => ({ orderBy }));
++    const from = mock(() => ({ where }));
++    const select = mock(() => ({ from }));
++    const conn = { select } as any;
++
++    const result = await listQueuedDispatches(conn, 25);
++    expect(result).toEqual(rows);
++    expect(where).toHaveBeenCalledTimes(1);
++    expect(orderBy).toHaveBeenCalledTimes(1);
++    expect(limit).toHaveBeenCalledWith(25);
++  });
++});
++
++describe("incrementDispatchAttempts", () => {
++  test("increments attempts and records the last error", async () => {
++    const where = mock(async () => {});
++    const set = mock(() => ({ where }));
++    const updateFn = mock(() => ({ set }));
++    const conn = { update: updateFn } as any;
++
++    await incrementDispatchAttempts(conn, "d1", "boom");
++
++    expect(updateFn).toHaveBeenCalledTimes(1);
++    expect(set).toHaveBeenCalledTimes(1);
++    expect(where).toHaveBeenCalledTimes(1);
++  });
++});
++
++describe("findNotificationById", () => {
++  test("returns the row when found", async () => {
++    const limit = mock(async () => [{ id: "n1", title: "T" }]);
++    const where = mock(() => ({ limit }));
++    const from = mock(() => ({ where }));
++    const select = mock(() => ({ from }));
++    const conn = { select } as any;
++
++    const result = await findNotificationById(conn, "n1");
++    expect(result).toEqual({ id: "n1", title: "T" });
++  });
++
++  test("returns null when not found", async () => {
++    const limit = mock(async () => []);
++    const where = mock(() => ({ limit }));
++    const from = mock(() => ({ where }));
++    const select = mock(() => ({ from }));
++    const conn = { select } as any;
++
++    const result = await findNotificationById(conn, "missing");
++    expect(result).toBeNull();
++  });
++});
++
+ describe("listNotifications", () => {
+   test("returns rows from select", async () => {
+     const rows = [
+       { id: "n1", createdAt: new Date() },
+       { id: "n2", createdAt: new Date() },
+     ];
+     const limit = mock(async () => rows);
+     const orderBy = mock(() => ({ limit }));
+     const where = mock(() => ({ orderBy }));
+     const from = mock(() => ({ where }));
+diff --git a/packages/api/src/tests/unit/notification.service.test.ts b/packages/api/src/tests/unit/notification.service.test.ts
+index bc170a0..0f5fe27 100644
+--- a/packages/api/src/tests/unit/notification.service.test.ts
++++ b/packages/api/src/tests/unit/notification.service.test.ts
+@@ -40,20 +40,24 @@ afterEach(() => {
+ });
+ 
+ function makeRepo(overrides: Partial<NotificationRepo> = {}): NotificationRepo {
+   return {
+     findNotificationByEventKey: mock(async () => null),
+     findNotificationByIdForUser: mock(async () => ({ id: "n1" })),
+     insertNotification: mock(async () => ({ id: "n1" })),
+     findUserEmail: mock(async () => ""),
+     insertDispatch: mock(async () => {}),
+     updateDispatchStatus: mock(async () => {}),
++    updateDispatchStatusById: mock(async () => {}),
++    listQueuedDispatches: mock(async () => []),
++    incrementDispatchAttempts: mock(async () => {}),
++    findNotificationById: mock(async () => null),
+     listNotifications: mock(async () => []),
+     countUnread: mock(async () => 0),
+     updateReadStatus: mock(async () => {}),
+     markAllRead: mock(async () => {}),
+     findDispatch: mock(async () => null),
+     ...overrides,
+   } as any;
+ }
+ 
+ describe("NotificationService (unit)", () => {
+@@ -93,103 +97,114 @@ describe("NotificationService (unit)", () => {
+       db: {} as any,
+       userId: "user1",
+       category: "system",
+       title: "Test",
+       body: "Test body",
+     });
+ 
+     expect(repo.insertNotification).toHaveBeenCalledTimes(1);
+   });
+ 
+-  test("writeInternal dispatches email for action severity with supported category and updates status to sent", async () => {
++  test("writeInternal queues email dispatch for action severity with supported category without calling emailPort.send", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_action" })),
+       findUserEmail: mock(async () => "user@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "Booking Confirmed",
+       body: "Your booking is confirmed",
+       severity: "action",
+       emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+-    expect(emailPort.send).toHaveBeenCalledWith({
+-      to: "user@example.com",
+-      subject: "Booking Confirmed",
+-      html: "Your booking is confirmed",
+-      category: "booking",
+-    });
+-    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
++    expect(repo.insertDispatch).toHaveBeenCalledWith(
++      expect.anything(),
++      expect.objectContaining({
++        notificationId: "n_action",
++        channel: "email",
++        recipientEmail: "user@example.com",
++        status: "queued",
++      }),
++    );
+   });
+ 
+-  test("writeInternal dispatches email for critical severity with supported category", async () => {
++  test("writeInternal queues email dispatch for critical severity with supported category", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_critical" })),
+       findUserEmail: mock(async () => "critical@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m2" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "payment",
+       title: "Payment Required",
+       body: "Payment is due",
+       severity: "critical",
+       emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+-    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+   });
+ 
+-  test("writeInternal updates dispatch status to failed when email send fails", async () => {
++  test("dispatchQueuedEmails marks the dispatch row failed and increments attempts when email send fails", async () => {
+     const repo = makeRepo({
+-      findNotificationByEventKey: mock(async () => null),
+-      insertNotification: mock(async () => ({ id: "n_fail" })),
+-      findUserEmail: mock(async () => "user@example.com"),
++      listQueuedDispatches: mock(async () => [
++        {
++          id: "d1",
++          notificationId: "n_fail",
++          channel: "email",
++          recipientEmail: "user@example.com",
++          status: "queued",
++          attempts: 0,
++          createdAt: new Date(),
++        },
++      ]),
++      findNotificationById: mock(async () => ({
++        id: "n_fail",
++        title: "Booking Failed",
++        body: "Email dispatch will fail",
++        category: "booking",
++      })),
+     });
+     const emailPort = {
+       send: mock(async () => {
+         throw new Error("SMTP failure");
+       }),
+     };
+ 
+-    const service = createNotificationService(repo, emailPort as any);
+-
+-    await service.write({
++    const service = createNotificationService(repo, emailPort as any, {
+       db: {} as any,
+-      userId: "user1",
+-      category: "booking",
+-      title: "Booking Failed",
+-      body: "Email dispatch will fail",
+-      severity: "action",
+-      emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+-    expect(repo.updateDispatchStatus).toHaveBeenCalledWith(
++    const result = await service.dispatchQueuedEmails();
++
++    expect(result).toEqual({ sent: 0, failed: 1 });
++    expect(repo.incrementDispatchAttempts).toHaveBeenCalledWith(
+       expect.anything(),
+-      "n_fail",
+-      "failed",
++      "d1",
++      "Error: SMTP failure",
+     );
+ 
+     const errorCalls = logCaptures.filter(
+       (c: any) => c.action === "notification_email_dispatch_failed",
+     );
+     expect(errorCalls.length).toBeGreaterThanOrEqual(1);
+   });
+ 
+   test("writeInternal skips email dispatch when recipient email is empty string", async () => {
+     const repo = makeRepo({
+@@ -286,43 +301,43 @@ describe("NotificationService (unit)", () => {
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
+ 
+     const debugCalls = logCaptures.filter(
+       (c: any) => c.action === "notification_email_skipped_category",
+     );
+     expect(debugCalls.length).toBeGreaterThanOrEqual(1);
+   });
+ 
+-  test("writeInternal dispatches email with eventKey dedup check passing (no existing)", async () => {
++  test("writeInternal queues email dispatch with eventKey dedup check passing (no existing)", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_dedup_pass" })),
+       findUserEmail: mock(async () => "user@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "New Booking",
+       body: "New booking body",
+       severity: "action",
+       eventKey: "booking.b1.new",
+       emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+-    expect(repo.updateDispatchStatus).toHaveBeenCalledTimes(1);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("writeBestEffort catches and logs errors", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => {
+         throw new Error("db error");
+       }),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+@@ -574,110 +589,114 @@ describe("NotificationService (unit)", () => {
+ 
+   test("markAllAsRead delegates to repo", async () => {
+     const repo = makeRepo();
+ 
+     const service = createNotificationService(repo);
+     await service.markAllAsRead("user1");
+ 
+     expect(repo.markAllRead).toHaveBeenCalledWith("user1");
+   });
+ 
+-  test("writeInternal dispatches email for refund category with action severity", async () => {
++  test("writeInternal queues email dispatch for refund category with action severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_refund" })),
+       findUserEmail: mock(async () => "refund@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "refund",
+       title: "Refund Processed",
+       body: "Your refund has been processed",
+       severity: "action",
+       emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+   });
+ 
+-  test("writeInternal dispatches email for schedule category with critical severity", async () => {
++  test("writeInternal queues email dispatch for schedule category with critical severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_schedule" })),
+       findUserEmail: mock(async () => "schedule@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "schedule",
+       title: "Schedule Changed",
+       body: "Your schedule has been updated",
+       severity: "critical",
+       emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+   });
+ 
+-  test("writeInternal dispatches email for override category with action severity", async () => {
++  test("writeInternal queues email dispatch for override category with action severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_override" })),
+       findUserEmail: mock(async () => "override@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "override",
+       title: "Override Applied",
+       body: "An override was applied",
+       severity: "action",
+       emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+   });
+ 
+-  test("writeInternal dispatches email for payment category with action severity", async () => {
++  test("writeInternal queues email dispatch for payment category with action severity", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_payment" })),
+       findUserEmail: mock(async () => "payment@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "payment",
+       title: "Payment Received",
+       body: "Your payment was received",
+       severity: "action",
+       emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("skips email dispatch for unsupported categories (achievement) with emailPort", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_achievement" })),
+       findUserEmail: mock(async () => "user@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+@@ -687,64 +706,70 @@ describe("NotificationService (unit)", () => {
+       db: {} as any,
+       userId: "user1",
+       category: "achievement",
+       title: "Achievement Unlocked",
+       body: "You earned a badge!",
+       severity: "action",
+       emailRequired: true,
+     });
+ 
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+ 
+     const debugCalls = logCaptures.filter(
+       (c: any) => c.action === "notification_email_skipped_category",
+     );
+     expect(debugCalls.length).toBeGreaterThanOrEqual(1);
+   });
+ 
+-  test("dispatches email for supported categories (booking)", async () => {
++  test("queues email dispatch for supported categories (booking)", async () => {
+     const repo = makeRepo({
+       findNotificationByEventKey: mock(async () => null),
+       insertNotification: mock(async () => ({ id: "n_booking" })),
+       findUserEmail: mock(async () => "user@example.com"),
+     });
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+ 
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({
+       db: {} as any,
+       userId: "user1",
+       category: "booking",
+       title: "Booking Confirmed",
+       body: "Your booking is confirmed",
+       severity: "action",
+       emailRequired: true,
+     });
+ 
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+   });
+ 
+   test("getUnreadCount is exposed as a function", async () => {
+     const repo = makeRepo();
+     const service = createNotificationService(repo);
+     expect(typeof service.getUnreadCount).toBe("function");
+   });
+ });
+ 
+ describe("write vs writeBestEffort", () => {
+   const makeTestRepo = (overrides: Record<string, unknown> = {}) => ({
+     findNotificationByEventKey: mock(async () => null),
+     insertNotification: mock(async () => ({ id: "n1" })),
+     findUserEmail: mock(async () => null),
+     insertDispatch: mock(async () => {}),
+     updateDispatchStatus: mock(async () => {}),
++    updateDispatchStatusById: mock(async () => {}),
++    listQueuedDispatches: mock(async () => []),
++    incrementDispatchAttempts: mock(async () => {}),
++    findNotificationById: mock(async () => null),
+     listNotifications: mock(async () => []),
+     countUnread: mock(async () => 0),
+     findNotificationByIdForUser: mock(async () => null),
+     updateReadStatus: mock(async () => {}),
+     markAllRead: mock(async () => {}),
+     findDispatch: mock(async () => null),
+     ...overrides,
+   });
+ 
+   const baseParams = {
+@@ -815,62 +840,61 @@ describe("NotificationService email routing decision (G17)", () => {
+   function makeRoutingRepo(
+     overrides: Partial<NotificationRepo> = {},
+   ): NotificationRepo {
+     return {
+       findNotificationByEventKey: mock(async () => null),
+       findNotificationByIdForUser: mock(async () => ({ id: "n1" })),
+       insertNotification: mock(async () => ({ id: "n_email" })),
+       findUserEmail: mock(async () => "user@example.com"),
+       insertDispatch: mock(async () => {}),
+       updateDispatchStatus: mock(async () => {}),
++      updateDispatchStatusById: mock(async () => {}),
++      listQueuedDispatches: mock(async () => []),
++      incrementDispatchAttempts: mock(async () => {}),
++      findNotificationById: mock(async () => null),
+       listNotifications: mock(async () => []),
+       countUnread: mock(async () => 0),
+       updateReadStatus: mock(async () => {}),
+       markAllRead: mock(async () => {}),
+       findDispatch: mock(async () => null),
+       ...overrides,
+     } as any;
+   }
+ 
+   const baseParams = {
+     db: {} as any,
+     userId: "user1",
+     category: "booking" as const,
+     title: "Test",
+     body: "Test body",
+     severity: "action" as const,
+     eventKey: "test.key",
+   };
+ 
+-  test("emailRequired true + action severity + supported category → email dispatched and status sent", async () => {
++  test("emailRequired true + action severity + supported category → dispatch queued, no inline send", async () => {
+     const repo = makeRoutingRepo();
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({ ...baseParams, emailRequired: true });
+ 
+     expect(repo.insertDispatch).toHaveBeenCalledTimes(1);
+     expect(repo.insertDispatch).toHaveBeenCalledWith(
+       expect.anything(),
+       expect.objectContaining({
+         notificationId: "n_email",
+         channel: "email",
+         recipientEmail: "user@example.com",
+         status: "queued",
+       }),
+     );
+-    expect(emailPort.send).toHaveBeenCalledTimes(1);
+-    expect(repo.updateDispatchStatus).toHaveBeenCalledWith(
+-      expect.anything(),
+-      "n_email",
+-      "sent",
+-    );
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
+   });
+ 
+   test("emailRequired default false + action severity + supported category → no email", async () => {
+     const repo = makeRoutingRepo();
+     const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
+     const service = createNotificationService(repo, emailPort as any);
+ 
+     await service.write({ ...baseParams });
+ 
+     expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+@@ -917,10 +941,131 @@ describe("NotificationService email routing decision (G17)", () => {
+       ...baseParams,
+       category: "achievement",
+       severity: "info",
+     });
+ 
+     expect(repo.insertNotification).toHaveBeenCalledTimes(1);
+     expect(repo.insertDispatch).toHaveBeenCalledTimes(0);
+     expect(emailPort.send).toHaveBeenCalledTimes(0);
+   });
+ });
++
++describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
++  const queuedRow = (overrides: Record<string, unknown> = {}) => ({
++    id: "d1",
++    notificationId: "n1",
++    channel: "email",
++    recipientEmail: "user@example.com",
++    status: "queued",
++    attempts: 0,
++    createdAt: new Date(),
++    ...overrides,
++  });
++
++  test("sends queued rows and marks them sent", async () => {
++    const repo = makeRepo({
++      listQueuedDispatches: mock(async () => [queuedRow()]),
++      findNotificationById: mock(async () => ({
++        id: "n1",
++        title: "Booking Confirmed",
++        body: "Your booking is confirmed",
++        category: "booking",
++      })),
++    });
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++
++    const service = createNotificationService(repo, emailPort as any, {
++      db: {} as any,
++    });
++
++    const result = await service.dispatchQueuedEmails();
++
++    expect(result).toEqual({ sent: 1, failed: 0 });
++    expect(emailPort.send).toHaveBeenCalledWith({
++      to: "user@example.com",
++      subject: "Booking Confirmed",
++      html: "Your booking is confirmed",
++      category: "booking",
++    });
++    expect(repo.updateDispatchStatusById).toHaveBeenCalledWith(
++      expect.anything(),
++      "d1",
++      "sent",
++    );
++  });
++
++  test("marks skipped sends as suppressed", async () => {
++    const repo = makeRepo({
++      listQueuedDispatches: mock(async () => [queuedRow()]),
++      findNotificationById: mock(async () => ({
++        id: "n1",
++        title: "Title",
++        body: "Body",
++        category: "booking",
++      })),
++    });
++    const emailPort = { send: mock(async () => ({ skipped: true })) };
++
++    const service = createNotificationService(repo, emailPort as any, {
++      db: {} as any,
++    });
++
++    const result = await service.dispatchQueuedEmails();
++
++    expect(result).toEqual({ sent: 0, failed: 0 });
++    expect(repo.updateDispatchStatusById).toHaveBeenCalledWith(
++      expect.anything(),
++      "d1",
++      "suppressed",
++    );
++  });
++
++  test("suppresses rows whose notification no longer exists", async () => {
++    const repo = makeRepo({
++      listQueuedDispatches: mock(async () => [queuedRow()]),
++      findNotificationById: mock(async () => null),
++    });
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++
++    const service = createNotificationService(repo, emailPort as any, {
++      db: {} as any,
++    });
++
++    const result = await service.dispatchQueuedEmails();
++
++    expect(result).toEqual({ sent: 0, failed: 0 });
++    expect(emailPort.send).toHaveBeenCalledTimes(0);
++    expect(repo.updateDispatchStatusById).toHaveBeenCalledWith(
++      expect.anything(),
++      "d1",
++      "suppressed",
++    );
++  });
++
++  test("limits the number of rows processed", async () => {
++    const repo = makeRepo();
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++
++    const service = createNotificationService(repo, emailPort as any, {
++      db: {} as any,
++    });
++
++    await service.dispatchQueuedEmails(10);
++
++    expect(repo.listQueuedDispatches).toHaveBeenCalledWith(
++      expect.anything(),
++      10,
++    );
++  });
++
++  test("returns zeroes without a db connection", async () => {
++    const repo = makeRepo();
++    const emailPort = { send: mock(async () => ({ messageId: "m1" })) };
++
++    const service = createNotificationService(repo, emailPort as any);
++
++    const result = await service.dispatchQueuedEmails();
++
++    expect(result).toEqual({ sent: 0, failed: 0 });
++    expect(repo.listQueuedDispatches).toHaveBeenCalledTimes(0);
++  });
++});
+diff --git a/packages/api/src/tests/unit/payment-module.test.ts b/packages/api/src/tests/unit/payment-module.test.ts
+new file mode 100644
+index 0000000..568f3b8
+--- /dev/null
++++ b/packages/api/src/tests/unit/payment-module.test.ts
+@@ -0,0 +1,42 @@
++import { describe, expect, test } from "bun:test";
++import { createPaymentModule } from "../../modules/payment";
++
++describe("createPaymentModule provider selection (C4)", () => {
++  const base = {
++    db: {} as any,
++    wallet: { getOrCreate: async () => ({}), credit: async () => ({}) } as any,
++    webhookSecret: "test-payment-webhook-secret",
++  };
++
++  test("throws when provider=xendit but xenditConfig is missing (no silent stub fallback)", () => {
++    expect(() => createPaymentModule({ ...base, provider: "xendit" })).toThrow(
++      /Xendit credentials are missing/,
++    );
++  });
++
++  test("throws on an unknown provider value", () => {
++    expect(() =>
++      createPaymentModule({ ...base, provider: "other" as never }),
++    ).toThrow(/Unknown payment provider/);
++  });
++
++  test("selects the stub provider when provider=stub", () => {
++    const module = createPaymentModule({ ...base, provider: "stub" });
++    expect(module.service).toBeDefined();
++    expect(module.handler).toBeDefined();
++  });
++
++  test("selects the xendit provider when provider=xendit with full config", () => {
++    const module = createPaymentModule({
++      ...base,
++      provider: "xendit",
++      xenditConfig: {
++        secretKey: "sk_test",
++        webhookToken: "wh_token",
++        successRedirectUrl: "http://localhost:3000/success",
++        failureRedirectUrl: "http://localhost:3000/failure",
++      },
++    });
++    expect(module.service).toBeDefined();
++  });
++});
+diff --git a/packages/api/src/tests/unit/payment.service.test.ts b/packages/api/src/tests/unit/payment.service.test.ts
+index c2a206d..eeffced 100644
+--- a/packages/api/src/tests/unit/payment.service.test.ts
++++ b/packages/api/src/tests/unit/payment.service.test.ts
+@@ -134,20 +134,91 @@ describe("PaymentService", () => {
+         provider: makeProvider() as any,
+         providerName: "stub",
+       });
+ 
+       const result = await service.createIntent("user1", "w1", "pkg1");
+       expect(result.checkoutUrl).toBeDefined();
+       expect(result.paymentId).toBe("pay_existing");
+       expect(result.providerReference).toBe("stub:user1:pkg1");
+     });
+ 
++    test("createIntent re-purchases after a FAILED payment (new checkout)", async () => {
++      const updatePaymentStatus = mock(async () => {});
++      const repo = makeRepo({
++        findPackageByCode: mock(async () => ({
++          id: "pkg1",
++          code: "pkg1",
++          isActive: true,
++          priceIdr: 50000,
++          marks: 100,
++        })),
++        findPaymentByProviderReference: mock(async () => ({
++          id: "pay_existing",
++          status: PAYMENT_STATUS.FAILED,
++          providerReference: "stub:user1:pkg1",
++        })),
++        updatePaymentStatus,
++      });
++      const db = makeDb();
++
++      const service = createPaymentService({
++        db,
++        wallet: makeWallet() as any,
++        repo,
++        provider: makeProvider() as any,
++        providerName: "stub",
++      });
++
++      const result = await service.createIntent("user1", "w1", "pkg1");
++      expect(result.paymentId).toBe("pay_existing");
++      expect(result.providerReference).toBe("stub:user1:pkg1");
++      expect(result.checkoutUrl).toBe("https://checkout.test/123");
++      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
++        status: PAYMENT_STATUS.PENDING,
++      });
++    });
++
++    test("createIntent re-purchases after an EXPIRED payment (new checkout)", async () => {
++      const updatePaymentStatus = mock(async () => {});
++      const repo = makeRepo({
++        findPackageByCode: mock(async () => ({
++          id: "pkg1",
++          code: "pkg1",
++          isActive: true,
++          priceIdr: 50000,
++          marks: 100,
++        })),
++        findPaymentByProviderReference: mock(async () => ({
++          id: "pay_existing",
++          status: PAYMENT_STATUS.EXPIRED,
++          providerReference: "stub:user1:pkg1",
++        })),
++        updatePaymentStatus,
++      });
++      const db = makeDb();
++
++      const service = createPaymentService({
++        db,
++        wallet: makeWallet() as any,
++        repo,
++        provider: makeProvider() as any,
++        providerName: "stub",
++      });
++
++      const result = await service.createIntent("user1", "w1", "pkg1");
++      expect(result.paymentId).toBe("pay_existing");
++      expect(result.checkoutUrl).toBe("https://checkout.test/123");
++      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
++        status: PAYMENT_STATUS.PENDING,
++      });
++    });
++
+     test("creates new payment intent when no existing payment", async () => {
+       const repo = makeRepo({
+         findPackageByCode: mock(async () => ({
+           id: "pkg1",
+           code: "pkg1",
+           isActive: true,
+           priceIdr: 50000,
+           marks: 100,
+         })),
+         findPaymentByProviderReference: mock(async () => null),
+@@ -630,20 +701,124 @@ describe("PaymentService", () => {
+       const result = await service.confirmFromWebhook({
+         provider: "stub",
+         providerReference: "stub:user1:pkg1",
+         providerEventId: "evt_paid",
+         status: PAYMENT_STATUS.PAID as PaymentStatus,
+       });
+ 
+       expect(result.status).toBe(PAYMENT_STATUS.PAID);
+       expect(wallet.credit).toHaveBeenCalledTimes(1);
+     });
++
++    test("PAID credit writes a payment notification for the payer", async () => {
++      const wallet = makeWallet();
++      const updatePaymentStatus = mock(async () => {});
++      const repo = makeRepo({
++        findPaymentByProviderReference: mock(async () => ({
++          id: "pay1",
++          userId: "user1",
++          status: PAYMENT_STATUS.PENDING,
++          walletId: "w1",
++          marks: 100,
++          amountIdr: 50000,
++          providerReference: "stub:user1:pkg1",
++        })),
++        findPaymentByProviderEventId: mock(async () => null),
++        updatePaymentStatus,
++      });
++      const notification = { writeBestEffort: mock(async () => {}) };
++
++      const tx = {};
++      const db = {
++        transaction: mock(async (fn: any) => fn(tx)),
++      };
++
++      const service = createPaymentService({
++        db: db as any,
++        wallet: wallet as any,
++        repo,
++        provider: makeProvider() as any,
++        providerName: "stub",
++        notification: notification as any,
++      });
++
++      await service.confirmFromWebhook({
++        provider: "stub",
++        providerReference: "stub:user1:pkg1",
++        providerEventId: "evt_paid_notif",
++        status: PAYMENT_STATUS.PAID as PaymentStatus,
++      });
++
++      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
++      expect(notification.writeBestEffort).toHaveBeenCalledWith(
++        expect.objectContaining({
++          db: tx,
++          userId: "user1",
++          category: "payment",
++          eventKey: "payment.pay1.credited",
++          emailRequired: true,
++        }),
++      );
++    });
++
++    test("REFUNDED webhook on a PAID payment writes a refund notification", async () => {
++      const wallet = makeWallet();
++      const updatePaymentStatus = mock(async () => {});
++      const repo = makeRepo({
++        findPaymentByProviderReference: mock(async () => ({
++          id: "pay1",
++          userId: "user1",
++          status: PAYMENT_STATUS.PAID,
++          walletId: "w1",
++          marks: 100,
++          amountIdr: 50000,
++          providerReference: "stub:user1:pkg1",
++        })),
++        findPaymentByProviderEventId: mock(async () => null),
++        updatePaymentStatus,
++      });
++      const notification = { writeBestEffort: mock(async () => {}) };
++
++      const tx = {};
++      const db = {
++        transaction: mock(async (fn: any) => fn(tx)),
++      };
++
++      const service = createPaymentService({
++        db: db as any,
++        wallet: wallet as any,
++        repo,
++        provider: makeProvider() as any,
++        providerName: "stub",
++        notification: notification as any,
++      });
++
++      const result = await service.confirmFromWebhook({
++        provider: "stub",
++        providerReference: "stub:user1:pkg1",
++        providerEventId: "evt_refunded_notif",
++        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
++      });
++
++      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
++      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
++      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
++      expect(notification.writeBestEffort).toHaveBeenCalledWith(
++        expect.objectContaining({
++          db: tx,
++          userId: "user1",
++          category: "refund",
++          eventKey: "payment.pay1.refunded",
++          emailRequired: true,
++        }),
++      );
++    });
+   });
+ 
+   describe("getPurchase", () => {
+     test("throws PaymentNotFoundError when payment not found", async () => {
+       const repo = makeRepo({
+         findPaymentById: mock(async () => null),
+       });
+       const db = makeDb();
+ 
+       const service = createPaymentService({
+diff --git a/packages/api/src/tests/unit/scheduler.service.test.ts b/packages/api/src/tests/unit/scheduler.service.test.ts
+index bb59662..23c2a5d 100644
+--- a/packages/api/src/tests/unit/scheduler.service.test.ts
++++ b/packages/api/src/tests/unit/scheduler.service.test.ts
+@@ -69,60 +69,64 @@ mock.module("bullmq", () => ({
+ }));
+ 
+ import { createSchedulerService } from "../../modules/scheduler/scheduler.service";
+ 
+ describe("createSchedulerService", () => {
+   test("returns null when redisUrl is empty", () => {
+     const result = createSchedulerService("", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+     expect(result).toBeNull();
+   });
+ 
+   test("returns queue and worker when redisUrl is provided", () => {
+     const result = createSchedulerService("redis://localhost:6379", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+     expect(result).not.toBeNull();
+     expect(result).toHaveProperty("queue");
+     expect(result).toHaveProperty("worker");
+   });
+ 
+   test("handles expire-bookings job", async () => {
+     const onExpireBookings = mock(async () => ({ expired: 5, failed: 0 }));
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings,
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedJobHandler).not.toBeNull();
+ 
+     const job = { id: "1", name: "expire-bookings", data: {} };
+     const result = await capturedJobHandler!(job);
+ 
+     expect(onExpireBookings).toHaveBeenCalledTimes(1);
+     expect(result).toEqual({ expired: 5, failed: 0 });
+   });
+ 
+   test("logs warn level when expire-bookings has failures", async () => {
+     const onExpireBookings = mock(async () => ({ expired: 3, failed: 2 }));
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings,
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedJobHandler).not.toBeNull();
+ 
+     const job = { id: "1", name: "expire-bookings", data: {} };
+     await capturedJobHandler!(job);
+ 
+     const warnLogs = logCaptures.filter(
+       (l) =>
+         l.level === "warn" && l.entry?.action === "expire_bookings_complete",
+@@ -130,148 +134,184 @@ describe("createSchedulerService", () => {
+     expect(warnLogs.length).toBe(1);
+     expect(warnLogs[0].entry).toMatchObject({ expired: 3, failed: 2 });
+   });
+ 
+   test("handles release-expired-holds job", async () => {
+     const onReleaseHolds = mock(async () => ({ released: 3 }));
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds,
+       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedJobHandler).not.toBeNull();
+ 
+     const job = { id: "2", name: "release-expired-holds", data: {} };
+     const result = await capturedJobHandler!(job);
+ 
+     expect(onReleaseHolds).toHaveBeenCalledTimes(1);
+     expect(result).toEqual({ released: 3 });
+   });
+ 
+   test("handles check-tutor-lateness job", async () => {
+     const onCheckTutorLateness = mock(async () => ({
+       autoCancelled: 2,
+       failed: 0,
+     }));
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+       onCheckTutorLateness,
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedJobHandler).not.toBeNull();
+ 
+     const job = { id: "2b", name: "check-tutor-lateness", data: {} };
+     const result = await capturedJobHandler!(job);
+ 
+     expect(onCheckTutorLateness).toHaveBeenCalledTimes(1);
+     expect(result).toEqual({ autoCancelled: 2, failed: 0 });
+   });
+ 
+   test("logs warn level when check-tutor-lateness has failures", async () => {
+     const onCheckTutorLateness = mock(async () => ({
+       autoCancelled: 1,
+       failed: 1,
+     }));
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+       onCheckTutorLateness,
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedJobHandler).not.toBeNull();
+ 
+     const job = { id: "2c", name: "check-tutor-lateness", data: {} };
+     await capturedJobHandler!(job);
+ 
+     const warnLogs = logCaptures.filter(
+       (l) =>
+         l.level === "warn" &&
+         l.entry?.action === "check_tutor_lateness_complete",
+     );
+     expect(warnLogs.length).toBe(1);
+     expect(warnLogs[0].entry).toMatchObject({ autoCancelled: 1, failed: 1 });
+   });
+ 
+   test("handles send-notification-email job", async () => {
+-    const onSendNotificationEmail = mock(async () => {});
++    const onSendNotificationEmail = mock(async () => ({
++      sent: 3,
++      failed: 1,
++    }));
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+       onSendNotificationEmail,
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedJobHandler).not.toBeNull();
+ 
+     const job = {
+       id: "3",
+       name: "send-notification-email",
+-      data: { notificationId: "n1", userId: "u1" },
++      data: {},
+     };
+-    await capturedJobHandler!(job);
++    const result = await capturedJobHandler!(job);
+ 
+-    expect(onSendNotificationEmail).toHaveBeenCalledWith({
+-      notificationId: "n1",
+-      userId: "u1",
++    expect(onSendNotificationEmail).toHaveBeenCalledTimes(1);
++    expect(onSendNotificationEmail).toHaveBeenCalledWith();
++    expect(result).toEqual({ sent: 3, failed: 1 });
++  });
++
++  test("handles escalate-support-tickets job", async () => {
++    const onEscalateSupportTickets = mock(async () => ({ escalated: 2 }));
++    createSchedulerService("redis://localhost:6379", {
++      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
++      onReleaseHolds: mock(async () => ({ released: 0 })),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets,
+     });
++
++    expect(capturedJobHandler).not.toBeNull();
++
++    const job = {
++      id: "5",
++      name: "escalate-support-tickets",
++      data: {},
++    };
++    const result = await capturedJobHandler!(job);
++
++    expect(onEscalateSupportTickets).toHaveBeenCalledTimes(1);
++    expect(result).toEqual({ escalated: 2 });
++
++    const infoLogs = logCaptures.filter(
++      (l) => l.entry?.action === "escalate_support_tickets_complete",
++    );
++    expect(infoLogs.length).toBe(1);
+   });
+ 
+   test("logs warning for unknown job", async () => {
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedJobHandler).not.toBeNull();
+ 
+     logCaptures = [];
+     const job = { id: "4", name: "unknown-job", data: {} };
+     await capturedJobHandler!(job);
+ 
+     const warnCalls = logCaptures.filter(
+       (c) => c.entry?.action === "scheduler_unknown_job",
+     );
+     expect(warnCalls.length).toBeGreaterThanOrEqual(1);
+   });
+ 
+   test("worker failed handler logs error", () => {
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedFailedHandler).not.toBeNull();
+ 
+     logCaptures = [];
+     const error = new Error("test error");
+     capturedFailedHandler!({ name: "test-job" }, error);
+ 
+     const errorCalls = logCaptures.filter(
+       (c) => c.entry?.action === "scheduler_job_failed",
+     );
+     expect(errorCalls.length).toBeGreaterThanOrEqual(1);
+   });
+ 
+   test("worker completed handler logs info", () => {
+     createSchedulerService("redis://localhost:6379", {
+       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+       onReleaseHolds: mock(async () => ({ released: 0 })),
+       onCheckTutorLateness: mock(async () => ({ autoCancelled: 0, failed: 0 })),
+-      onSendNotificationEmail: mock(async () => {}),
++      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
++      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+     });
+ 
+     expect(capturedCompletedHandler).not.toBeNull();
+ 
+     logCaptures = [];
+     capturedCompletedHandler!({ name: "test-job" });
+ 
+     const completedCalls = logCaptures.filter(
+       (c) => c.entry?.action === "scheduler_job_completed",
+     );
+diff --git a/packages/api/src/tests/unit/support.service.test.ts b/packages/api/src/tests/unit/support.service.test.ts
+index 1a39c34..41c6202 100644
+--- a/packages/api/src/tests/unit/support.service.test.ts
++++ b/packages/api/src/tests/unit/support.service.test.ts
+@@ -298,11 +298,54 @@ describe("SupportService", () => {
+       });
+       expect(audit.record).toHaveBeenCalledTimes(1);
+       expect(audit.record.mock.calls[0][0]).toMatchObject({
+         actorId: "admin1",
+         action: "support_ticket_resolved",
+         targetId: "t1",
+         targetType: "support_ticket",
+       });
+     });
+   });
++
++  describe("escalatePastSlaTickets", () => {
++    test("escalates overdue open tickets and records audit entries", async () => {
++      const overdue = [
++        makeTicket({
++          id: "t1",
++          slaDeadline: new Date(Date.now() - 60 * 60 * 1000),
++        }),
++      ];
++      const { service, repo, audit } = createService({
++        repo: {
++          listPastSla: mock(async () => overdue),
++          markEscalated: mock(async () => {}),
++        },
++      });
++
++      const result = await service.escalatePastSlaTickets();
++
++      expect(result.escalated).toBe(1);
++      expect(repo.listPastSla).toHaveBeenCalledTimes(1);
++      expect(repo.markEscalated).toHaveBeenCalledTimes(1);
++      expect(repo.markEscalated.mock.calls[0][1]).toBe("t1");
++      expect(audit.record).toHaveBeenCalledTimes(1);
++      expect(audit.record.mock.calls[0][0]).toMatchObject({
++        actorId: null,
++        actorType: "system",
++        action: "support_ticket_escalated",
++        targetId: "t1",
++        targetType: "support_ticket",
++        afterState: { status: "in_progress" },
++      });
++    });
++
++    test("returns zero when no tickets are overdue", async () => {
++      const { service } = createService({
++        repo: { listPastSla: mock(async () => []) },
++      });
++
++      const result = await service.escalatePastSlaTickets();
++
++      expect(result.escalated).toBe(0);
++    });
++  });
+ });

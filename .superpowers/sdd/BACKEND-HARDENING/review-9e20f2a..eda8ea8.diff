@@ -1,0 +1,144 @@
+# Review package: 9e20f2a..HEAD
+
+## Commits
+eda8ea8 test: add docker-compose.test.yml for local Postgres + Redis
+aa4e2e9 fix(dev): reconcile DB URLs across .env, docker-compose, and test setup
+
+## Files changed
+ docker-compose.test.yml              | 31 +++++++++++++++++++++++++++++++
+ package.json                         |  1 +
+ packages/api/src/tests/test-setup.ts |  3 ++-
+ packages/db/package.json             |  1 +
+ turbo.json                           |  3 +++
+ 5 files changed, 38 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/docker-compose.test.yml b/docker-compose.test.yml
+new file mode 100644
+index 0000000..0053081
+--- /dev/null
++++ b/docker-compose.test.yml
+@@ -0,0 +1,31 @@
++name: cogito-app-test
++
++services:
++  postgres:
++    image: postgres:16-alpine
++    container_name: cogito-app-postgres-test
++    environment:
++      POSTGRES_DB: cogito-app
++      POSTGRES_USER: postgres
++      POSTGRES_PASSWORD: password
++    ports:
++      - "6767:5432"
++    healthcheck:
++      test: ["CMD-SHELL", "pg_isready -U postgres"]
++      interval: 5s
++      timeout: 3s
++      retries: 10
++
++  redis:
++    image: redis:7-alpine
++    container_name: cogito-app-redis-test
++    ports:
++      - "6379:6379"
++    healthcheck:
++      test: ["CMD", "redis-cli", "ping"]
++      interval: 10s
++      timeout: 5s
++      retries: 5
++
++volumes:
++  cogito-app_postgres_data:
+diff --git a/package.json b/package.json
+index c41e6e7..95f26ed 100644
+--- a/package.json
++++ b/package.json
+@@ -31,20 +31,21 @@
+     "dev": "turbo dev",
+     "build": "turbo build",
+     "check-types": "turbo check-types",
+     "dev:web": "turbo -F web dev",
+     "dev:server": "turbo -F server dev",
+     "db:push": "turbo -F @cogito-app/db db:push",
+     "db:studio": "turbo -F @cogito-app/db db:studio",
+     "db:generate": "turbo -F @cogito-app/db db:generate",
+     "db:migrate": "turbo -F @cogito-app/db db:migrate",
+     "db:start": "turbo -F @cogito-app/db db:start",
++    "db:test": "turbo -F @cogito-app/db db:test",
+     "db:watch": "turbo -F @cogito-app/db db:watch",
+     "db:stop": "turbo -F @cogito-app/db db:stop",
+     "db:down": "turbo -F @cogito-app/db db:down",
+     "seed-packages": "bun --env-file apps/server/.env apps/server/src/seed-packages.ts",
+     "lint": "oxlint",
+     "lint:fix": "oxlint --fix",
+     "format": "oxfmt --write",
+     "check": "oxlint && oxfmt --write",
+     "test": "bun test",
+     "test:api": "bun test --env-file apps/server/.env packages/api/src/tests",
+diff --git a/packages/api/src/tests/test-setup.ts b/packages/api/src/tests/test-setup.ts
+index 8753fe9..f48ee13 100644
+--- a/packages/api/src/tests/test-setup.ts
++++ b/packages/api/src/tests/test-setup.ts
+@@ -1,5 +1,6 @@
+-process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test";
++process.env.DATABASE_URL ??=
++  "postgresql://postgres:password@localhost:6767/cogito-app";
+ process.env.BETTER_AUTH_SECRET ??= "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+ process.env.BETTER_AUTH_URL ??= "http://localhost:3001";
+ process.env.CORS_ORIGIN ??= "http://localhost:3000";
+ process.env.PAYMENT_WEBHOOK_SECRET ??= "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+diff --git a/packages/db/package.json b/packages/db/package.json
+index cc249a9..36e1bfa 100644
+--- a/packages/db/package.json
++++ b/packages/db/package.json
+@@ -11,20 +11,21 @@
+     "./schema": {
+       "default": "./src/schema/index.ts"
+     }
+   },
+   "scripts": {
+     "db:push": "drizzle-kit push",
+     "db:generate": "drizzle-kit generate",
+     "db:studio": "drizzle-kit studio",
+     "db:migrate": "drizzle-kit migrate",
+     "db:start": "docker compose up -d",
++    "db:test": "docker compose -f ../../docker-compose.test.yml up -d",
+     "db:watch": "docker compose up",
+     "db:stop": "docker compose stop",
+     "db:down": "docker compose down"
+   },
+   "dependencies": {
+     "@cogito-app/env": "workspace:*",
+     "dotenv": "catalog:",
+     "drizzle-orm": "catalog:",
+     "postgres": "^3.4.5",
+     "zod": "catalog:"
+diff --git a/turbo.json b/turbo.json
+index df3f316..555b4d8 100644
+--- a/turbo.json
++++ b/turbo.json
+@@ -36,20 +36,23 @@
+       "persistent": true
+     },
+     "db:studio": {
+       "cache": false,
+       "persistent": true
+     },
+     "db:start": {
+       "cache": false,
+       "persistent": true
+     },
++    "db:test": {
++      "cache": false
++    },
+     "db:stop": {
+       "cache": false
+     },
+     "db:watch": {
+       "cache": false,
+       "persistent": true
+     },
+     "db:down": {
+       "cache": false
+     }

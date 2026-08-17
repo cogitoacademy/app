@@ -1,0 +1,93 @@
+# Review package: 9e20f2a..HEAD
+
+## Commits
+e257a82 ci: pin oven/bun to 1.3.14 in Dockerfile (lockfile parity)
+28be5ab ci: require green checks before auto-merging dependabot PRs
+82a864c ci: use native bun ecosystem in dependabot (writes bun.lock)
+
+## Files changed
+ .github/dependabot.yml           | 2 +-
+ .github/workflows/auto-merge.yml | 4 ++--
+ apps/server/Dockerfile           | 4 ++--
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+## Diff
+diff --git a/.github/dependabot.yml b/.github/dependabot.yml
+index e1fd7c7..0fef576 100644
+--- a/.github/dependabot.yml
++++ b/.github/dependabot.yml
+@@ -1,13 +1,13 @@
+ version: 2
+ updates:
+-  - package-ecosystem: "npm"
++  - package-ecosystem: "bun"
+     directory: "/"
+     schedule:
+       interval: "weekly"
+       day: "monday"
+     groups:
+       dev-dependencies:
+         patterns: ["@types/*", "oxlint", "oxfmt", "typescript"]
+       dependencies:
+         patterns: ["*"]
+         exclude-patterns: ["@types/*"]
+diff --git a/.github/workflows/auto-merge.yml b/.github/workflows/auto-merge.yml
+index d25dded..ed0f7ae 100644
+--- a/.github/workflows/auto-merge.yml
++++ b/.github/workflows/auto-merge.yml
+@@ -1,21 +1,21 @@
+ name: Auto-merge Dependabot
+ on:
+   pull_request:
+     types: [opened, synchronize, reopened]
+-  pull_request_review:
+-    types: [submitted]
+   check_suite:
+     types: [completed]
+ 
+ jobs:
+   auto-merge:
+     runs-on: ubuntu-latest
+     if: github.actor == 'dependabot[bot]'
+     permissions:
+       pull-requests: write
+       contents: write
+     steps:
++      # Durable gate: enable "Require status checks" branch protection for main with CI required.
+       - uses: fastify/github-action-merge-dependabot@v3
+         with:
+           github-token: ${{ secrets.GITHUB_TOKEN }}
+           merge-method: squash
++          target: minor
+diff --git a/apps/server/Dockerfile b/apps/server/Dockerfile
+index e7d82a3..4db2ef1 100644
+--- a/apps/server/Dockerfile
++++ b/apps/server/Dockerfile
+@@ -1,25 +1,25 @@
+-FROM oven/bun:1 AS deps
++FROM oven/bun:1.3.14 AS deps
+ WORKDIR /app
+ COPY package.json bun.lock ./
+ COPY packages/api/package.json packages/api/
+ COPY packages/db/package.json packages/db/
+ COPY packages/auth/package.json packages/auth/
+ COPY packages/env/package.json packages/env/
+ COPY packages/config/package.json packages/config/
+ RUN bun install --frozen-lockfile
+ 
+ FROM deps AS builder
+ COPY . .
+ RUN bun run build
+ 
+-FROM oven/bun:1-slim AS runner
++FROM oven/bun:1.3.14-slim AS runner
+ WORKDIR /app
+ COPY --from=builder /app/apps/server/dist ./dist
+ COPY --from=builder /app/node_modules ./node_modules
+ COPY --from=builder /app/packages ./packages
+ COPY --from=builder /app/package.json ./
+ 
+ ENV NODE_ENV=production
+ EXPOSE 3001
+ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+   CMD curl -f http://localhost:3001/health || exit 1

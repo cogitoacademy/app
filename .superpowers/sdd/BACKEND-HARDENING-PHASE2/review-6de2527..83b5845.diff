@@ -1,0 +1,3885 @@
+# Review package: 6de2527..83b5845
+
+## Commits
+83b5845 style: apply oxfmt formatting to booking repo, meeting provider, room service
+cc30200 feat(booking): group-series creation with upfront per-session holds (FR-20)
+864eb98 fix(booking): reprice partial groups to awaiting_reconfirmation at deadline (FR-16/TC-18)
+0807b9a fix(booking): forfeit per-session hold when a series session is cancelled after H-2 (TC-30)
+415b00d test(room): use toSorted in notification recipient assertion
+8a77d59 feat(room): notify tutor and confirmed students on offline room assign/relocate/cancel (P1-3)
+0bfdb27 refactor(booking): rename shadowed transition result in acceptReschedule
+5dad04e feat(meeting): update/cancel provider events on reschedule and terminal booking states (OQ-05)
+2f02653 fix(notification): bound and HTML-escape user-supplied reason fields in email bodies
+4d8d682 fix(admin-booking): return refreshed booking from applyOverride (P1-5 stale holdAmount)
+
+## Files changed
+ packages/api/src/lib/sanitize.ts                   |  13 +
+ .../modules/admin-booking/admin-booking.service.ts |  11 +-
+ .../api/src/modules/booking/booking.handler.ts     |  31 ++
+ packages/api/src/modules/booking/booking.repo.ts   |  16 +
+ packages/api/src/modules/booking/booking.router.ts |  29 +-
+ .../api/src/modules/booking/booking.service.ts     | 458 ++++++++++++++++++---
+ packages/api/src/modules/booking/booking.types.ts  |  36 ++
+ packages/api/src/modules/booking/index.ts          |   5 +
+ .../api/src/modules/meeting/fallback.provider.ts   |  23 +-
+ .../src/modules/meeting/google-meeting.provider.ts | 195 ++++++++-
+ packages/api/src/modules/meeting/meeting.types.ts  |  14 +
+ packages/api/src/modules/room/index.ts             |  25 +-
+ packages/api/src/modules/room/room.service.ts      |  80 +++-
+ packages/api/src/services.ts                       |   6 +-
+ .../src/tests/integration/admin-override.test.ts   |   3 +
+ .../api/src/tests/integration/booking-g5.test.ts   |  22 +-
+ .../tests/integration/booking-group-series.test.ts | 180 ++++++++
+ .../integration/booking-reprice-deadline.test.ts   | 265 ++++++++++++
+ .../tests/integration/meeting-lifecycle.test.ts    | 167 ++++++++
+ .../api/src/tests/integration/room-g14.test.ts     |  28 +-
+ .../api/src/tests/unit/booking.service.test.ts     | 245 ++++++++++-
+ .../src/tests/unit/google-meeting.provider.test.ts | 128 ++++++
+ packages/api/src/tests/unit/room.service.test.ts   | 130 ++++++
+ packages/api/src/tests/unit/sanitize.test.ts       |  24 +-
+ .../api/src/tests/unit/validation-bounds.test.ts   |  26 ++
+ 25 files changed, 2061 insertions(+), 99 deletions(-)
+
+## Diff
+diff --git a/packages/api/src/lib/sanitize.ts b/packages/api/src/lib/sanitize.ts
+index e2b7cb1..19c6d42 100644
+--- a/packages/api/src/lib/sanitize.ts
++++ b/packages/api/src/lib/sanitize.ts
+@@ -79,20 +79,33 @@ function sanitizeTag(raw: string, tagName: string): string {
+   );
+   const cleaned = stripped.replace(
+     /(\s+(?:href|src|xlink:href)\s*=\s*)("[^"]*"|'[^']*'|[^\s>]*)/gi,
+     (_match, prefix: string, value: string) =>
+       sanitizeAttributeValue(prefix, value),
+   );
+   if (!ALLOWED_TAGS.has(tagName)) return "";
+   return cleaned;
+ }
+ 
++/**
++ * Escapes a string for safe interpolation into an HTML email/notification body
++ * (M5: user-supplied reasons must not inject markup). Escapes `&<>"'`.
++ */
++export function escapeHtml(value: string): string {
++  return value
++    .replace(/&/g, "&amp;")
++    .replace(/</g, "&lt;")
++    .replace(/>/g, "&gt;")
++    .replace(/"/g, "&quot;")
++    .replace(/'/g, "&#39;");
++}
++
+ export function sanitizeHtml(input: string): string {
+   if (!input) return "";
+   let result = "";
+   let index = 0;
+ 
+   while (index < input.length) {
+     const open = input.indexOf("<", index);
+     if (open === -1) {
+       result += input.slice(index);
+       break;
+diff --git a/packages/api/src/modules/admin-booking/admin-booking.service.ts b/packages/api/src/modules/admin-booking/admin-booking.service.ts
+index a24a2be..13f2b36 100644
+--- a/packages/api/src/modules/admin-booking/admin-booking.service.ts
++++ b/packages/api/src/modules/admin-booking/admin-booking.service.ts
+@@ -226,21 +226,21 @@ export function createAdminBookingService(deps: {
+     return {
+       newState,
+       affectedParticipantIds: affectedParts.map((p) => p.userId),
+       projectedMarksAction: input.marksAction ?? null,
+       perParticipantImpact,
+       overrideMeta,
+     };
+   }
+ 
+   async function applyOverride(adminId: string, input: OverrideInput) {
+-    const result = await db.transaction(async (tx) => {
++    await db.transaction(async (tx) => {
+       const bookingRow = await repo.findBookingById(tx, input.bookingId);
+       if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
+ 
+       const plan = await planOverride(tx, bookingRow, input);
+ 
+       const updateResult = await repo.updateBookingWithOverride(
+         tx,
+         input.bookingId,
+         plan.newState,
+         input.reason,
+@@ -328,25 +328,28 @@ export function createAdminBookingService(deps: {
+         actorType: ACTOR_TYPE.ADMIN,
+         action: "booking_override",
+         targetId: input.bookingId,
+         targetType: "booking",
+         beforeState: { currentState: updateResult.previousState },
+         afterState: {
+           currentState: plan.newState,
+           overrideMeta: plan.overrideMeta,
+         },
+       });
+-
+-      return updateResult.updated;
+     });
+ 
+-    return result;
++    // The override tx mutates holdAmount/state after the versioned update, so
++    // re-read the booking so the response reflects the post-override values
++    // (P1-5: the old response carried a stale pre-update holdAmount).
++    const refreshed = await repo.findBookingById(db, input.bookingId);
++    if (!refreshed) throw new BookingNotFoundError(input.bookingId);
++    return refreshed;
+   }
+ 
+   /** Returns the projected override outcome without persisting anything. */
+   async function previewOverride(input: OverrideInput) {
+     const bookingRow = await repo.findBookingById(db, input.bookingId);
+     if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
+ 
+     const plan = await planOverride(db, bookingRow, input);
+ 
+     return {
+diff --git a/packages/api/src/modules/booking/booking.handler.ts b/packages/api/src/modules/booking/booking.handler.ts
+index dd5e661..5cb758e 100644
+--- a/packages/api/src/modules/booking/booking.handler.ts
++++ b/packages/api/src/modules/booking/booking.handler.ts
+@@ -1,38 +1,40 @@
+ import type { Context } from "../../context";
+ import { z } from "zod";
+ import { withDomainMap } from "../../lib/handler-utils";
+ import { bookingIdempotency } from "../../lib/idempotency";
+ import { mapBookingError } from "./booking.errors";
+ import type {
+   createSoloInput,
+   createGroupInput,
+   createSeriesInput,
++  createGroupSeriesInput,
+   getBookingInput,
+   listMineInput,
+   listSessionsInput,
+   bookingActionInput,
+   confirmInviteInput,
+   declineInviteInput,
+   reconfirmInput,
+   withdrawInput,
+   proposeRescheduleInput,
+   completeSessionInput,
+   markAttendanceInput,
+   cancelSessionInput,
+   addSessionNoteInput,
+ } from "./booking.types";
+ import type { BookingService } from "./booking.service";
+ 
+ type CreateSoloInput = z.infer<typeof createSoloInput>;
+ type CreateGroupInput = z.infer<typeof createGroupInput>;
+ type CreateSeriesInput = z.infer<typeof createSeriesInput>;
++type CreateGroupSeriesInput = z.infer<typeof createGroupSeriesInput>;
+ type GetBookingInput = z.infer<typeof getBookingInput>;
+ type ListMineInput = z.infer<typeof listMineInput>;
+ type ListSessionsInput = z.infer<typeof listSessionsInput>;
+ type BookingActionInput = z.infer<typeof bookingActionInput>;
+ type ConfirmInviteInput = z.infer<typeof confirmInviteInput>;
+ type DeclineInviteInput = z.infer<typeof declineInviteInput>;
+ type ReconfirmInput = z.infer<typeof reconfirmInput>;
+ type WithdrawInput = z.infer<typeof withdrawInput>;
+ type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
+ type CompleteSessionInput = z.infer<typeof completeSessionInput>;
+@@ -234,20 +236,49 @@ export function createBookingHandler(booking: BookingService) {
+               availabilitySlotId: input.availabilitySlotId,
+               modality: input.modality,
+               sessions: input.sessions,
+               timezone: input.timezone,
+             }),
+           mapBookingError,
+         ),
+       );
+     },
+ 
++    createGroupSeries: async ({
++      context,
++      input,
++    }: {
++      context: Context;
++      input: CreateGroupSeriesInput;
++    }) => {
++      const headerKey = context.headers.get("idempotency-key");
++      const sessionsKey = input.sessions
++        .map((s) => s.scheduledStartAt.toISOString())
++        .join(",");
++      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${sessionsKey}:${input.inviteeUserIds.join(",")}:${headerKey ?? ""}`;
++      return bookingIdempotency.getOrSet(idempotencyKey, () =>
++        withDomainMap(
++          () =>
++            booking.createGroupSeries(context.session!.user.id, {
++              tutorId: input.tutorId,
++              availabilitySlotId: input.availabilitySlotId,
++              modality: input.modality,
++              targetGroupSize: input.targetGroupSize,
++              inviteeUserIds: input.inviteeUserIds,
++              sessions: input.sessions,
++              timezone: input.timezone,
++            }),
++          mapBookingError,
++        ),
++      );
++    },
++
+     confirmInvite: async ({
+       context,
+       input,
+     }: {
+       context: Context;
+       input: ConfirmInviteInput;
+     }) => {
+       return withDomainMap(
+         () => booking.confirmInvite(context.session!.user.id, input.bookingId),
+         mapBookingError,
+diff --git a/packages/api/src/modules/booking/booking.repo.ts b/packages/api/src/modules/booking/booking.repo.ts
+index 4adada3..cf7ba4b 100644
+--- a/packages/api/src/modules/booking/booking.repo.ts
++++ b/packages/api/src/modules/booking/booking.repo.ts
+@@ -169,20 +169,35 @@ async function findUserEmails(
+   conn: DbOrTx,
+   userIds: string[],
+ ): Promise<{ id: string; email: string; name: string }[]> {
+   if (userIds.length === 0) return [];
+   return conn
+     .select({ id: user.id, email: user.email, name: user.name })
+     .from(user)
+     .where(inArray(user.id, userIds));
+ }
+ 
++/**
++ * Resolves registered users by id (used to validate group-series invitees).
++ *
++ * @param conn - the database connection or active transaction
++ * @param userIds - the user ids to look up
++ * @returns the matching user rows
++ */
++async function findUsersByIds(conn: DbOrTx, userIds: string[]) {
++  if (userIds.length === 0) return [];
++  return conn
++    .select({ id: user.id })
++    .from(user)
++    .where(inArray(user.id, userIds));
++}
++
+ /**
+  * Lists participants whose confirmation state is RECONFIRMED for a booking.
+  *
+  * @param conn - the database connection or active transaction
+  * @param bookingId - the booking id
+  * @returns the reconfirmed participant rows
+  */
+ async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
+   return conn
+     .select({ ...getTableColumns(bookingParticipant) })
+@@ -805,20 +820,21 @@ export function createBookingRepo(db: DbType) {
+   return {
+     findBookingById,
+     findBookingWithParticipants,
+     listBookingsByProposer,
+     listBookingsByTutor,
+     findTutorProfile,
+     findAvailabilitySlot,
+     findParticipant,
+     findConfirmedParticipants,
+     findUserEmails,
++    findUsersByIds,
+     findReconfirmedParticipants,
+     insertBooking,
+     updateBookingCancellationReason,
+     updateBookingHoldAmount,
+     updateBookingConfirmedHeadcount,
+     insertParticipant,
+     updateParticipantState,
+     insertStateHistory,
+     insertRescheduleProposal,
+     findPendingRescheduleProposal,
+diff --git a/packages/api/src/modules/booking/booking.router.ts b/packages/api/src/modules/booking/booking.router.ts
+index 3616ae4..8f088e7 100644
+--- a/packages/api/src/modules/booking/booking.router.ts
++++ b/packages/api/src/modules/booking/booking.router.ts
+@@ -1,21 +1,22 @@
+-import { z } from "zod";
+-
+ import { protectedProcedure, tutorProcedure } from "../../procedures";
+ import {
+   createSoloInput,
+   createGroupInput,
+   createSeriesInput,
++  createGroupSeriesInput,
+   getBookingInput,
+   listMineInput,
+   listSessionsInput,
+   bookingActionInput,
++  cancelBookingInput,
++  declineBookingInput,
+   confirmInviteInput,
+   declineInviteInput,
+   reconfirmInput,
+   withdrawInput,
+   proposeRescheduleInput,
+   completeSessionInput,
+   markAttendanceInput,
+   cancelSessionInput,
+   acceptRescheduleInput,
+   rejectRescheduleInput,
+@@ -60,25 +61,21 @@ export function createBookingRouter(handler: BookingHandler) {
+       .handler(handler.listMine),
+ 
+     cancel: protectedProcedure
+       .route({
+         method: "POST",
+         path: "/booking/cancel",
+         tags: ["Bookings"],
+         summary: "Cancel booking",
+         description: "Cancels a booking, releases held Marks if applicable",
+       })
+-      .input(
+-        bookingActionInput.extend({
+-          cancellationReason: z.string().optional(),
+-        }),
+-      )
++      .input(cancelBookingInput)
+       .handler(handler.cancel),
+ 
+     acceptReschedule: protectedProcedure
+       .route({
+         method: "POST",
+         path: "/booking/reschedule/accept",
+         tags: ["Bookings"],
+         summary: "Accept reschedule",
+         description: "Student accepts the tutor's reschedule proposal",
+       })
+@@ -147,20 +144,32 @@ export function createBookingRouter(handler: BookingHandler) {
+       .route({
+         method: "POST",
+         path: "/booking/series/create",
+         tags: ["Bookings"],
+         summary: "Create a series booking",
+         description: "Creates a multi-session series booking (2-4 sessions)",
+       })
+       .input(createSeriesInput)
+       .handler(handler.createSeries),
+ 
++    createGroupSeries: protectedProcedure
++      .route({
++        method: "POST",
++        path: "/booking/group-series/create",
++        tags: ["Bookings"],
++        summary: "Create a group series booking",
++        description:
++          "Creates a multi-session group series (FR-20): the proposer holds the full package up front and invitees accept the whole series",
++      })
++      .input(createGroupSeriesInput)
++      .handler(handler.createGroupSeries),
++
+     confirmInvite: protectedProcedure
+       .route({
+         method: "POST",
+         path: "/booking/invite/confirm",
+         tags: ["Bookings"],
+         summary: "Confirm group invite",
+         description: "Invitee confirms participation and holds Marks",
+       })
+       .input(confirmInviteInput)
+       .handler(handler.confirmInvite),
+@@ -248,25 +257,21 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
+       .handler(handler.acceptBooking),
+ 
+     declineBooking: tutorProcedure
+       .route({
+         method: "POST",
+         path: "/tutor/booking/decline",
+         tags: ["Tutor", "Bookings"],
+         summary: "Decline booking",
+         description: "Tutor declines a booking and releases held Marks",
+       })
+-      .input(
+-        bookingActionInput.extend({
+-          reason: z.string().optional(),
+-        }),
+-      )
++      .input(declineBookingInput)
+       .handler(handler.declineBooking),
+ 
+     completeSession: tutorProcedure
+       .route({
+         method: "POST",
+         path: "/tutor/booking/complete",
+         tags: ["Tutor", "Bookings"],
+         summary: "Complete session",
+         description: "Tutor marks a scheduled session as completed",
+       })
+diff --git a/packages/api/src/modules/booking/booking.service.ts b/packages/api/src/modules/booking/booking.service.ts
+index 9f7da31..7f02ddc 100644
+--- a/packages/api/src/modules/booking/booking.service.ts
++++ b/packages/api/src/modules/booking/booking.service.ts
+@@ -27,30 +27,29 @@ import {
+   BookingStateTransitionError,
+   BookingNotEditableError,
+   InsufficientMarksError,
+   BookingNotAwaitingConfirmationError,
+   BookingNotAwaitingReconfirmationError,
+   BookingNotAwaitingReviewError,
+   BookingSeriesSizeError,
+   BookingParticipantNotFoundError,
+   BookingParticipantAlreadyConfirmedError,
+   BookingCancelledError,
+-  BookingCancellationDeadlinePassedError,
+   BookingSessionNotFoundError,
+   BookingSessionNotCancellableError,
+   BookingSessionRequiredError,
+   BookingSessionNotStartedError,
+   BookingRescheduleNotFoundError,
+   BookingRescheduleNotPendingError,
+   BookingNotCompletedError,
+ } from "./booking.errors";
+-import { sanitizeHtml } from "../../lib/sanitize";
++import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
+ import { log } from "../../lib/logger";
+ import {
+   BOOKING_STATE,
+   TERMINAL_STATES,
+   type BookingState,
+ } from "./booking-state.types";
+ import { canTransition, TRANSITIONS } from "./booking-transitions";
+ import type { BookingRepo } from "./booking.repo";
+ import type {
+   BookingWalletPort,
+@@ -81,20 +80,30 @@ export interface CreateGroupInput {
+ }
+ 
+ export interface CreateSeriesInput {
+   tutorId: string;
+   availabilitySlotId: string;
+   modality: "online" | "offline";
+   sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
+   timezone: string;
+ }
+ 
++export interface CreateGroupSeriesInput {
++  tutorId: string;
++  availabilitySlotId: string;
++  modality: "online" | "offline";
++  targetGroupSize: number;
++  inviteeUserIds: string[];
++  sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[];
++  timezone: string;
++}
++
+ export interface TutorPayoutResult {
+   completedSessions: number;
+   totalMarks: number;
+   cogitoTake: number;
+   tutorPayout: number;
+   tutorPayoutIdr: number;
+ }
+ 
+ export interface BookingTransition {
+   bookingId: string;
+@@ -113,21 +122,26 @@ export type MeetingStatus = "pending" | "ready" | "failed";
+  *
+  * `meeting.createEvent` fires only on tutor accept (online bookings), and
+  * for group bookings tutor accept only happens after every participant
+  * confirmed — so "all confirmed AND tutor accepted" is satisfied by
+  * construction. Withdrawal after creation does not revoke the link.
+  */
+ function computeMeetingInfo(b: {
+   meeting: { status: string; meetingUrl: string | null } | null;
+ }): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
+   const event = b.meeting;
+-  if (!event || event.status === "pending" || event.status === "manual") {
++  if (
++    !event ||
++    event.status === "pending" ||
++    event.status === "manual" ||
++    event.status === "cancelled"
++  ) {
+     return { meetingStatus: "pending", meetingUrl: null };
+   }
+   if (event.status === "failed") {
+     return { meetingStatus: "failed", meetingUrl: null };
+   }
+   return { meetingStatus: "ready", meetingUrl: event.meetingUrl };
+ }
+ 
+ export type BookingService = ReturnType<typeof createBookingService>;
+ 
+@@ -619,21 +633,21 @@ export function createBookingService(deps: {
+    * @param bookingId - the booking to cancel
+    * @param cancellationReason - optional reason for the cancellation
+    * @returns the updated booking
+    * @throws {BookingStateTransitionError} if the booking is in a terminal state
+    */
+   async function cancel(
+     userId: string,
+     bookingId: string,
+     cancellationReason?: string,
+   ) {
+-    return db.transaction(async (tx) => {
++    const result = await db.transaction(async (tx) => {
+       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
+       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
+         throw new BookingStateTransitionError(
+           b.currentState,
+           "cancel",
+           b.currentState,
+         );
+       }
+ 
+       const now = new Date();
+@@ -726,20 +740,26 @@ export function createBookingService(deps: {
+             title: `Booking ${toState}`,
+             body: `A participant ${toState} the booking.`,
+             eventKey: `booking.${bookingId}.${toState}.${p.userId}`,
+             emailRequired: true,
+           });
+         }
+       }
+ 
+       return updated;
+     });
++
++    // Delete the provider-side meeting event once the booking is terminal
++    // (FR-21/OQ-05). Best-effort: a Google failure must not break cancellation.
++    await meeting.cancelEvent(bookingId);
++
++    return result;
+   }
+ 
+   async function tutorAccept(bookingId: string, tutorId: string) {
+     const result = await db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+       if (b.tutorId !== tutorId)
+         throw new BookingNotOwnedError(bookingId, tutorId);
+       if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
+         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
+@@ -860,21 +880,21 @@ export function createBookingService(deps: {
+     });
+ 
+     return result.updated!;
+   }
+ 
+   async function tutorDecline(
+     bookingId: string,
+     tutorId: string,
+     reason?: string,
+   ) {
+-    return db.transaction(async (tx) => {
++    const result = await db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+       if (b.tutorId !== tutorId)
+         throw new BookingNotOwnedError(bookingId, tutorId);
+       if (b.currentState !== BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
+         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
+       }
+ 
+       await releaseAllParticipantHolds(
+         tx,
+@@ -891,27 +911,33 @@ export function createBookingService(deps: {
+         reason,
+       });
+ 
+       await notification.writeBestEffort({
+         db: tx,
+         userId: b.proposerId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+         severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "Booking declined",
+-        body: `Tutor declined the booking. ${reason ?? ""}`,
++        body: `Tutor declined the booking. ${escapeHtml(reason ?? "")}`,
+         eventKey: `booking.${bookingId}.declined`,
+         emailRequired: true,
+       });
+ 
+       return updated;
+     });
++
++    // Best-effort cleanup of the provider-side event (a declined booking may
++    // have a live meeting if it was previously scheduled).
++    await meeting.cancelEvent(bookingId);
++
++    return result;
+   }
+ 
+   async function completeSession(
+     bookingId: string,
+     tutorId: string,
+     sessionId?: string,
+   ) {
+     return db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+@@ -1020,44 +1046,87 @@ export function createBookingService(deps: {
+       throw new BookingStateTransitionError(
+         session.currentState,
+         "completeSession",
+         BOOKING_STATE.COMPLETED,
+       );
+     }
+     if (session.scheduledStartAt.getTime() > Date.now()) {
+       throw new BookingSessionNotStartedError(sessionId);
+     }
+ 
+-    const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
+-    if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
+-    await wallet.deduct(tx, {
+-      walletId: proposerWallet.id,
+-      amount: session.holdAmount,
+-      eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
+-      sourceReference: bookingId,
+-      bookingId,
+-      actorType: ACTOR_TYPE.TUTOR,
+-      reason: "Series session completed",
+-    });
+-
+-    const participant = await repo.findParticipant(tx, bookingId, b.proposerId);
++    const isGroupSeries = b.targetGroupSize > 1;
++    let deductedHoldAmount = 0;
+     let residualHeld = 0;
+-    if (participant) {
+-      residualHeld = Math.max(0, participant.heldAmount - session.holdAmount);
+-      await repo.updateParticipantState(tx, participant.id, {
+-        heldAmount: residualHeld,
++    let proposerWallet: Awaited<ReturnType<BookingWalletPort["getByUserId"]>> =
++      null;
++    let proposerParticipant: NonNullable<
++      Awaited<ReturnType<BookingRepo["findParticipant"]>>
++    > | null = null;
++
++    if (isGroupSeries) {
++      // P1-8: group-series holds live on each confirmed participant's wallet,
++      // so a completed session deducts each participant's per-session share.
++      const participants = await repo.findConfirmedParticipants(tx, bookingId);
++      for (const p of participants) {
++        if (p.heldAmount <= 0) continue;
++        // eslint-disable-next-line no-await-in-loop
++        const w = await wallet.getByUserId(tx, p.userId);
++        if (!w) throw new BookingNotFoundError(p.userId);
++        // eslint-disable-next-line no-await-in-loop
++        await wallet.deduct(tx, {
++          walletId: w.id,
++          amount: session.holdAmount,
++          eventKey: `booking.${bookingId}.session.${session.id}.deduct.${p.userId}`,
++          sourceReference: bookingId,
++          bookingId,
++          actorType: ACTOR_TYPE.TUTOR,
++          reason: "Group series session completed",
++        });
++        // eslint-disable-next-line no-await-in-loop
++        await repo.updateParticipantState(tx, p.id, {
++          heldAmount: Math.max(0, p.heldAmount - session.holdAmount),
++        });
++        deductedHoldAmount += session.holdAmount;
++      }
++    } else {
++      proposerWallet = await wallet.getByUserId(tx, b.proposerId);
++      if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
++      await wallet.deduct(tx, {
++        walletId: proposerWallet.id,
++        amount: session.holdAmount,
++        eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
++        sourceReference: bookingId,
++        bookingId,
++        actorType: ACTOR_TYPE.TUTOR,
++        reason: "Series session completed",
+       });
++
++      proposerParticipant = await repo.findParticipant(
++        tx,
++        bookingId,
++        b.proposerId,
++      );
++      if (proposerParticipant) {
++        residualHeld = Math.max(
++          0,
++          proposerParticipant.heldAmount - session.holdAmount,
++        );
++        await repo.updateParticipantState(tx, proposerParticipant.id, {
++          heldAmount: residualHeld,
++        });
++      }
++      deductedHoldAmount = session.holdAmount;
+     }
+     await repo.updateBookingHoldAmount(
+       tx,
+       bookingId,
+-      Math.max(0, b.holdAmount - session.holdAmount),
++      Math.max(0, b.holdAmount - deductedHoldAmount),
+     );
+ 
+     await repo.completeSession(tx, session.id);
+ 
+     await notification.writeBestEffort({
+       db: tx,
+       userId: b.proposerId,
+       bookingId,
+       category: NOTIFICATION_CATEGORY.BOOKING,
+       severity: NOTIFICATION_SEVERITY.INFO,
+@@ -1079,31 +1148,55 @@ export function createBookingService(deps: {
+     const sessions = await repo.listSessionsBySeriesId(tx, bookingId);
+     const allCompleted = sessions.every(
+       (s) => s.currentState === BOOKING_STATE.COMPLETED,
+     );
+     if (!allCompleted) {
+       const refreshed = await repo.findBookingById(tx, bookingId);
+       if (!refreshed) throw new BookingNotFoundError(bookingId);
+       return refreshed;
+     }
+ 
+-    if (residualHeld > 0) {
++    if (isGroupSeries) {
++      // Release any residual hold each participant still carries (normally 0
++      // after per-session deducts, but guard rounding/edge states).
++      const participants = await repo.findConfirmedParticipants(tx, bookingId);
++      for (const p of participants) {
++        if (p.heldAmount <= 0) continue;
++        // eslint-disable-next-line no-await-in-loop
++        const w = await wallet.getByUserId(tx, p.userId);
++        if (!w) throw new BookingNotFoundError(p.userId);
++        // eslint-disable-next-line no-await-in-loop
++        await wallet.release(tx, {
++          walletId: w.id,
++          amount: p.heldAmount,
++          eventKey: `booking.${bookingId}.series-release.${p.userId}`,
++          sourceReference: bookingId,
++          bookingId,
++          actorType: ACTOR_TYPE.TUTOR,
++          reason: "Group series completed: released residual hold",
++        });
++        // eslint-disable-next-line no-await-in-loop
++        await repo.updateParticipantState(tx, p.id, { heldAmount: 0 });
++      }
++    } else if (residualHeld > 0) {
+       await wallet.release(tx, {
+-        walletId: proposerWallet.id,
++        walletId: proposerWallet!.id,
+         amount: residualHeld,
+         eventKey: `booking.${bookingId}.series-release`,
+         sourceReference: bookingId,
+         bookingId,
+         actorType: ACTOR_TYPE.TUTOR,
+         reason: "Series completed: released residual hold",
+       });
+-      await repo.updateParticipantState(tx, participant!.id, { heldAmount: 0 });
++      await repo.updateParticipantState(tx, proposerParticipant!.id, {
++        heldAmount: 0,
++      });
+     }
+ 
+     await repo.updateBookingHoldAmount(tx, bookingId, 0);
+     await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
+       actorId: tutorId,
+       actorType: ACTOR_TYPE.TUTOR,
+       reason: "All series sessions completed",
+     });
+ 
+     await notification.writeBestEffort({
+@@ -1155,61 +1248,75 @@ export function createBookingService(deps: {
+           session.currentState,
+           "cancelSession",
+           BOOKING_STATE.CANCELLED,
+         );
+       }
+ 
+       const now = new Date();
+       const h2 = new Date(
+         session.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
+       );
+-      if (now > h2) {
+-        throw new BookingCancellationDeadlinePassedError(sessionId);
+-      }
++      const isLate = now > h2;
+ 
+       const participant = await repo.findParticipant(tx, b.id, userId);
+       if (participant && participant.heldAmount > 0 && session.holdAmount > 0) {
+         const w = await wallet.getByUserId(tx, participant.userId);
+         if (!w) throw new BookingNotFoundError(participant.userId);
+-        await wallet.release(tx, {
+-          walletId: w.id,
+-          amount: session.holdAmount,
+-          eventKey: `booking.${b.id}.session.${session.id}.cancel`,
+-          sourceReference: b.id,
+-          bookingId: b.id,
+-          actorType: ACTOR_TYPE.STUDENT,
+-          reason: "Series session cancelled",
+-        });
++        if (isLate) {
++          // PRD penalty (TC-30): cancelling after H-2 forfeits the session
++          // hold instead of releasing it.
++          await wallet.deduct(tx, {
++            walletId: w.id,
++            amount: session.holdAmount,
++            eventKey: `booking.${b.id}.session.${session.id}.forfeit`,
++            sourceReference: b.id,
++            bookingId: b.id,
++            actorType: ACTOR_TYPE.STUDENT,
++            reason: "Session cancelled after cancellation deadline (forfeit)",
++          });
++        } else {
++          await wallet.release(tx, {
++            walletId: w.id,
++            amount: session.holdAmount,
++            eventKey: `booking.${b.id}.session.${session.id}.cancel`,
++            sourceReference: b.id,
++            bookingId: b.id,
++            actorType: ACTOR_TYPE.STUDENT,
++            reason: "Series session cancelled",
++          });
++        }
+         await repo.updateParticipantState(tx, participant.id, {
+           heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
+         });
+       }
+ 
+       await repo.cancelSession(tx, session.id);
+       await repo.updateBookingHoldAmount(
+         tx,
+         b.id,
+         Math.max(0, b.holdAmount - session.holdAmount),
+       );
+ 
+       await notification.writeBestEffort({
+         db: tx,
+         userId: b.tutorId,
+         bookingId: b.id,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+         severity: NOTIFICATION_SEVERITY.INFO,
+         title: "Series session cancelled",
+-        body: "A student cancelled one session of the series.",
++        body: isLate
++          ? "A student cancelled one session of the series after the cancellation deadline (hold forfeited)."
++          : "A student cancelled one session of the series.",
+         eventKey: `booking.${b.id}.session.${session.id}.cancelled`,
+       });
+ 
+-      return { cancelled: true, sessionId };
++      return { cancelled: true, sessionId, forfeited: isLate };
+     });
+   }
+ 
+   async function addSessionNote(
+     userId: string,
+     bookingId: string,
+     content: string,
+   ) {
+     const b = await repo.findBookingById(db, bookingId);
+     if (!b) throw new BookingNotFoundError(bookingId);
+@@ -1329,53 +1436,53 @@ export function createBookingService(deps: {
+         body: "Tutor proposed a new time for the booking.",
+         eventKey: `booking.${bookingId}.reschedule_proposed`,
+         emailRequired: true,
+       });
+ 
+       return updated;
+     });
+   }
+ 
+   async function acceptReschedule(userId: string, bookingId: string) {
+-    return db.transaction(async (tx) => {
++    const { proposal, updated } = await db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+       if (b.proposerId !== userId)
+         throw new BookingNotOwnedError(bookingId, userId);
+       if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
+         throw new BookingRescheduleNotPendingError(bookingId);
+       }
+ 
+-      const proposal = await repo.findPendingRescheduleProposal(tx, bookingId);
+-      if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
++      const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
++      if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
+ 
+-      await repo.updateRescheduleProposal(tx, proposal.id, {
++      await repo.updateRescheduleProposal(tx, pending.id, {
+         status: "accepted",
+         decidedAt: new Date(),
+       });
+ 
+       await repo.updateBookingSchedule(tx, bookingId, {
+-        scheduledStartAt: proposal.proposedStartAt,
+-        scheduledEndAt: proposal.proposedEndAt,
++        scheduledStartAt: pending.proposedStartAt,
++        scheduledEndAt: pending.proposedEndAt,
+       });
+ 
+-      const updated = await transition(
++      const transitioned = await transition(
+         tx,
+         bookingId,
+         BOOKING_STATE.AWAITING_RECONFIRMATION,
+         {
+           actorId: userId,
+           actorType: ACTOR_TYPE.STUDENT,
+           reason: "Student accepted the reschedule proposal",
+           metadata: {
+-            proposedStartAt: proposal.proposedStartAt,
+-            proposedEndAt: proposal.proposedEndAt,
++            proposedStartAt: pending.proposedStartAt,
++            proposedEndAt: pending.proposedEndAt,
+           },
+         },
+       );
+ 
+       await repo.updateBookingDeadline(
+         tx,
+         bookingId,
+         new Date(Date.now() + RESPONSE_WINDOW_MS),
+       );
+ 
+@@ -1384,22 +1491,31 @@ export function createBookingService(deps: {
+         userId: b.tutorId,
+         bookingId,
+         category: NOTIFICATION_CATEGORY.BOOKING,
+         severity: NOTIFICATION_SEVERITY.ACTION,
+         title: "Reschedule accepted",
+         body: "The student accepted the proposed new time.",
+         eventKey: `booking.${bookingId}.reschedule_accepted`,
+         emailRequired: true,
+       });
+ 
+-      return updated;
++      return { proposal: pending, updated: transitioned };
++    });
++
++    // Move the provider-side meeting event to the new time (FR-21/OQ-05).
++    // Best-effort: a Google failure must not roll back the accepted reschedule.
++    await meeting.updateEvent(bookingId, {
++      startAt: proposal.proposedStartAt,
++      endAt: proposal.proposedEndAt,
+     });
++
++    return updated;
+   }
+ 
+   async function rejectReschedule(userId: string, bookingId: string) {
+     return db.transaction(async (tx) => {
+       const b = await repo.findBookingById(tx, bookingId);
+       if (!b) throw new BookingNotFoundError(bookingId);
+       if (b.proposerId !== userId)
+         throw new BookingNotOwnedError(bookingId, userId);
+       if (b.currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED) {
+         throw new BookingRescheduleNotPendingError(bookingId);
+@@ -2024,20 +2140,190 @@ export function createBookingService(deps: {
+         title: "New series request",
+         body: `A student requested a ${input.sessions.length}-session series with you.`,
+         eventKey: `booking.${bookingId}.tutor_request`,
+         emailRequired: true,
+       });
+ 
+       return { ...b, disclaimer: computeDisclaimer(b) };
+     });
+   }
+ 
++  async function createGroupSeries(
++    proposerId: string,
++    input: CreateGroupSeriesInput,
++  ) {
++    const profile = await repo.findTutorProfile(db, input.tutorId, {
++      publishedOnly: true,
++    });
++    if (!profile) throw new BookingNotFoundError(input.tutorId);
++
++    if (
++      input.sessions.length < MIN_SERIES_SESSIONS ||
++      input.sessions.length > MAX_SERIES_SESSIONS
++    ) {
++      throw new BookingSeriesSizeError(
++        "",
++        MIN_SERIES_SESSIONS,
++        MAX_SERIES_SESSIONS,
++      );
++    }
++
++    const slot = await repo.findAvailabilitySlot(
++      db,
++      input.availabilitySlotId,
++      input.tutorId,
++      { futureOnly: true },
++    );
++    if (!slot) throw new BookingNotEditableError(input.availabilitySlotId);
++
++    // Validate the invitees are registered users (FR-20).
++    const invitees = await repo.findUsersByIds(db, input.inviteeUserIds);
++    if (invitees.length !== input.inviteeUserIds.length) {
++      throw new BookingNotFoundError("invitee");
++    }
++
++    const size = input.targetGroupSize;
++    const pricePerStudent = (profile.prices?.[String(size)] ??
++      DEFAULT_SOLO_PRICE) as number;
++    const priceSnapshot = pricing.computeSplit(
++      input.modality,
++      pricePerStudent,
++      size as GroupSize,
++    );
++    const perSession = priceSnapshot.perStudent;
++    const packageTotal = perSession * input.sessions.length;
++
++    const w = await wallet.getByUserId(db, proposerId);
++    if (!w) throw new BookingNotFoundError(proposerId);
++    if (w.availableBalance < packageTotal) {
++      throw new InsufficientMarksError(packageTotal, w.availableBalance);
++    }
++
++    const bookingId = crypto.randomUUID();
++    const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
++
++    return db.transaction(async (tx) => {
++      for (const session of input.sessions) {
++        // eslint-disable-next-line no-await-in-loop
++        const overlapping = await repo.findOverlappingBookings(
++          tx,
++          input.tutorId,
++          session.scheduledStartAt,
++          session.scheduledEndAt,
++          { excludeStates: [...TERMINAL_STATES] },
++        );
++        if (overlapping.length > 0) {
++          throw new BookingConflictError(
++            input.tutorId,
++            session.scheduledStartAt.toISOString(),
++            session.scheduledEndAt.toISOString(),
++          );
++        }
++      }
++
++      await wallet.hold(tx, {
++        walletId: w.id,
++        amount: packageTotal,
++        eventKey: `booking.${bookingId}.hold`,
++        sourceReference: bookingId,
++        bookingId,
++        actorType: ACTOR_TYPE.STUDENT,
++        reason: "Hold Marks for group-series booking (proposer)",
++      });
++
++      const b = await repo.insertBooking(tx, {
++        id: bookingId,
++        type: BOOKING_TYPE.SERIES,
++        modality: input.modality,
++        tutorId: input.tutorId,
++        proposerId,
++        targetGroupSize: size,
++        minConfirmedHeadcount: MIN_GROUP_HEADCOUNT,
++        confirmedHeadcount: 1,
++        currentState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
++        scheduledStartAt: input.sessions[0]!.scheduledStartAt,
++        scheduledEndAt:
++          input.sessions[input.sessions.length - 1]!.scheduledEndAt,
++        timezone: input.timezone,
++        priceSnapshot,
++        originalMarks: packageTotal,
++        holdAmount: packageTotal,
++        deadlineAt,
++      });
++
++      await repo.insertParticipant(tx, {
++        bookingId,
++        userId: proposerId,
++        role: "proposer",
++        confirmationState: CONFIRMATION_STATE.CONFIRMED,
++        heldAmount: packageTotal,
++      });
++
++      for (const inviteeId of input.inviteeUserIds) {
++        // eslint-disable-next-line no-await-in-loop
++        await repo.insertParticipant(tx, {
++          bookingId,
++          userId: inviteeId,
++          role: "invitee",
++          confirmationState: CONFIRMATION_STATE.PENDING,
++          heldAmount: 0,
++        });
++        // eslint-disable-next-line no-await-in-loop
++        await notification.write({
++          db: tx,
++          userId: inviteeId,
++          bookingId,
++          category: NOTIFICATION_CATEGORY.BOOKING,
++          severity: NOTIFICATION_SEVERITY.ACTION,
++          title: "Group series invitation",
++          body: `You have been invited to a ${size}-person group series of ${input.sessions.length} sessions. Accepting holds the full package up front. ${GROUP_SERIES_DISCLAIMER}`,
++          eventKey: `booking.${bookingId}.invite.${inviteeId}`,
++          emailRequired: true,
++        });
++      }
++
++      for (const session of input.sessions) {
++        // eslint-disable-next-line no-await-in-loop
++        await repo.insertBookingSession(tx, {
++          seriesBookingId: bookingId,
++          scheduledStartAt: session.scheduledStartAt,
++          scheduledEndAt: session.scheduledEndAt,
++          currentState: BOOKING_STATE.SCHEDULED,
++          holdAmount: perSession,
++          priceSnapshot,
++        });
++      }
++
++      await recordTransition(tx, {
++        bookingId,
++        fromState: null,
++        toState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
++        actorId: proposerId,
++        actorType: ACTOR_TYPE.STUDENT,
++      });
++
++      await notification.writeBestEffort({
++        db: tx,
++        userId: input.tutorId,
++        bookingId,
++        category: NOTIFICATION_CATEGORY.BOOKING,
++        severity: NOTIFICATION_SEVERITY.ACTION,
++        title: "New group series request",
++        body: `A student requested a ${size}-person, ${input.sessions.length}-session group series with you.`,
++        eventKey: `booking.${bookingId}.tutor_request`,
++        emailRequired: true,
++      });
++
++      return { ...b, disclaimer: computeDisclaimer(b) };
++    });
++  }
++
+   async function listSessions(bookingId: string, userId: string) {
+     const b = await repo.findBookingById(db, bookingId);
+     if (!b) throw new BookingNotFoundError(bookingId);
+     await assertBookingAccess(b, userId, db, bookingId);
+     if (b.type !== BOOKING_TYPE.SERIES)
+       throw new BookingNotEditableError(bookingId);
+     return repo.listSessionsBySeriesId(db, bookingId);
+   }
+ 
+   /**
+@@ -2115,20 +2401,38 @@ export function createBookingService(deps: {
+     const b = await repo.findBookingById(tx, bookingId);
+     if (!b) throw new BookingNotFoundError(bookingId);
+     if (b.currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) return;
+     await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+       actorId,
+       actorType: ACTOR_TYPE.ADMIN,
+       reason: "Room assigned",
+     });
+   }
+ 
++  /**
++   * Returns the recipients of offline-room lifecycle notifications: the tutor
++   * and every confirmed student participant. Consumed by the room module via a
++   * consumer-driven port (P1-3).
++   */
++  async function getBookingRecipients(
++    tx: DbOrTx,
++    bookingId: string,
++  ): Promise<{ tutorId: string; participantUserIds: string[] }> {
++    const b = await repo.findBookingById(tx, bookingId);
++    if (!b) throw new BookingNotFoundError(bookingId);
++    const participants = await repo.findConfirmedParticipants(tx, bookingId);
++    return {
++      tutorId: b.tutorId,
++      participantUserIds: participants.map((p) => p.userId),
++    };
++  }
++
+   async function expireBookings() {
+     const candidates = await repo.findBookingsExpiringByDeadline(db, [
+       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
+       BOOKING_STATE.AWAITING_RECONFIRMATION,
+       BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+       BOOKING_STATE.RESCHEDULE_PROPOSED,
+       BOOKING_STATE.SCHEDULED,
+       BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
+     ]);
+ 
+@@ -2137,20 +2441,63 @@ export function createBookingService(deps: {
+       [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
+       [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
+     };
+ 
+     let succeeded = 0;
+     let failed = 0;
+     for (const b of candidates) {
+       try {
+         // eslint-disable-next-line no-await-in-loop
+         await db.transaction(async (tx) => {
++          // FR-16/TC-18: when a group deadline passes with a partial headcount
++          // (>= 2 but < target), reprice to the final per-student total and
++          // move the group to a fresh 12h reconfirmation window instead of
++          // expiring it. Only groups that never reached the minimum headcount
++          // expire and release all holds.
++          const confirmed = await repo.findConfirmedParticipants(tx, b.id);
++          if (
++            b.currentState ===
++              BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION &&
++            confirmed.length >= MIN_GROUP_HEADCOUNT &&
++            confirmed.length < b.targetGroupSize
++          ) {
++            await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.SYSTEM);
++
++            await repo.updateBookingDeadline(
++              tx,
++              b.id,
++              new Date(Date.now() + RESPONSE_WINDOW_MS),
++            );
++
++            await transition(tx, b.id, BOOKING_STATE.AWAITING_RECONFIRMATION, {
++              actorId: "system",
++              actorType: ACTOR_TYPE.SYSTEM,
++              reason: "Group deadline passed with partial headcount",
++            });
++
++            for (const p of confirmed) {
++              // eslint-disable-next-line no-await-in-loop
++              await notification.writeBestEffort({
++                db: tx,
++                userId: p.userId,
++                bookingId: b.id,
++                category: NOTIFICATION_CATEGORY.BOOKING,
++                severity: NOTIFICATION_SEVERITY.ACTION,
++                title: "Group deadline reached",
++                body: "Your group did not fill before the deadline. The per-student price was updated — please reconfirm within 12 hours.",
++                eventKey: `booking.${b.id}.deadline_reprice.${p.userId}`,
++                emailRequired: true,
++              });
++            }
++            return;
++          }
++
+           await releaseAllParticipantHolds(
+             tx,
+             b.id,
+             "Booking expired",
+             ACTOR_TYPE.SYSTEM,
+           );
+ 
+           await repo.updateBookingHoldAmount(tx, b.id, 0);
+ 
+           const targetState =
+@@ -2192,20 +2539,24 @@ export function createBookingService(deps: {
+               ? NOTIFICATION_SEVERITY.ACTION
+               : NOTIFICATION_SEVERITY.INFO,
+             title: noShow ? "Session marked as no-show" : "Booking expired",
+             body: noShow
+               ? "The session was marked as no-show and held marks were released."
+               : "The booking expired because its deadline passed.",
+             eventKey: `booking.${b.id}.expired.tutor`,
+             emailRequired: noShow,
+           });
+         });
++        // Best-effort cleanup of the provider-side event once the booking is
++        // terminal (FR-21/OQ-05). No-op when no live event exists.
++        // eslint-disable-next-line no-await-in-loop
++        await meeting.cancelEvent(b.id);
+         succeeded++;
+       } catch (error) {
+         failed++;
+         log({
+           level: "error",
+           action: "expire_booking_failed",
+           bookingId: b.id,
+           error: { message: String(error) },
+         });
+       }
+@@ -2325,20 +2676,23 @@ export function createBookingService(deps: {
+             db: tx,
+             userId: b.tutorId,
+             bookingId: b.id,
+             category: NOTIFICATION_CATEGORY.BOOKING,
+             severity: NOTIFICATION_SEVERITY.INFO,
+             title: "Session auto-cancelled",
+             body: "You did not join the session within 15 minutes, so it was auto-cancelled.",
+             eventKey: `booking.${b.id}.tutor_no_show.tutor`,
+           });
+         });
++        // Best-effort cleanup of the provider-side event (NO_SHOW is terminal).
++        // eslint-disable-next-line no-await-in-loop
++        await meeting.cancelEvent(b.id);
+         autoCancelled++;
+       } catch (error) {
+         failed++;
+         log({
+           level: "error",
+           action: "tutor_lateness_check_failed",
+           bookingId: b.id,
+           error: { message: String(error) },
+         });
+       }
+@@ -2346,20 +2700,21 @@ export function createBookingService(deps: {
+     return { autoCancelled, failed };
+   }
+ 
+   return {
+     getById,
+     listMine,
+     listForTutor,
+     createSolo,
+     createGroup,
+     createSeries,
++    createGroupSeries,
+     confirmInvite,
+     declineInvite,
+     reconfirm,
+     withdraw,
+     cancel,
+     tutorAccept,
+     tutorDecline,
+     completeSession,
+     markTutorAttendance,
+     proposeReschedule,
+@@ -2369,12 +2724,13 @@ export function createBookingService(deps: {
+     addSessionNote,
+     getSessionNotes,
+     listSessions,
+     getTutorPayouts,
+     expireBookings,
+     releaseExpiredHolds,
+     checkTutorLateness,
+     transition,
+     canTransition,
+     transitionBookingToScheduled,
++    getBookingRecipients,
+   };
+ }
+diff --git a/packages/api/src/modules/booking/booking.types.ts b/packages/api/src/modules/booking/booking.types.ts
+index 049e862..20530bb 100644
+--- a/packages/api/src/modules/booking/booking.types.ts
++++ b/packages/api/src/modules/booking/booking.types.ts
+@@ -56,24 +56,59 @@ export const createSeriesInput = z.object({
+         .refine((d) => d.scheduledEndAt > d.scheduledStartAt, {
+           message: "scheduledEndAt must be after scheduledStartAt",
+           path: ["scheduledEndAt"],
+         }),
+     )
+     .min(2)
+     .max(4),
+   timezone: z.string().max(50).default("Asia/Jakarta"),
+ });
+ 
++export const createGroupSeriesInput = z.object({
++  tutorId: z.string().max(100),
++  availabilitySlotId: z.string().max(100),
++  modality: z.enum(["online", "offline"]),
++  targetGroupSize: z.number().int().min(2).max(6),
++  inviteeUserIds: z.array(z.string().max(100)).min(1).max(5),
++  sessions: z
++    .array(
++      z
++        .object({
++          scheduledStartAt: z.coerce
++            .date()
++            .refine((d) => d > new Date(), "Must be in the future"),
++          scheduledEndAt: z.coerce
++            .date()
++            .refine((d) => d > new Date(), "Must be in the future"),
++        })
++        .refine((d) => d.scheduledEndAt > d.scheduledStartAt, {
++          message: "scheduledEndAt must be after scheduledStartAt",
++          path: ["scheduledEndAt"],
++        }),
++    )
++    .min(2)
++    .max(4),
++  timezone: z.string().max(50).default("Asia/Jakarta"),
++});
++
+ export const bookingActionInput = z.object({
+   bookingId: z.string().max(100),
+ });
+ 
++export const cancelBookingInput = bookingActionInput.extend({
++  cancellationReason: z.string().max(500).optional(),
++});
++
++export const declineBookingInput = bookingActionInput.extend({
++  reason: z.string().max(500).optional(),
++});
++
+ export const confirmInviteInput = z.object({
+   bookingId: z.string().max(100),
+ });
+ 
+ export const declineInviteInput = z.object({
+   bookingId: z.string().max(100),
+   reason: z.string().max(2000).optional(),
+ });
+ 
+ export const reconfirmInput = z.object({
+@@ -136,18 +171,19 @@ export const listMineInput = z.object({
+   states: z.array(z.string().max(100)).max(15).optional(),
+ });
+ 
+ export const listSessionsInput = z.object({
+   bookingId: z.string().max(100),
+ });
+ 
+ export type CreateSoloInput = z.infer<typeof createSoloInput>;
+ export type CreateGroupInput = z.infer<typeof createGroupInput>;
+ export type CreateSeriesInput = z.infer<typeof createSeriesInput>;
++export type CreateGroupSeriesInput = z.infer<typeof createGroupSeriesInput>;
+ export type BookingActionInput = z.infer<typeof bookingActionInput>;
+ export type ConfirmInviteInput = z.infer<typeof confirmInviteInput>;
+ export type DeclineInviteInput = z.infer<typeof declineInviteInput>;
+ export type ReconfirmInput = z.infer<typeof reconfirmInput>;
+ export type WithdrawInput = z.infer<typeof withdrawInput>;
+ export type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
+ export type CompleteSessionInput = z.infer<typeof completeSessionInput>;
+ export type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;
+diff --git a/packages/api/src/modules/booking/index.ts b/packages/api/src/modules/booking/index.ts
+index ae41975..28c242a 100644
+--- a/packages/api/src/modules/booking/index.ts
++++ b/packages/api/src/modules/booking/index.ts
+@@ -49,20 +49,25 @@ export interface BookingNotificationPort {
+   writeBestEffort(params: NotificationWriteParams): Promise<void>;
+ }
+ 
+ export interface BookingMeetingPort {
+   createEvent(
+     bookingId: string,
+     scheduledStartAt?: Date,
+     scheduledEndAt?: Date,
+     attendees?: MeetingAttendee[],
+   ): Promise<MeetingEvent>;
++  updateEvent(
++    bookingId: string,
++    changes: { startAt?: Date; endAt?: Date },
++  ): Promise<void>;
++  cancelEvent(bookingId: string): Promise<void>;
+ }
+ 
+ export interface BookingPayoutPort {
+   getTutorPayouts(input: {
+     tutorId: string;
+     dateFrom?: Date;
+     dateTo?: Date;
+   }): Promise<{
+     completedSessions: number;
+     totalMarks: number;
+diff --git a/packages/api/src/modules/meeting/fallback.provider.ts b/packages/api/src/modules/meeting/fallback.provider.ts
+index fb04181..d91870d 100644
+--- a/packages/api/src/modules/meeting/fallback.provider.ts
++++ b/packages/api/src/modules/meeting/fallback.provider.ts
+@@ -1,11 +1,12 @@
+ import { meetingEvent } from "@cogito-app/db/schema";
++import { eq } from "drizzle-orm";
+ import type { DbOrTx } from "../../lib/tx";
+ import type {
+   MeetingAttendee,
+   MeetingEvent,
+   MeetingPort,
+ } from "./meeting.types";
+ import { log } from "../../lib/logger";
+ 
+ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
+   async function createEvent(
+@@ -30,12 +31,32 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
+       level: "warn",
+       action: "meeting_manual_created",
+       message:
+         "Meeting created with manual provider — admin needs to assign a meeting link",
+       bookingId,
+     });
+ 
+     return row as typeof meetingEvent.$inferSelect;
+   }
+ 
+-  return { createEvent };
++  // Manual links carry no provider-side event: a reschedule is a no-op (the
++  // admin re-assigns a link as needed). On cancellation we still reflect the
++  // terminal state locally so the booking GET stops surfacing the link.
++  async function updateEvent(): Promise<void> {}
++  async function cancelEvent(bookingId: string): Promise<void> {
++    try {
++      await db
++        .update(meetingEvent)
++        .set({ status: "cancelled" })
++        .where(eq(meetingEvent.bookingId, bookingId));
++    } catch (error) {
++      log({
++        level: "error",
++        action: "meeting_manual_cancel_failed",
++        bookingId,
++        error: { message: String(error) },
++      });
++    }
++  }
++
++  return { createEvent, updateEvent, cancelEvent };
+ }
+diff --git a/packages/api/src/modules/meeting/google-meeting.provider.ts b/packages/api/src/modules/meeting/google-meeting.provider.ts
+index 5ffbc28..5c35992 100644
+--- a/packages/api/src/modules/meeting/google-meeting.provider.ts
++++ b/packages/api/src/modules/meeting/google-meeting.provider.ts
+@@ -1,12 +1,12 @@
+ import { google } from "googleapis";
+-import { eq } from "drizzle-orm";
++import { and, desc, eq } from "drizzle-orm";
+ import { meetingEvent } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ import type {
+   MeetingAttendee,
+   MeetingEvent,
+   MeetingPort,
+ } from "./meeting.types";
+ import { log } from "../../lib/logger";
+ import { CircuitBreaker } from "../../lib/circuit-breaker";
+ import type { RedisClient } from "../../lib/redis";
+@@ -218,20 +218,205 @@ export function createGoogleMeetingProvider(
+     return fetchJson<GoogleCalendarEvent>(
+       `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
+       {
+         method: "GET",
+         headers: { authorization: `Bearer ${accessToken}` },
+       },
+       timeoutMs,
+     );
+   }
+ 
++  async function updateEventWithOauth(
++    accessToken: string,
++    eventId: string,
++    start: Date,
++    end: Date,
++    timeoutMs: number,
++  ): Promise<GoogleCalendarEvent> {
++    const calendarId = encodeURIComponent(config.calendarId);
++    const encodedEventId = encodeURIComponent(eventId);
++    const current = await getEventWithOauth(accessToken, eventId, timeoutMs);
++    return fetchJson<GoogleCalendarEvent>(
++      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
++      {
++        method: "PUT",
++        headers: {
++          authorization: `Bearer ${accessToken}`,
++          "content-type": "application/json",
++        },
++        body: JSON.stringify({
++          ...current,
++          start: { dateTime: start.toISOString() },
++          end: { dateTime: end.toISOString() },
++        }),
++      },
++      timeoutMs,
++    );
++  }
++
++  async function deleteEventWithOauth(
++    accessToken: string,
++    eventId: string,
++    timeoutMs: number,
++  ): Promise<void> {
++    const calendarId = encodeURIComponent(config.calendarId);
++    const encodedEventId = encodeURIComponent(eventId);
++    await fetchJson<unknown>(
++      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
++      {
++        method: "DELETE",
++        headers: { authorization: `Bearer ${accessToken}` },
++      },
++      timeoutMs,
++    );
++  }
++
++  /**
++   * Finds the newest provider-created (google_meet) meeting event row for a
++   * booking. Rows that were never created (failed/manual fallback) or already
++   * cancelled have no live provider event to update/delete.
++   */
++  async function findLiveProviderEvent(bookingId: string) {
++    const [row] = await db
++      .select()
++      .from(meetingEvent)
++      .where(
++        and(
++          eq(meetingEvent.bookingId, bookingId),
++          eq(meetingEvent.provider, "google_meet"),
++        ),
++      )
++      .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
++      .limit(1);
++    if (!row || !row.externalEventId) return null;
++    if (row.status === "failed" || row.status === "cancelled") return null;
++    return row;
++  }
++
++  async function updateEvent(
++    bookingId: string,
++    changes: { startAt?: Date; endAt?: Date },
++  ): Promise<void> {
++    if (!changes.startAt && !changes.endAt) return;
++    const startedAt = Date.now();
++    const row = await findLiveProviderEvent(bookingId);
++    if (!row) return;
++
++    try {
++      await googleMeetBreaker.execute(async () => {
++        const TIMEOUT_MS = 30_000;
++        const oauthAccessToken =
++          config.authType === "oauth_refresh_token"
++            ? await refreshOAuthAccessToken(TIMEOUT_MS)
++            : null;
++        if (config.authType === "oauth_refresh_token") {
++          await updateEventWithOauth(
++            oauthAccessToken!,
++            row.externalEventId!,
++            changes.startAt ?? new Date(),
++            changes.endAt ?? new Date(),
++            TIMEOUT_MS,
++          );
++        } else {
++          await withTimeout(
++            Promise.resolve(
++              calendar!.events.update({
++                calendarId: config.calendarId,
++                eventId: row.externalEventId!,
++                requestBody: {
++                  start: {
++                    dateTime: (changes.startAt ?? new Date()).toISOString(),
++                  },
++                  end: {
++                    dateTime: (changes.endAt ?? new Date()).toISOString(),
++                  },
++                },
++              }),
++            ).then(() => undefined),
++            TIMEOUT_MS,
++            "Google Meet API timeout after 30s",
++          );
++        }
++      });
++      log({
++        level: "info",
++        action: "google_meet_event_updated",
++        bookingId,
++        eventId: row.externalEventId,
++        durationMs: Date.now() - startedAt,
++      });
++    } catch (error) {
++      log({
++        level: "error",
++        action: "google_meet_update_failed",
++        bookingId,
++        durationMs: Date.now() - startedAt,
++        error: { message: String(error) },
++      });
++    }
++  }
++
++  async function cancelEvent(bookingId: string): Promise<void> {
++    const startedAt = Date.now();
++    const row = await findLiveProviderEvent(bookingId);
++    if (!row) return;
++
++    try {
++      await googleMeetBreaker.execute(async () => {
++        const TIMEOUT_MS = 30_000;
++        const oauthAccessToken =
++          config.authType === "oauth_refresh_token"
++            ? await refreshOAuthAccessToken(TIMEOUT_MS)
++            : null;
++        if (config.authType === "oauth_refresh_token") {
++          await deleteEventWithOauth(
++            oauthAccessToken!,
++            row.externalEventId!,
++            TIMEOUT_MS,
++          );
++        } else {
++          await withTimeout(
++            Promise.resolve(
++              calendar!.events.delete({
++                calendarId: config.calendarId,
++                eventId: row.externalEventId!,
++              }),
++            ).then(() => undefined),
++            TIMEOUT_MS,
++            "Google Meet API timeout after 30s",
++          );
++        }
++      });
++
++      await db
++        .update(meetingEvent)
++        .set({ status: "cancelled" })
++        .where(eq(meetingEvent.id, row.id));
++
++      log({
++        level: "info",
++        action: "google_meet_event_cancelled",
++        bookingId,
++        eventId: row.externalEventId,
++        durationMs: Date.now() - startedAt,
++      });
++    } catch (error) {
++      log({
++        level: "error",
++        action: "google_meet_cancel_failed",
++        bookingId,
++        durationMs: Date.now() - startedAt,
++        error: { message: String(error) },
++      });
++    }
++  }
++
+   async function waitForMeetUrl(
+     eventId: string,
+     accessToken?: string,
+   ): Promise<string | null> {
+     const POLL_ATTEMPTS = 8;
+     const POLL_DELAY_MS = 750;
+ 
+     for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
+       await new Promise((resolve) => setTimeout(resolve, POLL_DELAY_MS));
+ 
+@@ -371,21 +556,21 @@ export function createGoogleMeetingProvider(
+         bookingId,
+         provider: "google_meet",
+         externalEventId: null,
+         meetingUrl: null,
+         status: "failed" as const,
+         errorReason: String(error),
+       };
+     }
+   }
+ 
+-  return { createEvent };
++  return { createEvent, updateEvent, cancelEvent };
+ }
+ 
+ export function createGoogleMeetingProviderWithFallback(
+   config: GoogleMeetingConfig,
+   db: DbOrTx,
+   redis?: RedisClient,
+ ): MeetingPort {
+   const googleProvider = createGoogleMeetingProvider(config, db, redis);
+   async function createEvent(
+     bookingId: string,
+@@ -416,12 +601,16 @@ export function createGoogleMeetingProviderWithFallback(
+         message:
+           "Meeting created with manual provider - admin needs to assign a meeting link",
+         bookingId,
+       });
+ 
+       return row as typeof meetingEvent.$inferSelect;
+     }
+     return result;
+   }
+ 
+-  return { createEvent };
++  return {
++    createEvent,
++    updateEvent: googleProvider.updateEvent,
++    cancelEvent: googleProvider.cancelEvent,
++  };
+ }
+diff --git a/packages/api/src/modules/meeting/meeting.types.ts b/packages/api/src/modules/meeting/meeting.types.ts
+index 073e0e7..bb53b37 100644
+--- a/packages/api/src/modules/meeting/meeting.types.ts
++++ b/packages/api/src/modules/meeting/meeting.types.ts
+@@ -13,11 +13,25 @@ export interface MeetingAttendee {
+   name?: string;
+ }
+ 
+ export interface MeetingPort {
+   createEvent(
+     bookingId: string,
+     scheduledStartAt?: Date,
+     scheduledEndAt?: Date,
+     attendees?: MeetingAttendee[],
+   ): Promise<MeetingEvent>;
++  /**
++   * Moves the provider-side event to a new time after a booking reschedule is
++   * committed (FR-21 / OQ-05). No-op when the booking has no provider event
++   * (manual link or never created).
++   */
++  updateEvent(
++    bookingId: string,
++    changes: { startAt?: Date; endAt?: Date },
++  ): Promise<void>;
++  /**
++   * Deletes the provider-side event when the booking reaches a terminal state
++   * (cancelled/late_cancelled/declined/expired). No-op for manual links.
++   */
++  cancelEvent(bookingId: string): Promise<void>;
+ }
+diff --git a/packages/api/src/modules/room/index.ts b/packages/api/src/modules/room/index.ts
+index 2b5b18f..72c029b 100644
+--- a/packages/api/src/modules/room/index.ts
++++ b/packages/api/src/modules/room/index.ts
+@@ -1,35 +1,56 @@
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
++import type { NotificationWriteParams } from "../notification/notification.service";
+ import { createRoomRepo } from "./room.repo";
+ import { createRoomService } from "./room.service";
+ import { createRoomHandler } from "./room.handler";
+ import type { RoomRepo } from "./room.repo";
+ import type { RoomService } from "./room.service";
+ import type { RoomHandler } from "./room.handler";
+ 
+ export type RoomModule = ReturnType<typeof createRoomModule>;
+ 
+ /**
+  * Consumer-driven port into the booking module. The room module only needs to
+  * move an offline booking from awaiting_admin_room_approval to scheduled once
+- * a room is assigned (G14).
++ * a room is assigned (G14) and learn the recipients for offline-room
++ * notifications (tutor + confirmed students, P1-3).
+  */
+ export interface RoomBookingPort {
+   transitionBookingToScheduled(
+     tx: DbOrTx,
+     bookingId: string,
+     actorId: string,
+   ): Promise<void>;
++  getBookingRecipients(
++    tx: DbOrTx,
++    bookingId: string,
++  ): Promise<{ tutorId: string; participantUserIds: string[] }>;
++}
++
++/**
++ * Consumer-driven port into the notification module so the room module can
++ * surface offline-room lifecycle events to the tutor and confirmed students
++ * (in-app + email per the notification matrix).
++ */
++export interface RoomNotificationPort {
++  writeBestEffort(params: NotificationWriteParams): Promise<void>;
+ }
+ 
+ export function createRoomModule(deps: {
+   db: DbType;
+   bookingPort?: RoomBookingPort;
++  notificationPort?: RoomNotificationPort;
+ }) {
+   const repo = createRoomRepo();
+-  const service = createRoomService(repo, deps.db, deps.bookingPort);
++  const service = createRoomService(
++    repo,
++    deps.db,
++    deps.bookingPort,
++    deps.notificationPort,
++  );
+   const handler = createRoomHandler(service);
+   return { service, handler, repo };
+ }
+ 
+ export type { RoomService, RoomHandler, RoomRepo };
+diff --git a/packages/api/src/modules/room/room.service.ts b/packages/api/src/modules/room/room.service.ts
+index e68dc0e..37d7679 100644
+--- a/packages/api/src/modules/room/room.service.ts
++++ b/packages/api/src/modules/room/room.service.ts
+@@ -1,28 +1,66 @@
+ import type { DbType } from "../../lib/db";
++import type { DbOrTx } from "../../lib/tx";
+ import {
+   RoomNotFoundError,
+   RoomBookingConflictError,
+   RoomBookingNotFoundError,
+ } from "./room.errors";
+ import type { RoomRepo } from "./room.repo";
+ import type { CreateRoomInput } from "./room.types";
+-import { ROOM_BOOKING_STATUS } from "../../shared/constants";
+-import type { RoomBookingPort } from "./index";
++import {
++  NOTIFICATION_CATEGORY,
++  NOTIFICATION_SEVERITY,
++  ROOM_BOOKING_STATUS,
++} from "../../shared/constants";
++import type { RoomBookingPort, RoomNotificationPort } from "./index";
+ 
+ export type RoomService = ReturnType<typeof createRoomService>;
+ 
+ export function createRoomService(
+   repo: RoomRepo,
+   db: DbType,
+   bookingPort?: RoomBookingPort,
++  notificationPort?: RoomNotificationPort,
+ ) {
++  /**
++   * Writes an in-app + email notification for the tutor and each confirmed
++   * student of the booking (P1-3 offline-room notification matrix).
++   */
++  async function notifyBookingRecipients(
++    tx: DbOrTx,
++    bookingId: string,
++    eventKey: string,
++    title: string,
++    body: string,
++  ): Promise<void> {
++    if (!notificationPort) return;
++    const recipients = await bookingPort?.getBookingRecipients(tx, bookingId);
++    if (!recipients) return;
++
++    const userIds = [recipients.tutorId, ...recipients.participantUserIds];
++    for (const userId of new Set(userIds)) {
++      // eslint-disable-next-line no-await-in-loop
++      await notificationPort.writeBestEffort({
++        db: tx,
++        userId,
++        bookingId,
++        category: NOTIFICATION_CATEGORY.BOOKING,
++        severity: NOTIFICATION_SEVERITY.ACTION,
++        title,
++        body,
++        eventKey: `${eventKey}.${userId}`,
++        emailRequired: true,
++      });
++    }
++  }
++
+   async function listActive() {
+     return repo.findActiveRooms(db);
+   }
+ 
+   async function createRoom(input: CreateRoomInput) {
+     return repo.insertRoom(db, input);
+   }
+ 
+   async function checkAvailability(
+     roomId: string,
+@@ -67,27 +105,31 @@ export function createRoomService(
+ 
+       const inserted = await repo.insertRoomBooking(tx, {
+         roomId,
+         bookingId,
+         startAt,
+         endAt,
+         status: ROOM_BOOKING_STATUS.CONFIRMED,
+       });
+ 
+       if (bookingPort && actorId) {
+-        await bookingPort.transitionBookingToScheduled(
+-          tx,
+-          bookingId,
+-          actorId,
+-        );
++        await bookingPort.transitionBookingToScheduled(tx, bookingId, actorId);
+       }
+ 
++      await notifyBookingRecipients(
++        tx,
++        bookingId,
++        `room.${bookingId}.assigned`,
++        "Offline session confirmed",
++        `Your offline session was confirmed in room ${roomRow.name}.`,
++      );
++
+       return inserted;
+     });
+   }
+ 
+   async function relocateRoom(
+     bookingId: string,
+     roomId: string,
+     startAt: Date,
+     endAt: Date,
+   ) {
+@@ -114,43 +156,63 @@ export function createRoomService(
+           startAt.toISOString(),
+           endAt.toISOString(),
+         );
+ 
+       await repo.updateRoomBookingStatus(
+         tx,
+         current.id,
+         ROOM_BOOKING_STATUS.RELOCATED,
+       );
+ 
+-      return repo.insertRoomBooking(tx, {
++      const inserted = await repo.insertRoomBooking(tx, {
+         roomId,
+         bookingId,
+         startAt,
+         endAt,
+         status: ROOM_BOOKING_STATUS.CONFIRMED,
+       });
++
++      await notifyBookingRecipients(
++        tx,
++        bookingId,
++        `room.${bookingId}.relocated`,
++        "Offline session relocated",
++        `Your offline session was relocated to room ${roomRow.name}.`,
++      );
++
++      return inserted;
+     });
+   }
+ 
+   async function cancelRoomBooking(bookingId: string) {
+     return db.transaction(async (tx) => {
+       const current = await repo.findActiveRoomBookingByBookingId(
+         tx,
+         bookingId,
+       );
+       if (!current) throw new RoomBookingNotFoundError(bookingId);
+ 
+-      return repo.updateRoomBookingStatus(
++      const updated = await repo.updateRoomBookingStatus(
+         tx,
+         current.id,
+         ROOM_BOOKING_STATUS.CANCELLED,
+       );
++
++      await notifyBookingRecipients(
++        tx,
++        bookingId,
++        `room.${bookingId}.cancelled`,
++        "Offline room assignment cancelled",
++        "Your offline room assignment was cancelled by an admin.",
++      );
++
++      return updated;
+     });
+   }
+ 
+   return {
+     listActive,
+     createRoom,
+     checkAvailability,
+     assignRoom,
+     relocateRoom,
+     cancelRoomBooking,
+diff --git a/packages/api/src/services.ts b/packages/api/src/services.ts
+index 6c18ff5..c0e0180 100644
+--- a/packages/api/src/services.ts
++++ b/packages/api/src/services.ts
+@@ -164,21 +164,25 @@ function createServices() {
+     audit: audit.service,
+     payout: booking.service,
+   });
+   const discovery = createDiscoveryModule({ db });
+   const invite = createInviteModule({ db, audit: audit.service });
+   const achievement = createAchievementModule({
+     db,
+     audit: audit.service,
+     notification: notification.service,
+   });
+-  const room = createRoomModule({ db, bookingPort: booking.service });
++  const room = createRoomModule({
++    db,
++    bookingPort: booking.service,
++    notificationPort: notification.service,
++  });
+ 
+   const payment = createPaymentModule({
+     db,
+     wallet: wallet.service,
+     xenditConfig:
+       env.XENDIT_SECRET_KEY && env.XENDIT_WEBHOOK_TOKEN
+         ? {
+             secretKey: env.XENDIT_SECRET_KEY!,
+             webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
+             successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL ?? "",
+diff --git a/packages/api/src/tests/integration/admin-override.test.ts b/packages/api/src/tests/integration/admin-override.test.ts
+index e4c41b1..ece0904 100644
+--- a/packages/api/src/tests/integration/admin-override.test.ts
++++ b/packages/api/src/tests/integration/admin-override.test.ts
+@@ -217,20 +217,23 @@ describe("Admin Override happy path", () => {
+       bookingId,
+       category: "force_cancel",
+       reason: "Dibatalkan oleh admin",
+       affectedParticipants: [studentId],
+       marksAction: "release_holds",
+       userNote: "Hubungi admin",
+     });
+     expect(updated.currentState).toBe("cancelled");
+     expect(updated.previousState).toBe("awaiting_tutor_review");
+     expect(updated.overrideMeta).toMatchObject({ category: "force_cancel" });
++    // P1-5 regression: the response must reflect the post-override holdAmount
++    // (released to 0), not the stale pre-update value.
++    expect(updated.holdAmount).toBe(0);
+ 
+     const [after] = await db
+       .select()
+       .from(booking)
+       .where(eq(booking.id, bookingId));
+     expect(after!.currentState).toBe("cancelled");
+     expect(after!.previousState).toBe("awaiting_tutor_review");
+     expect(after!.holdAmount).toBe(0);
+     expect(after!.stateReason).toBe("Dibatalkan oleh admin");
+   });
+diff --git a/packages/api/src/tests/integration/booking-g5.test.ts b/packages/api/src/tests/integration/booking-g5.test.ts
+index 68dd6fd..14e8d62 100644
+--- a/packages/api/src/tests/integration/booking-g5.test.ts
++++ b/packages/api/src/tests/integration/booking-g5.test.ts
+@@ -175,33 +175,47 @@ describe("G5: series session cancellation rules", () => {
+       .select()
+       .from(bookingSession)
+       .where(eq(bookingSession.id, target.id));
+     expect(row!.currentState).toBe("cancelled");
+     expect(row!.holdAmount).toBe(0);
+ 
+     const wAfter = await studentClient.wallet.get({});
+     expect(wAfter.heldBalance).toBe(wBefore.heldBalance - 50);
+   });
+ 
+-  test("cancel another session inside H-2 → rejected", async () => {
++  test("TC-30: cancel a series session inside H-2 → forfeits the session hold", async () => {
+     const sessions = await studentClient.booking.listSessions({ bookingId });
+     const target = sessions.find((s) => s.currentState === "scheduled")!;
+ 
+     // nudge the session to be within 2h of start
+     await db
+       .update(bookingSession)
+       .set({ scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000) })
+       .where(eq(bookingSession.id, target.id));
+ 
+-    await expect(
+-      studentClient.booking.cancelSession({ sessionId: target.id }),
+-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
++    const wBefore = await studentClient.wallet.get({});
++    const result = await studentClient.booking.cancelSession({
++      sessionId: target.id,
++    });
++    expect(result.cancelled).toBe(true);
++    expect(result.forfeited).toBe(true);
++
++    const [row] = await db
++      .select()
++      .from(bookingSession)
++      .where(eq(bookingSession.id, target.id));
++    expect(row!.currentState).toBe("cancelled");
++
++    const wAfter = await studentClient.wallet.get({});
++    // Forfeiting a 50-mark session hold deducts from the total balance.
++    expect(wAfter.totalBalance).toBe(wBefore.totalBalance - 50);
++    expect(wAfter.heldBalance).toBe(wBefore.heldBalance - 50);
+   });
+ 
+   test("group series bookings cannot have individual sessions cancelled", async () => {
+     const { booking: bookingTable } = await import("@cogito-app/db/schema");
+     const start = new Date(Date.now() + 48 * 3600_000);
+     const priceSnapshot = {
+       perStudent: 40,
+       baseline: 120,
+       tutorShare: 96,
+       cogitoTake: 24,
+diff --git a/packages/api/src/tests/integration/booking-group-series.test.ts b/packages/api/src/tests/integration/booking-group-series.test.ts
+index 714f0f3..8decde7 100644
+--- a/packages/api/src/tests/integration/booking-group-series.test.ts
++++ b/packages/api/src/tests/integration/booking-group-series.test.ts
+@@ -1,15 +1,17 @@
+ import { describe, test, expect, beforeAll } from "bun:test";
+ import { eq } from "drizzle-orm";
+ import { db } from "@cogito-app/db";
+ import {
+   wallet,
++  bookingSession,
++  notification,
+   tutorInvite,
+   tutorProfile,
+   availabilitySlot,
+ } from "@cogito-app/db/schema";
+ 
+ import {
+   createTestContext,
+   createTestClient,
+   signUpAndSignIn,
+   setUserRole,
+@@ -265,10 +267,188 @@ describe("Booking series flow", () => {
+     expect(b.type).toBe("series");
+   });
+ 
+   test("TC-24: list sessions returns 3 children", async () => {
+     const sessions = await studentClient.booking.listSessions({
+       bookingId,
+     });
+     expect(sessions.length).toBe(3);
+   });
+ });
++
++describe("Booking group series flow (FR-20)", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now() + 9000;
++  const tutorEmail = `tutor.gs.${ts}@cogito.test`;
++  const proposerEmail = `proposer.gs.${ts}@cogito.test`;
++  const invitee1Email = `invitee1.gs.${ts}@cogito.test`;
++  const invitee2Email = `invitee2.gs.${ts}@cogito.test`;
++  let proposerClient: TestClient;
++  let invitee1Client: TestClient;
++  let invitee2Client: TestClient;
++  let tutorClient: TestClient;
++  let tutorId: string;
++  let slotId: string;
++  let proposerId: string;
++  let invitee1Id: string;
++  let invitee2Id: string;
++  let bookingId: string;
++
++  beforeAll(async () => {
++    const tutorData = await createPublishedTutor(tutorEmail, ts);
++    tutorId = tutorData.tutorId;
++    slotId = tutorData.slotId;
++    const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
++    tutorClient = createTestClient(await createTestContext(tutorCookie ?? ""));
++
++    const proposerRes = await signUpAndSignIn(
++      proposerEmail,
++      "Test1234!",
++      "Proposer GS",
++    );
++    proposerClient = createTestClient(
++      await createTestContext(proposerRes.cookie),
++    );
++    const proposerCtx = await createTestContext(proposerRes.cookie);
++    proposerId = proposerCtx.session?.user.id!;
++    await creditWallet(proposerId, 500);
++
++    const i1Res = await signUpAndSignIn(
++      invitee1Email,
++      "Test1234!",
++      "Invitee1 GS",
++    );
++    invitee1Client = createTestClient(await createTestContext(i1Res.cookie));
++    const i1Ctx = await createTestContext(i1Res.cookie);
++    invitee1Id = i1Ctx.session?.user.id!;
++    await creditWallet(invitee1Id, 500);
++
++    const i2Res = await signUpAndSignIn(
++      invitee2Email,
++      "Test1234!",
++      "Invitee2 GS",
++    );
++    invitee2Client = createTestClient(await createTestContext(i2Res.cookie));
++    const i2Ctx = await createTestContext(i2Res.cookie);
++    invitee2Id = i2Ctx.session?.user.id!;
++    await creditWallet(invitee2Id, 500);
++  });
++
++  test("proposer creates a 3-person, 3-session group series with upfront holds", async () => {
++    const sessions = [
++      {
++        scheduledStartAt: new Date(Date.now() + 72 * 3600_000).toISOString(),
++        scheduledEndAt: new Date(Date.now() + 73 * 3600_000).toISOString(),
++      },
++      {
++        scheduledStartAt: new Date(Date.now() + 96 * 3600_000).toISOString(),
++        scheduledEndAt: new Date(Date.now() + 97 * 3600_000).toISOString(),
++      },
++      {
++        scheduledStartAt: new Date(Date.now() + 120 * 3600_000).toISOString(),
++        scheduledEndAt: new Date(Date.now() + 121 * 3600_000).toISOString(),
++      },
++    ];
++
++    const b = await proposerClient.booking.createGroupSeries({
++      tutorId,
++      availabilitySlotId: slotId,
++      modality: "online",
++      targetGroupSize: 3,
++      inviteeUserIds: [invitee1Id, invitee2Id],
++      sessions,
++      timezone: "Asia/Jakarta",
++    });
++
++    bookingId = b.id;
++    expect(b.currentState).toBe("awaiting_participant_confirmation");
++    expect(b.type).toBe("series");
++    expect(b.targetGroupSize).toBe(3);
++    expect(b.confirmedHeadcount).toBe(1);
++    expect(b.disclaimer).toContain("Group series bookings");
++
++    // Proposer holds the full package up front: 40 marks × 3 sessions.
++    const [proposerWallet] = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.userId, proposerId));
++    expect(proposerWallet!.heldBalance).toBe(120);
++    expect(proposerWallet!.totalBalance).toBe(500);
++
++    // Each session carries the per-participant per-session amount.
++    const sessionsRows = await db
++      .select()
++      .from(bookingSession)
++      .where(eq(bookingSession.seriesBookingId, bookingId));
++    expect(sessionsRows.length).toBe(3);
++    for (const s of sessionsRows) {
++      expect(s.holdAmount).toBe(40);
++    }
++
++    // Invitation notifications carry the G15 disclaimer per TC-25.
++    const inviteNotifs = await db
++      .select()
++      .from(notification)
++      .where(
++        eq(notification.eventKey, `booking.${bookingId}.invite.${invitee1Id}`),
++      );
++    expect(inviteNotifs.length).toBe(1);
++    expect(inviteNotifs[0]!.body).toContain("Group series bookings");
++  });
++
++  test("invitee confirms the full-series package (hold is the whole package)", async () => {
++    const result = await invitee1Client.booking.confirmInvite({ bookingId });
++    expect(result.confirmedHeadcount).toBe(2);
++
++    const [w] = await db
++      .select()
++      .from(wallet)
++      .where(eq(wallet.userId, invitee1Id));
++    expect(w!.heldBalance).toBe(120);
++    expect(w!.availableBalance).toBe(380);
++  });
++
++  test("all confirm → tutor accepts → each completed session deducts per participant (P1-8)", async () => {
++    const r = await invitee2Client.booking.confirmInvite({ bookingId });
++    expect(r.confirmedHeadcount).toBe(3);
++
++    const accepted = await tutorClient.tutorActions.acceptBooking({
++      bookingId,
++    });
++    expect(accepted.currentState).toBe("scheduled");
++
++    const sessions = await proposerClient.booking.listSessions({ bookingId });
++    expect(sessions.length).toBe(3);
++
++    // Backdate the sessions so the tutor can complete them.
++    for (const s of sessions) {
++      await db
++        .update(bookingSession)
++        .set({ scheduledStartAt: new Date(Date.now() - 3600_000) })
++        .where(eq(bookingSession.id, s.id));
++    }
++
++    for (const s of sessions) {
++      await tutorClient.tutorActions.completeSession({
++        bookingId,
++        sessionId: s.id,
++      });
++    }
++
++    for (const userId of [proposerId, invitee1Id, invitee2Id]) {
++      const [w] = await db
++        .select()
++        .from(wallet)
++        .where(eq(wallet.userId, userId));
++      // 3 sessions × 40 marks deducted per participant.
++      expect(w!.totalBalance).toBe(500 - 120);
++      expect(w!.heldBalance).toBe(0);
++    }
++
++    const finalBooking = await proposerClient.booking.get({ bookingId });
++    expect(finalBooking.currentState).toBe("completed");
++    expect(finalBooking.holdAmount).toBe(0);
++  });
++});
+diff --git a/packages/api/src/tests/integration/booking-reprice-deadline.test.ts b/packages/api/src/tests/integration/booking-reprice-deadline.test.ts
+new file mode 100644
+index 0000000..1fd68a3
+--- /dev/null
++++ b/packages/api/src/tests/integration/booking-reprice-deadline.test.ts
+@@ -0,0 +1,265 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  booking,
++  bookingParticipant,
++  notification,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++} from "@cogito-app/db/schema";
++
++import { services } from "@cogito-app/api/services";
++import { resetDatabase } from "../helpers/test-client";
++import {
++  createTestUser,
++  createTestWallet,
++  getWalletByUserId,
++} from "../helpers/factories";
++import { createBookingRepo } from "../../modules/booking/booking.repo";
++import {
++  ACTOR_TYPE,
++  BOOKING_TYPE,
++  MODALITY,
++  RESPONSE_WINDOW_MS,
++} from "../../shared/constants";
++import { BOOKING_STATE } from "../../modules/booking/booking-state.types";
++
++const repo = createBookingRepo(db);
++
++async function createPublishedTutor(email: string, ts: number) {
++  const tutor = await createTestUser(email, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Deadline",
++      token: `token-deadline-${ts}`,
++      status: "accepted",
++      invitedBy: tutor.id,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutor.id,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db.insert(tutorProfile).values({
++    userId: tutor.id,
++    inviteId: invite!.id,
++    displayName: "Prof Deadline",
++    shortBio: "Bio",
++    credentialsSummary: "Creds",
++    expertise: ["Mathematics"],
++    modality: "both",
++    prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++    availabilitySummary: "Flexible",
++    onboardingStatus: "published",
++    publishedAt: new Date(),
++  });
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({
++      tutorId: tutor.id,
++      startDate: start,
++      endDate: new Date(start.getTime() + 2 * 3600_000),
++      modality: "both",
++    })
++    .returning();
++
++  return { tutorId: tutor.id, slotId: slot!.id };
++}
++
++async function holdMarks(userId: string, amount: number, bookingId: string) {
++  const w = await getWalletByUserId(userId);
++  if (!w) throw new Error(`wallet missing for ${userId}`);
++  await services.wallet.hold(db, {
++    walletId: w.id,
++    amount,
++    eventKey: `booking.${bookingId}.hold.${userId}`,
++    sourceReference: bookingId,
++    bookingId,
++    actorType: ACTOR_TYPE.STUDENT,
++    reason: "Hold Marks for seeded group booking",
++  });
++}
++
++/**
++ * Seeds a group booking in AWAITING_PARTICIPANT_CONFIRMATION with the given
++ * confirmed participants (each holding `heldAmount`), a past deadline, and
++ * matching wallet holds. Mirrors the state a real 3-of-5 group reaches after
++ * the invitees confirm.
++ */
++async function seedPartialGroup(params: {
++  tutorId: string;
++  confirmedUserIds: string[];
++  targetGroupSize: number;
++  perStudent: number;
++}) {
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const b = await repo.insertBooking(db, {
++    id: crypto.randomUUID(),
++    type: BOOKING_TYPE.GROUP,
++    modality: MODALITY.ONLINE,
++    tutorId: params.tutorId,
++    proposerId: params.confirmedUserIds[0]!,
++    targetGroupSize: params.targetGroupSize,
++    minConfirmedHeadcount: 2,
++    confirmedHeadcount: params.confirmedUserIds.length,
++    currentState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
++    scheduledStartAt: start,
++    scheduledEndAt: new Date(start.getTime() + 3600_000),
++    timezone: "Asia/Jakarta",
++    priceSnapshot: {
++      perStudent: params.perStudent,
++      baseline: params.perStudent * params.targetGroupSize,
++      tutorShare: params.perStudent * params.targetGroupSize * 0.8,
++      cogitoTake: params.perStudent * params.targetGroupSize * 0.2,
++    },
++    originalMarks: params.perStudent * params.targetGroupSize,
++    holdAmount: params.perStudent * params.confirmedUserIds.length,
++    deadlineAt: new Date(Date.now() - 60_000),
++  });
++
++  for (const [index, userId] of params.confirmedUserIds.entries()) {
++    await repo.insertParticipant(db, {
++      bookingId: b.id,
++      userId,
++      role: index === 0 ? "proposer" : "invitee",
++      confirmationState: "confirmed",
++      heldAmount: params.perStudent,
++    });
++  }
++
++  for (const userId of params.confirmedUserIds) {
++    await holdMarks(userId, params.perStudent, b.id);
++  }
++
++  return b;
++}
++
++describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  let tutorId: string;
++  let studentA: { id: string };
++  let studentB: { id: string };
++  let studentC: { id: string };
++
++  beforeAll(async () => {
++    const tutor = await createPublishedTutor(
++      `tutor.deadline.${ts}@cogito.test`,
++      ts,
++    );
++    tutorId = tutor.tutorId;
++
++    studentA = await createTestUser(`student.dl.a.${ts}@cogito.test`);
++    await createTestWallet(studentA.id, 300);
++    studentB = await createTestUser(`student.dl.b.${ts}@cogito.test`);
++    await createTestWallet(studentB.id, 300);
++    studentC = await createTestUser(`student.dl.c.${ts}@cogito.test`);
++    await createTestWallet(studentC.id, 300);
++  });
++
++  test("partial group (3 of 5) at deadline reprices to awaiting_reconfirmation", async () => {
++    // Size 5 per-student price from the seeded tutor profile is 30.
++    const b = await seedPartialGroup({
++      tutorId,
++      confirmedUserIds: [studentA.id, studentB.id, studentC.id],
++      targetGroupSize: 5,
++      perStudent: 30,
++    });
++
++    const result = await services.booking.expireBookings();
++    expect(result.expired).toBeGreaterThanOrEqual(1);
++    expect(result.failed).toBe(0);
++
++    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
++    expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_RECONFIRMATION);
++    // Repriced to the size-3 rate: 3 × 40.
++    expect(row!.holdAmount).toBe(120);
++    const deadlineMs = new Date(row!.deadlineAt!).getTime();
++    expect(deadlineMs).toBeGreaterThan(Date.now() + RESPONSE_WINDOW_MS - 5000);
++
++    const participants = await db
++      .select()
++      .from(bookingParticipant)
++      .where(eq(bookingParticipant.bookingId, b.id));
++    for (const p of participants) {
++      expect(p.heldAmount).toBe(40);
++      expect(p.confirmationState).toBe("confirmed");
++    }
++
++    for (const id of [studentA.id, studentB.id, studentC.id]) {
++      const w = await getWalletByUserId(id);
++      expect(w!.heldBalance).toBe(40);
++
++      const notifs = await db
++        .select()
++        .from(notification)
++        .where(
++          eq(notification.eventKey, `booking.${b.id}.deadline_reprice.${id}`),
++        );
++      expect(notifs.length).toBe(1);
++      expect(notifs[0]!.severity).toBe("action");
++    }
++  });
++
++  test("deadline with headcount < 2 still expires and releases all holds", async () => {
++    const soloStudent = await createTestUser(
++      `student.dl.under.${ts}@cogito.test`,
++    );
++    await createTestWallet(soloStudent.id, 300);
++
++    const start = new Date(Date.now() + 48 * 3600_000);
++    const b = await repo.insertBooking(db, {
++      id: crypto.randomUUID(),
++      type: BOOKING_TYPE.GROUP,
++      modality: MODALITY.ONLINE,
++      tutorId,
++      proposerId: soloStudent.id,
++      targetGroupSize: 5,
++      minConfirmedHeadcount: 2,
++      confirmedHeadcount: 1,
++      currentState: BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
++      scheduledStartAt: start,
++      scheduledEndAt: new Date(start.getTime() + 3600_000),
++      timezone: "Asia/Jakarta",
++      priceSnapshot: {
++        perStudent: 30,
++        baseline: 150,
++        tutorShare: 120,
++        cogitoTake: 30,
++      },
++      originalMarks: 150,
++      holdAmount: 30,
++      deadlineAt: new Date(Date.now() - 60_000),
++    });
++
++    await repo.insertParticipant(db, {
++      bookingId: b.id,
++      userId: soloStudent.id,
++      role: "proposer",
++      confirmationState: "confirmed",
++      heldAmount: 30,
++    });
++    await holdMarks(soloStudent.id, 30, b.id);
++
++    const result = await services.booking.expireBookings();
++    expect(result.failed).toBe(0);
++
++    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
++    expect(row!.currentState).toBe(BOOKING_STATE.EXPIRED);
++    expect(row!.holdAmount).toBe(0);
++
++    const w = await getWalletByUserId(soloStudent.id);
++    expect(w!.heldBalance).toBe(0);
++    expect(w!.availableBalance).toBe(300);
++  });
++});
+diff --git a/packages/api/src/tests/integration/meeting-lifecycle.test.ts b/packages/api/src/tests/integration/meeting-lifecycle.test.ts
+new file mode 100644
+index 0000000..b2475f5
+--- /dev/null
++++ b/packages/api/src/tests/integration/meeting-lifecycle.test.ts
+@@ -0,0 +1,167 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++  meetingEvent,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(
++  email: string,
++  ts: number,
++): Promise<{ tutorId: string; slotId: string }> {
++  await signUpAndSignIn(email, "Test1234!", "Tutor Meet Lifecycle");
++  const tutorCtx = await createTestContext(
++    (await signInAndGetCookie(email, "Test1234!")) ?? "",
++  );
++  if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
++  const tutorId = tutorCtx.session.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Meet Lifecycle",
++      token: `token-ml-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Meet Lifecycle",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({ tutorId, startDate: start, endDate: end, modality: "both" })
++    .returning();
++
++  return { tutorId, slotId: slot!.id };
++}
++
++async function getMeetingStatus(bookingId: string) {
++  const [row] = await db
++    .select({ status: meetingEvent.status })
++    .from(meetingEvent)
++    .where(eq(meetingEvent.bookingId, bookingId));
++  return row?.status ?? null;
++}
++
++describe("OQ-05: meeting event lifecycle follows the booking state", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const studentEmail = `student.ml.${ts}@cogito.test`;
++  const tutorEmail = `tutor.ml.${ts}@cogito.test`;
++  let studentClient: TestClient;
++  let tutorClient: TestClient;
++  let slotId: string;
++  let bookingId: string;
++
++  beforeAll(async () => {
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student Meet Lifecycle",
++    );
++    studentClient = createTestClient(
++      await createTestContext(studentRes.cookie),
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    if (studentCtx.session?.user) {
++      await creditWallet(studentCtx.session.user.id, 200);
++    }
++
++    const tutorData = await createPublishedTutor(tutorEmail, ts);
++    slotId = tutorData.slotId;
++    const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
++    tutorClient = createTestClient(await createTestContext(tutorCookie));
++  });
++
++  test("tutor accept creates a meeting row for the booking", async () => {
++    const start = new Date(Date.now() + 48 * 3600_000).toISOString();
++    const end = new Date(Date.now() + 49 * 3600_000).toISOString();
++
++    const b = await studentClient.booking.createSolo({
++      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
++      availabilitySlotId: slotId,
++      modality: "online",
++      scheduledStartAt: start,
++      scheduledEndAt: end,
++      timezone: "Asia/Jakarta",
++    });
++    bookingId = b.id;
++
++    await tutorClient.tutorActions.acceptBooking({ bookingId });
++
++    // Test env uses the fallback (manual) provider.
++    expect(await getMeetingStatus(bookingId)).toBe("manual");
++  });
++
++  test("cancelling the booking marks the meeting event cancelled (no leaked event)", async () => {
++    await studentClient.booking.cancel({ bookingId });
++
++    expect(await getMeetingStatus(bookingId)).toBe("cancelled");
++
++    const fetched = await studentClient.booking.get({ bookingId });
++    expect(fetched.currentState).toBe("cancelled");
++    expect(fetched.meetingStatus).toBe("pending");
++    expect(fetched.meetingUrl).toBeNull();
++  });
++});
+diff --git a/packages/api/src/tests/integration/room-g14.test.ts b/packages/api/src/tests/integration/room-g14.test.ts
+index 3c92448..b9f20c7 100644
+--- a/packages/api/src/tests/integration/room-g14.test.ts
++++ b/packages/api/src/tests/integration/room-g14.test.ts
+@@ -1,19 +1,20 @@
+ import { describe, test, expect, beforeAll } from "bun:test";
+ import { eq, desc } from "drizzle-orm";
+ import { db } from "@cogito-app/db";
+ import {
+   wallet,
+   tutorInvite,
+   tutorProfile,
+   availabilitySlot,
+   roomBooking,
++  notification,
+ } from "@cogito-app/db/schema";
+ 
+ import {
+   createTestContext,
+   createTestClient,
+   signUpAndSignIn,
+   setUserRole,
+   resetDatabase,
+   type TestClient,
+ } from "../helpers/test-client";
+@@ -109,20 +110,21 @@ describe("G14 admin room relocate and cancel", () => {
+   const ts = Date.now();
+   const adminEmail = `admin.g14.${ts}@cogito.test`;
+ 
+   let adminClient: TestClient;
+   let student1Client: TestClient;
+   let student2Client: TestClient;
+   let tutor1Client: TestClient;
+   let tutor2Client: TestClient;
+   let tutor1Id: string;
+   let tutor2Id: string;
++  let student1Id: string;
+   let slot1Id: string;
+   let slot2Id: string;
+   let roomAId: string;
+   let roomBId: string;
+   let roomCId: string;
+   let booking1Id: string;
+   let booking2Id: string;
+ 
+   const startISO = new Date(Date.now() + 24 * 3600_000).toISOString();
+   const endISO = new Date(Date.now() + 25 * 3600_000).toISOString();
+@@ -138,31 +140,34 @@ describe("G14 admin room relocate and cancel", () => {
+     await setUserRole(adminCtx.session.user.id, "admin");
+     adminClient = createTestClient(await createTestContext(adminRes.cookie));
+ 
+     async function setupStudent(email: string, name: string) {
+       const res = await signUpAndSignIn(email, "Test1234!", name);
+       const client = createTestClient(await createTestContext(res.cookie));
+       const ctx = await createTestContext(res.cookie);
+       if (ctx.session?.user) {
+         await creditWallet(ctx.session.user.id, 200);
+       }
+-      return client;
++      return { client, userId: ctx.session?.user.id! };
+     }
+ 
+-    student1Client = await setupStudent(
++    const s1 = await setupStudent(
+       `student1.g14.${ts}@cogito.test`,
+       "Student G14 One",
+     );
+-    student2Client = await setupStudent(
++    student1Client = s1.client;
++    student1Id = s1.userId;
++    const s2 = await setupStudent(
+       `student2.g14.${ts}@cogito.test`,
+       "Student G14 Two",
+     );
++    student2Client = s2.client;
+ 
+     const t1 = await createPublishedTutor(
+       `tutor1.g14.${ts}@cogito.test`,
+       ts,
+       "Prof G14 One",
+     );
+     tutor1Id = t1.tutorId;
+     slot1Id = t1.slotId;
+     tutor1Client = createTestClient(await createTestContext(t1.cookie));
+     const t2 = await createPublishedTutor(
+@@ -285,20 +290,37 @@ describe("G14 admin room relocate and cancel", () => {
+     expect(rb.roomId).toBe(roomCId);
+ 
+     const rows = await listRoomBookings(booking1Id);
+     expect(rows.length).toBe(2);
+     const oldRow = rows.find((r) => r.roomId === roomAId);
+     const newRow = rows.find((r) => r.roomId === roomCId);
+     expect(oldRow!.status).toBe("relocated");
+     expect(newRow!.status).toBe("confirmed");
+   });
+ 
++  test("offline room assign/relocate write in-app+email notifications to tutor and student (P1-3)", async () => {
++    const notifs = await db
++      .select()
++      .from(notification)
++      .where(eq(notification.bookingId, booking1Id));
++    const titles = notifs.map((n) => n.title);
++    expect(titles).toContain("Offline session confirmed");
++    expect(titles).toContain("Offline session relocated");
++
++    const recipients = [...new Set(notifs.map((n) => n.userId))];
++    expect(recipients).toContain(tutor1Id);
++    expect(recipients).toContain(student1Id);
++
++    const dispatchEligible = notifs.filter((n) => n.severity === "action");
++    expect(dispatchEligible.length).toBeGreaterThan(0);
++  });
++
+   test("admin cancels booking2 room → booking continues without room", async () => {
+     const rb = await adminClient.room.cancelBooking({ bookingId: booking2Id });
+     expect(rb.status).toBe("cancelled");
+ 
+     const rows = await listRoomBookings(booking2Id);
+     const active = rows.find((r) => r.status !== "cancelled");
+     expect(active).toBeUndefined();
+ 
+     const booking = await student2Client.booking.get({ bookingId: booking2Id });
+     expect(booking.currentState).toBe("scheduled");
+diff --git a/packages/api/src/tests/unit/booking.service.test.ts b/packages/api/src/tests/unit/booking.service.test.ts
+index 269ef88..7503b31 100644
+--- a/packages/api/src/tests/unit/booking.service.test.ts
++++ b/packages/api/src/tests/unit/booking.service.test.ts
+@@ -7,21 +7,20 @@ import {
+   BookingStateTransitionError,
+   BookingNotEditableError,
+   InsufficientMarksError,
+   BookingNotAwaitingConfirmationError,
+   BookingNotAwaitingReconfirmationError,
+   BookingNotAwaitingReviewError,
+   BookingSeriesSizeError,
+   BookingParticipantNotFoundError,
+   BookingParticipantAlreadyConfirmedError,
+   BookingCancelledError,
+-  BookingCancellationDeadlinePassedError,
+   BookingSessionNotFoundError,
+   BookingSessionNotCancellableError,
+   BookingSessionRequiredError,
+   BookingSessionNotStartedError,
+   BookingRescheduleNotFoundError,
+   BookingRescheduleNotPendingError,
+   BookingNotCompletedError,
+ } from "../../modules/booking/booking.errors";
+ 
+ function makeDb() {
+@@ -45,20 +44,21 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
+     insertParticipant: mock(async () => {}),
+     insertStateHistory: mock(async () => {}),
+     updateBookingVersioned: mock(async () => ({ updated: {}, newVersion: 1 })),
+     updateBookingHoldAmount: mock(async () => {}),
+     updateBookingCancellationReason: mock(async () => {}),
+     updateBookingConfirmedHeadcount: mock(async () => {}),
+     updateParticipantState: mock(async () => {}),
+     findParticipant: mock(async () => null),
+     findConfirmedParticipants: mock(async () => []),
+     findUserEmails: mock(async () => []),
++    findUsersByIds: mock(async () => []),
+     findReconfirmedParticipants: mock(async () => []),
+     insertRescheduleProposal: mock(async () => {}),
+     findPendingRescheduleProposal: mock(async () => null),
+     updateRescheduleProposal: mock(async () => {}),
+     insertBookingSession: mock(async () => {}),
+     listSessionsBySeriesId: mock(async () => []),
+     findBookingsExpiringByDeadline: mock(async () => []),
+     findBookingsWithTutorLateness: mock(async () => []),
+     findTutorParticipant: mock(async () => null),
+     findBookingType: mock(async () => null),
+@@ -146,20 +146,22 @@ function makeMeeting() {
+   return {
+     createEvent: mock(async () => ({
+       id: "m1",
+       bookingId: "b1",
+       provider: "google_meet",
+       externalEventId: "ext1",
+       meetingUrl: "https://meet.google.com/abc",
+       status: "created",
+       errorReason: null,
+     })),
++    updateEvent: mock(async () => {}),
++    cancelEvent: mock(async () => {}),
+   };
+ }
+ 
+ function makeBooking(overrides: Record<string, unknown> = {}) {
+   return {
+     id: "b1",
+     type: "solo",
+     modality: "online",
+     tutorId: "tutor1",
+     proposerId: "student1",
+@@ -788,20 +790,100 @@ describe("BookingService", () => {
+           findOverlappingBookings: mock(async () => [{ id: "existing" }]),
+         },
+       });
+ 
+       await expect(
+         service.createSeries("student1", seriesInput),
+       ).rejects.toThrow(BookingConflictError);
+     });
+   });
+ 
++  describe("createGroupSeries (FR-20)", () => {
++    const groupSeriesInput = {
++      tutorId: "tutor1",
++      availabilitySlotId: "slot1",
++      modality: "online" as const,
++      targetGroupSize: 3,
++      inviteeUserIds: ["student2", "student3"],
++      sessions: [
++        {
++          scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
++          scheduledEndAt: new Date(
++            Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000,
++          ),
++        },
++        {
++          scheduledStartAt: new Date(Date.now() + 96 * 60 * 60 * 1000),
++          scheduledEndAt: new Date(
++            Date.now() + 96 * 60 * 60 * 1000 + 90 * 60 * 1000,
++          ),
++        },
++      ],
++      timezone: "Asia/Jakarta",
++    };
++
++    test("throws BookingNotFoundError when an invitee is not a registered user", async () => {
++      const { service } = createService({
++        repo: {
++          findTutorProfile: mock(async () => makeTutorProfile()),
++          findAvailabilitySlot: mock(async () => makeSlot()),
++          findUsersByIds: mock(async () => [{ id: "student2" }]),
++        },
++      });
++
++      await expect(
++        service.createGroupSeries("student1", groupSeriesInput),
++      ).rejects.toThrow(BookingNotFoundError);
++    });
++
++    test("creates a group series with proposer package hold, invitee rows, and per-session holds", async () => {
++      const booking = makeBooking({ type: "series", targetGroupSize: 3 });
++      const { service, repo, wallet, notification } = createService({
++        repo: {
++          findTutorProfile: mock(async () => makeTutorProfile()),
++          findAvailabilitySlot: mock(async () => makeSlot()),
++          findOverlappingBookings: mock(async () => []),
++          findUsersByIds: mock(async () => [
++            { id: "student2" },
++            { id: "student3" },
++          ]),
++          insertBooking: mock(async () => booking),
++        },
++      });
++
++      const result = await service.createGroupSeries(
++        "student1",
++        groupSeriesInput,
++      );
++
++      // Package = perSession (42) × 2 sessions; proposer holds up front.
++      expect(wallet.hold).toHaveBeenCalledTimes(1);
++      expect(wallet.hold.mock.calls[0][1].amount).toBe(84);
++      expect(repo.insertBooking).toHaveBeenCalledWith(
++        expect.anything(),
++        expect.objectContaining({
++          type: "series",
++          targetGroupSize: 3,
++          confirmedHeadcount: 1,
++          currentState: "awaiting_participant_confirmation",
++          holdAmount: 84,
++        }),
++      );
++      expect(repo.insertParticipant).toHaveBeenCalledTimes(3);
++      expect(repo.insertBookingSession).toHaveBeenCalledTimes(2);
++      // One invite + tutor-request notification.
++      expect(notification.write).toHaveBeenCalledTimes(2);
++      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
++      expect(result.disclaimer).toContain("Group series bookings");
++    });
++  });
++
+   describe("cancel", () => {
+     test("throws BookingNotFoundError when booking does not exist", async () => {
+       const { service } = createService({
+         repo: {
+           findBookingById: mock(async () => null),
+           findParticipant: mock(async () => null),
+         },
+       });
+ 
+       await expect(service.cancel("student1", "nonexistent")).rejects.toThrow(
+@@ -925,20 +1007,43 @@ describe("BookingService", () => {
+             updated: { ...booking, currentState: "cancelled" },
+             newVersion: 2,
+           })),
+         },
+       });
+ 
+       await service.cancel("student1", "b1");
+ 
+       expect(wallet.release).not.toHaveBeenCalled();
+     });
++
++    test("OQ-05: cancel deletes the provider-side meeting event (best-effort)", async () => {
++      const booking = makeBooking({
++        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
++      });
++      const { service, meeting } = createService({
++        repo: {
++          findBookingById: mock(async () => booking),
++          findParticipant: mock(async () => makeParticipant()),
++          findConfirmedParticipants: mock(async () => [
++            makeParticipant({ heldAmount: 42 }),
++          ]),
++          updateBookingVersioned: mock(async () => ({
++            updated: { ...booking, currentState: "cancelled" },
++            newVersion: 2,
++          })),
++        },
++      });
++
++      await service.cancel("student1", "b1");
++
++      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
++    });
+   });
+ 
+   describe("tutorAccept", () => {
+     test("throws BookingNotFoundError when booking does not exist", async () => {
+       const { service } = createService({
+         repo: { findBookingById: mock(async () => null) },
+       });
+ 
+       await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
+         BookingNotFoundError,
+@@ -1199,20 +1304,62 @@ describe("BookingService", () => {
+             updated: { ...booking, currentState: "declined" },
+             newVersion: 2,
+           })),
+         },
+       });
+ 
+       await service.tutorDecline("b1", "tutor1");
+ 
+       expect(wallet.release).not.toHaveBeenCalled();
+     });
++
++    test("M5: user-supplied decline reason is HTML-escaped in the notification body", async () => {
++      const booking = makeBooking({ holdAmount: 42 });
++      const { service, notification } = createService({
++        repo: {
++          findBookingById: mock(async () => booking),
++          findConfirmedParticipants: mock(async () => [
++            makeParticipant({ heldAmount: 42 }),
++          ]),
++          updateBookingVersioned: mock(async () => ({
++            updated: { ...booking, currentState: "declined" },
++            newVersion: 2,
++          })),
++        },
++      });
++
++      await service.tutorDecline("b1", "tutor1", "<script>alert(1)</script>");
++
++      const body = notification.writeBestEffort.mock.calls[0][0].body as string;
++      expect(body).not.toContain("<script>");
++      expect(body).toContain("&lt;script&gt;");
++    });
++
++    test("OQ-05: tutorDecline cancels the provider-side meeting event (best-effort)", async () => {
++      const booking = makeBooking({ holdAmount: 42 });
++      const { service, meeting } = createService({
++        repo: {
++          findBookingById: mock(async () => booking),
++          findConfirmedParticipants: mock(async () => [
++            makeParticipant({ heldAmount: 42 }),
++          ]),
++          updateBookingVersioned: mock(async () => ({
++            updated: { ...booking, currentState: "declined" },
++            newVersion: 2,
++          })),
++        },
++      });
++
++      await service.tutorDecline("b1", "tutor1", "schedule conflict");
++
++      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
++    });
+   });
+ 
+   describe("completeSession", () => {
+     test("throws BookingNotFoundError when booking does not exist", async () => {
+       const { service } = createService({
+         repo: { findBookingById: mock(async () => null) },
+       });
+ 
+       await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
+         BookingNotFoundError,
+@@ -2012,21 +2159,25 @@ describe("BookingService", () => {
+           findBookingById: mock(async () => ({ ...booking, version: 1 })),
+           findParticipant: mock(async () => participant),
+           findConfirmedParticipants: mock(async () => []),
+           updateBookingVersioned: mock(async () => ({
+             updated: { ...booking, currentState: "awaiting_reconfirmation" },
+             newVersion: 2,
+           })),
+         },
+       });
+ 
+-      const result = await service.withdraw("student1", "b1", "late withdrawal");
++      const result = await service.withdraw(
++        "student1",
++        "b1",
++        "late withdrawal",
++      );
+       expect(result).toEqual({ withdrawn: true, late: true });
+ 
+       expect(wallet.release).not.toHaveBeenCalled();
+       expect(wallet.deduct).toHaveBeenCalledTimes(1);
+       expect(wallet.deduct.mock.calls[0][1].eventKey).toBe(
+         "booking.b1.withdraw-late.student1",
+       );
+       expect(wallet.deduct.mock.calls[0][1].reason).toBe(
+         "Late withdrawal penalty",
+       );
+@@ -2255,20 +2406,51 @@ describe("BookingService", () => {
+ 
+       expect(result).toEqual({ expired: 1, failed: 0 });
+       expect(wallet.release).toHaveBeenCalledTimes(1);
+       expect(wallet.release.mock.calls[0][1]).toMatchObject({
+         amount: 42,
+         actorType: "system",
+         reason: "Booking expired",
+       });
+     });
+ 
++    test("OQ-05: expireBookings cancels the provider-side meeting event (best-effort)", async () => {
++      const expiringBooking = makeBooking({
++        currentState: "awaiting_tutor_review",
++        holdAmount: 42,
++        proposerId: "student1",
++      });
++
++      const { service, meeting } = createService({
++        repo: {
++          findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
++          findBookingById: mock(async () => ({
++            ...expiringBooking,
++            currentState: "awaiting_tutor_review",
++            version: 1,
++          })),
++          findConfirmedParticipants: mock(async () => [
++            makeParticipant({ heldAmount: 42 }),
++          ]),
++          updateBookingVersioned: mock(async () => ({
++            updated: { ...expiringBooking, currentState: "expired" },
++            newVersion: 2,
++          })),
++        },
++      });
++
++      const result = await service.expireBookings();
++
++      expect(result).toEqual({ expired: 1, failed: 0 });
++      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
++    });
++
+     test("writes expiry notifications to proposer and tutor", async () => {
+       const expiringBooking = makeBooking({
+         currentState: "awaiting_tutor_review",
+         holdAmount: 42,
+         proposerId: "student1",
+         tutorId: "tutor1",
+       });
+ 
+       const { service, notification } = createService({
+         repo: {
+@@ -3778,68 +3960,84 @@ describe("BookingService", () => {
+           findSessionById: mock(async () => session),
+           findBookingById: mock(async () => booking),
+           findParticipant: mock(async () =>
+             makeParticipant({ heldAmount: 84 }),
+           ),
+         },
+       });
+ 
+       const result = await service.cancelSession("student1", "s1");
+ 
+-      expect(result).toEqual({ cancelled: true, sessionId: "s1" });
++      expect(result).toEqual({
++        cancelled: true,
++        sessionId: "s1",
++        forfeited: false,
++      });
+       expect(wallet.release).toHaveBeenCalledTimes(1);
+       expect(wallet.release.mock.calls[0][1]).toMatchObject({
+         amount: 42,
+         reason: "Series session cancelled",
+       });
+       expect(repo.updateParticipantState).toHaveBeenCalledWith(
+         expect.anything(),
+         "p1",
+         expect.objectContaining({ heldAmount: 42 }),
+       );
+       expect(repo.cancelSession).toHaveBeenCalledWith(expect.anything(), "s1");
+       expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+         expect.anything(),
+         "b1",
+         42,
+       );
+       expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+     });
+ 
+-    test("rejects cancellation within 2h of session start", async () => {
++    test("TC-30: cancelling a session within 2h of start forfeits the session hold", async () => {
+       const booking = makeBooking({
+         type: "series",
+         targetGroupSize: 1,
+         holdAmount: 84,
+         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+       });
+       const session = {
+         id: "s1",
+         seriesBookingId: "b1",
+         scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000),
+         scheduledEndAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+         currentState: "scheduled",
+         holdAmount: 42,
+       };
+-      const { service } = createService({
++      const { service, wallet, repo } = createService({
+         repo: {
+           findSessionById: mock(async () => session),
+           findBookingById: mock(async () => booking),
+           findParticipant: mock(async () =>
+             makeParticipant({ heldAmount: 84 }),
+           ),
+         },
+       });
+ 
+-      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
+-        BookingCancellationDeadlinePassedError,
+-      );
++      const result = await service.cancelSession("student1", "s1");
++
++      expect(result).toEqual({
++        cancelled: true,
++        sessionId: "s1",
++        forfeited: true,
++      });
++      expect(wallet.release).not.toHaveBeenCalled();
++      expect(wallet.deduct).toHaveBeenCalledTimes(1);
++      expect(wallet.deduct.mock.calls[0][1]).toMatchObject({
++        amount: 42,
++        eventKey: "booking.b1.session.s1.forfeit",
++        reason: "Session cancelled after cancellation deadline (forfeit)",
++      });
++      expect(repo.cancelSession).toHaveBeenCalledWith(expect.anything(), "s1");
+     });
+ 
+     test("rejects cancellation for group series bookings", async () => {
+       const booking = makeBooking({
+         type: "series",
+         targetGroupSize: 3,
+         holdAmount: 252,
+         scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+       });
+       const session = {
+@@ -3966,20 +4164,51 @@ describe("BookingService", () => {
+         }),
+       );
+       expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+       expect(notification.write).toHaveBeenCalledTimes(1);
+       expect(notification.write.mock.calls[0][0]).toMatchObject({
+         userId: "tutor1",
+         title: "Reschedule accepted",
+       });
+     });
+ 
++    test("acceptReschedule moves the provider-side meeting event to the new time (OQ-05)", async () => {
++      const booking = makeRescheduleBooking();
++      const proposal = {
++        id: "r1",
++        bookingId: "b1",
++        proposedBy: "tutor1",
++        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
++        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
++        status: "pending",
++      };
++      const { service, meeting } = createService({
++        repo: {
++          findBookingById: mock(async () => ({ ...booking, version: 1 })),
++          findPendingRescheduleProposal: mock(async () => proposal),
++          updateBookingVersioned: mock(
++            async (_conn: any, _id: any, ver: number, updates: any) => ({
++              updated: { ...booking, ...updates, version: ver + 1 },
++              newVersion: ver + 1,
++            }),
++          ),
++        },
++      });
++
++      await service.acceptReschedule("student1", "b1");
++
++      expect(meeting.updateEvent).toHaveBeenCalledWith("b1", {
++        startAt: proposal.proposedStartAt,
++        endAt: proposal.proposedEndAt,
++      });
++    });
++
+     test("acceptReschedule throws when caller is not the proposer", async () => {
+       const booking = makeRescheduleBooking({ proposerId: "other" });
+       const { service } = createService({
+         repo: {
+           findBookingById: mock(async () => booking),
+         },
+       });
+ 
+       await expect(service.acceptReschedule("student1", "b1")).rejects.toThrow(
+         BookingNotOwnedError,
+diff --git a/packages/api/src/tests/unit/google-meeting.provider.test.ts b/packages/api/src/tests/unit/google-meeting.provider.test.ts
+index 8951bb7..8d2492d 100644
+--- a/packages/api/src/tests/unit/google-meeting.provider.test.ts
++++ b/packages/api/src/tests/unit/google-meeting.provider.test.ts
+@@ -49,39 +49,49 @@ const mockCalendarEventsInsert = mock(async () => ({
+ const mockCalendarEventsGet = mock(async () => ({
+   data: {
+     id: "evt_123",
+     conferenceData: {
+       entryPoints: [
+         { entryPointType: "video", uri: "https://meet.google.com/abc" },
+       ],
+     },
+   },
+ }));
++const mockCalendarEventsUpdate = mock(async () => ({
++  data: {
++    id: "evt_123",
++    start: { dateTime: "2030-01-01T10:00:00.000Z" },
++    end: { dateTime: "2030-01-01T11:00:00.000Z" },
++  },
++}));
++const mockCalendarEventsDelete = mock(async () => ({ data: "" }));
+ 
+ mock.module("googleapis", () => ({
+   google: {
+     auth: {
+       JWT: class {
+         constructor(_config: unknown) {}
+       },
+       OAuth2: class {
+         credentials: unknown;
+         constructor(_clientId: string, _clientSecret: string) {}
+         setCredentials(credentials: unknown) {
+           this.credentials = credentials;
+         }
+       },
+     },
+     calendar: () => ({
+       events: {
+         insert: mockCalendarEventsInsert,
+         get: mockCalendarEventsGet,
++        update: mockCalendarEventsUpdate,
++        delete: mockCalendarEventsDelete,
+       },
+     }),
+   },
+ }));
+ 
+ import {
+   createGoogleMeetingProvider,
+   createGoogleMeetingProviderWithFallback,
+ } from "../../modules/meeting/google-meeting.provider";
+ 
+@@ -361,20 +371,138 @@ describe("createGoogleMeetingProviderWithFallback", () => {
+     expect(insert).toHaveBeenCalledTimes(1);
+     expect(update).toHaveBeenCalledTimes(1);
+     expect(set).toHaveBeenCalledWith(
+       expect.objectContaining({ provider: "manual", status: "manual" }),
+     );
+     expect(result.provider).toBe("manual");
+     expect(result.status).toBe("manual");
+   });
+ });
+ 
++describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
++  const config = {
++    authType: "service_account" as const,
++    clientEmail: "test@example.com",
++    privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
++    calendarId: "primary",
++  };
++
++  function makeSelectDb(row: unknown) {
++    return {
++      select: mock(() => ({
++        from: mock(() => ({
++          where: mock(() => ({
++            orderBy: mock(() => ({
++              limit: mock(async () => (row ? [row] : [])),
++            })),
++          })),
++        })),
++      })),
++      update: mock(() => ({
++        set: mock(() => ({ where: mock(async () => []) })),
++      })),
++      insert: mock(() => ({
++        values: mock(() => ({ returning: mock(async () => []) })),
++      })),
++    } as any;
++  }
++
++  const liveRow = {
++    id: "me1",
++    bookingId: "b1",
++    provider: "google_meet",
++    externalEventId: "evt_123",
++    meetingUrl: "https://meet.google.com/abc",
++    status: "created",
++    errorReason: null,
++  };
++
++  beforeEach(() => {
++    mockCalendarEventsUpdate.mockClear();
++    mockCalendarEventsDelete.mockClear();
++  });
++
++  test("updateEvent moves the provider event start/end", async () => {
++    const db = makeSelectDb(liveRow);
++    const provider = createGoogleMeetingProvider(config, db);
++    const start = new Date("2030-02-01T08:00:00Z");
++    const end = new Date("2030-02-01T09:30:00Z");
++
++    await provider.updateEvent("b1", { startAt: start, endAt: end });
++
++    const call = mockCalendarEventsUpdate.mock.calls.at(-1)?.[0];
++    expect(call?.eventId).toBe("evt_123");
++    expect(call?.calendarId).toBe("primary");
++    expect(call?.requestBody?.start?.dateTime).toBe(start.toISOString());
++    expect(call?.requestBody?.end?.dateTime).toBe(end.toISOString());
++  });
++
++  test("updateEvent is a no-op without a live provider event", async () => {
++    const db = makeSelectDb(null);
++    const provider = createGoogleMeetingProvider(config, db);
++
++    await provider.updateEvent("b1", {
++      startAt: new Date("2030-02-01T08:00:00Z"),
++      endAt: new Date("2030-02-01T09:30:00Z"),
++    });
++
++    expect(mockCalendarEventsUpdate).not.toHaveBeenCalled();
++  });
++
++  test("cancelEvent deletes the provider event and marks the row cancelled", async () => {
++    const db = makeSelectDb(liveRow);
++    const provider = createGoogleMeetingProvider(config, db);
++
++    await provider.cancelEvent("b1");
++
++    expect(mockCalendarEventsDelete).toHaveBeenCalledTimes(1);
++    const call = mockCalendarEventsDelete.mock.calls[0]?.[0];
++    expect(call?.eventId).toBe("evt_123");
++    expect(db.update).toHaveBeenCalledTimes(1);
++    const setMock = db.update.mock.results[0]?.value?.set as ReturnType<
++      typeof mock
++    >;
++    expect(setMock).toHaveBeenCalledWith({ status: "cancelled" });
++  });
++
++  test("cancelEvent is a no-op without a live provider event", async () => {
++    const db = makeSelectDb(null);
++    const provider = createGoogleMeetingProvider(config, db);
++
++    await provider.cancelEvent("b1");
++
++    expect(mockCalendarEventsDelete).not.toHaveBeenCalled();
++    expect(db.update).not.toHaveBeenCalled();
++  });
++
++  test("fallback provider update is a no-op; cancel marks the local row cancelled", async () => {
++    const db = makeSelectDb(liveRow);
++    const { createFallbackMeetingProvider } =
++      await import("../../modules/meeting/fallback.provider");
++    const provider = createFallbackMeetingProvider(db);
++
++    await provider.updateEvent("b1", {
++      startAt: new Date("2030-02-01T08:00:00Z"),
++      endAt: new Date("2030-02-01T09:30:00Z"),
++    });
++    await provider.cancelEvent("b1");
++
++    expect(mockCalendarEventsUpdate).not.toHaveBeenCalled();
++    expect(mockCalendarEventsDelete).not.toHaveBeenCalled();
++    expect(db.update).toHaveBeenCalledTimes(1);
++    const setMock = db.update.mock.results[0]?.value?.set as ReturnType<
++      typeof mock
++    >;
++    expect(setMock).toHaveBeenCalledWith({ status: "cancelled" });
++  });
++});
++
+ describe("createGoogleMeetingProvider timeout", () => {
+   const config = {
+     authType: "service_account" as const,
+     clientEmail: "test@example.com",
+     privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+     calendarId: "primary",
+   };
+ 
+   test("createEvent handles timeout error from Promise.race", async () => {
+     mockCalendarEventsInsert.mockImplementationOnce(async () => {
+diff --git a/packages/api/src/tests/unit/room.service.test.ts b/packages/api/src/tests/unit/room.service.test.ts
+index 93c4fb3..cd8fb4c 100644
+--- a/packages/api/src/tests/unit/room.service.test.ts
++++ b/packages/api/src/tests/unit/room.service.test.ts
+@@ -287,10 +287,140 @@ describe("createRoomService", () => {
+ 
+       expect(repo.updateRoomBookingStatus).toHaveBeenCalledWith(
+         expect.anything(),
+         "rb1",
+         "cancelled",
+       );
+       expect(result.status).toBe("cancelled");
+     });
+   });
+ });
++
++describe("room service notifications (P1-3)", () => {
++  const roomBookingRow = {
++    id: "rb1",
++    roomId: "room1",
++    bookingId: "b1",
++    startAt: new Date("2024-01-01T10:00:00Z"),
++    endAt: new Date("2024-01-01T11:00:00Z"),
++    status: "confirmed",
++  };
++
++  function makePorts() {
++    const notificationPort = { writeBestEffort: mock(async () => {}) };
++    const bookingPort = {
++      transitionBookingToScheduled: mock(async () => {}),
++      getBookingRecipients: mock(async () => ({
++        tutorId: "tutor1",
++        participantUserIds: ["student1", "student2"],
++      })),
++    };
++    return { notificationPort, bookingPort };
++  }
++
++  test("assignRoom notifies tutor and each confirmed student (emailRequired)", async () => {
++    const repo = makeRepo({
++      findRoomById: mock(async () => makeRoom()),
++      findRoomBookingsForUpdate: mock(async () => []),
++      insertRoomBooking: mock(async () => roomBookingRow),
++    });
++    const { notificationPort, bookingPort } = makePorts();
++
++    const service = createRoomService(
++      repo,
++      makeDb(),
++      bookingPort,
++      notificationPort,
++    );
++    await service.assignRoom(
++      "b1",
++      "room1",
++      new Date("2024-01-01T10:00:00Z"),
++      new Date("2024-01-01T11:00:00Z"),
++      "admin1",
++    );
++
++    expect(bookingPort.transitionBookingToScheduled).toHaveBeenCalledWith(
++      expect.anything(),
++      "b1",
++      "admin1",
++    );
++    expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(3);
++    const calls = notificationPort.writeBestEffort.mock.calls.map(
++      (c: any) => c[0],
++    );
++    expect(calls.map((c: any) => c.userId).toSorted()).toEqual(
++      ["student1", "student2", "tutor1"].toSorted(),
++    );
++    for (const call of calls) {
++      expect(call.emailRequired).toBe(true);
++      expect(call.category).toBe("booking");
++    }
++    expect(calls[0].eventKey).toContain("room.b1.assigned");
++  });
++
++  test("relocateRoom notifies tutor and confirmed students", async () => {
++    const repo = makeRepo({
++      findRoomById: mock(async () => makeRoom()),
++      findActiveRoomBookingByBookingId: mock(async () => ({
++        id: "rb_old",
++        roomId: "room_old",
++        status: "confirmed",
++      })),
++      findRoomBookingsForUpdate: mock(async () => []),
++      updateRoomBookingStatus: mock(async () => ({
++        id: "rb_old",
++        status: "relocated",
++      })),
++      insertRoomBooking: mock(async () => roomBookingRow),
++    });
++    const { notificationPort, bookingPort } = makePorts();
++
++    const service = createRoomService(
++      repo,
++      makeDb(),
++      bookingPort,
++      notificationPort,
++    );
++    await service.relocateRoom(
++      "b1",
++      "room1",
++      new Date("2024-01-01T10:00:00Z"),
++      new Date("2024-01-01T11:00:00Z"),
++    );
++
++    expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(3);
++    const calls = notificationPort.writeBestEffort.mock.calls.map(
++      (c: any) => c[0],
++    );
++    expect(calls[0].eventKey).toContain("room.b1.relocated");
++  });
++
++  test("cancelRoomBooking notifies tutor and confirmed students", async () => {
++    const repo = makeRepo({
++      findActiveRoomBookingByBookingId: mock(async () => ({
++        id: "rb1",
++        roomId: "room1",
++        status: "confirmed",
++      })),
++      updateRoomBookingStatus: mock(async () => ({
++        id: "rb1",
++        status: "cancelled",
++      })),
++    });
++    const { notificationPort, bookingPort } = makePorts();
++
++    const service = createRoomService(
++      repo,
++      makeDb(),
++      bookingPort,
++      notificationPort,
++    );
++    await service.cancelRoomBooking("b1");
++
++    expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(3);
++    const calls = notificationPort.writeBestEffort.mock.calls.map(
++      (c: any) => c[0],
++    );
++    expect(calls[0].eventKey).toContain("room.b1.cancelled");
++  });
++});
+diff --git a/packages/api/src/tests/unit/sanitize.test.ts b/packages/api/src/tests/unit/sanitize.test.ts
+index b2302b3..01a1792 100644
+--- a/packages/api/src/tests/unit/sanitize.test.ts
++++ b/packages/api/src/tests/unit/sanitize.test.ts
+@@ -1,12 +1,34 @@
+ import { describe, test, expect } from "bun:test";
+-import { sanitizeHtml } from "../../lib/sanitize";
++import { sanitizeHtml, escapeHtml } from "../../lib/sanitize";
++
++describe("escapeHtml", () => {
++  test("escapes HTML metacharacters", () => {
++    expect(escapeHtml(`<script>alert("x")</script>`)).toBe(
++      "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;",
++    );
++  });
++
++  test("escapes ampersands and apostrophes", () => {
++    expect(escapeHtml("a & b 'c'")).toBe("a &amp; b &#39;c&#39;");
++  });
++
++  test("leaves safe text untouched", () => {
++    expect(escapeHtml("plain reason")).toBe("plain reason");
++  });
++
++  test("never emits a raw <script> tag", () => {
++    const out = escapeHtml(`<script>alert(1)</script>`);
++    expect(out).not.toContain("<script>");
++    expect(out).toContain("&lt;script&gt;");
++  });
++});
+ 
+ describe("sanitizeHtml", () => {
+   test("strips script tags with their content", () => {
+     expect(sanitizeHtml("<script>alert(1)</script>hello")).toBe("hello");
+     expect(
+       sanitizeHtml("<SCRIPT>alert(1)</SCRIPT>hello <script>bad()</script>"),
+     ).toBe("hello ");
+   });
+ 
+   test("strips on* event handler attributes", () => {
+diff --git a/packages/api/src/tests/unit/validation-bounds.test.ts b/packages/api/src/tests/unit/validation-bounds.test.ts
+index f42b025..11cd924 100644
+--- a/packages/api/src/tests/unit/validation-bounds.test.ts
++++ b/packages/api/src/tests/unit/validation-bounds.test.ts
+@@ -1,16 +1,18 @@
+ import { describe, test, expect } from "bun:test";
+ import {
+   createSoloInput,
+   createGroupInput,
+   createSeriesInput,
+   bookingActionInput,
++  cancelBookingInput,
++  declineBookingInput,
+   declineInviteInput,
+   proposeRescheduleInput,
+   listMineInput,
+ } from "../../modules/booking/booking.types";
+ import { updateMyProfileInput } from "../../modules/tutor/tutor.types";
+ import { upsertAvailabilityInput } from "../../modules/tutor/availability.types";
+ import { achievementInput } from "../../modules/achievement/achievement.types";
+ import { createInviteInput } from "../../modules/admin-tutor/admin-tutor.types";
+ import {
+   applyOverrideInput,
+@@ -135,20 +137,44 @@ describe("Validation bounds — string .max()", () => {
+     const result = declineInviteInput.safeParse({
+       bookingId: "b1",
+       reason: LONG_LONG_TEXT,
+     });
+     expect(result.success).toBe(false);
+     if (!result.success) {
+       expect(result.error.issues[0].message).toMatch(/<=2000/i);
+     }
+   });
+ 
++  test("M5: cancellationReason rejects >500 chars", () => {
++    const longReason = "a".repeat(501);
++    const result = cancelBookingInput.safeParse({
++      bookingId: "b1",
++      cancellationReason: longReason,
++    });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toMatch(/<=500/i);
++    }
++  });
++
++  test("M5: tutor decline reason rejects >500 chars", () => {
++    const longReason = "a".repeat(501);
++    const result = declineBookingInput.safeParse({
++      bookingId: "b1",
++      reason: longReason,
++    });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toMatch(/<=500/i);
++    }
++  });
++
+   test("Correction reason rejects >2000 chars", () => {
+     const result = createCorrectionInput.safeParse({
+       walletId: "w1",
+       amount: 100,
+       type: "compensate_credit",
+       reason: LONG_LONG_TEXT,
+     });
+     expect(result.success).toBe(false);
+     if (!result.success) {
+       expect(result.error.issues[0].message).toMatch(/<=2000/i);

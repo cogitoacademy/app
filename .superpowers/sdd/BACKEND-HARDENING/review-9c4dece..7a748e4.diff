@@ -1,0 +1,381 @@
+# Review package: 9c4dece..HEAD
+
+## Commits
+7a748e4 fix(booking): return refreshed booking on partial series completion and release residual holds (G18)
+
+## Files changed
+ .../api/src/modules/booking/booking.service.ts     |  27 ++++-
+ .../tests/integration/booking-series-g18.test.ts   |   3 +
+ .../api/src/tests/unit/booking.service.test.ts     | 113 ++++++++++++++++++++-
+ 3 files changed, 135 insertions(+), 8 deletions(-)
+
+## Diff
+diff --git a/packages/api/src/modules/booking/booking.service.ts b/packages/api/src/modules/booking/booking.service.ts
+index 95aa25f..375f3d6 100644
+--- a/packages/api/src/modules/booking/booking.service.ts
++++ b/packages/api/src/modules/booking/booking.service.ts
+@@ -935,23 +935,25 @@ export function createBookingService(deps: {
+       walletId: proposerWallet.id,
+       amount: session.holdAmount,
+       eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
+       sourceReference: bookingId,
+       bookingId,
+       actorType: ACTOR_TYPE.TUTOR,
+       reason: "Series session completed",
+     });
+ 
+     const participant = await repo.findParticipant(tx, bookingId, b.proposerId);
++    let residualHeld = 0;
+     if (participant) {
++      residualHeld = Math.max(0, participant.heldAmount - session.holdAmount);
+       await repo.updateParticipantState(tx, participant.id, {
+-        heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
++        heldAmount: residualHeld,
+       });
+     }
+     await repo.updateBookingHoldAmount(
+       tx,
+       bookingId,
+       Math.max(0, b.holdAmount - session.holdAmount),
+     );
+ 
+     await repo.completeSession(tx, session.id);
+ 
+@@ -974,25 +976,40 @@ export function createBookingService(deps: {
+       title: "Session completed",
+       body: "One session of the series was marked as completed.",
+       eventKey: `booking.${bookingId}.session.${session.id}.completed.tutor`,
+     });
+ 
+     const sessions = await repo.listSessionsBySeriesId(tx, bookingId);
+     const allCompleted = sessions.every(
+       (s) => s.currentState === BOOKING_STATE.COMPLETED,
+     );
+     if (!allCompleted) {
+-      return b;
++      const refreshed = await repo.findBookingById(tx, bookingId);
++      if (!refreshed) throw new BookingNotFoundError(bookingId);
++      return refreshed;
++    }
++
++    if (residualHeld > 0) {
++      await wallet.release(tx, {
++        walletId: proposerWallet.id,
++        amount: residualHeld,
++        eventKey: `booking.${bookingId}.series-release`,
++        sourceReference: bookingId,
++        bookingId,
++        actorType: ACTOR_TYPE.TUTOR,
++        reason: "Series completed: released residual hold",
++      });
++      await repo.updateParticipantState(tx, participant!.id, { heldAmount: 0 });
+     }
+ 
+     await repo.updateBookingHoldAmount(tx, bookingId, 0);
+-    const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
++    await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
+       actorId: tutorId,
+       actorType: ACTOR_TYPE.TUTOR,
+       reason: "All series sessions completed",
+     });
+ 
+     await notification.writeBestEffort({
+       db: tx,
+       userId: b.proposerId,
+       bookingId,
+       category: NOTIFICATION_CATEGORY.BOOKING,
+@@ -1005,21 +1022,23 @@ export function createBookingService(deps: {
+       db: tx,
+       userId: b.tutorId,
+       bookingId,
+       category: NOTIFICATION_CATEGORY.BOOKING,
+       severity: NOTIFICATION_SEVERITY.INFO,
+       title: "Series completed",
+       body: "All sessions in the series are completed.",
+       eventKey: `booking.${bookingId}.series_completed.tutor`,
+     });
+ 
+-    return updated;
++    const refreshed = await repo.findBookingById(tx, bookingId);
++    if (!refreshed) throw new BookingNotFoundError(bookingId);
++    return refreshed;
+   }
+ 
+   async function cancelSession(userId: string, sessionId: string) {
+     return db.transaction(async (tx) => {
+       const session = await repo.findSessionById(tx, sessionId);
+       if (!session) throw new BookingSessionNotFoundError(sessionId);
+       const b = await repo.findBookingById(tx, session.seriesBookingId);
+       if (!b) throw new BookingNotFoundError(session.seriesBookingId);
+       await assertBookingAccess(b, userId, tx, session.seriesBookingId);
+ 
+diff --git a/packages/api/src/tests/integration/booking-series-g18.test.ts b/packages/api/src/tests/integration/booking-series-g18.test.ts
+index 999d22a..63a16fb 100644
+--- a/packages/api/src/tests/integration/booking-series-g18.test.ts
++++ b/packages/api/src/tests/integration/booking-series-g18.test.ts
+@@ -182,20 +182,21 @@ describe("Series session completion (G18)", () => {
+     await db
+       .update(bookingSession)
+       .set({ scheduledStartAt: new Date(Date.now() - 3600_000) })
+       .where(eq(bookingSession.id, sessionIds[0]!));
+ 
+     const result = await tutorClient.tutorActions.completeSession({
+       bookingId,
+       sessionId: sessionIds[0]!,
+     });
+     expect(result.currentState).toBe("scheduled");
++    expect(result.holdAmount).toBe(2 * perSession);
+ 
+     const [session] = await db
+       .select()
+       .from(bookingSession)
+       .where(eq(bookingSession.id, sessionIds[0]!));
+     expect(session!.currentState).toBe("completed");
+ 
+     const w = await studentClient.wallet.get({});
+     expect(w.heldBalance).toBe(2 * perSession);
+ 
+@@ -225,26 +226,28 @@ describe("Series session completion (G18)", () => {
+     await db
+       .update(bookingSession)
+       .set({ scheduledStartAt: new Date(Date.now() - 3600_000) })
+       .where(eq(bookingSession.seriesBookingId, bookingId));
+ 
+     const r2 = await tutorClient.tutorActions.completeSession({
+       bookingId,
+       sessionId: sessionIds[1]!,
+     });
+     expect(r2.currentState).toBe("scheduled");
++    expect(r2.holdAmount).toBe(perSession);
+ 
+     const r3 = await tutorClient.tutorActions.completeSession({
+       bookingId,
+       sessionId: sessionIds[2]!,
+     });
+     expect(r3.currentState).toBe("completed");
++    expect(r3.holdAmount).toBe(0);
+ 
+     const [booking] = await db
+       .select()
+       .from(bookingTable)
+       .where(eq(bookingTable.id, bookingId));
+     expect(booking!.currentState).toBe("completed");
+     expect(booking!.holdAmount).toBe(0);
+ 
+     const w = await studentClient.wallet.get({});
+     expect(w.heldBalance).toBe(0);
+diff --git a/packages/api/src/tests/unit/booking.service.test.ts b/packages/api/src/tests/unit/booking.service.test.ts
+index fb421f2..2b858e1 100644
+--- a/packages/api/src/tests/unit/booking.service.test.ts
++++ b/packages/api/src/tests/unit/booking.service.test.ts
+@@ -1204,23 +1204,26 @@ describe("BookingService", () => {
+         scheduledEndAt: new Date(Date.now() + 3600_000),
+         currentState: "scheduled",
+         holdAmount: 50,
+         priceSnapshot: null,
+       };
+       const sessions = [
+         session,
+         { ...session, id: "s2", currentState: "scheduled" },
+         { ...session, id: "s3", currentState: "scheduled" },
+       ];
++      const refreshed = { ...booking, holdAmount: 100, version: 2 };
+       const { service, wallet, repo, notification } = createService({
+         repo: {
+-          findBookingById: mock(async () => booking),
++          findBookingById: mock(async () => refreshed)
++            .mockImplementationOnce(async () => booking)
++            .mockImplementationOnce(async () => refreshed),
+           findSessionById: mock(async () => session),
+           listSessionsBySeriesId: mock(async () => sessions),
+           findParticipant: mock(async () => ({
+             id: "p1",
+             userId: "student1",
+             heldAmount: 150,
+           })),
+           updateParticipantState: mock(async () => {}),
+           updateBookingHoldAmount: mock(async () => {}),
+           completeSession: mock(async () => {}),
+@@ -1248,20 +1251,23 @@ describe("BookingService", () => {
+         "p1",
+         { heldAmount: 100 },
+       );
+       expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+         expect.anything(),
+         "b1",
+         100,
+       );
+       expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+       expect(result.currentState).toBe("scheduled");
++      expect(result.holdAmount).toBe(100);
++      expect(result.originalMarks).toBe(150);
++      expect(wallet.release).not.toHaveBeenCalled();
+       expect(notification.writeBestEffort.mock.calls.length).toBe(2);
+     });
+ 
+     test("completing the last series session transitions booking to completed (G18)", async () => {
+       const booking = makeBooking({
+         type: "series",
+         currentState: "scheduled",
+         holdAmount: 50,
+         originalMarks: 150,
+       });
+@@ -1287,56 +1293,155 @@ describe("BookingService", () => {
+         {
+           id: "s3",
+           seriesBookingId: "b1",
+           scheduledStartAt: new Date(Date.now() - 3600_000),
+           scheduledEndAt: new Date(Date.now() + 3600_000),
+           currentState: "scheduled",
+           holdAmount: 50,
+           priceSnapshot: null,
+         },
+       ];
+-      const { service, repo, notification } = createService({
++      const completedBooking = {
++        ...booking,
++        currentState: "completed",
++        holdAmount: 0,
++        version: 2,
++      };
++      const { service, repo, notification, wallet } = createService({
+         repo: {
+-          findBookingById: mock(async () => booking),
++          findBookingById: mock(async () => completedBooking)
++            .mockImplementationOnce(async () => booking)
++            .mockImplementationOnce(async () => booking),
+           findSessionById: mock(async () => sessions[2]),
+           listSessionsBySeriesId: mock(async () => [
+             ...sessions.slice(0, 2),
+             { ...sessions[2]!, currentState: "completed" },
+           ]),
+           findParticipant: mock(async () => ({
+             id: "p1",
+             userId: "student1",
+             heldAmount: 50,
+           })),
+           updateParticipantState: mock(async () => {}),
+           updateBookingHoldAmount: mock(async () => {}),
+           completeSession: mock(async () => {}),
+           updateBookingVersioned: mock(async () => ({
+-            updated: { ...booking, currentState: "completed" },
++            updated: { ...booking, currentState: "completed", holdAmount: 0 },
+             newVersion: 2,
+           })),
+         },
+       });
+ 
+       const result = await service.completeSession("b1", "tutor1", "s3");
+ 
+       expect(repo.updateBookingVersioned).toHaveBeenCalledTimes(1);
+       expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+         expect.anything(),
+         "b1",
+         0,
+       );
+       expect(result.currentState).toBe("completed");
++      expect(result.holdAmount).toBe(0);
++      expect(wallet.release).not.toHaveBeenCalled();
+       // 2 per-session notifications + 2 series-completed notifications
+       expect(notification.writeBestEffort.mock.calls.length).toBe(4);
+     });
+ 
++    test("completing the last series session releases a residual participant hold (G18)", async () => {
++      const booking = makeBooking({
++        type: "series",
++        currentState: "scheduled",
++        holdAmount: 50,
++        originalMarks: 150,
++      });
++      const sessions = [
++        {
++          id: "s1",
++          seriesBookingId: "b1",
++          scheduledStartAt: new Date(Date.now() - 3600_000),
++          scheduledEndAt: new Date(Date.now() + 3600_000),
++          currentState: "completed",
++          holdAmount: 50,
++          priceSnapshot: null,
++        },
++        {
++          id: "s2",
++          seriesBookingId: "b1",
++          scheduledStartAt: new Date(Date.now() - 3600_000),
++          scheduledEndAt: new Date(Date.now() + 3600_000),
++          currentState: "completed",
++          holdAmount: 50,
++          priceSnapshot: null,
++        },
++        {
++          id: "s3",
++          seriesBookingId: "b1",
++          scheduledStartAt: new Date(Date.now() - 3600_000),
++          scheduledEndAt: new Date(Date.now() + 3600_000),
++          currentState: "scheduled",
++          holdAmount: 50,
++          priceSnapshot: null,
++        },
++      ];
++      const completedBooking = {
++        ...booking,
++        currentState: "completed",
++        holdAmount: 0,
++        version: 2,
++      };
++      const { service, repo, notification, wallet } = createService({
++        repo: {
++          findBookingById: mock(async () => completedBooking)
++            .mockImplementationOnce(async () => booking)
++            .mockImplementationOnce(async () => booking),
++          findSessionById: mock(async () => sessions[2]),
++          listSessionsBySeriesId: mock(async () => [
++            ...sessions.slice(0, 2),
++            { ...sessions[2]!, currentState: "completed" },
++          ]),
++          findParticipant: mock(async () => ({
++            id: "p1",
++            userId: "student1",
++            heldAmount: 60,
++          })),
++          updateParticipantState: mock(async () => {}),
++          updateBookingHoldAmount: mock(async () => {}),
++          completeSession: mock(async () => {}),
++          updateBookingVersioned: mock(async () => ({
++            updated: { ...booking, currentState: "completed", holdAmount: 0 },
++            newVersion: 2,
++          })),
++        },
++      });
++
++      const result = await service.completeSession("b1", "tutor1", "s3");
++
++      expect(result.currentState).toBe("completed");
++      expect(result.holdAmount).toBe(0);
++      expect(repo.updateParticipantState).toHaveBeenCalledWith(
++        expect.anything(),
++        "p1",
++        { heldAmount: 10 },
++      );
++      expect(wallet.release).toHaveBeenCalledTimes(1);
++      expect(wallet.release.mock.calls[0][1]).toMatchObject({
++        walletId: "w1",
++        amount: 10,
++        eventKey: "booking.b1.series-release",
++        sourceReference: "b1",
++        bookingId: "b1",
++        actorType: "tutor",
++        reason: "Series completed: released residual hold",
++      });
++      expect(notification.writeBestEffort.mock.calls.length).toBe(4);
++    });
++
+     test("series future session completion is rejected (G18)", async () => {
+       const booking = makeBooking({
+         type: "series",
+         currentState: "scheduled",
+         holdAmount: 150,
+       });
+       const session = {
+         id: "s1",
+         seriesBookingId: "b1",
+         scheduledStartAt: new Date(Date.now() + 48 * 3600_000),

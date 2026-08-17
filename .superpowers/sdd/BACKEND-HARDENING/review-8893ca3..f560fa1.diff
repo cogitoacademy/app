@@ -1,0 +1,2365 @@
+# Review package: feat/prd-gaps-admin..HEAD
+
+## Commits
+f560fa1 style: apply oxfmt to G14 room files
+4b65fee feat(room): admin room relocate and cancel (G14)
+30167f7 feat(room): expose room availability check (G13)
+10c66bc style: use toSorted in G12 integration test
+1a888d9 feat(meeting): add Google Meet attendees (G12)
+eeb9164 feat(meeting): expose meeting link status on booking responses (G11)
+
+## Files changed
+ packages/api/src/modules/booking/booking.repo.ts   |  13 +
+ .../api/src/modules/booking/booking.service.ts     |  47 +++-
+ packages/api/src/modules/booking/index.ts          |   3 +-
+ .../api/src/modules/meeting/fallback.provider.ts   |   8 +-
+ .../src/modules/meeting/google-meeting.provider.ts |  21 +-
+ packages/api/src/modules/meeting/meeting.types.ts  |   6 +
+ packages/api/src/modules/room/room.errors.ts       |  11 +
+ packages/api/src/modules/room/room.handler.ts      |  59 +++-
+ packages/api/src/modules/room/room.repo.ts         |  34 ++-
+ packages/api/src/modules/room/room.router.ts       |  44 ++-
+ packages/api/src/modules/room/room.service.ts      |  80 +++++-
+ packages/api/src/modules/room/room.types.ts        |  20 ++
+ .../api/src/tests/integration/meeting-g11.test.ts  | 188 +++++++++++++
+ .../api/src/tests/integration/meeting-g12.test.ts  | 239 ++++++++++++++++
+ .../integration/room-availability-g13.test.ts      | 203 ++++++++++++++
+ .../api/src/tests/integration/room-g14.test.ts     | 299 +++++++++++++++++++++
+ .../api/src/tests/unit/booking.service.test.ts     |  85 +++++-
+ .../api/src/tests/unit/fallback.provider.test.ts   |  31 +++
+ .../src/tests/unit/google-meeting.provider.test.ts |  47 ++++
+ packages/api/src/tests/unit/room.service.test.ts   | 148 ++++++++++
+ 20 files changed, 1573 insertions(+), 13 deletions(-)
+
+## Diff
+diff --git a/packages/api/src/modules/booking/booking.repo.ts b/packages/api/src/modules/booking/booking.repo.ts
+index 7808fa4..9d88f89 100644
+--- a/packages/api/src/modules/booking/booking.repo.ts
++++ b/packages/api/src/modules/booking/booking.repo.ts
+@@ -13,20 +13,21 @@ import {
+ } from "drizzle-orm";
+ import {
+   booking,
+   bookingParticipant,
+   bookingStateHistory,
+   bookingRescheduleProposal,
+   bookingSession,
+   sessionNote,
+   availabilitySlot,
+   tutorProfile,
++  user,
+   type booking as bookingTable,
+ } from "@cogito-app/db/schema";
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+ import {
+   CONFIRMATION_STATE,
+   ONBOARDING_STATUS,
+   LATENESS_TOLERANCE_MS,
+   MODALITY,
+ } from "../../shared/constants";
+@@ -114,20 +115,31 @@ async function findConfirmedParticipants(
+   ];
+   if (excludeUserId) {
+     conditions.push(ne(bookingParticipant.userId, excludeUserId));
+   }
+   return conn
+     .select()
+     .from(bookingParticipant)
+     .where(and(...conditions));
+ }
+ 
++async function findUserEmails(
++  conn: DbOrTx,
++  userIds: string[],
++): Promise<{ id: string; email: string; name: string }[]> {
++  if (userIds.length === 0) return [];
++  return conn
++    .select({ id: user.id, email: user.email, name: user.name })
++    .from(user)
++    .where(inArray(user.id, userIds));
++}
++
+ async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
+   return conn
+     .select()
+     .from(bookingParticipant)
+     .where(
+       and(
+         eq(bookingParticipant.bookingId, bookingId),
+         eq(
+           bookingParticipant.confirmationState,
+           CONFIRMATION_STATE.RECONFIRMED,
+@@ -529,20 +541,21 @@ export function createBookingRepo(db: DbType) {
+   }
+ 
+   return {
+     findBookingById,
+     findBookingWithParticipants,
+     listBookingsByProposer,
+     findTutorProfile,
+     findAvailabilitySlot,
+     findParticipant,
+     findConfirmedParticipants,
++    findUserEmails,
+     findReconfirmedParticipants,
+     insertBooking,
+     updateBookingCancellationReason,
+     updateBookingHoldAmount,
+     updateBookingConfirmedHeadcount,
+     insertParticipant,
+     updateParticipantState,
+     insertStateHistory,
+     insertRescheduleProposal,
+     findPendingRescheduleProposal,
+diff --git a/packages/api/src/modules/booking/booking.service.ts b/packages/api/src/modules/booking/booking.service.ts
+index 4a63066..f1d99c7 100644
+--- a/packages/api/src/modules/booking/booking.service.ts
++++ b/packages/api/src/modules/booking/booking.service.ts
+@@ -88,20 +88,43 @@ export interface CreateSeriesInput {
+ export interface BookingTransition {
+   bookingId: string;
+   fromState: BookingState | null;
+   toState: BookingState;
+   reason?: string;
+   actorId: string | null;
+   actorType: "student" | "tutor" | "admin" | "system";
+   metadata?: Record<string, unknown>;
+ }
+ 
++export type MeetingStatus = "pending" | "ready" | "failed";
++
++/**
++ * Derives the frontend-facing meeting status for a booking.
++ *
++ * `meeting.createEvent` fires only on tutor accept (online bookings), and
++ * for group bookings tutor accept only happens after every participant
++ * confirmed — so "all confirmed AND tutor accepted" is satisfied by
++ * construction. Withdrawal after creation does not revoke the link.
++ */
++function computeMeetingInfo(b: {
++  meeting: { status: string; meetingUrl: string | null } | null;
++}): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
++  const event = b.meeting;
++  if (!event || event.status === "pending" || event.status === "manual") {
++    return { meetingStatus: "pending", meetingUrl: null };
++  }
++  if (event.status === "failed") {
++    return { meetingStatus: "failed", meetingUrl: null };
++  }
++  return { meetingStatus: "ready", meetingUrl: event.meetingUrl };
++}
++
+ export type BookingService = ReturnType<typeof createBookingService>;
+ 
+ export function createBookingService(deps: {
+   db: DbType;
+   repo: BookingRepo;
+   wallet: BookingWalletPort;
+   pricing: BookingPricingPort;
+   audit: BookingAuditPort;
+   notification: BookingNotificationPort;
+   meeting: BookingMeetingPort;
+@@ -345,25 +368,33 @@ export function createBookingService(deps: {
+ 
+   function computeDisclaimer(b: {
+     type: string;
+     targetGroupSize: number;
+   }): string | null {
+     if (b.type !== BOOKING_TYPE.SERIES) return null;
+     if (b.targetGroupSize > 1) return GROUP_SERIES_DISCLAIMER;
+     return null;
+   }
+ 
++  /**
++   * Derives the frontend-facing meeting status for a booking — see the
++   * module-scope computeMeetingInfo.
++   */
+   async function getById(bookingId: string, userId: string) {
+     const b = await repo.findBookingWithParticipants(bookingId);
+     if (!b) throw new BookingNotFoundError(bookingId);
+     await assertBookingAccess(b, userId, db, bookingId);
+-    return { ...b, disclaimer: computeDisclaimer(b) };
++    return {
++      ...b,
++      disclaimer: computeDisclaimer(b),
++      ...computeMeetingInfo(b),
++    };
+   }
+ 
+   async function listMine(
+     userId: string,
+     opts: { cursor?: string; limit?: number; states?: string[] } = {},
+   ) {
+     const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+     const rows = await repo.listBookingsByProposer(userId, {
+       states: opts.states,
+       limit,
+@@ -579,24 +610,38 @@ export function createBookingService(deps: {
+       const isOffline = b.modality === MODALITY.OFFLINE;
+ 
+       let updated;
+       if (!isOffline) {
+         await transition(tx, bookingId, BOOKING_STATE.CONFIRMED, {
+           actorId: tutorId,
+           actorType: ACTOR_TYPE.TUTOR,
+         });
+ 
+         try {
++          const participants = await repo.findConfirmedParticipants(
++            tx,
++            bookingId,
++          );
++          const users = await repo.findUserEmails(tx, [
++            b.tutorId,
++            ...participants.map((p) => p.userId),
++          ]);
++          const attendees = users.map((u) => ({
++            email: u.email,
++            name: u.name,
++          }));
++
+           const meetingResult = await meeting.createEvent(
+             bookingId,
+             b.scheduledStartAt,
+             b.scheduledEndAt,
++            attendees,
+           );
+ 
+           if (meetingResult.status === "failed") {
+             updated = await repo.findBookingById(tx, bookingId);
+           } else {
+             updated = await transition(tx, bookingId, BOOKING_STATE.SCHEDULED, {
+               actorId: tutorId,
+               actorType: ACTOR_TYPE.TUTOR,
+               reason: "Meeting created automatically",
+             });
+diff --git a/packages/api/src/modules/booking/index.ts b/packages/api/src/modules/booking/index.ts
+index d098586..3e9ec93 100644
+--- a/packages/api/src/modules/booking/index.ts
++++ b/packages/api/src/modules/booking/index.ts
+@@ -1,13 +1,13 @@
+ import type { DbType } from "../../lib/db";
+ import type { DbOrTx } from "../../lib/tx";
+-import type { MeetingEvent } from "../meeting/meeting.types";
++import type { MeetingAttendee, MeetingEvent } from "../meeting/meeting.types";
+ import type { AuditRecordParams } from "../audit/audit.service";
+ import type { GroupSize, PriceSnapshot } from "../pricing/pricing.service";
+ import type { NotificationWriteParams } from "../notification/notification.service";
+ import type {
+   WalletSnapshot,
+   HoldParams,
+   ReleaseParams,
+   DeductParams,
+ } from "../wallet/wallet.service";
+ import { createBookingRepo } from "./booking.repo";
+@@ -39,20 +39,21 @@ export interface BookingAuditPort {
+ export interface BookingNotificationPort {
+   write(params: NotificationWriteParams): Promise<void>;
+   writeBestEffort(params: NotificationWriteParams): Promise<void>;
+ }
+ 
+ export interface BookingMeetingPort {
+   createEvent(
+     bookingId: string,
+     scheduledStartAt?: Date,
+     scheduledEndAt?: Date,
++    attendees?: MeetingAttendee[],
+   ): Promise<MeetingEvent>;
+ }
+ 
+ export function createBookingModule(deps: {
+   db: DbType;
+   wallet: BookingWalletPort;
+   pricing: BookingPricingPort;
+   audit: BookingAuditPort;
+   notification: BookingNotificationPort;
+   meeting: BookingMeetingPort;
+diff --git a/packages/api/src/modules/meeting/fallback.provider.ts b/packages/api/src/modules/meeting/fallback.provider.ts
+index 17c5329..fb04181 100644
+--- a/packages/api/src/modules/meeting/fallback.provider.ts
++++ b/packages/api/src/modules/meeting/fallback.provider.ts
+@@ -1,29 +1,35 @@
+ import { meetingEvent } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+-import type { MeetingEvent, MeetingPort } from "./meeting.types";
++import type {
++  MeetingAttendee,
++  MeetingEvent,
++  MeetingPort,
++} from "./meeting.types";
+ import { log } from "../../lib/logger";
+ 
+ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
+   async function createEvent(
+     bookingId: string,
+     _scheduledStartAt?: Date,
+     _scheduledEndAt?: Date,
++    attendees?: MeetingAttendee[],
+   ): Promise<MeetingEvent> {
+     const [row] = await db
+       .insert(meetingEvent)
+       .values({
+         bookingId,
+         provider: "manual",
+         status: "manual",
+         meetingUrl: null,
+         externalEventId: null,
++        attendeeEmails: attendees?.map((a) => a.email) ?? null,
+       })
+       .returning();
+ 
+     log({
+       level: "warn",
+       action: "meeting_manual_created",
+       message:
+         "Meeting created with manual provider — admin needs to assign a meeting link",
+       bookingId,
+     });
+diff --git a/packages/api/src/modules/meeting/google-meeting.provider.ts b/packages/api/src/modules/meeting/google-meeting.provider.ts
+index 23ce570..dae4980 100644
+--- a/packages/api/src/modules/meeting/google-meeting.provider.ts
++++ b/packages/api/src/modules/meeting/google-meeting.provider.ts
+@@ -1,14 +1,18 @@
+ import { google } from "googleapis";
+ import { meetingEvent } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+-import type { MeetingEvent, MeetingPort } from "./meeting.types";
++import type {
++  MeetingAttendee,
++  MeetingEvent,
++  MeetingPort,
++} from "./meeting.types";
+ import { log } from "../../lib/logger";
+ import { createFallbackMeetingProvider } from "./fallback.provider";
+ import { CircuitBreaker } from "../../lib/circuit-breaker";
+ import type { RedisClient } from "../../lib/redis";
+ 
+ interface GoogleMeetingConfig {
+   clientEmail: string;
+   privateKey: string;
+   calendarId: string;
+ }
+@@ -38,36 +42,46 @@ export function createGoogleMeetingProvider(
+     key: config.privateKey.replace(/\\n/g, "\n"),
+     scopes: ["https://www.googleapis.com/auth/calendar"],
+   });
+ 
+   const calendar = google.calendar({ version: "v3", auth });
+ 
+   async function createEvent(
+     bookingId: string,
+     scheduledStartAt?: Date,
+     scheduledEndAt?: Date,
++    attendees?: MeetingAttendee[],
+   ): Promise<MeetingEvent> {
+     try {
+       const now = new Date();
+       const start =
+         scheduledStartAt ?? new Date(now.getTime() + 60 * 60 * 1000);
+       const end = scheduledEndAt ?? new Date(start.getTime() + 90 * 60 * 1000);
++      const attendeeEmails = attendees?.map((a) => a.email) ?? null;
+ 
+       const TIMEOUT_MS = 30_000;
+       const response = await googleMeetBreaker.execute(() =>
+         Promise.race([
+           calendar.events.insert({
+             calendarId: config.calendarId,
+             requestBody: {
+               summary: `Cogito Booking ${bookingId}`,
+               start: { dateTime: start.toISOString() },
+               end: { dateTime: end.toISOString() },
++              ...(attendees?.length
++                ? {
++                    attendees: attendees.map((a) => ({
++                      email: a.email,
++                      ...(a.name ? { displayName: a.name } : {}),
++                    })),
++                  }
++                : {}),
+               conferenceData: {
+                 createRequest: {
+                   requestId: bookingId,
+                   conferenceSolutionKey: { type: "hangoutsMeet" },
+                 },
+               },
+             },
+             conferenceDataVersion: 1,
+           }),
+           new Promise<never>((_, reject) =>
+@@ -84,20 +98,21 @@ export function createGoogleMeetingProvider(
+       const meetingUrl = conferenceEntry?.uri ?? null;
+       const externalEventId = event.id ?? null;
+ 
+       const [row] = await db
+         .insert(meetingEvent)
+         .values({
+           bookingId,
+           provider: "google_meet",
+           externalEventId,
+           meetingUrl,
++          attendeeEmails,
+           status: "created",
+         })
+         .returning();
+ 
+       return {
+         id: row!.id,
+         bookingId,
+         provider: "google_meet",
+         externalEventId,
+         meetingUrl,
+@@ -114,20 +129,21 @@ export function createGoogleMeetingProvider(
+ 
+       const [row] = await db
+         .insert(meetingEvent)
+         .values({
+           bookingId,
+           provider: "google_meet",
+           status: "failed",
+           errorReason: String(error),
+           meetingUrl: null,
+           externalEventId: null,
++          attendeeEmails: attendees?.map((a) => a.email) ?? null,
+         })
+         .returning();
+ 
+       return {
+         id: row!.id,
+         bookingId,
+         provider: "google_meet",
+         externalEventId: null,
+         meetingUrl: null,
+         status: "failed" as const,
+@@ -144,28 +160,31 @@ export function createGoogleMeetingProviderWithFallback(
+   db: DbOrTx,
+   redis?: RedisClient,
+ ): MeetingPort {
+   const googleProvider = createGoogleMeetingProvider(config, db, redis);
+   const fallbackProvider = createFallbackMeetingProvider(db);
+ 
+   async function createEvent(
+     bookingId: string,
+     scheduledStartAt?: Date,
+     scheduledEndAt?: Date,
++    attendees?: MeetingAttendee[],
+   ): Promise<MeetingEvent> {
+     const result = await googleProvider.createEvent(
+       bookingId,
+       scheduledStartAt,
+       scheduledEndAt,
++      attendees,
+     );
+     if (result.status === "failed") {
+       return fallbackProvider.createEvent(
+         bookingId,
+         scheduledStartAt,
+         scheduledEndAt,
++        attendees,
+       );
+     }
+     return result;
+   }
+ 
+   return { createEvent };
+ }
+diff --git a/packages/api/src/modules/meeting/meeting.types.ts b/packages/api/src/modules/meeting/meeting.types.ts
+index 1ce06ae..073e0e7 100644
+--- a/packages/api/src/modules/meeting/meeting.types.ts
++++ b/packages/api/src/modules/meeting/meeting.types.ts
+@@ -1,17 +1,23 @@
+ export interface MeetingEvent {
+   id: string;
+   bookingId: string;
+   provider: string;
+   externalEventId: string | null;
+   meetingUrl: string | null;
+   status: string;
+   errorReason: string | null;
+ }
+ 
++export interface MeetingAttendee {
++  email: string;
++  name?: string;
++}
++
+ export interface MeetingPort {
+   createEvent(
+     bookingId: string,
+     scheduledStartAt?: Date,
+     scheduledEndAt?: Date,
++    attendees?: MeetingAttendee[],
+   ): Promise<MeetingEvent>;
+ }
+diff --git a/packages/api/src/modules/room/room.errors.ts b/packages/api/src/modules/room/room.errors.ts
+index 56224b8..4f14641 100644
+--- a/packages/api/src/modules/room/room.errors.ts
++++ b/packages/api/src/modules/room/room.errors.ts
+@@ -13,16 +13,27 @@ export class RoomBookingConflictError extends DomainError {
+   readonly domain = "room";
+   constructor(roomId: string, startAt: string, endAt: string) {
+     super(
+       "ROOM_BOOKING_CONFLICT",
+       "Room is already booked for this time slot",
+       { roomId, startAt, endAt },
+     );
+   }
+ }
+ 
++export class RoomBookingNotFoundError extends DomainError {
++  readonly domain = "room";
++  constructor(bookingId: string) {
++    super("ROOM_BOOKING_NOT_FOUND", "Booking has no active room assignment", {
++      bookingId,
++    });
++  }
++}
++
+ export function mapRoomError(err: DomainError): ORPCError<string, undefined> {
+   if (err instanceof RoomNotFoundError) return notFound(err.message, err);
+   if (err instanceof RoomBookingConflictError)
+     return conflict(err.message, err);
++  if (err instanceof RoomBookingNotFoundError)
++    return notFound(err.message, err);
+   return internalServerError(err.message, err);
+ }
+diff --git a/packages/api/src/modules/room/room.handler.ts b/packages/api/src/modules/room/room.handler.ts
+index 87a5c0f..21a0e68 100644
+--- a/packages/api/src/modules/room/room.handler.ts
++++ b/packages/api/src/modules/room/room.handler.ts
+@@ -1,15 +1,21 @@
+ import type { Context } from "../../context";
+ import { withDomainMap } from "../../lib/handler-utils";
+ import { mapRoomError } from "./room.errors";
+ import type { RoomService } from "./room.service";
+-import type { CreateRoomInput, AssignRoomInput } from "./room.types";
++import type {
++  CreateRoomInput,
++  AssignRoomInput,
++  CheckAvailabilityInput,
++  RelocateRoomInput,
++  CancelRoomInput,
++} from "./room.types";
+ 
+ export type RoomHandler = ReturnType<typeof createRoomHandler>;
+ 
+ export function createRoomHandler(room: RoomService) {
+   return {
+     list: async ({ context: _context }: { context: Context }) => {
+       return withDomainMap(() => room.listActive(), mapRoomError);
+     },
+ 
+     create: async ({
+@@ -33,12 +39,63 @@ export function createRoomHandler(room: RoomService) {
+         () =>
+           room.assignRoom(
+             input.bookingId,
+             input.roomId,
+             input.startAt,
+             input.endAt,
+           ),
+         mapRoomError,
+       );
+     },
++
++    checkAvailability: async ({
++      context: _context,
++      input,
++    }: {
++      context: Context;
++      input: CheckAvailabilityInput;
++    }) => {
++      return withDomainMap(
++        async () => ({
++          available: await room.checkAvailability(
++            input.roomId,
++            input.startAt,
++            input.endAt,
++          ),
++        }),
++        mapRoomError,
++      );
++    },
++
++    relocate: async ({
++      context: _context,
++      input,
++    }: {
++      context: Context;
++      input: RelocateRoomInput;
++    }) => {
++      return withDomainMap(
++        () =>
++          room.relocateRoom(
++            input.bookingId,
++            input.roomId,
++            input.startAt,
++            input.endAt,
++          ),
++        mapRoomError,
++      );
++    },
++
++    cancelBooking: async ({
++      context: _context,
++      input,
++    }: {
++      context: Context;
++      input: CancelRoomInput;
++    }) => {
++      return withDomainMap(
++        () => room.cancelRoomBooking(input.bookingId),
++        mapRoomError,
++      );
++    },
+   };
+ }
+diff --git a/packages/api/src/modules/room/room.repo.ts b/packages/api/src/modules/room/room.repo.ts
+index 9191bfe..11ff7f4 100644
+--- a/packages/api/src/modules/room/room.repo.ts
++++ b/packages/api/src/modules/room/room.repo.ts
+@@ -1,11 +1,11 @@
+-import { eq, and, gte, lte, ne } from "drizzle-orm";
++import { eq, and, gte, lte, ne, desc } from "drizzle-orm";
+ import { room, roomBooking } from "@cogito-app/db/schema";
+ import type { DbOrTx } from "../../lib/tx";
+ import { ROOM_BOOKING_STATUS } from "../../shared/constants";
+ 
+ export type RoomRepo = ReturnType<typeof createRoomRepo>;
+ 
+ export async function findActiveRooms(conn: DbOrTx) {
+   return conn.select().from(room).where(eq(room.isActive, true));
+ }
+ 
+@@ -77,20 +77,52 @@ export async function insertRoomBooking(
+     bookingId: string;
+     startAt: Date;
+     endAt: Date;
+     status: string;
+   },
+ ) {
+   const [row] = await conn.insert(roomBooking).values(values).returning();
+   return row!;
+ }
+ 
++/**
++ * Returns the most recent non-cancelled room booking for a booking — the
++ * active room assignment (relocated rows are historical).
++ */
++export async function findActiveRoomBookingByBookingId(
++  conn: DbOrTx,
++  bookingId: string,
++) {
++  return conn.query.roomBooking.findFirst({
++    where: and(
++      eq(roomBooking.bookingId, bookingId),
++      ne(roomBooking.status, ROOM_BOOKING_STATUS.CANCELLED),
++    ),
++    orderBy: [desc(roomBooking.createdAt)],
++  });
++}
++
++export async function updateRoomBookingStatus(
++  conn: DbOrTx,
++  roomBookingId: string,
++  status: string,
++) {
++  const [row] = await conn
++    .update(roomBooking)
++    .set({ status })
++    .where(eq(roomBooking.id, roomBookingId))
++    .returning();
++  return row!;
++}
++
+ export function createRoomRepo() {
+   return {
+     findActiveRooms,
+     insertRoom,
+     findRoomById,
+     findRoomBookings,
+     findRoomBookingsForUpdate,
+     insertRoomBooking,
++    findActiveRoomBookingByBookingId,
++    updateRoomBookingStatus,
+   };
+ }
+diff --git a/packages/api/src/modules/room/room.router.ts b/packages/api/src/modules/room/room.router.ts
+index 8324dd1..c286258 100644
+--- a/packages/api/src/modules/room/room.router.ts
++++ b/packages/api/src/modules/room/room.router.ts
+@@ -1,11 +1,18 @@
+-import { listRoomsInput, createRoomInput, assignRoomInput } from "./room.types";
++import {
++  listRoomsInput,
++  createRoomInput,
++  assignRoomInput,
++  checkAvailabilityInput,
++  relocateRoomInput,
++  cancelRoomInput,
++} from "./room.types";
+ import { adminProcedure, protectedProcedure } from "../../procedures";
+ import type { RoomHandler } from "./room.handler";
+ 
+ export function createRoomRouter(handler: RoomHandler) {
+   return {
+     list: protectedProcedure
+       .route({
+         method: "POST",
+         path: "/rooms/list",
+         tags: ["Rooms"],
+@@ -29,12 +36,47 @@ export function createRoomRouter(handler: RoomHandler) {
+     assign: adminProcedure
+       .route({
+         method: "POST",
+         path: "/admin/rooms/assign",
+         tags: ["Admin", "Rooms"],
+         summary: "Assign room to booking",
+         description: "Confirms a room for an offline booking",
+       })
+       .input(assignRoomInput)
+       .handler(handler.assign),
++
++    checkAvailability: protectedProcedure
++      .route({
++        method: "POST",
++        path: "/rooms/check-availability",
++        tags: ["Rooms"],
++        summary: "Check room availability",
++        description: "Returns whether a room is free for a time slot",
++      })
++      .input(checkAvailabilityInput)
++      .handler(handler.checkAvailability),
++
++    relocate: adminProcedure
++      .route({
++        method: "POST",
++        path: "/admin/rooms/relocate",
++        tags: ["Admin", "Rooms"],
++        summary: "Relocate booking to another room",
++        description:
++          "Moves a booking to a different room, freeing the previous one",
++      })
++      .input(relocateRoomInput)
++      .handler(handler.relocate),
++
++    cancelBooking: adminProcedure
++      .route({
++        method: "POST",
++        path: "/admin/rooms/cancel-booking",
++        tags: ["Admin", "Rooms"],
++        summary: "Cancel room booking",
++        description:
++          "Cancels a booking's room assignment; the booking continues without a room",
++      })
++      .input(cancelRoomInput)
++      .handler(handler.cancelBooking),
+   };
+ }
+diff --git a/packages/api/src/modules/room/room.service.ts b/packages/api/src/modules/room/room.service.ts
+index fac130b..0d16bf3 100644
+--- a/packages/api/src/modules/room/room.service.ts
++++ b/packages/api/src/modules/room/room.service.ts
+@@ -1,14 +1,19 @@
+ import type { DbType } from "../../lib/db";
+-import { RoomNotFoundError, RoomBookingConflictError } from "./room.errors";
++import {
++  RoomNotFoundError,
++  RoomBookingConflictError,
++  RoomBookingNotFoundError,
++} from "./room.errors";
+ import type { RoomRepo } from "./room.repo";
+ import type { CreateRoomInput } from "./room.types";
++import { ROOM_BOOKING_STATUS } from "../../shared/constants";
+ 
+ export type RoomService = ReturnType<typeof createRoomService>;
+ 
+ export function createRoomService(repo: RoomRepo, db: DbType) {
+   async function listActive() {
+     return repo.findActiveRooms(db);
+   }
+ 
+   async function createRoom(input: CreateRoomInput) {
+     return repo.insertRoom(db, input);
+@@ -52,17 +57,86 @@ export function createRoomService(repo: RoomRepo, db: DbType) {
+           roomId,
+           startAt.toISOString(),
+           endAt.toISOString(),
+         );
+ 
+       return repo.insertRoomBooking(tx, {
+         roomId,
+         bookingId,
+         startAt,
+         endAt,
+-        status: "confirmed",
++        status: ROOM_BOOKING_STATUS.CONFIRMED,
+       });
+     });
+   }
+ 
+-  return { listActive, createRoom, checkAvailability, assignRoom };
++  async function relocateRoom(
++    bookingId: string,
++    roomId: string,
++    startAt: Date,
++    endAt: Date,
++  ) {
++    return db.transaction(async (tx) => {
++      const roomRow = await repo.findRoomById(tx, roomId);
++      if (!roomRow) throw new RoomNotFoundError(roomId);
++
++      const current = await repo.findActiveRoomBookingByBookingId(
++        tx,
++        bookingId,
++      );
++      if (!current) throw new RoomBookingNotFoundError(bookingId);
++
++      const conflicting = await repo.findRoomBookingsForUpdate(
++        tx,
++        roomId,
++        startAt,
++        endAt,
++        bookingId,
++      );
++      if (conflicting.length > 0)
++        throw new RoomBookingConflictError(
++          roomId,
++          startAt.toISOString(),
++          endAt.toISOString(),
++        );
++
++      await repo.updateRoomBookingStatus(
++        tx,
++        current.id,
++        ROOM_BOOKING_STATUS.RELOCATED,
++      );
++
++      return repo.insertRoomBooking(tx, {
++        roomId,
++        bookingId,
++        startAt,
++        endAt,
++        status: ROOM_BOOKING_STATUS.CONFIRMED,
++      });
++    });
++  }
++
++  async function cancelRoomBooking(bookingId: string) {
++    return db.transaction(async (tx) => {
++      const current = await repo.findActiveRoomBookingByBookingId(
++        tx,
++        bookingId,
++      );
++      if (!current) throw new RoomBookingNotFoundError(bookingId);
++
++      return repo.updateRoomBookingStatus(
++        tx,
++        current.id,
++        ROOM_BOOKING_STATUS.CANCELLED,
++      );
++    });
++  }
++
++  return {
++    listActive,
++    createRoom,
++    checkAvailability,
++    assignRoom,
++    relocateRoom,
++    cancelRoomBooking,
++  };
+ }
+diff --git a/packages/api/src/modules/room/room.types.ts b/packages/api/src/modules/room/room.types.ts
+index e604a2b..417e32d 100644
+--- a/packages/api/src/modules/room/room.types.ts
++++ b/packages/api/src/modules/room/room.types.ts
+@@ -8,12 +8,32 @@ export const createRoomInput = z.object({
+   capacity: z.number().int().min(1),
+ });
+ 
+ export const assignRoomInput = z.object({
+   bookingId: z.string().min(1).max(100),
+   roomId: z.string().min(1).max(100),
+   startAt: z.coerce.date(),
+   endAt: z.coerce.date(),
+ });
+ 
++export const checkAvailabilityInput = z.object({
++  roomId: z.string().min(1).max(100),
++  startAt: z.coerce.date(),
++  endAt: z.coerce.date(),
++});
++
++export const relocateRoomInput = z.object({
++  bookingId: z.string().min(1).max(100),
++  roomId: z.string().min(1).max(100),
++  startAt: z.coerce.date(),
++  endAt: z.coerce.date(),
++});
++
++export const cancelRoomInput = z.object({
++  bookingId: z.string().min(1).max(100),
++});
++
+ export type CreateRoomInput = z.infer<typeof createRoomInput>;
+ export type AssignRoomInput = z.infer<typeof assignRoomInput>;
++export type CheckAvailabilityInput = z.infer<typeof checkAvailabilityInput>;
++export type RelocateRoomInput = z.infer<typeof relocateRoomInput>;
++export type CancelRoomInput = z.infer<typeof cancelRoomInput>;
+diff --git a/packages/api/src/tests/integration/meeting-g11.test.ts b/packages/api/src/tests/integration/meeting-g11.test.ts
+new file mode 100644
+index 0000000..d823ae3
+--- /dev/null
++++ b/packages/api/src/tests/integration/meeting-g11.test.ts
+@@ -0,0 +1,188 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++  meetingEvent,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(
++  email: string,
++  ts: number,
++): Promise<{ tutorId: string; slotId: string }> {
++  await signUpAndSignIn(email, "Test1234!", "Tutor Meet G11");
++  const tutorCtx = await createTestContext(
++    (await signInAndGetCookie(email, "Test1234!")) ?? "",
++  );
++  if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
++  const tutorId = tutorCtx.session.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Meet G11",
++      token: `token-meet11-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Meet G11",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({ tutorId, startDate: start, endDate: end, modality: "both" })
++    .returning();
++
++  return { tutorId, slotId: slot!.id };
++}
++
++describe("G11 meeting link visibility gating", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const studentEmail = `student.meet11.${ts}@cogito.test`;
++  const tutorEmail = `tutor.meet11.${ts}@cogito.test`;
++  let studentClient: TestClient;
++  let tutorClient: TestClient;
++  let slotId: string;
++  let bookingId: string;
++
++  beforeAll(async () => {
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student Meet G11",
++    );
++    studentClient = createTestClient(
++      await createTestContext(studentRes.cookie),
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    if (studentCtx.session?.user) {
++      await creditWallet(studentCtx.session.user.id, 200);
++    }
++
++    const tutorData = await createPublishedTutor(tutorEmail, ts);
++    slotId = tutorData.slotId;
++    const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
++    tutorClient = createTestClient(await createTestContext(tutorCookie));
++  });
++
++  test("before tutor accept, booking GET reports pending meeting with no url", async () => {
++    const start = new Date(Date.now() + 48 * 3600_000).toISOString();
++    const end = new Date(Date.now() + 49 * 3600_000).toISOString();
++
++    const b = await studentClient.booking.createSolo({
++      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
++      availabilitySlotId: slotId,
++      modality: "online",
++      scheduledStartAt: start,
++      scheduledEndAt: end,
++      timezone: "Asia/Jakarta",
++    });
++    bookingId = b.id;
++    expect(b.currentState).toBe("awaiting_tutor_review");
++
++    const fetched = await studentClient.booking.get({ bookingId });
++    expect(fetched.meetingStatus).toBe("pending");
++    expect(fetched.meetingUrl).toBeNull();
++    expect(fetched.meeting).toBeNull();
++  });
++
++  test("after tutor accept, meetingEvent row exists and status surfaces", async () => {
++    const updated = await tutorClient.tutorActions.acceptBooking({ bookingId });
++    expect(updated.currentState).toBe("scheduled");
++
++    const [meetingRow] = await db
++      .select()
++      .from(meetingEvent)
++      .where(eq(meetingEvent.bookingId, bookingId));
++    expect(meetingRow).toBeDefined();
++
++    const fetched = await studentClient.booking.get({ bookingId });
++    expect(fetched.meeting?.id).toBe(meetingRow!.id);
++    // Fallback provider creates a manual meeting (no link) in test env.
++    expect(fetched.meetingStatus).toBe("pending");
++    expect(fetched.meetingUrl).toBeNull();
++  });
++
++  test("created meeting row with url maps to ready + url", async () => {
++    await db
++      .update(meetingEvent)
++      .set({ status: "created", meetingUrl: "https://meet.google.com/g11" })
++      .where(eq(meetingEvent.bookingId, bookingId));
++
++    const fetched = await studentClient.booking.get({ bookingId });
++    expect(fetched.meetingStatus).toBe("ready");
++    expect(fetched.meetingUrl).toBe("https://meet.google.com/g11");
++  });
++
++  test("failed meeting row maps to failed with no url", async () => {
++    await db
++      .update(meetingEvent)
++      .set({ status: "failed", meetingUrl: null })
++      .where(eq(meetingEvent.bookingId, bookingId));
++
++    const fetched = await studentClient.booking.get({ bookingId });
++    expect(fetched.meetingStatus).toBe("failed");
++    expect(fetched.meetingUrl).toBeNull();
++  });
++});
+diff --git a/packages/api/src/tests/integration/meeting-g12.test.ts b/packages/api/src/tests/integration/meeting-g12.test.ts
+new file mode 100644
+index 0000000..f100583
+--- /dev/null
++++ b/packages/api/src/tests/integration/meeting-g12.test.ts
+@@ -0,0 +1,239 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++  meetingEvent,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(
++  email: string,
++  ts: number,
++): Promise<{ tutorId: string; slotId: string }> {
++  await signUpAndSignIn(email, "Test1234!", "Tutor Meet G12");
++  const tutorCtx = await createTestContext(
++    (await signInAndGetCookie(email, "Test1234!")) ?? "",
++  );
++  if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
++  const tutorId = tutorCtx.session.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Meet G12",
++      token: `token-meet12-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Meet G12",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 72 * 3600_000);
++  const end = new Date(Date.now() + 73 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({ tutorId, startDate: start, endDate: end, modality: "both" })
++    .returning();
++
++  return { tutorId, slotId: slot!.id };
++}
++
++async function getMeetingAttendees(
++  bookingId: string,
++): Promise<string[] | null> {
++  const [row] = await db
++    .select({ attendeeEmails: meetingEvent.attendeeEmails })
++    .from(meetingEvent)
++    .where(eq(meetingEvent.bookingId, bookingId));
++  return row?.attendeeEmails ?? null;
++}
++
++describe("G12 Google Meet attendee automation", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++
++  describe("solo booking", () => {
++    const studentEmail = `student.meet12s.${ts}@cogito.test`;
++    const tutorEmail = `tutor.meet12s.${ts}@cogito.test`;
++    let studentClient: TestClient;
++    let tutorClient: TestClient;
++    let slotId: string;
++    let bookingId: string;
++
++    beforeAll(async () => {
++      const studentRes = await signUpAndSignIn(
++        studentEmail,
++        "Test1234!",
++        "Student Meet G12S",
++      );
++      studentClient = createTestClient(
++        await createTestContext(studentRes.cookie),
++      );
++      const studentCtx = await createTestContext(studentRes.cookie);
++      if (studentCtx.session?.user) {
++        await creditWallet(studentCtx.session.user.id, 200);
++      }
++
++      const tutorData = await createPublishedTutor(tutorEmail, ts);
++      slotId = tutorData.slotId;
++      const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
++      tutorClient = createTestClient(await createTestContext(tutorCookie));
++    });
++
++    test("tutor accept stores tutor + student emails as attendees", async () => {
++      const start = new Date(Date.now() + 72 * 3600_000).toISOString();
++      const end = new Date(Date.now() + 73 * 3600_000).toISOString();
++
++      const b = await studentClient.booking.createSolo({
++        tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
++        availabilitySlotId: slotId,
++        modality: "online",
++        scheduledStartAt: start,
++        scheduledEndAt: end,
++        timezone: "Asia/Jakarta",
++      });
++      bookingId = b.id;
++
++      await tutorClient.tutorActions.acceptBooking({ bookingId });
++
++      const attendeeEmails = await getMeetingAttendees(bookingId);
++      expect(attendeeEmails).toBeDefined();
++      expect(attendeeEmails!.toSorted()).toEqual([studentEmail, tutorEmail].toSorted());
++    });
++  });
++
++  describe("group booking", () => {
++    const proposerEmail = `student.meet12g.${ts}@cogito.test`;
++    const inviteeEmail = `student.meet12g2.${ts}@cogito.test`;
++    const tutorEmail = `tutor.meet12g.${ts}@cogito.test`;
++    let proposerClient: TestClient;
++    let inviteeClient: TestClient;
++    let tutorClient: TestClient;
++    let tutorId: string;
++    let slotId: string;
++    let inviteeId: string;
++    let bookingId: string;
++
++    beforeAll(async () => {
++      const proposerRes = await signUpAndSignIn(
++        proposerEmail,
++        "Test1234!",
++        "Proposer Meet G12G",
++      );
++      proposerClient = createTestClient(
++        await createTestContext(proposerRes.cookie),
++      );
++      const proposerCtx = await createTestContext(proposerRes.cookie);
++      if (proposerCtx.session?.user) {
++        await creditWallet(proposerCtx.session.user.id, 300);
++      }
++
++      const inviteeRes = await signUpAndSignIn(
++        inviteeEmail,
++        "Test1234!",
++        "Invitee Meet G12G",
++      );
++      inviteeClient = createTestClient(
++        await createTestContext(inviteeRes.cookie),
++      );
++      const inviteeCtx = await createTestContext(inviteeRes.cookie);
++      if (inviteeCtx.session?.user) {
++        await creditWallet(inviteeCtx.session.user.id, 300);
++        inviteeId = inviteeCtx.session.user.id;
++      }
++
++      const tutorData = await createPublishedTutor(tutorEmail, ts + 1);
++      tutorId = tutorData.tutorId;
++      slotId = tutorData.slotId;
++      const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
++      tutorClient = createTestClient(await createTestContext(tutorCookie));
++    });
++
++    test("group with all confirmed — tutor accept stores tutor + all confirmed participants", async () => {
++      const start = new Date(Date.now() + 72 * 3600_000).toISOString();
++      const end = new Date(Date.now() + 73 * 3600_000).toISOString();
++
++      const g = await proposerClient.booking.createGroup({
++        tutorId,
++        availabilitySlotId: slotId,
++        modality: "online",
++        targetGroupSize: 2,
++        inviteeUserIds: [inviteeId],
++        scheduledStartAt: start,
++        scheduledEndAt: end,
++        timezone: "Asia/Jakarta",
++      });
++      bookingId = g.id;
++
++      await inviteeClient.booking.confirmInvite({ bookingId });
++      const accepted = await tutorClient.tutorActions.acceptBooking({
++        bookingId,
++      });
++      expect(accepted.currentState).toBe("scheduled");
++
++      const attendeeEmails = await getMeetingAttendees(bookingId);
++      expect(attendeeEmails).toBeDefined();
++      expect(attendeeEmails!.toSorted()).toEqual(
++        [proposerEmail, inviteeEmail, tutorEmail].toSorted(),
++      );
++    });
++  });
++});
+diff --git a/packages/api/src/tests/integration/room-availability-g13.test.ts b/packages/api/src/tests/integration/room-availability-g13.test.ts
+new file mode 100644
+index 0000000..c789e78
+--- /dev/null
++++ b/packages/api/src/tests/integration/room-availability-g13.test.ts
+@@ -0,0 +1,203 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(
++  email: string,
++  ts: number,
++): Promise<{ tutorId: string; slotId: string }> {
++  await signUpAndSignIn(email, "Test1234!", "Tutor Avail G13");
++  const tutorCtx = await createTestContext(
++    (await signInAndGetCookie(email, "Test1234!")) ?? "",
++  );
++  if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
++  const tutorId = tutorCtx.session.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: "Prof Avail G13",
++      token: `token-avail13-${ts}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: "Prof Avail G13",
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({ tutorId, startDate: start, endDate: end, modality: "both" })
++    .returning();
++
++  return { tutorId, slotId: slot!.id };
++}
++
++describe("G13 offline room availability", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const adminEmail = `admin.avail.${ts}@cogito.test`;
++  const studentEmail = `student.avail.${ts}@cogito.test`;
++  const tutorEmail = `tutor.avail.${ts}@cogito.test`;
++
++  let adminClient: TestClient;
++  let studentClient: TestClient;
++  let tutorClient: TestClient;
++  let tutorId: string;
++  let slotId: string;
++  let roomId: string;
++  let bookingId: string;
++
++  const startISO = new Date(Date.now() + 24 * 3600_000).toISOString();
++  const endISO = new Date(Date.now() + 25 * 3600_000).toISOString();
++  const earlierStartISO = new Date(Date.now() + 20 * 3600_000).toISOString();
++  const earlierEndISO = new Date(Date.now() + 21 * 3600_000).toISOString();
++
++  beforeAll(async () => {
++    const adminRes = await signUpAndSignIn(
++      adminEmail,
++      "Test1234!",
++      "Admin Avail",
++    );
++    const adminCtx = await createTestContext(adminRes.cookie);
++    if (!adminCtx.session?.user) throw new Error("Admin session missing");
++    await setUserRole(adminCtx.session.user.id, "admin");
++    adminClient = createTestClient(await createTestContext(adminRes.cookie));
++
++    const studentRes = await signUpAndSignIn(
++      studentEmail,
++      "Test1234!",
++      "Student Avail",
++    );
++    studentClient = createTestClient(
++      await createTestContext(studentRes.cookie),
++    );
++    const studentCtx = await createTestContext(studentRes.cookie);
++    if (studentCtx.session?.user) {
++      await creditWallet(studentCtx.session.user.id, 200);
++    }
++
++    const tutorData = await createPublishedTutor(tutorEmail, ts);
++    tutorId = tutorData.tutorId;
++    slotId = tutorData.slotId;
++    const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
++    tutorClient = createTestClient(await createTestContext(tutorCookie));
++  });
++
++  test("admin creates a room", async () => {
++    const r = await adminClient.room.create({
++      name: "Sesi B",
++      location: "Lantai 1",
++      capacity: 8,
++    });
++    expect(r.id).toBeDefined();
++    roomId = r.id;
++  });
++
++  test("student creates offline booking and tutor accepts", async () => {
++    const b = await studentClient.booking.createSolo({
++      tutorId,
++      availabilitySlotId: slotId,
++      modality: "offline",
++      scheduledStartAt: startISO,
++      scheduledEndAt: endISO,
++      timezone: "Asia/Jakarta",
++    });
++    bookingId = b.id;
++
++    const updated = await tutorClient.tutorActions.acceptBooking({
++      bookingId,
++    });
++    expect(updated.currentState).toBe("awaiting_admin_room_approval");
++  });
++
++  test("admin assigns room → slot is now occupied", async () => {
++    const rb = await adminClient.room.assign({
++      bookingId,
++      roomId,
++      startAt: startISO,
++      endAt: endISO,
++    });
++    expect(rb.status).toBe("confirmed");
++  });
++
++  test("overlapping slot reports unavailable", async () => {
++    const res = await studentClient.room.checkAvailability({
++      roomId,
++      startAt: startISO,
++      endAt: endISO,
++    });
++    expect(res.available).toBe(false);
++  });
++
++  test("free slot reports available", async () => {
++    const res = await studentClient.room.checkAvailability({
++      roomId,
++      startAt: earlierStartISO,
++      endAt: earlierEndISO,
++    });
++    expect(res.available).toBe(true);
++  });
++});
+diff --git a/packages/api/src/tests/integration/room-g14.test.ts b/packages/api/src/tests/integration/room-g14.test.ts
+new file mode 100644
+index 0000000..a268dbc
+--- /dev/null
++++ b/packages/api/src/tests/integration/room-g14.test.ts
+@@ -0,0 +1,299 @@
++import { describe, test, expect, beforeAll } from "bun:test";
++import { eq, desc } from "drizzle-orm";
++import { db } from "@cogito-app/db";
++import {
++  wallet,
++  tutorInvite,
++  tutorProfile,
++  availabilitySlot,
++  roomBooking,
++} from "@cogito-app/db/schema";
++
++import {
++  createTestContext,
++  createTestClient,
++  signUpAndSignIn,
++  setUserRole,
++  resetDatabase,
++  type TestClient,
++} from "../helpers/test-client";
++
++async function creditWallet(userId: string, amount: number) {
++  const { services } = await import("@cogito-app/api/services");
++  const w = await services.wallet.getOrCreate(userId);
++  await db
++    .update(wallet)
++    .set({ totalBalance: amount, availableBalance: amount })
++    .where(eq(wallet.id, w.id));
++}
++
++async function signInAndGetCookie(email: string, password: string) {
++  const { auth } = await import("@cogito-app/auth");
++  const res = await auth.api.signInEmail({
++    body: { email, password },
++    headers: new Headers(),
++    asResponse: true,
++  });
++  const setCookie = res.headers.getSetCookie();
++  return setCookie
++    .find((c: string) => c.includes("better-auth.session_token"))
++    ?.split(";")[0];
++}
++
++async function createPublishedTutor(
++  email: string,
++  ts: number,
++  name: string,
++): Promise<{ tutorId: string; slotId: string; cookie: string }> {
++  await signUpAndSignIn(email, "Test1234!", name);
++  const cookie = (await signInAndGetCookie(email, "Test1234!")) ?? "";
++  const tutorCtx = await createTestContext(cookie);
++  if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
++  const tutorId = tutorCtx.session.user.id;
++  await setUserRole(tutorId, "tutor");
++
++  const [invite] = await db
++    .insert(tutorInvite)
++    .values({
++      email,
++      displayName: name,
++      token: `token-g14-${ts}-${email}`,
++      status: "accepted",
++      invitedBy: tutorId,
++      expiresAt: new Date(Date.now() + 86400000),
++      acceptedBy: tutorId,
++      acceptedAt: new Date(),
++    })
++    .returning();
++
++  await db
++    .insert(tutorProfile)
++    .values({
++      userId: tutorId,
++      inviteId: invite!.id,
++      displayName: name,
++      shortBio: "Bio",
++      credentialsSummary: "Creds",
++      expertise: ["Mathematics"],
++      modality: "both",
++      prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
++      availabilitySummary: "Flexible",
++      onboardingStatus: "published",
++      publishedAt: new Date(),
++    })
++    .execute();
++
++  const start = new Date(Date.now() + 48 * 3600_000);
++  const end = new Date(Date.now() + 49 * 3600_000);
++  const [slot] = await db
++    .insert(availabilitySlot)
++    .values({ tutorId, startDate: start, endDate: end, modality: "both" })
++    .returning();
++
++  return { tutorId, slotId: slot!.id, cookie };
++}
++
++async function listRoomBookings(bookingId: string) {
++  return db
++    .select()
++    .from(roomBooking)
++    .where(eq(roomBooking.bookingId, bookingId))
++    .orderBy(desc(roomBooking.createdAt));
++}
++
++describe("G14 admin room relocate and cancel", () => {
++  beforeAll(async () => {
++    await resetDatabase();
++  });
++
++  const ts = Date.now();
++  const adminEmail = `admin.g14.${ts}@cogito.test`;
++
++  let adminClient: TestClient;
++  let student1Client: TestClient;
++  let student2Client: TestClient;
++  let tutor1Client: TestClient;
++  let tutor2Client: TestClient;
++  let tutor1Id: string;
++  let tutor2Id: string;
++  let slot1Id: string;
++  let slot2Id: string;
++  let roomAId: string;
++  let roomBId: string;
++  let roomCId: string;
++  let booking1Id: string;
++  let booking2Id: string;
++
++  const startISO = new Date(Date.now() + 24 * 3600_000).toISOString();
++  const endISO = new Date(Date.now() + 25 * 3600_000).toISOString();
++
++  beforeAll(async () => {
++    const adminRes = await signUpAndSignIn(
++      adminEmail,
++      "Test1234!",
++      "Admin G14",
++    );
++    const adminCtx = await createTestContext(adminRes.cookie);
++    if (!adminCtx.session?.user) throw new Error("Admin session missing");
++    await setUserRole(adminCtx.session.user.id, "admin");
++    adminClient = createTestClient(await createTestContext(adminRes.cookie));
++
++    async function setupStudent(email: string, name: string) {
++      const res = await signUpAndSignIn(email, "Test1234!", name);
++      const client = createTestClient(await createTestContext(res.cookie));
++      const ctx = await createTestContext(res.cookie);
++      if (ctx.session?.user) {
++        await creditWallet(ctx.session.user.id, 200);
++      }
++      return client;
++    }
++
++    student1Client = await setupStudent(
++      `student1.g14.${ts}@cogito.test`,
++      "Student G14 One",
++    );
++    student2Client = await setupStudent(
++      `student2.g14.${ts}@cogito.test`,
++      "Student G14 Two",
++    );
++
++    const t1 = await createPublishedTutor(
++      `tutor1.g14.${ts}@cogito.test`,
++      ts,
++      "Prof G14 One",
++    );
++    tutor1Id = t1.tutorId;
++    slot1Id = t1.slotId;
++    tutor1Client = createTestClient(await createTestContext(t1.cookie));
++    const t2 = await createPublishedTutor(
++      `tutor2.g14.${ts}@cogito.test`,
++      ts,
++      "Prof G14 Two",
++    );
++    tutor2Id = t2.tutorId;
++    slot2Id = t2.slotId;
++    tutor2Client = createTestClient(await createTestContext(t2.cookie));
++  });
++
++  test("admin creates three rooms", async () => {
++    const a = await adminClient.room.create({
++      name: "Sesi A",
++      location: "Lantai 1",
++      capacity: 10,
++    });
++    roomAId = a.id;
++    const b = await adminClient.room.create({
++      name: "Sesi B",
++      location: "Lantai 2",
++      capacity: 12,
++    });
++    roomBId = b.id;
++    const c = await adminClient.room.create({
++      name: "Sesi C",
++      location: "Lantai 3",
++      capacity: 14,
++    });
++    roomCId = c.id;
++  });
++
++  test("two offline bookings accepted", async () => {
++    const b1 = await student1Client.booking.createSolo({
++      tutorId: tutor1Id,
++      availabilitySlotId: slot1Id,
++      modality: "offline",
++      scheduledStartAt: startISO,
++      scheduledEndAt: endISO,
++      timezone: "Asia/Jakarta",
++    });
++    booking1Id = b1.id;
++    const accepted1 = await tutor1Client.tutorActions.acceptBooking({
++      bookingId: booking1Id,
++    });
++    expect(accepted1.currentState).toBe("awaiting_admin_room_approval");
++
++    const b2 = await student2Client.booking.createSolo({
++      tutorId: tutor2Id,
++      availabilitySlotId: slot2Id,
++      modality: "offline",
++      scheduledStartAt: startISO,
++      scheduledEndAt: endISO,
++      timezone: "Asia/Jakarta",
++    });
++    booking2Id = b2.id;
++    const accepted2 = await tutor2Client.tutorActions.acceptBooking({
++      bookingId: booking2Id,
++    });
++    expect(accepted2.currentState).toBe("awaiting_admin_room_approval");
++  });
++
++  test("admin assigns room A to booking1 → confirmed", async () => {
++    const rb = await adminClient.room.assign({
++      bookingId: booking1Id,
++      roomId: roomAId,
++      startAt: startISO,
++      endAt: endISO,
++    });
++    expect(rb.status).toBe("confirmed");
++
++    const rows = await listRoomBookings(booking1Id);
++    expect(rows.length).toBe(1);
++    expect(rows[0]!.roomId).toBe(roomAId);
++    expect(rows[0]!.status).toBe("confirmed");
++  });
++
++  test("admin assigns room B to booking2 → confirmed", async () => {
++    const rb = await adminClient.room.assign({
++      bookingId: booking2Id,
++      roomId: roomBId,
++      startAt: startISO,
++      endAt: endISO,
++    });
++    expect(rb.status).toBe("confirmed");
++  });
++
++  test("relocate booking2 into occupied room A is rejected", async () => {
++    await expect(
++      adminClient.room.relocate({
++        bookingId: booking2Id,
++        roomId: roomAId,
++        startAt: startISO,
++        endAt: endISO,
++      }),
++    ).rejects.toThrow(/already booked/i);
++
++    const rows = await listRoomBookings(booking2Id);
++    expect(rows.length).toBe(1);
++    expect(rows[0]!.status).toBe("confirmed");
++    expect(rows[0]!.roomId).toBe(roomBId);
++  });
++
++  test("relocate booking1 to room C succeeds → room A freed", async () => {
++    const rb = await adminClient.room.relocate({
++      bookingId: booking1Id,
++      roomId: roomCId,
++      startAt: startISO,
++      endAt: endISO,
++    });
++    expect(rb.status).toBe("confirmed");
++    expect(rb.roomId).toBe(roomCId);
++
++    const rows = await listRoomBookings(booking1Id);
++    expect(rows.length).toBe(2);
++    const oldRow = rows.find((r) => r.roomId === roomAId);
++    const newRow = rows.find((r) => r.roomId === roomCId);
++    expect(oldRow!.status).toBe("relocated");
++    expect(newRow!.status).toBe("confirmed");
++  });
++
++  test("admin cancels booking2 room → booking continues without room", async () => {
++    const rb = await adminClient.room.cancelBooking({ bookingId: booking2Id });
++    expect(rb.status).toBe("cancelled");
++
++    const rows = await listRoomBookings(booking2Id);
++    const active = rows.find((r) => r.status !== "cancelled");
++    expect(active).toBeUndefined();
++
++    const booking = await student2Client.booking.get({ bookingId: booking2Id });
++    expect(booking.currentState).toBe("awaiting_admin_room_approval");
++  });
++});
+diff --git a/packages/api/src/tests/unit/booking.service.test.ts b/packages/api/src/tests/unit/booking.service.test.ts
+index 2897594..94f2f07 100644
+--- a/packages/api/src/tests/unit/booking.service.test.ts
++++ b/packages/api/src/tests/unit/booking.service.test.ts
+@@ -42,20 +42,21 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
+     insertBooking: mock(async () => ({})),
+     insertParticipant: mock(async () => {}),
+     insertStateHistory: mock(async () => {}),
+     updateBookingVersioned: mock(async () => ({ updated: {}, newVersion: 1 })),
+     updateBookingHoldAmount: mock(async () => {}),
+     updateBookingCancellationReason: mock(async () => {}),
+     updateBookingConfirmedHeadcount: mock(async () => {}),
+     updateParticipantState: mock(async () => {}),
+     findParticipant: mock(async () => null),
+     findConfirmedParticipants: mock(async () => []),
++    findUserEmails: mock(async () => []),
+     findReconfirmedParticipants: mock(async () => []),
+     insertRescheduleProposal: mock(async () => {}),
+     findPendingRescheduleProposal: mock(async () => null),
+     updateRescheduleProposal: mock(async () => {}),
+     insertBookingSession: mock(async () => {}),
+     listSessionsBySeriesId: mock(async () => []),
+     findBookingsExpiringByDeadline: mock(async () => []),
+     findBookingsWithTutorLateness: mock(async () => []),
+     findTutorParticipant: mock(async () => null),
+     findBookingType: mock(async () => null),
+@@ -261,38 +262,94 @@ describe("BookingService", () => {
+         proposerId: "student1",
+         tutorId: "tutor1",
+       };
+       const { service } = createService({
+         repo: {
+           findBookingWithParticipants: mock(async () => booking),
+         },
+       });
+ 
+       const result = await service.getById("b1", "student1");
+-      expect(result).toEqual({ ...booking, disclaimer: null });
++      expect(result).toEqual({
++        ...booking,
++        disclaimer: null,
++        meetingStatus: "pending",
++        meetingUrl: null,
++      });
+     });
+ 
+     test("returns booking when user is assigned tutor", async () => {
+       const booking = {
+         id: "b1",
+         currentState: "confirmed",
+         proposerId: "other",
+         tutorId: "tutor1",
+       };
+       const { service } = createService({
+         repo: {
+           findBookingWithParticipants: mock(async () => booking),
+         },
+       });
+ 
+       const result = await service.getById("b1", "tutor1");
+-      expect(result).toEqual({ ...booking, disclaimer: null });
++      expect(result).toEqual({
++        ...booking,
++        disclaimer: null,
++        meetingStatus: "pending",
++        meetingUrl: null,
++      });
++    });
++
++    test("returns ready meeting status and url when meeting is created", async () => {
++      const booking = {
++        id: "b1",
++        currentState: "scheduled",
++        proposerId: "student1",
++        tutorId: "tutor1",
++        meeting: {
++          id: "m1",
++          status: "created",
++          meetingUrl: "https://meet.google.com/abc",
++        },
++      };
++      const { service } = createService({
++        repo: {
++          findBookingWithParticipants: mock(async () => booking),
++        },
++      });
++
++      const result = await service.getById("b1", "student1");
++      expect(result.meetingStatus).toBe("ready");
++      expect(result.meetingUrl).toBe("https://meet.google.com/abc");
++    });
++
++    test("returns pending meeting status when meeting exists but is manual", async () => {
++      const booking = {
++        id: "b1",
++        currentState: "confirmed",
++        proposerId: "student1",
++        tutorId: "tutor1",
++        meeting: {
++          id: "m1",
++          status: "manual",
++          meetingUrl: null,
++        },
++      };
++      const { service } = createService({
++        repo: {
++          findBookingWithParticipants: mock(async () => booking),
++        },
++      });
++
++      const result = await service.getById("b1", "student1");
++      expect(result.meetingStatus).toBe("pending");
++      expect(result.meetingUrl).toBeNull();
+     });
+ 
+     test("throws BookingNotFoundError when booking does not exist", async () => {
+       const { service } = createService({
+         repo: {
+           findBookingWithParticipants: mock(async () => null),
+         },
+       });
+ 
+       await expect(service.getById("nonexistent", "user1")).rejects.toThrow(
+@@ -852,21 +909,21 @@ describe("BookingService", () => {
+             makeBooking({ currentState: "confirmed" }),
+           ),
+         },
+       });
+ 
+       await expect(service.tutorAccept("b1", "tutor1")).rejects.toThrow(
+         BookingNotAwaitingReviewError,
+       );
+     });
+ 
+-    test("accepts online booking — transitions to confirmed then scheduled and creates meeting", async () => {
++    test("accepts online booking — transitions to confirmed then scheduled and creates meeting with attendees", async () => {
+       const booking = makeBooking({ modality: "online" });
+       let findCallCount = 0;
+       const {
+         service,
+         meeting: meetingMock,
+         notification,
+       } = createService({
+         repo: {
+           findBookingById: mock(async () => {
+             findCallCount++;
+@@ -879,30 +936,52 @@ describe("BookingService", () => {
+             return { ...booking, currentState: "confirmed", version: 2 };
+           }),
+           updateBookingVersioned: mock(
+             async (_conn: any, _id: any, ver: number, updates: any) => {
+               return {
+                 updated: { ...booking, ...updates, version: ver + 1 },
+                 newVersion: ver + 1,
+               };
+             },
+           ),
++          findConfirmedParticipants: mock(async () => [
++            { userId: "student1" },
++            { userId: "student2" },
++          ]),
++          findUserEmails: mock(async () => [
++            { id: "tutor1", email: "tutor1@example.com", name: "Tutor One" },
++            {
++              id: "student1",
++              email: "student1@example.com",
++              name: "Student One",
++            },
++            {
++              id: "student2",
++              email: "student2@example.com",
++              name: "Student Two",
++            },
++          ]),
+         },
+       });
+ 
+       await service.tutorAccept("b1", "tutor1");
+ 
+       expect(meetingMock.createEvent).toHaveBeenCalledTimes(1);
+       expect(meetingMock.createEvent).toHaveBeenCalledWith(
+         "b1",
+         booking.scheduledStartAt,
+         booking.scheduledEndAt,
++        [
++          { email: "tutor1@example.com", name: "Tutor One" },
++          { email: "student1@example.com", name: "Student One" },
++          { email: "student2@example.com", name: "Student Two" },
++        ],
+       );
+       expect(notification.write).toHaveBeenCalledTimes(1);
+       expect(notification.write.mock.calls[0][0].title).toBe(
+         "Booking accepted",
+       );
+     });
+ 
+     test("accepts offline booking — transitions to confirmed then awaiting_admin_room_approval and sets deadline", async () => {
+       const scheduledStartAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+       const booking = makeBooking({ modality: "offline", scheduledStartAt });
+diff --git a/packages/api/src/tests/unit/fallback.provider.test.ts b/packages/api/src/tests/unit/fallback.provider.test.ts
+index c39299b..4f8a48d 100644
+--- a/packages/api/src/tests/unit/fallback.provider.test.ts
++++ b/packages/api/src/tests/unit/fallback.provider.test.ts
+@@ -84,11 +84,42 @@ describe("createFallbackMeetingProvider", () => {
+     const values = mock(() => ({ returning }));
+     const insert = mock(() => ({ values }));
+ 
+     const db = { insert } as any;
+ 
+     const provider = createFallbackMeetingProvider(db);
+     const result = await provider.createEvent("b2");
+ 
+     expect(result.bookingId).toBe("b2");
+   });
++
++  test("createEvent persists attendeeEmails when attendees provided", async () => {
++    const insertedRow = {
++      id: "me1",
++      bookingId: "b3",
++      provider: "manual",
++      status: "manual",
++      meetingUrl: null,
++      externalEventId: null,
++    };
++
++    const returning = mock(async () => [insertedRow]);
++    const values = mock(() => ({ returning }));
++    const insert = mock(() => ({ values }));
++
++    const db = { insert } as any;
++
++    const provider = createFallbackMeetingProvider(db);
++    await provider.createEvent("b3", undefined, undefined, [
++      { email: "tutor@example.com", name: "Tutor" },
++      { email: "student@example.com" },
++    ]);
++
++    const insertValues = values.mock.calls[0]?.[0] as {
++      attendeeEmails: string[] | null;
++    };
++    expect(insertValues.attendeeEmails).toEqual([
++      "tutor@example.com",
++      "student@example.com",
++    ]);
++  });
+ });
+diff --git a/packages/api/src/tests/unit/google-meeting.provider.test.ts b/packages/api/src/tests/unit/google-meeting.provider.test.ts
+index 4491056..0431474 100644
+--- a/packages/api/src/tests/unit/google-meeting.provider.test.ts
++++ b/packages/api/src/tests/unit/google-meeting.provider.test.ts
+@@ -108,20 +108,67 @@ describe("createGoogleMeetingProvider", () => {
+     const result = await provider.createEvent("b1");
+ 
+     expect(result.bookingId).toBe("b1");
+     expect(result.provider).toBe("google_meet");
+     expect(result.status).toBe("created");
+     expect(result.meetingUrl).toBe("https://meet.google.com/abc");
+     expect(result.externalEventId).toBe("evt_123");
+     expect(result.errorReason).toBeNull();
+   });
+ 
++  test("createEvent passes attendees to calendar insert and persists attendeeEmails", async () => {
++    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
++      data: {
++        id: "evt_123",
++        conferenceData: {
++          entryPoints: [{ uri: "https://meet.google.com/abc" }],
++        },
++      },
++    }));
++
++    const successRow = {
++      id: "me1",
++      bookingId: "b1",
++      provider: "google_meet",
++      externalEventId: "evt_123",
++      meetingUrl: "https://meet.google.com/abc",
++      attendeeEmails: ["tutor@example.com", "student@example.com"],
++      status: "created",
++      errorReason: null,
++    };
++
++    const returning = mock(async () => [successRow]);
++    const values = mock(() => ({ returning }));
++    const insert = mock(() => ({ values }));
++    const db = { insert } as any;
++
++    const provider = createGoogleMeetingProvider(config, db);
++    await provider.createEvent("b1", undefined, undefined, [
++      { email: "tutor@example.com", name: "Tutor" },
++      { email: "student@example.com" },
++    ]);
++
++    const insertCall = mockCalendarEventsInsert.mock.calls.at(-1)?.[0];
++    expect(insertCall?.requestBody?.attendees).toEqual([
++      { email: "tutor@example.com", displayName: "Tutor" },
++      { email: "student@example.com" },
++    ]);
++
++    const insertValues = values.mock.calls[0]?.[0] as {
++      attendeeEmails: string[] | null;
++    };
++    expect(insertValues.attendeeEmails).toEqual([
++      "tutor@example.com",
++      "student@example.com",
++    ]);
++  });
++
+   test("createEvent returns failed status on Google API error", async () => {
+     mockCalendarEventsInsert.mockImplementationOnce(async () => {
+       throw new Error("Google API error");
+     });
+ 
+     const failedRow = {
+       id: "me2",
+       bookingId: "b1",
+       provider: "google_meet",
+       externalEventId: null,
+diff --git a/packages/api/src/tests/unit/room.service.test.ts b/packages/api/src/tests/unit/room.service.test.ts
+index 66f0655..93c4fb3 100644
+--- a/packages/api/src/tests/unit/room.service.test.ts
++++ b/packages/api/src/tests/unit/room.service.test.ts
+@@ -14,20 +14,27 @@ function makeRoom(overrides: Record<string, unknown> = {}) {
+ }
+ 
+ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
+   return {
+     findActiveRooms: mock(async (_conn: any) => []),
+     insertRoom: mock(async (_conn: any, _values: any) => ({})),
+     findRoomById: mock(async (_conn: any, _roomId: string) => null),
+     findRoomBookings: mock(async (_conn: any) => []),
+     findRoomBookingsForUpdate: mock(async (_conn: any) => []),
+     insertRoomBooking: mock(async (_conn: any, _values: any) => ({})),
++    findActiveRoomBookingByBookingId: mock(async (_conn: any) => null),
++    updateRoomBookingStatus: mock(
++      async (_conn: any, _id: string, status: string) => ({
++        id: "rb1",
++        status,
++      }),
++    ),
+     ...overrides,
+   } as RoomRepo;
+ }
+ 
+ function makeDb() {
+   const tx = {};
+   return {
+     transaction: mock(async (fn: any) => fn(tx)),
+   } as any;
+ }
+@@ -138,11 +145,152 @@ describe("createRoomService", () => {
+       const service = createRoomService(repo, makeDb());
+       const result = await service.assignRoom(
+         "b1",
+         "room1",
+         new Date("2024-01-01T10:00:00Z"),
+         new Date("2024-01-01T11:00:00Z"),
+       );
+       expect(result).toEqual(roomBookingRow);
+     });
+   });
++
++  describe("relocateRoom", () => {
++    test("throws notFound when room not found", async () => {
++      const repo = makeRepo({ findRoomById: mock(async () => null) });
++
++      const service = createRoomService(repo, makeDb());
++      await expect(
++        service.relocateRoom(
++          "b1",
++          "room_missing",
++          new Date("2024-01-01T10:00:00Z"),
++          new Date("2024-01-01T11:00:00Z"),
++        ),
++      ).rejects.toThrow("Room not found");
++    });
++
++    test("throws notFound when booking has no active room booking", async () => {
++      const repo = makeRepo({
++        findRoomById: mock(async () => makeRoom()),
++        findActiveRoomBookingByBookingId: mock(async () => null),
++      });
++
++      const service = createRoomService(repo, makeDb());
++      await expect(
++        service.relocateRoom(
++          "b1",
++          "room1",
++          new Date("2024-01-01T10:00:00Z"),
++          new Date("2024-01-01T11:00:00Z"),
++        ),
++      ).rejects.toThrow("no active room assignment");
++    });
++
++    test("throws conflict when new room is occupied", async () => {
++      const repo = makeRepo({
++        findRoomById: mock(async () => makeRoom()),
++        findActiveRoomBookingByBookingId: mock(async () => ({
++          id: "rb_old",
++          roomId: "room_old",
++          status: "confirmed",
++        })),
++        findRoomBookingsForUpdate: mock(async () => [{ id: "rb_x" }]),
++      });
++
++      const service = createRoomService(repo, makeDb());
++      await expect(
++        service.relocateRoom(
++          "b1",
++          "room1",
++          new Date("2024-01-01T10:00:00Z"),
++          new Date("2024-01-01T11:00:00Z"),
++        ),
++      ).rejects.toThrow("Room is already booked");
++    });
++
++    test("frees old room and confirms new room", async () => {
++      const oldRow = {
++        id: "rb_old",
++        roomId: "room_old",
++        bookingId: "b1",
++        status: "confirmed",
++      };
++      const newRow = {
++        id: "rb_new",
++        roomId: "room1",
++        bookingId: "b1",
++        status: "confirmed",
++      };
++
++      const repo = makeRepo({
++        findRoomById: mock(async () => makeRoom()),
++        findActiveRoomBookingByBookingId: mock(async () => oldRow),
++        findRoomBookingsForUpdate: mock(async () => []),
++        updateRoomBookingStatus: mock(async () => ({
++          ...oldRow,
++          status: "relocated",
++        })),
++        insertRoomBooking: mock(async () => newRow),
++      });
++
++      const service = createRoomService(repo, makeDb());
++      const result = await service.relocateRoom(
++        "b1",
++        "room1",
++        new Date("2024-01-01T10:00:00Z"),
++        new Date("2024-01-01T11:00:00Z"),
++      );
++
++      expect(repo.updateRoomBookingStatus).toHaveBeenCalledWith(
++        expect.anything(),
++        "rb_old",
++        "relocated",
++      );
++      expect(repo.insertRoomBooking).toHaveBeenCalledWith(
++        expect.anything(),
++        expect.objectContaining({
++          roomId: "room1",
++          bookingId: "b1",
++          status: "confirmed",
++        }),
++      );
++      expect(result).toEqual(newRow);
++    });
++  });
++
++  describe("cancelRoomBooking", () => {
++    test("throws notFound when booking has no active room booking", async () => {
++      const repo = makeRepo({
++        findActiveRoomBookingByBookingId: mock(async () => null),
++      });
++
++      const service = createRoomService(repo, makeDb());
++      await expect(service.cancelRoomBooking("b1")).rejects.toThrow(
++        "no active room assignment",
++      );
++    });
++
++    test("sets the active room booking to cancelled", async () => {
++      const repo = makeRepo({
++        findActiveRoomBookingByBookingId: mock(async () => ({
++          id: "rb1",
++          roomId: "room1",
++          status: "confirmed",
++        })),
++        updateRoomBookingStatus: mock(async () => ({
++          id: "rb1",
++          status: "cancelled",
++        })),
++      });
++
++      const service = createRoomService(repo, makeDb());
++      const result = await service.cancelRoomBooking("b1");
++
++      expect(repo.updateRoomBookingStatus).toHaveBeenCalledWith(
++        expect.anything(),
++        "rb1",
++        "cancelled",
++      );
++      expect(result.status).toBe("cancelled");
++    });
++  });
+ });

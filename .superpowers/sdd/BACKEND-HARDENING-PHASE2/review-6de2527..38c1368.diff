@@ -1,0 +1,1264 @@
+# Review package: 6de2527..38c1368
+
+## Commits
+38c1368 style(upload): apply oxfmt formatting to upload module
+4147b9e docs(server): document new security, upload, and redis env vars in .env.example
+ad98881 feat(upload): signed-URL uploads with Cloudflare R2 and local dev fallback
+
+## Files changed
+ apps/server/.env.example                           |  31 +++++
+ bun.lock                                           |  54 ++++++++
+ packages/api/package.json                          |   2 +
+ packages/api/src/lib/storage.test.ts               | 146 +++++++++++++++++++++
+ packages/api/src/lib/storage.ts                    | 136 +++++++++++++++++++
+ packages/api/src/modules/upload/index.ts           |  20 +++
+ packages/api/src/modules/upload/upload.errors.ts   |  29 ++++
+ packages/api/src/modules/upload/upload.handler.ts  |  25 ++++
+ packages/api/src/modules/upload/upload.router.ts   |  19 +++
+ packages/api/src/modules/upload/upload.service.ts  |  56 ++++++++
+ packages/api/src/modules/upload/upload.types.ts    |  23 ++++
+ packages/api/src/routers.ts                        |   3 +
+ packages/api/src/services.ts                       |  19 +++
+ packages/api/src/tests/unit/upload.errors.test.ts  |  29 ++++
+ packages/api/src/tests/unit/upload.handler.test.ts |  42 ++++++
+ packages/api/src/tests/unit/upload.service.test.ts | 133 +++++++++++++++++++
+ packages/api/src/tests/unit/upload.types.test.ts   |  62 +++++++++
+ 17 files changed, 829 insertions(+)
+
+## Diff
+diff --git a/apps/server/.env.example b/apps/server/.env.example
+index 267dd7b..d751ba3 100644
+--- a/apps/server/.env.example
++++ b/apps/server/.env.example
+@@ -8,20 +8,51 @@ PORT=3001
+ BETTER_AUTH_SECRET=replace-with-a-secret-at-least-32-chars-long
+ BETTER_AUTH_URL=http://localhost:3001
+ 
+ # CORS (frontend URL)
+ CORS_ORIGIN=http://localhost:3000
+ 
+ # Payment
+ PAYMENT_PROVIDER=stub
+ PAYMENT_WEBHOOK_SECRET=replace-with-a-secret-at-least-32-chars-long
+ 
++# Webhooks
++# Comma-separated IP allowlist for payment webhooks (e.g. 1.2.3.4,5.6.7.8). Leave
++# empty to allow webhooks from any IP.
++WEBHOOK_ALLOWED_IPS=
++# Allow the authless stub checkout route (dev/test only; requires NODE_ENV != production).
++STUB_WEBHOOK_ALLOWED=false
++# Trust X-Forwarded-For for client IPs (set true only when behind a trusted reverse proxy).
++TRUST_PROXY=false
++
++# Seeding
++# Allow running the seed script in production (dangerous - keep false in prod).
++SEED_ALLOWED_IN_PROD=false
++# Admin password used by the seed script (min 12 chars).
++SEED_ADMIN_PASSWORD=
++
++# Redis (BullMQ queues, rate limits, idempotency)
++REDIS_URL=redis://localhost:6379
++
++# File uploads (Cloudflare R2)
++# When all R2_* credentials are set, uploads use R2; otherwise a local uploads
++# directory (UPLOAD_DIR) is used and served from /uploads/*.
++R2_ACCOUNT_ID=
++R2_ACCESS_KEY_ID=
++R2_SECRET_ACCESS_KEY=
++R2_BUCKET=
++# Optional: public base URL for R2 objects (e.g. https://cdn.example.com). When
++# unset, files are served through the app's /uploads/* route instead.
++R2_PUBLIC_URL=
++# Local upload directory (used when R2 is not configured).
++UPLOAD_DIR=./uploads
++
+ # External links
+ COMPETITION_CALENDAR_URL=https://cogitoacademy.id/en/calendar
+ 
+ # Environment
+ NODE_ENV=development
+ 
+ # Google OAuth (optional - leave blank to disable Google login)
+ GOOGLE_CLIENT_ID=
+ GOOGLE_CLIENT_SECRET=
+ 
+diff --git a/bun.lock b/bun.lock
+index acae53b..2305192 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -81,20 +81,22 @@
+         "@vitejs/plugin-react": "^6.0.5",
+         "postcss": "^8.5.26",
+         "tailwindcss": "^4.2.2",
+         "typescript": "catalog:",
+         "vite": "^8.2.1",
+       },
+     },
+     "packages/api": {
+       "name": "@cogito-app/api",
+       "dependencies": {
++        "@aws-sdk/client-s3": "^3.1110.0",
++        "@aws-sdk/s3-request-presigner": "^3.1110.0",
+         "@cogito-app/auth": "workspace:*",
+         "@cogito-app/db": "workspace:*",
+         "@cogito-app/env": "workspace:*",
+         "@orpc/server": "catalog:",
+         "bullmq": "^6",
+         "drizzle-orm": "catalog:",
+         "googleapis": "^174.0.1",
+         "ioredis": "^6.0.0",
+         "zod": "catalog:",
+       },
+@@ -198,20 +200,58 @@
+     "dotenv": "^17.2.2",
+     "drizzle-orm": "^0.45.1",
+     "elysia": "^1.4.28",
+     "next-themes": "^0.4.6",
+     "react": "^19.2.6",
+     "react-dom": "^19.2.6",
+     "typescript": "^6",
+     "zod": "^4.1.13",
+   },
+   "packages": {
++    "@aws-sdk/checksums": ["@aws-sdk/checksums@3.1000.27", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-insWOqKKNUrbN/dohEG7BJ0U5GkyqhjbMb/NHNaLUtq+7my2M8C4EnZZZoxMmXRqCC+P9dEr+KyJA2JGGzoKLg=="],
++
++    "@aws-sdk/client-s3": ["@aws-sdk/client-s3@3.1110.0", "", { "dependencies": { "@aws-sdk/checksums": "^3.1000.27", "@aws-sdk/core": "^3.977.7", "@aws-sdk/credential-provider-node": "^3.972.79", "@aws-sdk/middleware-sdk-s3": "^3.972.73", "@aws-sdk/signature-v4-multi-region": "^3.996.44", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/fetch-http-handler": "^5.6.13", "@smithy/node-http-handler": "^4.9.13", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-40xbEcWjdaYKlZ4/NvndIJ3LotAEQAvHVQ7Z4NVy4Z4xGRN7xXJlHI9bMh/4aMJQ++6h5W5sv+wqjfk0rEKOBg=="],
++
++    "@aws-sdk/core": ["@aws-sdk/core@3.977.7", "", { "dependencies": { "@aws-sdk/types": "^3.974.3", "@aws-sdk/xml-builder": "^3.972.38", "@aws/lambda-invoke-store": "^0.3.0", "@smithy/core": "^3.31.1", "@smithy/signature-v4": "^5.6.12", "@smithy/types": "^4.16.1", "bowser": "^2.11.0", "tslib": "^2.6.2" } }, "sha512-I88Iov89NVmjSmJLKSv7Cn9M2J+a2942OkA8nZCbz+sl4ZeY4zEOcoLOrbt1GRfQ8zEQKnjAJdXixA3J/p1fDQ=="],
++
++    "@aws-sdk/credential-provider-env": ["@aws-sdk/credential-provider-env@3.972.68", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-2a20A/IdNOwUvaDq91iqqS7BA0XlNMfW3iLGZGZLJv0EbUqhSxB0PIx4rQQqssvWj1uXImb3/UCCdHz/+1dOiA=="],
++
++    "@aws-sdk/credential-provider-http": ["@aws-sdk/credential-provider-http@3.972.70", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/fetch-http-handler": "^5.6.13", "@smithy/node-http-handler": "^4.9.13", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-0yRem2Fs52r/Nn6UAqIlpjexfaYj8ziEozOe9tamtAVT/5bzFLKx8O2r7MaRqgS3hGKHIa1Jij9nKHSsNnb04A=="],
++
++    "@aws-sdk/credential-provider-ini": ["@aws-sdk/credential-provider-ini@3.973.13", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/credential-provider-env": "^3.972.68", "@aws-sdk/credential-provider-http": "^3.972.70", "@aws-sdk/credential-provider-login": "^3.972.75", "@aws-sdk/credential-provider-process": "^3.972.68", "@aws-sdk/credential-provider-sso": "^3.973.12", "@aws-sdk/credential-provider-web-identity": "^3.972.74", "@aws-sdk/nested-clients": "^3.997.42", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/credential-provider-imds": "^4.4.16", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-2M39DE02XpYYaSWYk/4AsImXYUU/1L2xmTMLUpMMWq7DfLv191/vCRy3baKtdr45AkJQyVgSjmuVOLm15SwrRQ=="],
++
++    "@aws-sdk/credential-provider-login": ["@aws-sdk/credential-provider-login@3.972.75", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/nested-clients": "^3.997.42", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-jaTESuJlQsoUZ44f/i2puyPt8VlF/dMMJ9HM3cStYtk7eKX4N9UWi83OLixUkoOJH3BwWlPLCq9YIK9nfWhVBg=="],
++
++    "@aws-sdk/credential-provider-node": ["@aws-sdk/credential-provider-node@3.972.79", "", { "dependencies": { "@aws-sdk/credential-provider-env": "^3.972.68", "@aws-sdk/credential-provider-http": "^3.972.70", "@aws-sdk/credential-provider-ini": "^3.973.13", "@aws-sdk/credential-provider-process": "^3.972.68", "@aws-sdk/credential-provider-sso": "^3.973.12", "@aws-sdk/credential-provider-web-identity": "^3.972.74", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/credential-provider-imds": "^4.4.16", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-RIw5dof1EHkWubrZzPC941CDtnFG1iAXsxbFgLkhdYZXHc4icU13c/uxSMI0J5eUx9bxa7LjfpdjfClBB1QsDA=="],
++
++    "@aws-sdk/credential-provider-process": ["@aws-sdk/credential-provider-process@3.972.68", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-nLP3Pda2MQTFJ25hKBMmUuB9Uv+bTZQNlufbeCwklP549Vwnkd8bRLJoCKp5k6xjmdyptrPrOfGOhN0mKuca8A=="],
++
++    "@aws-sdk/credential-provider-sso": ["@aws-sdk/credential-provider-sso@3.973.12", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/nested-clients": "^3.997.42", "@aws-sdk/token-providers": "3.1108.0", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-EmgyyHn+f9WCcelp3L/vci+LGbX8GigWaVphRArjVo5Pktkr9YnLy/mQ6VDkDyBD72dtfRNTgHmD2ts4rTDXKQ=="],
++
++    "@aws-sdk/credential-provider-web-identity": ["@aws-sdk/credential-provider-web-identity@3.972.74", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/nested-clients": "^3.997.42", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-0YfczxGXF3RjGj8z7QG/Ho2HnLGKDHfPSHiTs47UU1U/+mmwISDN+rvGKt2zh+3FX8NdT4xd95LGBGyhQw2dgQ=="],
++
++    "@aws-sdk/middleware-sdk-s3": ["@aws-sdk/middleware-sdk-s3@3.972.73", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/signature-v4-multi-region": "^3.996.44", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-oy7sRA5HvHcAvkcKX6F8RI240jcOf3c8y/Gqjs9qemIibdKQqGBIi0uwa+47ZRYqGLpdEO28TQU4G73yUzo06Q=="],
++
++    "@aws-sdk/nested-clients": ["@aws-sdk/nested-clients@3.997.42", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/signature-v4-multi-region": "^3.996.44", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/fetch-http-handler": "^5.6.13", "@smithy/node-http-handler": "^4.9.13", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-XWRyon2MTHXD/zMoo0Mbge6Vwf+iE0qQaM/RyGO6NfZ9WukCFiQL27nQVZjYy2JwSIg+iXZxKOX95OBXqlSM4w=="],
++
++    "@aws-sdk/s3-request-presigner": ["@aws-sdk/s3-request-presigner@3.1110.0", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/signature-v4-multi-region": "^3.996.44", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-xr7vfMj3Mea1r1+GzdBT/9LpKN2l+xBMSzbGoj3Uia6ERPMjx55BeqVtVGBHWw5+IKSGCx5SVC7Jn+3FxntMLg=="],
++
++    "@aws-sdk/signature-v4-multi-region": ["@aws-sdk/signature-v4-multi-region@3.996.44", "", { "dependencies": { "@aws-sdk/types": "^3.974.3", "@smithy/signature-v4": "^5.6.12", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-ZSfQ35Qn4MhSY+A0Whyr+KBx+wJKZUyBsOrjB2pSHOafRzbFe47T8XcXM8hZqUAC69qnqIy0C9ArxTuud0CC2w=="],
++
++    "@aws-sdk/token-providers": ["@aws-sdk/token-providers@3.1108.0", "", { "dependencies": { "@aws-sdk/core": "^3.977.7", "@aws-sdk/nested-clients": "^3.997.42", "@aws-sdk/types": "^3.974.3", "@smithy/core": "^3.31.1", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-rI80zxDxGJ6904eC/YbjkdjY6JdaZvQ01kOmrMvw7cFQGIHo27fhnIVbMSVDS4T6foQImjxYSRoOu/uSJscXDw=="],
++
++    "@aws-sdk/types": ["@aws-sdk/types@3.974.3", "", { "dependencies": { "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-ECAqfpNsef+7MO8qtR0h9KcFIBAygaE7Cm6UOiQl+ft+uVap+1G7bNEjs4mdJE2OnA4m6k7i8peH8uGIAsOMGw=="],
++
++    "@aws-sdk/xml-builder": ["@aws-sdk/xml-builder@3.972.38", "", { "dependencies": { "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-grf7mzfVxBS5AlsuTvBN7uDpzqohFww9fRPCO+EBSUdvtsYMcPSKdz54h/7XiscqNcUM1Ae1MF7JLHmiYYuzbQ=="],
++
++    "@aws/lambda-invoke-store": ["@aws/lambda-invoke-store@0.3.0", "", {}, "sha512-sl4Bm6yiMNYrZKkqqDFWN0UfnWhlS8ivKxrYl+6t0gCLrqr8y3B2IqZZbFRkfaVVp7C/baApyh71P+LeE1A2sQ=="],
++
+     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
+ 
+     "@babel/compat-data": ["@babel/compat-data@7.29.7", "", {}, "sha512-locTkQyKvwIEgBzVrn8693ebc97F2U8ZHjbXwDXJ5Fn2TCpNwTlKcaKLkdHop5c/icOFE7qt7Q9JC5hnKNa6Gg=="],
+ 
+     "@babel/core": ["@babel/core@7.29.7", "", { "dependencies": { "@babel/code-frame": "^7.29.7", "@babel/generator": "^7.29.7", "@babel/helper-compilation-targets": "^7.29.7", "@babel/helper-module-transforms": "^7.29.7", "@babel/helpers": "^7.29.7", "@babel/parser": "^7.29.7", "@babel/template": "^7.29.7", "@babel/traverse": "^7.29.7", "@babel/types": "^7.29.7", "@jridgewell/remapping": "^2.3.5", "convert-source-map": "^2.0.0", "debug": "^4.1.0", "gensync": "^1.0.0-beta.2", "json5": "^2.2.3", "semver": "^6.3.1" } }, "sha512-RgHBCvtjbOK2gXSNBNIkNoEc9qoVEtau3hj8gEqKQuL3HZAibKarWFEI3Lfm6EYKkLalOh8eSrj9b+ch9H/VBA=="],
+ 
+     "@babel/generator": ["@babel/generator@7.29.7", "", { "dependencies": { "@babel/parser": "^7.29.7", "@babel/types": "^7.29.7", "@jridgewell/gen-mapping": "^0.3.12", "@jridgewell/trace-mapping": "^0.3.28", "jsesc": "^3.0.2" } }, "sha512-DkXD5OJQaAQIdZ1bt3UZdEnHAn9Imd3IVBdX03UFe+ony9Ojw5pzr9YVKGDY1jt+Gcn/FnGkNf8r+Vj5NOJWtQ=="],
+ 
+     "@babel/helper-compilation-targets": ["@babel/helper-compilation-targets@7.29.7", "", { "dependencies": { "@babel/compat-data": "^7.29.7", "@babel/helper-validator-option": "^7.29.7", "browserslist": "^4.24.0", "lru-cache": "^5.1.1", "semver": "^6.3.1" } }, "sha512-wem6WaBj4NaVYVdNhLPPVacES6ZJ+KBBfSkTMD3YZxbP3rm3Di85tJU5ljaUNhaOynt+Aj0xruhYuzQBt8n71g=="],
+ 
+@@ -524,20 +564,32 @@
+     "@rolldown/binding-openharmony-arm64": ["@rolldown/binding-openharmony-arm64@1.2.3", "", { "os": "none", "cpu": "arm64" }, "sha512-Kr0OcsoQI816i6HOl3vFHpd1K0eZyh76zgfj4c1nTyaTsd5r2Mj1lwM4R90y/qaCfmTn9eHy0SKwi98eitRxug=="],
+ 
+     "@rolldown/binding-win32-arm64-msvc": ["@rolldown/binding-win32-arm64-msvc@1.2.3", "", { "os": "win32", "cpu": "arm64" }, "sha512-hOtMwTqnME+/gJcH/PCZ0wn0zPUjiWOgkHpxbSJpfGKMezHltx1S7/k1SitzVa7Ww2cqrDDaFbZEhcJZO8o+Jw=="],
+ 
+     "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.2.3", "", { "os": "win32", "cpu": "x64" }, "sha512-ekcqMMkI2PlhYnfzQnB/cEdYUVVJViWvoUyLrbzgDoi3Snfc1mVBwdnc306ufA5ejy8JSPjT2RlW1nQSjW7efg=="],
+ 
+     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
+ 
+     "@sinclair/typebox": ["@sinclair/typebox@0.34.49", "", {}, "sha512-brySQQs7Jtn0joV8Xh9ZV/hZb9Ozb0pmazDIASBkYKCjXrXU3mpcFahmK/z4YDhGkQvP9mWJbVyahdtU5wQA+A=="],
+ 
++    "@smithy/core": ["@smithy/core@3.33.0", "", { "dependencies": { "@smithy/types": "^4.17.0", "tslib": "^2.6.2" } }, "sha512-uKbkxgqLyepQDZoq8aRSdUqD1ID//rOqG96ixBhp++O7vBtmwYM6fwldGhr9HJP0iYrdc7GP/AlgzPWEZIrNRg=="],
++
++    "@smithy/credential-provider-imds": ["@smithy/credential-provider-imds@4.5.0", "", { "dependencies": { "@smithy/core": "^3.32.0", "@smithy/types": "^4.17.0", "tslib": "^2.6.2" } }, "sha512-2jsPi+7Zv2hSzD9IXR9D7DTqSn7mv4XalzRm+bESh53jiaUS3NKEUbpQFTJP0HhQy9qzZvluxQ3yS24zdRrqsA=="],
++
++    "@smithy/fetch-http-handler": ["@smithy/fetch-http-handler@5.7.0", "", { "dependencies": { "@smithy/core": "^3.32.0", "@smithy/types": "^4.17.0", "tslib": "^2.6.2" } }, "sha512-W/exA8T0LEzCQtJ02w4IzaEQPIspgarqZprb7W8FwnYiDowgCrjl2fTQ6FvuSSUnJORuepBF81abmBJwqh+0XQ=="],
++
++    "@smithy/node-http-handler": ["@smithy/node-http-handler@4.11.0", "", { "dependencies": { "@smithy/core": "^3.33.0", "@smithy/types": "^4.17.0", "tslib": "^2.6.2" } }, "sha512-ssHIZsadPUA3lGdnoByxfnjtb9xPYQLvdfJRLKIwxOoa6tO1suG4sLFSsgd7D/CsvYd8QbBIuKTImuJha5l6aQ=="],
++
++    "@smithy/signature-v4": ["@smithy/signature-v4@5.7.0", "", { "dependencies": { "@smithy/core": "^3.32.0", "@smithy/types": "^4.17.0", "tslib": "^2.6.2" } }, "sha512-hCynhm22wMJ8wTF9crcwu8mxggtUrSLLJgDcGUvYFBqpofxycYJCGKOMYg4xtPPFtgNiDJSYmhsWLTrcU/g59Q=="],
++
++    "@smithy/types": ["@smithy/types@4.17.0", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-Aw4joiM0ZdErpo39lCj8phT2lxoiKZV+KZzBxnnQhWVtU2Is/WffQSL04uUWRcXUse9Ln8vXZK6V/FwqRVnQpg=="],
++
+     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
+ 
+     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
+ 
+     "@t3-oss/env-core": ["@t3-oss/env-core@0.13.11", "", { "peerDependencies": { "arktype": "^2.1.0", "typescript": ">=5.0.0", "valibot": "^1.0.0-beta.7 || ^1.0.0", "zod": "^3.24.0 || ^4.0.0" }, "optionalPeers": ["arktype", "typescript", "valibot", "zod"] }, "sha512-sM7GYY+KL7H/Hl0BE0inWfk3nRHZOLhmVn7sHGxaZt9FAR6KqREXAE+6TqKfiavfXmpRxO/OZ2QgKRd+oiBYRQ=="],
+ 
+     "@tabler/icons": ["@tabler/icons@3.46.0", "", {}, "sha512-f2RYFl3fzPwj5WO82x6en0dmkjefxEfOm16D1ByM6cj/McNiwOkL4VaPUoP9VVIrXAD9WnTSVFr70px703b//A=="],
+ 
+     "@tabler/icons-react": ["@tabler/icons-react@3.46.0", "", { "dependencies": { "@tabler/icons": "3.46.0" }, "peerDependencies": { "react": ">= 16" } }, "sha512-CCm7xJWhDT2PH4ZIFkP6AgYKtVhq0gpYkjUN+GVh1AzmIQaa77OW0bQPBPQiTE0PsXMR9oSxFqA3qBglzPyrVQ=="],
+ 
+@@ -722,20 +774,22 @@
+     "base64-js": ["base64-js@1.5.1", "", {}, "sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA=="],
+ 
+     "baseline-browser-mapping": ["baseline-browser-mapping@2.10.33", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-bA6+tcSLpz2tIEdDXZPpPTIuxBcC4+w6SieaYyfigIa4h8GlFxbA17v22Vx3JUtuZQj9SgOsnbK+aTBzyDyEuw=="],
+ 
+     "better-auth": ["better-auth@1.6.11", "", { "dependencies": { "@better-auth/core": "1.6.11", "@better-auth/drizzle-adapter": "1.6.11", "@better-auth/kysely-adapter": "1.6.11", "@better-auth/memory-adapter": "1.6.11", "@better-auth/mongo-adapter": "1.6.11", "@better-auth/prisma-adapter": "1.6.11", "@better-auth/telemetry": "1.6.11", "@better-auth/utils": "0.4.0", "@better-fetch/fetch": "1.1.21", "@noble/ciphers": "^2.1.1", "@noble/hashes": "^2.0.1", "better-call": "1.3.5", "defu": "^6.1.4", "jose": "^6.1.3", "kysely": "^0.28.17", "nanostores": "^1.1.1", "zod": "^4.3.6" }, "peerDependencies": { "@lynx-js/react": "*", "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0", "@sveltejs/kit": "^2.0.0", "@tanstack/react-start": "^1.0.0", "@tanstack/solid-start": "^1.0.0", "better-sqlite3": "^12.0.0", "drizzle-kit": ">=0.31.4", "drizzle-orm": "^0.45.2", "mongodb": "^6.0.0 || ^7.0.0", "mysql2": "^3.0.0", "next": "^14.0.0 || ^15.0.0 || ^16.0.0", "pg": "^8.0.0", "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "solid-js": "^1.0.0", "svelte": "^4.0.0 || ^5.0.0", "vitest": "^2.0.0 || ^3.0.0 || ^4.0.0", "vue": "^3.0.0" }, "optionalPeers": ["@lynx-js/react", "@prisma/client", "@sveltejs/kit", "@tanstack/react-start", "@tanstack/solid-start", "better-sqlite3", "drizzle-kit", "drizzle-orm", "mongodb", "mysql2", "next", "pg", "prisma", "react", "react-dom", "solid-js", "svelte", "vitest", "vue"] }, "sha512-Wwt6+q07dwIhsp6XiM7L1qSXVUWBEtNl+eZvwM778CguFqDZFBN9Pt6LtFaHl55t8Z+Zc//5kxcbgDY8/79vFQ=="],
+ 
+     "better-call": ["better-call@1.3.5", "", { "dependencies": { "@better-auth/utils": "^0.4.0", "@better-fetch/fetch": "^1.1.21", "rou3": "^0.7.12", "set-cookie-parser": "^3.0.1" }, "peerDependencies": { "zod": "^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-kOFJkBP7utAQLEYrobZm3vkTH8mXq5GNgvjc5/XEST1ilVHaxXUXfeDeFlqoETMtyqS4+3/h4ONX2i++ebZrvA=="],
+ 
+     "bignumber.js": ["bignumber.js@9.3.1", "", {}, "sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ=="],
+ 
++    "bowser": ["bowser@2.14.1", "", {}, "sha512-tzPjzCxygAKWFOJP011oxFHs57HzIhOEracIgAePE4pqB3LikALKnSzUyU4MGs9/iCEUuHlAJTjTc5M+u7YEGg=="],
++
+     "brace-expansion": ["brace-expansion@2.1.2", "", { "dependencies": { "balanced-match": "^1.0.0" } }, "sha512-w5JZcKgdhDOgOwm8H+KgbosopHMuGcl6qbulwjtz3SM7I7P3yW1eAjzMPLrIE+NQ9vjgANKHWeMHnrT0OXW1oA=="],
+ 
+     "browserslist": ["browserslist@4.28.2", "", { "dependencies": { "baseline-browser-mapping": "^2.10.12", "caniuse-lite": "^1.0.30001782", "electron-to-chromium": "^1.5.328", "node-releases": "^2.0.36", "update-browserslist-db": "^1.2.3" }, "bin": { "browserslist": "cli.js" } }, "sha512-48xSriZYYg+8qXna9kwqjIVzuQxi+KYWp2+5nCYnYKPTr0LvD89Jqk2Or5ogxz0NUMfIjhh2lIUX/LyX9B4oIg=="],
+ 
+     "buffer-equal-constant-time": ["buffer-equal-constant-time@1.0.1", "", {}, "sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA=="],
+ 
+     "buffer-from": ["buffer-from@1.1.2", "", {}, "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ=="],
+ 
+     "bullmq": ["bullmq@6.0.11", "", { "dependencies": { "cron-parser": "5.8.1", "msgpackr": "2.0.5", "node-abort-controller": "3.1.1", "semver": "7.8.5", "tslib": "2.8.1" }, "peerDependencies": { "bullmq-otel": ">=2.0.0", "ioredis": ">=5.0.0", "pg": ">=8.0.0", "redis": ">=5.0.0" }, "optionalPeers": ["bullmq-otel", "ioredis", "pg", "redis"] }, "sha512-nq3WTDqlbSlgJfVFZ56qMZ99BqVBAUl2S+cnLbD3jRWvViWS/vtD22o/ynxYgcOyS2v//wO9AdQHekv18IlucQ=="],
+ 
+diff --git a/packages/api/package.json b/packages/api/package.json
+index d4356fc..d5363c1 100644
+--- a/packages/api/package.json
++++ b/packages/api/package.json
+@@ -9,20 +9,22 @@
+       "default": "./src/*.ts"
+     },
+     "./modules/scheduler/*": {
+       "default": "./src/modules/scheduler/*.ts"
+     }
+   },
+   "scripts": {
+     "test": "bun ../../scripts/run-test-suite.mjs api"
+   },
+   "dependencies": {
++    "@aws-sdk/client-s3": "^3.1110.0",
++    "@aws-sdk/s3-request-presigner": "^3.1110.0",
+     "@cogito-app/auth": "workspace:*",
+     "@cogito-app/db": "workspace:*",
+     "@cogito-app/env": "workspace:*",
+     "@orpc/server": "catalog:",
+     "bullmq": "^6",
+     "drizzle-orm": "catalog:",
+     "googleapis": "^174.0.1",
+     "ioredis": "^6.0.0",
+     "zod": "catalog:"
+   },
+diff --git a/packages/api/src/lib/storage.test.ts b/packages/api/src/lib/storage.test.ts
+new file mode 100644
+index 0000000..5b04806
+--- /dev/null
++++ b/packages/api/src/lib/storage.test.ts
+@@ -0,0 +1,146 @@
++import { afterAll, describe, expect, test } from "bun:test";
++import { mkdtempSync, rmSync } from "node:fs";
++import { join } from "node:path";
++import { tmpdir } from "node:os";
++
++import {
++  InvalidStorageKeyError,
++  createLocalStorage,
++  createR2Storage,
++  createStorage,
++} from "./storage";
++
++const dir = mkdtempSync(join(tmpdir(), "cogito-uploads-test-"));
++
++afterAll(() => {
++  rmSync(dir, { recursive: true, force: true });
++});
++
++describe("createLocalStorage", () => {
++  test("put stores bytes under dir and returns a public URL", async () => {
++    const s = createLocalStorage({ dir, baseUrl: "/uploads" });
++    const { key, url } = await s.put(
++      "a/b.png",
++      new TextEncoder().encode("hi"),
++      "image/png",
++    );
++    expect(key).toBe("a/b.png");
++    expect(url).toBe("/uploads/a/b.png");
++    expect(await Bun.file(join(dir, "a/b.png")).text()).toBe("hi");
++  });
++
++  test("defaults baseUrl to /uploads", async () => {
++    const s = createLocalStorage({ dir });
++    const { url } = await s.getSignedUploadUrl("u1/f.png", "image/png");
++    expect(url).toBe("/uploads/u1/f.png");
++  });
++
++  test("getSignedUploadUrl returns a direct PUT url for the key", async () => {
++    const s = createLocalStorage({ dir });
++    const { url, method } = await s.getSignedUploadUrl(
++      "user-1/uuid-avatar.png",
++      "image/png",
++    );
++    expect(method).toBe("PUT");
++    expect(url).toBe("/uploads/user-1/uuid-avatar.png");
++  });
++
++  test("resolvePublicUrl returns the served URL for a key", () => {
++    const s = createLocalStorage({ dir });
++    expect(s.resolvePublicUrl("user-1/uuid-note.pdf")).toBe(
++      "/uploads/user-1/uuid-note.pdf",
++    );
++  });
++
++  test("rejects keys with path traversal", async () => {
++    const s = createLocalStorage({ dir });
++    await expect(
++      s.put("../evil.png", new TextEncoder().encode("x"), "image/png"),
++    ).rejects.toThrow(InvalidStorageKeyError);
++    await expect(
++      s.getSignedUploadUrl("/etc/passwd", "image/png"),
++    ).rejects.toThrow(InvalidStorageKeyError);
++  });
++});
++
++describe("createR2Storage", () => {
++  const s = createR2Storage({
++    accountId: "acct",
++    accessKeyId: "key",
++    secretAccessKey: "secret",
++    bucket: "bucket",
++  });
++
++  test("resolvePublicUrl falls back to the key when publicUrl is unset", () => {
++    expect(s.resolvePublicUrl("user-1/uuid-avatar.png")).toBe(
++      "user-1/uuid-avatar.png",
++    );
++  });
++
++  test("resolvePublicUrl prefixes the public URL when set", () => {
++    const withPublic = createR2Storage({
++      accountId: "acct",
++      accessKeyId: "key",
++      secretAccessKey: "secret",
++      bucket: "bucket",
++      publicUrl: "https://cdn.example.com",
++    });
++    expect(withPublic.resolvePublicUrl("user-1/uuid-avatar.png")).toBe(
++      "https://cdn.example.com/user-1/uuid-avatar.png",
++    );
++  });
++
++  test("getSignedUploadUrl produces a PUT url containing the R2 host", async () => {
++    const { url, method } = await s.getSignedUploadUrl(
++      "user-1/uuid-avatar.png",
++      "image/png",
++    );
++    expect(method).toBe("PUT");
++    expect(url).toContain("r2.cloudflarestorage.com");
++    expect(url).toContain("X-Amz-Signature");
++  });
++});
++
++describe("createStorage", () => {
++  test("picks local storage when R2 credentials are missing", async () => {
++    const s = createStorage({ UPLOAD_DIR: dir });
++    const { url, method } = await s.getSignedUploadUrl(
++      "user-1/uuid-avatar.png",
++      "image/png",
++    );
++    expect(method).toBe("PUT");
++    expect(url).toBe("/uploads/user-1/uuid-avatar.png");
++  });
++
++  test("defaults the local dir to ./uploads", () => {
++    const s = createStorage({});
++    expect(s.resolvePublicUrl("user-1/uuid-avatar.png")).toBe(
++      "/uploads/user-1/uuid-avatar.png",
++    );
++  });
++
++  test("picks R2 storage when all R2 credentials are present", () => {
++    const s = createStorage({
++      R2_ACCOUNT_ID: "acct",
++      R2_ACCESS_KEY_ID: "key",
++      R2_SECRET_ACCESS_KEY: "secret",
++      R2_BUCKET: "bucket",
++    });
++    expect(s.resolvePublicUrl("user-1/uuid-avatar.png")).toBe(
++      "user-1/uuid-avatar.png",
++    );
++  });
++
++  test("R2 public URL is used for served URLs when configured", () => {
++    const s = createStorage({
++      R2_ACCOUNT_ID: "acct",
++      R2_ACCESS_KEY_ID: "key",
++      R2_SECRET_ACCESS_KEY: "secret",
++      R2_BUCKET: "bucket",
++      R2_PUBLIC_URL: "https://cdn.example.com",
++    });
++    expect(s.resolvePublicUrl("user-1/uuid-avatar.png")).toBe(
++      "https://cdn.example.com/user-1/uuid-avatar.png",
++    );
++  });
++});
+diff --git a/packages/api/src/lib/storage.ts b/packages/api/src/lib/storage.ts
+new file mode 100644
+index 0000000..e0ead50
+--- /dev/null
++++ b/packages/api/src/lib/storage.ts
+@@ -0,0 +1,136 @@
++import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
++import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
++import { mkdir } from "node:fs/promises";
++import { dirname, join } from "node:path";
++
++import { isValidUploadKey } from "./request-id";
++
++export interface StoragePort {
++  put(
++    key: string,
++    body: Uint8Array,
++    contentType: string,
++  ): Promise<{ key: string; url: string }>;
++  getSignedUploadUrl(
++    key: string,
++    contentType: string,
++  ): Promise<{ url: string; method: "PUT" }>;
++  resolvePublicUrl(key: string): string;
++}
++
++export class InvalidStorageKeyError extends Error {
++  constructor(key: string) {
++    super(`Invalid storage key: ${key}`);
++    this.name = "InvalidStorageKeyError";
++  }
++}
++
++function assertValidKey(key: string): void {
++  if (!isValidUploadKey(key)) throw new InvalidStorageKeyError(key);
++}
++
++export function createLocalStorage(opts: {
++  dir: string;
++  baseUrl?: string;
++}): StoragePort {
++  const baseUrl = opts.baseUrl ?? "/uploads";
++
++  return {
++    async put(key, body, _contentType) {
++      assertValidKey(key);
++      const filePath = join(opts.dir, key);
++      await mkdir(dirname(filePath), { recursive: true });
++      await Bun.write(filePath, body);
++      return { key, url: `${baseUrl}/${key}` };
++    },
++    async getSignedUploadUrl(key, _contentType) {
++      assertValidKey(key);
++      return { url: `${baseUrl}/${key}`, method: "PUT" };
++    },
++    resolvePublicUrl(key) {
++      assertValidKey(key);
++      return `${baseUrl}/${key}`;
++    },
++  };
++}
++
++export function createR2Storage(opts: {
++  accountId: string;
++  accessKeyId: string;
++  secretAccessKey: string;
++  bucket: string;
++  publicUrl?: string;
++}): StoragePort {
++  const client = new S3Client({
++    region: "auto",
++    endpoint: `https://${opts.accountId}.r2.cloudflarestorage.com`,
++    credentials: {
++      accessKeyId: opts.accessKeyId,
++      secretAccessKey: opts.secretAccessKey,
++    },
++  });
++
++  return {
++    async put(key, body, contentType) {
++      assertValidKey(key);
++      await client.send(
++        new PutObjectCommand({
++          Bucket: opts.bucket,
++          Key: key,
++          Body: body,
++          ContentType: contentType,
++        }),
++      );
++      return { key, url: opts.publicUrl ? `${opts.publicUrl}/${key}` : key };
++    },
++    async getSignedUploadUrl(key, contentType) {
++      assertValidKey(key);
++      const url = await getSignedUrl(
++        client,
++        new PutObjectCommand({
++          Bucket: opts.bucket,
++          Key: key,
++          ContentType: contentType,
++        }),
++        { expiresIn: 300 },
++      );
++      return { url, method: "PUT" };
++    },
++    resolvePublicUrl(key) {
++      assertValidKey(key);
++      return opts.publicUrl ? `${opts.publicUrl}/${key}` : key;
++    },
++  };
++}
++
++export interface StorageEnvLike {
++  R2_ACCOUNT_ID?: string;
++  R2_ACCESS_KEY_ID?: string;
++  R2_SECRET_ACCESS_KEY?: string;
++  R2_BUCKET?: string;
++  R2_PUBLIC_URL?: string;
++  UPLOAD_DIR?: string;
++}
++
++export function createStorage(envLike: StorageEnvLike): StoragePort {
++  const hasR2Credentials =
++    !!envLike.R2_ACCOUNT_ID &&
++    !!envLike.R2_ACCESS_KEY_ID &&
++    !!envLike.R2_SECRET_ACCESS_KEY &&
++    !!envLike.R2_BUCKET;
++
++  if (hasR2Credentials) {
++    return createR2Storage({
++      accountId: envLike.R2_ACCOUNT_ID!,
++      accessKeyId: envLike.R2_ACCESS_KEY_ID!,
++      secretAccessKey: envLike.R2_SECRET_ACCESS_KEY!,
++      bucket: envLike.R2_BUCKET!,
++      publicUrl: envLike.R2_PUBLIC_URL,
++    });
++  }
++
++  return createLocalStorage({
++    dir: envLike.UPLOAD_DIR ?? "./uploads",
++    baseUrl: "/uploads",
++  });
++}
+diff --git a/packages/api/src/modules/upload/index.ts b/packages/api/src/modules/upload/index.ts
+new file mode 100644
+index 0000000..51070c2
+--- /dev/null
++++ b/packages/api/src/modules/upload/index.ts
+@@ -0,0 +1,20 @@
++import type { DbType } from "../../lib/db";
++import type { StoragePort } from "../../lib/storage";
++import { createUploadService } from "./upload.service";
++import { createUploadHandler } from "./upload.handler";
++import type { UploadService } from "./upload.service";
++import type { UploadHandler } from "./upload.handler";
++
++export type UploadModule = ReturnType<typeof createUploadModule>;
++
++export function createUploadModule(deps: {
++  db?: DbType;
++  storage: StoragePort;
++}) {
++  const { storage } = deps;
++  const service = createUploadService({ storage });
++  const handler = createUploadHandler({ uploadService: service });
++  return { service, handler };
++}
++
++export type { UploadService, UploadHandler };
+diff --git a/packages/api/src/modules/upload/upload.errors.ts b/packages/api/src/modules/upload/upload.errors.ts
+new file mode 100644
+index 0000000..60d6f10
+--- /dev/null
++++ b/packages/api/src/modules/upload/upload.errors.ts
+@@ -0,0 +1,29 @@
++import { ORPCError } from "@orpc/server";
++import { DomainError } from "../../lib/domain-errors";
++import { badRequest, internalServerError } from "../../lib/errors";
++
++export class InvalidFilenameError extends DomainError {
++  readonly domain = "upload";
++  constructor(filename: string) {
++    super("INVALID_FILENAME", "Invalid filename", { filename });
++  }
++}
++
++export class UnsupportedContentTypeError extends DomainError {
++  readonly domain = "upload";
++  constructor(contentType: string) {
++    super("UNSUPPORTED_CONTENT_TYPE", "Unsupported content type", {
++      contentType,
++    });
++  }
++}
++
++export function mapUploadError(err: DomainError): ORPCError<string, undefined> {
++  if (err instanceof InvalidFilenameError) {
++    return badRequest(err.message, err);
++  }
++  if (err instanceof UnsupportedContentTypeError) {
++    return badRequest(err.message, err);
++  }
++  return internalServerError(err.message, err);
++}
+diff --git a/packages/api/src/modules/upload/upload.handler.ts b/packages/api/src/modules/upload/upload.handler.ts
+new file mode 100644
+index 0000000..a1f47ab
+--- /dev/null
++++ b/packages/api/src/modules/upload/upload.handler.ts
+@@ -0,0 +1,25 @@
++import type { Context } from "../../context";
++import { withDomainMap } from "../../lib/handler-utils";
++import type { CreateUploadUrlInput } from "./upload.types";
++import type { UploadService } from "./upload.service";
++import { mapUploadError } from "./upload.errors";
++
++export function createUploadHandler(deps: { uploadService: UploadService }) {
++  async function createUploadUrl({
++    context,
++    input,
++  }: {
++    context: Context;
++    input: CreateUploadUrlInput;
++  }) {
++    const user = context.session!.user;
++    return withDomainMap(
++      () => deps.uploadService.createUploadUrl(user.id, input),
++      mapUploadError,
++    );
++  }
++
++  return { createUploadUrl };
++}
++
++export type UploadHandler = ReturnType<typeof createUploadHandler>;
+diff --git a/packages/api/src/modules/upload/upload.router.ts b/packages/api/src/modules/upload/upload.router.ts
+new file mode 100644
+index 0000000..8ddfdd7
+--- /dev/null
++++ b/packages/api/src/modules/upload/upload.router.ts
+@@ -0,0 +1,19 @@
++import { protectedProcedure } from "../../procedures";
++import { createUploadUrlInput } from "./upload.types";
++import type { UploadHandler } from "./upload.handler";
++
++export function createUploadRouter(handler: UploadHandler) {
++  return {
++    createUploadUrl: protectedProcedure
++      .route({
++        method: "POST",
++        path: "/upload/create-url",
++        tags: ["Uploads"],
++        summary: "Create upload URL",
++        description:
++          "Returns a signed PUT URL (or a direct local URL in dev) for uploading a file with an allowed content type",
++      })
++      .input(createUploadUrlInput)
++      .handler(handler.createUploadUrl),
++  };
++}
+diff --git a/packages/api/src/modules/upload/upload.service.ts b/packages/api/src/modules/upload/upload.service.ts
+new file mode 100644
+index 0000000..77a4792
+--- /dev/null
++++ b/packages/api/src/modules/upload/upload.service.ts
+@@ -0,0 +1,56 @@
++import type { StoragePort } from "../../lib/storage";
++import {
++  InvalidFilenameError,
++  UnsupportedContentTypeError,
++} from "./upload.errors";
++import {
++  ALLOWED_CONTENT_TYPES,
++  MAX_UPLOAD_BYTES,
++  type CreateUploadUrlInput,
++} from "./upload.types";
++
++export function sanitizeFilename(filename: string): string {
++  const base = filename.replace(/\\/g, "/").split("/").pop() ?? "";
++  const cleaned = base.replace(/[^a-zA-Z0-9._-]/g, "_");
++  const safe = cleaned.replace(/\.{2,}/g, ".").replace(/^\.+/, "");
++  return safe.slice(0, 100) || "file";
++}
++
++export function createUploadService(deps: { storage: StoragePort }) {
++  async function createUploadUrl(userId: string, input: CreateUploadUrlInput) {
++    if (!ALLOWED_CONTENT_TYPES.includes(input.contentType)) {
++      throw new UnsupportedContentTypeError(input.contentType);
++    }
++    if (
++      !input.filename ||
++      input.filename.includes("..") ||
++      input.filename.startsWith("/")
++    ) {
++      throw new InvalidFilenameError(input.filename);
++    }
++
++    const filename = sanitizeFilename(input.filename);
++    const key = `${userId}/${crypto.randomUUID()}-${filename}`;
++    const { url, method } = await deps.storage.getSignedUploadUrl(
++      key,
++      input.contentType,
++    );
++
++    return {
++      uploadUrl: url,
++      key,
++      publicUrl: deps.storage.resolvePublicUrl(key),
++      contentType: input.contentType,
++      maxBytes: MAX_UPLOAD_BYTES,
++      method,
++    };
++  }
++
++  function resolvePublicUrl(key: string): string {
++    return deps.storage.resolvePublicUrl(key);
++  }
++
++  return { createUploadUrl, resolvePublicUrl };
++}
++
++export type UploadService = ReturnType<typeof createUploadService>;
+diff --git a/packages/api/src/modules/upload/upload.types.ts b/packages/api/src/modules/upload/upload.types.ts
+new file mode 100644
+index 0000000..bd6972d
+--- /dev/null
++++ b/packages/api/src/modules/upload/upload.types.ts
+@@ -0,0 +1,23 @@
++import { z } from "zod";
++
++export const ALLOWED_CONTENT_TYPES = [
++  "image/png",
++  "image/jpeg",
++  "image/webp",
++  "image/gif",
++  "application/pdf",
++] as const;
++
++export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
++
++export const createUploadUrlInput = z.object({
++  filename: z
++    .string()
++    .min(1)
++    .max(255)
++    .refine((s) => !s.includes("..") && !s.startsWith("/"), "invalid filename"),
++  contentType: z.enum(ALLOWED_CONTENT_TYPES),
++});
++
++export type CreateUploadUrlInput = z.infer<typeof createUploadUrlInput>;
++export type AllowedContentType = (typeof ALLOWED_CONTENT_TYPES)[number];
+diff --git a/packages/api/src/routers.ts b/packages/api/src/routers.ts
+index fa9edb0..0d32f12 100644
+--- a/packages/api/src/routers.ts
++++ b/packages/api/src/routers.ts
+@@ -12,38 +12,40 @@ import { createWalletRouter } from "./modules/wallet/wallet.router";
+ import { createPaymentRouter } from "./modules/payment/payment.router";
+ import {
+   createBookingRouter,
+   createTutorActionsRouter,
+ } from "./modules/booking/booking.router";
+ import { createRoomRouter } from "./modules/room/room.router";
+ import { createNotificationRouter } from "./modules/notification/notification.router";
+ import { createAdminBookingRouter } from "./modules/admin-booking/admin-booking.router";
+ import { createRefundRouter } from "./modules/refund/refund.router";
+ import { createSupportRouter } from "./modules/support/support.router";
++import { createUploadRouter } from "./modules/upload/upload.router";
+ import { handlers } from "./services";
+ 
+ const authRouter = createAuthRouter(handlers.auth);
+ const adminRouter = createAdminRouter(handlers.admin);
+ const adminTutorRouter = createAdminTutorRouter(handlers.adminTutor);
+ const tutorRouter = createTutorRouter(handlers.tutor);
+ const discoveryRouter = createDiscoveryRouter(handlers.discovery);
+ const inviteRouter = createInviteRouter(handlers.invite);
+ const achievementRouter = createAchievementRouter(handlers.achievement);
+ const walletRouter = createWalletRouter(handlers.wallet);
+ const paymentRouter = createPaymentRouter(handlers.payment);
+ const bookingRouter = createBookingRouter(handlers.booking);
+ const tutorActionsRouter = createTutorActionsRouter(handlers.tutorActions);
+ const roomRouter = createRoomRouter(handlers.room);
+ const notificationRouter = createNotificationRouter(handlers.notification);
+ const adminBookingRouter = createAdminBookingRouter(handlers.adminBooking);
+ const refundRouter = createRefundRouter(handlers.refund);
+ const supportRouter = createSupportRouter(handlers.support);
++const uploadRouter = createUploadRouter(handlers.upload);
+ 
+ export const appRouter = {
+   healthCheck: publicProcedure
+     .route({
+       method: "POST",
+       path: "/health-check",
+       tags: ["System"],
+       summary: "Health check",
+       description: "Returns OK if the server is running",
+     })
+@@ -59,14 +61,15 @@ export const appRouter = {
+   achievement: achievementRouter,
+   wallet: walletRouter,
+   payment: paymentRouter,
+   booking: bookingRouter,
+   tutorActions: tutorActionsRouter,
+   room: roomRouter,
+   notification: notificationRouter,
+   adminBooking: adminBookingRouter,
+   refund: refundRouter,
+   support: supportRouter,
++  upload: uploadRouter,
+ };
+ 
+ export type AppRouter = typeof appRouter;
+ export type AppRouterClient = RouterClient<typeof appRouter>;
+diff --git a/packages/api/src/services.ts b/packages/api/src/services.ts
+index 6c18ff5..042cf88 100644
+--- a/packages/api/src/services.ts
++++ b/packages/api/src/services.ts
+@@ -14,20 +14,22 @@ import { createInviteModule } from "./modules/invite";
+ import { createAchievementModule } from "./modules/achievement";
+ import { createBookingModule } from "./modules/booking";
+ import { createNotificationModule } from "./modules/notification";
+ import { createEmailModule } from "./modules/email";
+ import { createPaymentModule } from "./modules/payment";
+ import { createRoomModule } from "./modules/room";
+ import { createAdminBookingModule } from "./modules/admin-booking";
+ import { createRefundModule } from "./modules/refund";
+ import { createMeetingModule } from "./modules/meeting";
+ import { createSupportModule } from "./modules/support";
++import { createUploadModule } from "./modules/upload";
++import { createStorage } from "./lib/storage";
+ 
+ import type { AuditPort } from "./modules/audit/audit.service";
+ import type { PricingPort } from "./modules/pricing/pricing.service";
+ import type { WalletPort } from "./modules/wallet/wallet.service";
+ import type { AuthService } from "./modules/auth/auth.service";
+ import type { AdminService } from "./modules/admin/admin.service";
+ import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
+ import type { TutorService } from "./modules/tutor/tutor.service";
+ import type { InviteService } from "./modules/invite/invite.service";
+ import type { AchievementService } from "./modules/achievement/achievement.service";
+@@ -50,58 +52,62 @@ import type { AdminHandler } from "./modules/admin/admin.handler";
+ import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
+ import type { TutorHandler } from "./modules/tutor/tutor.handler";
+ import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
+ import type { InviteHandler } from "./modules/invite/invite.handler";
+ import type { AchievementHandler } from "./modules/achievement/achievement.handler";
+ import type { NotificationHandler } from "./modules/notification/notification.handler";
+ import type { AdminBookingHandler } from "./modules/admin-booking/admin-booking.handler";
+ import type { RefundHandler } from "./modules/refund/refund.handler";
+ import type { SupportService } from "./modules/support/support.service";
+ import type { SupportHandler } from "./modules/support/support.handler";
++import type { UploadService } from "./modules/upload/upload.service";
++import type { UploadHandler } from "./modules/upload/upload.handler";
+ 
+ export interface ServiceRegistry {
+   audit: AuditPort;
+   pricing: PricingPort;
+   wallet: WalletPort;
+   auth: AuthService;
+   admin: AdminService;
+   adminTutor: AdminTutorService;
+   tutor: TutorService;
+   invite: InviteService;
+   achievement: AchievementService;
+   booking: BookingService;
+   notification: NotificationService;
+   email: EmailService;
+   payment: PaymentService;
+   room: RoomService;
+   adminBooking: AdminBookingService;
+   refund: RefundService;
+   support: SupportService;
++  upload: UploadService;
+ }
+ 
+ export interface HandlerRegistry {
+   auth: AuthHandler;
+   admin: AdminHandler;
+   adminTutor: AdminTutorHandler;
+   tutor: TutorHandler;
+   discovery: DiscoveryHandler;
+   invite: InviteHandler;
+   achievement: AchievementHandler;
+   notification: NotificationHandler;
+   adminBooking: AdminBookingHandler;
+   refund: RefundHandler;
+   wallet: WalletHandler;
+   booking: BookingHandler;
+   tutorActions: TutorActionsHandler;
+   payment: PaymentHandler;
+   room: RoomHandler;
+   support: SupportHandler;
++  upload: UploadHandler;
+ }
+ 
+ function createServices() {
+   const redis = initRedis(env.REDIS_URL);
+   initIdempotencyStores(redis);
+   const googleMeetClientId = env.GOOGLE_MEET_CLIENT_ID ?? env.GOOGLE_CLIENT_ID;
+   const googleMeetClientSecret =
+     env.GOOGLE_MEET_CLIENT_SECRET ?? env.GOOGLE_CLIENT_SECRET;
+   const googleMeetConfig =
+     googleMeetClientId &&
+@@ -202,54 +208,67 @@ function createServices() {
+     refund: refund.service,
+     notification: notification.service,
+   });
+ 
+   const support = createSupportModule({
+     db,
+     audit: audit.service,
+     notification: notification.service,
+   });
+ 
++  const upload = createUploadModule({
++    storage: createStorage({
++      R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
++      R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
++      R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
++      R2_BUCKET: env.R2_BUCKET,
++      R2_PUBLIC_URL: env.R2_PUBLIC_URL,
++      UPLOAD_DIR: env.UPLOAD_DIR,
++    }),
++  });
++
+   const services: ServiceRegistry = {
+     audit: audit.service,
+     pricing: pricing.service,
+     wallet: wallet.service,
+     auth: auth.service,
+     admin: admin.service,
+     adminTutor: adminTutor.service,
+     tutor: tutor.service,
+     invite: invite.service,
+     achievement: achievement.service,
+     booking: booking.service,
+     notification: notification.service,
+     email: email.service,
+     payment: payment.service,
+     room: room.service,
+     adminBooking: adminBooking.service,
+     refund: refund.service,
+     support: support.service,
++    upload: upload.service,
+   };
+ 
+   const handlers: HandlerRegistry = {
+     auth: auth.handler,
+     admin: admin.handler,
+     adminTutor: adminTutor.handler,
+     tutor: tutor.handler,
+     discovery: discovery.handler,
+     invite: invite.handler,
+     achievement: achievement.handler,
+     notification: notification.handler,
+     adminBooking: adminBooking.handler,
+     refund: refund.handler,
+     wallet: wallet.handler,
+     booking: booking.handler,
+     tutorActions: booking.tutorActionsHandler,
+     payment: payment.handler,
+     room: room.handler,
+     support: support.handler,
++    upload: upload.handler,
+   };
+ 
+   return { services, handlers, redis };
+ }
+ 
+ const { services, handlers, redis } = createServices();
+ export { services, handlers, redis };
+diff --git a/packages/api/src/tests/unit/upload.errors.test.ts b/packages/api/src/tests/unit/upload.errors.test.ts
+new file mode 100644
+index 0000000..99655eb
+--- /dev/null
++++ b/packages/api/src/tests/unit/upload.errors.test.ts
+@@ -0,0 +1,29 @@
++import { describe, expect, test } from "bun:test";
++
++import {
++  InvalidFilenameError,
++  UnsupportedContentTypeError,
++  mapUploadError,
++} from "../../modules/upload/upload.errors";
++
++describe("upload errors", () => {
++  test("InvalidFilenameError maps to BAD_REQUEST", () => {
++    const err = mapUploadError(new InvalidFilenameError("../x.png"));
++    expect(err.code).toBe("BAD_REQUEST");
++  });
++
++  test("UnsupportedContentTypeError maps to BAD_REQUEST", () => {
++    const err = mapUploadError(new UnsupportedContentTypeError("text/plain"));
++    expect(err.code).toBe("BAD_REQUEST");
++  });
++
++  test("unknown DomainErrors map to INTERNAL_SERVER_ERROR", () => {
++    const err = mapUploadError({
++      code: "UNKNOWN",
++      domain: "upload",
++      message: "boom",
++      name: "UnknownUploadError",
++    } as never);
++    expect(err.code).toBe("INTERNAL_SERVER_ERROR");
++  });
++});
+diff --git a/packages/api/src/tests/unit/upload.handler.test.ts b/packages/api/src/tests/unit/upload.handler.test.ts
+new file mode 100644
+index 0000000..ac2e3cd
+--- /dev/null
++++ b/packages/api/src/tests/unit/upload.handler.test.ts
+@@ -0,0 +1,42 @@
++import { describe, expect, test } from "bun:test";
++
++import { createUploadHandler } from "../../modules/upload/upload.handler";
++import { UnsupportedContentTypeError } from "../../modules/upload/upload.errors";
++
++describe("uploadHandler", () => {
++  test("createUploadUrl calls the service with the session user id", async () => {
++    let calledWith: unknown;
++    const service = {
++      createUploadUrl: async (userId: string, input: unknown) => {
++        calledWith = { userId, input };
++        return { uploadUrl: "/uploads/k", key: "k", maxBytes: 1 };
++      },
++    };
++    const handler = createUploadHandler({ uploadService: service as never });
++    const result = await handler.createUploadUrl({
++      context: { session: { user: { id: "u1" } } } as never,
++      input: { filename: "a.png", contentType: "image/png" } as never,
++    });
++
++    expect(calledWith).toEqual({
++      userId: "u1",
++      input: { filename: "a.png", contentType: "image/png" },
++    });
++    expect(result).toEqual({ uploadUrl: "/uploads/k", key: "k", maxBytes: 1 });
++  });
++
++  test("maps service DomainErrors to ORPC errors", async () => {
++    const service = {
++      createUploadUrl: async () => {
++        throw new UnsupportedContentTypeError("text/plain");
++      },
++    };
++    const handler = createUploadHandler({ uploadService: service as never });
++    await expect(
++      handler.createUploadUrl({
++        context: { session: { user: { id: "u1" } } } as never,
++        input: { filename: "a.txt", contentType: "text/plain" } as never,
++      }),
++    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
++  });
++});
+diff --git a/packages/api/src/tests/unit/upload.service.test.ts b/packages/api/src/tests/unit/upload.service.test.ts
+new file mode 100644
+index 0000000..3e3e047
+--- /dev/null
++++ b/packages/api/src/tests/unit/upload.service.test.ts
+@@ -0,0 +1,133 @@
++import { describe, expect, test } from "bun:test";
++
++import {
++  createUploadService,
++  sanitizeFilename,
++} from "../../modules/upload/upload.service";
++import {
++  InvalidFilenameError,
++  UnsupportedContentTypeError,
++} from "../../modules/upload/upload.errors";
++import { MAX_UPLOAD_BYTES } from "../../modules/upload/upload.types";
++import type { StoragePort } from "../../lib/storage";
++
++function makeStorage(overrides: Partial<StoragePort> = {}): StoragePort {
++  return {
++    put: async (key) => ({ key, url: `/uploads/${key}` }),
++    getSignedUploadUrl: async (key) => ({
++      url: `/uploads/${key}`,
++      method: "PUT" as const,
++    }),
++    resolvePublicUrl: (key) => `/uploads/${key}`,
++    ...overrides,
++  };
++}
++
++describe("sanitizeFilename", () => {
++  test("strips path separators and traversal", () => {
++    expect(sanitizeFilename("../../etc/passwd")).toBe("passwd");
++    expect(sanitizeFilename("a/b/photo.png")).toBe("photo.png");
++  });
++
++  test("replaces unsafe characters", () => {
++    expect(sanitizeFilename("my photo!.png")).toBe("my_photo_.png");
++  });
++
++  test("caps length and falls back to 'file'", () => {
++    expect(sanitizeFilename("..")).toBe("file");
++    expect(sanitizeFilename("")).toBe("file");
++    expect(
++      sanitizeFilename("a".repeat(500) + ".png").length,
++    ).toBeLessThanOrEqual(100);
++  });
++});
++
++describe("upload service createUploadUrl", () => {
++  test("returns uploadUrl, key, publicUrl, contentType and maxBytes", async () => {
++    const service = createUploadService({ storage: makeStorage() });
++    const res = await service.createUploadUrl("user-1", {
++      filename: "avatar.png",
++      contentType: "image/png",
++    });
++
++    expect(res.maxBytes).toBe(MAX_UPLOAD_BYTES);
++    expect(res.contentType).toBe("image/png");
++    expect(res.method).toBe("PUT");
++    expect(res.key).toMatch(/^user-1\/[0-9a-f-]{36}-avatar\.png$/);
++    expect(res.publicUrl).toBe(`/uploads/${res.key}`);
++    expect(res.uploadUrl).toBe(`/uploads/${res.key}`);
++  });
++
++  test("sanitizes filenames with path separators so the key stays bounded", async () => {
++    const service = createUploadService({ storage: makeStorage() });
++    const res = await service.createUploadUrl("user-1", {
++      filename: "a/b/photo.png",
++      contentType: "image/png",
++    });
++
++    expect(res.key).toMatch(/^user-1\/[0-9a-f-]{36}-photo\.png$/);
++    expect(res.key).not.toContain("/b/");
++  });
++
++  test("throws UnsupportedContentTypeError for disallowed content types", async () => {
++    const service = createUploadService({ storage: makeStorage() });
++    await expect(
++      service.createUploadUrl("user-1", {
++        filename: "notes.txt",
++        contentType: "text/plain",
++      }),
++    ).rejects.toThrow(UnsupportedContentTypeError);
++  });
++
++  test("throws InvalidFilenameError for traversal or absolute filenames", async () => {
++    const service = createUploadService({ storage: makeStorage() });
++    await expect(
++      service.createUploadUrl("user-1", {
++        filename: "../evil.png",
++        contentType: "image/png",
++      }),
++    ).rejects.toThrow(InvalidFilenameError);
++    await expect(
++      service.createUploadUrl("user-1", {
++        filename: "/etc/passwd",
++        contentType: "image/png",
++      }),
++    ).rejects.toThrow(InvalidFilenameError);
++  });
++
++  test("uses the storage signed-URL result and public URL resolution", async () => {
++    let signedKey = "";
++    const storage = makeStorage({
++      getSignedUploadUrl: async (key) => {
++        signedKey = key;
++        return {
++          url: `https://signed.example/${key}?sig=abc`,
++          method: "PUT" as const,
++        };
++      },
++      resolvePublicUrl: (key) => `https://cdn.example/${key}`,
++    });
++    const service = createUploadService({ storage });
++    const res = await service.createUploadUrl("user-1", {
++      filename: "report.pdf",
++      contentType: "application/pdf",
++    });
++
++    expect(signedKey).toBe(res.key);
++    expect(res.uploadUrl).toBe(`https://signed.example/${res.key}?sig=abc`);
++    expect(res.publicUrl).toBe(`https://cdn.example/${res.key}`);
++  });
++});
++
++describe("upload service resolvePublicUrl", () => {
++  test("delegates to the storage port", () => {
++    const service = createUploadService({
++      storage: makeStorage({
++        resolvePublicUrl: (key) => `https://cdn.example/${key}`,
++      }),
++    });
++    expect(service.resolvePublicUrl("user-1/uuid-avatar.png")).toBe(
++      "https://cdn.example/user-1/uuid-avatar.png",
++    );
++  });
++});
+diff --git a/packages/api/src/tests/unit/upload.types.test.ts b/packages/api/src/tests/unit/upload.types.test.ts
+new file mode 100644
+index 0000000..8216a2a
+--- /dev/null
++++ b/packages/api/src/tests/unit/upload.types.test.ts
+@@ -0,0 +1,62 @@
++import { describe, expect, test } from "bun:test";
++
++import { createUploadUrlInput } from "../../modules/upload/upload.types";
++
++describe("createUploadUrlInput", () => {
++  test("accepts allowed content types", () => {
++    for (const contentType of [
++      "image/png",
++      "image/jpeg",
++      "image/webp",
++      "image/gif",
++      "application/pdf",
++    ]) {
++      const result = createUploadUrlInput.safeParse({
++        filename: "photo.png",
++        contentType,
++      });
++      expect(result.success).toBe(true);
++    }
++  });
++
++  test("rejects disallowed content types", () => {
++    const result = createUploadUrlInput.safeParse({
++      filename: "notes.txt",
++      contentType: "text/plain",
++    });
++    expect(result.success).toBe(false);
++  });
++
++  test("rejects missing or empty filenames", () => {
++    expect(
++      createUploadUrlInput.safeParse({ filename: "", contentType: "image/png" })
++        .success,
++    ).toBe(false);
++    expect(
++      createUploadUrlInput.safeParse({ contentType: "image/png" }).success,
++    ).toBe(false);
++  });
++
++  test("rejects filenames with path traversal or a leading slash", () => {
++    expect(
++      createUploadUrlInput.safeParse({
++        filename: "a/../../x",
++        contentType: "image/png",
++      }).success,
++    ).toBe(false);
++    expect(
++      createUploadUrlInput.safeParse({
++        filename: "/etc/passwd",
++        contentType: "image/png",
++      }).success,
++    ).toBe(false);
++  });
++
++  test("rejects filenames longer than 255 chars", () => {
++    const result = createUploadUrlInput.safeParse({
++      filename: "a".repeat(256),
++      contentType: "image/png",
++    });
++    expect(result.success).toBe(false);
++  });
++});
