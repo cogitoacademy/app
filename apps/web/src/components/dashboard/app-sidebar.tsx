@@ -242,7 +242,7 @@ export function AppSidebar({
                   </MenuItem>
                   <MenuItem onClick={signOut}>
                     <IconLogout />
-Sign out
+                    Sign out
                   </MenuItem>
                 </MenuPopup>
               </Menu>
