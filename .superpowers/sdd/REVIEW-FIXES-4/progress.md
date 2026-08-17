@@ -62,3 +62,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 
 - Commit `4928c3a` (off `62547ee`); review clean (2 minors: series-themed error copy on solo/group rejection — plan-prescribed class, message nit only; implicit test ordering convention matches existing suite patterns).
 - Guard suite 8/8; regressions 62/62 + 181/181; check-types/lint/oxfmt clean.
+
+## P2.4 (H1) reschedule accept deadline — complete
+
+- Commit `cb96ee5` + fix round 1 `5fb17a0` (review found 1 Important: missing AWAITING_ADMIN_ROOM_APPROVAL test; fixed + re-reviewed clean).
+- Discovers pre-existing schema drift: migration 0020 dropped 'expired' from `reschedule_status_check` while schema+code rely on it → new migration 0024 restores it (journaled).
+- Targeted 5/5; regressions 24/24; check-types/lint/oxfmt clean.
