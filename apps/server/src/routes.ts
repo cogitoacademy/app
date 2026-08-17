@@ -173,7 +173,9 @@ export function createServer() {
 
       if (
         path.startsWith("/api/auth/sign-in/") ||
-        path.startsWith("/api/auth/sign-up/")
+        path.startsWith("/api/auth/sign-up/") ||
+        path.startsWith("/api/auth/request-password-reset/") ||
+        path.startsWith("/api/auth/reset-password/")
       ) {
         const { allowed, retryAfterMs } = await authRateLimit(ip);
         if (!allowed) {

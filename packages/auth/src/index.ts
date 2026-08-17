@@ -19,6 +19,25 @@ export type CogitoUser = {
   updatedAt: Date;
 };
 
+export type ResetPasswordEmailSender = (params: {
+  user: CogitoUser;
+  url: string;
+  token: string;
+}) => Promise<void>;
+
+let resetPasswordEmailSender: ResetPasswordEmailSender | null = null;
+
+/**
+ * Wires the email port used by Better Auth's reset-password flow.
+ *
+ * The sender lives outside this package (the EmailService in @cogito-app/api)
+ * to avoid a circular dependency — @cogito-app/api imports @cogito-app/auth.
+ * The composition root (apps/server) calls this at boot. Tests wire a spy.
+ */
+export function setAuthEmailSender(sender: ResetPasswordEmailSender) {
+  resetPasswordEmailSender = sender;
+}
+
 export function createAuth() {
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -46,6 +65,39 @@ export function createAuth() {
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url, token }, _request) => {
+        const sender = resetPasswordEmailSender;
+        if (!sender) {
+          console.warn(
+            JSON.stringify({
+              level: "warn",
+              action: "reset_password_email_not_configured",
+              userId: user.id,
+            }),
+          );
+          return;
+        }
+        try {
+          await sender({
+            user: user as unknown as CogitoUser,
+            url,
+            token,
+          });
+        } catch (error) {
+          // Never surface email failures to the caller: the request endpoint
+          // must return the same response for known and unknown emails
+          // (anti-enumeration). The email provider logs its own failures.
+          console.error(
+            JSON.stringify({
+              level: "error",
+              action: "reset_password_email_send_failed",
+              userId: user.id,
+              error: { message: String(error) },
+            }),
+          );
+        }
+      },
     },
     socialProviders:
       env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET

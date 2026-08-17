@@ -165,7 +165,7 @@ export default function SignInForm({
                 <Field>
                   <div className="flex items-center">
                     <FieldLabel htmlFor={field.name}>Password</FieldLabel>
-                    <TextLink href="#" className="ml-auto">
+                    <TextLink href="/forgot-password" className="ml-auto">
                       Forgot password?
                     </TextLink>
                   </div>

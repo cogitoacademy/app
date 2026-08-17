@@ -53,6 +53,35 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 
 ---
 
+## Password Reset (Better Auth — `/api/auth/*`)
+
+Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
+
+### `POST /api/auth/request-password-reset`
+
+- **Auth:** Public
+- **Input:** `{ email, redirectTo? }`
+- **Output:** `200 { status: true }` — identical for known and unknown emails (no enumeration)
+- **Description:** Sends a reset email (category `auth`, via `setAuthEmailSender`). Link = `{BETTER_AUTH_URL}/reset-password/{token}?callbackURL={redirectTo}`. Rate-limited (10/min per IP, same limiter as other auth endpoints). Token valid 1 hour.
+
+### `GET /api/auth/reset-password/{token}`
+
+- **Auth:** Public
+- **Description:** Validates token, redirects to `callbackURL?token=<token>` or `callbackURL?error=INVALID_TOKEN`.
+
+### `POST /api/auth/reset-password`
+
+- **Auth:** Public
+- **Input:** `{ newPassword, token }`
+- **Description:** Sets new password. Revokes all existing sessions (`revokeSessionsOnPasswordReset: true`). Used tokens are invalidated (replay fails).
+
+### Frontend routes
+
+- `/forgot-password` — email request form (always shows success state after submit)
+- `/reset-password` — token entry + new password form; renders invalid/expired state on `error=INVALID_TOKEN`
+
+---
+
 ## Admin (`admin.*`)
 
 ### `admin.listUsers`
