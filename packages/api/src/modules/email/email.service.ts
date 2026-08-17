@@ -8,7 +8,8 @@ export interface EmailMessage {
     | "refund"
     | "schedule"
     | "override"
-    | "invite";
+    | "invite"
+    | "auth";
   idempotencyKey?: string;
 }
 

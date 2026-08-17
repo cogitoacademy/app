@@ -15,7 +15,7 @@ import {
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconEye, IconEyeOff } from "@tabler/icons-react";
+import { IconBrandGoogle, IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -106,8 +106,35 @@ export default function SignUpForm({
           <CardDescription>Enter your details to get started</CardDescription>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
+          <div className="flex flex-col gap-2.5">
+            <Button
+              type="button"
+              variant="secondary"
+              block
+              size="lg"
+              onClick={() => {
+                authClient.signIn.social(
+                  {
+                    provider: "google",
+                    callbackURL: `${window.location.origin}/auth/callback`,
+                  },
+                  {
+                    onError: (error) => {
+                      toastManager.add({
+                        title: error.error.message || error.error.statusText,
+                        type: "error",
+                      });
+                    },
+                  },
+                );
+              }}
+            >
+              <IconBrandGoogle size={18} />
+              Sign up with Google
+            </Button>
+          </div>
           <Divider variant="center" className="my-2">
-            Sign up with email
+            Or sign up with email
           </Divider>
           <form
             onSubmit={(e) => {

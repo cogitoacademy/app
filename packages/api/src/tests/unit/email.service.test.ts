@@ -20,6 +20,20 @@ describe("createEmailService", () => {
     expect(result).toEqual({ messageId: "msg_123" });
   });
 
+  test("accepts the auth category (reset password emails)", async () => {
+    const mockSend = mock(() => Promise.resolve({ messageId: "msg_123" }));
+    const service = createEmailService({ send: mockSend });
+
+    const result = await service.send({
+      to: "user@example.com",
+      subject: "Reset your Cogito password",
+      html: "<p>Reset link</p>",
+      category: "auth",
+    });
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ messageId: "msg_123" });
+  });
+
   test("send propagates provider errors", async () => {
     const mockSend = mock(() => Promise.reject(new Error("provider error")));
     const provider = { send: mockSend };

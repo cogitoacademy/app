@@ -6,7 +6,7 @@ import { cn } from "@cogito-app/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 
 export const avatarVariants = cva(
-  "relative rounded-full select-none bg-avatar flex items-center justify-center text-avatar-foreground font-semibold",
+  "relative shrink-0 rounded-full select-none bg-avatar flex items-center justify-center text-avatar-foreground font-semibold",
   {
     variants: {
       size: {

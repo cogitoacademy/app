@@ -54,7 +54,7 @@ export default function UserMenu() {
               });
             }}
           >
-            Sign Out
+            Sign out
           </MenuItem>
         </MenuGroup>
       </MenuPopup>

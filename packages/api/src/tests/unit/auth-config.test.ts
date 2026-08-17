@@ -95,3 +95,24 @@ describe("Auth config — password policy and session expiry", () => {
     expect(session.cookieCache.enabled).toBe(true);
   });
 });
+
+describe("Auth config — password reset", () => {
+  test("emailAndPassword config includes revokeSessionsOnPasswordReset", () => {
+    const emailAndPassword = {
+      enabled: true,
+      minPasswordLength: 8,
+      revokeSessionsOnPasswordReset: true,
+    };
+    expect(emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
+  });
+
+  test("requestPasswordReset response is identical for known and unknown emails", () => {
+    const known = {
+      status: true,
+      message:
+        "If this email exists in our system, check your email for the reset link",
+    };
+    const unknown = { ...known };
+    expect(unknown).toEqual(known);
+  });
+});

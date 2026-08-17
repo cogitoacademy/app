@@ -77,7 +77,7 @@ export function InviteClaimPage({ token }: { token: string }) {
         userEmail.toLowerCase() !== inviteInfo.email.toLowerCase()
       ) {
         toastManager.add({
-          title: `This invite is for ${inviteInfo.email}. Please log in with that email.`,
+          title: `This invite is for ${inviteInfo.email}. Please sign in with that email.`,
           type: "error",
         });
         await authClient.signOut();

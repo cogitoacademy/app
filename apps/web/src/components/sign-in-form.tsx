@@ -96,7 +96,7 @@ export default function SignInForm({
         <CardHeader align="center">
           <CardTitle>Sign in to your account</CardTitle>
           <CardDescription>
-            Login with your Email or Google account
+            Sign in with your Email or Google account
           </CardDescription>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
@@ -124,7 +124,7 @@ export default function SignInForm({
               }}
             >
               <IconBrandGoogle size={18} />
-              Login with Google
+              Sign in with Google
             </Button>
           </div>
           <Divider variant="center" className="my-2">
@@ -165,7 +165,7 @@ export default function SignInForm({
                 <Field>
                   <div className="flex items-center">
                     <FieldLabel htmlFor={field.name}>Password</FieldLabel>
-                    <TextLink href="#" className="ml-auto">
+                    <TextLink href="/forgot-password" className="ml-auto">
                       Forgot password?
                     </TextLink>
                   </div>

@@ -311,6 +311,7 @@ Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pric
 ## Auth Config
 
 - Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening).
+- Password reset flow: Better Auth built-in endpoints (`/api/auth/request-password-reset`, `/api/auth/reset-password`). Email via existing EmailService (category `auth`), wired through `setAuthEmailSender()` from the composition root (`apps/server/src/index.ts`). Unknown emails get the same success response (no enumeration). `revokeSessionsOnPasswordReset: true` — all existing sessions die on reset. Reset token valid 1 hour.
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
 - Cookies: sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. Same-origin subdomain sharing works because `app.cogitoacademy.id` and `cogitoacademy.id` share the same site.
 - `CogitoUser` type exported with role field.
