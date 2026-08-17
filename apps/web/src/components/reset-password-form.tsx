@@ -70,10 +70,10 @@ export function ResetPasswordForm({
           password: z.string().min(8, "Password must be at least 8 characters"),
           confirmPassword: z.string(),
         })
-        .refine(
-          (value) => value.password === value.confirmPassword,
-          { message: "Passwords do not match", path: ["confirmPassword"] },
-        ),
+        .refine((value) => value.password === value.confirmPassword, {
+          message: "Passwords do not match",
+          path: ["confirmPassword"],
+        }),
     },
   });
 
@@ -89,10 +89,7 @@ export function ResetPasswordForm({
             </CardDescription>
           </CardHeader>
           <CardBody className="flex flex-col gap-5">
-            <Button
-              block
-              onClick={() => navigate({ to: "/forgot-password" })}
-            >
+            <Button block onClick={() => navigate({ to: "/forgot-password" })}>
               Request a new link
             </Button>
             <Text className="text-center">
@@ -141,7 +138,9 @@ export function ResetPasswordForm({
                       type="button"
                       variant="plain"
                       size="sm-icon"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
                       aria-pressed={showPassword}
                       onClick={() => setShowPassword((prev) => !prev)}
                       className="absolute right-1 top-1/2 -translate-y-1/2 text-dimmed hover:text-foreground"
@@ -183,7 +182,9 @@ export function ResetPasswordForm({
                       type="button"
                       variant="plain"
                       size="sm-icon"
-                      aria-label={showConfirm ? "Hide password" : "Show password"}
+                      aria-label={
+                        showConfirm ? "Hide password" : "Show password"
+                      }
                       aria-pressed={showConfirm}
                       onClick={() => setShowConfirm((prev) => !prev)}
                       className="absolute right-1 top-1/2 -translate-y-1/2 text-dimmed hover:text-foreground"

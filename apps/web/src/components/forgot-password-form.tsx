@@ -139,8 +139,7 @@ export function ForgotPasswordForm() {
           </form>
 
           <Text className="text-center">
-            Remembered your password?{" "}
-            <TextLink href="/login">Sign in</TextLink>
+            Remembered your password? <TextLink href="/login">Sign in</TextLink>
           </Text>
         </CardBody>
       </Card>

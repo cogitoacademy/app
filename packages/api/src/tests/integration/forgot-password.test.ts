@@ -63,9 +63,7 @@ describe("Forgot password flow", () => {
     const response = await requestReset(`nobody.${ts}@cogito.test`);
     expect(response.status).toBe(200);
     expect(await response.text()).toBe(
-      await (
-        await requestReset(email)
-      ).text(),
+      await (await requestReset(email)).text(),
     );
   });
 
@@ -159,8 +157,7 @@ describe("Forgot password flow", () => {
     const token = tokenFromUrl(sentEmails.at(-1)!.url);
 
     const record = await db.query.verification.findFirst({
-      where: (v, { eq: eqFn }) =>
-        eqFn(v.identifier, `reset-password:${token}`),
+      where: (v, { eq: eqFn }) => eqFn(v.identifier, `reset-password:${token}`),
     });
     expect(record?.value).toBe(dbUser!.id);
   });
