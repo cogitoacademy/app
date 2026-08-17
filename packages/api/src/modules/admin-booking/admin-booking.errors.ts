@@ -55,6 +55,17 @@ export class BookingOverrideConflictError extends DomainError {
   }
 }
 
+export class OverrideMarksParticipantsRequiredError extends DomainError {
+  readonly domain = "admin-booking";
+  constructor(id: string) {
+    super(
+      "OVERRIDE_MARKS_PARTICIPANTS_REQUIRED",
+      "A marksAction requires at least one affectedParticipant so the money action is never a silent no-op",
+      { id },
+    );
+  }
+}
+
 export function mapAdminBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -63,6 +74,8 @@ export function mapAdminBookingError(
     return conflict(err.message, err);
   if (err instanceof BookingOverrideConflictError)
     return conflict(err.message, err);
+  if (err instanceof OverrideMarksParticipantsRequiredError)
+    return badRequest(err.message, err);
   if (err instanceof InvalidRefundStateError)
     return badRequest(err.message, err);
   if (err instanceof RefundSpendExhaustedError)

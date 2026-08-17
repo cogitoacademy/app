@@ -3,6 +3,7 @@ import {
   BookingNotFoundError,
   BookingOverrideConflictError,
   InvalidRefundStateError,
+  OverrideMarksParticipantsRequiredError,
   RefundSpendExhaustedError,
   TerminalStateOverrideError,
 } from "./admin-booking.errors";
@@ -19,6 +20,7 @@ import {
 } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+import { log } from "../../lib/logger";
 import { escapeHtml } from "../../lib/sanitize";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
@@ -141,7 +143,7 @@ export function createAdminBookingService(deps: {
   wallet: AdminBookingWalletPort;
   refund: AdminBookingRefundPort;
   notification?: AdminBookingNotificationPort;
-  meeting: AdminBookingMeetingPort;
+  meeting?: AdminBookingMeetingPort;
 }) {
   const { db, repo, auditPort, wallet, refund, notification, meeting } = deps;
 
@@ -192,6 +194,16 @@ export function createAdminBookingService(deps: {
         input.bookingId,
         bookingRow.currentState,
       );
+    }
+
+    // M1: a money action without affected participants would silently no-op —
+    // the state change would commit while the holds stay stranded in a
+    // terminal booking (skipped by the release job). Reject loudly instead.
+    if (
+      input.marksAction &&
+      (!input.affectedParticipants || input.affectedParticipants.length === 0)
+    ) {
+      throw new OverrideMarksParticipantsRequiredError(input.bookingId);
     }
 
     const overrideMeta: Record<string, unknown> = {
@@ -410,6 +422,26 @@ export function createAdminBookingService(deps: {
     // (P1-5: the old response carried a stale pre-update holdAmount).
     const refreshed = await repo.findBookingById(db, input.bookingId);
     if (!refreshed) throw new BookingNotFoundError(input.bookingId);
+
+    // H6: terminal overrides must cancel the provider-side meeting like every
+    // other terminal path (cancel/decline/withdraw). Best-effort after the tx
+    // commits — a Google failure must not break the override itself.
+    if (
+      meeting &&
+      (TERMINAL_STATES as readonly string[]).includes(refreshed.currentState)
+    ) {
+      try {
+        await meeting.cancelEvent(input.bookingId);
+      } catch (error) {
+        log({
+          level: "error",
+          action: "override_meeting_cancel_failed",
+          bookingId: input.bookingId,
+          error: { message: String(error) },
+        });
+      }
+    }
+
     return refreshed;
   }
 
@@ -614,6 +646,11 @@ export function createAdminBookingService(deps: {
         );
       }
 
+      if (!meeting) {
+        throw new Error(
+          "Meeting port not configured — setMeetingLink is unavailable",
+        );
+      }
       const meetingEventRow = await meeting.setManualLink(
         input.bookingId,
         input.url,

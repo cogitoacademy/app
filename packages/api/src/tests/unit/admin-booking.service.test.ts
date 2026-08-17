@@ -3,6 +3,7 @@ import { createAdminBookingService } from "../../modules/admin-booking/admin-boo
 import {
   BookingNotFoundError,
   InvalidRefundStateError,
+  OverrideMarksParticipantsRequiredError,
   TerminalStateOverrideError,
 } from "../../modules/admin-booking/admin-booking.errors";
 
@@ -499,6 +500,157 @@ describe("AdminBookingService", () => {
         "p1",
         0,
       );
+    });
+
+    test("throws OverrideMarksParticipantsRequiredError when marksAction has no affectedParticipants (M1)", async () => {
+      const wallet = makeWalletPort();
+      const repo = mockRepo({
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: wallet as any,
+        refund: makeRefundPort(),
+      });
+
+      try {
+        await service.applyOverride("admin1", {
+          bookingId: "b1",
+          category: "tutor_no_show",
+          reason: "No participants listed",
+          marksAction: "release_holds",
+        });
+        expect(true).toBe(false);
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(OverrideMarksParticipantsRequiredError);
+        expect(e.code).toBe("OVERRIDE_MARKS_PARTICIPANTS_REQUIRED");
+      }
+      expect(repo.updateBookingWithOverride).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
+    });
+
+    test("throws OverrideMarksParticipantsRequiredError for empty affectedParticipants array (M1)", async () => {
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo: mockRepo(),
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      await expect(
+        service.applyOverride("admin1", {
+          bookingId: "b1",
+          category: "force_cancel",
+          reason: "Empty list",
+          marksAction: "compensate_deduct",
+          affectedParticipants: [],
+        }),
+      ).rejects.toThrow(OverrideMarksParticipantsRequiredError);
+    });
+
+    test("cancels the provider meeting after a terminal override commits (H6)", async () => {
+      const meeting = {
+        setManualLink: mock(async () => ({}) as any),
+        cancelEvent: mock(async () => {}),
+      };
+      const repo = mockRepo({
+        findBookingById: mock(async () => {
+          const calls = repo.findBookingById.mock.calls.length;
+          return calls === 1
+            ? { id: "b1", currentState: "confirmed", holdAmount: 100 }
+            : { id: "b1", currentState: "cancelled", holdAmount: 0 };
+        }),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting,
+      });
+
+      await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "force_cancel",
+        reason: "Cancel meeting",
+      });
+
+      expect(meeting.cancelEvent).toHaveBeenCalledTimes(1);
+      expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
+    });
+
+    test("does not cancel the meeting when the override target is not terminal (H6)", async () => {
+      const meeting = {
+        setManualLink: mock(async () => ({}) as any),
+        cancelEvent: mock(async () => {}),
+      };
+      const repo = mockRepo({
+        updateBookingWithOverride: mock(async () => ({
+          previousState: "confirmed",
+          updated: { id: "b1", currentState: "confirmed" },
+        })),
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+          holdAmount: 100,
+        })),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting,
+      });
+
+      await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "admin_correction",
+        reason: "Non-terminal correction",
+      });
+
+      expect(meeting.cancelEvent).not.toHaveBeenCalled();
+    });
+
+    test("meeting cancel failure does not break the override (H6 best-effort)", async () => {
+      const meeting = {
+        setManualLink: mock(async () => ({}) as any),
+        cancelEvent: mock(async () => {
+          throw new Error("Google API down");
+        }),
+      };
+      const repo = mockRepo({
+        findBookingById: mock(async () => {
+          const calls = repo.findBookingById.mock.calls.length;
+          return calls === 1
+            ? { id: "b1", currentState: "confirmed", holdAmount: 100 }
+            : { id: "b1", currentState: "cancelled", holdAmount: 0 };
+        }),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting,
+      });
+
+      const result = await service.applyOverride("admin1", {
+        bookingId: "b1",
+        category: "force_cancel",
+        reason: "Cancel despite Google failure",
+      });
+
+      expect(result).toBeDefined();
+      expect(result.currentState).toBe("cancelled");
     });
   });
 

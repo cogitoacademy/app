@@ -90,3 +90,10 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - Auto-ack notification on ticket creation (`support.{id}.acknowledged`); escalation emits `support.{id}.escalated` notification row (metadata `whatsappTarget: +6288101190195`, `escalate: true`) — WhatsApp hook point, adapter NOT built.
 - Docs: CONTEXT H5 row, MODULE-REFERENCE support section, PRD-GAPS-PHASE3 U9 → CLOSED.
 - Targeted 34/34 (support-sla + support.service + support-flow + escalation job); full API 1860/0; server 49/0; check-types/lint/oxfmt clean.
+
+## P2.9 (H6 + M1) applyOverride meeting cancel + marks participants — complete
+
+- H6: terminal overrides call `meeting.cancelEvent` best-effort after tx commit (provider failure logged, never breaks override).
+- M1: `planOverride` throws `OverrideMarksParticipantsRequiredError` (400) when marksAction lacks non-empty affectedParticipants.
+- `AdminBookingMeetingPort` + `cancelEvent`; `meeting` dep optional with guard for setMeetingLink.
+- Targeted 53/53 (service + errors) + admin-override/override-preview/admin-meeting-link regressions 70/70; full API 1871/0; server 49/0 (1 known uploads flake on first run, green on rerun); check-types/lint/oxfmt clean.
