@@ -74,3 +74,8 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - Commit `ce867e7` + fix round 1 `a2bfbf5` (3 Important fixed: RPC enum for tutor_lateness_pending via OVERRIDE_LIST_CATEGORIES; idempotent flagging via repo exclusion + two-sweep test; API-REFERENCE copy).
 - Design (user): marking window ±15min + admin surface via overrideMeta category; no auto-cancel/release.
 - Targeted 8/8; regressions 68/68 + full integration 280/280; unit 1530/1530; check-types/lint/oxfmt clean.
+
+## P2.6 (H3) relocateRoom transition — complete
+
+- Commit `ff8eb9a` (off `a2bfbf5`); review clean (2 minors: notification test weak isolation across suite; no unit-level port assertion — acceptable).
+- Targeted 4/4; room/offline-scheduled/expiry regressions 34/34; check-types/lint/oxfmt clean.
