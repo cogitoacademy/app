@@ -6,7 +6,12 @@
  */
 export type RateLimitKind = "payment" | "invite" | "booking" | "search";
 
-const AUTH_PATHS = ["/api/auth/sign-in/", "/api/auth/sign-up/"];
+const AUTH_PATHS = [
+  "/api/auth/sign-in/",
+  "/api/auth/sign-up/",
+  "/api/auth/request-password-reset/",
+  "/api/auth/reset-password/",
+];
 
 export function matchAuthPath(path: string): boolean {
   return AUTH_PATHS.some((p) => path.startsWith(p));

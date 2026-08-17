@@ -195,7 +195,7 @@ export function createServer() {
       const path = url.pathname;
       const ip = getClientIp(request, env.TRUST_PROXY, server ?? undefined);
 
-if (matchAuthPath(path)) {
+      if (matchAuthPath(path)) {
         const { allowed, retryAfterMs } = await authRateLimit(ip);
         if (!allowed) {
           return new Response(JSON.stringify({ error: "Too many requests" }), {
