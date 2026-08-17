@@ -128,3 +128,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - `room.cancelRoomBooking` calls `bookingPort.cancelOfflineBooking` (releases holds + transition CANCELLED + audit, no-op past AWAITING_ADMIN_ROOM_APPROVAL); `findCancellableRoomBookingByBookingId` includes pending `requested` rows (FR-22).
 - Tests: room.service (3 new), booking.service (2 new), booking-u14-room-request (1 integration).
 - Full API 1889/0; check-types/lint/oxfmt clean.
+
+## P2.15 (M8) withdraw reprice fallback — complete
+
+- withdraw regression branch catches InsufficientMarksError from repriceGroupForHeadcount → release remaining holds + zero hold + transition EXPIRED (B5 mirror); other errors propagate.
+- Tests: 2 unit cases (withdraw-branch + G4 reprice test rewritten to expiry semantics).
+- Full API 1890/0; check-types/lint/oxfmt clean.

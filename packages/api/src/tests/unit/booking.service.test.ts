@@ -3019,6 +3019,92 @@ describe("BookingService", () => {
       );
     });
 
+    test("M8: pre-H2 withdraw reprice InsufficientMarksError falls through to the expiry branch (release all + EXPIRED)", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "confirmed",
+        targetGroupSize: 3,
+        confirmedHeadcount: 3,
+        holdAmount: 126,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 126,
+          tutorShare: 100.8,
+          cogitoTake: 25.2,
+          baselineCogitoTake: 16,
+          baselineTutorShare: 54,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => {
+            const calls = repo.findBookingById.mock.calls.length;
+            // Calls 1-2: load + regression-transition read (still confirmed).
+            // Call 3+: the expiry-fallback transition read sees the
+            // post-regression state so confirmed → ... → expired is valid.
+            return calls <= 2
+              ? { ...booking, currentState: "confirmed", version: 1 }
+              : {
+                  ...booking,
+                  currentState: "awaiting_reconfirmation",
+                  version: 2,
+                };
+          }),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+          ]),
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ prices: { "2": 60 } }),
+          ),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "expired" },
+            newVersion: 2,
+          })),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w1",
+            totalBalance: 84,
+            heldBalance: 42,
+            availableBalance: 42,
+          })),
+          // The repricing hold of the increased per-student price cannot be
+          // funded (60 > 42 available) → InsufficientMarksError.
+          hold: mock(async () => {
+            throw new InsufficientMarksError(60, 84);
+          }),
+        },
+        pricing: { computeSplit: mock(realComputeSplit) },
+      });
+
+      const result = await service.withdraw("student1", "b1");
+
+      // PRD TC-19: the group falls through to expiry on an unfunded reprice —
+      // the withdrawer still leaves, remaining holds are released, and the
+      // booking expires (never wedged, never rolled back). The regression to
+      // AWAITING_RECONFIRMATION happens first; the expiry fallback is the
+      // final transition.
+      expect(result.withdrawn).toBe(true);
+      expect(repo.updateBookingVersioned).toHaveBeenCalledTimes(2);
+      const lastCall = repo.updateBookingVersioned.mock.calls[1] as unknown[];
+      expect(lastCall[3]).toEqual(
+        expect.objectContaining({ currentState: "expired" }),
+      );
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
+    });
+
     test("group withdraw in a non-regressable state does not cancel (C1)", async () => {
       const booking = makeBooking({
         type: "group",
@@ -4916,14 +5002,14 @@ describe("BookingService", () => {
       });
     });
 
-    test("withdraw repricing rolls back when a remaining participant cannot cover the increased hold", async () => {
+    test("M8: unfunded reprice after withdrawal expires the group instead of rolling back the withdrawal", async () => {
       const booking = makeGroupBooking();
       const proposer = makeParticipant({ heldAmount: 112 });
       const remaining = [
         makeRemainingParticipant("p2", "student2", 28),
         makeRemainingParticipant("p3", "student3", 28),
       ];
-      const { service, wallet } = createService({
+      const { service, repo } = createService({
         repo: {
           findBookingById: mock(async () => ({ ...booking, version: 1 })),
           findParticipant: mock(async () => proposer),
@@ -4950,11 +5036,23 @@ describe("BookingService", () => {
         pricing: { computeSplit: mock(realComputeSplit) },
       });
 
-      await expect(service.withdraw("student1", "b1")).rejects.toThrow(
-        InsufficientMarksError,
+      // PRD TC-19: the group falls through to expiry on an unfunded reprice —
+      // the withdrawer is not stuck in a group they cannot leave, and the
+      // remaining holds are released with the booking EXPIRED. The regression
+      // to AWAITING_RECONFIRMATION happens first; the expiry fallback is the
+      // final transition.
+      const result = await service.withdraw("student1", "b1");
+      expect(result.withdrawn).toBe(true);
+      expect(repo.updateBookingVersioned).toHaveBeenCalledTimes(2);
+      const lastCall = repo.updateBookingVersioned.mock.calls[1] as unknown[];
+      expect(lastCall[3]).toEqual(
+        expect.objectContaining({ currentState: "expired" }),
       );
-      // the transaction aborts before any repricing hold is placed
-      expect(wallet.hold).not.toHaveBeenCalled();
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        0,
+      );
     });
 
     test("withdraw repricing releases excess hold when per-student price drops", async () => {

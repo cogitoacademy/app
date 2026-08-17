@@ -2597,14 +2597,48 @@ export function createBookingService(deps: {
             },
           );
 
-          await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
-          // M5: the surviving participants get a fresh 12h reconfirmation
-          // window (the old one may be near exhaustion or already passed).
-          await repo.updateBookingDeadline(
-            tx,
-            bookingId,
-            new Date(Date.now() + RESPONSE_WINDOW_MS),
-          );
+          // M8: if the survivors cannot fund the higher per-student price
+          // (InsufficientMarksError), the withdrawal must NOT roll back —
+          // PRD TC-19 expects the group to fall through to expiry (the same
+          // B5 handling expireBookings uses at the deadline).
+          try {
+            await repriceGroupForHeadcount(
+              tx,
+              b,
+              remaining,
+              ACTOR_TYPE.STUDENT,
+            );
+            // M5: the surviving participants get a fresh 12h reconfirmation
+            // window (the old one may be near exhaustion or already passed).
+            await repo.updateBookingDeadline(
+              tx,
+              bookingId,
+              new Date(Date.now() + RESPONSE_WINDOW_MS),
+            );
+          } catch (error) {
+            if (!(error instanceof InsufficientMarksError)) throw error;
+            log({
+              level: "warn",
+              action: "withdraw_reprice_failed",
+              bookingId,
+              message:
+                "Group reprice after withdrawal could not be funded; expiring the booking",
+              error: { message: String(error) },
+            });
+            await releaseAllParticipantHolds(
+              tx,
+              bookingId,
+              "Group cancelled: unfunded reprice after withdrawal",
+              ACTOR_TYPE.STUDENT,
+              userId,
+            );
+            await repo.updateBookingHoldAmount(tx, bookingId, 0);
+            await transition(tx, bookingId, BOOKING_STATE.EXPIRED, {
+              actorId: userId,
+              actorType: ACTOR_TYPE.STUDENT,
+              reason: "Not enough participants after withdrawal",
+            });
+          }
         } else if (b.type === BOOKING_TYPE.GROUP) {
           // A group in a non-regressable non-terminal state continues without
           // the withdrawer; their hold was released above and nothing is
