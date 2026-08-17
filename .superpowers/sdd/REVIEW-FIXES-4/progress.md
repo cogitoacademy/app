@@ -52,3 +52,8 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - Commit `f20916c5` (off P1 `697eb33`; review clean).
 - Targeted 5/5; regression batches green; check-types/lint/oxfmt clean.
 - Minor (deferred): tutor-ownership guard not explicitly regression-tested (coverage gap only); degenerate single-survivor GROUP no-show stays live (plan-mandated `type===GROUP` semantics).
+
+## P2.2 (C2) reschedule H-2 guard — complete
+
+- Commit `62547ee` (off `f20916c`); review clean (2 plan-consistent minors: error message text not surfaced verbatim; `<=` boundary is the safer direction).
+- Targeted 7/7; reschedule/series/group regressions green. gitignore was reverted by subagent → restored + recommitted with ledger.
