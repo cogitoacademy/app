@@ -262,7 +262,7 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
     expect(noShowDeducts[0]!.walletId).toBe(inviteeWallet!.id);
   });
 
-  test("after group no-show, the survivor's hold is still released by the expiry path", async () => {
+  test("after group no-show, the survivor's hold is forfeited by the no-show expiry path (M2/M4)", async () => {
     const bookingId = await createFullScheduledGroup();
     await tutorClient.tutorActions.markParticipantNoShow({
       bookingId,
@@ -273,9 +273,10 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
     expect(b.currentState).toBe("scheduled");
     expect(b.holdAmount).toBe(45);
 
-    // Release the remaining hold via the expiry path (deadline passed). The
-    // proposer's wallet may also carry holds from earlier tests' bookings, so
-    // assert the delta rather than an absolute balance.
+    // Expire the survivor's SCHEDULED booking: the no-show path now FORFEITS
+    // the remaining hold (deduct, M2) while transition-or-skip transitions the
+    // booking to NO_SHOW in the same tx (M4). The proposer's wallet may also
+    // carry holds from earlier tests' bookings, so assert the delta.
     const [proposerBefore] = await db
       .select()
       .from(wallet)
@@ -292,7 +293,10 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
       .from(wallet)
       .where(eq(wallet.userId, proposerId));
     expect(proposerWallet!.heldBalance).toBe(proposerBefore!.heldBalance - 45);
-    expect(proposerWallet!.totalBalance).toBe(proposerBefore!.totalBalance);
+    // Forfeit semantics: the hold is deducted (total drops), not released.
+    expect(proposerWallet!.totalBalance).toBe(
+      proposerBefore!.totalBalance - 45,
+    );
 
     // The forfeited target is never double-credited: its hold stays consumed.
     const [inviteeWallet] = await db
@@ -304,6 +308,7 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
 
     const after = await proposerClient.booking.get({ bookingId });
     expect(after.holdAmount).toBe(0);
+    expect(after.currentState).toBe("no_show");
   });
 
   test("solo no-show still transitions the booking to NO_SHOW and zeroes the hold", async () => {

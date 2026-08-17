@@ -67,6 +67,18 @@ import type {
   BookingRoomPort,
 } from "./index";
 
+/**
+ * Terminal target per expiry-eligible state. Shared by `expireBookings` and
+ * `releaseExpiredHolds` so both jobs agree on where a past-deadline booking
+ * ends up (M4). RESCHEDULE_PROPOSED is handled by the proposal-expiry branch
+ * in `expireBookings` (targets the pre-proposal state) and is deliberately
+ * absent here.
+ */
+const EXPIRY_TARGET: Record<string, BookingState> = {
+  [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
+  [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
+};
+
 export interface CreateSoloInput {
   tutorId: string;
   availabilitySlotId: string;
@@ -3237,12 +3249,6 @@ export function createBookingService(deps: {
       BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL,
     ]);
 
-    const EXPIRY_TARGET: Record<string, BookingState> = {
-      [BOOKING_STATE.RESCHEDULE_PROPOSED]: BOOKING_STATE.EXPIRED,
-      [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
-      [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
-    };
-
     const outcomes = await mapLimit(candidates, 5, async (b) => {
       try {
         let shouldCancelMeeting = true;
@@ -3469,13 +3475,66 @@ export function createBookingService(deps: {
     const outcomes = await mapLimit(candidates, 5, async (b) => {
       if (b.holdAmount <= 0) return { ok: true, released: false };
       try {
+        let didRelease = false;
         await db.transaction(async (tx) => {
-          await releaseAllParticipantHolds(
-            tx,
-            b.id,
-            "Hold released: deadline passed",
-            ACTOR_TYPE.SYSTEM,
-          );
+          const live = await repo.findBookingById(tx, b.id);
+          if (!live) return;
+          if (TERMINAL_STATES.includes(live.currentState as BookingState)) {
+            // Raced with expireBookings (or an admin action): the holds are
+            // already handled — never release from a terminal booking.
+            return;
+          }
+          if (live.currentState === BOOKING_STATE.RESCHEDULE_PROPOSED) {
+            // The proposal-expiry branch in expireBookings owns this path and
+            // retains the holds for the restored schedule. Skipping keeps the
+            // two jobs from fighting over the same booking (M4).
+            return;
+          }
+
+          // M4: transition-or-skip — the terminal transition comes FIRST so a
+          // version conflict throws before any wallet movement (a hold is only
+          // ever released together with the transition; a later tutor
+          // accept/complete can never deduct from a zeroed hold).
+          const targetState =
+            EXPIRY_TARGET[live.currentState as string] ?? BOOKING_STATE.EXPIRED;
+          const noShow = targetState === BOOKING_STATE.NO_SHOW;
+          await transition(tx, b.id, targetState, {
+            actorId: "system",
+            actorType: ACTOR_TYPE.SYSTEM,
+            reason: "Deadline passed",
+          });
+          didRelease = true;
+
+          if (noShow) {
+            // Same forfeit semantics as expireBookings (M2).
+            const participants = await repo.findConfirmedParticipants(tx, b.id);
+            for (const p of participants) {
+              if (p.heldAmount <= 0) continue;
+              // eslint-disable-next-line no-await-in-loop
+              const w = await wallet.getByUserId(tx, p.userId);
+              if (!w) continue;
+              // eslint-disable-next-line no-await-in-loop
+              await wallet.deduct(tx, {
+                walletId: w.id,
+                amount: p.heldAmount,
+                eventKey: `booking.${b.id}.no_show.${p.userId}`,
+                sourceReference: b.id,
+                bookingId: b.id,
+                actorType: ACTOR_TYPE.SYSTEM,
+                reason: "No-show forfeit",
+              });
+              // eslint-disable-next-line no-await-in-loop
+              await repo.updateParticipantState(tx, p.id, { heldAmount: 0 });
+            }
+          } else {
+            await releaseAllParticipantHolds(
+              tx,
+              b.id,
+              "Hold released: deadline passed",
+              ACTOR_TYPE.SYSTEM,
+            );
+          }
+
           await repo.updateBookingHoldAmount(tx, b.id, 0);
 
           await notification.writeBestEffort({
@@ -3483,13 +3542,22 @@ export function createBookingService(deps: {
             userId: b.proposerId,
             bookingId: b.id,
             category: NOTIFICATION_CATEGORY.BOOKING,
-            severity: NOTIFICATION_SEVERITY.INFO,
-            title: "Booking hold released",
-            body: "Held marks for an expired booking were released back to your balance.",
-            eventKey: `booking.${b.id}.hold_released_expiry`,
+            severity: noShow
+              ? NOTIFICATION_SEVERITY.ACTION
+              : NOTIFICATION_SEVERITY.INFO,
+            title: noShow
+              ? "Session marked as no-show"
+              : "Booking hold released",
+            body: noShow
+              ? "The session was marked as a no-show and held marks were forfeited."
+              : "Held marks for an expired booking were released back to your balance.",
+            eventKey: noShow
+              ? `booking.${b.id}.expired.student`
+              : `booking.${b.id}.hold_released_expiry`,
+            emailRequired: noShow,
           });
         });
-        return { ok: true, released: true };
+        return { ok: true, released: didRelease };
       } catch (error) {
         log({
           level: "error",

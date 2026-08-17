@@ -4182,6 +4182,151 @@ describe("BookingService", () => {
       const result = await service.releaseExpiredHolds();
       expect(result.released).toBeGreaterThanOrEqual(0);
     });
+
+    test("M4: skips the release when the booking cannot be transitioned (version conflict) — never releases from a live booking", async () => {
+      const b1 = makeBooking({
+        id: "b1",
+        currentState: "awaiting_tutor_review",
+        holdAmount: 100,
+        proposerId: "student1",
+      });
+
+      const { service, wallet, repo, notification } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [b1]),
+          findBookingById: mock(async () => ({ ...b1, version: 1 })),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 100 }),
+          ]),
+          // A concurrent writer bumped the version → transition fails.
+          updateBookingVersioned: mock(async () => null),
+        },
+      });
+
+      const result = await service.releaseExpiredHolds();
+      expect(result).toEqual({ released: 0 });
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+      expect(notification.writeBestEffort).not.toHaveBeenCalled();
+    });
+
+    test("M4: transitions the booking to its terminal state in the same tx before releasing holds", async () => {
+      const b1 = makeBooking({
+        id: "b1",
+        currentState: "awaiting_tutor_review",
+        holdAmount: 100,
+        proposerId: "student1",
+      });
+
+      const { service, wallet, repo, notification } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [b1]),
+          findBookingById: mock(async () => ({ ...b1, version: 1 })),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 100 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...b1, currentState: "expired" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.releaseExpiredHolds();
+      expect(result).toEqual({ released: 1 });
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "expired" }),
+      );
+      expect(repo.insertStateHistory).toHaveBeenCalledTimes(1);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+    });
+
+    test("M4: skips already-terminal bookings (raced with expireBookings)", async () => {
+      const b1 = makeBooking({
+        id: "b1",
+        currentState: "expired",
+        holdAmount: 100,
+        proposerId: "student1",
+      });
+
+      const { service, wallet } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [b1]),
+          findBookingById: mock(async () => ({ ...b1, version: 1 })),
+        },
+      });
+
+      const result = await service.releaseExpiredHolds();
+      expect(result).toEqual({ released: 0 });
+      expect(wallet.release).not.toHaveBeenCalled();
+    });
+
+    test("M4: skips RESCHEDULE_PROPOSED (expireBookings owns the proposal-expiry path)", async () => {
+      const b1 = makeBooking({
+        id: "b1",
+        currentState: "reschedule_proposed",
+        holdAmount: 100,
+        proposerId: "student1",
+      });
+
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [b1]),
+          findBookingById: mock(async () => ({ ...b1, version: 1 })),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 100 }),
+          ]),
+        },
+      });
+
+      const result = await service.releaseExpiredHolds();
+      expect(result).toEqual({ released: 0 });
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+    });
+
+    test("M4: SCHEDULED fallback forfeits holds (NO_SHOW) instead of releasing", async () => {
+      const b1 = makeBooking({
+        id: "b1",
+        currentState: "scheduled",
+        holdAmount: 42,
+        proposerId: "student1",
+      });
+
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingsExpiringByDeadline: mock(async () => [b1]),
+          findBookingById: mock(async () => ({ ...b1, version: 1 })),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ heldAmount: 42 }),
+          ]),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...b1, currentState: "no_show" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      const result = await service.releaseExpiredHolds();
+      expect(result).toEqual({ released: 1 });
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).toHaveBeenCalledTimes(1);
+      expect(wallet.deduct.mock.calls[0][1]).toMatchObject({
+        amount: 42,
+        reason: "No-show forfeit",
+      });
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "no_show" }),
+      );
+    });
   });
 
   describe("Story 2: State Machine Completeness", () => {

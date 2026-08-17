@@ -109,3 +109,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - `cancel()` throws `BookingSeriesNoOptOutError` for `type === SERIES && targetGroupSize > 1` past `AWAITING_PARTICIPANT_CONFIRMATION`; pre-confirmation cancel still works with EXPIRED fallback where CANCELLED unreachable.
 - Tests: unit (4 new cases) + integration `booking-group-series.test.ts` (proposer cancel → CONFLICT).
 - Full API 1873/0; check-types/lint/oxfmt clean.
+
+## P2.12 (M4) releaseExpiredHolds transition-or-skip — complete
+
+- Terminal transition FIRST in the same tx (shared EXPIRY_TARGET), then release/forfeit; version-conflict / terminal / RESCHEDULE_PROPOSED skipped without wallet movement.
+- Tests: 5 new unit cases + scheduler-holds.test.ts + booking-no-show-group.test.ts updated (survivor SCHEDULED forfeits on expiry).
+- Full API 1878/0; check-types/lint/oxfmt clean.
