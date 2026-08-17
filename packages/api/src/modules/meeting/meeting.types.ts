@@ -1,3 +1,5 @@
+import type { DbOrTx } from "../../lib/tx";
+
 export interface MeetingEvent {
   id: string;
   bookingId: string;
@@ -14,11 +16,21 @@ export interface MeetingAttendee {
 }
 
 export interface MeetingPort {
+  /**
+   * Creates a provider-side meeting event and persists the local
+   * `meetingEvent` row.
+   *
+   * When called inside a booking transaction, pass `conn` so the local row
+   * commits/rolls back with the booking — otherwise a failed transition would
+   * leave an orphan row (L2). The provider-side event cannot be rolled back;
+   * callers must best-effort `cancelEvent` on failure.
+   */
   createEvent(
     bookingId: string,
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
+    conn?: DbOrTx,
   ): Promise<MeetingEvent>;
   /**
    * Moves the provider-side event to a new time after a booking reschedule is

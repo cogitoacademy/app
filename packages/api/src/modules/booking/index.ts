@@ -55,6 +55,7 @@ export interface BookingMeetingPort {
     scheduledStartAt?: Date,
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
+    conn?: DbOrTx,
   ): Promise<MeetingEvent>;
   updateEvent(
     bookingId: string,

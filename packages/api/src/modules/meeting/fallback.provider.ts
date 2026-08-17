@@ -14,8 +14,12 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
     _scheduledStartAt?: Date,
     _scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
+    conn?: DbOrTx,
   ): Promise<MeetingEvent> {
-    const [row] = await db
+    // L2: when called inside a booking transaction, the local row must join
+    // that transaction so it rolls back with the booking.
+    const write = conn ?? db;
+    const [row] = await write
       .insert(meetingEvent)
       .values({
         bookingId,

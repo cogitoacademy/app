@@ -1423,11 +1423,114 @@ describe("BookingService", () => {
           { email: "student1@example.com", name: "Student One" },
           { email: "student2@example.com", name: "Student Two" },
         ],
+        expect.anything(), // L2: the meetingEvent row joins the booking tx
       );
       expect(notification.write).toHaveBeenCalledTimes(1);
       expect(notification.write.mock.calls[0][0].title).toBe(
         "Booking accepted",
       );
+    });
+
+    test("L3: notifies 'Meeting link ready' when the meeting row carries a URL", async () => {
+      const booking = makeBooking({ modality: "online" });
+      let findCallCount = 0;
+      const { service, notification } = createService({
+        repo: {
+          findBookingById: mock(async () => {
+            findCallCount++;
+            if (findCallCount <= 2)
+              return {
+                ...booking,
+                currentState: "awaiting_tutor_review",
+                version: 1,
+              };
+            return { ...booking, currentState: "confirmed", version: 2 };
+          }),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+          findConfirmedParticipants: mock(async () => []),
+          findUserEmails: mock(async () => [
+            { id: "tutor1", email: "tutor1@example.com", name: "Tutor One" },
+          ]),
+        },
+        meeting: {
+          ...makeMeeting(),
+          createEvent: mock(async () => ({
+            id: "m1",
+            bookingId: "b1",
+            provider: "google_meet",
+            externalEventId: "ext1",
+            meetingUrl: "https://meet.google.com/abc",
+            status: "created",
+            errorReason: null,
+          })),
+        },
+      });
+
+      await service.tutorAccept("b1", "tutor1");
+
+      const linkNotifs = notification.writeBestEffort.mock.calls.filter(
+        (c: any) => c[0].eventKey === "booking.b1.scheduled.tutor",
+      );
+      expect(linkNotifs.length).toBe(1);
+      expect(linkNotifs[0][0].title).toBe("Meeting link ready");
+      expect(linkNotifs[0][0].body).toBe(
+        "The meeting link for the session is ready.",
+      );
+    });
+
+    test("L3: notifies 'Meeting link pending' when the meeting row has no URL (manual fallback)", async () => {
+      const booking = makeBooking({ modality: "online" });
+      let findCallCount = 0;
+      const { service, notification } = createService({
+        repo: {
+          findBookingById: mock(async () => {
+            findCallCount++;
+            if (findCallCount <= 2)
+              return {
+                ...booking,
+                currentState: "awaiting_tutor_review",
+                version: 1,
+              };
+            return { ...booking, currentState: "confirmed", version: 2 };
+          }),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+          findConfirmedParticipants: mock(async () => []),
+          findUserEmails: mock(async () => [
+            { id: "tutor1", email: "tutor1@example.com", name: "Tutor One" },
+          ]),
+        },
+        meeting: {
+          ...makeMeeting(),
+          createEvent: mock(async () => ({
+            id: "m1",
+            bookingId: "b1",
+            provider: "manual",
+            externalEventId: null,
+            meetingUrl: null,
+            status: "manual",
+            errorReason: null,
+          })),
+        },
+      });
+
+      await service.tutorAccept("b1", "tutor1");
+
+      const linkNotifs = notification.writeBestEffort.mock.calls.filter(
+        (c: any) => c[0].eventKey === "booking.b1.scheduled.tutor",
+      );
+      expect(linkNotifs.length).toBe(1);
+      expect(linkNotifs[0][0].title).toBe("Meeting link pending");
+      expect(linkNotifs[0][0].body).toContain("pending");
     });
 
     test("accepts offline booking — transitions to confirmed then awaiting_admin_room_approval and sets deadline", async () => {

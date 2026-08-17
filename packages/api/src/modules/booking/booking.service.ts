@@ -3251,6 +3251,7 @@ export function createBookingService(deps: {
         b.scheduledStartAt,
         b.scheduledEndAt,
         attendees,
+        tx,
       );
 
       if (meetingResult.status === "failed") {
@@ -3272,14 +3273,31 @@ export function createBookingService(deps: {
         new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
       );
 
+      // L3: the "ready" copy is only truthful when the meeting row actually
+      // carries a URL — the fallback (manual) provider creates a row with
+      // meetingUrl null, so say "link pending" instead of promising a link.
+      const linkReady = Boolean(meetingResult.meetingUrl);
+      const tutorTitle = linkReady
+        ? "Meeting link ready"
+        : "Meeting link pending";
+      const tutorBody = linkReady
+        ? "The meeting link for the session is ready."
+        : "The meeting link for the session is pending — an admin will add it before the session.";
+      const participantTitle = linkReady
+        ? "Meeting link ready"
+        : "Meeting link pending";
+      const participantBody = linkReady
+        ? "The meeting link for your group session is ready."
+        : "The meeting link for your group session is pending — an admin will add it before the session.";
+
       await notification.writeBestEffort({
         db: tx,
         userId: b.tutorId,
         bookingId,
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
-        title: "Meeting link ready",
-        body: "The meeting link for the session is ready.",
+        title: tutorTitle,
+        body: tutorBody,
         eventKey: `booking.${bookingId}.scheduled.tutor`,
         emailRequired: true,
       });
@@ -3293,8 +3311,8 @@ export function createBookingService(deps: {
           bookingId,
           category: NOTIFICATION_CATEGORY.BOOKING,
           severity: NOTIFICATION_SEVERITY.ACTION,
-          title: "Meeting link ready",
-          body: "The meeting link for your group session is ready.",
+          title: participantTitle,
+          body: participantBody,
           eventKey: `booking.${bookingId}.scheduled.${p.userId}`,
           emailRequired: true,
         });
@@ -3311,6 +3329,21 @@ export function createBookingService(deps: {
         bookingId,
         tutorId,
       });
+      // L2: the local meetingEvent row is inside the booking tx and rolls back
+      // with it — but the provider-side Google event cannot be rolled back. If
+      // the failure happened after the event was created (e.g. a transition
+      // version conflict), best-effort cancel the provider event so a re-accept
+      // does not duplicate it.
+      try {
+        await meeting.cancelEvent(bookingId);
+      } catch (cancelError) {
+        log({
+          level: "warn",
+          action: "meeting_finalize_cleanup_failed",
+          bookingId,
+          error: { message: String(cancelError) },
+        });
+      }
       return {
         scheduled: false,
         booking: (await repo.findBookingById(tx, bookingId)) ?? b,

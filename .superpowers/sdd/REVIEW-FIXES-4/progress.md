@@ -141,3 +141,10 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - L1: `completeSeriesSession` deduct capped via `Math.min(session.holdAmount, p.heldAmount)` for solo-series (participant read) and group-series branches.
 - Tests: wallet-knowledge-bank-guard.test.ts (new, 4 cases) + booking.service.test.ts (2 L1 cases).
 - Full API 1896/0; check-types/lint/oxfmt clean.
+
+## P2.17 (L2 + L3) meeting tx propagation + link-pending copy — complete
+
+- L2: MeetingPort.createEvent accepts optional conn (DbOrTx); both providers write meetingEvent through it; finalizeMeetingSchedule passes the booking tx + best-effort cancelEvent on post-creation failure.
+- L3: scheduled notification copy derived from meetingResult.meetingUrl (ready vs pending).
+- Tests: 2 L3 unit cases + createEvent tx-arg assertion; meeting/fallback provider suites green.
+- Full API 1898/0; server 49/0; check-types/lint/oxfmt clean.
