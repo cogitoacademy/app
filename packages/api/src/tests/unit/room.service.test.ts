@@ -22,6 +22,7 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
     findRoomBookingsForUpdate: mock(async (_conn: any) => []),
     insertRoomBooking: mock(async (_conn: any, _values: any) => ({})),
     findActiveRoomBookingByBookingId: mock(async (_conn: any) => null),
+    findRequestedRoomBookingByBookingId: mock(async (_conn: any) => null),
     updateRoomBookingStatus: mock(
       async (_conn: any, _id: string, status: string) => ({
         id: "rb1",
@@ -291,6 +292,47 @@ describe("createRoomService", () => {
         "cancelled",
       );
       expect(result.status).toBe("cancelled");
+    });
+  });
+
+  describe("cancelRequestedRoomForBooking (M7)", () => {
+    test("cancels the pending requested row when present", async () => {
+      const repo = makeRepo({
+        findRequestedRoomBookingByBookingId: mock(async () => ({
+          id: "rb_req",
+          roomId: "room1",
+          bookingId: "b1",
+          status: "requested",
+        })),
+        updateRoomBookingStatus: mock(async () => ({
+          id: "rb_req",
+          status: "cancelled",
+        })),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await service.cancelRequestedRoomForBooking({}, "b1");
+
+      expect(repo.findRequestedRoomBookingByBookingId).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+      );
+      expect(repo.updateRoomBookingStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "rb_req",
+        "cancelled",
+      );
+    });
+
+    test("is a no-op when no requested row exists (already confirmed/cancelled)", async () => {
+      const repo = makeRepo({
+        findRequestedRoomBookingByBookingId: mock(async () => null),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await service.cancelRequestedRoomForBooking({}, "b1");
+
+      expect(repo.updateRoomBookingStatus).not.toHaveBeenCalled();
     });
   });
 });

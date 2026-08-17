@@ -1,5 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createBookingService } from "../../modules/booking/booking.service";
+import { RESPONSE_WINDOW_MS } from "../../shared/constants";
 import {
   BookingNotFoundError,
   BookingNotOwnedError,
@@ -286,6 +287,7 @@ function createService(
     wallet?: Record<string, unknown>;
     meeting?: Record<string, unknown>;
     pricing?: Record<string, unknown>;
+    roomPort?: Record<string, unknown>;
   } = {},
 ) {
   const db = makeDb();
@@ -299,6 +301,9 @@ function createService(
   const meeting = overrides.meeting
     ? { ...makeMeeting(), ...overrides.meeting }
     : makeMeeting();
+  const roomPort = overrides.roomPort
+    ? { ...makeRoomPort(), ...overrides.roomPort }
+    : makeRoomPort();
   const service = createBookingService({
     db,
     repo,
@@ -307,8 +312,30 @@ function createService(
     audit,
     notification,
     meeting,
+    roomPort,
   } as any);
-  return { service, db, repo, wallet, pricing, audit, notification, meeting };
+  return {
+    service,
+    db,
+    repo,
+    wallet,
+    pricing,
+    audit,
+    notification,
+    meeting,
+    roomPort,
+  };
+}
+
+function makeRoomPort(overrides: Record<string, unknown> = {}) {
+  return {
+    requestRoomForBooking: mock(async () => ({
+      available: true,
+      roomBookingId: "rb1",
+    })),
+    cancelRequestedRoomForBooking: mock(async () => {}),
+    ...overrides,
+  };
 }
 
 describe("BookingService", () => {
@@ -2411,6 +2438,92 @@ describe("BookingService", () => {
         expect.objectContaining({ heldAmount: 0 }),
       );
     });
+
+    test("M5: decline refreshes the reconfirmation deadline to now + 12h when the group survives", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 3,
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      });
+      const participant = makeParticipant({
+        confirmationState: "reconfirmed",
+        heldAmount: 42,
+      });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          decrementBookingConfirmedHeadcount: mock(async () => {}),
+          // Two confirmed participants remain — the group survives and
+          // reprices, so the reconfirmation window must refresh.
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2" }),
+            makeParticipant({ id: "p3", userId: "student3" }),
+          ]),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w1",
+            totalBalance: 100,
+            heldBalance: 42,
+            availableBalance: 58,
+          })),
+        },
+      });
+
+      const result = await service.reconfirm("student1", "b1", false);
+      expect(result).toEqual({ reconfirmed: false });
+      expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+      const deadlineArg = repo.updateBookingDeadline.mock.calls[0][2] as Date;
+      const diff = deadlineArg.getTime() - Date.now();
+      expect(diff).toBeGreaterThanOrEqual(RESPONSE_WINDOW_MS - 1000);
+      expect(diff).toBeLessThanOrEqual(RESPONSE_WINDOW_MS + 1000);
+    });
+
+    test("M5: decline that drops the group below minimum does not refresh the deadline", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 3,
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+        },
+      });
+      const participant = makeParticipant({
+        confirmationState: "reconfirmed",
+        heldAmount: 42,
+      });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          decrementBookingConfirmedHeadcount: mock(async () => {}),
+          // Only one confirmed participant remains — the group expires.
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2" }),
+          ]),
+        },
+      });
+
+      await service.reconfirm("student1", "b1", false);
+      expect(repo.updateBookingDeadline).not.toHaveBeenCalled();
+    });
   });
 
   describe("withdraw", () => {
@@ -2817,6 +2930,93 @@ describe("BookingService", () => {
         expect.objectContaining({ currentState: "awaiting_reconfirmation" }),
       );
       expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
+    });
+
+    test("M7: group withdraw from AWAITING_ADMIN_ROOM_APPROVAL cancels the requested roomBooking and refreshes the reconfirmation deadline", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_admin_room_approval",
+        targetGroupSize: 3,
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, repo, roomPort } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+            makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+          ]),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "awaiting_reconfirmation" },
+            newVersion: 2,
+          })),
+        },
+        wallet: {
+          ...makeWallet(),
+          getByUserId: mock(async () => ({
+            id: "w1",
+            totalBalance: 100,
+            heldBalance: 42,
+            availableBalance: 58,
+          })),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      // The pending room request must not survive for an admin to assign
+      // mid-reconfirmation (the booking regressed to tutor review).
+      expect(roomPort.cancelRequestedRoomForBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+      );
+      // The new 12h reconfirmation window starts now.
+      expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+      const deadlineArg = repo.updateBookingDeadline.mock.calls[0][2] as Date;
+      const diff = deadlineArg.getTime() - Date.now();
+      expect(diff).toBeGreaterThanOrEqual(RESPONSE_WINDOW_MS - 1000);
+      expect(diff).toBeLessThanOrEqual(RESPONSE_WINDOW_MS + 1000);
+    });
+
+    test("M7: solo withdraw from AWAITING_ADMIN_ROOM_APPROVAL cancels the requested roomBooking", async () => {
+      const booking = makeBooking({
+        type: "solo",
+        currentState: "awaiting_admin_room_approval",
+        scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      });
+      const participant = makeParticipant({ heldAmount: 42 });
+      const { service, roomPort } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findConfirmedParticipants: mock(async () => []),
+          updateBookingVersioned: mock(async () => ({
+            updated: { ...booking, currentState: "cancelled" },
+            newVersion: 2,
+          })),
+        },
+      });
+
+      await service.withdraw("student1", "b1");
+
+      expect(roomPort.cancelRequestedRoomForBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+      );
     });
 
     test("group withdraw in a non-regressable state does not cancel (C1)", async () => {

@@ -115,3 +115,10 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - Terminal transition FIRST in the same tx (shared EXPIRY_TARGET), then release/forfeit; version-conflict / terminal / RESCHEDULE_PROPOSED skipped without wallet movement.
 - Tests: 5 new unit cases + scheduler-holds.test.ts + booking-no-show-group.test.ts updated (survivor SCHEDULED forfeits on expiry).
 - Full API 1878/0; check-types/lint/oxfmt clean.
+
+## P2.13 (M5 + M7) deadline refresh + room-request cancel — complete
+
+- M5: reconfirm-decline survival path + withdraw-pre-H2 regression path both refresh `deadlineAt = now + 12h` after repricing.
+- M7: withdraw from AWAITING_ADMIN_ROOM_APPROVAL cancels the pending `requested` roomBooking via new `roomPort.cancelRequestedRoomForBooking` (room service + repo `findRequestedRoomBookingByBookingId`).
+- Tests: 4 new unit cases (2 M5 reconfirm, 2 M7 withdraw) + 2 room.service M7 cases.
+- Full API 1884/0; check-types/lint/oxfmt clean.

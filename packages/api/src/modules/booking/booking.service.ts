@@ -2416,6 +2416,13 @@ export function createBookingService(deps: {
           });
         } else {
           await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
+          // M5: the surviving participants get a fresh 12h reconfirmation
+          // window — the previous window may have been (near) exhausted.
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(Date.now() + RESPONSE_WINDOW_MS),
+          );
         }
 
         return { reconfirmed: false };
@@ -2568,6 +2575,17 @@ export function createBookingService(deps: {
             cancelMeeting = true;
           }
 
+          // M7: a `requested` roomBooking row must not survive the regression
+          // — an admin `assignRoom` mid-reconfirmation would otherwise insert
+          // a confirmed room for a booking that is heading back to tutor
+          // review. No-op when the request was already confirmed/cancelled.
+          if (
+            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL &&
+            roomPort
+          ) {
+            await roomPort.cancelRequestedRoomForBooking(tx, bookingId);
+          }
+
           await transition(
             tx,
             bookingId,
@@ -2580,6 +2598,13 @@ export function createBookingService(deps: {
           );
 
           await repriceGroupForHeadcount(tx, b, remaining, ACTOR_TYPE.STUDENT);
+          // M5: the surviving participants get a fresh 12h reconfirmation
+          // window (the old one may be near exhaustion or already passed).
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(Date.now() + RESPONSE_WINDOW_MS),
+          );
         } else if (b.type === BOOKING_TYPE.GROUP) {
           // A group in a non-regressable non-terminal state continues without
           // the withdrawer; their hold was released above and nothing is
@@ -2601,6 +2626,14 @@ export function createBookingService(deps: {
             currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
           ) {
             cancelMeeting = true;
+          }
+          // M7: cancel the pending room request so the freed room is never
+          // assigned to a cancelled booking.
+          if (
+            currentState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL &&
+            roomPort
+          ) {
+            await roomPort.cancelRequestedRoomForBooking(tx, bookingId);
           }
           await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
             actorId: userId,

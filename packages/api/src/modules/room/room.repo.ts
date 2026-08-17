@@ -161,6 +161,24 @@ export async function updateRoomBookingStatus(
   return row!;
 }
 
+/**
+ * Returns the most recent `requested` room booking for a booking — the
+ * pending room request created at booking-creation time (U14) that has not
+ * been confirmed or cancelled yet.
+ */
+export async function findRequestedRoomBookingByBookingId(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  return conn.query.roomBooking.findFirst({
+    where: and(
+      eq(roomBooking.bookingId, bookingId),
+      eq(roomBooking.status, ROOM_BOOKING_STATUS.REQUESTED),
+    ),
+    orderBy: [desc(roomBooking.createdAt)],
+  });
+}
+
 export function createRoomRepo() {
   return {
     findActiveRooms,
@@ -170,6 +188,7 @@ export function createRoomRepo() {
     findRoomBookingsForUpdate,
     insertRoomBooking,
     findActiveRoomBookingByBookingId,
+    findRequestedRoomBookingByBookingId,
     updateRoomBookingStatus,
   };
 }

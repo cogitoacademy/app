@@ -257,6 +257,29 @@ export function createRoomService(
     });
   }
 
+  /**
+   * Cancels a still-pending (`requested`) room booking row. Called by the
+   * booking module when a participant withdraws from an offline booking in
+   * AWAITING_ADMIN_ROOM_APPROVAL (M7) so an admin `assignRoom` mid-
+   * reconfirmation cannot resurrect a room for a booking that went back to
+   * tutor review. No-op when the request was already confirmed/cancelled.
+   */
+  async function cancelRequestedRoomForBooking(
+    conn: DbOrTx,
+    bookingId: string,
+  ): Promise<void> {
+    const pending = await repo.findRequestedRoomBookingByBookingId(
+      conn,
+      bookingId,
+    );
+    if (!pending) return;
+    await repo.updateRoomBookingStatus(
+      conn,
+      pending.id,
+      ROOM_BOOKING_STATUS.CANCELLED,
+    );
+  }
+
   return {
     listActive,
     createRoom,
@@ -265,5 +288,6 @@ export function createRoomService(
     assignRoom,
     relocateRoom,
     cancelRoomBooking,
+    cancelRequestedRoomForBooking,
   };
 }
