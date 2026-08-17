@@ -57,3 +57,8 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 
 - Commit `62547ee` (off `f20916c`); review clean (2 plan-consistent minors: error message text not surfaced verbatim; `<=` boundary is the safer direction).
 - Targeted 7/7; reschedule/series/group regressions green. gitignore was reverted by subagent → restored + recommitted with ledger.
+
+## P2.3 (C3) completeSession start guard — complete
+
+- Commit `4928c3a` (off `62547ee`); review clean (2 minors: series-themed error copy on solo/group rejection — plan-prescribed class, message nit only; implicit test ordering convention matches existing suite patterns).
+- Guard suite 8/8; regressions 62/62 + 181/181; check-types/lint/oxfmt clean.
