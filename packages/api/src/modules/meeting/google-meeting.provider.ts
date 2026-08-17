@@ -199,6 +199,58 @@ export function createGoogleMeetingProvider(
     });
   }
 
+  /**
+   * Boot-time connectivity probe (P4.2/X3): verifies the configured credentials
+   * can reach the Calendar API (calendarList.get). For the service-account
+   * path this also surfaces misconfigured domain-wide delegation (events would
+   * otherwise land on the SA's own calendar and never produce a Meet URL).
+   * Logs loudly on failure so a broken Google Meet swap fails at boot.
+   */
+  async function probe(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      if (config.authType === "oauth_refresh_token") {
+        const accessToken = await refreshOAuthAccessToken(10_000);
+        await fetchJson<unknown>(
+          "https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1",
+          {
+            method: "GET",
+            headers: { authorization: `Bearer ${accessToken}` },
+          },
+          10_000,
+        );
+      } else {
+        await googleMeetBreaker.execute(async () =>
+          withTimeout(
+            Promise.resolve(
+              calendar!.calendarList.list({ maxResults: 1 }),
+            ).then((response) => response.data),
+            10_000,
+            "Google Meet API timeout after 10s (boot probe)",
+          ),
+        );
+      }
+      log({
+        level: "info",
+        action: "google_meet_probe_ok",
+        authType: config.authType,
+        calendarId: config.calendarId,
+        message: "Google Meet credentials verified against the Calendar API",
+      });
+      return { ok: true };
+    } catch (error) {
+      log({
+        level: "error",
+        action: "google_meet_probe_failed",
+        authType: config.authType,
+        calendarId: config.calendarId,
+        message:
+          "Google Meet boot probe failed — check credentials, calendar id, and GOOGLE_IMPERSONATED_USER (service-account mode)",
+        error: { message: String(error) },
+      });
+      return { ok: false, error: String(error) };
+    }
+  }
+
   async function insertEventWithOauth(
     accessToken: string,
     bookingId: string,
@@ -663,7 +715,7 @@ export function createGoogleMeetingProvider(
     }
   }
 
-  return { createEvent, updateEvent, cancelEvent, setManualLink };
+  return { createEvent, updateEvent, cancelEvent, setManualLink, probe };
 }
 
 export function createGoogleMeetingProviderWithFallback(
@@ -746,5 +798,6 @@ export function createGoogleMeetingProviderWithFallback(
     updateEvent: googleProvider.updateEvent,
     cancelEvent: googleProvider.cancelEvent,
     setManualLink: googleProvider.setManualLink,
+    probe: googleProvider.probe,
   };
 }

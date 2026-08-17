@@ -52,4 +52,11 @@ export interface MeetingPort {
    * manual link — this also stops `retry-failed-meetings` from retrying.
    */
   setManualLink(bookingId: string, url: string): Promise<MeetingEvent>;
+  /**
+   * Boot-time connectivity probe (P4.2/X3): verifies the configured Google
+   * credentials can reach the Calendar API (e.g. via `calendarList.get`).
+   * Logs loudly on failure so a misconfigured Google Meet swap fails at boot,
+   * not silently at the first booking. No-op for the manual fallback.
+   */
+  probe?(): Promise<{ ok: boolean; error?: string }>;
 }
