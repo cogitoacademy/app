@@ -231,9 +231,9 @@ export function createRoomService(
     });
   }
 
-  async function cancelRoomBooking(bookingId: string) {
+  async function cancelRoomBooking(bookingId: string, actorId?: string) {
     return db.transaction(async (tx) => {
-      const current = await repo.findActiveRoomBookingByBookingId(
+      const current = await repo.findCancellableRoomBookingByBookingId(
         tx,
         bookingId,
       );
@@ -244,6 +244,14 @@ export function createRoomService(
         current.id,
         ROOM_BOOKING_STATUS.CANCELLED,
       );
+
+      // M6 / FR-22: "cancel only if no room is available" — a booking still
+      // awaiting room approval cannot continue without a room: cancel it
+      // (transition + hold release + audit) in the same transaction. A
+      // booking that already got its room (SCHEDULED) continues without one.
+      if (bookingPort && actorId) {
+        await bookingPort.cancelOfflineBooking(tx, bookingId, actorId);
+      }
 
       await notifyBookingRecipients(
         tx,

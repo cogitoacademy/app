@@ -122,3 +122,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - M7: withdraw from AWAITING_ADMIN_ROOM_APPROVAL cancels the pending `requested` roomBooking via new `roomPort.cancelRequestedRoomForBooking` (room service + repo `findRequestedRoomBookingByBookingId`).
 - Tests: 4 new unit cases (2 M5 reconfirm, 2 M7 withdraw) + 2 room.service M7 cases.
 - Full API 1884/0; check-types/lint/oxfmt clean.
+
+## P2.14 (M6) cancelRoomBooking cancels awaiting-approval booking — complete
+
+- `room.cancelRoomBooking` calls `bookingPort.cancelOfflineBooking` (releases holds + transition CANCELLED + audit, no-op past AWAITING_ADMIN_ROOM_APPROVAL); `findCancellableRoomBookingByBookingId` includes pending `requested` rows (FR-22).
+- Tests: room.service (3 new), booking.service (2 new), booking-u14-room-request (1 integration).
+- Full API 1889/0; check-types/lint/oxfmt clean.

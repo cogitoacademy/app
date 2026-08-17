@@ -161,6 +161,8 @@ function createServices() {
         bookingService!.transitionBookingToScheduled(tx, bookingId, actorId),
       getBookingRecipients: (tx, bookingId) =>
         bookingService!.getBookingRecipients(tx, bookingId),
+      cancelOfflineBooking: (tx, bookingId, actorId) =>
+        bookingService!.cancelOfflineBooking(tx, bookingId, actorId),
     },
     notificationPort: notification.service,
   });

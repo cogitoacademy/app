@@ -5665,3 +5665,63 @@ describe("retryFailedMeetings", () => {
     expect(result).toEqual({ succeeded: 0, failed: 0 });
   });
 });
+
+describe("cancelOfflineBooking (M6)", () => {
+  test("cancels an awaiting-room-approval booking: releases holds, zeroes hold, transitions, records reason", async () => {
+    const booking = makeBooking({
+      currentState: "awaiting_admin_room_approval",
+      holdAmount: 42,
+      proposerId: "student1",
+    });
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () => ({ ...booking, version: 1 })),
+        findConfirmedParticipants: mock(async () => [
+          makeParticipant({ heldAmount: 42 }),
+        ]),
+        updateBookingVersioned: mock(async () => ({
+          updated: { ...booking, currentState: "cancelled" },
+          newVersion: 2,
+        })),
+      },
+    });
+
+    await service.cancelOfflineBooking({} as any, "b1", "admin1");
+
+    expect(wallet.release).toHaveBeenCalledTimes(1);
+    expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      0,
+    );
+    expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      1,
+      expect.objectContaining({ currentState: "cancelled" }),
+    );
+    expect(repo.updateBookingCancellationReason).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      "No room available",
+    );
+  });
+
+  test("is a no-op for a booking no longer awaiting room approval (SCHEDULED)", async () => {
+    const booking = makeBooking({
+      currentState: "scheduled",
+      holdAmount: 42,
+      proposerId: "student1",
+    });
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () => ({ ...booking, version: 1 })),
+      },
+    });
+
+    await service.cancelOfflineBooking({} as any, "b1", "admin1");
+
+    expect(wallet.release).not.toHaveBeenCalled();
+    expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+  });
+});

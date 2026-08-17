@@ -23,6 +23,7 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
     insertRoomBooking: mock(async (_conn: any, _values: any) => ({})),
     findActiveRoomBookingByBookingId: mock(async (_conn: any) => null),
     findRequestedRoomBookingByBookingId: mock(async (_conn: any) => null),
+    findCancellableRoomBookingByBookingId: mock(async (_conn: any) => null),
     updateRoomBookingStatus: mock(
       async (_conn: any, _id: string, status: string) => ({
         id: "rb1",
@@ -261,7 +262,7 @@ describe("createRoomService", () => {
   describe("cancelRoomBooking", () => {
     test("throws notFound when booking has no active room booking", async () => {
       const repo = makeRepo({
-        findActiveRoomBookingByBookingId: mock(async () => null),
+        findCancellableRoomBookingByBookingId: mock(async () => null),
       });
 
       const service = createRoomService(repo, makeDb());
@@ -272,7 +273,7 @@ describe("createRoomService", () => {
 
     test("sets the active room booking to cancelled", async () => {
       const repo = makeRepo({
-        findActiveRoomBookingByBookingId: mock(async () => ({
+        findCancellableRoomBookingByBookingId: mock(async () => ({
           id: "rb1",
           roomId: "room1",
           status: "confirmed",
@@ -291,6 +292,62 @@ describe("createRoomService", () => {
         "rb1",
         "cancelled",
       );
+      expect(result.status).toBe("cancelled");
+    });
+
+    test("M6: cancels an awaiting-room-approval booking via the booking port (FR-22 no room available)", async () => {
+      const repo = makeRepo({
+        findCancellableRoomBookingByBookingId: mock(async () => ({
+          id: "rb1",
+          roomId: "room1",
+          status: "requested",
+        })),
+        updateRoomBookingStatus: mock(async () => ({
+          id: "rb1",
+          status: "cancelled",
+        })),
+      });
+      const notificationPort = { writeBestEffort: mock(async () => {}) };
+      const bookingPort = {
+        transitionBookingToScheduled: mock(async () => {}),
+        getBookingRecipients: mock(async () => ({
+          tutorId: "tutor1",
+          participantUserIds: ["student1"],
+        })),
+        cancelOfflineBooking: mock(async () => {}),
+      };
+
+      const service = createRoomService(
+        repo,
+        makeDb(),
+        bookingPort,
+        notificationPort,
+      );
+      const result = await service.cancelRoomBooking("b1", "admin1");
+
+      expect(bookingPort.cancelOfflineBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        "admin1",
+      );
+      expect(result.status).toBe("cancelled");
+    });
+
+    test("M6: does not cancel the booking when the port is absent", async () => {
+      const repo = makeRepo({
+        findCancellableRoomBookingByBookingId: mock(async () => ({
+          id: "rb1",
+          roomId: "room1",
+          status: "confirmed",
+        })),
+        updateRoomBookingStatus: mock(async () => ({
+          id: "rb1",
+          status: "cancelled",
+        })),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      const result = await service.cancelRoomBooking("b1");
       expect(result.status).toBe("cancelled");
     });
   });
@@ -355,6 +412,7 @@ describe("room service notifications (P1-3)", () => {
         tutorId: "tutor1",
         participantUserIds: ["student1", "student2"],
       })),
+      cancelOfflineBooking: mock(async () => {}),
     };
     return { notificationPort, bookingPort };
   }
@@ -439,7 +497,7 @@ describe("room service notifications (P1-3)", () => {
 
   test("cancelRoomBooking notifies tutor and confirmed students", async () => {
     const repo = makeRepo({
-      findActiveRoomBookingByBookingId: mock(async () => ({
+      findCancellableRoomBookingByBookingId: mock(async () => ({
         id: "rb1",
         roomId: "room1",
         status: "confirmed",
@@ -457,7 +515,7 @@ describe("room service notifications (P1-3)", () => {
       bookingPort,
       notificationPort,
     );
-    await service.cancelRoomBooking("b1");
+    await service.cancelRoomBooking("b1", "admin1");
 
     expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(3);
     const calls = notificationPort.writeBestEffort.mock.calls.map(

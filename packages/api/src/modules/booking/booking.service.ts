@@ -296,7 +296,7 @@ export function createBookingService(deps: {
     tx: DbOrTx,
     bookingId: string,
     reason: string,
-    actorType: "student" | "tutor" | "system",
+    actorType: "student" | "tutor" | "admin" | "system",
     excludeUserId?: string,
   ): Promise<void> {
     const participants = await repo.findConfirmedParticipants(
@@ -3109,6 +3109,48 @@ export function createBookingService(deps: {
   }
 
   /**
+   * Cancels an offline booking whose room could not be provided (FR-22:
+   * "cancel only if no room is available"). Called by the room module inside
+   * `cancelRoomBooking` when the booking is still awaiting room approval.
+   *
+   * Releases all participant holds, zeroes the booking hold, transitions to
+   * CANCELLED and records the cancellation reason + audit trail — the same
+   * in-transaction guarantees the student cancel path provides (M6).
+   *
+   * @param tx - the active room-module transaction
+   * @param bookingId - the booking id
+   * @param actorId - the admin actor
+   */
+  async function cancelOfflineBooking(
+    tx: DbOrTx,
+    bookingId: string,
+    actorId: string,
+  ): Promise<void> {
+    const b = await repo.findBookingById(tx, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    if (b.currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) return;
+
+    await releaseAllParticipantHolds(
+      tx,
+      bookingId,
+      "Booking cancelled: no room available",
+      ACTOR_TYPE.ADMIN,
+    );
+    await repo.updateBookingHoldAmount(tx, bookingId, 0);
+
+    await transition(tx, bookingId, BOOKING_STATE.CANCELLED, {
+      actorId,
+      actorType: ACTOR_TYPE.ADMIN,
+      reason: "No room available",
+    });
+    await repo.updateBookingCancellationReason(
+      tx,
+      bookingId,
+      "No room available",
+    );
+  }
+
+  /**
    * Returns the recipients of offline-room lifecycle notifications: the tutor
    * and every confirmed student participant. Consumed by the room module via a
    * consumer-driven port (P1-3).
@@ -3729,6 +3771,7 @@ export function createBookingService(deps: {
     transition,
     canTransition,
     transitionBookingToScheduled,
+    cancelOfflineBooking,
     getBookingRecipients,
   };
 }

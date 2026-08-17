@@ -88,14 +88,14 @@ export function createRoomHandler(room: RoomService) {
     },
 
     cancelBooking: async ({
-      context: _context,
+      context,
       input,
     }: {
       context: Context;
       input: CancelRoomInput;
     }) => {
       return withDomainMap(
-        () => room.cancelRoomBooking(input.bookingId),
+        () => room.cancelRoomBooking(input.bookingId, context.session?.user.id),
         mapRoomError,
       );
     },
