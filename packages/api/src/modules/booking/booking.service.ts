@@ -1590,6 +1590,17 @@ export function createBookingService(deps: {
 
       const session = normalizeSession(proposedStartAt);
       if (userId !== b.tutorId) {
+        // C2: the current session must also still be beyond H-2 — a student
+        // close to class cannot bypass the late-cancel penalty by proposing a
+        // reschedule to a slot ≥2h out (mirror the cancel() guard).
+        if (
+          b.scheduledStartAt.getTime() - Date.now() <=
+          LATE_CANCEL_THRESHOLD_MS
+        ) {
+          throw new BookingNotEditableError(
+            "Booking can no longer be rescheduled within 2 hours of the current session (H-2)",
+          );
+        }
         // U2 (FR-14 TC-15): student-initiated reschedules are only allowed
         // before H-2 — the new session must start at least 2 hours out.
         if (
