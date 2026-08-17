@@ -13,3 +13,5 @@ pre-push:
   commands:
     typecheck:
       run: bun run check-types
+    lint:
+      run: bun run lint
