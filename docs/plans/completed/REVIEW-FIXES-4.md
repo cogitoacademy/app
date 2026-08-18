@@ -1,6 +1,6 @@
 # Backend Review Fixes 4 — Wave-4 Audit Plan
 
-> **STATUS: ACTIVE — planned for execution on main (`6c80391`).** Wave-4 findings from the 2026-08-17 full audit (docs/plans + `.superpowers/sdd` reconciliation, PRD-alignment and money-correctness bugs in the booking/payment/room/support domains, and third-party readiness — Xendit is **not** production-compatible, Resend/Google Meet/R2 need fail-loud guards). Findings verified in code at HEAD `6c80391` and against current vendor API docs (Xendit OpenAPI 2024-11-11).
+> **STATUS: COMPLETED — all PRs merged to main (2026-08-18): #68 (P1 docs reconciliation), #69 (P2 backend money-correctness + lifecycle), #70 (P3 Xendit provider rewrite + refunds), #75 (P4 fail-loud guards + ops docs), #76 (P4.4/G2 email verification).** Wave-4 findings from the 2026-08-17 full audit (docs/plans + `.superpowers/sdd` reconciliation, PRD-alignment and money-correctness bugs in the booking/payment/room/support domains, and third-party readiness — Xendit is **not** production-compatible, Resend/Google Meet/R2 need fail-loud guards). Findings verified in code at HEAD `6c80391` and against current vendor API docs (Xendit OpenAPI 2024-11-11).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 

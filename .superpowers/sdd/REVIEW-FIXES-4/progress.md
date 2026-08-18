@@ -174,3 +174,9 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - Web: /verify-email route + VerifyEmailForm (authClient.emailOtp.verifyEmail).
 - Tests: verification-email.test.ts (2 unit) + email-verification-g2.test.ts (3 integration: sign-up OTP row + sender, verify marks emailVerified, wrong OTP rejected).
 - Full API 1914/0; server 58/0; check-types/lint/oxfmt clean.
+
+## FINAL — all PRs merged (2026-08-18)
+
+- P1 #68 (cd141f28) · P2 #69 (ae0f234) · P3 #70 (f72c01e) · P4 #75 (752f58f) · G2 #76 (90ab85a) — all CI green.
+- Plan moved to docs/plans/completed/REVIEW-FIXES-4.md; README + CONTEXT updated.
+- Final suite: API 1914/0, server 58/0; coverage api 96.4% lines, overall 98.1%.
