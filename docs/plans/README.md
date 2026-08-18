@@ -4,8 +4,7 @@
 
 | Plan                                                  | Branch               | PR  | Status                                                                                                       |
 | ----------------------------------------------------- | -------------------- | --- | ------------------------------------------------------------------------------------------------------------ |
-| [REVIEW-FIXES-4.md](active/REVIEW-FIXES-4.md)         | `fix/review-fixes-4` | —   | Active — wave-4 audit fixes (docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud 3P guards) |
-| [PRD-GAPS-PHASE3.md](active/PRD-GAPS-PHASE3.md)       | main (merged)        | —   | All U-items closed except U9 partial (→ REVIEW-FIXES-4 P2.8)                                                 |
+| [PRD-GAPS-PHASE3.md](active/PRD-GAPS-PHASE3.md)       | main (merged)        | —   | All U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                        |
 | [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | main (merged #55)    | —   | F8/F13/F14/F16 closed (REVIEW-FIXES-3 P6); F1/F9/F12 partial                                                 |
 | [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge)    | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending           |
 
@@ -25,6 +24,7 @@
 | [BACKEND-REVIEW-HARDENING.md](completed/BACKEND-REVIEW-HARDENING.md)                               | `fix/backend-review-hardening`     | #48         |
 | [REVIEW-FIXES-2.md](completed/REVIEW-FIXES-2.md)                                                   | main (merged #50–#57)              | #50–#57     |
 | [REVIEW-FIXES-3.md](completed/REVIEW-FIXES-3.md)                                                   | main (merged #59–#65)              | #59–#65     |
+| [REVIEW-FIXES-4.md](completed/REVIEW-FIXES-4.md)                                                   | main (merged #68–#70, #75–#76)     | #68–#70, #75–#76 |
 | [BACKEND-CLEANUP.md](completed/BACKEND-CLEANUP.md)                                                 | main (merged)                      | —           |
 
 ## Archive (superseded / historical)
