@@ -49,4 +49,150 @@ describe("server env schema", () => {
   test("PAYMENT_PROVIDER=stub does not require Xendit credentials", () => {
     expect(() => serverEnvSchema.parse(validEnv)).not.toThrow();
   });
+
+  test("P4.1: NODE_ENV=production requires RESEND_API_KEY and a non-default EMAIL_FROM", () => {
+    const prod = { ...validEnv, NODE_ENV: "production" };
+    const missingKey = serverEnvSchema.safeParse(prod);
+    expect(missingKey.success).toBe(false);
+    const paths = (missingKey.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("RESEND_API_KEY");
+
+    // EMAIL_FROM must not be the dev default in production.
+    const defaultFrom = serverEnvSchema.safeParse({
+      ...prod,
+      RESEND_API_KEY: "re_prod_key",
+    });
+    expect(defaultFrom.success).toBe(false);
+    const fromPaths = (defaultFrom.error?.issues ?? []).map((i) =>
+      i.path.join("."),
+    );
+    expect(fromPaths).toContain("EMAIL_FROM");
+
+    // A complete production set parses (verified non-default sender).
+    expect(() =>
+      serverEnvSchema.parse({
+        ...prod,
+        RESEND_API_KEY: "re_prod_key",
+        EMAIL_FROM: "no-reply@cogitoacademy.id",
+      }),
+    ).not.toThrow();
+  });
+
+  test("P4.2: GOOGLE_MEET_ENABLED=true requires a complete credential set", () => {
+    // Partial OAuth triple → rejected.
+    const partial = serverEnvSchema.safeParse({
+      ...validEnv,
+      GOOGLE_MEET_ENABLED: true,
+      GOOGLE_MEET_CLIENT_ID: "cid",
+    });
+    expect(partial.success).toBe(false);
+    const paths = (partial.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("GOOGLE_MEET_ENABLED");
+
+    // Complete OAuth triple → ok.
+    expect(() =>
+      serverEnvSchema.parse({
+        ...validEnv,
+        GOOGLE_MEET_ENABLED: true,
+        GOOGLE_MEET_CLIENT_ID: "cid",
+        GOOGLE_MEET_CLIENT_SECRET: "csec",
+        GOOGLE_MEET_REFRESH_TOKEN: "rtok",
+      }),
+    ).not.toThrow();
+  });
+
+  test("P4.2: service-account mode requires GOOGLE_IMPERSONATED_USER", () => {
+    // SA email+key without impersonation → rejected.
+    const noImpersonation = serverEnvSchema.safeParse({
+      ...validEnv,
+      GOOGLE_MEET_ENABLED: true,
+      GOOGLE_CLIENT_EMAIL: "sa@example.com",
+      GOOGLE_PRIVATE_KEY:
+        "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+    });
+    expect(noImpersonation.success).toBe(false);
+    const paths = (noImpersonation.error?.issues ?? []).map((i) =>
+      i.path.join("."),
+    );
+    expect(paths).toContain("GOOGLE_IMPERSONATED_USER");
+
+    // SA email+key + impersonated user → ok.
+    expect(() =>
+      serverEnvSchema.parse({
+        ...validEnv,
+        GOOGLE_MEET_ENABLED: true,
+        GOOGLE_CLIENT_EMAIL: "sa@example.com",
+        GOOGLE_PRIVATE_KEY:
+          "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+        GOOGLE_IMPERSONATED_USER: "user@cogitoacademy.id",
+      }),
+    ).not.toThrow();
+  });
+
+  test("P4.3: production with partial R2 config is rejected", () => {
+    const prod = {
+      ...validEnv,
+      NODE_ENV: "production",
+      RESEND_API_KEY: "re",
+      EMAIL_FROM: "no-reply@cogitoacademy.id",
+    };
+    const partial = serverEnvSchema.safeParse({
+      ...prod,
+      R2_ACCOUNT_ID: "acct",
+    });
+    expect(partial.success).toBe(false);
+    const paths = (partial.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("R2_ACCOUNT_ID");
+  });
+
+  test("P4.3: production with complete R2 but no R2_PUBLIC_URL is rejected", () => {
+    const prod = {
+      ...validEnv,
+      NODE_ENV: "production",
+      RESEND_API_KEY: "re",
+      EMAIL_FROM: "no-reply@cogitoacademy.id",
+    };
+    const noUrl = serverEnvSchema.safeParse({
+      ...prod,
+      R2_ACCOUNT_ID: "acct",
+      R2_ACCESS_KEY_ID: "key",
+      R2_SECRET_ACCESS_KEY: "sec",
+      R2_BUCKET: "bucket",
+    });
+    expect(noUrl.success).toBe(false);
+    const paths = (noUrl.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("R2_PUBLIC_URL");
+  });
+
+  test("P4.3: complete R2 config with R2_PUBLIC_URL parses", () => {
+    const prod = {
+      ...validEnv,
+      NODE_ENV: "production",
+      RESEND_API_KEY: "re",
+      EMAIL_FROM: "no-reply@cogitoacademy.id",
+    };
+    expect(() =>
+      serverEnvSchema.parse({
+        ...prod,
+        R2_ACCOUNT_ID: "acct",
+        R2_ACCESS_KEY_ID: "key",
+        R2_SECRET_ACCESS_KEY: "sec",
+        R2_BUCKET: "bucket",
+        R2_PUBLIC_URL: "https://media.cogitoacademy.id",
+      }),
+    ).not.toThrow();
+  });
+
+  test("GOOGLE_MEET_ENABLED=false string is coerced to boolean false (not truthy)", () => {
+    // z.coerce.boolean() would turn the string "false" into true — the
+    // explicit preprocess keeps the documented test invocation safe.
+    const parsed = serverEnvSchema.safeParse({
+      ...validEnv,
+      GOOGLE_MEET_ENABLED: "false",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.GOOGLE_MEET_ENABLED).toBe(false);
+    }
+  });
 });

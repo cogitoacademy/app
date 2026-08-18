@@ -20,6 +20,7 @@ import { createRoomModule } from "./modules/room";
 import { createAdminBookingModule } from "./modules/admin-booking";
 import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
+import type { MeetingModule } from "./modules/meeting";
 import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
 import { createStorage } from "./lib/storage";
@@ -81,6 +82,7 @@ export interface ServiceRegistry {
   refund: RefundService;
   support: SupportService;
   upload: UploadService;
+  meeting: MeetingModule;
 }
 
 export interface HandlerRegistry {
@@ -281,6 +283,7 @@ function createServices() {
     refund: refund.service,
     support: support.service,
     upload: upload.service,
+    meeting,
   };
 
   const handlers: HandlerRegistry = {

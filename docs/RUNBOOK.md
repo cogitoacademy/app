@@ -277,6 +277,24 @@ For the OAuth path (`GOOGLE_MEET_CLIENT_ID` + `GOOGLE_MEET_CLIENT_SECRET` + `GOO
 5. Alternative: service-account mode with domain-wide delegation — set `GOOGLE_CLIENT_EMAIL` (SA), `GOOGLE_PRIVATE_KEY`, `GOOGLE_IMPERSONATED_USER` (delegated attendee), `GOOGLE_MEET_ENABLED=true`. Without `GOOGLE_IMPERSONATED_USER` events land on the SA's own calendar and never produce a Meet URL (P4.2 guard).
 6. Verify the boot probe logs a successful `calendarList.get` before enabling in prod.
 
+### Resend domain verification (X2 / P4.1)
+
+The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FROM` (the dev default `noreply@cogitoacademy.id` is rejected). Before enabling production email:
+
+1. Resend dashboard → **Domains** → add `cogitoacademy.id` (and `staging.cogitoacademy.id` for staging).
+2. Add the DNS records Resend provides (SPF/DKIM) at the DNS provider; wait for verification.
+3. Set `EMAIL_FROM` to a verified address, e.g. `noreply@cogitoacademy.id` — the env schema rejects the dev default only when `NODE_ENV=production`, so the verified domain's address is fine.
+4. Send a test invite/refund email on staging before enabling production email.
+
+### R2 bucket + API-token setup (X4 / P4.3)
+
+The production env schema requires all four `R2_*` vars together **and** `R2_PUBLIC_URL` when R2 is configured (partial config or a missing public URL fails loudly — no container-local disk fallback, no unreachable objects).
+
+1. Cloudflare dashboard → **R2** → create a bucket (region `auto`).
+2. **Manage R2 API Tokens** → create a token with Object Read & Write on the bucket → copy `ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` into `R2_ACCOUNT_ID` (your Cloudflare account id), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+3. Set `R2_PUBLIC_URL` to the public object URL (e.g. `https://media.cogitoacademy.id` via a custom domain, or the `r2.cloudflarestorage.com` endpoint). `GET /uploads/*` is disabled whenever `R2_PUBLIC_URL` is set (objects are served from R2 instead).
+4. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
+
 ## Deploy Secrets (CD webhooks)
 
 The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing.

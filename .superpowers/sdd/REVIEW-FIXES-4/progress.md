@@ -158,3 +158,11 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - P3.6: PaymentProvider.refund() — Xendit POST /v3/refunds; stub rfd-stub-{id}; adminRefund best-effort provider refund → refundRecord.providerEventId; migration 0025 payment_record.provider_request_id.
 - P3.7: env superRefine requires XENDIT_SUCCESS/FAILURE_REDIRECT_URL when PAYMENT_PROVIDER=xendit.
 - Tests: 18 provider unit (rewritten), status tests rewritten, env-xendit + timestamp + refund-flow updated; full API 1911/0; server 51/0; check-types/lint/oxfmt clean.
+
+## P4 (X2/X3/X4) fail-loud guards + ops docs — complete (4.1–4.3)
+
+- P4.1: env superRefine — RESEND_API_KEY required when NODE_ENV=production; EMAIL_FROM must not be the dev default (verified Resend domain).
+- P4.2: GOOGLE_MEET_ENABLED=true requires a complete credential set (OAuth triple OR SA email+key); GOOGLE_IMPERSONATED_USER required in SA mode. Boot-time meeting.probe() (calendarList.get, 10s) wired into server bootstrap; env examples fixed. Also fixed z.coerce.boolean() coercing "false"→true (the documented GOOGLE_MEET_ENABLED=false test invocation was silently enabling Meet).
+- P4.3: production requires all four R2_* vars together AND R2_PUBLIC_URL; env examples updated.
+- P4.4 (G2): user decision — separate PR after 4.1.
+- Tests: env-xendit.test.ts (P4.1–P4.3 + coercion); full API 1911/0; server 58/0; check-types/lint/oxfmt clean.

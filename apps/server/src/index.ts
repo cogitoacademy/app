@@ -95,6 +95,22 @@ const server = app.listen(port, () => {
 
 await initScheduler();
 
+// P4.2/X3: boot-time Google Meet probe — a broken credential set (or missing
+// GOOGLE_IMPERSONATED_USER in SA mode) must fail loudly at boot, not silently
+// at the first booking.
+if (env.GOOGLE_MEET_ENABLED && services.meeting?.probe) {
+  const probeResult = await services.meeting.probe();
+  if (!probeResult.ok) {
+    log({
+      level: "error",
+      action: "google_meet_boot_probe_failed",
+      message:
+        "Google Meet is enabled but the boot probe failed — meetings will silently fall back to manual links. Fix credentials before launch.",
+      error: { message: probeResult.error ?? "unknown" },
+    });
+  }
+}
+
 async function gracefulShutdown(signal: string) {
   log({ level: "info", action: "shutdown_signal", signal });
   // C8: bound the drain — if the DB pool (or anything else) hangs, force-exit

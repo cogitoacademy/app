@@ -40,7 +40,13 @@ const serverShape = {
   GOOGLE_MEET_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_MEET_CLIENT_SECRET: z.string().min(1).optional(),
   GOOGLE_MEET_REFRESH_TOKEN: z.string().min(1).optional(),
-  GOOGLE_MEET_ENABLED: z.coerce.boolean().default(false),
+  GOOGLE_MEET_ENABLED: z
+    .preprocess(
+      (v) =>
+        typeof v === "string" ? v !== "false" && v !== "0" && v !== "" : v,
+      z.coerce.boolean(),
+    )
+    .default(false),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("noreply@cogitoacademy.id"),
   METRICS_TOKEN: z.string().optional(),
@@ -84,6 +90,93 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
         code: z.ZodIssueCode.custom,
         path: ["XENDIT_FAILURE_REDIRECT_URL"],
         message: "required when PAYMENT_PROVIDER=xendit",
+      });
+    }
+  }
+
+  // P4.1 (X2): in production the Resend API key is mandatory — without it the
+  // email module silently uses the stub provider and every critical email
+  // (invites, booking confirmations, refunds, alerts) is suppressed with no
+  // alert. EMAIL_FROM must not be the dev default either: the sending domain
+  // has to be verified at Resend (RUNBOOK).
+  if (val.NODE_ENV === "production") {
+    if (!val.RESEND_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["RESEND_API_KEY"],
+        message:
+          "required when NODE_ENV=production — the stub email provider would silently suppress all emails",
+      });
+    }
+    if (val.EMAIL_FROM === "noreply@cogitoacademy.id") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["EMAIL_FROM"],
+        message:
+          "must be a verified Resend sending address in production (the dev default is not verified)",
+      });
+    }
+  }
+
+  // P4.2 (X3): GOOGLE_MEET_ENABLED=true requires a complete credential set —
+  // either the OAuth triple or the service-account email+key. A partial set
+  // would silently fall back to manual links (or, worse, land events on the
+  // SA's own calendar when GOOGLE_IMPERSONATED_USER is missing).
+  if (val.GOOGLE_MEET_ENABLED) {
+    const oauthComplete =
+      Boolean(val.GOOGLE_MEET_CLIENT_ID || val.GOOGLE_CLIENT_ID) &&
+      Boolean(val.GOOGLE_MEET_CLIENT_SECRET || val.GOOGLE_CLIENT_SECRET) &&
+      Boolean(val.GOOGLE_MEET_REFRESH_TOKEN);
+    const saComplete =
+      Boolean(val.GOOGLE_CLIENT_EMAIL) && Boolean(val.GOOGLE_PRIVATE_KEY);
+
+    if (!oauthComplete && !saComplete) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["GOOGLE_MEET_ENABLED"],
+        message:
+          "GOOGLE_MEET_ENABLED=true requires a complete credential set: the OAuth triple (GOOGLE_MEET_CLIENT_ID + GOOGLE_MEET_CLIENT_SECRET + GOOGLE_MEET_REFRESH_TOKEN) OR the service account (GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY)",
+      });
+    }
+
+    if (saComplete && !oauthComplete && !val.GOOGLE_IMPERSONATED_USER) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["GOOGLE_IMPERSONATED_USER"],
+        message:
+          "required in service-account mode — without domain-wide delegation events land on the SA's own calendar and never produce a Meet URL",
+      });
+    }
+  }
+
+  // P4.3 (X4): in production R2 is mandatory — without it uploads silently
+  // write to the container-local UPLOAD_DIR and are lost on every redeploy.
+  // And when R2 IS configured, R2_PUBLIC_URL must be set too, otherwise
+  // objects are written but unreachable (GET /uploads/* is disabled when R2
+  // is configured).
+  if (val.NODE_ENV === "production") {
+    const r2Vars = [
+      val.R2_ACCOUNT_ID,
+      val.R2_ACCESS_KEY_ID,
+      val.R2_SECRET_ACCESS_KEY,
+      val.R2_BUCKET,
+    ];
+    const anyR2 = r2Vars.some(Boolean);
+    const allR2 = r2Vars.every(Boolean);
+    if (anyR2 && !allR2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["R2_ACCOUNT_ID"],
+        message:
+          "partial R2 configuration: all of R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET are required together",
+      });
+    }
+    if (allR2 && !val.R2_PUBLIC_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["R2_PUBLIC_URL"],
+        message:
+          "required when R2 is configured — objects would be unreachable (GET /uploads/* is disabled when R2 is set)",
       });
     }
   }
