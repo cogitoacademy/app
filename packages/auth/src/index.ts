@@ -1,6 +1,7 @@
 import { createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { emailOTP } from "better-auth/plugins/email-otp";
 
 import { db } from "@cogito-app/db";
 import { getAuthTrustedOrigins } from "@cogito-app/env/origins";
@@ -25,7 +26,14 @@ export type ResetPasswordEmailSender = (params: {
   token: string;
 }) => Promise<void>;
 
+export type VerificationEmailSender = (params: {
+  email: string;
+  otp: string;
+  type: "sign-in" | "email-verification" | "forget-password" | "change-email";
+}) => Promise<void>;
+
 let resetPasswordEmailSender: ResetPasswordEmailSender | null = null;
+let verificationEmailSender: VerificationEmailSender | null = null;
 
 /**
  * Wires the email port used by Better Auth's reset-password flow.
@@ -36,6 +44,14 @@ let resetPasswordEmailSender: ResetPasswordEmailSender | null = null;
  */
 export function setAuthEmailSender(sender: ResetPasswordEmailSender) {
   resetPasswordEmailSender = sender;
+}
+
+/**
+ * Wires the email port used by the email-OTP verification plugin (G2).
+ * Same circular-dependency rationale as setAuthEmailSender.
+ */
+export function setVerificationEmailSender(sender: VerificationEmailSender) {
+  verificationEmailSender = sender;
 }
 
 // C6 (foundation-hardening): passwords must contain at least one uppercase
@@ -134,7 +150,46 @@ export function createAuth() {
         httpOnly: true,
       },
     },
-    plugins: [],
+    plugins: [
+      // G2: email verification via OTP (better-auth email-otp plugin). The
+      // OTP is delivered through the shared email port (wired at boot via
+      // setVerificationEmailSender). sendVerificationOnSignUp sends the OTP
+      // right after sign-up; the verify-email endpoint marks the user verified.
+      emailOTP({
+        sendVerificationOTP: async ({ email, otp, type }) => {
+          const sender = verificationEmailSender;
+          if (!sender) {
+            console.warn(
+              JSON.stringify({
+                level: "warn",
+                action: "verification_email_not_configured",
+                email,
+                type,
+              }),
+            );
+            return;
+          }
+          try {
+            await sender({ email, otp, type });
+          } catch (error) {
+            // Never surface email failures to the caller (anti-enumeration);
+            // the email provider logs its own failures.
+            console.error(
+              JSON.stringify({
+                level: "error",
+                action: "verification_email_send_failed",
+                email,
+                type,
+                error: { message: String(error) },
+              }),
+            );
+          }
+        },
+        sendVerificationOnSignUp: true,
+        expiresIn: 300,
+        otpLength: 6,
+      }),
+    ],
     hooks: {
       after: createAuthMiddleware(async () => {
         // Wallet creation is now handled lazily by WalletService.getOrCreate()

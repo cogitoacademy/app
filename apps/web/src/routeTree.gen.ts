@@ -15,6 +15,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
 import { Route as AppAdminOperationsRouteImport } from './routes/_app.admin-operations'
@@ -59,6 +60,11 @@ const LoginRoute = LoginRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppAchievementsRoute = AppAchievementsRouteImport.update({
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-operations': typeof AppAdminOperationsRoute
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-operations': typeof AppAdminOperationsRoute
@@ -196,6 +204,7 @@ export interface FileRoutesById {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/_app/achievements': typeof AppAchievementsRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
   '/_app/admin-operations': typeof AppAdminOperationsRoute
@@ -221,6 +230,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/reset-password'
+    | '/verify-email'
     | '/achievements'
     | '/admin-achievements'
     | '/admin-operations'
@@ -244,6 +254,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/reset-password'
+    | '/verify-email'
     | '/achievements'
     | '/admin-achievements'
     | '/admin-operations'
@@ -268,6 +279,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/reset-password'
+    | '/verify-email'
     | '/_app/achievements'
     | '/_app/admin-achievements'
     | '/_app/admin-operations'
@@ -293,6 +305,7 @@ export interface RootRouteChildren {
   InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
@@ -338,6 +351,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/achievements': {
@@ -500,6 +520,7 @@ const rootRouteChildren: RootRouteChildren = {
   InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport

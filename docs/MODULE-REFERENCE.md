@@ -204,6 +204,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 - Wallet is lazily created on first `me` call
 - Better Auth handles session management, password hashing, and session cookies
+- Email verification (G2, REVIEW-FIXES-4 P4.4): the `emailOTP` plugin sends a 6-digit OTP on sign-up (`sendVerificationOnSignUp`, 5 min expiry) via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); `POST /api/auth/email-otp/verify-email` marks the user verified; the web `/verify-email` route collects the code
 
 ---
 
