@@ -1,8 +1,12 @@
 import { initLogger } from "evlog";
 
 import { env } from "@cogito-app/env/server";
-import { setAuthEmailSender } from "@cogito-app/auth";
+import {
+  setAuthEmailSender,
+  setVerificationEmailSender,
+} from "@cogito-app/auth";
 import { buildResetPasswordEmail } from "@cogito-app/auth/reset-password-email";
+import { buildVerificationEmail } from "@cogito-app/auth/verification-email";
 import { log } from "@cogito-app/api/lib/logger";
 import { sql } from "drizzle-orm";
 
@@ -83,6 +87,30 @@ setAuthEmailSender(async ({ user, url }) => {
   });
   await services.email.send({
     to: user.email,
+    subject,
+    html,
+    category: "auth",
+  });
+});
+
+// G2: email verification OTP delivery through the shared email port.
+setVerificationEmailSender(async ({ email, otp, type }) => {
+  if (env.NODE_ENV !== "production") {
+    log({
+      level: "info",
+      action: "verification_otp",
+      email,
+      type,
+      otp,
+    });
+  }
+  const { subject, html } = buildVerificationEmail({
+    name: email.split("@")[0] ?? email,
+    otp,
+    expiresInMinutes: 5,
+  });
+  await services.email.send({
+    to: email,
     subject,
     html,
     category: "auth",

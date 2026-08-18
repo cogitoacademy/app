@@ -166,3 +166,11 @@ See the plan's Concern Inventory for full evidence (file:line). Highlights:
 - P4.3: production requires all four R2_* vars together AND R2_PUBLIC_URL; env examples updated.
 - P4.4 (G2): user decision — separate PR after 4.1.
 - Tests: env-xendit.test.ts (P4.1–P4.3 + coercion); full API 1911/0; server 58/0; check-types/lint/oxfmt clean.
+
+## P4.4 (G2) email verification — complete (separate PR)
+
+- better-auth emailOTP plugin: 6-digit OTP, 5 min expiry, sendVerificationOnSignUp.
+- OTP delivered via shared email port: setVerificationEmailSender + buildVerificationEmail (packages/auth/src/verification-email.ts).
+- Web: /verify-email route + VerifyEmailForm (authClient.emailOtp.verifyEmail).
+- Tests: verification-email.test.ts (2 unit) + email-verification-g2.test.ts (3 integration: sign-up OTP row + sender, verify marks emailVerified, wrong OTP rejected).
+- Full API 1914/0; server 58/0; check-types/lint/oxfmt clean.
