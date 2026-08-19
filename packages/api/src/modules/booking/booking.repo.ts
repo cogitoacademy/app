@@ -61,9 +61,10 @@ export function encodeBookingCursor(
  * parts. A legacy cursor (a bare ISO timestamp, as produced before the M3 fix)
  * is still accepted and yields a `null` id so the tie-break is skipped.
  */
-export function decodeBookingCursor(
-  cursor: string,
-): { scheduledStartAt: Date; id: string | null } {
+export function decodeBookingCursor(cursor: string): {
+  scheduledStartAt: Date;
+  id: string | null;
+} {
   const sep = cursor.indexOf("|");
   if (sep === -1) {
     return { scheduledStartAt: new Date(cursor), id: null };
@@ -87,10 +88,7 @@ function bookingCursorCondition(cursor: string): SQL<unknown> {
   }
   return or(
     lt(booking.scheduledStartAt, scheduledStartAt),
-    and(
-      eq(booking.scheduledStartAt, scheduledStartAt),
-      lt(booking.id, id),
-    ),
+    and(eq(booking.scheduledStartAt, scheduledStartAt), lt(booking.id, id)),
   )!;
 }
 
