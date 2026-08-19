@@ -66,6 +66,27 @@ const searchRateLimit = rateLimit({
   keyPrefix: "search",
   redis,
 });
+// M3: support ticket creation (SLA-driven abuse/lateness claims) — 5/min.
+const supportRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 5,
+  keyPrefix: "support",
+  redis,
+});
+// M3: achievement submissions (moderation queue spam) — 30/min.
+const achievementRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "achievement",
+  redis,
+});
+// M3: upload URL creation (mints R2 presigned URLs) — 30/min.
+const uploadRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "upload",
+  redis,
+});
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
@@ -214,6 +235,9 @@ export function createServer() {
       else if (rateLimitKind === "invite") limiter = inviteRateLimit;
       else if (rateLimitKind === "booking") limiter = bookingRateLimit;
       else if (rateLimitKind === "search") limiter = searchRateLimit;
+      else if (rateLimitKind === "support") limiter = supportRateLimit;
+      else if (rateLimitKind === "achievement") limiter = achievementRateLimit;
+      else if (rateLimitKind === "upload") limiter = uploadRateLimit;
 
       if (limiter) {
         const { allowed, retryAfterMs } = await limiter(ip);
