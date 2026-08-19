@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-14
+Last updated: 2026-08-19
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
@@ -34,12 +34,13 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `achievement.errors.ts` — `AchievementNotFoundError`, `AchievementNotOwnedError`, `OptimisticLockError`
 - `achievement.repo.ts` — CRUD with optimistic locking (`updateWithVersion`, `deleteWithVersion`)
 - `achievement.service.ts` — Ownership checks, admin review workflow, optimistic lock handling
-- `achievement.handler.ts` — `list`, `create`, `update`, `remove`, `adminList`, `adminReview`
-- `achievement.router.ts` — Protected routes for student ops, admin routes for review
+- `achievement.handler.ts` — `list`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminReview`
+- `achievement.router.ts` — Protected routes for student ops, admin routes for review, public `listApproved` route
 
 **Service Methods:**
 
 - `list(userId)` — Returns achievements for a user
+- `listApprovedPublic()` — Returns approved + visible achievements with the owner's display name for the public landing (F16)
 - `create(userId, input)` — Creates achievement in `pending` status
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
@@ -98,8 +99,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `admin-booking.types.ts` — Zod schemas for override/list/state-history/admin-refund inputs
 - `admin-booking.errors.ts` — `BookingNotFoundError`
 - `admin-booking.repo.ts` — booking lookup, override state application, state history
-- `admin-booking.service.ts` — `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`; exports `OVERRIDE_CATEGORIES` and `MARKS_ACTIONS`
-- `admin-booking.handler.ts` — `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`
+- `admin-booking.service.ts` — `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`, `setMeetingLink`, `cancelSeriesSession`; exports `OVERRIDE_CATEGORIES` and `MARKS_ACTIONS`
+- `admin-booking.handler.ts` — `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`, `setMeetingLink`, `cancelSeriesSession`
 - `admin-booking.router.ts` — Admin-only routes
 
 **Service Methods:**
@@ -109,6 +110,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
 - `adminRefund(adminId, { paymentId, reason })` — Creates a compensating ledger entry for a payment error
+- `setMeetingLink(adminId, { bookingId, url })` — Records a manual meeting URL on a `SCHEDULED`/`CONFIRMED` booking (U1/FR-21); notifies confirmed participants and records an `admin_set_meeting_link` audit record
+- `cancelSeriesSession(adminId, { sessionId, marksAction, amount? })` — Cancels one `scheduled` series session; the per-participant session hold is released, forfeited, or partially returned per `marksAction` (U6/TC-31); records audit + participant notifications
 
 **Dependencies:** `AdminBookingRepo`, `AuditPort`, wallet port
 
@@ -246,6 +249,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `addSessionNote(userId, bookingId, content)` — Adds a sanitized note to a completed session
 - `getSessionNotes(userId, bookingId)` — Lists notes for a completed session
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled
+- `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
 - `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
@@ -272,7 +276,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run.
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
-- Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U3, U5–U7); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)
+- Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) are **implemented** — U3/U5–U7 closed by REVIEW-FIXES-3 P3.8/P5 (see `docs/plans/active/PRD-GAPS-PHASE3.md`, all U-items closed); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)
 
 ---
 
@@ -405,7 +409,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 **Service Methods:**
 
-- `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reuses an existing PENDING intent for the same provider+user+package; resets FAILED/EXPIRED payments to PENDING and re-creates the intent (re-purchase, #46); returns `{ paymentId, providerReference, checkoutUrl }`
+- `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reuses an existing PENDING intent for the same provider+user+package (returning the persisted `checkoutUrl` when available — H4, migration 0026 adds `payment_record.checkout_url`); resets FAILED/EXPIRED payments to PENDING and re-creates the intent (re-purchase, #46); returns `{ paymentId, providerReference, checkoutUrl }`
 - `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE; writes `payment.{id}.credited` notification (B6, #46). On REFUNDED it reverses the credited Marks via `compensate_deduct` (`refund.{id}.reverse`) when the available balance suffices; when the Marks were already spent it marks the payment REFUNDED, writes a `refund_webhook_reconciliation` audit + `refund_record` row for admin, and skips the reversal + refund notification (P2.7/H4)
 - `getPurchase(paymentId, userId)` — Returns the payment record if owned by the user
 
@@ -537,7 +541,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 **Business Rules:**
 
 - Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min
-- Jobs use retry with exponential backoff (3 attempts; no DLQ yet)
+- Jobs use retry with exponential backoff (3 attempts); after attempts are exhausted the job is moved to the `cogito-jobs-dlq` dead-letter queue, whose worker logs the entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection (M4)
 - Circuit breaker state persisted in Redis (when available)
 
 ---
