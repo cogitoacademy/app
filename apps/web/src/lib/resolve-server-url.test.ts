@@ -36,4 +36,14 @@ describe("resolveServerUrl", () => {
       "http://localhost:3001",
     );
   });
+
+  test("resolves a same-origin relative path to the origin", () => {
+    // In a browser the base is window.location.origin; outside a browser the
+    // fallback base is http://localhost. Consumers append their own path
+    // prefixes (orpc.ts adds "/rpc", auth-client.ts the "/api/auth" basePath),
+    // so the relative config must collapse to the bare origin.
+    expect(resolveServerUrl("/rpc", "app.cogitoacademy.id", false)).toBe(
+      "http://localhost",
+    );
+  });
 });
