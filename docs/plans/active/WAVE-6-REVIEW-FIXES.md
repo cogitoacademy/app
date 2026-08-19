@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                |
 | ---------- | ---------------------------------------------------------------------------------------------------- |
-| Status     | Active — H1/H2/M2/M4/N1 (PR #82) + H3/M1/M3/M5/L1/N2/N4 (PR #83) fixed & merged; L2/L3/N3/P1-P3 open |
+| Status     | Active — H1/H2/M2/M4/N1 (PR #82) + H3/M1/M3/M5/L1/N2/N4 (PR #83) fixed & merged; L2/L3/N3/P1-P3 open → **L2 + N3 fixed and L3 confirmed defense-in-depth (wave-6c)** |
 | Branch     | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83) — both merged            |
 | Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)                                              |
 | Depends on | Wave-5 (PR #79) merged to main                                                                       |
@@ -25,11 +25,11 @@ This plan catalogs the findings of the wave-5 deep code review (worker W2, read-
 | M4  | MED      | Student `cancelSession` releases/deducts `session.holdAmount` regardless of the participant's remaining hold — leaks across pooled wallet holds                                                                                                                                                                           | `booking.service.ts:1376-1404`                 | **Fixed (wave-6a)**       |
 | M5  | MED      | Webhook processing failures return generic 500 + release the claim — persistent bugs loop against Xendit indefinitely, no DLQ/alert                                                                                                                                                                                       | `apps/server/src/webhooks/payments.ts:123-162` | **Fixed (wave-6b)**       |
 | L1  | LOW      | `xendit:no-event-id` fallback idempotency key collapses all id-less events — hides real delivery failures                                                                                                                                                                                                                 | `apps/server/src/webhooks/payments.ts:99`      | **Fixed (wave-6b)**       |
-| L2  | LOW      | Booking-create idempotency key has an empty header slot — frontend sends no `idempotency-key`; stale cached result on re-book within 24h TTL                                                                                                                                                                              | `booking.handler.ts:81-82,250,279,307`         | Open                      |
-| L3  | LOW      | Email-OTP brute-force protection is per-instance memory storage — multi-replica multiplication of verify attempts                                                                                                                                                                                                         | `packages/auth/src/index.ts:158-191`           | Partial                   |
+| L2  | LOW      | Booking-create idempotency key has an empty header slot — frontend sends no `idempotency-key`; stale cached result on re-book within 24h TTL                                                                                                                                          | `booking.handler.ts:81-82,250,279,307`         | **Fixed (wave-6c)**       |
+| L3  | LOW      | Email-OTP brute-force protection is per-instance memory storage — multi-replica multiplication of verify attempts                                                                                                                                                                                                         | `packages/auth/src/index.ts:158-191`           | **Defense-in-depth (wave-6c)** — app-level limiter covers it; see L3 |
 | N1  | MED      | `adminRefund` always fires a provider cash refund for the full `amountIdr` on every refund — but PRD §677 limits cash refunds to payment-error/incorrect-capture corrections (refund only the unused excess); normal Marks are non-convertible to rupiah, so booking/wallet corrections must be in-app Marks credits only | `admin-booking.service.ts:527-644`             | **Fixed (wave-6a)**       |
 | N2  | MED      | BullMQ scheduler jobs never set `removeOnComplete`/`removeOnFail` — completed/failed job records accumulate unbounded in Redis across every 5m/10m/60s repeatable tick                                                                                                                                                    | `scheduler.service.ts`, `jobs/*.job.ts`        | **Fixed (wave-6b)**       |
-| N3  | LOW      | `/health` returns HTTP 200 when a check is `degraded` (DB/Redis response > 1s) — latency degradation is not observable via the health endpoint / LB readiness                                                                                                                                                             | `apps/server/src/routes.ts:433-438`            | Open                      |
+| N3  | LOW      | `/health` returns HTTP 200 when a check is `degraded` (DB/Redis response > 1s) — latency degradation is not observable via the health endpoint / LB readiness                                                                                                                                                             | `apps/server/src/routes.ts:433-438`            | **Fixed (wave-6c)**       |
 | N4  | LOW      | REFUNDED-webhook available-balance guard reads via `wallet.getOrCreate` on the **global** `db` (not the `tx`) — out-of-tx read for an atomic money decision; concurrent wallet change can skew the reversal/reconciliation split                                                                                          | `payment.service.ts:397`                       | **Fixed (wave-6b)**       |
 
 ---
@@ -265,6 +265,8 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 - Cancel + re-book same tutor+slot within 24h → fresh booking created (not the stale cached id)
 - Double-submit of the same request → single booking (idempotency preserved)
 
+> **IMPLEMENTED (wave-6c):** `resolveIdempotencyNonce(headerKey)` added in `packages/api/src/lib/idempotency.ts` — when the client sends an `idempotency-key` header it is used verbatim (true double-submit dedup), otherwise a fresh `crypto.randomUUID()` is generated per attempt. The four create handlers (`createSolo/createGroup/createSeries/createGroupSeries` in `booking.handler.ts`) now end the key with this nonce instead of `headerKey ?? ""`. A re-book of the identical tutor+slot always gets a fresh nonce → a genuinely new key → a new booking; a retry of the exact same request still dedups. Covered by `booking.idempotency.test.ts` (L2 tests: no-header fresh-booking, cancel+re-book fresh, same-nonce double-submit single booking).
+
 ---
 
 ## L3: Email-OTP brute-force protection is per-instance memory storage
@@ -283,6 +285,8 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 - `/api/auth/email-otp/verify-email` hits the app-level auth rate limiter (10/min/IP)
 - Multi-instance: verify attempts are bounded globally (Redis-backed)
+
+> **DEFENSE-IN-DEPTH (wave-6c):** wiring better-auth `secondaryStorage` (Redis) into `packages/auth` is not cleanly available — `@cogito-app/auth` imports only `@cogito-app/db` and `@cogito-app/env`; the Redis client lives in `@cogito-app/api`, which already imports `@cogito-app/auth` (importing the API's Redis client into auth would create a circular dependency). Per the plan's fallback, this is **defense-in-depth only**: the app-level `authRateLimit` (10/min/IP, Redis-backed) fully covers `/api/auth/email-otp/` (confirmed in `rate-limit-paths.ts` `AUTH_PATHS`), so multi-replica verify attempts are already globally bounded by the shared Redis limiter. A focused assertion (`apps/server/src/rate-limit.test.ts`) pins `"/api/auth/email-otp/"` in `AUTH_PATHS` and the `authRateLimit` wiring. If a future requirement needs better-auth's internal per-plugin 3/min bound to be shared across replicas, add a Redis `secondaryStorage` to `packages/auth` in a separate PR (needs the circular-dep resolved first).
 
 ---
 
@@ -360,6 +364,8 @@ So a routine `adminRefund` (e.g. a booking-level override refund, a wallet corre
 
 - DB responds in 1.5s → health returns 503
 - DB responds in 100ms → 200
+
+> **IMPLEMENTED (wave-6c):** `healthStatus(status)` added in `packages/api/src/lib/db-health.ts` maps `ok` → 200 and `degraded`/`error` → 503. `routes.ts` `/health` now uses it, so a slow-but-alive dependency (>1s) trips the LB / Coolify readiness check. Covered by `db-health.test.ts` (N3: degraded→503, ok→200, error→503) + the existing slow-DB `degraded` assertion.
 
 ---
 

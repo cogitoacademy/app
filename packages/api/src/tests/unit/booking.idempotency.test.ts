@@ -107,10 +107,61 @@ describe("booking idempotency", () => {
       expect(result1).toEqual(result2);
     });
 
-    test("no header, identical input — same booking returned (natural key dedup)", async () => {
+    test("no header — each attempt gets a fresh booking (no stale natural-key dedup, L2)", async () => {
+      // The frontend previously sent no idempotency-key header, so the cache
+      // key collapsed to `booking:{user}:{tutor}:{start}:`. After a cancel +
+      // re-book of the identical tutor+slot within the 24h TTL, the stale
+      // cached id was returned instead of a fresh booking. The server must
+      // not reuse a natural key across distinct attempts: when no header is
+      // present, generate a fresh per-attempt nonce so a re-book is a new
+      // request (double-submit protection requires a client nonce header).
+      const booking = makeBookingService();
+      // Simulate a fresh booking row id per creation (as the service would).
+      let n = 0;
+      booking.createSolo.mockImplementation(async () => ({ id: `b${++n}` }));
+      const handler = createBookingHandler(booking as any);
+      const ctx1 = makeContext("u1", makeHeaders());
+      const ctx2 = makeContext("u1", makeHeaders());
+
+      const result1 = await handler.createSolo({
+        context: ctx1,
+        input: soloInput as any,
+      });
+      const result2 = await handler.createSolo({
+        context: ctx2,
+        input: soloInput as any,
+      });
+
+      expect(booking.createSolo).toHaveBeenCalledTimes(2);
+      expect(result1.id).not.toEqual(result2.id);
+    });
+
+    test("cancel + re-book same tutor+slot within TTL returns a fresh booking (L2)", async () => {
+      const booking = makeBookingService();
+      booking.createSolo.mockImplementation(async () => ({ id: "b-fresh" }));
+      const handler = createBookingHandler(booking as any);
+
+      // First attempt (original booking request), then the user cancels it.
+      const attempt1 = makeContext("u1", makeHeaders("attempt-1"));
+      await handler.createSolo({ context: attempt1, input: soloInput as any });
+
+      // Re-book the identical tutor + slot within the TTL. A fresh nonce
+      // (a new attempt) must produce a NEW booking, not the cached id.
+      const attempt2 = makeContext("u1", makeHeaders("attempt-2"));
+      const result2 = await handler.createSolo({
+        context: attempt2,
+        input: soloInput as any,
+      });
+
+      expect(booking.createSolo).toHaveBeenCalledTimes(2);
+      expect(result2.id).toEqual("b-fresh");
+    });
+
+    test("double-submit of the same request (same nonce header) — single booking (L2)", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
-      const ctx = makeContext("u1", makeHeaders());
+      const headers = makeHeaders("same-attempt");
+      const ctx = makeContext("u1", headers);
 
       const result1 = await handler.createSolo({
         context: ctx,
