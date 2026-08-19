@@ -27,7 +27,7 @@ This plan catalogs the findings of the wave-5 deep code review (worker W2, read-
 | L1  | LOW      | `xendit:no-event-id` fallback idempotency key collapses all id-less events — hides real delivery failures                                                                                                                                                                                                   | `apps/server/src/webhooks/payments.ts:99`      | Open   |
 | L2  | LOW      | Booking-create idempotency key has an empty header slot — frontend sends no `idempotency-key`; stale cached result on re-book within 24h TTL                                                                                                                                                                | `booking.handler.ts:81-82,250,279,307`         | Open   |
 | L3  | LOW      | Email-OTP brute-force protection is per-instance memory storage — multi-replica multiplication of verify attempts                                                                                                                                                                                           | `packages/auth/src/index.ts:158-191`           | Partial |
-| N1  | MED      | `adminRefund` provider refund amount = `payment.amountIdr` (full), local Marks reversal = `refundableMarks` (spend-adjusted) — company refunds full cash but only claws back the unspent remainder                                                                                                                                                                                             | `admin-booking.service.ts:531-643`             | Open   |
+| N1  | MED      | `adminRefund` always fires a provider cash refund for the full `amountIdr` on every refund — but PRD §677 limits cash refunds to payment-error/incorrect-capture corrections (refund only the unused excess); normal Marks are non-convertible to rupiah, so booking/wallet corrections must be in-app Marks credits only | `admin-booking.service.ts:527-644`             | Open   |
 | N2  | MED      | BullMQ scheduler jobs never set `removeOnComplete`/`removeOnFail` — completed/failed job records accumulate unbounded in Redis across every 5m/10m/60s repeatable tick                                                                                                                                                                                             | `scheduler.service.ts`, `jobs/*.job.ts`        | Open   |
 | N3  | LOW      | `/health` returns HTTP 200 when a check is `degraded` (DB/Redis response > 1s) — latency degradation is not observable via the health endpoint / LB readiness                                                                                                                                                                                             | `apps/server/src/routes.ts:433-438`            | Open   |
 | N4  | LOW      | REFUNDED-webhook available-balance guard reads via `wallet.getOrCreate` on the **global** `db` (not the `tx`) — out-of-tx read for an atomic money decision; concurrent wallet change can skew the reversal/reconciliation split                                                                                                                                                                                             | `payment.service.ts:397`                       | Open   |
@@ -284,26 +284,34 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 ---
 
-## N1: `adminRefund` provider refund amount ≠ local Marks reversal amount
+## N1: `adminRefund` issues a provider cash refund for non-error refunds — violates "Marks not convertible to rupiah"
 
-**Severity:** MEDIUM (money correctness)
+**Severity:** MEDIUM (money correctness / PRD compliance)
 
-**Location:** `packages/api/src/modules/admin-booking/admin-booking.service.ts:531-643` (provider call at `:586-602`, `createRefundRecord` at `:604`)
+**Location:** `packages/api/src/modules/admin-booking/admin-booking.service.ts:527-644` (provider call at `:586-602`, `createRefundRecord` at `:604`)
 
-**Evidence:** `adminRefund` computes the spend-adjusted `refundableMarks` (`:550-555`, the only amount the wallet is actually clawed back by), then calls the Xendit provider refund with **`payment.amountIdr ?? 0` — the full purchase amount** (`:590`). A user who paid 1,200,000 IDR / 120 Marks and spent 40 Marks receives a local Marks reversal of 80 Marks but Xendit refunds the **full** 1,200,000 IDR to their card. The company refunds full cash while clawing back only the unspent remainder — a direct cash leak on every partial-spend admin refund.
+**Evidence:** `adminRefund` always calls `refund.refundWithProvider(payment.providerRequestId, payment.amountIdr, "CANCELLATION")` (`:588-592`) whenever the payment has a `providerRequestId` — i.e. it issues a **real Xendit cash refund to the payer's card for the full `amountIdr`** on every admin refund, regardless of reason. It also reverses `refundableMarks` locally (`:560-568`) and stores the full `amountIdr` on the refund record (`:607`).
 
-**Why it matters:** the U8/B9 spend-adjusted refund policy (PRD TC-39) is correctly enforced on the Marks side but silently bypassed on the provider cash side. `refundRecord.amountIdr` also stores `payment.amountIdr` (full), so the audit trail records the wrong cash amount.
+**PRD conflict (Refund Policy §677):**
+- *"Purchased Marks are not redeemable or convertible back to rupiah after a successful valid purchase."*
+- *"Unused purchased Marks remain in the wallet indefinitely and cannot be cashed out to rupiah."*
+- *"Payment-error cash refunds are corrections, not Marks cash-out."* Cash refunds are **limited to actual payment errors / incorrect capture**; for anything else the correction is an **in-app Marks/ledger adjustment**, never a card refund.
+- *"If a duplicate or incorrect payment produced Marks that were already spent... admin must not issue a full cash refund blindly. Admin must either refund only the unused excess, correct the wallet with compensating entries, or escalate."*
+
+So a routine `adminRefund` (e.g. a booking-level override refund, a wallet correction) must **not** hit the payment provider at all — it should be a compensating ledger credit. A provider cash refund is only legitimate for a genuine payment-error/duplicate-capture correction, and even then only for the **unused cash excess**, never the full captured amount.
 
 **Required:**
 
-1. Pass the spend-adjusted cash equivalent of `refundableMarks` to `refund.refundWithProvider` (i.e. `round(refundableMarks / marks * amountIdr)` or an explicit proportional figure), or document the deliberate decision to refund full cash and separately reconcile.
-2. Store the actual refunded cash amount on `refundRecord.amountIdr`.
-3. Add a test: partial-spend payment → adminRefund → provider refund amount is the unspent proportion, not the full `amountIdr`.
+1. Gate the provider refund: only issue a real cash refund when the override reason is a payment error / incorrect capture (a distinct action or an explicit flag on the input), never for booking/wallet corrections.
+2. When a cash refund IS issued (payment error), refund only the **unused cash excess** (the cash equivalent of the unspent Marks remainder), not the full `amountIdr` — consistent with TC-39 "refund only the unused excess".
+3. For all other admin refunds/corrections, perform the in-app compensating Marks credit only (no provider call), per the "Marks not convertible" rule.
+4. Add tests: (a) booking/wallet correction → no provider refund call, only a Marks credit; (b) payment-error correction → provider refund equals only the unused cash excess; (c) fully-spent duplicate payment → rejected / escalated (no blind full refund).
 
 **Acceptance tests:**
 
-- Payment 120 Marks / 1,200,000 IDR, spent 40 → provider refund = 800,000 IDR (not 1,200,000); Marks reversal = 80
-- Fully-spent → rejected (existing behavior, unchanged)
+- Admin refunds a booking error → no `refundWithProvider` call; `refundRecord.amountIdr = 0` (or null); only a compensating Marks credit.
+- Admin issues a payment-error refund with 80/120 Marks unspent → provider refund = 800,000 IDR (not 1,200,000), not the full capture.
+- Fully-spent duplicate payment → no cash refund (existing `RefundSpendExhaustedError` behavior, unchanged).
 
 ---
 
@@ -395,4 +403,4 @@ A full read of `docs/prd.tex` (all 24 FRs, state machine, Marks ledger rules, re
 
 - v1.0 (2026-08-19): Created from the wave-5 deep review (worker W2, read-only). All findings verified against code at `d11962b` and re-checked against the wave-5 branch (`fix/wave5-prod-readiness`, PR #79). H1's `TRUST_PROXY` RUNBOOK row is added by wave-5's infra commit (W4 added `TRUST_PROXY=true` to the env examples); the RUNBOOK table row itself is still missing — tracked here.
 - v1.1 (2026-08-19, re-verification at HEAD `69e2dd8`): re-checked every original finding against current main. **Status sync:** H1–H3/M1–M5/L1–L2 all still **Open** (code unchanged); L3 → **Partial** (`/api/auth/email-otp/` now in `AUTH_PATHS`, `rate-limit-paths.ts:24`). **New findings added:** N1 (adminRefund provider refund amount ≠ Marks reversal), N2 (unbounded BullMQ job retention), N3 (`/health` degraded → 200), N4 (REFUNDED-webhook balance guard reads outside tx). H1's RUNBOOK `TRUST_PROXY` row is now present at `docs/RUNBOOK.md:297` (only the env-schema code + tests remain).
-- v1.2 (2026-08-19): PRD-vs-code audit added. **Aligned (verified):** pricing/extra-take, H-2/12h/15-min constants, KB threshold, packages, refund reconciliation, series no-opt-out, achievements, parent contact, session notes, tutor invite, offline rooms. **PRD gaps added:** P1 (group-invitee email lacks PRD content + CTA), P2 (no "Account created" welcome email), P3 (group-series disclaimer copy weaker than PRD equivalent).
+- v1.2 (2026-08-19): PRD-vs-code audit added. **Aligned (verified):** pricing/extra-take, H-2/12h/15-min constants, KB threshold, packages, refund reconciliation, series no-opt-out, achievements, parent contact, session notes, tutor invite, offline rooms. **PRD gaps added:** P1 (group-invitee email lacks PRD content + CTA), P2 (no "Account created" welcome email), P3 (group-series disclaimer copy weaker than PRD equivalent). **N1 reframed (v1.2b, product decision):** the real issue is that `adminRefund` issues a provider **cash** refund on every refund — PRD §677 limits cash refunds to payment-error corrections (refund only the unused excess); normal Marks are non-convertible to rupiah, so booking/wallet corrections must be in-app Marks credits. See the N1 section for the full PRD quotes and required gating. P2 is **in-scope** (user confirmed 2026-08-19).
