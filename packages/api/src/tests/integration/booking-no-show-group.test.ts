@@ -383,9 +383,9 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
 
     const fetched = await proposerClient.booking.get({ bookingId: b.id });
     expect(fetched.currentState).toBe("scheduled");
-    // Series keeps the full package hold; only the forfeited session's marks
-    // leave the wallet.
-    expect(fetched.holdAmount).toBe(100);
+    // Series no-show decrements the participant's held amount (H2), so the
+    // booking hold drops to the remaining (1-of-2) session's hold.
+    expect(fetched.holdAmount).toBe(50);
 
     const [participant] = await db
       .select()
