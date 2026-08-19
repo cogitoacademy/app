@@ -50,10 +50,10 @@
     "format": "oxfmt --write",
     "check": "oxlint && oxfmt --write",
     "test": "bun test",
-    "test:api": "bun test --env-file apps/server/.env packages/api/src/tests",
+    "test:api": "bun test --env-file apps/server/.env.test packages/api/src/tests",
     "test:e2e": "turbo -F @cogito-app/e2e test",
     "test:e2e:ui": "turbo -F @cogito-app/e2e test:ui",
-    "test:coverage": "bun test --coverage --env-file apps/server/.env packages/api/src/tests",
+    "test:coverage": "bun test --coverage --env-file apps/server/.env.test packages/api/src/tests",
     "prepare": "lefthook install"
   },
   "dependencies": {
