@@ -173,6 +173,13 @@ export function createPaymentService(deps: {
       ) {
         // Reset to PENDING so the webhook can credit, then re-create the intent.
         // Xendit allows reusing the reference_id for a fresh payment request.
+        // H3: each re-purchase is a new attempt. We rotate providerRequestId to
+        // the new attempt's id but RETAIN the previous providerEventId as the
+        // stale-generation marker: confirmFromWebhook ignores any terminal event
+        // whose providerEventId equals the retained one, so a late FAILED/EXPIRED
+        // for the OLD attempt cannot flip the re-purchased PENDING row terminal.
+        // (We cannot match against providerRequestId because Xendit payment
+        // events carry payment_id, not payment_request_id.)
         const freshIntent = await provider.createIntent({
           paymentId: existing.id,
           amountIdr: pkg.priceIdr,
@@ -387,15 +394,24 @@ export function createPaymentService(deps: {
 
           let didReverse = false;
           if (reversed) {
-            // H4: if the payer already spent the credited Marks (available
-            // balance below the payment's marks), the compensate_deduct
+            // N4: read the wallet through the transaction so the
+            // reversal-vs-reconciliation decision uses the transaction's view
+            // of the balance (a concurrent wallet change cannot skew it).
+            const w = await wallet.getByUserId(tx, record.userId);
+            // M1: the credited Marks live in availableBalance only until
+            // sessions are booked (moved to heldBalance). A payer may have
+            // spent SOME and held the REST, so the reversal basis must be the
+            // total (held + available), not available alone — otherwise the
+            // compensation is skipped, a reconciliation row is written, and the
+            // held marks are later deducted by the tutor AFTER the provider
+            // refunded, delivering Marks-backed sessions on a refunded payment.
+            // The "spent all" case (H4) is preserved: when total < marks the
             // reversal would throw InsufficientBalanceError inside the tx and
             // roll back the whole webhook (status stays PAID, provider retries
-            // forever). Instead we mark REFUNDED, record the mismatch for
-            // admin reconciliation (per PRD TC-39), and skip the reversal and
-            // the notification — no throw.
-            const w = await wallet.getOrCreate(record.userId);
-            if (w.availableBalance < record.marks) {
+            // forever). Instead we mark REFUNDED, record the mismatch for admin
+            // reconciliation (PRD TC-39), and skip the reversal + notification.
+            const total = w ? w.heldBalance + w.availableBalance : 0;
+            if (w === null || total < record.marks) {
               if (audit) {
                 await audit.record({
                   db: tx,
@@ -407,8 +423,9 @@ export function createPaymentService(deps: {
                   details: {
                     paymentId: record.id,
                     marks: record.marks,
-                    availableBalance: w.availableBalance,
-                    spent: record.marks - w.availableBalance,
+                    availableBalance: w ? w.availableBalance : 0,
+                    heldBalance: w ? w.heldBalance : 0,
+                    spent: record.marks - total,
                   },
                 });
               }
@@ -423,9 +440,22 @@ export function createPaymentService(deps: {
                 });
               }
             } else {
-              // R5: reverses the marks credited on PAID/SETTLED via the
-              // compensate_deduct primitive — it removes the marks from the
-              // available balance, unlike `deduct` which only releases holds.
+              // M1: consume held marks first (release them back to available),
+              // then reverse the full payment marks from available via
+              // compensate_deduct (R5) — total balance is the reversal basis.
+              const heldToRelease = Math.min(w!.heldBalance, record.marks);
+              if (heldToRelease > 0) {
+                await wallet.release(tx, {
+                  walletId: record.walletId,
+                  amount: heldToRelease,
+                  eventKey: `refund.${record.id}.release`,
+                  sourceReference: record.id,
+                  actorType: "system",
+                  reason: "Refund: released held marks before reversal",
+                });
+              }
+              // R5: compensate_deduct removes the marks from the available
+              // balance, unlike `deduct` which only releases holds.
               await wallet.compensate(tx, {
                 walletId: record.walletId,
                 amount: record.marks,
@@ -455,6 +485,37 @@ export function createPaymentService(deps: {
               emailRequired: true,
             });
           }
+        } else if (
+          input.status === PAYMENT_STATUS.FAILED ||
+          input.status === PAYMENT_STATUS.EXPIRED
+        ) {
+          // H3: after a re-purchase the row is reset to PENDING with a NEW
+          // providerRequestId (the current attempt's generation). A late
+          // FAILED/EXPIRED webhook for the OLD attempt would otherwise flip the
+          // PENDING row terminal and the new attempt's SUCCEEDED webhook would
+          // hit the early return above and never credit. The stale marker is the
+          // previous attempt's providerEventId: if the incoming terminal event
+          // carries that same id, it is the old attempt (or a duplicate of it)
+          // and must be ignored. (We cannot compare against providerRequestId
+          // because Xendit payment events carry payment_id, not
+          // payment_request_id.) Records without a stale marker fall back to the
+          // old behavior.
+          if (
+            record.status === PAYMENT_STATUS.PENDING &&
+            record.providerEventId &&
+            input.providerEventId === record.providerEventId
+          ) {
+            return { status: record.status };
+          }
+          await repo.updatePaymentStatus(
+            record.id,
+            {
+              status: input.status,
+              providerEventId: input.providerEventId,
+              failureReason: input.failureReason ?? null,
+            },
+            tx,
+          );
         } else {
           await repo.updatePaymentStatus(
             record.id,

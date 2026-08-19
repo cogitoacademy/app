@@ -5,9 +5,33 @@ import { log } from "@cogito-app/api/lib/logger";
 import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
 import { isProductionLike } from "@cogito-app/env/node-env";
 import { env } from "@cogito-app/env/server";
+import { PaymentNotFoundError } from "@cogito-app/api/modules/payment/payment.errors";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+
+/**
+ * M5: classifies a webhook processing failure as permanent (a bug that retrying
+ * will never fix — the provider should NOT be asked to retry) vs transient
+ * (a dependency hiccup worth retrying).
+ *
+ * Permanent failures are answered with a 4xx and the idempotency claim is NOT
+ * released (or is marked processed), so Xendit stops retrying a delivery that
+ * can never succeed. Transient failures (DB/Redis) are answered 5xx and the
+ * claim is released so the provider's retry re-processes.
+ */
+function isPermanentWebhookError(error: unknown): boolean {
+  if (error instanceof PaymentNotFoundError) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  // `mapXenditStatus` throws "Unknown payment status: <status>" for a status we
+  // don't understand — a permanent provider-side bug, not a transient failure.
+  return message.toLowerCase().includes("unknown payment status");
+}
+
+function permanentWebhookStatus(error: unknown): number {
+  if (error instanceof PaymentNotFoundError) return 404;
+  return 400;
+}
 
 export function stubCheckoutEnabled(
   nodeEnv: string,
@@ -99,6 +123,24 @@ export function paymentsWebhook(app: Elysia) {
 
         validateWebhookTimestamp(request, provider);
 
+        // L1: an event with neither a provider event id nor a provider reference
+        // cannot be matched to a payment and would otherwise collapse onto the
+        // shared `xendit:no-event-id` idempotency key, hiding real delivery
+        // failures. Reject it as a permanent 400 with a log instead.
+        if (!payload.providerEventId && !payload.providerReference) {
+          log({
+            level: "error",
+            action: "webhook_missing_reference",
+            provider,
+            error: {
+              message:
+                "Webhook event has neither a provider event id nor a provider reference",
+            },
+          });
+          set.status = 400;
+          return { error: "Webhook event is missing a payment reference" };
+        }
+
         const idempotencyKey = `${provider}:${payload.providerEventId || "no-event-id"}`;
         // Short 2-minute claim window (R7): a crash mid-processing only blocks
         // retries for 2 minutes instead of the 24h processed-record TTL, so the
@@ -124,7 +166,17 @@ export function paymentsWebhook(app: Elysia) {
           set.status = 200;
           return { ok: true };
         } catch (error) {
-          await webhookIdempotency.release(idempotencyKey);
+          // M5: release the claim ONLY on transient errors so the provider's
+          // retry re-processes. For permanent errors mark the event processed
+          // (dead-letter) so it does not loop against Xendit forever.
+          if (isPermanentWebhookError(error)) {
+            await webhookIdempotency.markProcessed(idempotencyKey, {
+              ok: false,
+              permanent: true,
+            });
+          } else {
+            await webhookIdempotency.release(idempotencyKey);
+          }
           throw error;
         }
       } catch (error) {
@@ -152,6 +204,20 @@ export function paymentsWebhook(app: Elysia) {
             error: { message },
           });
           set.status = 408;
+          return { error: message };
+        }
+
+        // M5: permanent failures (payment not found, unknown status) are a 4xx
+        // dead-letter — the provider should stop retrying. Only transient
+        // errors (DB/Redis) are a 5xx that Xendit retries.
+        if (isPermanentWebhookError(error)) {
+          log({
+            level: "error",
+            action: "webhook_dead_letter",
+            provider,
+            error: { message },
+          });
+          set.status = permanentWebhookStatus(error);
           return { error: message };
         }
 

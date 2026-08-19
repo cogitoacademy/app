@@ -1,5 +1,9 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createBookingRepo } from "../../modules/booking/booking.repo";
+import {
+  encodeBookingCursor,
+  decodeBookingCursor,
+} from "../../modules/booking/booking.repo";
 
 function makeSelectConn(rows: any[] = []) {
   const chain: any = {};
@@ -715,6 +719,41 @@ describe("createBookingRepo", () => {
 
       expect(findMany).toHaveBeenCalledTimes(1);
       expect(findMany.mock.calls[0]?.[0]).toMatchObject({ limit: 6 });
+    });
+  });
+
+  describe("booking cursor (M3)", () => {
+    test("encodeBookingCursor round-trips through decodeBookingCursor", () => {
+      const start = new Date("2026-08-16T03:00:00.000Z");
+      const cursor = encodeBookingCursor(start, "b-123");
+      expect(cursor).toBe("2026-08-16T03:00:00.000Z|b-123");
+      expect(decodeBookingCursor(cursor)).toEqual({
+        scheduledStartAt: start,
+        id: "b-123",
+      });
+    });
+
+    test("decodeBookingCursor accepts a legacy bare-ISO cursor with null id", () => {
+      const decoded = decodeBookingCursor("2026-08-16T03:00:00.000Z");
+      expect(decoded.scheduledStartAt.toISOString()).toBe(
+        "2026-08-16T03:00:00.000Z",
+      );
+      expect(decoded.id).toBeNull();
+    });
+
+    test("listBookingsByProposer passes a composite cursor through to findMany", async () => {
+      const findMany = mock(() => Promise.resolve([]));
+      const findFirst = mock(() => Promise.resolve(null));
+      const db: any = { query: { booking: { findFirst, findMany } } };
+      const repo = createBookingRepo(db);
+
+      await repo.listBookingsByProposer("u1", {
+        limit: 10,
+        cursor: "2026-08-16T03:00:00.000Z|b-123",
+      });
+
+      expect(findMany).toHaveBeenCalledTimes(1);
+      expect(findMany.mock.calls[0]?.[0]).toMatchObject({ limit: 11 });
     });
   });
 });

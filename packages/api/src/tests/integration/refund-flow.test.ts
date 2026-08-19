@@ -473,6 +473,7 @@ describe("Refund flow", () => {
       paymentId: intent.paymentId,
       marks: 50,
       availableBalance: 10,
+      heldBalance: 0,
       spent: 40,
     });
   });

@@ -493,8 +493,10 @@ describe("BookingService", () => {
 
       const result = await service.listMine("student1");
       expect(result.items.length).toBe(20);
+      // The nextCursor encodes the LAST item of the returned page (index 19),
+      // not a row beyond it.
       expect(result.nextCursor).toBe(
-        new Date("2025-01-01T00:00:00Z").toISOString(),
+        `${new Date("2025-01-01T00:00:00Z").toISOString()}|b19`,
       );
     });
 
@@ -520,8 +522,9 @@ describe("BookingService", () => {
 
       const result = await service.listMine("student1", { limit: 5 });
       expect(result.items.length).toBe(5);
+      // nextCursor encodes the LAST item of the returned page (index 4 = b4).
       expect(result.nextCursor).toBe(
-        new Date("2025-01-01T00:00:00Z").toISOString(),
+        `${new Date("2025-01-01T00:00:00Z").toISOString()}|b4`,
       );
       expect(repo.listBookingsByProposer).toHaveBeenCalledWith("student1", {
         states: undefined,

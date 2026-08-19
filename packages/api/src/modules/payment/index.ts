@@ -4,6 +4,7 @@ import type { RedisClient } from "../../lib/redis";
 import type {
   CompensateParams,
   CreditParams,
+  ReleaseParams,
   WalletSnapshot,
 } from "../wallet/wallet.service";
 import type { AuditRecordParams } from "../audit/audit.service";
@@ -23,7 +24,15 @@ export type PaymentModule = ReturnType<typeof createPaymentModule>;
 
 export interface PaymentWalletPort {
   getOrCreate(userId: string): Promise<WalletSnapshot>;
+  // N4: transactional read used inside confirmFromWebhook's REFUNDED branch so
+  // the reversal-vs-reconciliation money decision reads the active transaction's
+  // view, not the global db.
+  getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
   credit(db: DbOrTx, params: CreditParams): Promise<WalletSnapshot>;
+  // M1: REFUNDED reversal consumes held marks first (release) then deducts the
+  // remainder from available via compensate_deduct, so the reversal basis is
+  // total (held + available), not just available.
+  release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
   compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { scheduleEscalateSupportTickets } from "../../modules/scheduler/jobs/escalate-support-tickets.job";
+import { JOB_RETENTION } from "../../modules/scheduler/scheduler.service";
 
 describe("scheduleEscalateSupportTickets", () => {
   test("upserts a repeatable scheduler with retry and backoff options", async () => {
@@ -17,6 +18,7 @@ describe("scheduleEscalateSupportTickets", () => {
         opts: {
           attempts: 3,
           backoff: { type: "exponential", delay: 1000 },
+          ...JOB_RETENTION,
         },
       },
     );

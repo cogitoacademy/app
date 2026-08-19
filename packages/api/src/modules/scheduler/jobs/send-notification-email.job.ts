@@ -1,4 +1,5 @@
 import type { Queue } from "bullmq";
+import { JOB_RETENTION } from "../scheduler.service";
 
 const JOB_NAME = "send-notification-email";
 const REPEAT_INTERVAL_MS = 60_000;
@@ -20,6 +21,7 @@ export async function scheduleSendNotificationEmail(
       opts: {
         attempts: 3,
         backoff: { type: "exponential", delay: 1000 },
+        ...JOB_RETENTION,
       },
     },
   );
