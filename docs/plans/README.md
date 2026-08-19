@@ -4,6 +4,7 @@
 
 | Plan                                                  | Branch            | PR  | Status                                                                                                    |
 | ----------------------------------------------------- | ----------------- | --- | --------------------------------------------------------------------------------------------------------- |
+| [WAVE-6-REVIEW-FIXES.md](active/WAVE-6-REVIEW-FIXES.md) | `fix/wave6-review-fixes` (future PR) | —   | Active — H1–H3/M1–M5/L1–L2 open, L3 partial; N1–N4 added (2026-08-19)                                      |
 | [PRD-GAPS-PHASE3.md](active/PRD-GAPS-PHASE3.md)       | main (merged)     | —   | All U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                     |
 | [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | main (merged #55) | —   | F8/F13/F14/F16 closed (REVIEW-FIXES-3 P6); F2/F3/F6/F7/F11/F17 closed (merged #55); F1/F9/F12/F18 partial |
 | [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge) | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending        |

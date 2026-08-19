@@ -2,13 +2,13 @@
 
 | Field      | Value                                                                 |
 | ---------- | --------------------------------------------------------------------- |
-| Status     | Active — planned (2026-08-19), not yet implemented                    |
+| Status     | Active — re-verified against main @ `69e2dd8` (2026-08-19), not yet implemented                    |
 | Branch     | `fix/wave6-review-fixes` (future PR)                                  |
 | Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)               |
 | Depends on | Wave-5 (PR #79) merged to main                                        |
 | Scope      | Backend only (packages/api, apps/server, packages/env, packages/auth) |
 
-This plan catalogs the findings of the wave-5 deep code review (worker W2, read-only, `docs/plans/active/` companion to the wave-5 fix PR). Every finding was verified against code at `d11962b` (pre-wave-5) and re-checked against the wave-5 branch. Severity ordering follows the code-review skill.
+This plan catalogs the findings of the wave-5 deep code review (worker W2, read-only, `docs/plans/active/` companion to the wave-5 fix PR). Every finding was verified against code at `d11962b` (pre-wave-5) and re-checked against the wave-5 branch. **Re-verification (2026-08-19, HEAD `69e2dd8`):** every original finding was re-checked against current main; new findings **N1–N4** were added by the wave-6 deep review. Severity ordering follows the code-review skill.
 
 > **Rule:** the PRD (`docs/prd.tex`) is the source of truth. If a requirement in this spec conflicts with the PRD, the PRD wins.
 
@@ -16,7 +16,7 @@ This plan catalogs the findings of the wave-5 deep code review (worker W2, read-
 
 | #   | Severity | Finding                                                                                                                                                                                                                                                                                                     | Location                                       | Status |
 | --- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------ |
-| H1  | HIGH     | `z.coerce.boolean()` treats the string `"false"` as `true` for `TRUST_PROXY`, `STUB_WEBHOOK_ALLOWED`, `SCHEDULER_ENABLED`, `DB_SSL_REJECT_UNAUTHORIZED` — `TRUST_PROXY=false` actually enables proxy trust (rate-limit evasion + webhook IP allowlist bypass); `SCHEDULER_ENABLED=false` runs the scheduler | `packages/env/src/server.ts:15,32,35,53`       | Open   |
+| H1  | HIGH     | `z.coerce.boolean()` treats the string `"false"` as `true` for `TRUST_PROXY`, `STUB_WEBHOOK_ALLOWED`, `SCHEDULER_ENABLED`, `DB_SSL_REJECT_UNAUTHORIZED` — `TRUST_PROXY=false` actually enables proxy trust (rate-limit evasion + webhook IP allowlist bypass); `SCHEDULER_ENABLED=false` runs the scheduler | `packages/env/src/server.ts:17,34,37,55`       | Open   |
 | H2  | HIGH     | Series participant no-show forfeits the wallet hold but not `participant.heldAmount` → final session completion throws `InsufficientBalanceError` → booking stuck, tutor unpaid                                                                                                                             | `booking.service.ts:1515-1539,1162-1228`       | Open   |
 | H3  | HIGH     | Late terminal webhook for a re-purchased payment (shared `providerReference`) bricks the new purchase — user charged, never credited                                                                                                                                                                        | `payment.service.ts:157-183,263-278`           | Open   |
 | M1  | MED      | REFUNDED-webhook reversal checks `availableBalance` only — held Marks strand the reversal into admin reconciliation; company refunds cash but still delivers Marks-backed sessions                                                                                                                          | `payment.service.ts:364-406`                   | Open   |
@@ -26,7 +26,11 @@ This plan catalogs the findings of the wave-5 deep code review (worker W2, read-
 | M5  | MED      | Webhook processing failures return generic 500 + release the claim — persistent bugs loop against Xendit indefinitely, no DLQ/alert                                                                                                                                                                         | `apps/server/src/webhooks/payments.ts:123-162` | Open   |
 | L1  | LOW      | `xendit:no-event-id` fallback idempotency key collapses all id-less events — hides real delivery failures                                                                                                                                                                                                   | `apps/server/src/webhooks/payments.ts:99`      | Open   |
 | L2  | LOW      | Booking-create idempotency key has an empty header slot — frontend sends no `idempotency-key`; stale cached result on re-book within 24h TTL                                                                                                                                                                | `booking.handler.ts:81-82,250,279,307`         | Open   |
-| L3  | LOW      | Email-OTP brute-force protection is per-instance memory storage — multi-replica multiplication of verify attempts                                                                                                                                                                                           | `packages/auth/src/index.ts:158-191`           | Open   |
+| L3  | LOW      | Email-OTP brute-force protection is per-instance memory storage — multi-replica multiplication of verify attempts                                                                                                                                                                                           | `packages/auth/src/index.ts:158-191`           | Partial |
+| N1  | MED      | `adminRefund` provider refund amount = `payment.amountIdr` (full), local Marks reversal = `refundableMarks` (spend-adjusted) — company refunds full cash but only claws back the unspent remainder                                                                                                                                                                                             | `admin-booking.service.ts:531-643`             | Open   |
+| N2  | MED      | BullMQ scheduler jobs never set `removeOnComplete`/`removeOnFail` — completed/failed job records accumulate unbounded in Redis across every 5m/10m/60s repeatable tick                                                                                                                                                                                             | `scheduler.service.ts`, `jobs/*.job.ts`        | Open   |
+| N3  | LOW      | `/health` returns HTTP 200 when a check is `degraded` (DB/Redis response > 1s) — latency degradation is not observable via the health endpoint / LB readiness                                                                                                                                                                                             | `apps/server/src/routes.ts:433-438`            | Open   |
+| N4  | LOW      | REFUNDED-webhook available-balance guard reads via `wallet.getOrCreate` on the **global** `db` (not the `tx`) — out-of-tx read for an atomic money decision; concurrent wallet change can skew the reversal/reconciliation split                                                                                                                                                                                             | `payment.service.ts:397`                       | Open   |
 
 ---
 
@@ -54,7 +58,7 @@ This plan catalogs the findings of the wave-5 deep code review (worker W2, read-
 **Required:**
 
 1. Apply the same preprocess pattern used for `GOOGLE_MEET_ENABLED` (or `z.enum(["true","false"]).transform(...)`) to all four vars: `TRUST_PROXY`, `STUB_WEBHOOK_ALLOWED`, `SCHEDULER_ENABLED`, `DB_SSL_REJECT_UNAUTHORIZED`.
-2. Add a `TRUST_PROXY` row to the RUNBOOK env table (currently absent — `grep -c TRUST_PROXY docs/RUNBOOK.md` → 0).
+2. Add a `TRUST_PROXY` row to the RUNBOOK env table — **DONE (re-verified 2026-08-19):** the row now exists at `docs/RUNBOOK.md:297` (`TRUST_PROXY` — "Trust `x-forwarded-for` first hop... default false — required behind a reverse proxy"). Only the code + tests remain.
 3. Add unit tests asserting `"false"` → `false`, `"true"` → `true`, `""` → default, `"0"` → `false` for each var.
 
 **Acceptance tests:**
@@ -267,7 +271,7 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 **Location:** `packages/auth/src/index.ts:158-191`; better-auth 1.6.11 (`create-context.mjs:166-171`): `rateLimit.enabled = options.rateLimit?.enabled ?? isProduction`, storage defaults to `"memory"` unless `secondaryStorage` is configured. No `secondaryStorage` is wired (`packages/auth/src/index.ts` — DB adapter only).
 
-**Evidence:** the app-level `authRateLimit` (`routes.ts:39-44`, 10/min/IP) does **not** cover `/api/auth/email-otp/*` paths (they aren't in `AUTH_PATHS`, `rate-limit-paths.ts:11-18`); the plugin's own 3/min limit per endpoint is per-process. With multiple server replicas behind Caddy, an attacker gets N×3 verify attempts per minute against the 6-digit OTP (5 min expiry). 6 digits / 1e6 space — meaningful with a 1e6/… rate, still impractical per single instance but the multi-instance multiplication should be closed.
+**Evidence:** the app-level `authRateLimit` (`routes.ts:39-44`, 10/min/IP) — **re-verified 2026-08-19:** `rate-limit-paths.ts:24` now includes `/api/auth/email-otp/` in `AUTH_PATHS` (added by wave-5 M3), so the app-level limiter DOES cover email-OTP verify/send. The remaining gap is only the plugin's per-process 3/min limit (no Redis `secondaryStorage`), so N replicas still get N×3 verify attempts/min. This is defense-in-depth only at this point.
 
 **Required:**
 
@@ -280,13 +284,102 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 ---
 
+## N1: `adminRefund` provider refund amount ≠ local Marks reversal amount
+
+**Severity:** MEDIUM (money correctness)
+
+**Location:** `packages/api/src/modules/admin-booking/admin-booking.service.ts:531-643` (provider call at `:586-602`, `createRefundRecord` at `:604`)
+
+**Evidence:** `adminRefund` computes the spend-adjusted `refundableMarks` (`:550-555`, the only amount the wallet is actually clawed back by), then calls the Xendit provider refund with **`payment.amountIdr ?? 0` — the full purchase amount** (`:590`). A user who paid 1,200,000 IDR / 120 Marks and spent 40 Marks receives a local Marks reversal of 80 Marks but Xendit refunds the **full** 1,200,000 IDR to their card. The company refunds full cash while clawing back only the unspent remainder — a direct cash leak on every partial-spend admin refund.
+
+**Why it matters:** the U8/B9 spend-adjusted refund policy (PRD TC-39) is correctly enforced on the Marks side but silently bypassed on the provider cash side. `refundRecord.amountIdr` also stores `payment.amountIdr` (full), so the audit trail records the wrong cash amount.
+
+**Required:**
+
+1. Pass the spend-adjusted cash equivalent of `refundableMarks` to `refund.refundWithProvider` (i.e. `round(refundableMarks / marks * amountIdr)` or an explicit proportional figure), or document the deliberate decision to refund full cash and separately reconcile.
+2. Store the actual refunded cash amount on `refundRecord.amountIdr`.
+3. Add a test: partial-spend payment → adminRefund → provider refund amount is the unspent proportion, not the full `amountIdr`.
+
+**Acceptance tests:**
+
+- Payment 120 Marks / 1,200,000 IDR, spent 40 → provider refund = 800,000 IDR (not 1,200,000); Marks reversal = 80
+- Fully-spent → rejected (existing behavior, unchanged)
+
+---
+
+## N2: BullMQ scheduler jobs accumulate unbounded job records in Redis
+
+**Severity:** MEDIUM (ops / memory)
+
+**Location:** `packages/api/src/modules/scheduler/scheduler.service.ts` + `jobs/*.job.ts` (`upsertJobScheduler` opts at `expire-bookings.job.ts:7-18`, etc.)
+
+**Evidence:** every repeatable job registers with only `attempts: 3, backoff: { exponential }` and **no `removeOnComplete` / `removeOnFail`**. BullMQ defaults keep completed and failed job records (their full `data` and metadata) in the `completed`/`failed` sets indefinitely. With six jobs firing every 5m/10m/60s, Redis accumulates a completed record on every tick, permanently. The DLQ Redis list is bounded (`DLQ_LIST_MAX = 100`), but the completed-job set is not. On a busy scheduler this grows Redis memory without bound until eviction.
+
+**Why it matters:** unbounded Redis growth on the shared scheduler instance — eventually OOM / eviction churn that degrades idempotency, rate limits, and circuit-breaker state that share the same Redis.
+
+**Required:**
+
+1. Set `removeOnComplete: { age: <hours>, count: <n> }` and `removeOnFail: { age: <hours>, count: <n> }` on each repeatable job's `opts` (e.g. keep last 100 completed / last 50 failed).
+2. Consider a queue-level default (`defaultJobOptions`) so future jobs inherit it.
+
+**Acceptance tests:**
+
+- After a scheduler run, the `completed` set for `cogito-jobs` is bounded (no unbounded growth); `cogito-jobs:*` Redis keys stop growing.
+
+---
+
+## N3: `/health` returns 200 when a dependency is `degraded`
+
+**Severity:** LOW (observability / ops)
+
+**Location:** `apps/server/src/routes.ts:433-438`; `packages/api/src/lib/db-health.ts`
+
+**Evidence:** `healthCheck` reports `ok` / `degraded` (a dependency responded but took > 1s) / `error`. The route maps `ok` → 200, `degraded` → 200, `error` → 503. A slow-but-alive database or Redis (> 1s) therefore reports HTTP 200, so the Docker HEALTHCHECK and any LB / Coolify readiness check treat the instance as perfectly healthy even as latency degrades toward timeout. The `degraded` signal is computed but never surfaced as non-200.
+
+**Why it matters:** latency degradation is a real availability signal; the health endpoint exists to surface it. A 1s+ DB is often a precursor to timeout failures and should trip readiness, or at minimum be distinguishable from fully healthy.
+
+**Required:**
+
+1. Map `degraded` → 503 (or a distinct status), so LB / Coolify stop routing to a latency-degraded instance.
+2. Add a test asserting `degraded` yields non-200.
+
+**Acceptance tests:**
+
+- DB responds in 1.5s → health returns 503
+- DB responds in 100ms → 200
+
+---
+
+## N4: REFUNDED-webhook available-balance guard reads outside the transaction
+
+**Severity:** LOW (consistency / money decision)
+
+**Location:** `packages/api/src/modules/payment/payment.service.ts:397`
+
+**Evidence:** in `confirmFromWebhook`'s REFUNDED branch, the `availableBalance < record.marks` guard calls `wallet.getOrCreate(record.userId)` — a **non-transactional** read against the global `db`, not the active `tx`. The wallet's `getOrCreate` signature takes no connection (`wallet.service.ts:156`), so it always uses the module-level `db`. Inside `db.transaction(...)` this means the guard reads a snapshot that is not part of the transaction's view, so a concurrent wallet change (another booking's hold/release committed mid-webhook) can make the reversal-vs-reconciliation decision inconsistent with the row state that `updatePaymentStatusIfInCreditState` just locked.
+
+**Why it matters:** the REFUNDED webhook decision (reverse the marks vs. write an admin reconciliation row) is a money decision; reading outside the tx weakens the atomicity of the choice. This is low severity because the guard is conservative (worst case a reconciliation row is written when a reversal was possible), but it is a correctness smell worth closing with the M1 refactor.
+
+**Required:**
+
+1. Extend `getByUserId`/`getOrCreate` to accept a `DbOrTx` and call it with `tx` inside the webhook (the booking/room paths already thread `tx` through `wallet.getByUserId(tx, ...)`).
+2. Add a test: concurrent wallet change does not flip the reversal decision mid-transaction.
+
+**Acceptance tests:**
+
+- REFUNDED webhook reversal uses the transactional wallet snapshot
+- Existing refund-flow tests unchanged
+
+---
+
 ## Implementation Guidance (shared)
 
 - Follow the 4-layer pattern, consumer-driven ports, `DomainError` + `withDomainMap`, bounded zod, `DbOrTx`, and integration tests via `createRouterClient` (see `docs/CONTEXT.md` → "How to Add a New Module").
 - Money paths (H2, M1, M2, M4) must use `wallet.hold/release/deduct/credit/compensate` inside the booking transaction with deterministic `eventKey`s (ledger idempotency).
 - Verify: `bun run check-types`, `bun run lint`, full suite `REDIS_URL=redis://localhost:6379 bun test --env-file apps/server/.env.test packages/api/src/tests/ apps/server/src/openapi.test.ts` (0 fail), coverage gates (api ≥ 90%, overall ≥ 80%).
-- Conventional commits; one PR per item or a small coherent group (H1 alone is a security fix; H2+H4 are the same hold-accounting family; H3+M1+M2 are the payment family; M3+M5+L1 are reliability; L2+L3 are hardening).
+- Conventional commits; one PR per item or a small coherent group (H1 alone is a security fix; H2+H4 are the same hold-accounting family; H3+M1+M2+N1+N4 are the payment/refund family; M3+M5+L1+N2 are reliability; N3 is ops; L2+L3 are hardening).
 
 ### Version Notes
 
 - v1.0 (2026-08-19): Created from the wave-5 deep review (worker W2, read-only). All findings verified against code at `d11962b` and re-checked against the wave-5 branch (`fix/wave5-prod-readiness`, PR #79). H1's `TRUST_PROXY` RUNBOOK row is added by wave-5's infra commit (W4 added `TRUST_PROXY=true` to the env examples); the RUNBOOK table row itself is still missing — tracked here.
+- v1.1 (2026-08-19, re-verification at HEAD `69e2dd8`): re-checked every original finding against current main. **Status sync:** H1–H3/M1–M5/L1–L2 all still **Open** (code unchanged); L3 → **Partial** (`/api/auth/email-otp/` now in `AUTH_PATHS`, `rate-limit-paths.ts:24`). **New findings added:** N1 (adminRefund provider refund amount ≠ Marks reversal), N2 (unbounded BullMQ job retention), N3 (`/health` degraded → 200), N4 (REFUNDED-webhook balance guard reads outside tx). H1's RUNBOOK `TRUST_PROXY` row is now present at `docs/RUNBOOK.md:297` (only the env-schema code + tests remain).
