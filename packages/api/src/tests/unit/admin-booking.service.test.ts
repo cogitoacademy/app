@@ -1264,7 +1264,9 @@ describe("AdminBookingService", () => {
         {
           paymentId: "pay1",
           walletId: "w1",
-          amountIdr: 100000,
+          // N1: admin refunds are in-app Marks corrections — no cash moves,
+          // so the refund record carries 0 IDR and no provider refund id.
+          amountIdr: 0,
           marks: 50,
           reason: "Full refund",
           actorId: "admin1",
@@ -1319,7 +1321,8 @@ describe("AdminBookingService", () => {
         {
           paymentId: "pay2",
           walletId: "w1",
-          amountIdr: 150000,
+          // N1: in-app Marks credit only — no cash moves.
+          amountIdr: 0,
           marks: 75,
           reason: "Settled refund",
           actorId: "admin1",

@@ -144,14 +144,22 @@ describe("M4: student cancelSession caps release at participant.heldAmount", () 
       availabilitySlotId: slotId,
       modality: "online",
       sessions: [
-        { scheduledStartAt: t1.toISOString(), scheduledEndAt: new Date(t1.getTime() + 3600_000).toISOString() },
-        { scheduledStartAt: t2.toISOString(), scheduledEndAt: new Date(t2.getTime() + 3600_000).toISOString() },
+        {
+          scheduledStartAt: t1.toISOString(),
+          scheduledEndAt: new Date(t1.getTime() + 3600_000).toISOString(),
+        },
+        {
+          scheduledStartAt: t2.toISOString(),
+          scheduledEndAt: new Date(t2.getTime() + 3600_000).toISOString(),
+        },
       ],
       timezone: "Asia/Jakarta",
     });
     await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
 
-    const sessions = await studentClient.booking.listSessions({ bookingId: b.id });
+    const sessions = await studentClient.booking.listSessions({
+      bookingId: b.id,
+    });
     expect(sessions).toHaveLength(2);
     const [s1, s2] = sessions;
     expect(s1!.holdAmount).toBe(50);
@@ -167,7 +175,9 @@ describe("M4: student cancelSession caps release at participant.heldAmount", () 
       scheduledEndAt: new Date(otherStart.getTime() + 3600_000).toISOString(),
       timezone: "Asia/Jakarta",
     });
-    await tutorClient.tutorActions.acceptBooking({ bookingId: otherBooking.id });
+    await tutorClient.tutorActions.acceptBooking({
+      bookingId: otherBooking.id,
+    });
 
     // Simulate the reduced state M4 describes: an admin `cancelSeriesSession`
     // already released part of the participant's hold, so the participant now
@@ -186,14 +196,22 @@ describe("M4: student cancelSession caps release at participant.heldAmount", () 
       .set({ holdAmount: 20 })
       .where(eq(booking.id, b.id));
 
-    const wBefore = await db.select().from(wallet).where(eq(wallet.userId, studentId)).limit(1);
+    const wBefore = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, studentId))
+      .limit(1);
     const heldBefore = wBefore[0]!.heldBalance; // 20 (booking) + 50 (other) = 70
 
     // Student cancels session 2 pre-H2 → releases at most the participant's
     // remaining held amount (20), NOT session.holdAmount (50).
     await studentClient.booking.cancelSession({ sessionId: s2!.id });
 
-    const wAfter = await db.select().from(wallet).where(eq(wallet.userId, studentId)).limit(1);
+    const wAfter = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, studentId))
+      .limit(1);
     // Only 20 released; the other booking's 50 hold is untouched.
     expect(wAfter[0]!.heldBalance).toBe(heldBefore - 20);
 

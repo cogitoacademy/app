@@ -1550,7 +1550,9 @@ export function createBookingService(deps: {
         ...(isGroup
           ? { heldAmount: 0 }
           : isSeries
-            ? { heldAmount: Math.max(0, participant.heldAmount - forfeitAmount) }
+            ? {
+                heldAmount: Math.max(0, participant.heldAmount - forfeitAmount),
+              }
             : {}),
       });
 
@@ -1568,8 +1570,14 @@ export function createBookingService(deps: {
       } else if (isSeries) {
         // Series: recompute the booking hold to match the participant's
         // reduced held amount so later completions deduct the correct total.
-        const participants = await repo.findConfirmedParticipants(tx, bookingId);
-        const holdAmount = participants.reduce((sum, p) => sum + p.heldAmount, 0);
+        const participants = await repo.findConfirmedParticipants(
+          tx,
+          bookingId,
+        );
+        const holdAmount = participants.reduce(
+          (sum, p) => sum + p.heldAmount,
+          0,
+        );
         await repo.updateBookingHoldAmount(tx, bookingId, holdAmount);
       } else if (!isSeries) {
         await repo.updateBookingHoldAmount(tx, bookingId, 0);

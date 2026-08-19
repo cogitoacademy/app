@@ -158,15 +158,26 @@ describe("H2: series no-show decrements participant.heldAmount", () => {
       availabilitySlotId: slotId,
       modality: "online",
       sessions: [
-        { scheduledStartAt: t1.toISOString(), scheduledEndAt: new Date(t1.getTime() + 3600_000).toISOString() },
-        { scheduledStartAt: t2.toISOString(), scheduledEndAt: new Date(t2.getTime() + 3600_000).toISOString() },
-        { scheduledStartAt: t3.toISOString(), scheduledEndAt: new Date(t3.getTime() + 3600_000).toISOString() },
+        {
+          scheduledStartAt: t1.toISOString(),
+          scheduledEndAt: new Date(t1.getTime() + 3600_000).toISOString(),
+        },
+        {
+          scheduledStartAt: t2.toISOString(),
+          scheduledEndAt: new Date(t2.getTime() + 3600_000).toISOString(),
+        },
+        {
+          scheduledStartAt: t3.toISOString(),
+          scheduledEndAt: new Date(t3.getTime() + 3600_000).toISOString(),
+        },
       ],
       timezone: "Asia/Jakarta",
     });
     await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
 
-    const sessions = await studentClient.booking.listSessions({ bookingId: b.id });
+    const sessions = await studentClient.booking.listSessions({
+      bookingId: b.id,
+    });
     expect(sessions).toHaveLength(3);
     const s1 = sessions[0]!;
 
@@ -192,7 +203,11 @@ describe("H2: series no-show decrements participant.heldAmount", () => {
     expect(noShow.forfeitedMarks).toBe(perSession);
 
     // The wallet hold is reduced by the forfeit.
-    const w = await db.select().from(wallet).where(eq(wallet.userId, studentId)).limit(1);
+    const w = await db
+      .select()
+      .from(wallet)
+      .where(eq(wallet.userId, studentId))
+      .limit(1);
     // heldBalance after no-show = (N-1) × perSession
     expect(w[0]!.heldBalance).toBe(perSession * (sessions.length - 1));
 
