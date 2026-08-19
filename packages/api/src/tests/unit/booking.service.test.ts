@@ -1081,8 +1081,8 @@ describe("BookingService", () => {
       // P1: the group-series invitee notification body carries schedule,
       // per-student price, total Marks hold, the no-opt-out disclaimer, and a
       // direct CTA to view/accept in-platform.
-      const inviteeWrites = notification.write.mock.calls.filter(
-        (call: any) => call[0].eventKey?.includes(".invite."),
+      const inviteeWrites = notification.write.mock.calls.filter((call: any) =>
+        call[0].eventKey?.includes(".invite."),
       );
       expect(inviteeWrites.length).toBeGreaterThan(0);
       for (const [params] of inviteeWrites) {

@@ -12,10 +12,10 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export function buildWelcomeEmail({
-  name,
-  loginUrl,
-}: WelcomeEmailParams): { subject: string; html: string } {
+export function buildWelcomeEmail({ name, loginUrl }: WelcomeEmailParams): {
+  subject: string;
+  html: string;
+} {
   const safeName = escapeHtml(name);
   const safeLoginUrl = escapeHtml(loginUrl);
   return {
