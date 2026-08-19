@@ -1,6 +1,7 @@
 import {
   eq,
   and,
+  or,
   gte,
   asc,
   desc,
@@ -15,6 +16,7 @@ import {
   not,
   notExists,
   exists,
+  type SQL,
 } from "drizzle-orm";
 import {
   booking,
@@ -41,6 +43,56 @@ import {
 import { BOOKING_STATE } from "./booking-state.types";
 
 type BookingRow = typeof bookingTable.$inferSelect;
+
+/**
+ * M3: encodes a composite `(scheduledStartAt, id)` cursor into the opaque cursor
+ * string returned to clients. The `|` separator is safe because neither an ISO
+ * timestamp nor a UUID contains it.
+ */
+export function encodeBookingCursor(
+  scheduledStartAt: Date,
+  id: string,
+): string {
+  return `${scheduledStartAt.toISOString()}|${id}`;
+}
+
+/**
+ * M3: decodes a composite cursor string back into its `(scheduledStartAt, id)`
+ * parts. A legacy cursor (a bare ISO timestamp, as produced before the M3 fix)
+ * is still accepted and yields a `null` id so the tie-break is skipped.
+ */
+export function decodeBookingCursor(
+  cursor: string,
+): { scheduledStartAt: Date; id: string | null } {
+  const sep = cursor.indexOf("|");
+  if (sep === -1) {
+    return { scheduledStartAt: new Date(cursor), id: null };
+  }
+  return {
+    scheduledStartAt: new Date(cursor.slice(0, sep)),
+    id: cursor.slice(sep + 1) || null,
+  };
+}
+
+/**
+ * M3: builds the composite `(scheduledStartAt, id)` cursor predicate so bookings
+ * sharing an identical `scheduledStartAt` are not skipped across pages. Mirrors
+ * the `(createdAt, id)` composite cursor used by the wallet ledger.
+ */
+function bookingCursorCondition(cursor: string): SQL<unknown> {
+  const { scheduledStartAt, id } = decodeBookingCursor(cursor);
+  if (!id) {
+    // Legacy cursor: no id tie-break available.
+    return lt(booking.scheduledStartAt, scheduledStartAt);
+  }
+  return or(
+    lt(booking.scheduledStartAt, scheduledStartAt),
+    and(
+      eq(booking.scheduledStartAt, scheduledStartAt),
+      lt(booking.id, id),
+    ),
+  )!;
+}
 
 /**
  * Finds a booking by id.
@@ -916,11 +968,11 @@ export function createBookingRepo(db: DbType) {
       conditions.push(inArray(booking.currentState, opts.states));
     }
     if (opts.cursor) {
-      conditions.push(lt(booking.scheduledStartAt, new Date(opts.cursor)));
+      conditions.push(bookingCursorCondition(opts.cursor));
     }
     return db.query.booking.findMany({
       where: and(...conditions),
-      orderBy: [desc(booking.scheduledStartAt)],
+      orderBy: [desc(booking.scheduledStartAt), desc(booking.id)],
       limit: opts.limit + 1,
       with: {
         tutor: true,
@@ -939,11 +991,11 @@ export function createBookingRepo(db: DbType) {
       conditions.push(inArray(booking.currentState, opts.states));
     }
     if (opts.cursor) {
-      conditions.push(lt(booking.scheduledStartAt, new Date(opts.cursor)));
+      conditions.push(bookingCursorCondition(opts.cursor));
     }
     return db.query.booking.findMany({
       where: and(...conditions),
-      orderBy: [desc(booking.scheduledStartAt)],
+      orderBy: [desc(booking.scheduledStartAt), desc(booking.id)],
       limit: opts.limit + 1,
       with: {
         tutor: true,

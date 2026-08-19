@@ -1,4 +1,5 @@
 import type { Queue } from "bullmq";
+import { JOB_RETENTION } from "../scheduler.service";
 
 const JOB_NAME = "release-expired-holds";
 const REPEAT_INTERVAL_MS = 10 * 60 * 1000;
@@ -13,6 +14,7 @@ export async function scheduleHoldReleaseCheck(queue: Queue): Promise<void> {
       opts: {
         attempts: 3,
         backoff: { type: "exponential", delay: 1000 },
+        ...JOB_RETENTION,
       },
     },
   );

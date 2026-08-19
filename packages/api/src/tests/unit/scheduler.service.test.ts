@@ -4,6 +4,8 @@ let capturedJobHandler: ((job: any) => Promise<any>) | null = null;
 let capturedFailedHandler: ((job: any, err: Error) => void) | null = null;
 let capturedCompletedHandler: ((job: any) => void) | null = null;
 let capturedDlqJobHandler: ((job: any) => Promise<any>) | null = null;
+let capturedQueueOptions: any = null;
+let capturedDlqQueueOptions: any = null;
 
 const mockQueueAdd = mock(async () => ({}));
 const mockDlqQueueAdd = mock(async () => ({}));
@@ -47,6 +49,8 @@ beforeEach(() => {
   capturedFailedHandler = null;
   capturedCompletedHandler = null;
   capturedDlqJobHandler = null;
+  capturedQueueOptions = null;
+  capturedDlqQueueOptions = null;
 });
 
 afterEach(() => {
@@ -59,7 +63,12 @@ mock.module("bullmq", () => ({
   Queue: class {
     add: any;
     backend: any;
-    constructor(queueName: string) {
+    constructor(queueName: string, opts: any) {
+      if (queueName === "cogito-jobs-dlq") {
+        capturedDlqQueueOptions = opts;
+      } else {
+        capturedQueueOptions = opts;
+      }
       this.add =
         queueName === "cogito-jobs-dlq" ? mockDlqQueueAdd : mockQueueAdd;
       this.backend = {
@@ -396,5 +405,26 @@ describe("createSchedulerService", () => {
     expect(commandName).toBe("cogitoDlqPush");
     expect(args[0]).toBe("cogito:dlq");
     expect(args[2]).toBe("100");
+  });
+
+  test("N2: queue-level defaultJobOptions bounds completed/failed retention", () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    expect(capturedQueueOptions).not.toBeNull();
+    expect(capturedQueueOptions.defaultJobOptions).toEqual({
+      removeOnComplete: { age: 24 * 3600, count: 100 },
+      removeOnFail: { age: 7 * 24 * 3600, count: 50 },
+    });
+    // The DLQ queue must NOT inherit the retention (its records are already
+    // bounded by the DLQ Redis list) — only the main cogito-jobs queue bounds
+    // its completed/failed sets.
+    expect(capturedDlqQueueOptions).not.toBeNull();
+    expect(capturedDlqQueueOptions.defaultJobOptions).toBeUndefined();
   });
 });

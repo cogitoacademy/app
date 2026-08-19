@@ -2,6 +2,14 @@ import { Queue, Worker, type Job } from "bullmq";
 import { log } from "../../lib/logger";
 
 const QUEUE_NAME = "cogito-jobs";
+// N2: bound the completed/failed job records BullMQ keeps in Redis. Without
+// these, every repeatable tick (5m/10m/60s) accumulates a completed record
+// forever. Keep the last ~100 completed / last ~50 failed, and drop records
+// older than 24h / 7d respectively.
+export const JOB_RETENTION = {
+  removeOnComplete: { age: 24 * 3600, count: 100 },
+  removeOnFail: { age: 7 * 24 * 3600, count: 50 },
+} as const;
 // M4: dead-letter queue — jobs whose attempts are exhausted land here instead
 // of vanishing. A dedicated worker logs each entry and keeps a bounded Redis
 // list (cogito:dlq) for quick inspection.
@@ -78,7 +86,12 @@ export function createSchedulerService(
     { connection },
   );
 
-  const queue = new Queue(QUEUE_NAME, { connection });
+  const queue = new Queue(QUEUE_NAME, {
+    connection,
+    // N2: queue-level default so every current and future job inherits bounded
+    // completed/failed retention (see JOB_RETENTION).
+    defaultJobOptions: JOB_RETENTION,
+  });
 
   const worker = new Worker(
     QUEUE_NAME,

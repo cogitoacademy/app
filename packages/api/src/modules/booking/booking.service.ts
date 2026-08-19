@@ -58,6 +58,7 @@ import {
 } from "./booking-state.types";
 import { canTransition, TRANSITIONS } from "./booking-transitions";
 import type { BookingRepo } from "./booking.repo";
+import { encodeBookingCursor } from "./booking.repo";
 import type {
   BookingWalletPort,
   BookingPricingPort,
@@ -547,7 +548,10 @@ export function createBookingService(deps: {
     const items = rows.slice(0, limit);
     const nextCursor =
       rows.length > limit
-        ? items[items.length - 1]!.scheduledStartAt.toISOString()
+        ? encodeBookingCursor(
+            items[items.length - 1]!.scheduledStartAt,
+            items[items.length - 1]!.id,
+          )
         : null;
     return { items, nextCursor };
   }
@@ -565,7 +569,10 @@ export function createBookingService(deps: {
     const items = rows.slice(0, limit);
     const nextCursor =
       rows.length > limit
-        ? items[items.length - 1]!.scheduledStartAt.toISOString()
+        ? encodeBookingCursor(
+            items[items.length - 1]!.scheduledStartAt,
+            items[items.length - 1]!.id,
+          )
         : null;
     return { items, nextCursor };
   }

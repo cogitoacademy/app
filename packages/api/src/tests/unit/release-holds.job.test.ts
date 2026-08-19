@@ -1,5 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 import { scheduleHoldReleaseCheck } from "../../modules/scheduler/jobs/release-holds.job";
+import { JOB_RETENTION } from "../../modules/scheduler/scheduler.service";
 
 describe("scheduleHoldReleaseCheck", () => {
   test("upserts a scheduler with the correct name and interval", async () => {
@@ -18,6 +19,7 @@ describe("scheduleHoldReleaseCheck", () => {
         opts: {
           attempts: 3,
           backoff: { type: "exponential", delay: 1000 },
+          ...JOB_RETENTION,
         },
       },
     );

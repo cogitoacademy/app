@@ -4,7 +4,10 @@ import { booking } from "@cogito-app/db/schema";
 
 import { resetDatabase } from "../helpers/test-client";
 import { createTestUser } from "../helpers/factories";
-import { createBookingRepo } from "../../modules/booking/booking.repo";
+import {
+  createBookingRepo,
+  encodeBookingCursor,
+} from "../../modules/booking/booking.repo";
 
 const repo = createBookingRepo(db);
 
@@ -195,6 +198,52 @@ describe("booking repo (real DB)", () => {
     expect(page2Ids).toContain(ids[0]!);
     for (const id of page2Ids) {
       expect(page1Ids).not.toContain(id);
+    }
+  });
+
+  test("M3: composite cursor returns every row when bookings share scheduledStartAt", async () => {
+    const proposer = await createTestUser(
+      `repo.proposer.m3.${crypto.randomUUID()}@cogito.test`,
+    );
+    const shared = new Date(Date.now() + 48 * 3600_000);
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const b = await repo.insertBooking(
+        db,
+        makeBooking({
+          tutorId,
+          proposerId: proposer.id,
+          scheduledStartAt: shared,
+          scheduledEndAt: new Date(shared.getTime() + 3600_000),
+        }),
+      );
+      ids.push(b.id);
+    }
+
+    // Page through with a limit of 2 using the composite cursor. Every row must
+    // appear exactly once — the old `lt(scheduledStartAt)` cursor would have
+    // skipped all rows sharing the boundary timestamp.
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    let guard = 0;
+    do {
+      const rows = await repo.listBookingsByProposer(proposer.id, {
+        limit: 2,
+        cursor,
+      });
+      const page = rows.slice(0, 2);
+      seen.push(...page.map((r) => r.id));
+      cursor =
+        rows.length > 2
+          ? encodeBookingCursor(page[1]!.scheduledStartAt, page[1]!.id)
+          : undefined;
+      guard++;
+    } while (cursor && guard < 10);
+
+    expect(seen.length).toBe(5);
+    expect(new Set(seen).size).toBe(5);
+    for (const id of ids) {
+      expect(seen).toContain(id);
     }
   });
 });

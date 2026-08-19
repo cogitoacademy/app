@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { scheduleSendNotificationEmail } from "../../modules/scheduler/jobs/send-notification-email.job";
+import { JOB_RETENTION } from "../../modules/scheduler/scheduler.service";
 
 describe("scheduleSendNotificationEmail", () => {
   test("upserts a scheduler with retry and backoff options", async () => {
@@ -17,6 +18,7 @@ describe("scheduleSendNotificationEmail", () => {
         opts: {
           attempts: 3,
           backoff: { type: "exponential", delay: 1000 },
+          ...JOB_RETENTION,
         },
       },
     );
