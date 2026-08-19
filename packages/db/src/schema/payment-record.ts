@@ -34,6 +34,9 @@ export const paymentRecord = pgTable(
     // initiate provider refunds. Populated when the 2024-11-11 createIntent
     // response carries an id.
     providerRequestId: text("provider_request_id"),
+    // H4: the provider checkout URL, persisted so a PENDING re-purchase can
+    // return the stored URL instead of re-calling the provider.
+    checkoutUrl: text("checkout_url"),
     amountIdr: integer("amount_idr").notNull(),
     marks: integer("marks").notNull(),
     status: text("status").notNull().default("PENDING"),

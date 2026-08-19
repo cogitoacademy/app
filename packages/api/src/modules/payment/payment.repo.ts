@@ -110,6 +110,7 @@ export async function updatePaymentStatus(
     status: string;
     providerEventId?: string;
     providerRequestId?: string;
+    checkoutUrl?: string | null;
     receiptUrl?: string | null;
     failureReason?: string | null;
   },
@@ -175,6 +176,7 @@ export function createPaymentRepo(db: DbType) {
         status: string;
         providerEventId?: string;
         providerRequestId?: string;
+        checkoutUrl?: string | null;
         receiptUrl?: string | null;
         failureReason?: string | null;
       },

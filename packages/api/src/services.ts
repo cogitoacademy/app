@@ -230,6 +230,7 @@ function createServices() {
     notification: notification.service,
     audit: audit.service,
     refundRecord: refund.repo,
+    redis,
   });
 
   const adminBooking = createAdminBookingModule({

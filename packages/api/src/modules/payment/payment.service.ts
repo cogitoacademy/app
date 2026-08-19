@@ -135,19 +135,32 @@ export function createPaymentService(deps: {
     const existing = await repo.findPaymentByProviderReference(idempotencyKey);
     if (existing) {
       if (existing.status === PAYMENT_STATUS.PENDING) {
-        // TODO(H14): Store checkoutUrl in paymentRecord to avoid re-calling provider
+        // H4: reuse the persisted checkout URL when available so a PENDING
+        // re-purchase does not re-call the provider (payment provider intents
+        // are not guaranteed idempotent and would mint a second checkout).
+        if (existing.checkoutUrl) {
+          return {
+            paymentId: existing.id,
+            providerReference: existing.providerReference,
+            checkoutUrl: existing.checkoutUrl,
+          };
+        }
         const existingIntent = await provider.createIntent({
           paymentId: existing.id,
           amountIdr: pkg.priceIdr,
           providerReference: existing.providerReference,
         });
         // X1: refresh the provider payment-request id in case it rotated.
+        const update: {
+          status: string;
+          providerRequestId?: string;
+          checkoutUrl?: string | null;
+        } = { status: PAYMENT_STATUS.PENDING };
         if (existingIntent.paymentRequestId) {
-          await repo.updatePaymentStatus(existing.id, {
-            status: PAYMENT_STATUS.PENDING,
-            providerRequestId: existingIntent.paymentRequestId,
-          });
+          update.providerRequestId = existingIntent.paymentRequestId;
         }
+        update.checkoutUrl = existingIntent.checkoutUrl;
+        await repo.updatePaymentStatus(existing.id, update);
         return {
           paymentId: existing.id,
           providerReference: existing.providerReference,
@@ -160,20 +173,21 @@ export function createPaymentService(deps: {
       ) {
         // Reset to PENDING so the webhook can credit, then re-create the intent.
         // Xendit allows reusing the reference_id for a fresh payment request.
-        await repo.updatePaymentStatus(existing.id, {
-          status: PAYMENT_STATUS.PENDING,
-        });
         const freshIntent = await provider.createIntent({
           paymentId: existing.id,
           amountIdr: pkg.priceIdr,
           providerReference: existing.providerReference,
         });
+        const update: {
+          status: string;
+          providerRequestId?: string;
+          checkoutUrl?: string | null;
+        } = { status: PAYMENT_STATUS.PENDING };
         if (freshIntent.paymentRequestId) {
-          await repo.updatePaymentStatus(existing.id, {
-            status: PAYMENT_STATUS.PENDING,
-            providerRequestId: freshIntent.paymentRequestId,
-          });
+          update.providerRequestId = freshIntent.paymentRequestId;
         }
+        update.checkoutUrl = freshIntent.checkoutUrl;
+        await repo.updatePaymentStatus(existing.id, update);
         return {
           paymentId: existing.id,
           providerReference: existing.providerReference,
@@ -205,10 +219,24 @@ export function createPaymentService(deps: {
       const existingRow =
         await repo.findPaymentByProviderReference(providerReference);
       if (existingRow) {
+        if (existingRow.checkoutUrl) {
+          return {
+            paymentId: existingRow.id,
+            providerReference: existingRow.providerReference,
+            checkoutUrl: existingRow.checkoutUrl,
+          };
+        }
         const existingIntent = await provider.createIntent({
           paymentId: existingRow.id,
           amountIdr: pkg.priceIdr,
           providerReference: existingRow.providerReference,
+        });
+        await repo.updatePaymentStatus(existingRow.id, {
+          status: PAYMENT_STATUS.PENDING,
+          checkoutUrl: existingIntent.checkoutUrl,
+          ...(existingIntent.paymentRequestId
+            ? { providerRequestId: existingIntent.paymentRequestId }
+            : {}),
         });
         return {
           paymentId: existingRow.id,
@@ -225,12 +253,17 @@ export function createPaymentService(deps: {
         providerReference,
       });
       // X1: persist the provider payment-request id for provider refunds.
+      // H4: persist the checkout URL for PENDING re-purchase reuse.
+      const update: {
+        status: string;
+        providerRequestId?: string;
+        checkoutUrl?: string | null;
+      } = { status: PAYMENT_STATUS.PENDING };
       if (intent.paymentRequestId) {
-        await repo.updatePaymentStatus(paymentId, {
-          status: PAYMENT_STATUS.PENDING,
-          providerRequestId: intent.paymentRequestId,
-        });
+        update.providerRequestId = intent.paymentRequestId;
       }
+      update.checkoutUrl = intent.checkoutUrl;
+      await repo.updatePaymentStatus(paymentId, update);
       return { paymentId, providerReference, checkoutUrl: intent.checkoutUrl };
     } catch (error) {
       await repo.updatePaymentStatus(paymentId, {

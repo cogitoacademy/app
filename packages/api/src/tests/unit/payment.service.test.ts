@@ -150,6 +150,43 @@ describe("PaymentService", () => {
       expect(result.providerReference).toBe("stub:user1:pkg1");
     });
 
+    test("H4: PENDING re-purchase returns the stored checkoutUrl without re-calling the provider", async () => {
+      const provider = makeProvider();
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay_existing",
+          status: PAYMENT_STATUS.PENDING,
+          providerReference: "stub:user1:pkg1",
+          checkoutUrl: "https://checkout.test/stored",
+        })),
+        updatePaymentStatus,
+      });
+      const db = makeDb();
+
+      const service = createPaymentService({
+        db,
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+      expect(result.paymentId).toBe("pay_existing");
+      expect(result.checkoutUrl).toBe("https://checkout.test/stored");
+      // The provider must NOT be re-called and no DB update is needed.
+      expect(provider.createIntent).not.toHaveBeenCalled();
+      expect(updatePaymentStatus).not.toHaveBeenCalled();
+    });
+
     test("B6: createIntent reuses the existing row when its insert conflicts (check-then-insert race)", async () => {
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
@@ -219,6 +256,7 @@ describe("PaymentService", () => {
       expect(result.checkoutUrl).toBe("https://checkout.test/123");
       expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
         status: PAYMENT_STATUS.PENDING,
+        checkoutUrl: "https://checkout.test/123",
       });
     });
 
@@ -254,6 +292,7 @@ describe("PaymentService", () => {
       expect(result.checkoutUrl).toBe("https://checkout.test/123");
       expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
         status: PAYMENT_STATUS.PENDING,
+        checkoutUrl: "https://checkout.test/123",
       });
     });
 

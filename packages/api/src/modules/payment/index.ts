@@ -1,5 +1,6 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+import type { RedisClient } from "../../lib/redis";
 import type {
   CompensateParams,
   CreditParams,
@@ -60,6 +61,7 @@ export function createPaymentModule(deps: {
   notification?: PaymentNotificationPort;
   audit?: PaymentAuditPort;
   refundRecord?: PaymentRefundRecordPort;
+  redis?: RedisClient;
 }) {
   const useXendit = deps.provider === "xendit";
   if (useXendit && !deps.xenditConfig) {
@@ -82,6 +84,7 @@ export function createPaymentModule(deps: {
           | "qris"
           | "va_bca"
           | undefined,
+        redis: deps.redis,
       })
     : createStubPaymentProvider(deps.webhookSecret);
   const providerName = useXendit ? "xendit" : "stub";
