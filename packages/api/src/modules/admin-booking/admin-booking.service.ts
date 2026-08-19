@@ -578,37 +578,20 @@ export function createAdminBookingService(deps: {
         throw new InvalidRefundStateError(input.paymentId, payment.status);
       }
 
-      // X1: initiate the provider-side refund (Xendit POST /v3/refunds) using
-      // the stored payment-request id; the returned provider refund id is
-      // stored on the refundRecord row. Best-effort: a provider refund failure
-      // must not roll back the Marks reversal (admin can retry).
-      let providerRefundId: string | undefined;
-      if (refund.refundWithProvider && payment.providerRequestId) {
-        try {
-          const refundResult = await refund.refundWithProvider(
-            payment.providerRequestId,
-            payment.amountIdr ?? 0,
-            "CANCELLATION",
-          );
-          providerRefundId = refundResult.providerRefundId;
-        } catch (refundError) {
-          log({
-            level: "error",
-            action: "admin_refund_provider_failed",
-            paymentId: input.paymentId,
-            error: { message: String(refundError) },
-          });
-        }
-      }
-
+      // N1/M2 (Refund Policy §677): admin refunds are in-app Marks credits
+      // only — purchased Marks are never convertible back to rupiah, so the
+      // payment provider is NEVER called from here (no Xendit cash refund,
+      // no double-refund-on-retry after a tx rollback). The
+      // `refund.refundWithProvider` port is intentionally left unused by
+      // adminRefund. No cash moves: the refund record carries amountIdr 0
+      // and no providerEventId.
       await refund.createRefundRecord(tx, {
         paymentId: input.paymentId,
         walletId: participantWallet.id,
-        amountIdr: payment.amountIdr ?? 0,
+        amountIdr: 0,
         marks: refundableMarks,
         reason: input.reason,
         actorId: adminId,
-        ...(providerRefundId ? { providerEventId: providerRefundId } : {}),
       });
 
       if (notification) {

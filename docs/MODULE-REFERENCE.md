@@ -109,7 +109,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
-- `adminRefund(adminId, { paymentId, reason })` — Creates a compensating ledger entry for a payment error
+- `adminRefund(adminId, { paymentId, reason })` — Creates a compensating ledger entry for a payment error. **In-app Marks credit only (N1, PRD §677):** no provider call, `refundRecord.amountIdr = 0`, no `providerEventId` — purchased Marks are never convertible back to rupiah.
 - `setMeetingLink(adminId, { bookingId, url })` — Records a manual meeting URL on a `SCHEDULED`/`CONFIRMED` booking (U1/FR-21); notifies confirmed participants and records an `admin_set_meeting_link` audit record
 - `cancelSeriesSession(adminId, { sessionId, marksAction, amount? })` — Cancels one `scheduled` series session; the per-participant session hold is released, forfeited, or partially returned per `marksAction` (U6/TC-31); records audit + participant notifications
 

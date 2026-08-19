@@ -1331,6 +1331,51 @@ describe("AdminBookingService", () => {
       expect(auditPort.record).toHaveBeenCalledTimes(1);
     });
 
+    test("never calls refund.refundWithProvider even when payment has a providerRequestId (N1)", async () => {
+      const wallet = makeWalletPort();
+      const auditPort = makeAuditPort();
+      const refund = makeRefundPort();
+      const refundWithProvider = mock(async () => ({
+        providerRefundId: "rfd-stub-pr-stub",
+      }));
+      const refundPort = {
+        ...refund,
+        refundWithProvider,
+      } as any;
+      const repo = mockRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "u1",
+          status: "PAID",
+          marks: 50,
+          amountIdr: 100000,
+          providerRequestId: "pr-stub-123",
+        })),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort,
+        wallet: wallet as any,
+        refund: refundPort,
+      });
+
+      const result = await service.adminRefund("admin1", {
+        paymentId: "pay1",
+        reason: "N1 test",
+      });
+
+      expect(result).toEqual({ paymentId: "pay1", status: "refunded" });
+      // N1: admin refunds are in-app Marks credits only — the provider must
+      // never be called, and no cash moves on the refund record.
+      expect(refundWithProvider).not.toHaveBeenCalled();
+      expect(refund.createRefundRecord).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amountIdr: 0 }),
+      );
+      expect(auditPort.record).toHaveBeenCalledTimes(1);
+    });
+
     test("throws BookingNotFoundError when wallet not found for user", async () => {
       const wallet = makeWalletPort({
         getByUserId: mock(async () => null),

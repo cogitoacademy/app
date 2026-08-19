@@ -13,50 +13,50 @@ const validEnv = {
 };
 
 describe("server env boolean coercion (H1)", () => {
-  const BOOL_VARS = [
+  const BOOL_VARS: string[] = [
     "TRUST_PROXY",
     "STUB_WEBHOOK_ALLOWED",
     "SCHEDULER_ENABLED",
     "DB_SSL_REJECT_UNAUTHORIZED",
-  ] as const;
+  ];
 
   test.each(BOOL_VARS)(
     '%s="false" parses to boolean false (not truthy)',
-    (v) => {
+    (v: string) => {
       const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "false" });
       expect(parsed.success).toBe(true);
       if (parsed.success) {
-        expect(parsed.data[v]).toBe(false);
+        expect((parsed.data as Record<string, unknown>)[v]).toBe(false);
       }
     },
   );
 
-  test.each(BOOL_VARS)('%s="0" parses to boolean false', (v) => {
+  test.each(BOOL_VARS)('%s="0" parses to boolean false', (v: string) => {
     const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "0" });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data[v]).toBe(false);
+      expect((parsed.data as Record<string, unknown>)[v]).toBe(false);
     }
   });
 
-  test.each(BOOL_VARS)('%s="true" parses to boolean true', (v) => {
+  test.each(BOOL_VARS)('%s="true" parses to boolean true', (v: string) => {
     const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "true" });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data[v]).toBe(true);
+      expect((parsed.data as Record<string, unknown>)[v]).toBe(true);
     }
   });
 
-  test.each(BOOL_VARS)('%s="" falls back to the default', (v) => {
+  test.each(BOOL_VARS)('%s="" falls back to the default', (v: string) => {
     // emptyStringAsUndefined means an empty string is treated as undefined,
     // so the default applies.
     const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "" });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       if (v === "DB_SSL_REJECT_UNAUTHORIZED") {
-        expect(parsed.data[v]).toBe(true); // default true
+        expect((parsed.data as Record<string, unknown>)[v]).toBe(true); // default true
       } else {
-        expect(parsed.data[v]).toBe(false); // default false
+        expect((parsed.data as Record<string, unknown>)[v]).toBe(false); // default false
       }
     }
   });
@@ -68,7 +68,7 @@ describe("server env boolean coercion (H1)", () => {
     });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.TRUST_PROXY).toBe(false);
+      expect((parsed.data as Record<string, unknown>).TRUST_PROXY).toBe(false);
     }
   });
 });
