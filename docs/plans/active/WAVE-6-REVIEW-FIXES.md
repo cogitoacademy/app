@@ -2,8 +2,8 @@
 
 | Field      | Value                                                                                |
 | ---------- | ------------------------------------------------------------------------------------ |
-| Status     | Active — M2 + N1 implemented by wave-6a worker (2026-08-19); remaining findings open |
-| Branch     | `fix/wave6-review-fixes` (future PR)                                                 |
+| Status     | Active — H1/H2/M2/M4/N1 fixed & merged to main via PR #82 (2026-08-19); remaining findings open |
+| Branch     | `fix/wave6-a` (PR #82, merged)                                          |
 | Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)                              |
 | Depends on | Wave-5 (PR #79) merged to main                                                       |
 | Scope      | Backend only (packages/api, apps/server, packages/env, packages/auth)                |
