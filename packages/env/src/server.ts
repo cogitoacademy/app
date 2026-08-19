@@ -5,6 +5,36 @@ import { z } from "zod";
 
 import { isProductionLike } from "./node-env";
 
+// H1: z.coerce.boolean() treats the string "false" (and "0", "FALSE") as
+// truthy — an ops guard that sets TRUST_PROXY=false would actually ENABLE
+// proxy trust. All boolean env vars must go through this preprocess so the
+// string forms parse as their literal value and an empty string falls back to
+// the schema default. Unknown strings fail loudly (z.boolean()) instead of
+// silently coercing to a boolean.
+function boolFromEnv(v: unknown): unknown {
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (trimmed === "") return undefined; // treat as unset → .default() applies
+    const lower = trimmed.toLowerCase();
+    if (lower === "true" || lower === "1") return true;
+    if (lower === "false" || lower === "0") return false;
+    return trimmed;
+  }
+  return v;
+}
+
+const boolSchema = (defaultValue: boolean) =>
+  z.preprocess(
+    (v) => {
+      // Normalize an empty string to the default so `.default()` applies for
+      // direct schema.parse() calls too (createEnv's emptyStringAsUndefined
+      // only handles process.env, not explicit "" values).
+      if (v === undefined || v === "") return defaultValue;
+      return boolFromEnv(v);
+    },
+    z.boolean(),
+  );
+
 const serverShape = {
   DATABASE_URL: z.string().min(1),
   BETTER_AUTH_SECRET: z.string().min(32),
@@ -14,7 +44,7 @@ const serverShape = {
     .enum(["development", "production", "test", "staging"])
     .default("development"),
   PAYMENT_PROVIDER: z.enum(["stub", "xendit"]).default("stub"),
-  STUB_WEBHOOK_ALLOWED: z.coerce.boolean().default(false),
+  STUB_WEBHOOK_ALLOWED: boolSchema(false),
   PAYMENT_WEBHOOK_SECRET: z.string().min(32),
   COMPETITION_CALENDAR_URL: z
     .string()
@@ -31,10 +61,10 @@ const serverShape = {
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
   PORT: z.coerce.number().default(3001),
-  TRUST_PROXY: z.coerce.boolean().default(false),
+  TRUST_PROXY: boolSchema(false),
   SESSION_COOKIE_CACHE_MAX_AGE: z.coerce.number().default(60),
   REDIS_URL: z.string().url(),
-  SCHEDULER_ENABLED: z.coerce.boolean().default(false),
+  SCHEDULER_ENABLED: boolSchema(false),
   GOOGLE_CLIENT_EMAIL: z.string().email().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),
   GOOGLE_CALENDAR_ID: z.string().optional(),
@@ -42,17 +72,11 @@ const serverShape = {
   GOOGLE_MEET_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_MEET_CLIENT_SECRET: z.string().min(1).optional(),
   GOOGLE_MEET_REFRESH_TOKEN: z.string().min(1).optional(),
-  GOOGLE_MEET_ENABLED: z
-    .preprocess(
-      (v) =>
-        typeof v === "string" ? v !== "false" && v !== "0" && v !== "" : v,
-      z.coerce.boolean(),
-    )
-    .default(false),
+  GOOGLE_MEET_ENABLED: boolSchema(false),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("noreply@cogitoacademy.id"),
   METRICS_TOKEN: z.string().optional(),
-  DB_SSL_REJECT_UNAUTHORIZED: z.coerce.boolean().default(true),
+  DB_SSL_REJECT_UNAUTHORIZED: boolSchema(true),
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
