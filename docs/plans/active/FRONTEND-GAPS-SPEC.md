@@ -1,13 +1,13 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                                                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status     | Living gap inventory (updated 2026-08-19; F8/F13/F14/F16 closed by REVIEW-FIXES-3 P6; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F1/F9/F12/F18 partial) |
-| Branch     | `f/frontend-prd-gaps` (merged #55)                                                    |
-| Created    | 2026-07-29                                                                            |
-| Audited    | 2026-08-19                                                                            |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                         |
-| Scope      | Frontend only (`apps/web/`)                                                           |
+| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                        |
+| Created    | 2026-07-29                                                                                                                                                |
+| Audited    | 2026-08-19                                                                                                                                                |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                             |
+| Scope      | Frontend only (`apps/web/`)                                                                                                                               |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
@@ -83,6 +83,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > **Audit 2026-08-16 (against open PR #55 `f/frontend-prd-gaps`):** The open PR delivers F2, F3, F6, F7, F11, F17 (marked **Closed*** = implemented in the PR, pending merge) and partial F1/F9/F12/F15. After it merges, still open: **F8** (per-session series completion — UI has no session list/`sessionId`), **F13** (tutor payout view; backend `tutor.getMyPayouts` **exists since #43**), **F14** (group-series no-opt-out disclaimer display), **F16** (public achievements; no public procedure exists), plus F18 inviter-side `withdraw` UI, J2 proactive session-expiry UX, and the dead-components cleanup. The P2 blockers are resolved in the branch: type checks use `tsgo`, achievement fields are renamed end-to-end, migrations are rebased to `0020`–`0022`, the audited sections are retained, and temporary QA artifacts are removed. Final GitHub CI remains required before merge.
 
 > **Audit 2026-08-19 (against main `d11962b`):** PR #55 merged (`d4e50e0`). Verified in `apps/web/src`:
+>
 > - **F2/F3/F6/F7/F11/F17 → Closed** — override dialog with `previewOverride`/`applyOverride` (`admin-operations-page.tsx`), lateness report via `support.createTicket` (`booking-lifecycle-actions.tsx`), reschedule propose/accept/reject, wallet/ledger lookup tab, booking detail baseline.
 > - **F8 → Closed** — series bookings render a per-session list with per-session "Complete session" buttons calling `completeSession({ bookingId, sessionId })` (`booking-detail-page.tsx`).
 > - **F13 → Closed** — payout card on the tutor dashboard via `tutor.getMyPayouts` (`tutor-dashboard-page.tsx`).

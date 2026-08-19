@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                 |
 | ---------- | --------------------------------------------------------------------- |
-| Status     | Active — planned (2026-08-19), not yet implemented                     |
+| Status     | Active — planned (2026-08-19), not yet implemented                    |
 | Branch     | `fix/wave6-review-fixes` (future PR)                                  |
 | Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)               |
 | Depends on | Wave-5 (PR #79) merged to main                                        |
@@ -14,19 +14,19 @@ This plan catalogs the findings of the wave-5 deep code review (worker W2, read-
 
 ## Gap Summary
 
-| #   | Severity | Finding                                                                                                                              | Location                                                                 | Status |
-| --- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------ |
-| H1  | HIGH     | `z.coerce.boolean()` treats the string `"false"` as `true` for `TRUST_PROXY`, `STUB_WEBHOOK_ALLOWED`, `SCHEDULER_ENABLED`, `DB_SSL_REJECT_UNAUTHORIZED` — `TRUST_PROXY=false` actually enables proxy trust (rate-limit evasion + webhook IP allowlist bypass); `SCHEDULER_ENABLED=false` runs the scheduler | `packages/env/src/server.ts:15,32,35,53`                                 | Open   |
-| H2  | HIGH     | Series participant no-show forfeits the wallet hold but not `participant.heldAmount` → final session completion throws `InsufficientBalanceError` → booking stuck, tutor unpaid | `booking.service.ts:1515-1539,1162-1228`                                 | Open   |
-| H3  | HIGH     | Late terminal webhook for a re-purchased payment (shared `providerReference`) bricks the new purchase — user charged, never credited | `payment.service.ts:157-183,263-278`                                     | Open   |
-| M1  | MED      | REFUNDED-webhook reversal checks `availableBalance` only — held Marks strand the reversal into admin reconciliation; company refunds cash but still delivers Marks-backed sessions | `payment.service.ts:364-406`                                             | Open   |
-| M2  | MED      | `adminRefund` fires the provider-side Xendit refund **inside** the DB transaction — rollback after the HTTP call = double refund on retry | `admin-booking.service.ts:531-643`                                       | Open   |
-| M3  | MED      | Booking list cursor is non-unique `scheduledStartAt` — bookings sharing the timestamp are permanently skipped in pagination | `booking.service.ts:548-570`                                             | Open   |
-| M4  | MED      | Student `cancelSession` releases/deducts `session.holdAmount` regardless of the participant's remaining hold — leaks across pooled wallet holds | `booking.service.ts:1376-1404`                                           | Open   |
-| M5  | MED      | Webhook processing failures return generic 500 + release the claim — persistent bugs loop against Xendit indefinitely, no DLQ/alert | `apps/server/src/webhooks/payments.ts:123-162`                           | Open   |
-| L1  | LOW      | `xendit:no-event-id` fallback idempotency key collapses all id-less events — hides real delivery failures | `apps/server/src/webhooks/payments.ts:99`                                | Open   |
-| L2  | LOW      | Booking-create idempotency key has an empty header slot — frontend sends no `idempotency-key`; stale cached result on re-book within 24h TTL | `booking.handler.ts:81-82,250,279,307`                                   | Open   |
-| L3  | LOW      | Email-OTP brute-force protection is per-instance memory storage — multi-replica multiplication of verify attempts | `packages/auth/src/index.ts:158-191`                                     | Open   |
+| #   | Severity | Finding                                                                                                                                                                                                                                                                                                     | Location                                       | Status |
+| --- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------ |
+| H1  | HIGH     | `z.coerce.boolean()` treats the string `"false"` as `true` for `TRUST_PROXY`, `STUB_WEBHOOK_ALLOWED`, `SCHEDULER_ENABLED`, `DB_SSL_REJECT_UNAUTHORIZED` — `TRUST_PROXY=false` actually enables proxy trust (rate-limit evasion + webhook IP allowlist bypass); `SCHEDULER_ENABLED=false` runs the scheduler | `packages/env/src/server.ts:15,32,35,53`       | Open   |
+| H2  | HIGH     | Series participant no-show forfeits the wallet hold but not `participant.heldAmount` → final session completion throws `InsufficientBalanceError` → booking stuck, tutor unpaid                                                                                                                             | `booking.service.ts:1515-1539,1162-1228`       | Open   |
+| H3  | HIGH     | Late terminal webhook for a re-purchased payment (shared `providerReference`) bricks the new purchase — user charged, never credited                                                                                                                                                                        | `payment.service.ts:157-183,263-278`           | Open   |
+| M1  | MED      | REFUNDED-webhook reversal checks `availableBalance` only — held Marks strand the reversal into admin reconciliation; company refunds cash but still delivers Marks-backed sessions                                                                                                                          | `payment.service.ts:364-406`                   | Open   |
+| M2  | MED      | `adminRefund` fires the provider-side Xendit refund **inside** the DB transaction — rollback after the HTTP call = double refund on retry                                                                                                                                                                   | `admin-booking.service.ts:531-643`             | Open   |
+| M3  | MED      | Booking list cursor is non-unique `scheduledStartAt` — bookings sharing the timestamp are permanently skipped in pagination                                                                                                                                                                                 | `booking.service.ts:548-570`                   | Open   |
+| M4  | MED      | Student `cancelSession` releases/deducts `session.holdAmount` regardless of the participant's remaining hold — leaks across pooled wallet holds                                                                                                                                                             | `booking.service.ts:1376-1404`                 | Open   |
+| M5  | MED      | Webhook processing failures return generic 500 + release the claim — persistent bugs loop against Xendit indefinitely, no DLQ/alert                                                                                                                                                                         | `apps/server/src/webhooks/payments.ts:123-162` | Open   |
+| L1  | LOW      | `xendit:no-event-id` fallback idempotency key collapses all id-less events — hides real delivery failures                                                                                                                                                                                                   | `apps/server/src/webhooks/payments.ts:99`      | Open   |
+| L2  | LOW      | Booking-create idempotency key has an empty header slot — frontend sends no `idempotency-key`; stale cached result on re-book within 24h TTL                                                                                                                                                                | `booking.handler.ts:81-82,250,279,307`         | Open   |
+| L3  | LOW      | Email-OTP brute-force protection is per-instance memory storage — multi-replica multiplication of verify attempts                                                                                                                                                                                           | `packages/auth/src/index.ts:158-191`           | Open   |
 
 ---
 
@@ -37,13 +37,16 @@ This plan catalogs the findings of the wave-5 deep code review (worker W2, read-
 **Location:** `packages/env/src/server.ts:15,32,35,53`
 
 **Evidence (verified at runtime with zod 4.4.3):**
+
 ```
 "false" -> true, "0" -> true, "" -> false, "FALSE" -> true
 ```
+
 `TRUST_PROXY: z.coerce.boolean().default(false)` — the string `"false"` coerces to `true`. The wave-4 X3 fix added a preprocess only for `GOOGLE_MEET_ENABLED` (server.ts:44-49); the four other booleans are raw `z.coerce.boolean()`.
 
 **Why it matters:**
-- **`TRUST_PROXY` (security):** with `TRUST_PROXY` truthy, `getClientIp` (`packages/api/src/lib/request-id.ts:10-15`) trusts the client-supplied `x-forwarded-for` first hop. In production, ops who set `TRUST_PROXY=false` (the documented safe default) would actually *enable* proxy trust: the webhook IP allowlist (`apps/server/src/webhooks/payments.ts:19-28`, `WEBHOOK_ALLOWED_IPS`) becomes bypassable by spoofing `x-forwarded-for: <xendit-ip>`, and every per-IP rate limiter (auth 10/min, payment 5/min, booking 30/min, invite, search) becomes evadable by rotating the header. (The `x-callback-token` signature check still gates webhook processing, so this is defense-in-depth degradation — but rate-limit evasion is direct.)
+
+- **`TRUST_PROXY` (security):** with `TRUST_PROXY` truthy, `getClientIp` (`packages/api/src/lib/request-id.ts:10-15`) trusts the client-supplied `x-forwarded-for` first hop. In production, ops who set `TRUST_PROXY=false` (the documented safe default) would actually _enable_ proxy trust: the webhook IP allowlist (`apps/server/src/webhooks/payments.ts:19-28`, `WEBHOOK_ALLOWED_IPS`) becomes bypassable by spoofing `x-forwarded-for: <xendit-ip>`, and every per-IP rate limiter (auth 10/min, payment 5/min, booking 30/min, invite, search) becomes evadable by rotating the header. (The `x-callback-token` signature check still gates webhook processing, so this is defense-in-depth degradation — but rate-limit evasion is direct.)
 - **`SCHEDULER_ENABLED` (ops):** `SCHEDULER_ENABLED=false` → scheduler actually runs (money-moving jobs: expiry/no-show forfeits, hold releases).
 - **`STUB_WEBHOOK_ALLOWED` (staging):** `=false` → stub checkout endpoint enabled on staging (still gated by `NODE_ENV` not production-like after wave-5 C2).
 - **`DB_SSL_REJECT_UNAUTHORIZED`:** `=false` → true (fail-closed direction, but the prod warning at `packages/db/src/index.ts:7-11` becomes dead code).
@@ -68,6 +71,7 @@ This plan catalogs the findings of the wave-5 deep code review (worker W2, read-
 **Location:** `packages/api/src/modules/booking/booking.service.ts:1515-1539` (`markParticipantNoShow`) + `:1162-1228` (`completeSeriesSession`)
 
 **Evidence:**
+
 ```ts
 // markParticipantNoShow (series branch)
 const forfeitAmount = Math.min(session!.holdAmount, participant.heldAmount); // :1516
@@ -77,7 +81,8 @@ await repo.updateParticipantState(tx, participant.id, {
   ...(isGroup ? { heldAmount: 0 } : {}),   // :1538 — series keeps heldAmount
 });
 ```
-For a series participant the wallet `heldBalance` is reduced by the forfeit but `booking_participant.held_amount` is **not** decremented. `completeSeriesSession` later deducts per-session again from the *same* full `participant.heldAmount` (`Math.min(session.holdAmount, p.heldAmount)` at :1175/:1205). With an N-session series: hold = N×perSession; forfeit takes perSession → held = (N−1)×perSession; sessions 1…N each deduct perSession → the N-th deduct hits the `heldBalance >= amount` guard (`wallet.repo.ts:130-133`) → `InsufficientBalanceError` → the whole completion transaction rolls back. The booking stays SCHEDULED forever; the tutor can never complete → no payout; the delivered final session is unpaid (the exact "delivered-but-unpaid" failure L1 was meant to prevent, but L1 only capped the *deduct*, not the no-show-forfeit-vs-held accounting).
+
+For a series participant the wallet `heldBalance` is reduced by the forfeit but `booking_participant.held_amount` is **not** decremented. `completeSeriesSession` later deducts per-session again from the _same_ full `participant.heldAmount` (`Math.min(session.holdAmount, p.heldAmount)` at :1175/:1205). With an N-session series: hold = N×perSession; forfeit takes perSession → held = (N−1)×perSession; sessions 1…N each deduct perSession → the N-th deduct hits the `heldBalance >= amount` guard (`wallet.repo.ts:130-133`) → `InsufficientBalanceError` → the whole completion transaction rolls back. The booking stays SCHEDULED forever; the tutor can never complete → no payout; the delivered final session is unpaid (the exact "delivered-but-unpaid" failure L1 was meant to prevent, but L1 only capped the _deduct_, not the no-show-forfeit-vs-held accounting).
 
 **Note:** the group (non-series) path is safe (`heldAmount: 0` for ABSENT participants, skipped at :1072); solo no-show is terminal. Only series is affected. `tutor-no-show-u5.test.ts:212-270` asserts the forfeit but never completes the session afterwards, so this is untested.
 
@@ -102,7 +107,7 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 **Evidence:** `createIntent` reuses the same `providerReference` (`xendit:{userId}:{packageCode}`) for a fresh payment request after a FAILED/EXPIRED payment, and resets the row to PENDING. Xendit webhooks for the old and new attempts carry distinct `data.payment_id` values, so the idempotency key (`payments.ts:99`) and `providerEventId` dedup do not block the old attempt's events. Sequence: reset to PENDING → late `FAILED`/`EXPIRED` webhook for the **old** attempt arrives → `ALLOWED_TRANSITIONS[PENDING]` includes FAILED/EXPIRED → row flips to FAILED/EXPIRED → the new attempt's `SUCCEEDED` webhook then hits the early return at :268-269/:275-276 (`record.status === FAILED/EXPIRED` → returns without crediting). The user is charged but never credited, and re-purchase is blocked (`PackageAlreadyPurchasedError`).
 
-**Why it matters:** Xendit retries webhooks for minutes-to-hours; the re-purchase window overlaps it. This is the same out-of-order family as the fixed D3, but for *stale terminal events after reference reuse* — not covered by the D3 fix (D3 fixed PENDING-after-PAID ordering).
+**Why it matters:** Xendit retries webhooks for minutes-to-hours; the re-purchase window overlaps it. This is the same out-of-order family as the fixed D3, but for _stale terminal events after reference reuse_ — not covered by the D3 fix (D3 fixed PENDING-after-PAID ordering).
 
 **Required:**
 
@@ -123,7 +128,7 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 **Location:** `packages/api/src/modules/payment/payment.service.ts:364-406`
 
-**Evidence:** `const w = await wallet.getOrCreate(record.userId); if (w.availableBalance < record.marks) { …skip reversal, write refundRecord… }`. The credited Marks live in `availableBalance` only until the student books sessions, which move Marks to `heldBalance` (hold). If the payer has spent *some* marks and *held* the rest, `availableBalance < marks` even though `held + available ≥ marks` — the compensation is skipped, an admin reconciliation row is written, and the held marks stay in the wallet and are later deducted by the tutor at session completion **after the provider already refunded the payment**. The company refunds cash and still delivers Marks-backed sessions.
+**Evidence:** `const w = await wallet.getOrCreate(record.userId); if (w.availableBalance < record.marks) { …skip reversal, write refundRecord… }`. The credited Marks live in `availableBalance` only until the student books sessions, which move Marks to `heldBalance` (hold). If the payer has spent _some_ marks and _held_ the rest, `availableBalance < marks` even though `held + available ≥ marks` — the compensation is skipped, an admin reconciliation row is written, and the held marks stay in the wallet and are later deducted by the tutor at session completion **after the provider already refunded the payment**. The company refunds cash and still delivers Marks-backed sessions.
 
 **Required:**
 
@@ -148,7 +153,7 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 **Required:**
 
-1. Move the provider refund to *after* the transaction commits (mirror the `cancelMeeting` pattern in `booking.service.ts:2707-2709`), storing a `provider_refund_pending` marker inside the tx.
+1. Move the provider refund to _after_ the transaction commits (mirror the `cancelMeeting` pattern in `booking.service.ts:2707-2709`), storing a `provider_refund_pending` marker inside the tx.
 2. Make the post-commit provider call idempotent (unique reference/`Idempotency-Key` per refund record id).
 
 **Acceptance tests:**
@@ -184,7 +189,7 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 **Location:** `packages/api/src/modules/booking/booking.service.ts:1376-1404`
 
-**Evidence:** `wallet.release(tx, { amount: session.holdAmount, … })` (:1394) / `wallet.deduct(... amount: session.holdAmount ...)` (:1384) guarded only by `participant.heldAmount > 0`, while the participant row is decremented by `Math.max(0, heldAmount - session.holdAmount)` (:1403). After an admin `cancelSeriesSession(…, release/partial)` (which decrements `heldAmount` — `admin-booking.service.ts:813-817`), the participant may hold less than `session.holdAmount`; the wallet-level release/deduct then draws the difference from the *wallet's pooled held balance* (other bookings' holds), and the later completion of those other sessions fails with `InsufficientBalanceError` (same failure family as L1, release side). Wallet holds are pooled per wallet, so this leaks across bookings.
+**Evidence:** `wallet.release(tx, { amount: session.holdAmount, … })` (:1394) / `wallet.deduct(... amount: session.holdAmount ...)` (:1384) guarded only by `participant.heldAmount > 0`, while the participant row is decremented by `Math.max(0, heldAmount - session.holdAmount)` (:1403). After an admin `cancelSeriesSession(…, release/partial)` (which decrements `heldAmount` — `admin-booking.service.ts:813-817`), the participant may hold less than `session.holdAmount`; the wallet-level release/deduct then draws the difference from the _wallet's pooled held balance_ (other bookings' holds), and the later completion of those other sessions fails with `InsufficientBalanceError` (same failure family as L1, release side). Wallet holds are pooled per wallet, so this leaks across bookings.
 
 **Required:**
 
@@ -224,7 +229,7 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 **Location:** `apps/server/src/webhooks/payments.ts:99`
 
-**Evidence:** `const idempotencyKey = \`${provider}:${payload.providerEventId || "no-event-id"}\`;` — a malformed/legacy event without `payment_id`/`payment_request_id`/`id` shares one key with every other such event; the first one claims it and all subsequent ones are silently dropped (`{ok:true, idempotent:true}`), while `confirmFromWebhook` would have thrown `PaymentNotFoundError` anyway. Not exploitable (signature-verified), but hides real delivery failures.
+**Evidence:** `const idempotencyKey = \`${provider}:${payload.providerEventId || "no-event-id"}\`;`— a malformed/legacy event without`payment_id`/`payment_request_id`/`id` shares one key with every other such event; the first one claims it and all subsequent ones are silently dropped (`{ok:true, idempotent:true}`), while `confirmFromWebhook`would have thrown`PaymentNotFoundError` anyway. Not exploitable (signature-verified), but hides real delivery failures.
 
 **Required:**
 
@@ -243,7 +248,7 @@ For a series participant the wallet `heldBalance` is reduced by the forfeit but 
 
 **Location:** `packages/api/src/modules/booking/booking.handler.ts:81-82, 250, 279, 307` (key `booking:{userId}:{tutorId}:{start}:{headerKey ?? ""}`); `apps/web/src` contains no `idempotency-key` usage (verified by grep).
 
-**Evidence:** with the header always absent, the key is `booking:{user}:{tutor}:{start}:` — a user who cancels/expires a booking and re-books the identical tutor+slot within the 24h `bookingIdempotency` TTL receives the stale cached result (the old/cancelled booking id) instead of a fresh booking. The `getOrSet` cache stores the *result* of the first attempt for 24h (`lib/idempotency.ts:129-172`).
+**Evidence:** with the header always absent, the key is `booking:{user}:{tutor}:{start}:` — a user who cancels/expires a booking and re-books the identical tutor+slot within the 24h `bookingIdempotency` TTL receives the stale cached result (the old/cancelled booking id) instead of a fresh booking. The `getOrSet` cache stores the _result_ of the first attempt for 24h (`lib/idempotency.ts:129-172`).
 
 **Required:**
 
