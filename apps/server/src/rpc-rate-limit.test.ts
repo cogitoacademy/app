@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { matchRateLimitPath } from "./rate-limit-paths";
+import { matchAuthPath, matchRateLimitPath } from "./rate-limit-paths";
 
 describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
   test("payment.createPurchase matches /rpc/payment/createPurchase", () => {
@@ -24,6 +24,28 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
   test("student search matches /rpc/auth/searchStudents", () => {
     expect(matchRateLimitPath("/rpc/auth/searchStudents")).toBe("search");
     expect(matchRateLimitPath("/rpc/auth/searchStudents?q=x")).toBe("search");
+  });
+
+  test("support ticket creation matches /rpc/support/createTicket (M3)", () => {
+    expect(matchRateLimitPath("/rpc/support/createTicket")).toBe("support");
+    expect(matchRateLimitPath("/rpc/support/listTickets")).toBeNull();
+  });
+
+  test("achievement submission matches /rpc/achievement/create (M3)", () => {
+    expect(matchRateLimitPath("/rpc/achievement/create")).toBe("achievement");
+    expect(matchRateLimitPath("/rpc/achievement/list")).toBeNull();
+    expect(matchRateLimitPath("/rpc/achievement/listApproved")).toBeNull();
+  });
+
+  test("upload URL creation matches /rpc/upload/createUploadUrl (M3)", () => {
+    expect(matchRateLimitPath("/rpc/upload/createUploadUrl")).toBe("upload");
+  });
+
+  test("email-otp / forget-password / change-email paths are auth-limited (M3)", () => {
+    expect(matchAuthPath("/api/auth/email-otp/verify-email")).toBe(true);
+    expect(matchAuthPath("/api/auth/email-otp/send-otp")).toBe(true);
+    expect(matchAuthPath("/api/auth/forget-password/email")).toBe(true);
+    expect(matchAuthPath("/api/auth/change-email/email")).toBe(true);
   });
 
   test("other paths are not rate limited", () => {

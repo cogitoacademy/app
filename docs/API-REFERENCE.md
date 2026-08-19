@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-15
+Last updated: 2026-08-19
 
 ## Overview
 
@@ -302,6 +302,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ## Achievement (`achievement.*`)
 
+### `achievement.listApproved`
+
+- **RPC path:** `/rpc/achievements/listApproved`
+- **Auth:** Public
+- **Input:** None
+- **Output:** `{ items: Achievement[] }` — approved + visible achievements with the owner's `displayName` attached (public landing, F16)
+- **Description:** Returns approved and visible achievements for the public landing page; rejected/pending achievements are never exposed
+
 ### `achievement.list`
 
 - **Auth:** Protected
@@ -559,6 +567,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.listBookings`
 
+- **RPC path:** `/rpc/tutor/booking/list`
 - **Auth:** Tutor
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
@@ -566,6 +575,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.proposeReschedule`
 
+- **RPC path:** `/rpc/tutor/booking/reschedule/propose`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
 - **Output:** `{ booking }`
@@ -573,6 +583,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.acceptBooking`
 
+- **RPC path:** `/rpc/tutor/booking/accept`
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
@@ -580,6 +591,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.declineBooking`
 
+- **RPC path:** `/rpc/tutor/booking/decline`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ booking }`
@@ -587,6 +599,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.completeSession`
 
+- **RPC path:** `/rpc/tutor/booking/complete`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ booking }`
@@ -594,10 +607,20 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.markAttendance`
 
+- **RPC path:** `/rpc/tutor/booking/mark-attendance`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, attendance }` (`attendance` one of `present`/`late`)
-- **Output:** `{ booking }`
+- **Output:** `{ bookingId, attendanceState }`
 - **Description:** Marks tutor attendance; only allowed within ±15 minutes of the scheduled start (`BookingNotEditableError` otherwise, so tutors can't pre-mark to dodge lateness). There is no auto-cancel: an unmarked session is instead surfaced to the admin queue via `adminBooking.listBookings({ category: "tutor_lateness_pending" })`.
+
+### `tutorActions.markParticipantNoShow`
+
+- **RPC path:** `/rpc/tutor/booking/mark-participant-no-show`
+- **Auth:** Tutor
+- **Input:** `{ bookingId, participantUserId, sessionId? }` (`sessionId` required for series child sessions)
+- **Output:** `{ bookingId, participantUserId, sessionId, forfeitedMarks }`
+- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) before start+15 min, `BOOKING_STATE_TRANSITION` (409) if not `scheduled`
+- **Description:** Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); their session hold is forfeited. A solo booking transitions to `no_show`; a group booking stays live and only the target's hold is forfeited (C1); a series session keeps its state so other participants are unaffected.
 
 ---
 
@@ -712,6 +735,24 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ paymentId, reason }`
 - **Output:** `{ correction }`
 - **Description:** Issues a compensating ledger entry for a payment error
+
+### `adminBooking.setMeetingLink`
+
+- **RPC path:** `/rpc/admin/booking/setMeetingLink`
+- **Auth:** Admin
+- **Input:** `{ bookingId, url }` (`url` must be a valid URL, max 2048 chars)
+- **Output:** `{ bookingId, meetingUrl, status }`
+- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) unless the booking is `SCHEDULED`/`CONFIRMED`
+- **Description:** Records a manual meeting URL on a booking as fallback when Google Meet generation failed or is disabled (U1/FR-21); notifies confirmed participants and writes an `admin_set_meeting_link` audit record
+
+### `adminBooking.cancelSeriesSession`
+
+- **RPC path:** `/rpc/admin/booking/cancel-series-session`
+- **Auth:** Admin
+- **Input:** `{ sessionId, marksAction, amount? }` (`marksAction` one of `release`/`forfeit`/`partial`; `amount` required when `partial`, max 1000)
+- **Output:** `{ sessionId, currentState: "cancelled", marksAction, affectedParticipants }`
+- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_STATE_TRANSITION` (409) if the session is not `scheduled`
+- **Description:** Cancels a single series session; the session hold is released, forfeited, or partially returned per `marksAction` (U6/TC-31); records audit + participant notifications
 
 ---
 

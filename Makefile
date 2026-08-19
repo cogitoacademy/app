@@ -51,7 +51,7 @@ test:            ## Run unit tests only
 		bun test packages/api/src/tests/unit/ apps/server/src/openapi.test.ts
 
 test-api:        ## Run all API tests (unit + integration) with env
-		bun test --env-file apps/server/.env packages/api/src/tests/ apps/server/src/openapi.test.ts
+		bun test --env-file apps/server/.env.test packages/api/src/tests/ apps/server/src/openapi.test.ts
 
 test-e2e:        ## Run E2E tests (Playwright)
 		bun run test:e2e
@@ -63,7 +63,7 @@ test-coverage:   ## Run unit tests with coverage
 		bun test --coverage packages/api/src/tests/unit/ apps/server/src/openapi.test.ts
 
 test-coverage-html: ## Run unit tests with HTML coverage report
-		bun test --coverage --env-file apps/server/.env packages/api/src/tests/unit/ apps/server/src/openapi.test.ts && \
+		bun test --coverage --env-file apps/server/.env.test packages/api/src/tests/unit/ apps/server/src/openapi.test.ts && \
 		bunx coverage-istanbul report --include=coverage/coverage-final.json --reporter=html --dir=coverage/html
 
 # ── Database ──────────────────────────────────────────────────────────────────────

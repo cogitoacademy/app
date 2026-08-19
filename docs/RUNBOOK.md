@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-16
+Last updated: 2026-08-19
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -209,29 +209,36 @@ Student account name/image editing uses the existing Better Auth session and req
 
 Key environment variables (see `.env.example` for full list):
 
-| Variable                                                                                      | Required | Description                                                                                   |
-| --------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                  |
-| `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                               |
-| `BETTER_AUTH_URL`                                                                             | Yes      | Base URL for auth cookies                                                                     |
-| `CORS_ORIGIN`                                                                                 | Yes      | Allowed CORS origin                                                                           |
-| `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                               |
-| `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                           |
-| `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                  |
-| `GOOGLE_PRIVATE_KEY`                                                                          | No       | Google service account private key                                                            |
-| `GOOGLE_CALENDAR_ID`                                                                          | No       | Google Calendar ID for meeting creation                                                       |
-| `GOOGLE_IMPERSONATED_USER`                                                                    | No       | SA-mode impersonation address (REVIEW-FIXES-4 P4.2)                                           |
-| `GOOGLE_MEET_ENABLED`                                                                         | No       | Enables Google Meet provider (default false)                                                  |
-| `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                        |
-| `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production — P4.1)                                                |
-| `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod) |
-| `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                               |
-| `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                             |
-| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                |
-| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated)                                                 |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production — P4.3)                                  |
-| `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                  |
-| `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Must be `true` on staging for stub-payment E2E                                                |
+| Variable                                                                                      | Required | Description                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                 |
+| `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                                                                                              |
+| `BETTER_AUTH_URL`                                                                             | Yes      | Base URL for auth cookies                                                                                                                                    |
+| `CORS_ORIGIN`                                                                                 | Yes      | Allowed CORS origin                                                                                                                                          |
+| `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                                                                                              |
+| `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                                                                                          |
+| `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                                                                                 |
+| `GOOGLE_PRIVATE_KEY`                                                                          | No       | Google service account private key                                                                                                                           |
+| `GOOGLE_CALENDAR_ID`                                                                          | No       | Google Calendar ID for meeting creation                                                                                                                      |
+| `GOOGLE_IMPERSONATED_USER`                                                                    | No       | SA-mode impersonation address (REVIEW-FIXES-4 P4.2)                                                                                                          |
+| `GOOGLE_MEET_ENABLED`                                                                         | No       | Enables Google Meet provider (default false)                                                                                                                 |
+| `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                                                                                       |
+| `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                       |
+| `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                        |
+| `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                                                                                              |
+| `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                            |
+| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                               |
+| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated)                                                                                                                |
+| `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs |
+| `DB_SSL_REJECT_UNAUTHORIZED`                                                                  | No       | Reject unauthorized TLS certificates on the DB connection (default true)                                                                                     |
+| `METRICS_TOKEN`                                                                               | No       | Bearer token for the metrics endpoint                                                                                                                        |
+| `UPLOAD_DIR`                                                                                  | No       | Local upload directory when R2 is not configured (default `./uploads`)                                                                                       |
+| `COMPETITION_CALENDAR_URL`                                                                    | No       | External competition-calendar link surfaced by `wallet.competitionCalendarLink` (default `https://cogitoacademy.id/en/calendar`)                             |
+| `XENDIT_DEFAULT_PAYMENT_METHOD`                                                               | No       | Default Xendit channel (`ewallet_ovo`/`qris`/`va_bca`; default `ewallet_ovo`)                                                                                |
+| `SESSION_COOKIE_CACHE_MAX_AGE`                                                                | No       | Better Auth session-cookie cache max age in seconds (default 60)                                                                                             |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3)                                                                                         |
+| `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                 |
+| `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                             |
 
 ## Real-Provider Swap (Resend / Xendit / Google Meet / R2)
 
@@ -239,10 +246,10 @@ The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet f
 
 | Provider    | Dev default          | Silent-failure mode if misconfigured                                                                                                  | Prod requirement (fail-loud guard PR)                                                                                     |
 | ----------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Resend      | Stub (no-op email)   | **Silent** — `RESEND_API_KEY` optional, no `NODE_ENV` check; critical emails suppressed with no alert                                 | `RESEND_API_KEY` required when `NODE_ENV=production` + verified `EMAIL_FROM` domain (P4.1)                                |
+| Resend      | Stub (no-op email)   | **Silent** — `RESEND_API_KEY` optional, no `NODE_ENV` check; critical emails suppressed with no alert                                 | `RESEND_API_KEY` required when `NODE_ENV` is production/staging + verified `EMAIL_FROM` domain (P4.1)                     |
 | Xendit      | Stub provider        | Webhook 408/500 loops if OTP-paths or status mapping mismatch                                                                         | `XENDIT_SECRET_KEY`+`XENDIT_WEBHOOK_TOKEN`+redirect URLs when `PAYMENT_PROVIDER=xendit`; sandbox E2E before enabling (P3) |
 | Google Meet | Manual link fallback | **Silent** — `GOOGLE_MEET_ENABLED=true` with broken creds falls back to manual links, events land on the wrong calendar               | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + boot probe (P4.2)                                        |
-| R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable | All `R2_*` + `R2_PUBLIC_URL` required in production (P4.3)                                                                |
+| R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable | All `R2_*` + `R2_PUBLIC_URL` required in production/staging (P4.3)                                                        |
 
 > **P3 status (2026-08-17):** the Xendit provider was rewritten for `api-version: 2024-11-11` — `request_amount`/`channel_code`/`channel_properties`, top-level response with `actions[].value` (REDIRECT_CUSTOMER → PRESENT_TO_CUSTOMER), statuses SUCCEEDED/REQUIRES_ACTION/AUTHORIZED/CANCELED, webhook idempotency keys from `data.payment_id`/`payment_request_id` (fixes the `xendit:no-event-id` collision), and a provider `refund()` port wired into `adminRefund` (refund id stored on `refund_record.provider_event_id`; migration 0025 adds `payment_record.provider_request_id`). Timestamp validation is provider-conditional (skipped for xendit — L4). `XENDIT_SUCCESS/FAILURE_REDIRECT_URL` are required by the env schema when `PAYMENT_PROVIDER=xendit` (P3.7).
 
@@ -283,7 +290,7 @@ The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FRO
 
 1. Resend dashboard → **Domains** → add `cogitoacademy.id` (and `staging.cogitoacademy.id` for staging).
 2. Add the DNS records Resend provides (SPF/DKIM) at the DNS provider; wait for verification.
-3. Set `EMAIL_FROM` to a verified address, e.g. `noreply@cogitoacademy.id` — the env schema rejects the dev default only when `NODE_ENV=production`, so the verified domain's address is fine.
+3. Set `EMAIL_FROM` to a verified address, e.g. `noreply@cogitoacademy.id` — the env schema rejects the dev default when `NODE_ENV` is production/staging, so the verified domain's address is fine.
 4. Send a test invite/refund email on staging before enabling production email.
 
 ### R2 bucket + API-token setup (X4 / P4.3)

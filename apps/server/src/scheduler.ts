@@ -83,10 +83,17 @@ export async function shutdownScheduler(): Promise<void> {
     });
     scheduler!.worker.close(true).catch(() => {});
     scheduler!.queue.close().catch(() => {});
+    scheduler!.dlqWorker.close(true).catch(() => {});
+    scheduler!.dlqQueue.close().catch(() => {});
   }, SHUTDOWN_TIMEOUT_MS);
 
   try {
-    await Promise.all([scheduler.worker.close(), scheduler.queue.close()]);
+    await Promise.all([
+      scheduler.worker.close(),
+      scheduler.queue.close(),
+      scheduler.dlqWorker.close(),
+      scheduler.dlqQueue.close(),
+    ]);
     clearTimeout(forceExit);
     log({
       level: "info",

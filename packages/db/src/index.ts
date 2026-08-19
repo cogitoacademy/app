@@ -1,12 +1,13 @@
 import { env } from "@cogito-app/env/server";
+import { isProductionLike } from "@cogito-app/env/node-env";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import * as schema from "./schema";
 
-if (env.NODE_ENV === "production" && !env.DB_SSL_REJECT_UNAUTHORIZED) {
+if (isProductionLike(env.NODE_ENV) && !env.DB_SSL_REJECT_UNAUTHORIZED) {
   console.warn(
-    "WARNING: DB_SSL_REJECT_UNAUTHORIZED is false in production. SSL certificate verification is disabled.",
+    "WARNING: DB_SSL_REJECT_UNAUTHORIZED is false in production/staging. SSL certificate verification is disabled.",
   );
 }
 
@@ -40,7 +41,7 @@ export function createDb(connectionString?: string) {
     connection: {
       statement_timeout: 30_000,
     },
-    ...(env.NODE_ENV === "production" && {
+    ...(isProductionLike(env.NODE_ENV) && {
       ssl: { rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED },
     }),
     ...(env.NODE_ENV === "development" && {

@@ -78,6 +78,32 @@ describe("server env schema", () => {
     ).not.toThrow();
   });
 
+  test("NODE_ENV=staging is accepted and behaves like production (P4.1/P4.3)", () => {
+    // Staging without the Resend key is rejected (fail-loud, like production).
+    const staging = { ...validEnv, NODE_ENV: "staging" };
+    const missingKey = serverEnvSchema.safeParse(staging);
+    expect(missingKey.success).toBe(false);
+    const paths = (missingKey.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("RESEND_API_KEY");
+
+    // Staging with the key + non-default sender parses.
+    const stagingOk = serverEnvSchema.safeParse({
+      ...staging,
+      RESEND_API_KEY: "re_staging_key",
+      EMAIL_FROM: "no-reply@staging.cogitoacademy.id",
+    });
+    expect(stagingOk.success).toBe(true);
+
+    // Partial R2 config is rejected in staging, like production.
+    const partialR2 = serverEnvSchema.safeParse({
+      ...staging,
+      RESEND_API_KEY: "re_staging_key",
+      EMAIL_FROM: "no-reply@staging.cogitoacademy.id",
+      R2_ACCOUNT_ID: "acct",
+    });
+    expect(partialR2.success).toBe(false);
+  });
+
   test("P4.2: GOOGLE_MEET_ENABLED=true requires a complete credential set", () => {
     // Partial OAuth triple → rejected.
     const partial = serverEnvSchema.safeParse({

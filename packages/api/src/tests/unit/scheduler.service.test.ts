@@ -3,8 +3,11 @@ import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
 let capturedJobHandler: ((job: any) => Promise<any>) | null = null;
 let capturedFailedHandler: ((job: any, err: Error) => void) | null = null;
 let capturedCompletedHandler: ((job: any) => void) | null = null;
+let capturedDlqJobHandler: ((job: any) => Promise<any>) | null = null;
 
 const mockQueueAdd = mock(async () => ({}));
+const mockDlqQueueAdd = mock(async () => ({}));
+const mockRunCommand = mock(async () => "OK");
 
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
@@ -38,9 +41,12 @@ beforeEach(() => {
     }
   };
   mockQueueAdd.mockClear();
+  mockDlqQueueAdd.mockClear();
+  mockRunCommand.mockClear();
   capturedJobHandler = null;
   capturedFailedHandler = null;
   capturedCompletedHandler = null;
+  capturedDlqJobHandler = null;
 });
 
 afterEach(() => {
@@ -51,15 +57,32 @@ afterEach(() => {
 
 mock.module("bullmq", () => ({
   Queue: class {
-    add = mockQueueAdd;
+    add: any;
+    backend: any;
+    constructor(queueName: string) {
+      this.add =
+        queueName === "cogito-jobs-dlq" ? mockDlqQueueAdd : mockQueueAdd;
+      this.backend = {
+        get client() {
+          return Promise.resolve({
+            defineCommand: mock(async () => {}),
+            runCommand: mockRunCommand,
+          });
+        },
+      };
+    }
   },
   Worker: class {
     constructor(
-      _queueName: string,
+      queueName: string,
       handler: (job: any) => Promise<any>,
       _opts: any,
     ) {
-      capturedJobHandler = handler;
+      if (queueName === "cogito-jobs-dlq") {
+        capturedDlqJobHandler = handler;
+      } else {
+        capturedJobHandler = handler;
+      }
     }
     on(event: string, handler: any) {
       if (event === "failed") capturedFailedHandler = handler;
@@ -316,5 +339,62 @@ describe("createSchedulerService", () => {
       (c) => c.entry?.action === "scheduler_job_completed",
     );
     expect(completedCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("M4: failed job is pushed to the DLQ queue", () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    expect(capturedFailedHandler).not.toBeNull();
+
+    const error = new Error("boom");
+    capturedFailedHandler!(
+      { id: "job-1", name: "expire-bookings", attemptsMade: 3, data: { x: 1 } },
+      error,
+    );
+
+    expect(mockDlqQueueAdd).toHaveBeenCalledTimes(1);
+    const [jobName, payload] = mockDlqQueueAdd.mock.calls[0];
+    expect(jobName).toBe("expire-bookings");
+    expect(payload).toMatchObject({
+      originalJobId: "job-1",
+      attemptsMade: 3,
+      failedReason: "boom",
+      data: { x: 1 },
+    });
+  });
+
+  test("M4: DLQ worker logs the job and keeps a bounded Redis list", async () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    expect(capturedDlqJobHandler).not.toBeNull();
+
+    logCaptures = [];
+    await capturedDlqJobHandler!({
+      id: "dlq-1",
+      name: "expire-bookings",
+      data: { originalJobId: "job-1", failedReason: "boom" },
+    });
+
+    const dlqCalls = logCaptures.filter(
+      (c) => c.entry?.action === "scheduler_dlq_job",
+    );
+    expect(dlqCalls.length).toBeGreaterThanOrEqual(1);
+    expect(mockRunCommand).toHaveBeenCalledTimes(1);
+    const [commandName, args] = mockRunCommand.mock.calls[0];
+    expect(commandName).toBe("cogitoDlqPush");
+    expect(args[0]).toBe("cogito:dlq");
+    expect(args[2]).toBe("100");
   });
 });

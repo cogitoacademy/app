@@ -8,6 +8,11 @@ describe("seed guards", () => {
     expect(seedAllowed("development", undefined)).toBe(true);
   });
 
+  test("seedAllowed treats staging like production", () => {
+    expect(seedAllowed("staging", undefined)).toBe(false);
+    expect(seedAllowed("staging", "true")).toBe(true);
+  });
+
   test("seedAdminPassword rejects short or missing passwords", () => {
     expect(seedAdminPassword(undefined)).toBeNull();
     expect(seedAdminPassword("short")).toBeNull();

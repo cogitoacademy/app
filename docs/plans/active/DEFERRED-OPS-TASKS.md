@@ -25,6 +25,10 @@ Tasks deferred from production-readiness (#18) and infrastructure (#19) that cou
 
 Configured in scheduler.service.ts: `attempts: 3, backoff: { type: 'exponential', delay: 1000 }`.
 
+### 1.2b BullMQ dead-letter queue (M4, prod-fixes wave) ✅
+
+Implemented in `scheduler.service.ts`: failed jobs (attempts exhausted) are pushed to the `cogito-jobs-dlq` queue; a dedicated DLQ worker logs each entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection. Wired into `apps/server/src/scheduler.ts` shutdown (dlq worker + queue closed with the main worker).
+
 ### 1.3 Wallet repo explicit column lists (from 3.2) ✅
 
 Replaced `SELECT *` in `wallet.repo.ts` getById/getByUserId with explicit column lists.

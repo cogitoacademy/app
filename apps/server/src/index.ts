@@ -1,6 +1,7 @@
 import { initLogger } from "evlog";
 
 import { env } from "@cogito-app/env/server";
+import { isProductionLike } from "@cogito-app/env/node-env";
 import {
   setAuthEmailSender,
   setVerificationEmailSender,
@@ -73,7 +74,7 @@ const port = env.PORT;
 
 const { services } = await import("@cogito-app/api/services");
 setAuthEmailSender(async ({ user, url }) => {
-  if (env.NODE_ENV !== "production") {
+  if (!isProductionLike(env.NODE_ENV)) {
     log({
       level: "info",
       action: "reset_password_link",
@@ -95,7 +96,7 @@ setAuthEmailSender(async ({ user, url }) => {
 
 // G2: email verification OTP delivery through the shared email port.
 setVerificationEmailSender(async ({ email, otp, type }) => {
-  if (env.NODE_ENV !== "production") {
+  if (!isProductionLike(env.NODE_ENV)) {
     log({
       level: "info",
       action: "verification_otp",

@@ -2,6 +2,17 @@ import { Queue, Worker, type Job } from "bullmq";
 import { log } from "../../lib/logger";
 
 const QUEUE_NAME = "cogito-jobs";
+// M4: dead-letter queue — jobs whose attempts are exhausted land here instead
+// of vanishing. A dedicated worker logs each entry and keeps a bounded Redis
+// list (cogito:dlq) for quick inspection.
+const DLQ_QUEUE_NAME = "cogito-jobs-dlq";
+const DLQ_LIST_KEY = "cogito:dlq";
+const DLQ_LIST_MAX = 100;
+// Atomic bounded push: LPUSH then LTRIM to the last DLQ_LIST_MAX entries.
+const DLQ_PUSH_LUA = `
+redis.call('LPUSH', KEYS[1], ARGV[1])
+return redis.call('LTRIM', KEYS[1], 0, ARGV[2] - 1)
+`;
 
 export interface SchedulerHandlers {
   onExpireBookings: () => Promise<{ expired: number; failed: number }>;
@@ -18,6 +29,8 @@ export interface SchedulerHandlers {
 export interface SchedulerService {
   queue: Queue;
   worker: Worker;
+  dlqQueue: Queue;
+  dlqWorker: Worker;
 }
 
 export function createSchedulerService(
@@ -27,6 +40,43 @@ export function createSchedulerService(
   if (!redisUrl) return null;
 
   const connection = { url: redisUrl };
+
+  // M4: DLQ queue + worker. Created before the main worker so the main
+  // worker's handler stays the "current" one for callers.
+  const dlqQueue = new Queue(DLQ_QUEUE_NAME, { connection });
+
+  const dlqWorker = new Worker(
+    DLQ_QUEUE_NAME,
+    async (job: Job) => {
+      log({
+        level: "error",
+        action: "scheduler_dlq_job",
+        message: `Job ${job.name} moved to DLQ after attempts exhausted`,
+        job: { id: job.id, name: job.name, data: job.data },
+      });
+
+      // Keep a bounded Redis list of DLQ entries for quick inspection.
+      try {
+        const client = await dlqQueue.backend.client;
+        client.defineCommand("cogitoDlqPush", {
+          numberOfKeys: 1,
+          lua: DLQ_PUSH_LUA,
+        });
+        await client.runCommand("cogitoDlqPush", [
+          DLQ_LIST_KEY,
+          JSON.stringify(job.data),
+          String(DLQ_LIST_MAX),
+        ]);
+      } catch (error) {
+        log({
+          level: "warn",
+          action: "scheduler_dlq_list_failed",
+          error: { message: String(error) },
+        });
+      }
+    },
+    { connection },
+  );
 
   const queue = new Queue(QUEUE_NAME, { connection });
 
@@ -112,6 +162,26 @@ export function createSchedulerService(
       message: `Job ${job?.name ?? "unknown"} failed`,
       error: { message: err.message, stack: err.stack },
     });
+
+    // M4: after attempts are exhausted the job would vanish — move it to the
+    // DLQ so it is logged, kept in the bounded Redis list, and can be
+    // replayed manually if needed.
+    if (job) {
+      dlqQueue
+        .add(job.name, {
+          originalJobId: job.id,
+          attemptsMade: job.attemptsMade,
+          failedReason: err.message,
+          data: job.data,
+        })
+        .catch((error) => {
+          log({
+            level: "warn",
+            action: "scheduler_dlq_add_failed",
+            error: { message: String(error) },
+          });
+        });
+    }
   });
 
   worker.on("completed", (job) => {
@@ -122,5 +192,5 @@ export function createSchedulerService(
     });
   });
 
-  return { queue, worker };
+  return { queue, worker, dlqQueue, dlqWorker };
 }

@@ -6,7 +6,9 @@ import {
   unauthorized,
   badRequest,
 } from "../../lib/errors";
+import { log } from "../../lib/logger";
 import { fetchWithTimeout, retryWithBackoff } from "../../lib/retry";
+import type { RedisClient } from "../../lib/redis";
 import type {
   PaymentProvider,
   PaymentStatus,
@@ -15,12 +17,6 @@ import type {
 
 const XENDIT_API_BASE = "https://api.xendit.co/v3";
 const XENDIT_API_VERSION = "2024-11-11";
-
-const xenditCircuitBreaker = new CircuitBreaker({
-  failureThreshold: 5,
-  resetTimeoutMs: 30_000,
-  halfOpenMaxAttempts: 1,
-});
 
 type XenditPaymentMethod = "ewallet_ovo" | "qris" | "va_bca";
 
@@ -77,7 +73,24 @@ export function createXenditPaymentProvider(opts: {
   failureRedirectUrl: string;
   defaultPaymentMethod?: XenditPaymentMethod;
   customer?: XenditCustomer;
+  redis?: RedisClient;
 }): PaymentProvider {
+  const xenditCircuitBreaker = new CircuitBreaker({
+    failureThreshold: 5,
+    resetTimeoutMs: 30_000,
+    halfOpenMaxAttempts: 1,
+    name: "xendit",
+    redis: opts.redis ?? undefined,
+    monitor: (state, error) => {
+      log({
+        level: state === "open" ? "error" : "info",
+        action: "circuit_breaker_state_change",
+        service: "xendit",
+        state,
+        error: error ? { message: String(error) } : undefined,
+      });
+    },
+  });
   const authHeader = `Basic ${Buffer.from(`${opts.secretKey}:`).toString("base64")}`;
   const defaultMethod = opts.defaultPaymentMethod ?? "ewallet_ovo";
   const methodConfig = PAYMENT_METHOD_CONFIG[defaultMethod];

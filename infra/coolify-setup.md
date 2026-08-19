@@ -44,12 +44,19 @@
    - BETTER_AUTH_SECRET=...
    - BETTER_AUTH_URL=https://cogitoacademy.id
    - CORS_ORIGIN=https://app.cogitoacademy.id
+   - TRUST_PROXY=true (required — Caddy terminates TLS and forwards
+     x-forwarded-for; without it rate limiting and the webhook IP
+     allowlist see Caddy's IP instead of the client's)
    - ... (all vars from .env.prod)
 7. Health check: GET /health
 8. Domain: cogitoacademy.id (Coolify auto-configures Caddy + HTTPS)
    - Path: /rpc → this service (Coolify handles routing)
    - Path: /api → this service
    - Path: /health → this service
+   - Path: /webhooks → this service (payment provider webhooks —
+     `POST /webhooks/payments/:provider` must be reachable from the
+     internet; without this path the webhook 404s and payments never
+     confirm)
 9. Auto-deploy: ON (deploy when new image pushed)
 10. Deploy
 
@@ -64,6 +71,13 @@
 7. Auto-deploy: ON
 8. Deploy
 
+> **VITE_SERVER_URL is baked at build time** (the CD workflow passes it as a
+> `--build-arg`; the web image has no runtime env). The frontend calls the API
+> at the absolute URL `https://cogitoacademy.id` (same site as
+> `app.cogitoacademy.id`, so the `SameSite=Strict` session cookie is sent and
+> CORS is allowed via `CORS_ORIGIN`). Do not set `VITE_SERVER_URL` in the
+> Coolify web service env — it has no effect on the built image.
+
 ## Step 6: Configure Caddy Routing
 
 Coolify automatically configures Caddy reverse proxy:
@@ -71,12 +85,13 @@ Coolify automatically configures Caddy reverse proxy:
 - cogitoacademy.id/rpc/\* → cogito-server:3001
 - cogitoacademy.id/api/\* → cogito-server:3001
 - cogitoacademy.id/health → cogito-server:3001
+- cogitoacademy.id/webhooks/\* → cogito-server:3001 (payment webhooks)
 - cogitoacademy.id/\* → cogito-web:80
 
 Or use separate domains:
 
 - app.cogitoacademy.id → cogito-web:80
-- cogitoacademy.id/rpc, /api, /health → cogito-server:3001
+- cogitoacademy.id/rpc, /api, /health, /webhooks → cogito-server:3001
 
 ## Step 7: Repeat for Staging
 

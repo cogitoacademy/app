@@ -1,3 +1,5 @@
+import { isProductionLike } from "@cogito-app/env/node-env";
+
 export function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
@@ -52,7 +54,7 @@ export function openApiAccessDenied(
   nodeEnv: string,
   hasSession: boolean,
 ): Response | null {
-  if (nodeEnv === "production")
+  if (isProductionLike(nodeEnv))
     return new Response("Not Found", { status: 404 });
   if (!hasSession) return new Response("Unauthorized", { status: 401 });
   return null;
