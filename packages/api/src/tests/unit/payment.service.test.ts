@@ -30,8 +30,20 @@ function makeWallet() {
   return {
     credit: mock(async () => ({ id: "w1", totalBalance: 150 })),
     deduct: mock(async () => ({ id: "w1", totalBalance: 0 })),
+    release: mock(async () => ({
+      id: "w1",
+      totalBalance: 0,
+      heldBalance: 0,
+      availableBalance: 0,
+    })),
     compensate: mock(async () => ({ id: "w1", totalBalance: 0 })),
     getById: mock(async () => ({ id: "w1" })),
+    getByUserId: mock(async () => ({
+      id: "w1",
+      totalBalance: 100,
+      heldBalance: 0,
+      availableBalance: 100,
+    })),
     getOrCreate: mock(async () => ({
       id: "w1",
       totalBalance: 100,
@@ -966,7 +978,7 @@ describe("PaymentService", () => {
     test("H4: REFUNDED webhook with spent marks does not compensate, writes audit + refundRecord, returns REFUNDED", async () => {
       const wallet = {
         ...makeWallet(),
-        getOrCreate: mock(async () => ({
+        getByUserId: mock(async () => ({
           id: "w1",
           totalBalance: 100,
           heldBalance: 0,
@@ -1039,6 +1051,7 @@ describe("PaymentService", () => {
             paymentId: "pay1",
             marks: 100,
             availableBalance: 30,
+            heldBalance: 0,
             spent: 70,
           },
         }),
@@ -1057,7 +1070,7 @@ describe("PaymentService", () => {
     test("H4: REFUNDED webhook with sufficient available balance still compensates (clean case)", async () => {
       const wallet = {
         ...makeWallet(),
-        getOrCreate: mock(async () => ({
+        getByUserId: mock(async () => ({
           id: "w1",
           totalBalance: 100,
           heldBalance: 0,
@@ -1227,6 +1240,483 @@ describe("PaymentService", () => {
       expect(updatePaymentStatusIfInCreditState).toHaveBeenCalledTimes(1);
       expect(wallet.compensate).toHaveBeenCalledTimes(0);
       expect(notification.writeBestEffort).toHaveBeenCalledTimes(0);
+    });
+
+    test("H3: createIntent re-purchase after FAILED retains old providerEventId as stale marker", async () => {
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay_existing",
+          status: PAYMENT_STATUS.FAILED,
+          providerReference: "stub:user1:pkg1",
+          providerEventId: "evt_old_failed",
+        })),
+        updatePaymentStatus,
+      });
+      const db = makeDb();
+      const provider = {
+        ...makeProvider(),
+        createIntent: mock(async () => ({
+          checkoutUrl: "https://checkout.test/new",
+          paymentRequestId: "pr_new_attempt",
+        })),
+      };
+
+      const service = createPaymentService({
+        db,
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+      expect(result.paymentId).toBe("pay_existing");
+      // The providerRequestId rotates to the new attempt; the old providerEventId
+      // is retained as the stale marker (not cleared).
+      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
+        status: PAYMENT_STATUS.PENDING,
+        providerRequestId: "pr_new_attempt",
+        checkoutUrl: "https://checkout.test/new",
+      });
+    });
+
+    test("H3: stale FAILED webhook for the OLD attempt after re-purchase is ignored (row stays PENDING)", async () => {
+      const wallet = makeWallet();
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
+          providerEventId: "evt_old_failed",
+          providerRequestId: "pr_new_attempt",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus,
+      });
+      const db = {
+        transaction: mock(async (fn: any) => fn({})),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      // OLD attempt's FAILED webhook carries the retained stale-marker id.
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_old_failed",
+        status: PAYMENT_STATUS.FAILED as PaymentStatus,
+        failureReason: "Late old-attempt failure",
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.PENDING);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
+      expect(wallet.credit).toHaveBeenCalledTimes(0);
+    });
+
+    test("H3: new attempt SUCCEEDED webhook after re-purchase credits once", async () => {
+      const wallet = makeWallet();
+      const updatePaymentStatus = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          walletId: "w1",
+          marks: 100,
+          providerReference: "stub:user1:pkg1",
+          providerEventId: null,
+          providerRequestId: "pr_new_attempt",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus,
+      });
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      // New attempt's SUCCEEDED webhook carries the current generation id.
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "pr_new_attempt",
+        status: PAYMENT_STATUS.PAID as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.PAID);
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+    });
+
+    test("H3: no double-credit when both old and new SUCCEEDED arrive", async () => {
+      const wallet = makeWallet();
+      // Stateful row: the first webhook transitions PENDING → PAID; the second
+      // call must observe the PAID row so the early-return blocks a re-credit.
+      const row = {
+        id: "pay1",
+        status: PAYMENT_STATUS.PENDING,
+        walletId: "w1",
+        marks: 100,
+        providerReference: "stub:user1:pkg1",
+        providerEventId: null,
+        providerRequestId: "pr_new_attempt",
+      };
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => row),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus: mock(async (_id: string, data: any) => {
+          if (data.status) row.status = data.status;
+        }),
+      });
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+      });
+
+      // New attempt succeeds and credits.
+      const result1 = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "pr_new_attempt",
+        status: PAYMENT_STATUS.PAID as PaymentStatus,
+      });
+      expect(result1.status).toBe(PAYMENT_STATUS.PAID);
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+
+      // Old attempt's SUCCEEDED arrives late — the row is now PAID and the
+      // terminal early-return prevents a second credit.
+      const result2 = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "pr_old_succeeded",
+        status: PAYMENT_STATUS.PAID as PaymentStatus,
+      });
+      expect(result2.status).toBe(PAYMENT_STATUS.PAID);
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+    });
+
+    test("M1: REFUNDED webhook reverses from total balance when payer holds all credited marks", async () => {
+      const wallet = {
+        ...makeWallet(),
+        getByUserId: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 100,
+          availableBalance: 0,
+        })),
+        release: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 0,
+          availableBalance: 100,
+        })),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 0,
+          heldBalance: 0,
+          availableBalance: 0,
+        })),
+      };
+      const updatePaymentStatusIfInCreditState = mock(async () => ({
+        id: "pay1",
+        status: PAYMENT_STATUS.REFUNDED,
+      }));
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatusIfInCreditState,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+      const audit = { record: mock(async () => {}) };
+      const refundRecord = { insertRefundRecord: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+        audit: audit as any,
+        refundRecord: refundRecord as any,
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_refunded_held",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
+      // Held marks are released back to available first, then the full marks
+      // are reversed — the reversal ran despite available being 0.
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({
+          walletId: "w1",
+          amount: 100,
+          eventKey: "refund.pay1.release",
+          actorType: "system",
+        }),
+      );
+      expect(wallet.compensate).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledTimes(0);
+      expect(refundRecord.insertRefundRecord).toHaveBeenCalledTimes(0);
+    });
+
+    test("M1: REFUNDED webhook with payer having spent some and held some reverses the remainder", async () => {
+      const wallet = {
+        ...makeWallet(),
+        getByUserId: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 30,
+          availableBalance: 70,
+        })),
+        release: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 0,
+          availableBalance: 100,
+        })),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 0,
+          heldBalance: 0,
+          availableBalance: 0,
+        })),
+      };
+      const updatePaymentStatusIfInCreditState = mock(async () => ({
+        id: "pay1",
+        status: PAYMENT_STATUS.REFUNDED,
+      }));
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatusIfInCreditState,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+      const audit = { record: mock(async () => {}) };
+      const refundRecord = { insertRefundRecord: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+        audit: audit as any,
+        refundRecord: refundRecord as any,
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_refunded_held_some",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
+      expect(wallet.release).toHaveBeenCalledTimes(1);
+      expect(wallet.release).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({
+          walletId: "w1",
+          amount: 30,
+          eventKey: "refund.pay1.release",
+          actorType: "system",
+        }),
+      );
+      expect(wallet.compensate).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledTimes(0);
+      expect(refundRecord.insertRefundRecord).toHaveBeenCalledTimes(0);
+    });
+
+    test("M1: REFUNDED webhook with spent all marks (total below payment marks) reconciles", async () => {
+      const wallet = {
+        ...makeWallet(),
+        getByUserId: mock(async () => ({
+          id: "w1",
+          totalBalance: 10,
+          heldBalance: 0,
+          availableBalance: 10,
+        })),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 0,
+          heldBalance: 0,
+          availableBalance: 0,
+        })),
+      };
+      const updatePaymentStatusIfInCreditState = mock(async () => ({
+        id: "pay1",
+        status: PAYMENT_STATUS.REFUNDED,
+      }));
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatusIfInCreditState,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+      const audit = { record: mock(async () => {}) };
+      const refundRecord = { insertRefundRecord: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+        audit: audit as any,
+        refundRecord: refundRecord as any,
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_refunded_all_spent",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
+      expect(wallet.release).toHaveBeenCalledTimes(0);
+      expect(wallet.compensate).toHaveBeenCalledTimes(0);
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(refundRecord.insertRefundRecord).toHaveBeenCalledTimes(1);
+    });
+
+    test("N4: REFUNDED webhook reads the wallet through the transaction (getByUserId with tx)", async () => {
+      const wallet = {
+        ...makeWallet(),
+        getByUserId: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 0,
+          availableBalance: 100,
+        })),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 0,
+          heldBalance: 0,
+          availableBalance: 0,
+        })),
+      };
+      const updatePaymentStatusIfInCreditState = mock(async () => ({
+        id: "pay1",
+        status: PAYMENT_STATUS.REFUNDED,
+      }));
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: PAYMENT_STATUS.PAID,
+          walletId: "w1",
+          marks: 100,
+          amountIdr: 50000,
+          providerReference: "stub:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatusIfInCreditState,
+      });
+      const notification = { writeBestEffort: mock(async () => {}) };
+
+      const tx = {};
+      const db = {
+        transaction: mock(async (fn: any) => fn(tx)),
+      };
+
+      const service = createPaymentService({
+        db: db as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "stub",
+        notification: notification as any,
+      });
+
+      await service.confirmFromWebhook({
+        provider: "stub",
+        providerReference: "stub:user1:pkg1",
+        providerEventId: "evt_n4_tx_read",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+      });
+
+      expect(wallet.getByUserId).toHaveBeenCalledWith(tx, "user1");
+      expect(wallet.getOrCreate).not.toHaveBeenCalled();
     });
   });
 
