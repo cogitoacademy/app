@@ -1,12 +1,12 @@
 # Wave-6 Review Fixes — Production Readiness (W2 findings)
 
-| Field      | Value                                                                                |
-| ---------- | ------------------------------------------------------------------------------------ |
+| Field      | Value                                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------------- |
 | Status     | Active — H1/H2/M2/M4/N1 (PR #82) + H3/M1/M3/M5/L1/N2/N4 (PR #8x, wave-6b) fixed; L2/L3/N3/P1-P3 open |
-| Branch     | `fix/wave6-a` (PR #82, merged); `fix/wave6-b` (PR #8x)                     |
-| Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)                              |
-| Depends on | Wave-5 (PR #79) merged to main                                                       |
-| Scope      | Backend only (packages/api, apps/server, packages/env, packages/auth)                |
+| Branch     | `fix/wave6-a` (PR #82, merged); `fix/wave6-b` (PR #8x)                                               |
+| Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)                                              |
+| Depends on | Wave-5 (PR #79) merged to main                                                                       |
+| Scope      | Backend only (packages/api, apps/server, packages/env, packages/auth)                                |
 
 This plan catalogs the findings of the wave-5 deep code review (worker W2, read-only, `docs/plans/active/` companion to the wave-5 fix PR). Every finding was verified against code at `d11962b` (pre-wave-5) and re-checked against the wave-5 branch. **Re-verification (2026-08-19, HEAD `69e2dd8`):** every original finding was re-checked against current main; new findings **N1–N4** were added by the wave-6 deep review. Severity ordering follows the code-review skill.
 
