@@ -20,7 +20,7 @@ export const MAX_SERIES_SESSIONS = 4;
 export const SESSION_DURATION_MINUTES = 90;
 export const SESSION_DURATION_MS = SESSION_DURATION_MINUTES * 60 * 1000;
 export const GROUP_SERIES_DISCLAIMER =
-  "Group series bookings require attendance at all sessions. Individual sessions cannot be cancelled.";
+  "This is a full-series commitment. Once confirmed, you cannot opt out of this series. Individual sessions missed after the H-2 cutoff are non-refundable. By proceeding, you confirm you are available for all listed dates and times.";
 export const DEFAULT_SOLO_PRICE = 42;
 
 export const DEFAULT_PAGE_LIMIT = 20;

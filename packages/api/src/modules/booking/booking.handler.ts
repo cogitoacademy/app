@@ -1,7 +1,10 @@
 import type { Context } from "../../context";
 import { z } from "zod";
 import { withDomainMap } from "../../lib/handler-utils";
-import { bookingIdempotency } from "../../lib/idempotency";
+import {
+  bookingIdempotency,
+  resolveIdempotencyNonce,
+} from "../../lib/idempotency";
 import { mapBookingError } from "./booking.errors";
 import type {
   createSoloInput,
@@ -79,7 +82,8 @@ export function createBookingHandler(booking: BookingService) {
       input: CreateSoloInput;
     }) => {
       const headerKey = context.headers.get("idempotency-key");
-      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${input.scheduledStartAt.toISOString()}:${headerKey ?? ""}`;
+      const nonce = resolveIdempotencyNonce(headerKey);
+      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${input.scheduledStartAt.toISOString()}:${nonce}`;
       return bookingIdempotency.getOrSet(idempotencyKey, () =>
         withDomainMap(
           () =>
@@ -248,7 +252,8 @@ export function createBookingHandler(booking: BookingService) {
       input: CreateGroupInput;
     }) => {
       const headerKey = context.headers.get("idempotency-key");
-      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${input.scheduledStartAt.toISOString()}:${input.inviteeUserIds.join(",")}:${headerKey ?? ""}`;
+      const nonce = resolveIdempotencyNonce(headerKey);
+      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${input.scheduledStartAt.toISOString()}:${input.inviteeUserIds.join(",")}:${nonce}`;
       return bookingIdempotency.getOrSet(idempotencyKey, () =>
         withDomainMap(
           () =>
@@ -280,7 +285,8 @@ export function createBookingHandler(booking: BookingService) {
       const sessionsKey = input.sessions
         .map((s) => s.scheduledStartAt.toISOString())
         .join(",");
-      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${sessionsKey}:${headerKey ?? ""}`;
+      const nonce = resolveIdempotencyNonce(headerKey);
+      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${sessionsKey}:${nonce}`;
       return bookingIdempotency.getOrSet(idempotencyKey, () =>
         withDomainMap(
           () =>
@@ -308,7 +314,8 @@ export function createBookingHandler(booking: BookingService) {
       const sessionsKey = input.sessions
         .map((s) => s.scheduledStartAt.toISOString())
         .join(",");
-      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${sessionsKey}:${input.inviteeUserIds.join(",")}:${headerKey ?? ""}`;
+      const nonce = resolveIdempotencyNonce(headerKey);
+      const idempotencyKey = `booking:${context.session!.user.id}:${input.tutorId}:${sessionsKey}:${input.inviteeUserIds.join(",")}:${nonce}`;
       return bookingIdempotency.getOrSet(idempotencyKey, () =>
         withDomainMap(
           () =>

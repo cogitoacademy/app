@@ -3,6 +3,20 @@ import { sql } from "drizzle-orm";
 import type { RedisClient } from "./redis";
 import type { DbType } from "./db";
 
+export type HealthOverall = "ok" | "degraded" | "error";
+
+/**
+ * Maps an overall health status to an HTTP status code (N3).
+ *
+ * `ok` → 200. `degraded` and `error` both → 503 so that a latency-degraded
+ * dependency (>1s) trips the LB / Coolify readiness check instead of being
+ * silently reported healthy. Previously `degraded` mapped to 200, so a
+ * slow-but-alive DB/Redis was indistinguishable from fully healthy.
+ */
+export function healthStatus(status: HealthOverall): number {
+  return status === "ok" ? 200 : 503;
+}
+
 export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
   const checks: Record<string, "ok" | "degraded" | "error"> = {};
 
@@ -26,7 +40,7 @@ export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
     }
   }
 
-  const overall = Object.values(checks).every((v) => v === "ok")
+  const overall: HealthOverall = Object.values(checks).every((v) => v === "ok")
     ? "ok"
     : Object.values(checks).some((v) => v === "error")
       ? "error"

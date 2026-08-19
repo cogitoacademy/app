@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { COGITO_NS } from "./redis";
 import type { RedisClient } from "./redis";
 import { logRedisFallback } from "./redis";
@@ -230,4 +231,21 @@ export function generateIdempotencyKey(
   ...parts: string[]
 ): string {
   return `${prefix}:${parts.join(":")}`;
+}
+
+/**
+ * Returns a stable per-attempt idempotency nonce.
+ *
+ * When the client supplies an `idempotency-key` header (recommended), it is
+ * used verbatim so double-submit of the same request deduplicates to a single
+ * booking. When the header is absent, a fresh server-generated UUID is used
+ * per attempt — this prevents the previously-broken behavior where the key
+ * collapsed to a *natural* key (`booking:{user}:{tutor}:{start}:`) that cached
+ * the first result for 24h and returned a stale/cancelled booking id on a
+ * re-book of the identical tutor+slot (L2). A fresh nonce per attempt keeps a
+ * re-book a genuinely new request while still collapsing true retries only
+ * when the client sends the same header.
+ */
+export function resolveIdempotencyNonce(headerKey: string | null): string {
+  return headerKey?.trim() || randomUUID();
 }

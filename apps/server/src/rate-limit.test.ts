@@ -28,3 +28,24 @@ describe("invite and booking rate limit paths", () => {
     expect(routes).toContain('keyPrefix: "booking"');
   });
 });
+
+describe("L3: email-OTP verify is throttled by the app-level auth limiter (defense-in-depth)", () => {
+  test("email-otp verify-email path is matched by the auth limiter", () => {
+    const paths = readFileSync(
+      new URL("./rate-limit-paths.ts", import.meta.url),
+      "utf-8",
+    );
+    const routes = readFileSync(
+      new URL("./routes.ts", import.meta.url),
+      "utf-8",
+    );
+
+    // /api/auth/email-otp/* must be in AUTH_PATHS so the app-level limiter
+    // (10/min/IP, Redis-backed) applies — the plan's L3 acceptance criterion.
+    expect(paths).toContain('"/api/auth/email-otp/"');
+
+    // routes.ts must apply authRateLimit to matched auth paths.
+    expect(routes).toContain("authRateLimit");
+    expect(routes).toContain("matchAuthPath(path)");
+  });
+});

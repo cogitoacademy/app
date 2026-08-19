@@ -32,7 +32,7 @@ import {
   readBodyWithLimit,
 } from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
-import { healthCheck } from "@cogito-app/api/lib/db-health";
+import { healthCheck, healthStatus } from "@cogito-app/api/lib/db-health";
 
 const redis = getRedisClient();
 
@@ -432,8 +432,7 @@ export function createServer() {
     )
     .get("/health", async () => {
       const result = await healthCheck(redis);
-      const status =
-        result.status === "ok" ? 200 : result.status === "degraded" ? 200 : 503;
+      const status = healthStatus(result.status);
       return Response.json(result, { status });
     })
     .get("/metrics", ({ request }) => {

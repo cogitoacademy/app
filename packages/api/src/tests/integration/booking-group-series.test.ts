@@ -367,7 +367,8 @@ describe("Booking group series flow (FR-20)", () => {
     expect(b.type).toBe("series");
     expect(b.targetGroupSize).toBe(3);
     expect(b.confirmedHeadcount).toBe(1);
-    expect(b.disclaimer).toContain("Group series bookings");
+    expect(b.disclaimer).toContain("full-series commitment");
+    expect(b.disclaimer).toContain("cannot opt out");
 
     // Proposer holds the full package up front: 40 marks × 3 sessions.
     const [proposerWallet] = await db
@@ -395,7 +396,16 @@ describe("Booking group series flow (FR-20)", () => {
         eq(notification.eventKey, `booking.${bookingId}.invite.${invitee1Id}`),
       );
     expect(inviteNotifs.length).toBe(1);
-    expect(inviteNotifs[0]!.body).toContain("Group series bookings");
+    // P1: the invitee notification/email body carries schedule, per-student
+    // price, total Marks hold, the no-opt-out disclaimer, and a CTA link.
+    const body = inviteNotifs[0]!.body;
+    expect(body).toContain("full-series commitment");
+    expect(body).toContain("cannot opt out");
+    expect(body).toContain("40 Marks");
+    expect(body).toContain("120");
+    expect(body).toMatch(/schedule/i);
+    expect(body).toContain("/bookings/");
+    expect(inviteNotifs[0]!.severity).toBe("action");
   });
 
   test("invitee confirms the full-series package (hold is the whole package)", async () => {
