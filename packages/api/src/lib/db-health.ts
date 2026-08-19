@@ -40,9 +40,7 @@ export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
     }
   }
 
-  const overall: HealthOverall = Object.values(checks).every(
-    (v) => v === "ok",
-  )
+  const overall: HealthOverall = Object.values(checks).every((v) => v === "ok")
     ? "ok"
     : Object.values(checks).some((v) => v === "error")
       ? "error"

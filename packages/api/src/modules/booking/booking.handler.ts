@@ -1,7 +1,10 @@
 import type { Context } from "../../context";
 import { z } from "zod";
 import { withDomainMap } from "../../lib/handler-utils";
-import { bookingIdempotency, resolveIdempotencyNonce } from "../../lib/idempotency";
+import {
+  bookingIdempotency,
+  resolveIdempotencyNonce,
+} from "../../lib/idempotency";
 import { mapBookingError } from "./booking.errors";
 import type {
   createSoloInput,
