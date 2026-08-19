@@ -3,13 +3,15 @@ import "dotenv/config";
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+import { isProductionLike } from "./node-env";
+
 const serverShape = {
   DATABASE_URL: z.string().min(1),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url(),
   CORS_ORIGIN: z.url(),
   NODE_ENV: z
-    .enum(["development", "production", "test"])
+    .enum(["development", "production", "test", "staging"])
     .default("development"),
   PAYMENT_PROVIDER: z.enum(["stub", "xendit"]).default("stub"),
   STUB_WEBHOOK_ALLOWED: z.coerce.boolean().default(false),
@@ -94,18 +96,19 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
     }
   }
 
-  // P4.1 (X2): in production the Resend API key is mandatory — without it the
-  // email module silently uses the stub provider and every critical email
-  // (invites, booking confirmations, refunds, alerts) is suppressed with no
-  // alert. EMAIL_FROM must not be the dev default either: the sending domain
-  // has to be verified at Resend (RUNBOOK).
-  if (val.NODE_ENV === "production") {
+  // P4.1 (X2): in production-like environments (production + staging) the
+  // Resend API key is mandatory — without it the email module silently uses
+  // the stub provider and every critical email (invites, booking
+  // confirmations, refunds, alerts) is suppressed with no alert. EMAIL_FROM
+  // must not be the dev default either: the sending domain has to be verified
+  // at Resend (RUNBOOK).
+  if (isProductionLike(val.NODE_ENV)) {
     if (!val.RESEND_API_KEY) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["RESEND_API_KEY"],
         message:
-          "required when NODE_ENV=production — the stub email provider would silently suppress all emails",
+          "required when NODE_ENV is production/staging — the stub email provider would silently suppress all emails",
       });
     }
     if (val.EMAIL_FROM === "noreply@cogitoacademy.id") {
@@ -113,7 +116,7 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
         code: z.ZodIssueCode.custom,
         path: ["EMAIL_FROM"],
         message:
-          "must be a verified Resend sending address in production (the dev default is not verified)",
+          "must be a verified Resend sending address in production/staging (the dev default is not verified)",
       });
     }
   }
@@ -149,12 +152,12 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
     }
   }
 
-  // P4.3 (X4): in production R2 is mandatory — without it uploads silently
-  // write to the container-local UPLOAD_DIR and are lost on every redeploy.
-  // And when R2 IS configured, R2_PUBLIC_URL must be set too, otherwise
-  // objects are written but unreachable (GET /uploads/* is disabled when R2
-  // is configured).
-  if (val.NODE_ENV === "production") {
+  // P4.3 (X4): in production-like environments (production + staging) R2 is
+  // mandatory — without it uploads silently write to the container-local
+  // UPLOAD_DIR and are lost on every redeploy. And when R2 IS configured,
+  // R2_PUBLIC_URL must be set too, otherwise objects are written but
+  // unreachable (GET /uploads/* is disabled when R2 is configured).
+  if (isProductionLike(val.NODE_ENV)) {
     const r2Vars = [
       val.R2_ACCOUNT_ID,
       val.R2_ACCESS_KEY_ID,

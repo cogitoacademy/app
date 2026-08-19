@@ -1,3 +1,6 @@
+import type { NodeEnv } from "./node-env";
+import { isProductionLike } from "./node-env";
+
 const PRIVATE_NETWORK_PATTERNS = [
   /^10(?:\.\d{1,3}){3}$/,
   /^192\.168(?:\.\d{1,3}){2}$/,
@@ -15,9 +18,9 @@ function formatHttpOrigin(host: string, port: string) {
 
 export function getAuthTrustedOrigins(
   configuredOrigin: string,
-  nodeEnv: "development" | "production" | "test",
+  nodeEnv: NodeEnv,
 ) {
-  if (nodeEnv === "production") return [configuredOrigin];
+  if (isProductionLike(nodeEnv)) return [configuredOrigin];
 
   const port = getDevelopmentPort(configuredOrigin);
   return [
@@ -35,11 +38,11 @@ export function getAuthTrustedOrigins(
 export function isAllowedFrontendOrigin(
   origin: string | null,
   configuredOrigin: string,
-  nodeEnv: "development" | "production" | "test",
+  nodeEnv: NodeEnv,
 ) {
   if (!origin) return false;
   if (origin === configuredOrigin) return true;
-  if (nodeEnv === "production") return false;
+  if (isProductionLike(nodeEnv)) return false;
 
   try {
     const url = new URL(origin);

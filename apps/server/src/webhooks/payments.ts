@@ -3,6 +3,7 @@ import { services } from "@cogito-app/api";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
 import { log } from "@cogito-app/api/lib/logger";
 import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
+import { isProductionLike } from "@cogito-app/env/node-env";
 import { env } from "@cogito-app/env/server";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
@@ -13,7 +14,9 @@ export function stubCheckoutEnabled(
   provider: string,
   allowed: boolean,
 ): boolean {
-  return nodeEnv !== "production" && provider === "stub" && allowed === true;
+  // The stub checkout is a dev/test affordance: never in production-like
+  // environments (production + staging), even when STUB_WEBHOOK_ALLOWED=true.
+  return !isProductionLike(nodeEnv) && provider === "stub" && allowed === true;
 }
 
 export function ipAllowed(

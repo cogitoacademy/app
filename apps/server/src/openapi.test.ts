@@ -50,6 +50,16 @@ describe("OpenAPI access gate", () => {
     expect(prodAnon!.status).toBe(404);
   });
 
+  test("treats staging like production (404 without session)", () => {
+    const stagingAnon = openApiAccessDenied("staging", false);
+    expect(stagingAnon).not.toBeNull();
+    expect(stagingAnon!.status).toBe(404);
+
+    const stagingAuthed = openApiAccessDenied("staging", true);
+    expect(stagingAuthed).not.toBeNull();
+    expect(stagingAuthed!.status).toBe(404);
+  });
+
   test("requires an authenticated session outside production", () => {
     const anon = openApiAccessDenied("development", false);
     expect(anon).not.toBeNull();

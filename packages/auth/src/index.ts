@@ -4,6 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins/email-otp";
 
 import { db } from "@cogito-app/db";
+import { isProductionLike } from "@cogito-app/env/node-env";
 import { getAuthTrustedOrigins } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 
@@ -145,8 +146,8 @@ export function createAuth() {
     baseURL: env.BETTER_AUTH_URL,
     advanced: {
       defaultCookieAttributes: {
-        sameSite: env.NODE_ENV === "production" ? "strict" : "lax",
-        secure: env.NODE_ENV === "production",
+        sameSite: isProductionLike(env.NODE_ENV) ? "strict" : "lax",
+        secure: isProductionLike(env.NODE_ENV),
         httpOnly: true,
       },
     },

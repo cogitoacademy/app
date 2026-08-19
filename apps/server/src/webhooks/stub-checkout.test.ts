@@ -10,4 +10,7 @@ describe("stubCheckoutEnabled", () => {
     expect(stubCheckoutEnabled("production", "stub", true)).toBe(false);
     expect(stubCheckoutEnabled("development", "xendit", true)).toBe(false);
   });
+  test("never true in staging (production-like)", () => {
+    expect(stubCheckoutEnabled("staging", "stub", true)).toBe(false);
+  });
 });

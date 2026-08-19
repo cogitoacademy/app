@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { auth } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
 import { env } from "@cogito-app/env/server";
+import { isProductionLike } from "@cogito-app/env/node-env";
 import {
   user,
   tutorInvite,
@@ -23,7 +24,7 @@ export function seedAllowed(
   nodeEnv: string,
   allowFlag: string | undefined,
 ): boolean {
-  if (nodeEnv !== "production") return true;
+  if (!isProductionLike(nodeEnv)) return true;
   return allowFlag === "true";
 }
 
@@ -120,7 +121,7 @@ async function seedDemoStudent(email: string, password: string, name: string) {
 async function seed() {
   if (!seedAllowed(env.NODE_ENV, process.env.SEED_ALLOWED_IN_PROD)) {
     throw new Error(
-      "Refusing to seed in production unless SEED_ALLOWED_IN_PROD=true",
+      "Refusing to seed in production/staging unless SEED_ALLOWED_IN_PROD=true",
     );
   }
   const adminPassword = seedAdminPassword(process.env.SEED_ADMIN_PASSWORD);
