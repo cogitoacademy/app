@@ -362,6 +362,27 @@ describe("BookingService", () => {
       });
     });
 
+    test("P3: surfaces the expanded GROUP_SERIES_DISCLAIMER on the booking GET for a group series", async () => {
+      const booking = {
+        id: "b1",
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "awaiting_participant_confirmation",
+        proposerId: "student1",
+        tutorId: "tutor1",
+      };
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => booking),
+        },
+      });
+
+      const result = await service.getById("b1", "student1");
+      expect(result.disclaimer).toContain("cannot opt out");
+      expect(result.disclaimer).toContain("non-refundable");
+      expect(result.disclaimer).toContain("available for all");
+    });
+
     test("returns booking when user is assigned tutor", async () => {
       const booking = {
         id: "b1",
@@ -745,6 +766,22 @@ describe("BookingService", () => {
       expect(repo.insertBooking).toHaveBeenCalledTimes(1);
       expect(repo.insertParticipant).toHaveBeenCalledTimes(3);
       expect(notification.write).toHaveBeenCalledTimes(2);
+
+      // P1: each invitee notification body carries the PRD-mandated content:
+      // schedule, per-student price, total Marks hold, and a direct CTA link.
+      const inviteeWrites = notification.write.mock.calls.filter(
+        (call: any) =>
+          call[0].title === "Group booking invitation" ||
+          call[0].eventKey?.includes(".invite."),
+      );
+      for (const [params] of inviteeWrites) {
+        expect(params.body).toMatch(/schedule/i);
+        expect(params.body).toContain("42");
+        expect(params.body).toContain("126");
+        expect(params.body).toContain("/bookings/");
+        expect(params.body).toMatch(/https?:\/\//);
+        expect(params.emailRequired).toBe(true);
+      }
     });
 
     test("throws InsufficientMarksError when insufficient marks for proposer hold", async () => {
@@ -1039,7 +1076,24 @@ describe("BookingService", () => {
       // One invite + tutor-request notification.
       expect(notification.write).toHaveBeenCalledTimes(2);
       expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
-      expect(result.disclaimer).toContain("Group series bookings");
+      expect(result.disclaimer).toContain("full-series commitment");
+
+      // P1: the group-series invitee notification body carries schedule,
+      // per-student price, total Marks hold, the no-opt-out disclaimer, and a
+      // direct CTA to view/accept in-platform.
+      const inviteeWrites = notification.write.mock.calls.filter(
+        (call: any) => call[0].eventKey?.includes(".invite."),
+      );
+      expect(inviteeWrites.length).toBeGreaterThan(0);
+      for (const [params] of inviteeWrites) {
+        expect(params.title).toBe("Group series invitation");
+        expect(params.body).toContain("cannot opt out");
+        expect(params.body).toContain("42");
+        expect(params.body).toContain("84");
+        expect(params.body).toContain("/bookings/");
+        expect(params.body).toMatch(/https?:\/\//);
+        expect(params.emailRequired).toBe(true);
+      }
     });
   });
 
@@ -5552,9 +5606,8 @@ describe("BookingService", () => {
       });
 
       const result = await service.getById("b1", "student1");
-      expect(result.disclaimer).toBe(
-        "Group series bookings require attendance at all sessions. Individual sessions cannot be cancelled.",
-      );
+      expect(result.disclaimer).toContain("full-series commitment");
+      expect(result.disclaimer).toContain("cannot opt out");
     });
   });
 

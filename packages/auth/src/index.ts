@@ -33,8 +33,19 @@ export type VerificationEmailSender = (params: {
   type: "sign-in" | "email-verification" | "forget-password" | "change-email";
 }) => Promise<void>;
 
+/**
+ * Email port for the signup-confirmation (welcome) email (PRD notification
+ * matrix: "Account created" -> email to the new student). Fires once on actual
+ * user creation, never on a subsequent existing-user sign-in.
+ */
+export type WelcomeEmailSender = (params: {
+  user: CogitoUser;
+  loginUrl: string;
+}) => Promise<void>;
+
 let resetPasswordEmailSender: ResetPasswordEmailSender | null = null;
 let verificationEmailSender: VerificationEmailSender | null = null;
+let welcomeEmailSender: WelcomeEmailSender | null = null;
 
 /**
  * Wires the email port used by Better Auth's reset-password flow.
@@ -53,6 +64,16 @@ export function setAuthEmailSender(sender: ResetPasswordEmailSender) {
  */
 export function setVerificationEmailSender(sender: VerificationEmailSender) {
   verificationEmailSender = sender;
+}
+
+/**
+ * Wires the signup-confirmation (welcome) email port (P2).
+ * Same circular-dependency rationale as setAuthEmailSender — the sender lives
+ * in @cogito-app/api's EmailService and is wired at boot by the composition
+ * root (apps/server). Fires only on actual user creation.
+ */
+export function setWelcomeEmailSender(sender: WelcomeEmailSender) {
+  welcomeEmailSender = sender;
 }
 
 // C6 (foundation-hardening): passwords must contain at least one uppercase
@@ -196,6 +217,48 @@ export function createAuth() {
         // Wallet creation is now handled lazily by WalletService.getOrCreate()
         // when the user first calls auth.me. This decouples auth from wallet.
       }),
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          // P2: send the signup-confirmation (welcome) email on actual account
+          // creation. The PRD notification matrix requires a welcome email to
+          // new students with an onboarding entry point, login link, and brief
+          // platform intro. Fires only on a genuine new signup — an existing
+          // user signing in never re-creates the user row, so it does not re-send.
+          after: async (user) => {
+            const sender = welcomeEmailSender;
+            if (!sender) {
+              console.warn(
+                JSON.stringify({
+                  level: "warn",
+                  action: "welcome_email_not_configured",
+                  userId: user.id,
+                }),
+              );
+              return;
+            }
+            try {
+              const origin = env.CORS_ORIGIN.replace(/\/$/, "");
+              await sender({
+                user: user as unknown as CogitoUser,
+                loginUrl: `${origin}/login`,
+              });
+            } catch (error) {
+              // Never surface email failures to the caller (anti-enumeration);
+              // the email provider logs its own failures.
+              console.error(
+                JSON.stringify({
+                  level: "error",
+                  action: "welcome_email_send_failed",
+                  userId: user.id,
+                  error: { message: String(error) },
+                }),
+              );
+            }
+          },
+        },
+      },
     },
   });
 }

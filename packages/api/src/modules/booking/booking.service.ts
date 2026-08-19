@@ -1,3 +1,4 @@
+import { env } from "@cogito-app/env/server";
 import {
   BOOKING_TYPE,
   MODALITY,
@@ -449,6 +450,15 @@ export function createBookingService(deps: {
     if (b.type !== BOOKING_TYPE.SERIES) return null;
     if (b.targetGroupSize > 1) return GROUP_SERIES_DISCLAIMER;
     return null;
+  }
+
+  /**
+   * Builds the deep-link CTA used by the group/group-series invitee email so
+   * an invited student can view and accept the invite directly in-platform.
+   */
+  function formatInviteCta(bookingId: string): string {
+    const origin = env.CORS_ORIGIN.replace(/\/$/, "");
+    return `${origin}/bookings/${bookingId}`;
   }
 
   function normalizeSession(startAt: Date) {
@@ -2174,7 +2184,13 @@ export function createBookingService(deps: {
           category: NOTIFICATION_CATEGORY.BOOKING,
           severity: NOTIFICATION_SEVERITY.ACTION,
           title: "Group booking invitation",
-          body: "You have been invited to a group session. Confirm within 12 hours.",
+          body: [
+            "You have been invited to a group session. Confirm within 12 hours.",
+            `Schedule: ${session.scheduledStartAt.toISOString()}`,
+            `Per-student price: ${pricePerStudent} Marks`,
+            `Total Marks held on acceptance: ${totalMarks}`,
+            `View and accept in-platform: ${formatInviteCta(bookingId)}`,
+          ].join(" "),
           eventKey: `booking.${bookingId}.invite.${inviteeId}`,
           emailRequired: true,
         });
@@ -3050,7 +3066,14 @@ export function createBookingService(deps: {
           category: NOTIFICATION_CATEGORY.BOOKING,
           severity: NOTIFICATION_SEVERITY.ACTION,
           title: "Group series invitation",
-          body: `You have been invited to a ${size}-person group series of ${input.sessions.length} sessions. Accepting holds the full package up front. ${GROUP_SERIES_DISCLAIMER}`,
+          body: [
+            `You have been invited to a ${size}-person group series of ${input.sessions.length} sessions.`,
+            `Schedule: ${sessions.map((s) => s.scheduledStartAt.toISOString()).join(", ")}`,
+            `Per-student price per session: ${perSession} Marks`,
+            `Total Marks held upfront on acceptance: ${packageTotal}`,
+            GROUP_SERIES_DISCLAIMER,
+            `View and accept in-platform: ${formatInviteCta(bookingId)}`,
+          ].join(" "),
           eventKey: `booking.${bookingId}.invite.${inviteeId}`,
           emailRequired: true,
         });

@@ -5,9 +5,11 @@ import { isProductionLike } from "@cogito-app/env/node-env";
 import {
   setAuthEmailSender,
   setVerificationEmailSender,
+  setWelcomeEmailSender,
 } from "@cogito-app/auth";
 import { buildResetPasswordEmail } from "@cogito-app/auth/reset-password-email";
 import { buildVerificationEmail } from "@cogito-app/auth/verification-email";
+import { buildWelcomeEmail } from "@cogito-app/auth/welcome-email";
 import { log } from "@cogito-app/api/lib/logger";
 import { sql } from "drizzle-orm";
 
@@ -112,6 +114,22 @@ setVerificationEmailSender(async ({ email, otp, type }) => {
   });
   await services.email.send({
     to: email,
+    subject,
+    html,
+    category: "auth",
+  });
+});
+
+// P2: signup-confirmation (welcome) email to new students. Sent only on actual
+// user creation (better-auth databaseHooks.user.create.after), so an existing
+// user signing in never re-triggers it.
+setWelcomeEmailSender(async ({ user, loginUrl }) => {
+  const { subject, html } = buildWelcomeEmail({
+    name: user.name || user.email,
+    loginUrl,
+  });
+  await services.email.send({
+    to: user.email,
     subject,
     html,
     category: "auth",
