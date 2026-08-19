@@ -32,7 +32,11 @@ jobs:
 
       - name: Build and push web
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/web:staging -f apps/web/Dockerfile .
+          docker build \
+            -t ghcr.io/${{ github.repository }}/web:staging \
+            -f apps/web/Dockerfile \
+            --build-arg VITE_SERVER_URL=https://staging.cogitoacademy.id \
+            .
           docker push ghcr.io/${{ github.repository }}/web:staging
 
       - name: Trigger Coolify deploy
@@ -40,3 +44,18 @@ jobs:
         # a silent no-op deploy is worse than a red build.
         run: |
           curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_STAGING_WEBHOOK }}
+
+      - name: Health check
+        # Same bounded retry loop as cd-prod: Coolify restarts the container
+        # asynchronously, so poll until the API is healthy (up to ~5 min).
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 10 https://staging.cogitoacademy.id/health; then
+              echo "API healthy after ${i} attempts"
+              exit 0
+            fi
+            echo "attempt ${i}/20: not healthy yet, waiting 15s"
+            sleep 15
+          done
+          echo "API did not become healthy within the timeout" >&2
+          exit 1

@@ -60,7 +60,8 @@ mock.module("bullmq", () => ({
     add: any;
     backend: any;
     constructor(queueName: string) {
-      this.add = queueName === "cogito-jobs-dlq" ? mockDlqQueueAdd : mockQueueAdd;
+      this.add =
+        queueName === "cogito-jobs-dlq" ? mockDlqQueueAdd : mockQueueAdd;
       this.backend = {
         get client() {
           return Promise.resolve({
