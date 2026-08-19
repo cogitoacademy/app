@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const SEED_EMAIL = "student.seed@cogitoacademy.id";
-const SEED_PASSWORD = "student123";
+const SEED_PASSWORD = "Student123!";
 
 async function login(page: Page) {
   await page.goto("/login");
