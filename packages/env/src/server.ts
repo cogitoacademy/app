@@ -24,16 +24,13 @@ function boolFromEnv(v: unknown): unknown {
 }
 
 const boolSchema = (defaultValue: boolean) =>
-  z.preprocess(
-    (v) => {
-      // Normalize an empty string to the default so `.default()` applies for
-      // direct schema.parse() calls too (createEnv's emptyStringAsUndefined
-      // only handles process.env, not explicit "" values).
-      if (v === undefined || v === "") return defaultValue;
-      return boolFromEnv(v);
-    },
-    z.boolean(),
-  );
+  z.preprocess((v) => {
+    // Normalize an empty string to the default so `.default()` applies for
+    // direct schema.parse() calls too (createEnv's emptyStringAsUndefined
+    // only handles process.env, not explicit "" values).
+    if (v === undefined || v === "") return defaultValue;
+    return boolFromEnv(v);
+  }, z.boolean());
 
 const serverShape = {
   DATABASE_URL: z.string().min(1),

@@ -20,15 +20,18 @@ describe("server env boolean coercion (H1)", () => {
     "DB_SSL_REJECT_UNAUTHORIZED",
   ] as const;
 
-  test.each(BOOL_VARS)("%s=\"false\" parses to boolean false (not truthy)", (v) => {
-    const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "false" });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data[v]).toBe(false);
-    }
-  });
+  test.each(BOOL_VARS)(
+    '%s="false" parses to boolean false (not truthy)',
+    (v) => {
+      const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "false" });
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data[v]).toBe(false);
+      }
+    },
+  );
 
-  test.each(BOOL_VARS)("%s=\"0\" parses to boolean false", (v) => {
+  test.each(BOOL_VARS)('%s="0" parses to boolean false', (v) => {
     const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "0" });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -36,7 +39,7 @@ describe("server env boolean coercion (H1)", () => {
     }
   });
 
-  test.each(BOOL_VARS)("%s=\"true\" parses to boolean true", (v) => {
+  test.each(BOOL_VARS)('%s="true" parses to boolean true', (v) => {
     const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "true" });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -44,7 +47,7 @@ describe("server env boolean coercion (H1)", () => {
     }
   });
 
-  test.each(BOOL_VARS)("%s=\"\" falls back to the default", (v) => {
+  test.each(BOOL_VARS)('%s="" falls back to the default', (v) => {
     // emptyStringAsUndefined means an empty string is treated as undefined,
     // so the default applies.
     const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "" });
@@ -58,8 +61,11 @@ describe("server env boolean coercion (H1)", () => {
     }
   });
 
-  test("TRUST_PROXY=\"FALSE\" (uppercase) parses to false", () => {
-    const parsed = serverEnvSchema.safeParse({ ...validEnv, TRUST_PROXY: "FALSE" });
+  test('TRUST_PROXY="FALSE" (uppercase) parses to false', () => {
+    const parsed = serverEnvSchema.safeParse({
+      ...validEnv,
+      TRUST_PROXY: "FALSE",
+    });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.TRUST_PROXY).toBe(false);

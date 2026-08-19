@@ -1373,7 +1373,16 @@ export function createBookingService(deps: {
       const isLate = now > h2;
 
       const participant = await repo.findParticipant(tx, b.id, userId);
-      if (participant && participant.heldAmount > 0 && session.holdAmount > 0) {
+      // M4: cap the release/deduct at the participant's current held amount.
+      // After an admin cancelSeriesSession(..., release) the participant may
+      // hold less than session.holdAmount; releasing/deducting the full
+      // session amount would draw the difference from the wallet's pooled
+      // held balance (other bookings' holds) and strand later completions.
+      const effective = Math.min(
+        session.holdAmount,
+        participant?.heldAmount ?? session.holdAmount,
+      );
+      if (participant && effective > 0) {
         const w = await wallet.getByUserId(tx, participant.userId);
         if (!w) throw new BookingNotFoundError(participant.userId);
         if (isLate) {
@@ -1381,7 +1390,7 @@ export function createBookingService(deps: {
           // hold instead of releasing it.
           await wallet.deduct(tx, {
             walletId: w.id,
-            amount: session.holdAmount,
+            amount: effective,
             eventKey: `booking.${b.id}.session.${session.id}.forfeit`,
             sourceReference: b.id,
             bookingId: b.id,
@@ -1391,7 +1400,7 @@ export function createBookingService(deps: {
         } else {
           await wallet.release(tx, {
             walletId: w.id,
-            amount: session.holdAmount,
+            amount: effective,
             eventKey: `booking.${b.id}.session.${session.id}.cancel`,
             sourceReference: b.id,
             bookingId: b.id,
@@ -1400,7 +1409,7 @@ export function createBookingService(deps: {
           });
         }
         await repo.updateParticipantState(tx, participant.id, {
-          heldAmount: Math.max(0, participant.heldAmount - session.holdAmount),
+          heldAmount: Math.max(0, participant.heldAmount - effective),
         });
       }
 
@@ -1408,7 +1417,7 @@ export function createBookingService(deps: {
       await repo.updateBookingHoldAmount(
         tx,
         b.id,
-        Math.max(0, b.holdAmount - session.holdAmount),
+        Math.max(0, b.holdAmount - effective),
       );
 
       await notification.writeBestEffort({
@@ -1530,12 +1539,19 @@ export function createBookingService(deps: {
       }
 
       const isGroup = b.type === BOOKING_TYPE.GROUP;
-      // The forfeited hold no longer lives anywhere: zero the target's row so
-      // a later release (cancel/expire) never double-credits them. Solo and
-      // series keep their existing row bookkeeping.
+      // The forfeited hold no longer lives in the wallet: zero the target's
+      // row (group) so a later release never double-credits them. For a
+      // series, the participant still holds the remaining sessions' marks, so
+      // decrement `heldAmount` by the forfeit (H2) — otherwise a later
+      // completion deduct / residual release draws from the pooled wallet hold
+      // and throws InsufficientBalanceError (delivered-but-unpaid session).
       await repo.updateParticipantState(tx, participant.id, {
         attendanceState: ATTENDANCE_STATE.ABSENT,
-        ...(isGroup ? { heldAmount: 0 } : {}),
+        ...(isGroup
+          ? { heldAmount: 0 }
+          : isSeries
+            ? { heldAmount: Math.max(0, participant.heldAmount - forfeitAmount) }
+            : {}),
       });
 
       if (isGroup) {
@@ -1548,6 +1564,12 @@ export function createBookingService(deps: {
         const holdAmount = confirmed
           .filter((p) => p.attendanceState !== ATTENDANCE_STATE.ABSENT)
           .reduce((sum, p) => sum + p.heldAmount, 0);
+        await repo.updateBookingHoldAmount(tx, bookingId, holdAmount);
+      } else if (isSeries) {
+        // Series: recompute the booking hold to match the participant's
+        // reduced held amount so later completions deduct the correct total.
+        const participants = await repo.findConfirmedParticipants(tx, bookingId);
+        const holdAmount = participants.reduce((sum, p) => sum + p.heldAmount, 0);
         await repo.updateBookingHoldAmount(tx, bookingId, holdAmount);
       } else if (!isSeries) {
         await repo.updateBookingHoldAmount(tx, bookingId, 0);
