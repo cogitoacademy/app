@@ -203,6 +203,71 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
    ```
 5. Roll back migrations if needed (rare — coordinate with DBA)
 
+## Agent Herd
+
+Parallel development with a lead agent and skill-gated worker agents on top of Herdr. Prereqs: `herdr` + `herd` installed (`~/.local/bin/`), you are inside a Herdr-managed pane (`echo $HERDR_ENV` → `1`).
+
+Roles:
+
+- **Lead** (`~/.config/opencode/agents/lead.md`): plans, proposes the per-goal worker roster, spawns/monitors/verifies workers. The lead never spawns workers without user approval and never resolves a worker `blocked` state on its own — it escalates to the user first.
+- **Workers** (`.opencode/agents/worker-*.md`): `worker-frontend` (frontend-design), `worker-review` (code-review, read-only), `worker-feature` (feature-workflow), `worker-core` (engineering-core), `worker-prod` (production-reliability). Each is skill-gated via `permission.skill` (`*` denied, one allowed) so unrelated skill bodies never load in its context, and carries anti-loop rules (never re-run a command that already produced output).
+
+### Dispatch one goal across workers
+
+```bash
+# 1. Per unit of work, create an isolated worktree + branch (required for parallel
+#    write-capable workers — they must never share a working directory)
+herd worktree feat/f1-admin-dashboard    # cwd defaults to the repo; creates workspace + pane
+
+# 2. Spawn a worker pinned to its role (passes --agent <role> to the opencode process)
+herd-spawn-worker w-frontend worker-frontend /path/to/worktree
+
+# 3. Submit a self-contained brief (goal / scope / constraints / acceptance criteria /
+#    WORKER-REPORT.md contract / escalation rule — workers cannot see the lead's conversation)
+herd prompt w-frontend "Implement F1 per docs/plans/active/FRONTEND-GAPS-SPEC.md. Scope: apps/web. Use the frontend-design skill. Write WORKER-REPORT.md at repo root; stop and report rather than guess."
+
+# 4. Monitor — block, never sleep-poll
+herdr agent wait w-frontend --timeout 300000   # blocks until idle/done/blocked
+herd read w-frontend                            # inspect output / a blocked question
+
+# 5. User answers a blocked worker directly, e.g. to type a password
+herd attach w-frontend                         # detach: ctrl+b q
+
+# 6. Verify before integrating (never trust "done"): read WORKER-REPORT.md,
+#    run bun run check + bun run check-types per worker, review the diff,
+#    diff worker file sets against each other to catch overlaps.
+```
+
+### Integration (PR + CI + squash-merge)
+
+Worker branches are never merged directly into main:
+
+```bash
+# 1. Rebuild the wave as a clean feature branch from origin/main with
+#    Conventional Commits (type(scope): short description + body)
+git checkout -b fix/waveN-<area> origin/main
+# ... apply the verified changes in logical commits ...
+
+# 2. Push + PR with a full body (Summary/Why/Implementation/Testing/Risks/Rollback/Notes)
+git push -u origin fix/waveN-<area>
+gh pr create --title "..." --body "..."
+
+# 3. Wait for CI (blocking watch, never sleep-wait)
+gh pr checks <n> --watch
+
+# 4. Squash-merge when green
+gh pr merge <n> --squash --delete-branch
+```
+
+Findings/concerns discovered during a wave are documented in `docs/plans/active/` in the same PR (planning-first, AGENTS.md rule 11).
+
+### Lifecycle
+
+- Detach the TUI (`ctrl+b q`) and the Herdr server keeps all panes/agents running headless; reattach with `herdr`. Remote/multi-device attach: `herdr --remote <ssh-target>` (see herdr docs, "Persistence and remote access").
+- Worker approval/`blocked` states wait for a user; there is no fully unattended flow by design.
+- Agent names must match `[a-z][a-z0-9_-]{0,31}` and be unique among live agents.
+- Cleanup: `herd` never closes panes/workspaces it didn't create; close finished worker panes explicitly.
+
 ## Environment Variables
 
 Student account name/image editing uses the existing Better Auth session and requires no additional environment variables or database migration.
