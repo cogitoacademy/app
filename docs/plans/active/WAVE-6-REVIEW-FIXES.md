@@ -2,8 +2,8 @@
 
 | Field      | Value                                                                                                |
 | ---------- | ---------------------------------------------------------------------------------------------------- |
-| Status     | Active — H1/H2/M2/M4/N1 (PR #82) + H3/M1/M3/M5/L1/N2/N4 (PR #8x, wave-6b) fixed; L2/L3/N3/P1-P3 open |
-| Branch     | `fix/wave6-a` (PR #82, merged); `fix/wave6-b` (PR #8x)                                               |
+| Status     | Active — H1/H2/M2/M4/N1 (PR #82) + H3/M1/M3/M5/L1/N2/N4 (PR #83) fixed & merged; L2/L3/N3/P1-P3 open |
+| Branch     | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83) — both merged            |
 | Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)                                              |
 | Depends on | Wave-5 (PR #79) merged to main                                                                       |
 | Scope      | Backend only (packages/api, apps/server, packages/env, packages/auth)                                |
