@@ -14,6 +14,18 @@ The authenticated `/dashboard` route is role-specific. Students retain the learn
 
 Admin create/resend produces a single-use plaintext token, stores only its SHA-256 digest, and attempts delivery through the shared Resend provider. The branded invitation email explains the tutor value proposition, uses one primary profile-setup CTA, identifies the required account email, displays a readable UTC expiry, and includes the raw claim URL as a fallback. Delivery status is returned to the admin UI; failed/stubbed delivery keeps the invite usable and exposes the one-time clipboard fallback. Claim requires an authenticated account with the same email (case-insensitive), consumes the invite and creates the tutor profile transactionally, and permits only student/tutor roles—admin cannot be silently demoted. Email/password and Google accounts share this claim path; OAuth preserves the `/invite?token=...` return URL.
 
+## Agent Herd (lead + skill-gated workers)
+
+Parallel development uses a lead-agent + worker-herd setup on top of Herdr (see `docs/RUNBOOK.md` → **Agent Herd** for the operational runbook).
+
+- **Lead agent** (`~/.config/opencode/agents/lead.md`, mode: primary) plans work, proposes a per-goal worker roster for user approval, then spawns/monitors/verifies workers through the `herd` wrapper (`~/.local/bin/herd`) and `herdr`. The lead **never sleep-polls**: it blocks on `herdr agent wait <name> --timeout <ms>` and `gh pr checks <n> --watch`.
+- **Worker agents** (`.opencode/agents/worker-*.md`, mode: primary, git-tracked) are started in Herdr panes via `herd-spawn-worker` (`~/.local/bin/herd-spawn-worker`), which passes `--agent <worker-role>` to the spawned opencode process.
+- **Skill isolation:** each worker's `permission.skill` block denies all skills except its one role skill, so worker contexts never load unrelated skill bodies. Workers still see `AGENTS.md` and the `.opencode/skills/AGENTS.md` workflow routing.
+- **Worker roster:** `worker-frontend` → frontend-design · `worker-review` → code-review (edit: deny) · `worker-feature` → feature-workflow · `worker-core` → engineering-core · `worker-prod` → production-reliability. Each carries anti-loop rules (never re-run a command that already produced output).
+- **Work isolation:** each write-capable worker operates in its own git worktree + branch under `~/cogito/wt-*` (or `<repo>/.worktrees/<branch>`), per the `parallel-worktrees` skill; workers never share a working directory. Before integration the lead diffs worker file sets against each other and reconciles overlaps.
+- **Integration:** worker branches are never merged directly into main. The lead rebuilds the wave as a clean feature branch from `origin/main` with Conventional Commits, opens a PR, waits for CI (`gh pr checks --watch`), then squash-merges. Findings/concerns go into `docs/plans/active/` in the same PR (planning-first, AGENTS.md rule 11).
+- **Escalation rule:** the lead must route every worker `blocked` state to the user first; it never resolves approvals autonomously. Passwords/secrets are typed by the user via `herd attach` directly in the worker pane.
+
 ## Architecture
 
 Monorepo (Turborepo + Bun workspaces). PostgreSQL 16 (Docker port 6767). Drizzle ORM. Elysia server. oRPC (not tRPC). Better Auth 1.6.11. React 19 + TanStack Router/Query/Form. Selia UI (TailwindCSS v4 + @base-ui/react).
