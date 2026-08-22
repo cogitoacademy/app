@@ -1,10 +1,10 @@
 # Economy Rate Control
 
-| Field | Value |
-| --- | --- |
-| Status | Completed |
-| Completed | 2026-08-22 |
-| Scope | Admin Cogito take schedule, IDR tutor honoraria, role authorization, and booking snapshots |
+| Field     | Value                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------ |
+| Status    | Completed                                                                                  |
+| Completed | 2026-08-22                                                                                 |
+| Scope     | Admin Cogito take schedule, IDR tutor honoraria, role authorization, and booking snapshots |
 
 ## Delivered
 

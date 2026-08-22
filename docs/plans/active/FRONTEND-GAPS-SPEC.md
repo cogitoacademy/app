@@ -1,13 +1,13 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                                             |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Status     | Living gap inventory (updated 2026-08-22; F1/F8/F9/F13/F14/F16/F18 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed) |
-| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                                |
-| Created    | 2026-07-29                                                                                                                                                        |
-| Audited    | 2026-08-22                                                                                                                                                        |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                     |
-| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                            |
+| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                  |
+| Created    | 2026-07-29                                                                                                                          |
+| Audited    | 2026-08-22                                                                                                                          |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                       |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                              |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
@@ -86,11 +86,11 @@ for classmates.
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Compatibility redirect to the shared `/bookings` list                                                                         |
 | `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                              |
 | `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                                                            |
-| `/_app/admin`                | admin-dashboard-page.tsx        | Complete F1 admin workspace entry point                                                                                         |
+| `/_app/admin`                | admin-dashboard-page.tsx        | Complete F1 admin workspace entry point                                                                                       |
 | `/_app/admin-operations`     | admin-operations-page.tsx       | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and wallet lookup          |
 | `/_app/admin-tutors`         | admin tutor invite + review     | Exists                                                                                                                        |
 | `/_app/admin-achievements`   | achievement-moderation-page.tsx | Exists (moderation UI)                                                                                                        |
-| `/_app/admin-economy`        | economy-settings-page.tsx       | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence    |
+| `/_app/admin-economy`        | economy-settings-page.tsx       | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence   |
 
 ### Remaining gaps (no complete surface yet)
 
@@ -100,27 +100,27 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 ## Frontend Gap Summary
 
-| #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status                                                                        |
-| --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ----------------------------------------------------------------------------- |
+| #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status                                                                                                                         |
+| --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | **Closed (2026-08-22)** — dedicated route, hydrated participant wallets/ledger, OQ-04 SLA deadline/status, and escalation link |
-| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed                                                                        |
-| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed                                                                        |
-| F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed                                                                        |
-| F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed                                                                        |
-| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed                                                                        |
-| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed                                                                        |
-| F8  | Series session completion UI                  | FR-20                  | G18                                         | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | **Closed (2026-08-22)** — toolbar editor, client DOMPurify render pass, and author context |
-| F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed                                                                        |
-| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed                                                                        |
-| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | **Closed (room approval queue)**                                              |
-| F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed                                                                        |
-| F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed                                                                        |
-| F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal    |
-| F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                |
+| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed                                                                                                                         |
+| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed                                                                                                                         |
+| F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed                                                                                                                         |
+| F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed                                                                                                                         |
+| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed                                                                                                                         |
+| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed                                                                                                                         |
+| F8  | Series session completion UI                  | FR-20                  | G18                                         | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | **Closed (2026-08-22)** — toolbar editor, client DOMPurify render pass, and author context                                     |
+| F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed                                                                                                                         |
+| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed                                                                                                                         |
+| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | **Closed (room approval queue)**                                                                                               |
+| F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed                                                                                                                         |
+| F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed                                                                                                                         |
+| F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal                                                      |
+| F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                                                                  |
 
 **Total estimated effort: ~0 days for remaining tracked gaps (F1, F9, and F18 are closed).**
 
