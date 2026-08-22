@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                                                                             |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-22; F1/F8/F13/F14/F16/F18 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; F9 partial) |
+| Status     | Living gap inventory (updated 2026-08-22; F1/F8/F9/F13/F14/F16/F18 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed) |
 | Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                                |
 | Created    | 2026-07-29                                                                                                                                                        |
 | Audited    | 2026-08-22                                                                                                                                                        |
@@ -110,7 +110,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed                                                                        |
 | F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed                                                                        |
 | F8  | Series session completion UI                  | FR-20                  | G18                                         | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | Partial                                                                       |
+| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | **Closed (2026-08-22)** — toolbar editor, client DOMPurify render pass, and author context |
 | F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed                                                                        |
 | F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed                                                                        |
 | F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | **Closed (room approval queue)**                                              |
@@ -122,7 +122,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal    |
 | F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                |
 
-**Total estimated effort: ~1.5 days for remaining gaps (F9 partial).**
+**Total estimated effort: ~0 days for remaining tracked gaps (F1, F9, and F18 are closed).**
 
 > **Audit 2026-08-14:** F4, F5, F10, F15 verified **closed** in `apps/web` (git HEAD `9b7df5e`). F8, F16, F17 remain partial. All remaining missing gaps have backend procedures ready except F13 (needs new `tutor.getMyPayouts` router) and F16 (needs a new public achievement list procedure).
 
@@ -138,7 +138,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > - **F14 → Closed** — booking detail renders the backend `disclaimer` in a warning callout (`booking-detail-page.tsx:304`).
 > - **F16 → Closed** — landing page renders live `achievement.listApproved` data with static fallback (`landing-page.tsx:74`).
 > - **F1 → Closed** — `/_app/admin` is the admin workspace entry point; the operations queue exposes category/urgency/SLA filters, reported reason/source/time-since-report, business-hours deadline/status, and a WhatsApp escalation link. The booking detail loads the full booking read model plus each participant's wallet and booking-scoped ledger entries.
-> - **F9 → Partial** — notes list + textarea with server-side sanitized HTML render (`dangerouslySetInnerHTML`); no rich-text toolbar editor and no client-side DOMPurify.
+> - **F9 → Closed** — completed-booking notes now use a toolbar editor for paragraphs/headings, emphasis, lists, and links. Both preview and persisted note rendering pass through a DOMPurify allow-list, with the existing server sanitizer remaining authoritative.
 > - **F12 → Closed** — `admin-operations-page.tsx` now consumes `room.listPendingApprovals` for offline bookings in `awaiting_admin_room_approval`; admins can assign the requested room, load a booking to choose another room (or use the existing relocate operation), and cancel the pending approval. The backend queue also includes requested-room conflicts with no `room_booking` row.
 > - **F18 → Closed (2026-08-22 follow-up)** — invitee confirm/decline/reconfirm plus proposer-side pending-invite withdrawal are wired. The new `booking.withdrawInvite` procedure marks only a pending invitee `withdrawn_pre_h2`, preserves headcount/holds, and notifies the target.
 > - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
@@ -335,13 +335,13 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-09, DL-18, prd.tex:1033-1043
 
-**Current state:** **PARTIAL (2026-08-19).** Notes list + textarea on completed bookings, rendered via `dangerouslySetInnerHTML` with **server-side** `sanitizeHtml` (backend `packages/api/src/lib/sanitize.ts`). No rich-text toolbar editor (headings/lists/emphasis) and no client-side DOMPurify — FR-09's formatting requirements are only partially met.
+**Current state:** **CLOSED (2026-08-22).** Completed bookings expose a shared notes view for both parties and a toolbar editor supporting paragraphs, headings, bold, italic, bullet lists, numbered lists, and safe links. Preview and persisted note rendering use a DOMPurify allow-list before `dangerouslySetInnerHTML`; the API still sanitizes and validates content server-side.
 
 **Required (after G7 backend):**
 
 1. On booking detail (after session completed), "Add session note" section
 2. Rich-text editor supporting: paragraphs, headings, bullet lists, numbered lists, links, bold, italic
-3. Sanitize on render (DOMPurify)
+3. Sanitize on render (DOMPurify allow-list; server sanitizer remains authoritative)
 4. "View notes" section showing all notes from both parties
 5. Only visible after session is completed
 

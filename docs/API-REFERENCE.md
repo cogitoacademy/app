@@ -523,14 +523,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId, content }` (`content` max 10,000 chars, sanitized)
 - **Output:** `{ note }`
-- **Description:** Adds a note to a completed session
+- **Description:** Adds a note to a completed session. The web editor sends allow-listed HTML for paragraphs/headings, emphasis, lists, and links; the API sanitizer remains authoritative before persistence.
 
 ### `booking.getSessionNotes`
 
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId }`
 - **Output:** `{ items: SessionNote[] }`
-- **Description:** Lists notes for a completed session
+- **Description:** Returns all notes for the completed booking so both parties can read the shared session record. The web client applies a DOMPurify allow-list before rendering note HTML.
 
 ### `booking.createGroup`
 
