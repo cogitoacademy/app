@@ -46,6 +46,8 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { formatBookingDate, formatBookingTimeRange } from "./booking-ui";
+import { SessionNoteEditor } from "./session-note-editor";
+import { sanitizeSessionNoteHtml } from "./session-note-sanitizer";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
@@ -62,6 +64,7 @@ type SupportCategory =
 
 export function BookingLifecycleActions({
   bookingId,
+  viewerId,
   viewerRole,
   currentState,
   bookingType,
@@ -79,6 +82,7 @@ export function BookingLifecycleActions({
   onBookingChanged,
 }: {
   bookingId: string;
+  viewerId: string;
   viewerRole: string;
   currentState: string;
   bookingType: string;
@@ -423,9 +427,18 @@ export function BookingLifecycleActions({
                   key={item.id}
                   className="rounded-lg border border-border p-4"
                 >
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <Text className="text-xs font-medium text-muted">
+                      {item.authorId === viewerId
+                        ? "Your note"
+                        : "Other participant's note"}
+                    </Text>
+                  </div>
                   <div
                     className="space-y-2 text-sm [&_a]:text-info [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
-                    dangerouslySetInnerHTML={{ __html: item.content }}
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeSessionNoteHtml(item.content),
+                    }}
                   />
                   <Text className="mt-3 text-xs text-muted">
                     {formatBookingDate(item.createdAt, timezone)}
@@ -437,16 +450,15 @@ export function BookingLifecycleActions({
             )}
             <Field>
               <FieldLabel htmlFor="session-note">Add a note</FieldLabel>
-              <textarea
+              <SessionNoteEditor
                 id="session-note"
-                className={TEXTAREA_CLASS}
                 value={note}
                 maxLength={10_000}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="Share progress, follow-up topics, or useful resources."
+                onChange={setNote}
+                disabled={addNote.isPending}
               />
               <FieldDescription>
-                Basic formatting and links are supported.
+                Notes are shared with the student and tutor after completion.
               </FieldDescription>
             </Field>
           </CardBody>
