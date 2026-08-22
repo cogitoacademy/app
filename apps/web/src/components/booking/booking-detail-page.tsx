@@ -6,9 +6,11 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   IconArrowLeft,
   IconCalendarEvent,
+  IconCheck,
   IconClock,
   IconCoins,
   IconDeviceLaptop,
+  IconInfoCircle,
   IconMapPin,
   IconUsers,
 } from "@tabler/icons-react";
@@ -26,6 +28,11 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import {
   Dialog,
   DialogBody,
@@ -60,7 +67,13 @@ import {
   BookingRescheduleAction,
   canProposeBookingReschedule,
 } from "./booking-reschedule-action";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { orpc } from "@/utils/orpc";
+
+type BookingConfirmation = {
+  action: "cancel" | "complete";
+  sessionId?: string;
+} | null;
 
 export function BookingDetailPage({
   bookingId,
@@ -76,6 +89,8 @@ export function BookingDetailPage({
   const [reviewDialog, setReviewDialog] = useState<"accept" | "decline" | null>(
     null,
   );
+  const [confirmationDialog, setConfirmationDialog] =
+    useState<BookingConfirmation>(null);
   const [declineReason, setDeclineReason] = useState("");
   const isTutor = viewerRole === "tutor";
   const bookingsPath = isTutor ? "/tutor-bookings" : "/bookings";
@@ -101,6 +116,7 @@ export function BookingDetailPage({
   const cancel = useMutation(
     orpc.booking.cancel.mutationOptions({
       onSuccess: () => {
+        setConfirmationDialog(null);
         toastManager.add({ title: "Booking cancelled", type: "success" });
         refreshBookingQueries();
       },
@@ -146,6 +162,7 @@ export function BookingDetailPage({
   const complete = useMutation(
     orpc.tutorActions.completeSession.mutationOptions({
       onSuccess: () => {
+        setConfirmationDialog(null);
         toastManager.add({ title: "Session completed", type: "success" });
         refreshBookingQueries();
       },
@@ -161,10 +178,7 @@ export function BookingDetailPage({
     }),
   );
   const completeSessionById = (sessionId: string) => {
-    const confirmed = window.confirm(
-      "Complete this session? Its held Marks will be settled.",
-    );
-    if (confirmed) complete.mutate({ bookingId, sessionId });
+    setConfirmationDialog({ action: "complete", sessionId });
   };
 
   if (bookingQuery.isPending) return <BookingDetailSkeleton />;
@@ -223,6 +237,7 @@ export function BookingDetailPage({
     new Date(booking.scheduledEndAt).getTime() <= Date.now();
   const tutorActionPending =
     accept.isPending || decline.isPending || complete.isPending;
+  const confirmationPending = cancel.isPending || complete.isPending;
   const canProposeReschedule = canProposeBookingReschedule({
     viewerRole,
     isBookingProposer: booking.proposerId === viewerId,
@@ -240,10 +255,7 @@ export function BookingDetailPage({
   ) : null;
 
   function requestCancellation() {
-    const confirmed = window.confirm(
-      "Cancel this booking? Cancellation rules and applicable refunds will be applied.",
-    );
-    if (confirmed) cancel.mutate({ bookingId });
+    setConfirmationDialog({ action: "cancel" });
   }
 
   function declineBooking() {
@@ -253,10 +265,22 @@ export function BookingDetailPage({
   }
 
   function completeSession() {
-    const confirmed = window.confirm(
-      "Mark this session as completed? Held Marks will be settled.",
-    );
-    if (confirmed) complete.mutate({ bookingId });
+    setConfirmationDialog({ action: "complete" });
+  }
+
+  function confirmBookingAction() {
+    if (!confirmationDialog) return;
+
+    if (confirmationDialog.action === "cancel") {
+      cancel.mutate({ bookingId });
+      return;
+    }
+
+    if (confirmationDialog.sessionId) {
+      complete.mutate({ bookingId, sessionId: confirmationDialog.sessionId });
+    } else {
+      complete.mutate({ bookingId });
+    }
   }
 
   return (
@@ -671,39 +695,111 @@ export function BookingDetailPage({
           }
         }}
       >
-        <DialogPopup>
-          <DialogHeader className="flex-col items-start gap-1.5">
-            <DialogTitle>
-              {reviewDialog === "decline"
-                ? "Decline booking request?"
-                : "Accept booking request?"}
-            </DialogTitle>
-            <DialogDescription>
-              {reviewDialog === "decline"
-                ? "The held Marks will be released and the student will receive your reason."
-                : "The student will be notified and this online session will move to scheduling."}
-            </DialogDescription>
-          </DialogHeader>
-          {reviewDialog === "decline" ? (
-            <DialogBody>
-              <label
-                htmlFor="decline-booking-reason"
-                className="text-foreground font-medium"
+        <DialogPopup className="sm:max-w-lg">
+          <DialogHeader className="flex-col items-start gap-3 pb-0">
+            {reviewDialog === "accept" ? (
+              <IconBox
+                variant="success-subtle"
+                size="md"
+                circle
+                aria-hidden="true"
               >
-                Reason
-              </label>
-              <Input
-                id="decline-booking-reason"
-                value={declineReason}
-                onChange={(event) => setDeclineReason(event.target.value)}
-                placeholder="For example: I am unavailable at this time"
-              />
-              <Text className="text-sm text-muted">
-                Give the student enough context to choose another tutor or time.
-              </Text>
+                <IconCheck />
+              </IconBox>
+            ) : null}
+            <div className="space-y-1.5">
+              <DialogTitle>
+                {reviewDialog === "decline"
+                  ? "Decline booking request?"
+                  : "Accept booking request?"}
+              </DialogTitle>
+              <DialogDescription>
+                {reviewDialog === "decline"
+                  ? "The held Marks will be released and the student will receive your reason."
+                  : booking.modality === "online"
+                    ? "The student will be notified and the session will move to scheduling."
+                    : "The student will be notified and the booking will move to room confirmation."}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          {reviewDialog === "accept" ? (
+            <DialogBody className="space-y-4">
+              <div className="rounded-lg border border-item-border bg-item p-4">
+                <div className="flex items-start gap-3">
+                  <IconBox
+                    variant="secondary-subtle"
+                    size="sm"
+                    aria-hidden="true"
+                  >
+                    <IconCalendarEvent />
+                  </IconBox>
+                  <div className="min-w-0">
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Session details
+                    </Text>
+                    <Text className="mt-1 font-medium">
+                      {formatBookingDate(
+                        booking.scheduledStartAt,
+                        booking.timezone,
+                      )}
+                    </Text>
+                    <Text className="text-sm text-muted">
+                      {formatBookingTimeRange(
+                        booking.scheduledStartAt,
+                        booking.scheduledEndAt,
+                        booking.timezone,
+                      )}
+                    </Text>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-item-border pt-3">
+                  <ReviewMeta
+                    icon={
+                      booking.modality === "online" ? (
+                        <IconDeviceLaptop />
+                      ) : (
+                        <IconMapPin />
+                      )
+                    }
+                    label="Format"
+                    value={booking.modality === "online" ? "Online" : "Offline"}
+                  />
+                  <ReviewMeta
+                    icon={<IconUsers />}
+                    label="Attendance"
+                    value={`${booking.confirmedHeadcount} of ${booking.targetGroupSize}`}
+                  />
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 rounded-lg border border-info-border bg-info/10 px-3 py-3">
+                <IconInfoCircle
+                  className="mt-0.5 size-4 shrink-0 text-info"
+                  aria-hidden="true"
+                />
+                <Text className="text-sm text-foreground">
+                  Accepting confirms this time for the student. You can still
+                  propose a new time later if plans change.
+                </Text>
+              </div>
             </DialogBody>
-          ) : null}
-          <DialogFooter>
+          ) : (
+            <DialogBody className="space-y-4">
+              <Field>
+                <FieldLabel htmlFor="decline-booking-reason">Reason</FieldLabel>
+                <Input
+                  id="decline-booking-reason"
+                  value={declineReason}
+                  onChange={(event) => setDeclineReason(event.target.value)}
+                  placeholder="For example: I am unavailable at this time"
+                />
+                <FieldDescription>
+                  Give the student enough context to choose another tutor or
+                  time.
+                </FieldDescription>
+              </Field>
+            </DialogBody>
+          )}
+          <DialogFooter className="flex-col-reverse items-stretch sm:flex-row sm:items-center">
             <Button
               variant="secondary"
               type="button"
@@ -713,6 +809,7 @@ export function BookingDetailPage({
                 setDeclineReason("");
               }}
               disabled={tutorActionPending}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
@@ -722,6 +819,7 @@ export function BookingDetailPage({
                 onClick={declineBooking}
                 progress={decline.isPending}
                 disabled={!declineReason.trim() || tutorActionPending}
+                className="w-full sm:w-auto"
               >
                 Decline request
               </Button>
@@ -730,6 +828,7 @@ export function BookingDetailPage({
                 onClick={() => accept.mutate({ bookingId })}
                 progress={accept.isPending}
                 disabled={tutorActionPending}
+                className="w-full sm:w-auto"
               >
                 Accept booking
               </Button>
@@ -737,6 +836,34 @@ export function BookingDetailPage({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
+      <ConfirmationDialog
+        open={confirmationDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmationDialog(null);
+        }}
+        title={
+          confirmationDialog?.action === "cancel"
+            ? "Cancel this booking?"
+            : confirmationDialog?.sessionId
+              ? "Complete this session?"
+              : "Mark this session as completed?"
+        }
+        description={
+          confirmationDialog?.action === "cancel"
+            ? "Cancellation rules and applicable refunds will be applied."
+            : "Held Marks will be settled."
+        }
+        confirmLabel={
+          confirmationDialog?.action === "cancel"
+            ? "Cancel booking"
+            : "Complete session"
+        }
+        confirmVariant={
+          confirmationDialog?.action === "cancel" ? "danger" : "primary"
+        }
+        pending={confirmationPending}
+        onConfirm={confirmBookingAction}
+      />
     </Stack>
   );
 }
@@ -759,6 +886,31 @@ function DetailField({
         <Text className="text-sm text-muted">{label}</Text>
         <Text className="font-medium">{value}</Text>
       </div>
+    </div>
+  );
+}
+
+function ReviewMeta({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="text-muted [&_svg:not([class*=size-])]:size-4"
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
+      <span>
+        <Text className="text-xs text-muted">{label}</Text>
+        <Text className="text-sm font-medium">{value}</Text>
+      </span>
     </div>
   );
 }

@@ -30,7 +30,7 @@ export function DialogPopup({
     <BaseDialog.Portal>
       <BaseDialog.Backdrop
         className={cn(
-          "fixed inset-0 min-h-dvh bg-black/60 transition-[color,opacity] backdrop-blur-sm",
+          "fixed inset-0 z-[900] min-h-dvh bg-black/60 transition-[color,opacity] backdrop-blur-sm",
           "data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
         )}
       />
@@ -38,13 +38,13 @@ export function DialogPopup({
         data-slot="dialog-popup"
         {...props}
         className={cn(
-          "fixed left-1/2 -translate-x-1/2 -translate-y-1/2",
+          "fixed left-1/2 z-[950] -translate-x-1/2 -translate-y-1/2",
           "top-[calc(50%+1.25rem*var(--nested-dialogs))]",
           "bg-dialog text-dialog-foreground backdrop-blur-sm",
           "ring ring-dialog-border rounded-xl shadow",
           "scale-[calc(1-0.1*var(--nested-dialogs))]",
-          "outline-none transition-all w-full max-w-md",
-          "max-w-[calc(100%-2rem)]",
+          "outline-none transition-all w-full",
+          "max-w-[calc(100%-2rem)] sm:max-w-md",
           "max-h-[90dvh] overflow-hidden flex flex-col",
           "data-[nested-dialog-open]:after:absolute",
           "data-[nested-dialog-open]:after:inset-0",
@@ -71,7 +71,7 @@ export function DialogHeader({
     <header
       data-slot="dialog-header"
       {...props}
-      className={cn("px-6 pt-4.5 flex items-center gap-3.5", className)}
+      className={cn("px-6 py-4.5 flex items-center gap-3.5", className)}
     >
       {children}
     </header>

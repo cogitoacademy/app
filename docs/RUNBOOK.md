@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-19
+Last updated: 2026-08-22
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -19,6 +19,10 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Admin: priority operations and moderation counts; actions link to `/admin-operations`, `/admin-tutors`, and `/admin-achievements`. In `/admin-operations`, verify the booking queue filters, open a queue item’s detail view, confirm its state-history timeline loads, and use **Open override** to reach the existing preview/apply flow.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
+
+### Tutor booking review smoke check
+
+With a seeded tutor and a pending request, open the request from `/tutor-bookings` and choose **Review request**. Verify that the accept dialog is centered and compact on desktop, remains within the viewport on mobile, and shows the scheduled date/time, modality, and attendance before the final action. Verify that **Cancel** closes the dialog without changing the booking, while the decline variant keeps the reason required. Only select **Accept booking** when the state transition is intended; online requests move to `scheduled`, while offline requests move to `awaiting_admin_room_approval`. For cancel/complete actions, verify the in-app confirmation dialog appears instead of a browser prompt and that the success/error toast remains visible above any open modal.
 
 ### Development
 

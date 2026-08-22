@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-19
+Last updated: 2026-08-22
 
 ## Overview
 
@@ -588,6 +588,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
 - **Description:** Tutor accepts a solo booking; online goes `scheduled` (creates meeting), offline goes `awaiting_admin_room_approval`
+- **Frontend note:** The tutor booking-detail flow presents a responsive confirmation summary before calling this unchanged procedure; the dialog does not change the input, output, or transition rules.
 
 ### `tutorActions.declineBooking`
 
@@ -604,6 +605,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ bookingId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ booking }`
 - **Description:** Marks a scheduled session completed and deducts held Marks
+- **Frontend note:** Cancel and complete actions are confirmed with in-app Selia dialogs; mutation feedback is emitted through the global toast layer and does not change this RPC contract.
 
 ### `tutorActions.markAttendance`
 

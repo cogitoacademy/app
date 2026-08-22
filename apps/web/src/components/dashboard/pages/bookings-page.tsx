@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -33,6 +34,7 @@ import {
   getBookingTypeLabel,
 } from "@/components/booking/booking-ui";
 import { EmptyStateCard } from "@/components/empty-state";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { orpc } from "@/utils/orpc";
 
 const AWAITING_STATES = new Set([
@@ -45,6 +47,7 @@ const AWAITING_STATES = new Set([
 
 export function BookingsPage() {
   const queryClient = useQueryClient();
+  const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
   const { data, error, isError, isFetching, isPending, refetch } = useQuery(
     orpc.booking.listMine.queryOptions({ input: {} }),
   );
@@ -52,6 +55,7 @@ export function BookingsPage() {
   const cancel = useMutation(
     orpc.booking.cancel.mutationOptions({
       onSuccess: () => {
+        setCancelBookingId(null);
         toastManager.add({ title: "Booking cancelled", type: "success" });
         void queryClient.invalidateQueries({
           queryKey: orpc.booking.listMine.queryKey({ input: {} }),
@@ -76,10 +80,7 @@ export function BookingsPage() {
   ).length;
 
   function requestCancellation(bookingId: string) {
-    const confirmed = window.confirm(
-      "Cancel this booking? Cancellation rules and applicable refunds will be applied.",
-    );
-    if (confirmed) cancel.mutate({ bookingId });
+    setCancelBookingId(bookingId);
   }
 
   return (
@@ -238,6 +239,20 @@ export function BookingsPage() {
           })}
         </div>
       )}
+      <ConfirmationDialog
+        open={cancelBookingId !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelBookingId(null);
+        }}
+        title="Cancel this booking?"
+        description="Cancellation rules and applicable refunds will be applied."
+        confirmLabel="Cancel booking"
+        confirmVariant="danger"
+        pending={cancel.isPending}
+        onConfirm={() => {
+          if (cancelBookingId) cancel.mutate({ bookingId: cancelBookingId });
+        }}
+      />
     </Stack>
   );
 }

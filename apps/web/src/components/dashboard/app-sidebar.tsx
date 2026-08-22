@@ -35,6 +35,7 @@ import {
   IconCertificate,
   IconCoins,
   IconHome,
+  IconLibrary,
   IconLogout,
   IconSearch,
   IconSelector,
@@ -80,6 +81,11 @@ const resourceItems = [
     href: "https://cogitoacademy.id/en/calendar",
     label: "Competition Calendar",
     icon: IconCalendarEvent,
+  },
+  {
+    href: "https://www.cogitoacademy.id/en/student-resources",
+    label: "Knowledge Bank",
+    icon: IconLibrary,
   },
   {
     href: "https://wa.me/6288101190195",

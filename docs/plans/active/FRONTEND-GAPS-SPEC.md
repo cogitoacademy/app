@@ -465,7 +465,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, contextual actions, and chronological activity in the main flow, with session access, Marks, and participant metadata in a sticky desktop rail.
+**Current state:** **CLOSED (2026-08-19).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, contextual actions, and chronological activity in the main flow, with session access, Marks, and participant metadata in a sticky desktop rail. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted.
 
 **Required:**
 
@@ -570,6 +570,10 @@ Card, Button, Badge, Heading, Text, Stack, Input, Field, Select, Menu, Table, It
 ---
 
 ### Version Notes
+
+- v1.7 (2026-08-22): Replaced booking cancel/complete browser confirmation prompts with Selia dialogs and raised the global toast layer above dialog overlays so mutation feedback remains visible. No booking API or state-machine contract changed.
+
+- v1.6 (2026-08-22): Refined the F17 tutor booking review dialog with responsive sizing, a schedule/modality/attendance summary, modality-aware transition copy, and mobile-friendly action layout. No booking API or state-machine contract changed.
 
 - v1.5 (2026-08-19): Re-audited against main `d11962b` (PR #55 merged). F2/F3/F6/F7/F11/F17 → **Closed** (merged); F8/F13/F14/F16 confirmed **Closed** in code; F1/F9/F12 remain **Partial** (no admin state-history detail view, no rich-text toolbar, no dedicated room-approval queue); F18 → **Partial** (inviter-side `withdraw` UI still missing); J2 → **Open**; dead components (`chart.tsx`/`data.ts`/`user-menu.tsx`) still present with 0 importers.
 - v1.4 (2026-08-16): Reconciled PR #55 with merged PRs #59, #61, #62, and #63. Resolved migration numbering and achievement-contract blockers, retained F18/J2/dead-component audit coverage, removed temporary QA artifacts, and kept the remaining frontend gaps explicit pending final CI.

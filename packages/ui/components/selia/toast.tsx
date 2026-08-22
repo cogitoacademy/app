@@ -25,7 +25,7 @@ function StackedToasts() {
 
   return (
     <BaseToast.Portal>
-      <BaseToast.Viewport className="fixed top-2 md:top-4 right-0 left-0 mx-2 md:mx-auto flex">
+      <BaseToast.Viewport className="fixed top-2 z-[1000] right-0 left-0 mx-2 md:top-4 md:mx-auto flex">
         {toasts.map((toast) => (
           <BaseToast.Root
             key={toast.id}
@@ -68,7 +68,7 @@ function AnchoredToasts() {
 
   return (
     <BaseToast.Portal>
-      <BaseToast.Viewport className="outline-0">
+      <BaseToast.Viewport className="z-[1000] outline-0">
         {toasts.map((toast) => (
           <BaseToast.Positioner
             key={toast.id}
