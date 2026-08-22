@@ -61,6 +61,7 @@ function RouteComponent() {
           role={(session.data?.user as CogitoUser | undefined)?.role}
         />
       }
+      sessionExpiresAt={session.data?.session.expiresAt}
     >
       <Outlet />
     </Layout>

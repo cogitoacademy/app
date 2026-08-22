@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { cn } from "@cogito-app/ui/lib/utils";
@@ -10,15 +12,18 @@ import { ModeToggle } from "../mode-toggle";
 import { NotificationBell } from "../notification-bell";
 import { BalanceBadge } from "../balance-badge";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
+import { SessionExpiryNotice } from "../session-expiry-notice";
 
 export function Layout({
   children,
   sidebar,
   title = "Dashboard",
+  sessionExpiresAt,
 }: {
   children: React.ReactNode;
   sidebar: React.ReactNode;
   title?: string;
+  sessionExpiresAt?: Date | string | null;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth >= 1280,
@@ -86,6 +91,7 @@ export function Layout({
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >
+          <SessionExpiryNotice expiresAt={sessionExpiresAt} />
           {children}
         </div>
       </main>
