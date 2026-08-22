@@ -2504,6 +2504,68 @@ export function createBookingService(deps: {
     });
   }
 
+  async function withdrawInvite(
+    proposerId: string,
+    bookingId: string,
+    inviteeUserId: string,
+    reason?: string,
+  ) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
+        throw new BookingNotAwaitingConfirmationError(
+          bookingId,
+          b.currentState,
+        );
+      }
+      if (b.proposerId !== proposerId) {
+        throw new BookingNotOwnedError(bookingId, proposerId);
+      }
+      if (
+        b.type !== BOOKING_TYPE.GROUP &&
+        !(b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1)
+      ) {
+        throw new BookingNotEditableError(bookingId);
+      }
+
+      const participant = await repo.findParticipant(
+        tx,
+        bookingId,
+        inviteeUserId,
+      );
+      if (!participant)
+        throw new BookingParticipantNotFoundError(inviteeUserId);
+      if (participant.role !== "invitee") {
+        throw new BookingNotEditableError(bookingId);
+      }
+      if (participant.confirmationState !== CONFIRMATION_STATE.PENDING) {
+        throw new BookingParticipantAlreadyConfirmedError(participant.id);
+      }
+
+      await repo.updateParticipantState(tx, participant.id, {
+        confirmationState: CONFIRMATION_STATE.WITHDRAWN_PRE_H2,
+        withdrawnAt: new Date(),
+        withdrawnReason: reason,
+      });
+      await notification.writeBestEffort({
+        db: tx,
+        userId: inviteeUserId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Group invitation withdrawn",
+        body: reason
+          ? `The booking proposer withdrew your invitation. Reason: ${reason}`
+          : "The booking proposer withdrew your invitation.",
+        eventKey: `booking.${bookingId}.invite_withdrawn.${inviteeUserId}`,
+        emailRequired: true,
+      });
+
+      return { withdrawn: true, inviteeUserId };
+    });
+  }
+
   async function reconfirm(userId: string, bookingId: string, accept: boolean) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
@@ -4013,6 +4075,7 @@ export function createBookingService(deps: {
     createGroupSeries,
     confirmInvite,
     declineInvite,
+    withdrawInvite,
     reconfirm,
     withdraw,
     cancel,
