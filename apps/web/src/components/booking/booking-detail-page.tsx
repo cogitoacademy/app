@@ -204,7 +204,7 @@ export function BookingDetailPage({
               Try again
             </Button>
             <Button
-              variant="plain"
+              variant="underline"
               onClick={() => void navigate({ to: bookingsPath })}
             >
               Back to {bookingsLabel.toLowerCase()}
@@ -291,7 +291,7 @@ export function BookingDetailPage({
     >
       <div>
         <Button
-          variant="plain"
+          variant="underline"
           size="sm"
           render={
             <Link to={bookingsPath} aria-label={`Back to ${bookingsLabel}`} />
@@ -879,7 +879,7 @@ function DetailField({
 }) {
   return (
     <div className="flex gap-3">
-      <IconBox variant="secondary-subtle" size="sm">
+      <IconBox variant="tertiary" size="sm">
         {icon}
       </IconBox>
       <div>
