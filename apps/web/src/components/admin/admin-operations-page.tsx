@@ -6,9 +6,11 @@ import {
   IconAlertTriangle,
   IconBuilding,
   IconCalendarEvent,
+  IconCheck,
   IconClock,
   IconCoins,
   IconEye,
+  IconRefresh,
   IconSearch,
   IconUsers,
 } from "@tabler/icons-react";
@@ -913,6 +915,10 @@ function WalletLookup() {
   );
 }
 
+type PendingRoomApproval = Awaited<
+  ReturnType<typeof client.room.listPendingApprovals>
+>[number];
+
 function RoomOperations() {
   const queryClient = useQueryClient();
   const [operation, setOperation] = useState<"assign" | "relocate">("assign");
@@ -920,14 +926,26 @@ function RoomOperations() {
   const [roomId, setRoomId] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
+  const [selectedApproval, setSelectedApproval] =
+    useState<PendingRoomApproval | null>(null);
   const roomsQuery = useQuery(
     orpc.room.list.queryOptions({ input: undefined }),
   );
+  const pendingQuery = useQuery(
+    orpc.room.listPendingApprovals.queryOptions({ input: { limit: 50 } }),
+  );
+  const invalidateRoomQueries = () => {
+    void queryClient.invalidateQueries({ queryKey: orpc.room.list.key() });
+    void queryClient.invalidateQueries({
+      queryKey: orpc.room.listPendingApprovals.key(),
+    });
+  };
   const assign = useMutation(
     orpc.room.assign.mutationOptions({
       onSuccess: () => {
         toastManager.add({ title: "Room assigned", type: "success" });
-        void queryClient.invalidateQueries({ queryKey: orpc.room.list.key() });
+        setSelectedApproval(null);
+        invalidateRoomQueries();
       },
       onError: (error: Error) => showError("Room could not be assigned", error),
     }),
@@ -936,7 +954,8 @@ function RoomOperations() {
     orpc.room.relocate.mutationOptions({
       onSuccess: () => {
         toastManager.add({ title: "Room relocated", type: "success" });
-        void queryClient.invalidateQueries({ queryKey: orpc.room.list.key() });
+        setSelectedApproval(null);
+        invalidateRoomQueries();
       },
       onError: (error: Error) =>
         showError("Room could not be relocated", error),
@@ -944,12 +963,37 @@ function RoomOperations() {
   );
   const cancel = useMutation(
     orpc.room.cancelBooking.mutationOptions({
-      onSuccess: () =>
-        toastManager.add({ title: "Room booking cancelled", type: "success" }),
+      onSuccess: () => {
+        toastManager.add({ title: "Room booking cancelled", type: "success" });
+        setSelectedApproval(null);
+        invalidateRoomQueries();
+      },
       onError: (error: Error) =>
         showError("Room booking could not be cancelled", error),
     }),
   );
+  const openApproval = (approval: PendingRoomApproval) => {
+    setSelectedApproval(approval);
+    setOperation("assign");
+    setBookingId(approval.bookingId);
+    setRoomId(approval.requestedRoomId ?? "");
+    setStartAt(
+      toDateTimeLocalInput(approval.scheduledStartAt, approval.timezone),
+    );
+    setEndAt(toDateTimeLocalInput(approval.scheduledEndAt, approval.timezone));
+  };
+  const assignRequested = (approval: PendingRoomApproval) => {
+    if (!approval.requestedRoomId) {
+      openApproval(approval);
+      return;
+    }
+    assign.mutate({
+      bookingId: approval.bookingId,
+      roomId: approval.requestedRoomId,
+      startAt: new Date(approval.scheduledStartAt),
+      endAt: new Date(approval.scheduledEndAt),
+    });
+  };
   const valid =
     bookingId.trim() &&
     roomId &&
@@ -958,11 +1002,24 @@ function RoomOperations() {
     new Date(endAt) > new Date(startAt);
   return (
     <Stack direction="column" spacing="md">
+      <PendingRoomApprovals
+        items={pendingQuery.data ?? []}
+        isPending={pendingQuery.isPending}
+        errorMessage={pendingQuery.isError ? pendingQuery.error.message : null}
+        onRetry={() => void pendingQuery.refetch()}
+        onRefresh={() => void pendingQuery.refetch()}
+        onAssignRequested={assignRequested}
+        onOpenForm={openApproval}
+        onCancel={(id) => cancel.mutate({ bookingId: id })}
+        isActionPending={assign.isPending || cancel.isPending}
+      />
       <Card>
         <CardHeader>
           <CardTitle>Offline room assignment</CardTitle>
           <CardDescription>
-            Assign an active room to an offline booking.
+            {selectedApproval
+              ? `Managing pending booking ${selectedApproval.bookingId}.`
+              : "Assign or relocate an active room to an offline booking."}
           </CardDescription>
         </CardHeader>
         <CardBody className="grid gap-4 sm:grid-cols-2">
@@ -1061,6 +1118,152 @@ function RoomOperations() {
   );
 }
 
+function PendingRoomApprovals({
+  items,
+  isPending,
+  errorMessage,
+  onRetry,
+  onRefresh,
+  onAssignRequested,
+  onOpenForm,
+  onCancel,
+  isActionPending,
+}: {
+  items: PendingRoomApproval[];
+  isPending: boolean;
+  errorMessage: string | null;
+  onRetry: () => void;
+  onRefresh: () => void;
+  onAssignRequested: (approval: PendingRoomApproval) => void;
+  onOpenForm: (approval: PendingRoomApproval) => void;
+  onCancel: (bookingId: string) => void;
+  isActionPending: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-wrap">
+        <div className="min-w-0 flex-1">
+          <CardTitle>Pending room approvals</CardTitle>
+          <CardDescription>
+            Offline bookings accepted by a tutor and waiting for an admin room
+            decision.
+          </CardDescription>
+        </div>
+        <Button
+          size="sm"
+          variant="plain"
+          onClick={onRefresh}
+          disabled={isPending}
+        >
+          <IconRefresh /> Refresh
+        </Button>
+      </CardHeader>
+      <CardBody>
+        {isPending ? (
+          <div className="min-h-32 animate-pulse rounded-lg bg-accent/30" />
+        ) : errorMessage ? (
+          <div className="flex flex-col items-start gap-3">
+            <Text className="text-muted">{errorMessage}</Text>
+            <Button size="sm" variant="secondary" onClick={onRetry}>
+              Try again
+            </Button>
+          </div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={<IconCheck />}
+            title="No pending room approvals"
+            description="Tutor-accepted offline bookings will appear here."
+            tone="secondary"
+            size="compact"
+          />
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Booking</TableHead>
+                  <TableHead>Session</TableHead>
+                  <TableHead>Requested room</TableHead>
+                  <TableHead>Participants</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.bookingId}>
+                    <TableCell>
+                      <Text className="font-mono text-xs">
+                        {item.bookingId}
+                      </Text>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <Badge variant="warning">Room approval</Badge>
+                        <Badge variant="secondary">{item.bookingType}</Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {formatBookingDate(item.scheduledStartAt, item.timezone)}
+                    </TableCell>
+                    <TableCell>
+                      {item.requestedRoomName ? (
+                        <>
+                          <Text>{item.requestedRoomName}</Text>
+                          <Text className="text-xs text-muted">
+                            {item.requestedRoomLocation}
+                          </Text>
+                        </>
+                      ) : (
+                        <Text className="text-xs text-muted">
+                          No room available from the original request
+                        </Text>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.confirmedHeadcount}/{item.targetGroupSize}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {item.requestedRoomId ? (
+                          <Button
+                            size="sm"
+                            onClick={() => onAssignRequested(item)}
+                            progress={isActionPending}
+                            disabled={isActionPending}
+                          >
+                            <IconCheck /> Assign
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => onOpenForm(item)}
+                          disabled={isActionPending}
+                        >
+                          {item.requestedRoomId
+                            ? "Choose another"
+                            : "Choose room"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => onCancel(item.bookingId)}
+                          progress={isActionPending}
+                          disabled={isActionPending}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
 function BalanceCard({ label, value }: { label: string; value: number }) {
   return (
     <Card>
@@ -1139,6 +1342,27 @@ function humanize(value: string) {
     .replaceAll("_", " ")
     .replace(/^./, (letter) => letter.toUpperCase());
 }
+
+function toDateTimeLocalInput(value: string | Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    calendar: "iso8601",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+    .formatToParts(new Date(value))
+    .reduce<Record<string, string>>((result, part) => {
+      if (part.type !== "literal") result[part.type] = part.value;
+      return result;
+    }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
 function showError(title: string, error: Error) {
   toastManager.add({
     title,

@@ -643,6 +643,13 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** `{ items: Room[] }` — active rooms
 - **Description:** Lists active rooms for offline scheduling
 
+### `room.listPendingApprovals`
+
+- **Auth:** Admin
+- **Input:** `{ limit? }` (1–100, default 50)
+- **Output:** `PendingRoomApproval[]`
+- **Description:** Lists offline bookings in `awaiting_admin_room_approval`, ordered by session start. Each item includes booking timing/participant summary and the optional requested room; bookings whose requested room was unavailable are included with `requestedRoomId: null`.
+
 ### `room.create`
 
 - **Auth:** Admin
@@ -675,7 +682,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ bookingId }`
 - **Output:** `{ cancelled: true }`
-- **Description:** Cancels a booking's room assignment; the booking continues without a room
+- **Description:** Cancels a booking's room assignment. While the booking is awaiting room approval, this releases its holds and transitions it to `cancelled`; it also handles pending approvals that have no room-booking row because the requested room was unavailable.
 
 ---
 

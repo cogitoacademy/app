@@ -244,6 +244,27 @@ describe("Room assignment flow", () => {
     expect(updated.currentState).toBe("awaiting_admin_room_approval");
   });
 
+  test("admin room queue lists all pending approvals, including no-room conflicts", async () => {
+    const pending = await adminClient.room.listPendingApprovals({ limit: 50 });
+
+    expect(pending.map((item) => item.bookingId)).toEqual(
+      expect.arrayContaining([booking1Id, booking2Id]),
+    );
+    expect(pending.find((item) => item.bookingId === booking1Id)).toMatchObject(
+      {
+        currentState: "awaiting_admin_room_approval",
+        modality: "offline",
+      },
+    );
+    expect(pending.find((item) => item.bookingId === booking2Id)).toMatchObject(
+      {
+        currentState: "awaiting_admin_room_approval",
+        modality: "offline",
+        requestedRoomId: null,
+      },
+    );
+  });
+
   test("admin assigns room to booking1 → roomBooking row confirmed", async () => {
     const rb = await adminClient.room.assign({
       bookingId: booking1Id,

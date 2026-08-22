@@ -150,6 +150,8 @@ describe("createRoomRepo", () => {
     const r = createRoomRepo();
 
     expect(r).toHaveProperty("findActiveRooms");
+    expect(r).toHaveProperty("findPendingRoomApprovals");
+    expect(r).toHaveProperty("findPendingApprovalBookingById");
     expect(r).toHaveProperty("insertRoom");
     expect(r).toHaveProperty("findRoomById");
     expect(r).toHaveProperty("findRoomBookings");

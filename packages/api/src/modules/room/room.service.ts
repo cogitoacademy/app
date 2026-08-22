@@ -58,6 +58,10 @@ export function createRoomService(
     return repo.findActiveRooms(db);
   }
 
+  async function listPendingApprovals(limit = 50) {
+    return repo.findPendingRoomApprovals(db, limit);
+  }
+
   async function createRoom(input: CreateRoomInput) {
     return repo.insertRoom(db, input);
   }
@@ -237,7 +241,37 @@ export function createRoomService(
         tx,
         bookingId,
       );
-      if (!current) throw new RoomBookingNotFoundError(bookingId);
+      if (!current) {
+        const pending = await repo.findPendingApprovalBookingById(
+          tx,
+          bookingId,
+        );
+        if (!pending || !bookingPort || !actorId) {
+          throw new RoomBookingNotFoundError(bookingId);
+        }
+
+        // A requested room can be absent when the student's preferred room
+        // was already occupied. The booking is still cancellable while it is
+        // awaiting admin room approval; let the booking port perform the
+        // state transition, hold release, and audit atomically.
+        await bookingPort.cancelOfflineBooking(tx, bookingId, actorId);
+        await notifyBookingRecipients(
+          tx,
+          bookingId,
+          `room.${bookingId}.cancelled`,
+          "Offline room assignment cancelled",
+          "Your offline room assignment was cancelled by an admin.",
+        );
+
+        return {
+          id: null,
+          bookingId,
+          roomId: null,
+          startAt: pending.scheduledStartAt,
+          endAt: pending.scheduledEndAt,
+          status: ROOM_BOOKING_STATUS.CANCELLED,
+        };
+      }
 
       const updated = await repo.updateRoomBookingStatus(
         tx,
@@ -290,6 +324,7 @@ export function createRoomService(
 
   return {
     listActive,
+    listPendingApprovals,
     createRoom,
     checkAvailability,
     requestRoomForBooking,

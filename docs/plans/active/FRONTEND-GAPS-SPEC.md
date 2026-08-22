@@ -1,13 +1,13 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-22; F8/F13/F14/F16 closed by REVIEW-FIXES-3 P6; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F1/F9/F12/F18 partial) |
-| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                        |
-| Created    | 2026-07-29                                                                                                                                                |
-| Audited    | 2026-08-22                                                                                                                                                |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                             |
-| Scope      | Frontend only (`apps/web/`)                                                                                                                               |
+| Field      | Value                                                                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Living gap inventory (updated 2026-08-22; F8/F13/F14/F16 closed by REVIEW-FIXES-3 P6; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; F1/F9/F18 partial) |
+| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                                |
+| Created    | 2026-07-29                                                                                                                                                        |
+| Audited    | 2026-08-22                                                                                                                                                        |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                     |
+| Scope      | Frontend only (`apps/web/`)                                                                                                                                       |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
@@ -72,7 +72,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | Partial                                                                       |
 | F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed                                                                        |
 | F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed                                                                        |
-| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | Partial                                                                       |
+| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | **Closed (room approval queue)**                                              |
 | F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                |
 | F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                |
 | F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed                                                                        |
@@ -80,7 +80,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed                                                                        |
 | F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | Partial                                                                       |
 
-**Total estimated effort: ~7 days for remaining gaps (F1, F9, F12, F18 partial; J2 open).**
+**Total estimated effort: ~5.5 days for remaining gaps (F1, F9, F18 partial; J2 open).**
 
 > **Audit 2026-08-14:** F4, F5, F10, F15 verified **closed** in `apps/web` (git HEAD `9b7df5e`). F8, F16, F17 remain partial. All remaining missing gaps have backend procedures ready except F13 (needs new `tutor.getMyPayouts` router) and F16 (needs a new public achievement list procedure).
 
@@ -88,7 +88,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 > **Audit 2026-08-19 (against main `d11962b`):** PR #55 merged (`d4e50e0`). Verified in `apps/web/src`:
 >
-> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the remaining F1 limitations are recorded above.
+> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The remaining F1 limitations are recorded above.
 >
 > - **F2/F3/F6/F7/F11/F17 → Closed** — override dialog with `previewOverride`/`applyOverride` (`admin-operations-page.tsx`), lateness report via `support.createTicket` (`booking-lifecycle-actions.tsx`), reschedule propose/accept/reject, wallet/ledger lookup tab, booking detail baseline.
 > - **F8 → Closed** — series bookings render a per-session list with per-session "Complete session" buttons calling `completeSession({ bookingId, sessionId })` (`booking-detail-page.tsx`).
@@ -97,7 +97,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > - **F16 → Closed** — landing page renders live `achievement.listApproved` data with static fallback (`landing-page.tsx:74`).
 > - **F1 → Partial** — admin dashboard + filtered booking queue + override dialog now include a booking-detail/history view backed by `getBookingStateHistory`; the dedicated route, fully hydrated participant/per-wallet detail, and business-hours SLA surface remain open.
 > - **F9 → Partial** — notes list + textarea with server-side sanitized HTML render (`dangerouslySetInnerHTML`); no rich-text toolbar editor and no client-side DOMPurify.
-> - **F12 → Partial** — room assign/relocate/cancel operations exist (`admin-operations-page.tsx` `RoomOperations`), but there is no dedicated `awaiting_admin_room_approval` approval queue.
+> - **F12 → Closed** — `admin-operations-page.tsx` now consumes `room.listPendingApprovals` for offline bookings in `awaiting_admin_room_approval`; admins can assign the requested room, load a booking to choose another room (or use the existing relocate operation), and cancel the pending approval. The backend queue also includes requested-room conflicts with no `room_booking` row.
 > - **F18 → Partial** — invitee confirm/decline/reconfirm wired; **inviter-side `withdraw` UI still missing** (0 references to `withdraw` in `apps/web/src`).
 > - **J2 → Open** — no proactive expiry UX; only the 401/403 redirect with `reason=session-expired` (`orpc.ts:26`).
 > - **Dead components → still present** — `chart.tsx`, `data.ts`, `user-menu.tsx` have 0 importers in `apps/web/src`.
@@ -359,13 +359,13 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-22
 
-**Current state:** **PARTIAL (2026-08-19).** Room assign/relocate/cancel operations exist (`admin-operations-page.tsx` `RoomOperations`, merged #55), but there is **no dedicated `awaiting_admin_room_approval` approval queue** — admins must paste a booking id manually.
+**Current state:** **CLOSED (2026-08-22).** The Rooms tab consumes `room.listPendingApprovals` and no longer requires admins to paste a booking id for pending approvals. Existing assign/relocate/cancel mutations remain the action paths.
 
 **Required (after G14 backend):**
 
 1. In admin dashboard, room approval queue for offline bookings in `awaiting_admin_room_approval`
 2. Actions: approve room, relocate room (select from available), cancel room
-3. Calls `admin.approveRoom`, `admin.relocateRoom`, `admin.cancelRoom`
+3. Calls `room.assign`, `room.relocate`, `room.cancelBooking`
 4. Notifies tutor + students (via G17)
 
 **Acceptance:**
