@@ -373,12 +373,12 @@ export function createBookingService(deps: {
     }
 
     const newSize = remaining.length;
-    const pricePerStudent = (profile.prices?.[String(newSize)] ??
-      DEFAULT_SOLO_PRICE) as number;
-    const newSnapshot = pricing.computeSplit(
+    const newSnapshot = await computePriceSnapshot(
+      tx,
+      profile,
       b.modality as Modality,
-      pricePerStudent,
       newSize as GroupSize,
+      b.priceSnapshot,
     );
     const newPerStudent = newSnapshot.perStudent;
     const oldPerStudent = b.priceSnapshot?.perStudent ?? newPerStudent;
@@ -471,6 +471,89 @@ export function createBookingService(deps: {
       scheduledStartAt: startAt,
       scheduledEndAt: new Date(startAt.getTime() + SESSION_DURATION_MS),
     };
+  }
+
+  type EconomicSnapshot = {
+    perStudent: number;
+    markValueIdr?: number;
+    economyVersion?: number;
+    tutorBaseRateIdr?: number;
+    tutorIncrementIdr?: number;
+    cogitoBaseTakeIdr?: number;
+    cogitoIncrementIdr?: number;
+  };
+
+  /**
+   * New tutor profiles use IDR base honoraria. Legacy profiles keep the old
+   * Marks map until they are edited through onboarding, so existing bookings
+   * and migrations remain readable while the new economy rolls out.
+   */
+  async function computePriceSnapshot(
+    conn: DbOrTx,
+    profile: {
+      prices?: Record<string, number> | null;
+      baseRatesIdr?: { online?: number; offline?: number } | null;
+    },
+    modality: Modality,
+    groupSize: GroupSize,
+    previousSnapshot?: EconomicSnapshot | null,
+  ) {
+    const baseRates = profile.baseRatesIdr;
+    const baseRateIdr =
+      previousSnapshot?.tutorBaseRateIdr ??
+      (modality === MODALITY.OFFLINE ? baseRates?.offline : baseRates?.online);
+    if (typeof baseRateIdr !== "number") {
+      return pricing.computeSplit(
+        modality,
+        (profile.prices?.[String(groupSize)] ?? DEFAULT_SOLO_PRICE) as number,
+        groupSize,
+      );
+    }
+
+    if (!pricing.getEconomyConfig || !pricing.computeEconomics) {
+      throw new Error("IDR pricing is not configured");
+    }
+    const current = await pricing.getEconomyConfig(conn);
+    const config =
+      previousSnapshot?.markValueIdr !== undefined
+        ? {
+            ...current,
+            version: previousSnapshot.economyVersion ?? current.version,
+            markValueIdr: previousSnapshot.markValueIdr,
+            onlineTutorIncrementIdr:
+              modality === MODALITY.ONLINE &&
+              previousSnapshot.tutorIncrementIdr !== undefined
+                ? previousSnapshot.tutorIncrementIdr
+                : current.onlineTutorIncrementIdr,
+            offlineTutorIncrementIdr:
+              modality === MODALITY.OFFLINE &&
+              previousSnapshot.tutorIncrementIdr !== undefined
+                ? previousSnapshot.tutorIncrementIdr
+                : current.offlineTutorIncrementIdr,
+            onlineCogitoBaseIdr:
+              modality === MODALITY.ONLINE &&
+              previousSnapshot.cogitoBaseTakeIdr !== undefined
+                ? previousSnapshot.cogitoBaseTakeIdr
+                : current.onlineCogitoBaseIdr,
+            offlineCogitoBaseIdr:
+              modality === MODALITY.OFFLINE &&
+              previousSnapshot.cogitoBaseTakeIdr !== undefined
+                ? previousSnapshot.cogitoBaseTakeIdr
+                : current.offlineCogitoBaseIdr,
+            onlineCogitoIncrementIdr:
+              modality === MODALITY.ONLINE &&
+              previousSnapshot.cogitoIncrementIdr !== undefined
+                ? previousSnapshot.cogitoIncrementIdr
+                : current.onlineCogitoIncrementIdr,
+            offlineCogitoIncrementIdr:
+              modality === MODALITY.OFFLINE &&
+              previousSnapshot.cogitoIncrementIdr !== undefined
+                ? previousSnapshot.cogitoIncrementIdr
+                : current.offlineCogitoIncrementIdr,
+          }
+        : current;
+
+    return pricing.computeEconomics(modality, baseRateIdr, groupSize, config);
   }
 
   function assertSessionFitsAvailability(
@@ -657,11 +740,7 @@ export function createBookingService(deps: {
       throw new BookingNotEditableError(input.tutorId);
     }
 
-    const priceSnapshot = pricing.computeSplit(
-      modality,
-      (profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE) as number,
-      1,
-    );
+    const priceSnapshot = await computePriceSnapshot(db, profile, modality, 1);
     const totalMarks = priceSnapshot.perStudent * 1;
 
     const w = await wallet.getByUserId(db, proposerId);
@@ -2129,12 +2208,11 @@ export function createBookingService(deps: {
     assertSessionFitsAvailability(slot, session, input.modality);
 
     const size = input.targetGroupSize;
-    const pricePerStudent = (profile.prices?.[String(size)] ??
-      DEFAULT_SOLO_PRICE) as number;
-    const priceSnapshot = pricing.computeSplit(
+    const priceSnapshot = await computePriceSnapshot(
+      db,
+      profile,
       input.modality,
-      pricePerStudent,
-      size as 1 | 2 | 3 | 4 | 5 | 6,
+      size as GroupSize,
     );
     const totalMarks = priceSnapshot.perStudent * size;
 
@@ -2222,7 +2300,7 @@ export function createBookingService(deps: {
           body: [
             "You have been invited to a group session. Confirm within 12 hours.",
             `Schedule: ${session.scheduledStartAt.toISOString()}`,
-            `Per-student price: ${pricePerStudent} Marks`,
+            `Per-student price: ${priceSnapshot.perStudent} Marks`,
             `Total Marks held on acceptance: ${totalMarks}`,
             `View and accept in-platform: ${formatInviteCta(bookingId)}`,
           ].join(" "),
@@ -2835,11 +2913,10 @@ export function createBookingService(deps: {
     );
     assertNoIntraSeriesOverlap(sessions);
 
-    const pricePerStudent = (profile.prices?.["1"] ??
-      DEFAULT_SOLO_PRICE) as number;
-    const priceSnapshot = pricing.computeSplit(
+    const priceSnapshot = await computePriceSnapshot(
+      db,
+      profile,
       input.modality,
-      pricePerStudent,
       1,
     );
     const perSession = priceSnapshot.perStudent;
@@ -3007,11 +3084,10 @@ export function createBookingService(deps: {
     }
 
     const size = input.targetGroupSize;
-    const pricePerStudent = (profile.prices?.[String(size)] ??
-      DEFAULT_SOLO_PRICE) as number;
-    const priceSnapshot = pricing.computeSplit(
+    const priceSnapshot = await computePriceSnapshot(
+      db,
+      profile,
       input.modality,
-      pricePerStudent,
       size as GroupSize,
     );
     const perSession = priceSnapshot.perStudent;
@@ -3190,6 +3266,7 @@ export function createBookingService(deps: {
     let totalMarks = 0;
     let cogitoTake = 0;
     let tutorPayout = 0;
+    let tutorPayoutIdr = 0;
 
     for (const b of bookings) {
       if (b.type === BOOKING_TYPE.SERIES) {
@@ -3203,18 +3280,24 @@ export function createBookingService(deps: {
           for (const s of completed) {
             completedSessions++;
             const snap = s.priceSnapshot ?? b.priceSnapshot;
-            totalMarks += snap?.baseline ?? 0;
+            totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
             cogitoTake += snap?.cogitoTake ?? 0;
             tutorPayout += snap?.tutorShare ?? 0;
+            tutorPayoutIdr +=
+              snap?.tutorHonorariumIdr ??
+              (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
           }
           continue;
         }
       }
       completedSessions++;
       const snap = b.priceSnapshot;
-      totalMarks += snap?.baseline ?? 0;
+      totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
       cogitoTake += snap?.cogitoTake ?? 0;
       tutorPayout += snap?.tutorShare ?? 0;
+      tutorPayoutIdr +=
+        snap?.tutorHonorariumIdr ??
+        (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
     }
 
     return {
@@ -3222,7 +3305,7 @@ export function createBookingService(deps: {
       totalMarks,
       cogitoTake,
       tutorPayout,
-      tutorPayoutIdr: Math.round(tutorPayout * TUTOR_PAYOUT_RATE_IDR),
+      tutorPayoutIdr: Math.round(tutorPayoutIdr),
     };
   }
 

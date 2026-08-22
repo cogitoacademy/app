@@ -43,6 +43,9 @@ type PublishedTutor = {
   subjects?: TutorSubject[] | null;
   modality: string | null;
   prices: Record<string, number> | null;
+  pricesByModality?: Partial<
+    Record<"online" | "offline", Record<string, number>>
+  > | null;
   availabilitySummary: string | null;
   proofUrls: string[] | null;
   publishedAt: Date | null;

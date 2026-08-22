@@ -25,6 +25,7 @@ const routeTitles: Record<string, string> = {
   "/admin-tutors": "Manage Tutors",
   "/admin-achievements": "Achievement Moderation",
   "/admin-operations": "Operations",
+  "/admin-economy": "Economy Settings",
 };
 
 export const Route = createFileRoute("/_app")({
@@ -64,6 +65,7 @@ function RouteComponent() {
       sidebar={
         <AppSidebar
           userEmail={session.data.user.email}
+          userImage={session.data.user.image}
           userName={session.data.user.name}
           role={(session.data.user as CogitoUser).role}
         />

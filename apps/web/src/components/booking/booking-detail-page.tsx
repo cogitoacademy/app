@@ -310,7 +310,7 @@ export function BookingDetailPage({
     <Stack
       direction="column"
       spacing="lg"
-      className="mx-auto w-full min-w-0 max-w-7xl"
+      className="mx-auto w-full min-w-0 max-w-5xl"
     >
       <div>
         <Button
@@ -555,7 +555,7 @@ export function BookingDetailPage({
                 A chronological record of this booking
               </CardDescription>
             </CardHeader>
-            <CardBody className="px-6 py-2">
+            <CardBody className="px-6">
               {history.length > 0 ? (
                 <ol aria-label="Booking activity" className="relative">
                   {history.map((entry) => (
@@ -1137,7 +1137,7 @@ function DetailField({
 }) {
   return (
     <div className="flex gap-3">
-      <IconBox variant="tertiary" size="sm">
+      <IconBox variant="tertiary" size="md">
         {icon}
       </IconBox>
       <div>

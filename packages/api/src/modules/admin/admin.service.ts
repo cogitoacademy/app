@@ -9,7 +9,9 @@ import {
   OptimisticLockError,
   WalletNotFoundError,
   InvalidLedgerFilterError,
+  EconomyConfigConflictError,
 } from "./admin.errors";
+import type { EconomyService } from "../economy";
 
 export interface ListUsersInput {
   limit?: number;
@@ -71,14 +73,23 @@ export interface GetTutorPayoutsInput {
   dateTo?: string;
 }
 
+export interface UpdateEconomySettingsInput {
+  expectedVersion: number;
+  onlineCogitoBaseIdr: number;
+  onlineCogitoIncrementIdr: number;
+  offlineCogitoBaseIdr: number;
+  offlineCogitoIncrementIdr: number;
+}
+
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
   db: DbType;
   wallet: AdminWalletPort;
   payout: BookingPayoutPort;
+  economy?: EconomyService;
 }) {
-  const { adminRepo, auditPort, db, wallet, payout } = deps;
+  const { adminRepo, auditPort, db, wallet, payout, economy } = deps;
 
   async function listUsers(
     input: ListUsersInput = {},
@@ -208,7 +219,73 @@ export function createAdminService(deps: {
     });
   }
 
-  return { listUsers, setRole, getWallet, listLedgerEntries, getTutorPayouts };
+  async function getEconomySettings() {
+    if (!economy) throw new Error("Economy service is not configured");
+    return economy.getConfig(db);
+  }
+
+  async function updateEconomySettings(
+    adminId: string,
+    input: UpdateEconomySettingsInput,
+  ) {
+    if (!economy) throw new Error("Economy service is not configured");
+
+    return db.transaction(async (tx) => {
+      const before = await economy.getConfig(tx);
+      if (before.version !== input.expectedVersion) {
+        throw new EconomyConfigConflictError(input.expectedVersion);
+      }
+
+      const updated = await economy.updateConfig(tx, {
+        expectedVersion: input.expectedVersion,
+        updatedBy: adminId,
+        values: {
+          onlineCogitoBaseIdr: input.onlineCogitoBaseIdr,
+          onlineCogitoIncrementIdr: input.onlineCogitoIncrementIdr,
+          offlineCogitoBaseIdr: input.offlineCogitoBaseIdr,
+          offlineCogitoIncrementIdr: input.offlineCogitoIncrementIdr,
+        },
+      });
+      if (!updated) {
+        throw new EconomyConfigConflictError(input.expectedVersion);
+      }
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "economy_config_updated",
+        targetId: updated.id,
+        targetType: "economy_config",
+        beforeState: {
+          onlineCogitoBaseIdr: before.onlineCogitoBaseIdr,
+          onlineCogitoIncrementIdr: before.onlineCogitoIncrementIdr,
+          offlineCogitoBaseIdr: before.offlineCogitoBaseIdr,
+          offlineCogitoIncrementIdr: before.offlineCogitoIncrementIdr,
+          version: before.version,
+        },
+        afterState: {
+          onlineCogitoBaseIdr: updated.onlineCogitoBaseIdr,
+          onlineCogitoIncrementIdr: updated.onlineCogitoIncrementIdr,
+          offlineCogitoBaseIdr: updated.offlineCogitoBaseIdr,
+          offlineCogitoIncrementIdr: updated.offlineCogitoIncrementIdr,
+          version: updated.version,
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  return {
+    listUsers,
+    setRole,
+    getWallet,
+    listLedgerEntries,
+    getTutorPayouts,
+    getEconomySettings,
+    updateEconomySettings,
+  };
 }
 
 export type AdminService = ReturnType<typeof createAdminService>;

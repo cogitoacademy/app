@@ -50,6 +50,9 @@ export type TutorSummaryData = {
   subjects?: TutorSubject[] | null;
   modality: string | null;
   prices?: Record<string, number> | null;
+  pricesByModality?: Partial<
+    Record<"online" | "offline", Record<string, number>>
+  > | null;
   user: { name: string | null; image: string | null } | null;
 };
 
@@ -66,9 +69,14 @@ export function TutorSummary({
   action?: ReactNode;
 }) {
   const tutorName = tutor.displayName ?? tutor.user?.name ?? "Tutor";
-  const startingPrice = tutor.prices
-    ? Math.min(...Object.values(tutor.prices))
-    : null;
+  const allPrices = tutor.pricesByModality
+    ? Object.values(tutor.pricesByModality).flatMap((prices) =>
+        prices ? Object.values(prices) : [],
+      )
+    : tutor.prices
+      ? Object.values(tutor.prices)
+      : [];
+  const startingPrice = allPrices.length > 0 ? Math.min(...allPrices) : null;
   const subjectLabels = groupTutorSubjects(
     tutor.subjects,
     tutor.expertise,

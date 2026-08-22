@@ -8,9 +8,11 @@ Before submission, the admin tutor invite form checks whether the normalized ema
 
 Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16).
 
-The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, upcoming sessions, availability, profile status, and payout totals. Admins see escalated booking operations plus pending tutor-profile and achievement review queues. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. Booking rows use the Cogito mark icon as the Marks prefix, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These are frontend compositions of existing oRPC procedures; there is no dashboard-specific backend endpoint.
+The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, upcoming sessions, availability, profile status, and payout totals. Admins see escalated booking operations plus pending tutor-profile and achievement review queues. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. The authenticated shell uses the profile image in the sidebar user avatar when available and falls back to initials. Booking rows use the Cogito mark icon as the Marks prefix, keep time/location/tutor in the booking metadata column, show student participants (not the tutor) in the avatar stack, use the per-student amount for a single-session group's `You pay` value, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These are frontend compositions of existing oRPC procedures; there is no dashboard-specific backend endpoint.
 
 The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students, Pending for tutors when requests need review (otherwise Upcoming), and All for admins; an explicit `tab` query parameter overrides the role-aware default.
+
+The booking detail page uses participant `user.image` values with initials as the fallback, prefixes Marks values with `/cogito-mark.png`, and renders state history as a newest-first transition timeline (`fromState → toState`, actor type, timestamp, and reason). Each transition uses a context icon (users for participant actions, calendar for scheduling, map pin for rooms, and check/X/alert icons for outcomes) while the destination state remains the single colored status badge. For online sessions, meeting creation starts when the tutor accepts after required confirmations. A successful link moves the booking to `scheduled`; a failed Google attempt leaves it `confirmed` for the 5-minute retry job, while a manual fallback is entered by an admin. The detail page surfaces these states and refreshes while a link is pending. Manual-link entry updates the newest meeting-attempt row so the detail read stays consistent after multiple retries.
 
 ## Email notifications (P1/P2, PRD notification matrix)
 
@@ -161,6 +163,12 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - Removing the final invitee automatically returns the request to solo without
   clearing the selected schedule or learning goal.
 
+- New tutor profiles store IDR base honoraria. Tutor discovery and booking
+  creation derive the current Marks price from the active economy config, while
+  every new booking stores an immutable economy version and IDR/Marks snapshot.
+  Existing profiles/bookings that still use the legacy Marks map remain readable
+  during migration.
+
 - [`marks-economy-architecture.md`](marks-economy-architecture.md) — canonical reference for the closed-loop Marks economy, package pricing, tutor honorarium/take-rate formulas, regulatory assumptions, Knowledge Bank gating, and related engineering changes.
 - The Marks blueprint is a reference architecture, not a substitute for Indonesian legal, regulatory, accounting, or payment-provider review before production launch.
 
@@ -173,7 +181,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Meeting:** Google Meet (production) / manual link fallback via CircuitBreaker
 - **Deployment:** Coolify on Hetzner VPS (after infrastructure branch)
 
-## DB Schema (29 tables)
+## DB Schema (30 tables)
 
 ### `user` (auth.ts) — CHECK(role IN ('student','tutor','admin'))
 
@@ -185,7 +193,9 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ### `studentProfile` (student-profile.ts) — uuid PK
 
-### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status + profile_edit_status; keeps approved public values separate from pending reviewed edits
+### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status + profile_edit_status; keeps approved public values separate from pending reviewed edits; stores IDR base honoraria in `base_rates_idr`
+
+### `economyConfig` (economy-config.ts) — singleton active Marks value, IDR tutor honorarium parameters, and admin-managed Cogito take schedule
 
 ### `availabilitySlot` (availability-slot.ts) — tutor availability windows (one-time + weekly-generated)
 
@@ -235,7 +245,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Admin Module (admin)
 
-- `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`
+- `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
 
 ### AdminTutor Module (admin)
 
@@ -274,21 +284,21 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Pricing Module (internal)
 
-- `calculateSoloPrice`, `calculateGroupPrice`, `calculateSeriesPrice`, `validateFloorPrice`
+- `computeSplit` (legacy Marks pricing), `computeEconomics` (IDR honorarium + Cogito take), `validateBaseRates`, `getEconomyConfig`
 
 ### Booking Module (student mutations + shared authenticated reads)
 
 Tutor availability is modeled as free-time windows rather than pre-sized sessions. The booking UI uses the shared Selia calendar and a cross-browser 24-hour autocomplete time field; students can enter any exact minute, but a start must leave room for the server-fixed 90-minute session inside the selected window. A one-session selection is one-time and multiple selections form a series automatically.
 
 - `createSolo`, `get`, `listMine`, `cancel`
-- `proposeReschedule`, `acceptReschedule`, `rejectReschedule`, `cancelSession`, `getRescheduleAvailability`
+- `proposeReschedule` (booking proposer), `acceptReschedule`, `rejectReschedule`, `cancelSession`, `getRescheduleAvailability`
 - `addSessionNote`, `getSessionNotes`
 - `createGroup`, `createSeries`, `createGroupSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
 - `listSessions`
 
 Tutor discovery and every student-owned booking mutation are guarded by `studentProcedure`. The protected booking list/detail/session reads are shared by authenticated parties: students see proposer/participant bookings, tutors see assigned bookings, and admins see all bookings. Tutor/admin accounts still cannot browse the student tutor catalog or create/cancel/confirm/reconfirm/withdraw bookings; tutor fulfillment remains under `tutorActions.*`.
 
-After submission, the tutor or booking proposer can propose a replacement time from the booking-detail action panel. Rescheduling is session-scoped; each proposal requires tutor and all active-student approval, and the original schedule remains active until unanimous acceptance.
+After submission, the tutor or booking proposer can propose a replacement time from the booking-detail action panel. The frontend dispatches student proposals to `booking.proposeReschedule` and tutor proposals to `tutorActions.proposeReschedule`; both routes use the shared service. Rescheduling is session-scoped; each proposal requires tutor and all active-student approval, and the original schedule remains active until unanimous acceptance.
 
 ### TutorActions Module (tutor)
 
@@ -330,7 +340,7 @@ After submission, the tutor or booking proposer can propose a replacement time f
 
 - BullMQ repeatable jobs: `expire-bookings` (5m), `release-expired-holds` (10m), `check-tutor-lateness` (5m), `send-notification-email` (60s — consumes the email outbox via `dispatchQueuedEmails`; failed rows are retried up to 3 attempts), `escalate-support-tickets` (15m), `retry-failed-meetings` (5m — re-creates Google Meet for CONFIRMED online bookings whose meeting creation failed, up to 3 attempts)
 
-Internal-only modules with no RPC procedures: `audit`, `email`, `meeting`, `pricing`, `scheduler`.
+Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meeting`, `pricing`, `scheduler`.
 
 ## Auth Config
 
@@ -359,28 +369,29 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 
 > **`.superpowers/sdd/` disposition (2026-08-17):** kept as the execution ledger — worktree paths, commit ranges, test counts, and merge reconciliation live in `.superpowers/sdd/{PLAN}/progress.md`; the durable plans stay in `docs/plans/`. The two-file-per-plan rule applies: plan in `docs/plans/`, ledger in `.superpowers/sdd/{PLAN}/progress.md`. The `.superpowers/sdd/.gitignore` tracks `**/progress.md` plus the archived `BACKEND-HARDENING/` + `BACKEND-HARDENING-PHASE2/` histories (formerly untracked local files, now committed).
 
-| Plan                                                              | Branch                                                                              | Status                                                                                                                                                                                 |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/completed/REVIEW-FIXES-4.md`                          | main (merged)                                                                       | Completed (2026-08-18) — wave-4 audit fixes merged via #68–#70, #75–#76 (docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud 3P guards, G2 email verification)        |
-| `docs/plans/active/WAVE-6-REVIEW-FIXES.md`                        | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83), `fix/wave6-c` (PR #84) — all merged | **Completed (2026-08-19)** — all wave-6 findings (H1–H3, M1–M5, L1–L3, N1–N4, P1–P3) fixed & merged; L3 closed as defense-in-depth                                                     |
-| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (merged)                                                                       | Active — all U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                                                                                         |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (merged #55)                                                  | Active — F1 queue category filters + booking detail/history are implemented; F1 remains partial for full participant/SLA surfaces; F9/F18 partial; F12 room approval queue implemented |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                                                                   | Active — code gaps 1.1–1.8 done (1.4 now 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                                                                         |
-| `docs/plans/completed/REVIEW-FIXES-3.md`                          | main (merged)                                                                       | Merged to main (#59–#65) — all wave-3 PRs landed; G2 (email verification) was deferred and is now **implemented** by REVIEW-FIXES-4 P4.4 (#76)                                         |
-| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`                                                         | Merged to main (#16)                                                                                                                                                                   |
-| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`                                                         | Merged to main (#16)                                                                                                                                                                   |
-| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`                                                         | Merged to main (#16)                                                                                                                                                                   |
-| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening`                                                  | Merged to main (#17)                                                                                                                                                                   |
-| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness`                                                  | Merged to main (#18)                                                                                                                                                                   |
-| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`                                                        | Merged to main (#19)                                                                                                                                                                   |
-| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                                                                       | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                                                                                               |
-| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                                                                       | Merged to main (#34–#38)                                                                                                                                                               |
-| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                                                                       | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness)                                                                           |
-| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`                                                      | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                                                                                                       |
-| `docs/plans/completed/REVIEW-FIXES-2.md`                          | main (merged)                                                                       | Merged to main (#50–#57) — wave-2 review fixes (rate limits, withdraw, uploads/payments, coverage)                                                                                     |
-| `docs/plans/completed/BACKEND-CLEANUP.md`                         | main (merged)                                                                       | Completed — all 11 items merged (2026-08-15)                                                                                                                                           |
-| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                                                                   | Superseded                                                                                                                                                                             |
-| `docs/archive/REFACTORING-PLAN.md`                                | —                                                                                   | Historical reference                                                                                                                                                                   |
+| Plan                                                              | Branch                                                                              | Status                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/completed/REVIEW-FIXES-4.md`                          | main (merged)                                                                       | Completed (2026-08-18) — wave-4 audit fixes merged via #68–#70, #75–#76 (docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud 3P guards, G2 email verification)                                                               |
+| `docs/plans/active/WAVE-6-REVIEW-FIXES.md`                        | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83), `fix/wave6-c` (PR #84) — all merged | **Completed (2026-08-19)** — all wave-6 findings (H1–H3, M1–M5, L1–L3, N1–N4, P1–P3) fixed & merged; L3 closed as defense-in-depth                                                                                                            |
+| `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (merged)                                                                       | Active — all U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                                                                                                                                                |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (merged #55)                                                  | Active — F1 queue category filters + booking detail/history are implemented; F1 remains partial for full participant/SLA surfaces; F9/F18 partial; F12 room approval queue implemented; booking detail meeting/activity UX refined 2026-08-22 |
+| `docs/plans/completed/ECONOMY-RATE-CONTROL.md`                    | main                                                                                | Completed 2026-08-22 — admin-managed Cogito take schedule, IDR tutor honoraria, immutable booking snapshots, and all-role economy E2E |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                                                                   | Active — code gaps 1.1–1.8 done (1.4 now 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                                                                                                                                |
+| `docs/plans/completed/REVIEW-FIXES-3.md`                          | main (merged)                                                                       | Merged to main (#59–#65) — all wave-3 PRs landed; G2 (email verification) was deferred and is now **implemented** by REVIEW-FIXES-4 P4.4 (#76)                                                                                                |
+| `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`                                                         | Merged to main (#16)                                                                                                                                                                                                                          |
+| `docs/plans/completed/CONSOLIDATION-PHASE2-ERROR-ARCHITECTURE.md` | `improvement/consolidation`                                                         | Merged to main (#16)                                                                                                                                                                                                                          |
+| `docs/plans/completed/CONSOLIDATION-PHASE2.5-GAPS.md`             | `improvement/consolidation`                                                         | Merged to main (#16)                                                                                                                                                                                                                          |
+| `docs/plans/completed/FOUNDATION-HARDENING.md`                    | `improvement/foundation-hardening`                                                  | Merged to main (#17)                                                                                                                                                                                                                          |
+| `docs/plans/completed/PRODUCTION-READINESS-PLAN.md`               | `improvement/production-readiness`                                                  | Merged to main (#18)                                                                                                                                                                                                                          |
+| `docs/plans/completed/INFRASTRUCTURE-PLAN.md`                     | `improvement/infrastructure`                                                        | Merged to main (#19)                                                                                                                                                                                                                          |
+| `docs/plans/completed/PRD-GAPS-SPEC.md`                           | main (merged)                                                                       | Merged to main (#36, #39–#43) — all G1–G20 landed; B-series fixes in #46                                                                                                                                                                      |
+| `docs/plans/completed/BACKEND-HARDENING.md`                       | main (merged)                                                                       | Merged to main (#34–#38)                                                                                                                                                                                                                      |
+| `docs/plans/completed/BACKEND-HARDENING-PHASE2.md`                | main (merged)                                                                       | Merged to main (#46) — all 6 PRs implemented (security, money correctness, outbox, uploads, PRD-correctness)                                                                                                                                  |
+| `docs/plans/completed/BACKEND-REVIEW-HARDENING.md`                | `fix/backend-review-hardening`                                                      | Merged to main (#48) — review fixes (C1, H1–H7, M1–M16, L1–L9) + Redis mandatory                                                                                                                                                              |
+| `docs/plans/completed/REVIEW-FIXES-2.md`                          | main (merged)                                                                       | Merged to main (#50–#57) — wave-2 review fixes (rate limits, withdraw, uploads/payments, coverage)                                                                                                                                            |
+| `docs/plans/completed/BACKEND-CLEANUP.md`                         | main (merged)                                                                       | Completed — all 11 items merged (2026-08-15)                                                                                                                                                                                                  |
+| `docs/archive/EXECUTION-PLAN-v2.md`                               | —                                                                                   | Superseded                                                                                                                                                                                                                                    |
+| `docs/archive/REFACTORING-PLAN.md`                                | —                                                                                   | Historical reference                                                                                                                                                                                                                          |
 
 ### Execution Order
 
@@ -401,7 +412,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 
 Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). **REVIEW-FIXES-2 merged via #50–#57** (wave-2 findings), **REVIEW-FIXES-3 merged via #59–#65** (wave-3 findings), **REVIEW-FIXES-4 merged via #68–#70, #75–#76** (wave-4: docs/sdd reconciliation, money-correctness bugs C1–C3/H1–H6/M1–M9/L1–L5, Xendit provider rewrite for the 2024-11-11 API, fail-loud Resend/Google Meet/R2 guards, G2 email verification). Next: remaining frontend-gap work and production ops.
 
-## Role E2E Readiness Snapshot (2026-08-14)
+## Role E2E Readiness Snapshot (2026-08-22)
 
 Use this section as the current role-readiness baseline. Re-audit only after the related backend or frontend plans materially change.
 
@@ -414,6 +425,8 @@ The student My Profile surface supports self-service account name and profile-im
 Student profile UX is organized as a responsive account-identity card plus separate learning and parent/guardian sections. The page shows profile completion, keeps account identity saving separate from learning-profile saving, and uses one visible save action for the learning fields.
 
 **Primary promotion flow is ready:** email/password auth -> tutor discovery -> solo booking -> Marks hold -> booking list/detail -> cancellation. Profile, balance/top-up, basic achievements, notification bell, calendar export, and WhatsApp contact surfaces are also present.
+
+Economy role coverage is ready: students see computed Marks prices and cannot open admin economy settings; tutors see IDR honorarium setup without Marks cash-out language; admins can update the active Cogito take schedule and see it persist after reload.
 
 Booking detail uses a task-detail layout shared by student and tutor views: a compact identity-and-status header, a single primary content flow for schedule, session actions, and activity, and a sticky metadata rail for session access, Marks, and participants. All existing lifecycle actions and data remain available without changing the booking API.
 
@@ -429,7 +442,7 @@ The tutor workspace now has the primary management surfaces: tutor-only onboardi
 
 Published tutor profiles remain editable. Bio and availability-summary edits publish immediately; trust-sensitive edits are held in `pendingProfileChanges` with a separate edit-review status, so discovery continues serving the last approved profile until an admin approves the proposal or requests revisions.
 
-Tutor onboarding uses the same account-identity card as the student profile, then groups public profile, teaching setup, and availability/proof fields into responsive sections. Profile status and admin feedback stay visible above the form, while draft/save and submit-for-review actions are consolidated into one sticky action area. These are UI-only changes; the existing tutor profile and Better Auth mutations remain unchanged.
+Tutor onboarding uses the same account-identity card as the student profile, then groups public profile, teaching setup, and availability/proof fields into responsive sections. Profile status and admin feedback stay visible above the form, while draft/save and submit-for-review actions are consolidated into one sticky action area. Tutors enter IDR base honoraria per modality; the API validates the active minimum and Rp 5,000 increments while preserving legacy Marks maps for older profiles.
 
 Tutor subjects are normalized in `subject_category` (self-referencing mother/child hierarchy) and `tutor_profile_subject` (profile-to-child join). The legacy `expertise` array remains readable for compatibility, while onboarding and published discovery use normalized child subjects. Subject changes on a published profile follow the existing pending-review path and are applied atomically when an admin approves the edit. The onboarding category selector and student tutor-list filters keep UUIDs as submission/query values but render human-readable labels; raw subject IDs should never be shown to tutors or students.
 
@@ -437,7 +450,7 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 
 ### Admin
 
-Backend is ready for user role management, tutor invite/review, achievement moderation, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
+Backend is ready for user role management, tutor invite/review, achievement moderation, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, refund corrections, and the active economy schedule. The /admin-economy screen lets admins edit the four Cogito take fields in Rp 5,000 increments with optimistic versioning; updates are audit-logged and apply only to future/new repricing snapshots. Achievement moderation remains the safest next Admin UI quick win.
 
 The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin operations UI now also provides category filtering plus a booking-detail/history dialog backed by `adminBooking.getBookingStateHistory`, and the Rooms tab has a dedicated `room.listPendingApprovals` queue with assign/choose-another/cancel actions; F1 remains partial for a dedicated `/admin` route, fully hydrated participant/per-wallet detail, and business-hours SLA presentation. F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8).
 

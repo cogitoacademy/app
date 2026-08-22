@@ -31,12 +31,30 @@ service resolves proposer/participant visibility for students, assigned
 bookings for tutors, and the complete set for admins. `/_app/tutor-bookings`
 remains as a compatibility redirect. The list keeps status/action semantics in
 the booking detail page, shows tutor earnings/total Marks where relevant, and
-uses a compact date/location/status arrangement on mobile. Admin detail is
-read-only; admin mutations remain in the operations console. Marks values use
-the Cogito mark icon as a prefix, and visible status badges reveal the state
-explanation on hover or keyboard focus.
+uses a compact date/location/tutor metadata arrangement on mobile, shows only
+student participants in the avatar stack, and displays single-session group
+prices per student for the student viewer. Admin detail is read-only; admin
+mutations remain in the operations console. Marks values use the Cogito mark
+icon as a prefix, and visible status badges reveal the state explanation on
+hover or keyboard focus.
 
-The shared booking list orders active/all rows by the nearest scheduled start while keeping past/cancelled history newest-first. Defaults are role-aware: students see Upcoming, tutors see Pending when requests exist (or Upcoming otherwise), and admins see All; an explicit `tab` query parameter wins.
+The shared booking list orders active/all rows by the nearest scheduled start
+while keeping past/cancelled history newest-first. Defaults are role-aware:
+students see Upcoming, tutors see Pending when requests exist (or Upcoming
+otherwise), and admins see All; an explicit `tab` query parameter wins.
+
+### Booking detail UX follow-up (2026-08-22)
+
+The detail page now renders participant profile images with initials fallback,
+uses the Cogito mark asset as the prefix for Marks amounts, and presents state
+history as a vertical transition timeline with actor, timestamp, state chips,
+and reason. Online meeting access explains the `confirmed`/link-pending and
+provider-failed states and refreshes while a link is being prepared. The
+backend starts link generation when the tutor accepts after required
+confirmations; successful generation moves the booking to `scheduled`, while
+failed Google attempts remain `confirmed` for the 5-minute retry job. Manual
+admin links update the newest meeting-attempt row so the detail read remains
+consistent after retries.
 
 ---
 
@@ -49,28 +67,29 @@ Booking type is derived from invitees (none = solo, one or more = group), so
 students no longer need to select a separate solo/group mode before searching
 for classmates.
 
-| Route                        | Component                       | Status                                                                                           |
-| ---------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `/` (index)                  | Landing redirect                | Exists                                                                                           |
-| `/login`                     | sign-in-form.tsx                | Exists                                                                                           |
-| `/auth/callback`             | auth callback                   | Exists                                                                                           |
-| `/invite`                    | invite-claim-page.tsx           | Exists                                                                                           |
-| `/_app`                      | App layout + sidebar            | Exists                                                                                           |
-| `/_app/dashboard`            | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                  |
-| `/_app/balance`              | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                            |
-| `/_app/bookings`             | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                             |
-| `/_app/bookings/$bookingId`  | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history            |
-| `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                          |
-| `/_app/tutors/$tutorId/book` | create-booking-page.tsx         | Exists (solo/group/series creation)                                                              |
-| `/_app/achievements`         | achivements-page.tsx            | Exists (submission + list)                                                                       |
-| `/_app/profile`              | profile-page.tsx                | Complete — responsive account identity, completion indicator, learning profile, and parent/guardian sections |
+| Route                        | Component                       | Status                                                                                                                        |
+| ---------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `/` (index)                  | Landing redirect                | Exists                                                                                                                        |
+| `/login`                     | sign-in-form.tsx                | Exists                                                                                                                        |
+| `/auth/callback`             | auth callback                   | Exists                                                                                                                        |
+| `/invite`                    | invite-claim-page.tsx           | Exists                                                                                                                        |
+| `/_app`                      | App layout + sidebar            | Exists                                                                                                                        |
+| `/_app/dashboard`            | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                                               |
+| `/_app/balance`              | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                                                         |
+| `/_app/bookings`             | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                                                          |
+| `/_app/bookings/$bookingId`  | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                         |
+| `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                                                       |
+| `/_app/tutors/$tutorId/book` | create-booking-page.tsx         | Exists (solo/group/series creation)                                                                                           |
+| `/_app/achievements`         | achivements-page.tsx            | Exists (submission + list)                                                                                                    |
+| `/_app/profile`              | profile-page.tsx                | Complete — responsive account identity, completion indicator, learning profile, and parent/guardian sections                  |
 | `/_app/onboarding`           | onboarding-form.tsx             | Complete baseline — responsive tutor profile sections, visible review status/feedback, pricing grid, and consolidated actions |
-| `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Compatibility redirect to the shared `/bookings` list                                             |
-| `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview |
-| `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                               |
-| `/_app/admin-operations`     | admin-operations-page.tsx       | Partial F1 baseline — filtered queue, booking detail/history, override, rooms, and wallet lookup |
-| `/_app/admin-tutors`         | admin tutor invite + review     | Exists                                                                                           |
-| `/_app/admin-achievements`   | achievement-moderation-page.tsx | Exists (moderation UI)                                                                           |
+| `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Compatibility redirect to the shared `/bookings` list                                                                         |
+| `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                              |
+| `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                                                            |
+| `/_app/admin-operations`     | admin-operations-page.tsx       | Partial F1 baseline — filtered queue, booking detail/history, override, rooms, and wallet lookup                              |
+| `/_app/admin-tutors`         | admin tutor invite + review     | Exists                                                                                                                        |
+| `/_app/admin-achievements`   | achievement-moderation-page.tsx | Exists (moderation UI)                                                                                                        |
+| `/_app/admin-economy`        | economy-settings-page.tsx       | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence    |
 
 ### Remaining gaps (no complete surface yet)
 
@@ -100,6 +119,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                |
 | F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed                                                                        |
 | F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | Partial                                                                       |
+| F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                |
 
 **Total estimated effort: ~5.5 days for remaining gaps (F1, F9, F18 partial; J2 open).**
 
@@ -109,7 +129,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 > **Audit 2026-08-19 (against main `d11962b`):** PR #55 merged (`d4e50e0`). Verified in `apps/web/src`:
 >
-> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The remaining F1 limitations are recorded above.
+> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The F6 reschedule action now dispatches by viewer role: student proposers use `booking.proposeReschedule`, tutors use `tutorActions.proposeReschedule`. The remaining F1 limitations are recorded above.
 >
 > - **F2/F3/F6/F7/F11/F17 → Closed** — override dialog with `previewOverride`/`applyOverride` (`admin-operations-page.tsx`), lateness report via `support.createTicket` (`booking-lifecycle-actions.tsx`), reschedule propose/accept/reject, wallet/ledger lookup tab, booking detail baseline.
 > - **F8 → Closed** — series bookings render a per-session list with per-session "Complete session" buttons calling `completeSession({ bookingId, sessionId })` (`booking-detail-page.tsx`).
@@ -248,13 +268,13 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** **CLOSED (2026-08-19).** `booking-reschedule-action.tsx` (calendar + time input + reason; `booking.proposeReschedule` tutor-or-proposer, per-session `sessionId`, supersedes pending proposal) — merged via #55.
+**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22).** `booking-reschedule-action.tsx` (calendar + time input + reason; role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule`, per-session `sessionId`, supersedes pending proposal) — merged via #55 with the tutor route wiring corrected in the follow-up.
 
 **Required (after G6 backend fix):**
 
 1. On tutor booking detail (`_app.tutor-bookings`), add "Propose reschedule" action for bookings in `confirmed`/`scheduled` state
 2. Form: new date/time picker, reason (optional)
-3. Calls `booking.proposeReschedule` (tutor role, after G6 fix)
+3. Calls `tutorActions.proposeReschedule` for tutors (the student proposer path uses `booking.proposeReschedule`)
 4. Shows pending status after submission
 
 **Acceptance:**
@@ -596,6 +616,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Field, Select, Menu, Table, It
 
 ### Version Notes
 
+- v1.9 (2026-08-22): Tutor discovery category and child-subject filters now support multi-select values with label-preserving triggers and normalized array filters.
+- v1.8 (2026-08-22): Refined booking detail participants, Marks prefix, activity timeline, and online meeting status. The detail page uses profile images with initials fallback, a newest-first activity line with transition-specific icons and one destination-state badge, 30–60 second refresh while a meeting link is pending, and explicit copy for `confirmed` provider retries. The meeting providers now update the newest meeting-attempt row for manual-link fallback, and the booking read model never reports a URL-less row as `ready`.
 - v1.7 (2026-08-22): Replaced booking cancel/complete browser confirmation prompts with Selia dialogs and raised the global toast layer above dialog overlays so mutation feedback remains visible. No booking API or state-machine contract changed.
 
 - v1.6 (2026-08-22): Refined the F17 tutor booking review dialog with responsive sizing, a schedule/modality/attendance summary, modality-aware transition copy, and mobile-friendly action layout. No booking API or state-machine contract changed.

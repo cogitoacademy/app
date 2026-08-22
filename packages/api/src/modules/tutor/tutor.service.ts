@@ -83,6 +83,20 @@ export function validateUpdateInput(
       throw new InvalidTutorPricingError(profile.id, error);
     }
   }
+  if (input.baseRatesIdr) {
+    const modality = (input.modality ?? profile.modality ?? MODALITY.ONLINE) as
+      | "online"
+      | "offline"
+      | "both";
+    const error =
+      pricingPort.validateBaseRates?.(
+        input.baseRatesIdr as Record<string, number>,
+        modality,
+      ) ?? "IDR pricing is not configured";
+    if (error) {
+      throw new InvalidTutorPricingError(profile.id, error);
+    }
+  }
 }
 
 /**
@@ -115,7 +129,10 @@ export function validateSubmitForReview(
     { key: "shortBio", value: profile.shortBio },
     { key: "credentialsSummary", value: profile.credentialsSummary },
     { key: "modality", value: profile.modality },
-    { key: "prices", value: profile.prices },
+    {
+      key: "baseRatesIdr",
+      value: profile.baseRatesIdr ?? profile.prices,
+    },
   ];
   const missingFields = requiredFields
     .filter((f) => !f.value)
@@ -130,7 +147,20 @@ export function validateSubmitForReview(
     throw new TutorProfileIncompleteError(profile.id, ["subjectIds"]);
   }
 
-  if (profile.prices) {
+  if (profile.baseRatesIdr) {
+    const modality = (profile.modality ?? MODALITY.ONLINE) as
+      | "online"
+      | "offline"
+      | "both";
+    const error =
+      pricingPort.validateBaseRates?.(
+        profile.baseRatesIdr as Record<string, number>,
+        modality,
+      ) ?? "IDR pricing is not configured";
+    if (error) {
+      throw new InvalidTutorPricingError(profile.id, error);
+    }
+  } else if (profile.prices) {
     const modality = (profile.modality ?? MODALITY.ONLINE) as
       | "online"
       | "offline"
@@ -199,6 +229,7 @@ export function createTutorService(deps: {
       "credentialsSummary",
       "expertise",
       "modality",
+      "baseRatesIdr",
       "prices",
       "proofUrls",
     ] as const;

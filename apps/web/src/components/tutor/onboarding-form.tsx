@@ -79,6 +79,7 @@ interface OnboardingFormProps {
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
+    baseRatesIdr: Partial<{ online: number; offline: number }> | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
     proofUrls: string[];
@@ -90,6 +91,7 @@ interface OnboardingFormProps {
       expertise: string[];
       subjectIds: string[];
       modality: Modality;
+      baseRatesIdr: Partial<{ online: number; offline: number }>;
       prices: Record<string, number>;
       proofUrls: string[];
     }> | null;
@@ -119,7 +121,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       profile.subjects?.map((subject) => subject.id) ??
       [],
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
-    prices: pending.prices ?? (profile.prices as Record<string, number>) ?? {},
+    baseRatesIdr: pending.baseRatesIdr ??
+      profile.baseRatesIdr ?? {
+        online: 175_000,
+        offline: 225_000,
+      },
     availabilitySummary: profile.availabilitySummary ?? "",
     proofUrls: pending.proofUrls ?? profile.proofUrls ?? [],
   });
@@ -226,6 +232,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       expertise?: string[];
       subjectIds?: string[];
       modality?: Modality;
+      baseRatesIdr?: Partial<{ online: number; offline: number }>;
       prices?: Record<string, number>;
       availabilitySummary?: string;
       proofUrls?: string[];
@@ -241,11 +248,16 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (form.subjectIds.length > 0) payload.subjectIds = form.subjectIds;
     if (form.modality) payload.modality = form.modality;
-    if (form.prices && Object.keys(form.prices).length > 0) {
-      const cleanPrices = Object.fromEntries(
-        Object.entries(form.prices).filter(([, value]) => value > 0),
+    if (form.baseRatesIdr && Object.keys(form.baseRatesIdr).length > 0) {
+      const cleanBaseRates = Object.fromEntries(
+        Object.entries(form.baseRatesIdr).filter(([, value]) => value > 0),
       );
-      if (Object.keys(cleanPrices).length > 0) payload.prices = cleanPrices;
+      if (Object.keys(cleanBaseRates).length > 0) {
+        payload.baseRatesIdr = cleanBaseRates as Partial<{
+          online: number;
+          offline: number;
+        }>;
+      }
     }
     if (availabilitySummary) payload.availabilitySummary = availabilitySummary;
     if (form.proofUrls.length > 0) payload.proofUrls = form.proofUrls;
@@ -261,8 +273,21 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (!form.modality) validationErrors.modality = "Required";
     if (form.subjectIds.length === 0)
       validationErrors.subjects = "Select at least one child subject";
-    if (!Object.values(form.prices ?? {}).some((value) => value > 0))
-      validationErrors.prices = "Add at least one valid session price";
+    const requiredRates =
+      form.modality === "both"
+        ? ["online", "offline"]
+        : form.modality
+          ? [form.modality]
+          : [];
+    if (
+      requiredRates.some(
+        (key) =>
+          typeof form.baseRatesIdr[key as "online" | "offline"] !== "number",
+      )
+    ) {
+      validationErrors.baseRatesIdr =
+        "Add a valid IDR base honorarium for each selected modality";
+    }
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -566,7 +591,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 </IconBox>
                 <CardTitle>Teaching setup</CardTitle>
                 <CardDescription>
-                  Set the session format and Marks students should expect.
+                  Set the session format and your IDR honorarium. Cogito
+                  calculates the student Marks price from the active economy.
                 </CardDescription>
               </CardHeader>
               <CardBody className="flex flex-col gap-5">
@@ -613,10 +639,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 {form.modality ? (
                   <TutorPricingFields
                     modality={form.modality}
-                    prices={form.prices}
-                    onChange={(prices) => {
-                      setForm((current) => ({ ...current, prices }));
-                      clearError("prices");
+                    baseRatesIdr={form.baseRatesIdr}
+                    onChange={(baseRatesIdr) => {
+                      setForm((current) => ({ ...current, baseRatesIdr }));
+                      clearError("baseRatesIdr");
                     }}
                     errors={errors}
                   />

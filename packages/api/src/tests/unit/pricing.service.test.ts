@@ -140,4 +140,60 @@ describe("Pricing Service", () => {
       }
     });
   });
+
+  describe("IDR economy calculations", () => {
+    const config = {
+      version: 7,
+      markValueIdr: 5_000,
+      minTutorBaseRateIdr: 50_000,
+      onlineTutorIncrementIdr: 30_000,
+      offlineTutorIncrementIdr: 40_000,
+      onlineCogitoBaseIdr: 50_000,
+      onlineCogitoIncrementIdr: 20_000,
+      offlineCogitoBaseIdr: 90_000,
+      offlineCogitoIncrementIdr: 40_000,
+    };
+
+    test("calculates the blueprint online baseline", () => {
+      const result = pricing.computeEconomics("online", 175_000, 2, config);
+
+      expect(result).toMatchObject({
+        tutorHonorariumIdr: 205_000,
+        cogitoTakeIdr: 70_000,
+        totalIdr: 275_000,
+        totalMarks: 55,
+        perStudent: 28,
+        actualMarksPooled: 56,
+        economyVersion: 7,
+      });
+    });
+
+    test("calculates the blueprint offline baseline", () => {
+      const result = pricing.computeEconomics("offline", 225_000, 3, config);
+
+      expect(result).toMatchObject({
+        tutorHonorariumIdr: 305_000,
+        cogitoTakeIdr: 170_000,
+        totalIdr: 475_000,
+        totalMarks: 95,
+        perStudent: 32,
+        actualMarksPooled: 96,
+      });
+    });
+
+    test("validates IDR base honoraria", () => {
+      expect(
+        pricing.validateBaseRates({ online: 175_000 }, "online", config),
+      ).toBeNull();
+      expect(
+        pricing.validateBaseRates({ online: 175_001 }, "online", config),
+      ).toContain("increments");
+      expect(
+        pricing.validateBaseRates({ online: 45_000 }, "online", config),
+      ).toContain("at least");
+      expect(
+        pricing.validateBaseRates({ online: 175_000 }, "both", config),
+      ).toContain("offline");
+    });
+  });
 });

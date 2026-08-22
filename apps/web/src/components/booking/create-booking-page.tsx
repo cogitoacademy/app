@@ -302,9 +302,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
     );
   const selectedSlot = selectedSlots[0] ?? null;
-  const perSessionPrice = Number(profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE);
+  const pricesForModality =
+    profile.pricesByModality?.[effectiveModality] ?? profile.prices;
+  const perSessionPrice = Number(
+    pricesForModality?.["1"] ?? DEFAULT_SOLO_PRICE,
+  );
   const baseSessionPrice = isGroupBooking
-    ? Number(profile.prices?.[String(invitees.length + 1)] ?? perSessionPrice)
+    ? Number(
+        pricesForModality?.[String(invitees.length + 1)] ?? perSessionPrice,
+      )
     : perSessionPrice;
   const price = baseSessionPrice * Math.max(selectedSlots.length, 1);
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
@@ -420,7 +426,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
       <form
         onSubmit={submitBooking}
-        className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:items-start"
+        className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.65fr)] lg:items-start"
       >
         <div className="space-y-4">
           <Card>

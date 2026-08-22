@@ -4,6 +4,7 @@ import { initRedis } from "./lib/redis";
 import { initIdempotencyStores } from "./lib/idempotency";
 import { createAuditModule } from "./modules/audit";
 import { createPricingModule } from "./modules/pricing";
+import { createEconomyModule } from "./modules/economy";
 import { createWalletModule } from "./modules/wallet";
 import { createAuthModule } from "./modules/auth";
 import { createAdminModule } from "./modules/admin";
@@ -134,7 +135,11 @@ function createServices() {
 
   // Infrastructure modules
   const audit = createAuditModule();
-  const pricing = createPricingModule();
+  const economy = createEconomyModule({ db });
+  const pricing = createPricingModule({
+    db,
+    economy: economy.service,
+  });
   const email = createEmailModule({
     resendApiKey: env.RESEND_API_KEY,
     emailFrom: env.EMAIL_FROM,
@@ -183,6 +188,7 @@ function createServices() {
     audit: audit.service,
     wallet: wallet.service,
     payout: booking.service,
+    economy: economy.service,
   });
   const adminTutor = createAdminTutorModule({
     db,
@@ -196,7 +202,7 @@ function createServices() {
     audit: audit.service,
     payout: booking.service,
   });
-  const discovery = createDiscoveryModule({ db });
+  const discovery = createDiscoveryModule({ db, pricing: pricing.service });
   const invite = createInviteModule({ db, audit: audit.service });
   const achievement = createAchievementModule({
     db,

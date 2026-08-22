@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   IconCalendarEvent,
+  IconChalkboardTeacher,
   IconChevronRight,
   IconClock,
   IconInbox,
@@ -23,6 +24,7 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { cn } from "@cogito-app/ui/lib/utils";
@@ -68,7 +70,7 @@ type BookingListItem = {
   scheduledEndAt: string | Date;
   timezone: string;
   originalMarks: number;
-  priceSnapshot: { tutorShare?: number } | null;
+  priceSnapshot: { perStudent?: number; tutorShare?: number } | null;
   tutor: BookingPerson | null;
   proposer: BookingPerson | null;
   participants?: Array<{
@@ -320,27 +322,25 @@ function BookingListRow({
         attention && "border-warning-border",
       )}
     >
-      <div className="grid min-w-0 gap-4 p-4 md:grid-cols-[5.5rem_12rem_minmax(0,1fr)_auto] md:items-center md:gap-5 md:p-5">
-        <div className="flex min-w-0 items-center gap-3 md:block">
+      <div className="grid min-w-0 gap-4 p-4 md:grid-cols-[5.5rem_auto_minmax(0,1fr)_auto] md:items-center md:gap-5 md:p-5">
+        <div className="flex min-w-0 items-center gap-3 md:gap-0">
           <DateTile date={date} />
           <div className="min-w-0 md:hidden">
             <BookingMeta booking={booking} location={location} />
           </div>
         </div>
 
-        <div className="hidden min-w-0 md:block md:w-48">
+        <div className="hidden min-w-0 md:block md:w-auto">
           <BookingMeta booking={booking} location={location} />
         </div>
 
         <div className="min-w-0">
-          <Text className="truncate font-semibold" title={title}>
+          <Text className="truncate font-semibold md:text-lg" title={title}>
             {title}
-          </Text>
-          <Text className="mt-1 truncate text-sm text-muted">
-            {getBookingContextLabel(booking)}
           </Text>
           <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <AvatarStack people={people} />
+            <Separator orientation="vertical" className="h-full" />
             <BookingFinancialInfo booking={booking} viewerRole={viewerRole} />
             {showStatus ? (
               <BookingStatusBadge
@@ -379,10 +379,12 @@ function BookingMeta({
   booking: BookingListItem;
   location: string;
 }) {
+  const tutorName = booking.tutor?.name?.trim() || "Cogito tutor";
+
   return (
-    <div className="min-w-0 space-y-1 md:w-48 md:max-w-48">
+    <div className="min-w-0 space-y-1 md:w-auto md:max-w-48">
       <div className="flex items-center gap-1.5 text-sm font-medium">
-        <IconClock className="size-3.5 shrink-0 text-muted" />
+        <IconClock className="size-3.5 md:size-5 shrink-0 text-muted" />
         <span className="truncate">
           {formatBookingTimeRange(
             booking.scheduledStartAt,
@@ -392,8 +394,14 @@ function BookingMeta({
         </span>
       </div>
       <div className="flex items-center gap-1.5 text-sm text-muted">
-        <IconMapPin className="size-3.5 shrink-0" />
+        <IconMapPin className="size-3.5 md:size-5 shrink-0" />
         <span className="truncate">{location}</span>
+      </div>
+      <div className="flex items-center gap-1.5 text-sm text-muted">
+        <IconChalkboardTeacher className="size-3.5 md:size-5 shrink-0" />
+        <span className="truncate" title={tutorName}>
+          {tutorName}
+        </span>
       </div>
     </div>
   );
@@ -403,17 +411,19 @@ function DateTile({ date }: { date: ReturnType<typeof getDateParts> }) {
   return (
     <div
       className={cn(
-        "flex size-16 shrink-0 flex-col items-center justify-center rounded-xl text-center",
+        "flex size-16 md:h-full md:w-auto md:flex-1 aspect-square shrink-0 flex-col items-center justify-center rounded-md text-center",
         date.isToday
           ? "bg-primary text-primary-foreground"
           : "bg-accent text-foreground",
       )}
     >
-      <span className="text-xs font-medium uppercase opacity-80">
+      <span className="text-xs lg:text-sm font-medium uppercase opacity-80">
         {date.weekday}
       </span>
-      <span className="text-2xl font-semibold leading-none">{date.day}</span>
-      <span className="text-[0.65rem] font-medium uppercase opacity-80">
+      <span className="text-2xl lg:text-4xl font-semibold leading-none my-1">
+        {date.day}
+      </span>
+      <span className="text-[0.65rem] lg:text-sm font-medium uppercase opacity-80">
         {date.month}
       </span>
     </div>
@@ -425,15 +435,12 @@ function AvatarStack({ people }: { people: BookingPerson[] }) {
 
   return (
     <div className="flex items-center -space-x-2" aria-label="Participants">
-      {people.slice(0, 4).map((person) => (
+      {people.map((person) => (
         <Avatar key={person.id} size="sm" className="border-2 border-card">
           {person.image ? <AvatarImage src={person.image} alt="" /> : null}
           <AvatarFallback>{getInitials(person.name)}</AvatarFallback>
         </Avatar>
       ))}
-      {people.length > 4 ? (
-        <span className="ml-3 text-xs text-muted">+{people.length - 4}</span>
-      ) : null}
     </div>
   );
 }
@@ -563,9 +570,10 @@ function getDateParts(value: string | Date, timeZone: string) {
 
 function getBookingPeople(booking: BookingListItem) {
   const people = [
-    booking.tutor,
     booking.proposer,
-    ...(booking.participants ?? []).map((participant) => participant.user),
+    ...(booking.participants ?? [])
+      .filter((participant) => participant.role !== "tutor")
+      .map((participant) => participant.user),
   ].filter((person): person is BookingPerson => Boolean(person));
   return [...new Map(people.map((person) => [person.id, person])).values()];
 }
@@ -596,11 +604,6 @@ function formatPeopleNames(names: string[]) {
   return `${names[0]}, ${names[1]} +${names.length - 2}`;
 }
 
-function getBookingContextLabel(booking: BookingListItem) {
-  const tutorName = booking.tutor?.name ?? "Cogito tutor";
-  return `Tutor: ${tutorName}`;
-}
-
 function getBookingLocation(booking: BookingListItem) {
   if (booking.modality === "online") return "Online";
   const room = booking.roomBookings?.find(
@@ -618,6 +621,10 @@ function BookingFinancialInfo({
 }) {
   const total = booking.originalMarks;
   const tutorShare = booking.priceSnapshot?.tutorShare ?? 0;
+  const studentPay =
+    booking.type === "group"
+      ? (booking.priceSnapshot?.perStudent ?? total)
+      : total;
 
   if (viewerRole === "tutor") {
     return (
@@ -643,7 +650,7 @@ function BookingFinancialInfo({
     );
   }
 
-  return <FinancialValue label="You pay" value={total} />;
+  return <FinancialValue label="You pay" value={studentPay} />;
 }
 
 function FinancialValue({ label, value }: { label: string; value: number }) {

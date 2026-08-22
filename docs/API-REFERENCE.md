@@ -130,9 +130,24 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ tutorId, dateFrom?, dateTo? }`
-- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` at 7,000 IDR/Mark)
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` is summed from IDR tutor-honorarium snapshots; legacy pre-economy bookings use the compatibility path)
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
 - **Description:** Tutor payout summary from completed bookings in a date range
+
+### `admin.getEconomySettings`
+
+- **Auth:** Admin
+- **Input:** None
+- **Output:** `{ id, markValueIdr, minTutorBaseRateIdr, onlineTutorIncrementIdr, offlineTutorIncrementIdr, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr, version, updatedBy, createdAt, updatedAt }`
+- **Description:** Returns the active Marks computational value and the online/offline tutor and Cogito schedules used for new booking snapshots.
+
+### `admin.updateEconomySettings`
+
+- **Auth:** Admin
+- **Input:** `{ expectedVersion, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr }` (IDR values use Rp 5,000 increments; bases are at least Rp 5,000; increments are non-negative)
+- **Output:** The updated economy settings object, with `version` incremented
+- **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
+- **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged.
 
 ---
 
@@ -278,14 +293,15 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
-- **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, parent }]`
-- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array.
+- **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, parent }]` and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response.
 
 ### `tutors.getProfile`
 
 - **Auth:** Student
 - **Input:** `{ tutorId }`
-- **Output:** `{ profile }`
+- **Output:** `{ profile }` with computed `pricesByModality` Marks maps
+- **Description:** Returns the published tutor profile and future availability slots for the booking form. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
 
 ---
 
@@ -489,7 +505,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.proposeReschedule`
 
 - **Auth:** Student (booking proposer)
-- **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
+- **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
 - **Output:** `{ booking }`
 - **Description:** Proposes a new fixed 90-minute time for one booking session; proposals expire after 24 hours and require tutor plus all active-student approval
 
@@ -587,7 +603,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **RPC path:** `/rpc/tutor/booking/reschedule/propose`
 - **Auth:** Tutor
-- **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
+- **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
 - **Output:** `{ booking }`
 - **Description:** Tutor proposes a new fixed 90-minute time for one session; tutor proposals may be outside the original availability window and require every active student's acceptance
 

@@ -190,6 +190,7 @@ async function seed() {
         credentialsSummary: "Seed credentials",
         expertise: ["Mathematics", "Physics"],
         modality: "both",
+        baseRatesIdr: { online: 175_000, offline: 225_000 },
         prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
         availabilitySummary: "Weekdays 16:00–20:00 WIB",
         onboardingStatus: "published",
@@ -213,6 +214,10 @@ async function seed() {
 
     console.log("Seed tutor profile ready:", profile!.id);
   } else {
+    await db
+      .update(tutorProfile)
+      .set({ baseRatesIdr: { online: 175_000, offline: 225_000 } })
+      .where(eq(tutorProfile.userId, tutorUser.id));
     console.log("Seed tutor profile already exists:", existingProfile[0].id);
   }
 

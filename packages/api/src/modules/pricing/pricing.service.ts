@@ -6,6 +6,10 @@ import {
   EXTRA_TAKE_DIVISOR,
   MODALITY,
 } from "../../shared/constants";
+import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
+import type { EconomyParameters, EconomyService } from "../economy";
+import { DEFAULT_ECONOMY_CONFIG } from "../economy";
 
 export type GroupSize = 1 | 2 | 3 | 4 | 5 | 6;
 export type Modality = "online" | "offline" | "both";
@@ -22,6 +26,20 @@ export interface PriceSnapshot {
   tutorExtraShare: number;
 }
 
+export interface EconomyPriceSnapshot extends PriceSnapshot {
+  economyVersion: number;
+  markValueIdr: number;
+  tutorBaseRateIdr: number;
+  tutorIncrementIdr: number;
+  tutorHonorariumIdr: number;
+  cogitoBaseTakeIdr: number;
+  cogitoIncrementIdr: number;
+  cogitoTakeIdr: number;
+  totalIdr: number;
+  totalMarks: number;
+  actualMarksPooled: number;
+}
+
 export interface PricingPort {
   validatePrices(
     prices: Record<string, number>,
@@ -32,6 +50,18 @@ export interface PricingPort {
     tutorPricePerStudent: number,
     confirmedHeadcount: GroupSize,
   ): PriceSnapshot;
+  validateBaseRates(
+    baseRatesIdr: Record<string, number>,
+    modality: Modality,
+    config?: EconomyParameters,
+  ): string | null;
+  computeEconomics(
+    modality: Modality,
+    baseRateIdr: number,
+    confirmedHeadcount: GroupSize,
+    config: EconomyParameters,
+  ): EconomyPriceSnapshot;
+  getEconomyConfig(conn?: DbOrTx): Promise<EconomyParameters>;
 }
 
 export type PricingService = ReturnType<typeof createPricingService>;
@@ -148,11 +178,120 @@ function computeSplit(
   };
 }
 
+function validateBaseRates(
+  baseRatesIdr: Record<string, number>,
+  modality: Modality,
+  config: EconomyParameters = DEFAULT_ECONOMY_CONFIG,
+): string | null {
+  if (!baseRatesIdr || Object.keys(baseRatesIdr).length === 0) {
+    return "At least one IDR base honorarium is required";
+  }
+
+  const requiredModalities =
+    modality === MODALITY.BOTH
+      ? [MODALITY.ONLINE, MODALITY.OFFLINE]
+      : [modality];
+  for (const required of requiredModalities) {
+    const value = baseRatesIdr[required];
+    if (typeof value !== "number" || !Number.isInteger(value)) {
+      return `A ${required} base honorarium is required`;
+    }
+    if (value < config.minTutorBaseRateIdr) {
+      return `${required} base honorarium must be at least Rp ${config.minTutorBaseRateIdr.toLocaleString("id-ID")}`;
+    }
+    if (value % 5_000 !== 0) {
+      return `${required} base honorarium must use Rp 5,000 increments`;
+    }
+  }
+
+  for (const key of Object.keys(baseRatesIdr)) {
+    if (key !== MODALITY.ONLINE && key !== MODALITY.OFFLINE) {
+      return `Invalid modality base honorarium: ${key}`;
+    }
+  }
+
+  return null;
+}
+
+function computeEconomics(
+  modality: Modality,
+  baseRateIdr: number,
+  confirmedHeadcount: GroupSize,
+  config: EconomyParameters,
+): EconomyPriceSnapshot {
+  const effectiveModality =
+    modality === MODALITY.OFFLINE ? MODALITY.OFFLINE : MODALITY.ONLINE;
+  const tutorIncrementIdr =
+    effectiveModality === MODALITY.OFFLINE
+      ? config.offlineTutorIncrementIdr
+      : config.onlineTutorIncrementIdr;
+  const cogitoBaseTakeIdr =
+    effectiveModality === MODALITY.OFFLINE
+      ? config.offlineCogitoBaseIdr
+      : config.onlineCogitoBaseIdr;
+  const cogitoIncrementIdr =
+    effectiveModality === MODALITY.OFFLINE
+      ? config.offlineCogitoIncrementIdr
+      : config.onlineCogitoIncrementIdr;
+  const tutorHonorariumIdr =
+    baseRateIdr + (confirmedHeadcount - 1) * tutorIncrementIdr;
+  const cogitoTakeIdr =
+    cogitoBaseTakeIdr + (confirmedHeadcount - 1) * cogitoIncrementIdr;
+  const totalIdr = tutorHonorariumIdr + cogitoTakeIdr;
+  const totalMarks = Math.ceil(totalIdr / config.markValueIdr);
+  const perStudent = Math.ceil(totalMarks / confirmedHeadcount);
+  const actualMarksPooled = perStudent * confirmedHeadcount;
+  const cogitoTake = Math.round(cogitoTakeIdr / config.markValueIdr);
+  const tutorShare = Math.max(totalMarks - cogitoTake, 0);
+
+  return {
+    perStudent,
+    baseline: totalMarks,
+    tutorShare,
+    cogitoTake,
+    baselineCogitoTake: cogitoTake,
+    baselineTutorShare: tutorShare,
+    extraTotal: 0,
+    cogitoExtraTake: 0,
+    tutorExtraShare: 0,
+    economyVersion: config.version,
+    markValueIdr: config.markValueIdr,
+    tutorBaseRateIdr: baseRateIdr,
+    tutorIncrementIdr,
+    tutorHonorariumIdr,
+    cogitoBaseTakeIdr,
+    cogitoIncrementIdr,
+    cogitoTakeIdr,
+    totalIdr,
+    totalMarks,
+    actualMarksPooled,
+  };
+}
+
 /**
  * Creates the pricing service with price validation and split computation.
  *
  * @returns a PricingPort with validatePrices and computeSplit
  */
-export function createPricingService(): PricingPort {
-  return { validatePrices, computeSplit };
+export function createPricingService(
+  deps: {
+    db?: DbType;
+    economy?: EconomyService;
+  } = {},
+): PricingPort {
+  async function getEconomyConfig(conn?: DbOrTx): Promise<EconomyParameters> {
+    if (!deps.economy) return DEFAULT_ECONOMY_CONFIG;
+    if (!conn && !deps.db) {
+      throw new Error("A database connection is required for economy config");
+    }
+    return deps.economy.getConfig(conn ?? deps.db!);
+  }
+
+  return {
+    validatePrices,
+    computeSplit,
+    validateBaseRates,
+    computeEconomics,
+    getEconomyConfig,
+  };
 }

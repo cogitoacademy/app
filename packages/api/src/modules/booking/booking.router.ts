@@ -244,7 +244,7 @@ export function createBookingRouter(handler: BookingHandler) {
         tags: ["Bookings"],
         summary: "Propose a new booking time",
         description:
-          "Tutor or booking proposer creates or counters a reschedule proposal",
+          "Booking proposer creates or counters a reschedule proposal",
       })
       .input(proposeRescheduleInput)
       .handler(handler.proposeReschedule),

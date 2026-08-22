@@ -124,9 +124,12 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
         />
         <MetricCard
           icon={<IconCoins />}
-          label="Tutor payout"
+          label="Honorarium earned"
           value={
-            payouts.isPending ? "—" : `${payouts.data?.tutorPayout ?? 0} Marks`
+            payouts.isPending
+              ? "—"
+              : "Rp " +
+                (payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")
           }
           tone="success-subtle"
         />
@@ -140,8 +143,8 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           <div>
             <CardTitle>Payout details</CardTitle>
             <CardDescription>
-              Completed sessions settle your share of the Marks; each Mark
-              converts to Rp 7,000 at payout.
+              Completed sessions settle the IDR honorarium captured in each
+              booking. Marks stay closed-loop and are not converted for tutors.
             </CardDescription>
           </div>
         </CardHeader>
@@ -160,21 +163,19 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
               </Text>
             </div>
             <div>
-              <Text className="text-sm text-muted">Cogito take</Text>
+              <Text className="text-sm text-muted">Cogito take (Marks)</Text>
               <Text className="mt-1 text-lg font-semibold">
                 {payouts.data?.cogitoTake ?? 0}
               </Text>
             </div>
             <div>
-              <Text className="text-sm text-muted">Tutor payout</Text>
+              <Text className="text-sm text-muted">Tutor honorarium</Text>
               <Text className="mt-1 text-lg font-semibold">
-                {payouts.data?.tutorPayout ?? 0} Marks
+                Rp {(payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")}
               </Text>
               <Text className="mt-1 text-sm text-muted">
-                ≈ Rp{" "}
-                {((payouts.data?.tutorPayout ?? 0) * 7000).toLocaleString(
-                  "id-ID",
-                )}
+                {payouts.data?.completedSessions ?? 0} completed session
+                {(payouts.data?.completedSessions ?? 0) === 1 ? "" : "s"}
               </Text>
             </div>
           </div>

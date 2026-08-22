@@ -6,6 +6,8 @@ import {
 } from "../../modules/tutor-discovery/discovery.service";
 import { TutorProfileNotFoundError } from "../../modules/tutor-discovery/discovery.errors";
 import type { DiscoveryRepo } from "../../modules/tutor-discovery/discovery.repo";
+import { createPricingService } from "../../modules/pricing/pricing.service";
+import { DEFAULT_ECONOMY_CONFIG } from "../../modules/economy";
 
 function makeProfile(
   overrides: Partial<ProfileWithUser> = {},
@@ -152,6 +154,27 @@ describe("Discovery Service", () => {
 
       const result = await service.listPublished();
       expect(result).toEqual([]);
+    });
+
+    test("projects current Marks prices from IDR base rates and economy config", async () => {
+      const profile = makeProfile({
+        modality: "both",
+        baseRatesIdr: { online: 175_000, offline: 225_000 },
+      });
+      const repo = makeRepo({ listPublished: mock(async () => [profile]) });
+      const pricing = {
+        ...createPricingService(),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const service = createDiscoveryService({ repo, pricing });
+      const result = await service.listPublished();
+
+      expect(result[0]?.pricesByModality?.online?.["1"]).toBe(45);
+      expect(result[0]?.pricesByModality?.online?.["2"]).toBe(28);
+      expect(result[0]?.pricesByModality?.offline?.["1"]).toBe(63);
+      expect(result[0]?.prices).toEqual(result[0]?.pricesByModality?.online);
+      expect(pricing.getEconomyConfig).toHaveBeenCalledTimes(1);
     });
   });
 

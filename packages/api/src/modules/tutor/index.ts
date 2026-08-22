@@ -1,10 +1,13 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import type { AuditRecordParams } from "../audit/audit.service";
 import type {
   GroupSize,
   Modality,
   PriceSnapshot,
+  EconomyPriceSnapshot,
 } from "../pricing/pricing.service";
+import type { EconomyParameters } from "../economy";
 import type { BookingPayoutPort } from "../booking";
 import { createTutorRepo } from "./tutor.repo";
 import { createTutorService } from "./tutor.service";
@@ -24,6 +27,18 @@ export interface TutorPricingPort {
     tutorPricePerStudent: number,
     confirmedHeadcount: GroupSize,
   ): PriceSnapshot;
+  validateBaseRates?(
+    baseRatesIdr: Record<string, number>,
+    modality: Modality,
+    config?: EconomyParameters,
+  ): string | null;
+  computeEconomics?(
+    modality: Modality,
+    baseRateIdr: number,
+    confirmedHeadcount: GroupSize,
+    config: EconomyParameters,
+  ): EconomyPriceSnapshot;
+  getEconomyConfig?(conn?: DbOrTx): Promise<EconomyParameters>;
 }
 
 export interface TutorAuditPort {
