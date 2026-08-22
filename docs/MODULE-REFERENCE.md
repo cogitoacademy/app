@@ -153,6 +153,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - Tutor invitation email copy has one primary action: accept the invitation and set up the tutor profile
 - The email states the exact account email required for claiming, shows expiry in UTC, and includes a plain fallback URL
 - Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
+- Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
 
 ---
 
@@ -614,25 +615,44 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - Profile updates use optimistic locking (`version`)
+- New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
+- A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
+
+## Tutor Subject Taxonomy Module
+
+**Purpose:** Maintain the editable mother/child subject catalog and normalized tutor selections.
+
+**Files:**
+
+- `tutor-subject.ts` (database schema) — `subject_category` hierarchy and `tutor_profile_subject` join table
+- `tutor-subjects/subject-selection.ts` — selection limits, active-child validation, and public projection helpers
+- `0027_subject_taxonomy.sql` — schema migration and source-informed initial catalog
+
+**Business Rules:**
+
+- Mother categories are the seven competition areas currently presented by Cogito Academy: Model United Nations, Public Speaking, Olympiad, World Scholar's Cup, Essay & Scientific Writing, Debate, and Business Plan
+- Only active child rows are selectable by tutors; each selection belongs to exactly one mother category
+- The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
 
 ---
 
 ## Tutor Discovery Module
 
-**Purpose:** Student-only tutor search and profile viewing.
+**Purpose:** Public taxonomy discovery plus student-only tutor search and profile viewing.
 
 **Files:**
 
-- `discovery.types.ts` — Zod schemas for search filters
+- `discovery.types.ts` — Zod schemas for taxonomy listing and search filters
 - `discovery.errors.ts` — `TutorNotFoundError`
-- `discovery.repo.ts` — `listPublished`, `findByUserId`
-- `discovery.service.ts` — `listPublished(filters)`, `getProfile(userId)`
+- `discovery.repo.ts` — `listSubjects`, `listPublished`, `findByUserId`
+- `discovery.service.ts` — `listSubjects()`, `listPublished(filters)`, `getProfile(userId)`
 - `discovery.handler.ts` — Maps handler context/input
-- `discovery.router.ts` — Student-only routes (`studentProcedure`)
+- `discovery.router.ts` — Public `listSubjects` plus student-only tutor routes
 
 **Service Methods:**
 
-- `listPublished(filters)` — Paginated list of published tutor profiles with subject and modality filters
+- `listSubjects()` — Returns active mother categories grouped with active child subjects
+- `listPublished(filters)` — Paginated list of published tutor profiles with category, child-subject, legacy expertise, and modality filters
 - `getProfile(userId)` — Returns full tutor profile
 
 **Dependencies:** `DiscoveryRepo`

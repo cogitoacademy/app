@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_TUTOR_SUBJECTS } from "../tutor-subjects/subject-selection";
 
 export const updateMyProfileInput = z.object({
   version: z.number().int(),
@@ -6,6 +7,14 @@ export const updateMyProfileInput = z.object({
   shortBio: z.string().max(2000).optional(),
   credentialsSummary: z.string().max(2000).optional(),
   expertise: z.array(z.string().max(255)).max(20).optional(),
+  subjectIds: z
+    .array(z.string().min(1).max(100))
+    .min(1)
+    .max(MAX_TUTOR_SUBJECTS)
+    .refine((subjectIds) => new Set(subjectIds).size === subjectIds.length, {
+      message: "subjectIds must not contain duplicates",
+    })
+    .optional(),
   modality: z.enum(["online", "offline", "both"]).optional(),
   prices: z
     .record(z.string(), z.number())

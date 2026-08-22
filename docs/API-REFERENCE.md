@@ -204,10 +204,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, expertise?, modality?, prices?, availabilitySummary?, proofUrls? }`
-- **Output:** `{ profile }`
-- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation
-- **Description:** Updates the draft tutor profile; optimistic lock via `version`
+- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, expertise?, subjectIds?, modality?, prices?, availabilitySummary?, proofUrls? }`
+- **Output:** `{ profile, subjects: [{ id, slug, name, description?, parent: { id, slug, name } }] }`
+- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active child subjects or exceed 20
+- **Description:** Updates the tutor profile with optimistic locking. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. For published profiles, trust-sensitive subject changes wait in `pendingProfileChanges` for admin approval.
 
 ### `tutor.submitForReview`
 
@@ -267,11 +267,19 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ## Tutor Discovery (`tutors.*`)
 
+### `tutors.listSubjects`
+
+- **Auth:** Public
+- **Input:** None
+- **Output:** `{ items: [{ id, slug, name, description?, children: [{ id, slug, name, description? }] }] }`
+- **Description:** Returns the active mother categories and selectable child subjects used by tutor onboarding and student filters.
+
 ### `tutors.listPublished`
 
 - **Auth:** Student
-- **Input:** `{ search?, expertise?, modality?, limit?, offset? }` (`limit` default 20, max 50)
-- **Output:** `{ items: TutorProfile[], total, limit, offset }`
+- **Input:** `{ search?, expertise?, categoryId?, subjectId?, modality?, limit?, offset? }` (`limit` default 20, max 50)
+- **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, parent }]`
+- **Description:** `categoryId` filters by a mother category; `subjectId` filters by an exact child subject. Search matches normalized child subject names as well as legacy profile text.
 
 ### `tutors.getProfile`
 

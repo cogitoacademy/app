@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import { lockTutorForBooking } from "../../lib/locks";
 import {
   ONBOARDING_STATUS,
@@ -9,6 +10,13 @@ import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
 import type { TutorAuditPort, TutorPricingPort } from "./index";
 import type { BookingPayoutPort } from "../booking";
+import {
+  haveSameSubjectIds,
+  toNormalizedTutorSubjects,
+  type NormalizedTutorSubject,
+  type TutorSubjectRelation,
+  validateTutorSubjectIds,
+} from "../tutor-subjects/subject-selection";
 import {
   TutorProfileNotFoundError,
   InvalidTutorStatusError,
@@ -21,6 +29,27 @@ import {
 } from "./tutor.errors";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
+type TutorProfileWithSubjectRelations = TutorProfileRow & {
+  subjects?: Array<TutorSubjectRelation & { subjectId: string }>;
+};
+type TutorProfileProjection = TutorProfileRow & {
+  subjects: NormalizedTutorSubject[];
+};
+
+function getSubjectRelations(
+  profile: TutorProfileWithSubjectRelations | undefined,
+) {
+  return profile?.subjects ?? [];
+}
+
+function projectTutorProfile(
+  profile: TutorProfileWithSubjectRelations,
+): TutorProfileProjection {
+  return {
+    ...profile,
+    subjects: toNormalizedTutorSubjects(getSubjectRelations(profile)),
+  };
+}
 
 function utcDateKey(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -95,8 +124,10 @@ export function validateSubmitForReview(
     throw new TutorProfileIncompleteError(profile.id, missingFields);
   }
 
-  if (!profile.expertise || profile.expertise.length === 0) {
-    throw new TutorProfileIncompleteError(profile.id, ["expertise"]);
+  const selectedSubjects = (profile as TutorProfileWithSubjectRelations)
+    .subjects;
+  if (!selectedSubjects || selectedSubjects.length === 0) {
+    throw new TutorProfileIncompleteError(profile.id, ["subjectIds"]);
   }
 
   if (profile.prices) {
@@ -139,7 +170,7 @@ export function createTutorService(deps: {
   async function getMyProfile(userId: string) {
     const profile = await tutorRepo.getByUserId(db, userId);
     if (!profile) throw new TutorProfileNotFoundError(userId);
-    return profile;
+    return projectTutorProfile(profile);
   }
 
   /**
@@ -153,7 +184,14 @@ export function createTutorService(deps: {
   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateUpdateInput(profile, input, pricingPort);
-    const { version, ...data } = input;
+    const { version, subjectIds, ...data } = input;
+    if (subjectIds !== undefined) {
+      const activeChildSubjects = await tutorRepo.listActiveChildSubjects(
+        db,
+        subjectIds,
+      );
+      validateTutorSubjectIds(subjectIds, activeChildSubjects);
+    }
     const isPublished =
       profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
     const protectedFields = [
@@ -164,7 +202,7 @@ export function createTutorService(deps: {
       "prices",
       "proofUrls",
     ] as const;
-    const directData: Omit<UpdateProfileInput, "version"> & {
+    const directData: Omit<UpdateProfileInput, "version" | "subjectIds"> & {
       pendingProfileChanges?: Record<string, unknown>;
       profileEditStatus?: string;
       profileEditAdminNote?: null;
@@ -188,15 +226,45 @@ export function createTutorService(deps: {
         directData.profileEditStatus = "pending_review";
         directData.profileEditAdminNote = null;
       }
+      if (subjectIds !== undefined) {
+        const currentSubjectIds = getSubjectRelations(profile!).map(
+          (relation) => relation.subjectId,
+        );
+        if (haveSameSubjectIds(subjectIds, currentSubjectIds)) {
+          delete pendingProfileChanges.subjectIds;
+        } else {
+          pendingProfileChanges.subjectIds = [...subjectIds];
+        }
+        if (Object.keys(pendingProfileChanges).length > 0) {
+          directData.pendingProfileChanges = pendingProfileChanges;
+          directData.profileEditStatus = "pending_review";
+          directData.profileEditAdminNote = null;
+        }
+      }
     }
-    const rows = await tutorRepo.updateProfileWithVersion(
-      db,
-      userId,
-      version,
-      directData,
-    );
-    if (rows.length === 0) throw new OptimisticLockError(profile!.id, version);
-    return rows[0];
+
+    const persist = async (conn: DbOrTx) => {
+      const rows = await tutorRepo.updateProfileWithVersion(
+        conn,
+        userId,
+        version,
+        directData,
+      );
+      if (rows.length === 0)
+        throw new OptimisticLockError(profile!.id, version);
+
+      if (!isPublished && subjectIds !== undefined) {
+        await tutorRepo.replaceProfileSubjects(conn, profile!.id, subjectIds);
+      }
+
+      const updated = await tutorRepo.getByUserId(conn, userId);
+      return projectTutorProfile(updated ?? rows[0]!);
+    };
+
+    if (!isPublished && subjectIds !== undefined) {
+      return db.transaction(persist);
+    }
+    return persist(db);
   }
 
   /**
@@ -228,7 +296,12 @@ export function createTutorService(deps: {
         afterState: { onboardingStatus: ONBOARDING_STATUS.PENDING_REVIEW },
       });
 
-      return row;
+      return row
+        ? {
+            ...row,
+            subjects: toNormalizedTutorSubjects(getSubjectRelations(profile)),
+          }
+        : row;
     });
   }
 

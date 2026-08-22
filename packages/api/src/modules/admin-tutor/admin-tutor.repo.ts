@@ -1,8 +1,10 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, isNotNull } from "drizzle-orm";
 import {
   account,
+  subjectCategory,
   tutorInvite,
   tutorProfile,
+  tutorProfileSubject,
   user,
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
@@ -184,6 +186,9 @@ async function getTutorProfileById(
   return (
     (await conn.query.tutorProfile.findFirst({
       where: eq(tutorProfile.id, id),
+      with: {
+        subjects: { with: { subject: { with: { parent: true } } } },
+      },
     })) ?? null
   );
 }
@@ -227,8 +232,47 @@ async function listTutorProfiles(
     orderBy: [desc(tutorProfile.createdAt)],
     limit: input.limit,
     offset: input.offset,
-    with: { user: true },
+    with: {
+      user: true,
+      subjects: { with: { subject: { with: { parent: true } } } },
+    },
   });
+}
+
+async function listActiveChildSubjects(
+  conn: DbOrTx,
+  subjectIds: readonly string[],
+) {
+  if (subjectIds.length === 0) return [];
+  return conn.query.subjectCategory.findMany({
+    where: and(
+      inArray(subjectCategory.id, [...subjectIds]),
+      eq(subjectCategory.isActive, true),
+      isNotNull(subjectCategory.parentId),
+    ),
+    orderBy: [asc(subjectCategory.sortOrder), asc(subjectCategory.name)],
+  });
+}
+
+async function replaceTutorProfileSubjects(
+  conn: DbOrTx,
+  tutorProfileId: string,
+  subjectIds: readonly string[],
+) {
+  await conn
+    .delete(tutorProfileSubject)
+    .where(eq(tutorProfileSubject.tutorProfileId, tutorProfileId));
+
+  if (subjectIds.length === 0) return [];
+  return conn
+    .insert(tutorProfileSubject)
+    .values(
+      subjectIds.map((subjectId) => ({
+        tutorProfileId,
+        subjectId,
+      })),
+    )
+    .returning();
 }
 
 export function createAdminTutorRepo() {
@@ -240,6 +284,8 @@ export function createAdminTutorRepo() {
     updateInvite,
     listInvites,
     getTutorProfileById,
+    listActiveChildSubjects,
+    replaceTutorProfileSubjects,
     updateTutorProfile,
     listTutorProfiles,
   };

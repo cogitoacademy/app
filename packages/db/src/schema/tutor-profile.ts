@@ -39,6 +39,7 @@ export const tutorProfile = pgTable(
         displayName: string;
         credentialsSummary: string;
         expertise: string[];
+        subjectIds: string[];
         modality: "online" | "offline" | "both";
         prices: Record<string, number>;
         proofUrls: string[];
@@ -76,17 +77,6 @@ export const tutorProfile = pgTable(
     ),
   ],
 );
-
-export const tutorProfileRelations = relations(tutorProfile, ({ one }) => ({
-  user: one(user, {
-    fields: [tutorProfile.userId],
-    references: [user.id],
-  }),
-  invite: one(tutorInvite, {
-    fields: [tutorProfile.inviteId],
-    references: [tutorInvite.id],
-  }),
-}));
 
 export const userToTutorProfileRelations = relations(user, ({ one }) => ({
   tutorProfile: one(tutorProfile, {

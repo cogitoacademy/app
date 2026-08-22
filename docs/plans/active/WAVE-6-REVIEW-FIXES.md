@@ -1,12 +1,12 @@
 # Wave-6 Review Fixes — Production Readiness (W2 findings)
 
-| Field      | Value                                                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------- |
 | Status     | **Complete (2026-08-19)** — all findings fixed & merged to main via PR #82, #83, #84; L3 confirmed defense-in-depth |
-| Branch     | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83), `fix/wave6-c` (PR #84) — all merged |
-| Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)                                                                                           |
-| Depends on | Wave-5 (PR #79) merged to main                                                                                                                    |
-| Scope      | Backend only (packages/api, apps/server, packages/env, packages/auth)                                                                             |
+| Branch     | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83), `fix/wave6-c` (PR #84) — all merged                                 |
+| Created    | 2026-08-19 (wave-5 deep review by worker W2, read-only)                                                             |
+| Depends on | Wave-5 (PR #79) merged to main                                                                                      |
+| Scope      | Backend only (packages/api, apps/server, packages/env, packages/auth)                                               |
 
 This plan catalogs the findings of the wave-5 deep code review (worker W2, read-only, `docs/plans/active/` companion to the wave-5 fix PR). Every finding was verified against code at `d11962b` (pre-wave-5) and re-checked against the wave-5 branch. **Re-verification (2026-08-19, HEAD `69e2dd8`):** every original finding was re-checked against current main; new findings **N1–N4** were added by the wave-6 deep review. Severity ordering follows the code-review skill.
 

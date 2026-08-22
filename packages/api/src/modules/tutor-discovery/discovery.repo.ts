@@ -1,11 +1,18 @@
-import { eq, desc, asc, and, gte, sql, type SQL } from "drizzle-orm";
-import { availabilitySlot, tutorProfile } from "@cogito-app/db/schema";
+import { eq, desc, asc, and, gte, sql, type SQL, isNull } from "drizzle-orm";
+import {
+  availabilitySlot,
+  subjectCategory,
+  tutorProfile,
+  tutorProfileSubject,
+} from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 
 export interface ListPublishedInput {
   search?: string;
   expertise?: string;
+  categoryId?: string;
+  subjectId?: string;
   modality?: "online" | "offline" | "both";
   limit: number;
   offset: number;
@@ -34,7 +41,21 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
       .replace(/_/g, "\\_");
     const q = `%${escaped}%`;
     conditions.push(
-      sql`(lower(${tutorProfile.displayName}) like lower(${q}) escape '\\' or lower(${tutorProfile.shortBio}) like lower(${q}) escape '\\' or lower(${tutorProfile.credentialsSummary}) like lower(${q}) escape '\\' or lower(coalesce(${tutorProfile.expertise}::text, '')) like lower(${q}) escape '\\')`,
+      sql`(
+        lower(${tutorProfile.displayName}) like lower(${q}) escape '\\'
+        or lower(${tutorProfile.shortBio}) like lower(${q}) escape '\\'
+        or lower(${tutorProfile.credentialsSummary}) like lower(${q}) escape '\\'
+        or lower(coalesce(${tutorProfile.expertise}::text, '')) like lower(${q}) escape '\\'
+        or exists (
+          select 1
+          from ${tutorProfileSubject}
+          inner join ${subjectCategory}
+            on ${tutorProfileSubject.subjectId} = ${subjectCategory.id}
+          where ${tutorProfileSubject.tutorProfileId} = ${tutorProfile.id}
+            and ${subjectCategory.isActive} = true
+            and lower(${subjectCategory.name}) like lower(${q}) escape '\\'
+        )
+      )`,
     );
   }
 
@@ -44,12 +65,31 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
     );
   }
 
+  if (input.categoryId || input.subjectId) {
+    conditions.push(
+      sql`exists (
+        select 1
+        from ${tutorProfileSubject}
+        inner join ${subjectCategory}
+          on ${tutorProfileSubject.subjectId} = ${subjectCategory.id}
+        where ${tutorProfileSubject.tutorProfileId} = ${tutorProfile.id}
+          and ${subjectCategory.isActive} = true
+          and ${subjectCategory.parentId} is not null
+          ${input.categoryId ? sql`and ${subjectCategory.parentId} = ${input.categoryId}` : sql``}
+          ${input.subjectId ? sql`and ${subjectCategory.id} = ${input.subjectId}` : sql``}
+      )`,
+    );
+  }
+
   return conn.query.tutorProfile.findMany({
     where: and(...conditions),
     orderBy: [desc(tutorProfile.publishedAt)],
     limit: input.limit,
     offset: input.offset,
-    with: { user: true },
+    with: {
+      user: true,
+      subjects: { with: { subject: { with: { parent: true } } } },
+    },
   });
 }
 
@@ -66,7 +106,26 @@ async function getProfileById(conn: DbOrTx, tutorId: string) {
       eq(tutorProfile.id, tutorId),
       eq(tutorProfile.onboardingStatus, "published"),
     ),
-    with: { user: true },
+    with: {
+      user: true,
+      subjects: { with: { subject: { with: { parent: true } } } },
+    },
+  });
+}
+
+async function listSubjects(conn: DbOrTx) {
+  return conn.query.subjectCategory.findMany({
+    where: and(
+      eq(subjectCategory.isActive, true),
+      isNull(subjectCategory.parentId),
+    ),
+    orderBy: [asc(subjectCategory.sortOrder), asc(subjectCategory.name)],
+    with: {
+      children: {
+        where: eq(subjectCategory.isActive, true),
+        orderBy: [asc(subjectCategory.sortOrder), asc(subjectCategory.name)],
+      },
+    },
   });
 }
 
@@ -89,6 +148,9 @@ export function createDiscoveryRepo(db: DbType) {
     },
     getProfileById(tutorId: string, conn?: DbOrTx) {
       return getProfileById(conn ?? db, tutorId);
+    },
+    listSubjects(conn?: DbOrTx) {
+      return listSubjects(conn ?? db);
     },
     listFutureAvailability(tutorUserId: string, conn?: DbOrTx) {
       return listFutureAvailability(conn ?? db, tutorUserId);

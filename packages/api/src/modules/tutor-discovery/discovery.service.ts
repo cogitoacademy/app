@@ -1,12 +1,19 @@
 import type { tutorProfile, user } from "@cogito-app/db/schema";
 import type { DiscoveryRepo } from "./discovery.repo";
 import { TutorProfileNotFoundError } from "./discovery.errors";
+import {
+  toNormalizedTutorSubjects,
+  toSubjectCategoryGroup,
+  type NormalizedTutorSubject,
+  type TutorSubjectRelation,
+} from "../tutor-subjects/subject-selection";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 type UserRow = typeof user.$inferSelect;
 
 export interface ProfileWithUser extends TutorProfileRow {
   user: UserRow | null;
+  subjects?: Array<TutorSubjectRelation & { subjectId: string }>;
 }
 
 export interface ProfileProjection {
@@ -16,6 +23,7 @@ export interface ProfileProjection {
   shortBio: string | null;
   credentialsSummary: string | null;
   expertise: string[];
+  subjects: NormalizedTutorSubject[];
   modality: string | null;
   prices: Record<string, number> | null;
   availabilitySummary: string | null;
@@ -32,6 +40,7 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     shortBio: profile.shortBio,
     credentialsSummary: profile.credentialsSummary,
     expertise: profile.expertise ?? [],
+    subjects: toNormalizedTutorSubjects(profile.subjects),
     modality: profile.modality,
     prices: profile.prices,
     availabilitySummary: profile.availabilitySummary,
@@ -51,6 +60,8 @@ export function createDiscoveryService(deps: { repo: DiscoveryRepo }) {
   async function listPublished(opts?: {
     search?: string;
     expertise?: string;
+    categoryId?: string;
+    subjectId?: string;
     modality?: "online" | "offline" | "both";
     limit?: number;
     offset?: number;
@@ -58,11 +69,18 @@ export function createDiscoveryService(deps: { repo: DiscoveryRepo }) {
     const profiles = await repo.listPublished({
       search: opts?.search,
       expertise: opts?.expertise,
+      categoryId: opts?.categoryId,
+      subjectId: opts?.subjectId,
       modality: opts?.modality,
       limit: opts?.limit ?? 20,
       offset: opts?.offset ?? 0,
     });
     return profiles.map(buildProjection);
+  }
+
+  async function listSubjects() {
+    const categories = await repo.listSubjects();
+    return categories.map(toSubjectCategoryGroup);
   }
 
   async function getProfile(tutorId: string) {
@@ -72,5 +90,5 @@ export function createDiscoveryService(deps: { repo: DiscoveryRepo }) {
     return { ...buildProjection(profile), availabilitySlots };
   }
 
-  return { listPublished, getProfile };
+  return { listPublished, listSubjects, getProfile };
 }
