@@ -91,6 +91,7 @@ const PENDING_STATES = new Set([
 ]);
 
 const CANCELLED_STATES = new Set(["cancelled", "late_cancelled"]);
+const COGITO_MARK_SRC = "/cogito-mark.png";
 
 export function BookingsPage() {
   const navigate = useNavigate();
@@ -299,7 +300,7 @@ function BookingListRow({
 }) {
   const date = getDateParts(booking.scheduledStartAt, booking.timezone);
   const people = getBookingPeople(booking);
-  const title = getBookingTitle(booking, viewerRole);
+  const title = getBookingTitle(booking);
   const location = getBookingLocation(booking);
   const showStatus = shouldShowStatusBadge(booking.currentState, activeTab);
   const attention = PENDING_STATES.has(booking.currentState);
@@ -314,28 +315,19 @@ function BookingListRow({
     <Card
       data-slot="booking-row"
       className={cn(
-        "overflow-hidden transition-shadow hover:shadow-card",
+        "overflow-visible transition-shadow hover:shadow-card",
         attention && "border-warning-border",
       )}
     >
-      <div className="grid min-w-0 gap-4 p-4 md:grid-cols-[5.5rem_minmax(10rem,0.8fr)_minmax(0,1.5fr)_minmax(10rem,0.8fr)_auto] md:items-center md:gap-5 md:p-5">
+      <div className="grid min-w-0 gap-4 p-4 md:grid-cols-[5.5rem_12rem_minmax(0,1fr)_auto] md:items-center md:gap-5 md:p-5">
         <div className="flex min-w-0 items-center gap-3 md:block">
           <DateTile date={date} />
           <div className="min-w-0 md:hidden">
-            {showStatus ? (
-              <Badge
-                variant={getBookingStateVariant(booking.currentState)}
-                pill
-                className="mb-1"
-              >
-                {getBookingStateLabel(booking.currentState)}
-              </Badge>
-            ) : null}
             <BookingMeta booking={booking} location={location} />
           </div>
         </div>
 
-        <div className="hidden min-w-0 md:block">
+        <div className="hidden min-w-0 md:block md:w-48">
           <BookingMeta booking={booking} location={location} />
         </div>
 
@@ -344,36 +336,24 @@ function BookingListRow({
             {title}
           </Text>
           <Text className="mt-1 truncate text-sm text-muted">
-            {getBookingTypeLabel(booking.type)} ·{" "}
-            {getRelatedPeopleLabel(people)}
+            {getBookingContextLabel(booking)}
           </Text>
-          <AvatarStack people={people} />
-        </div>
-
-        <div className="flex min-w-0 items-center justify-between gap-3 md:block">
-          <div className="min-w-0">
-            <Text className="truncate text-sm font-medium">
-              {getFinancialLabel(booking, viewerRole)}
-            </Text>
-            <Text className="mt-1 truncate text-xs text-muted">
-              {getBookingStateDescription(booking.currentState)}
-            </Text>
+          <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+            <AvatarStack people={people} />
+            <BookingFinancialInfo booking={booking} viewerRole={viewerRole} />
+            {showStatus ? (
+              <BookingStatusBadge
+                bookingId={booking.id}
+                state={booking.currentState}
+              />
+            ) : null}
           </div>
-          {showStatus ? (
-            <Badge
-              variant={getBookingStateVariant(booking.currentState)}
-              pill
-              className="hidden shrink-0 md:inline-flex"
-            >
-              {getBookingStateLabel(booking.currentState)}
-            </Badge>
-          ) : null}
         </div>
 
         <Button
           variant={attention ? "primary" : "secondary"}
           size="sm"
-          className="w-full md:w-auto"
+          className="w-full md:w-auto md:justify-self-end"
           render={
             <Link
               to="/bookings/$bookingId"
@@ -399,7 +379,7 @@ function BookingMeta({
   location: string;
 }) {
   return (
-    <div className="min-w-0 space-y-1">
+    <div className="min-w-0 space-y-1 md:w-48 md:max-w-48">
       <div className="flex items-center gap-1.5 text-sm font-medium">
         <IconClock className="size-3.5 shrink-0 text-muted" />
         <span className="truncate">
@@ -443,10 +423,7 @@ function AvatarStack({ people }: { people: BookingPerson[] }) {
   if (people.length === 0) return null;
 
   return (
-    <div
-      className="mt-3 flex items-center -space-x-2"
-      aria-label="Participants"
-    >
+    <div className="flex items-center -space-x-2" aria-label="Participants">
       {people.slice(0, 4).map((person) => (
         <Avatar key={person.id} size="sm" className="border-2 border-card">
           {person.image ? <AvatarImage src={person.image} alt="" /> : null}
@@ -583,22 +560,35 @@ function getBookingPeople(booking: BookingListItem) {
   return [...new Map(people.map((person) => [person.id, person])).values()];
 }
 
-function getBookingTitle(booking: BookingListItem, viewerRole: string) {
-  const tutorName = booking.tutor?.name ?? "Cogito tutor";
-  const proposerName = booking.proposer?.name ?? "Cogito student";
-  if (viewerRole === "tutor") return `Session with ${proposerName}`;
-  if (viewerRole === "admin") return `${proposerName} · ${tutorName}`;
-  return `Session with ${tutorName}`;
+function getBookingTitle(booking: BookingListItem) {
+  const participantNames = getBookingParticipantNames(booking);
+  const participantLabel = formatPeopleNames(participantNames);
+  return `${getBookingTypeLabel(booking.type)} with ${participantLabel}`;
 }
 
-function getRelatedPeopleLabel(people: BookingPerson[]) {
-  if (people.length === 0) return "No participants listed";
-  const names = people
-    .map((person) => person.name?.trim() || "Participant")
-    .slice(0, 2);
-  return people.length > 2
-    ? `${names.join(", ")} +${people.length - 2}`
-    : names.join(", ");
+function getBookingParticipantNames(booking: BookingListItem) {
+  const participants = [
+    booking.proposer,
+    ...(booking.participants ?? [])
+      .filter((participant) => participant.role !== "tutor")
+      .map((participant) => participant.user),
+  ].filter((person): person is BookingPerson => Boolean(person));
+  const uniquePeople = [
+    ...new Map(participants.map((person) => [person.id, person])).values(),
+  ];
+  return uniquePeople.map((person) => person.name?.trim() || "Participant");
+}
+
+function formatPeopleNames(names: string[]) {
+  if (names.length === 0) return "participant";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names[0]}, ${names[1]} +${names.length - 2}`;
+}
+
+function getBookingContextLabel(booking: BookingListItem) {
+  const tutorName = booking.tutor?.name ?? "Cogito tutor";
+  return `Tutor: ${tutorName}`;
 }
 
 function getBookingLocation(booking: BookingListItem) {
@@ -609,12 +599,96 @@ function getBookingLocation(booking: BookingListItem) {
   return room ? `${room.name} · ${room.location}` : "Offline venue pending";
 }
 
-function getFinancialLabel(booking: BookingListItem, viewerRole: string) {
-  const total = `${booking.originalMarks} Marks`;
-  const tutorShare = `${booking.priceSnapshot?.tutorShare ?? 0} Marks`;
-  if (viewerRole === "tutor") return `Earns ${tutorShare} · Total ${total}`;
-  if (viewerRole === "admin") return `Total ${total} · Tutor ${tutorShare}`;
-  return `You pay ${total}`;
+function BookingFinancialInfo({
+  booking,
+  viewerRole,
+}: {
+  booking: BookingListItem;
+  viewerRole: string;
+}) {
+  const total = booking.originalMarks;
+  const tutorShare = booking.priceSnapshot?.tutorShare ?? 0;
+
+  if (viewerRole === "tutor") {
+    return (
+      <div className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium">
+        <FinancialValue label="Earns" value={tutorShare} />
+        <span className="text-dimmed" aria-hidden="true">
+          ·
+        </span>
+        <FinancialValue label="Total" value={total} />
+      </div>
+    );
+  }
+
+  if (viewerRole === "admin") {
+    return (
+      <div className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium">
+        <FinancialValue label="Total" value={total} />
+        <span className="text-dimmed" aria-hidden="true">
+          ·
+        </span>
+        <FinancialValue label="Tutor" value={tutorShare} />
+      </div>
+    );
+  }
+
+  return <FinancialValue label="You pay" value={total} />;
+}
+
+function FinancialValue({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span className="text-muted">{label}</span>
+      <MarkAmount value={value} />
+    </span>
+  );
+}
+
+function MarkAmount({ value }: { value: number }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 whitespace-nowrap"
+      aria-label={`${value} Marks`}
+    >
+      <img
+        src={COGITO_MARK_SRC}
+        alt=""
+        aria-hidden="true"
+        className="size-4 shrink-0 object-contain"
+      />
+      <span>{value}</span>
+    </span>
+  );
+}
+
+function BookingStatusBadge({
+  bookingId,
+  state,
+}: {
+  bookingId: string;
+  state: string;
+}) {
+  const tooltipId = `booking-status-${bookingId}`;
+  return (
+    <span className="group relative inline-flex shrink-0">
+      <Badge
+        variant={getBookingStateVariant(state)}
+        pill
+        tabIndex={0}
+        aria-describedby={tooltipId}
+      >
+        {getBookingStateLabel(state)}
+      </Badge>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="pointer-events-none invisible absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-56 -translate-x-1/2 rounded-lg border border-popover-border bg-popover px-3 py-2 text-xs text-popover-foreground opacity-0 shadow-popover transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+      >
+        {getBookingStateDescription(state)}
+      </span>
+    </span>
+  );
 }
 
 function shouldShowStatusBadge(state: string, tab: BookingTab) {

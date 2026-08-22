@@ -26,7 +26,9 @@ bookings for tutors, and the complete set for admins. `/_app/tutor-bookings`
 remains as a compatibility redirect. The list keeps status/action semantics in
 the booking detail page, shows tutor earnings/total Marks where relevant, and
 uses a compact date/location/status arrangement on mobile. Admin detail is
-read-only; admin mutations remain in the operations console.
+read-only; admin mutations remain in the operations console. Marks values use
+the Cogito mark icon as a prefix, and visible status badges reveal the state
+explanation on hover or keyboard focus.
 
 ---
 
