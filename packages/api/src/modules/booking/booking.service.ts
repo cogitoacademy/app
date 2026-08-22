@@ -522,10 +522,12 @@ export function createBookingService(deps: {
    * @throws {BookingNotFoundError} if the booking does not exist
    * @throws {BookingNotOwnedError} if the user lacks access
    */
-  async function getById(bookingId: string, userId: string) {
+  async function getById(bookingId: string, userId: string, userRole?: string) {
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    await assertBookingAccess(b, userId, db, bookingId);
+    if (userRole !== "admin") {
+      await assertBookingAccess(b, userId, db, bookingId);
+    }
     return {
       ...b,
       disclaimer: computeDisclaimer(b),
@@ -575,6 +577,34 @@ export function createBookingService(deps: {
       states: opts.states,
       limit,
       cursor: opts.cursor,
+    });
+    const items = rows.slice(0, limit);
+    const nextCursor =
+      rows.length > limit
+        ? encodeBookingCursor(
+            items[items.length - 1]!.scheduledStartAt,
+            items[items.length - 1]!.id,
+          )
+        : null;
+    return { items, nextCursor };
+  }
+
+  /**
+   * Lists bookings visible to the signed-in role. This is the shared read
+   * contract for the role-aware booking list: students include invitations,
+   * tutors include assigned bookings, and admins include all bookings.
+   */
+  async function listAccessible(
+    userId: string,
+    userRole: string,
+    opts: { cursor?: string; limit?: number; states?: string[] } = {},
+  ) {
+    const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+    const rows = await repo.listBookingsForAccess(userId, {
+      states: opts.states,
+      limit,
+      cursor: opts.cursor,
+      includeAll: userRole === "admin",
     });
     const items = rows.slice(0, limit);
     const nextCursor =
@@ -3115,10 +3145,16 @@ export function createBookingService(deps: {
     });
   }
 
-  async function listSessions(bookingId: string, userId: string) {
+  async function listSessions(
+    bookingId: string,
+    userId: string,
+    userRole?: string,
+  ) {
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    await assertBookingAccess(b, userId, db, bookingId);
+    if (userRole !== "admin") {
+      await assertBookingAccess(b, userId, db, bookingId);
+    }
     if (b.type !== BOOKING_TYPE.SERIES)
       throw new BookingNotEditableError(bookingId);
     return repo.listSessionsBySeriesId(db, bookingId);
@@ -3882,6 +3918,7 @@ export function createBookingService(deps: {
     getRescheduleAvailability,
     listMine,
     listForTutor,
+    listAccessible,
     createSolo,
     createGroup,
     createSeries,

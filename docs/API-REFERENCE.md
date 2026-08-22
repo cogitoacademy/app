@@ -6,7 +6,7 @@ Last updated: 2026-08-22
 
 All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`.
 
-The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: student (`booking.listMine`, `tutors.listPublished`, `wallet.get`), tutor (`tutorActions.listBookings`, `tutor.listAvailability`, `tutor.getMyProfile`, `tutor.getMyPayouts`), and admin (`adminBooking.listBookings`, `adminTutor.listTutorProfiles`, `achievement.adminList`).
+The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures.
 
 ### Auth Levels
 
@@ -445,15 +445,15 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Protected
 - **Input:** `{ bookingId }`
-- **Output:** `{ booking, participants, history }` — ownership-checked
+- **Output:** `{ booking, participants, history }` — access-checked for the proposer, tutor, participants, or admin
 - **Errors:** `BOOKING_NOT_FOUND` (404)
 
 ### `booking.listMine`
 
-- **Auth:** Student
+- **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Returns bookings where the user is proposer
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side.
 
 ### `booking.cancel`
 

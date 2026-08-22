@@ -8,7 +8,7 @@ Before submission, the admin tutor invite form checks whether the normalized ema
 
 Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16).
 
-The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, upcoming sessions, availability, profile status, and payout totals. Admins see escalated booking operations plus pending tutor-profile and achievement review queues. These are frontend compositions of existing oRPC procedures; there is no dashboard-specific backend endpoint.
+The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, upcoming sessions, availability, profile status, and payout totals. Admins see escalated booking operations plus pending tutor-profile and achievement review queues. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. These are frontend compositions of existing oRPC procedures; there is no dashboard-specific backend endpoint.
 
 ## Email notifications (P1/P2, PRD notification matrix)
 
@@ -283,7 +283,7 @@ Tutor availability is modeled as free-time windows rather than pre-sized session
 - `createGroup`, `createSeries`, `createGroupSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
 - `listSessions`
 
-Tutor discovery and every student-owned booking mutation are guarded by `studentProcedure`. Tutor/admin accounts cannot browse the student tutor catalog or create/cancel/confirm/reconfirm/withdraw bookings; tutor fulfillment remains under `tutorActions.*`.
+Tutor discovery and every student-owned booking mutation are guarded by `studentProcedure`. The protected booking list/detail/session reads are shared by authenticated parties: students see proposer/participant bookings, tutors see assigned bookings, and admins see all bookings. Tutor/admin accounts still cannot browse the student tutor catalog or create/cancel/confirm/reconfirm/withdraw bookings; tutor fulfillment remains under `tutorActions.*`.
 
 After submission, the tutor or booking proposer can propose a replacement time from the booking-detail action panel. Rescheduling is session-scoped; each proposal requires tutor and all active-student approval, and the original schedule remains active until unanimous acceptance.
 
@@ -420,7 +420,7 @@ Booking cancellation and session completion also use in-app Selia confirmation d
 
 ### Tutor
 
-The tutor workspace now has the primary management surfaces: tutor-only onboarding, a Calendly-style availability page, an incoming booking list, and booking detail actions for accept, decline, and complete. Tutors configure multiple weekly-hour ranges per weekday, copy a range to weekdays, choose modality per range, and generate concrete future windows through an end date (up to 52 weeks). Date-specific overrides supersede only the conflicting recurring occurrence, while the weekly calendar preview exposes and removes individual generated windows. Existing bookings remain intact because replacement soft-deactivates availability rather than deleting referenced rows. The incoming list uses the tutor-owned booking query rather than proposer-only `booking.listMine`.
+The tutor workspace now has the primary management surfaces: tutor-only onboarding, a Calendly-style availability page, the shared role-aware `/bookings` list, and booking detail actions for accept, decline, and complete. Tutors configure multiple weekly-hour ranges per weekday, copy a range to weekdays, choose modality per range, and generate concrete future windows through an end date (up to 52 weeks). Date-specific overrides supersede only the conflicting recurring occurrence, while the weekly calendar preview exposes and removes individual generated windows. Existing bookings remain intact because replacement soft-deactivates availability rather than deleting referenced rows. The legacy `/tutor-bookings` route remains as a compatibility redirect to `/bookings`; tutor list data now comes from protected `booking.listMine`, not the proposer-only query.
 
 Published tutor profiles remain editable. Bio and availability-summary edits publish immediately; trust-sensitive edits are held in `pendingProfileChanges` with a separate edit-review status, so discovery continues serving the last approved profile until an admin approves the proposal or requests revisions.
 
@@ -432,7 +432,7 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 
 Backend is ready for user role management, tutor invite/review, achievement moderation, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, and refund corrections. Achievement moderation is the safest next Admin UI quick win.
 
-The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, and room availability/approval backend (G8–G10, G13–G14) have landed. The admin operations UI now also provides category filtering plus a booking-detail/history dialog backed by `adminBooking.getBookingStateHistory`, and the Rooms tab has a dedicated `room.listPendingApprovals` queue with assign/choose-another/cancel actions; F1 remains partial for a dedicated `/admin` route, fully hydrated participant/per-wallet detail, and business-hours SLA presentation. F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8).
+The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin operations UI now also provides category filtering plus a booking-detail/history dialog backed by `adminBooking.getBookingStateHistory`, and the Rooms tab has a dedicated `room.listPendingApprovals` queue with assign/choose-another/cancel actions; F1 remains partial for a dedicated `/admin` route, fully hydrated participant/per-wallet detail, and business-hours SLA presentation. F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8).
 
 ### Backend Gap Groups
 

@@ -225,11 +225,12 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
-- `booking.router.ts` — Student-owned booking mutations use `studentProcedure`; shared party reads/notes stay protected; `tutorActions.*` uses `tutorProcedure`
+- `booking.router.ts` — Student-owned booking mutations use `studentProcedure`; shared booking/detail/session reads stay protected; `tutorActions.*` uses `tutorProcedure`
 
 **Service Methods:**
 
-- `getById(bookingId, userId)` — Returns booking with access check
+- `getById(bookingId, userId, userRole?)` — Returns booking with access check; admins may inspect any booking
+- `listAccessible(userId, userRole, opts)` — Shared role-aware list: proposer/participant visibility for students, assigned bookings for tutors, and all bookings for admins; cursor-paginated
 - `listMine(userId, opts)` — Paginated list of user's bookings (proposer)
 - `listForTutor(tutorId, opts)` — Paginated list of bookings assigned to a tutor
 - `createSolo(proposerId, input)` — Creates solo booking with wallet hold, overlap check, and notification
@@ -274,7 +275,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
 - Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. Only the tutor may propose outside the original availability window.
 - Optimistic locking via `version` field prevents concurrent state changes
-- Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run.
+- Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run. The protected booking list/detail/session reads are available to authenticated parties, while admins can inspect the full booking set; tutor fulfillment remains under `tutorActions.*`.
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
 - Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) are **implemented** — U3/U5–U7 closed by REVIEW-FIXES-3 P3.8/P5 (see `docs/plans/active/PRD-GAPS-PHASE3.md`, all U-items closed); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)

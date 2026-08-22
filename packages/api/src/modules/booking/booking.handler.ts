@@ -110,7 +110,12 @@ export function createBookingHandler(booking: BookingService) {
       input: GetBookingInput;
     }) => {
       return withDomainMap(
-        () => booking.getById(input.bookingId, context.session!.user.id),
+        () =>
+          booking.getById(
+            input.bookingId,
+            context.session!.user.id,
+            context.session!.user.role ?? undefined,
+          ),
         mapBookingError,
       );
     },
@@ -140,7 +145,12 @@ export function createBookingHandler(booking: BookingService) {
       input: ListMineInput;
     }) => {
       return withDomainMap(
-        () => booking.listMine(context.session!.user.id, input),
+        () =>
+          booking.listAccessible(
+            context.session!.user.id,
+            context.session!.user.role ?? "student",
+            input,
+          ),
         mapBookingError,
       );
     },
@@ -409,7 +419,12 @@ export function createBookingHandler(booking: BookingService) {
       input: ListSessionsInput;
     }) => {
       return withDomainMap(
-        () => booking.listSessions(input.bookingId, context.session!.user.id),
+        () =>
+          booking.listSessions(
+            input.bookingId,
+            context.session!.user.id,
+            context.session!.user.role ?? undefined,
+          ),
         mapBookingError,
       );
     },

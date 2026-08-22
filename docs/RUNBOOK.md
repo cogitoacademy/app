@@ -15,15 +15,15 @@ Tutor invitation delivery should be smoke-tested in both desktop and mobile emai
 After a web deployment, sign in once as each supported role and open `/dashboard`:
 
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations.
-- Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/tutor-bookings`, `/availability`, and `/onboarding`.
-- Admin: priority operations and moderation counts; actions link to `/admin-operations`, `/admin-tutors`, and `/admin-achievements`. In `/admin-operations`, verify the booking queue filters, open a queue item’s detail view, confirm its state-history timeline loads, and use **Open override** to reach the existing preview/apply flow.
+- Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/bookings`, `/availability`, and `/onboarding`.
+- Admin: priority operations and moderation counts; actions link to `/bookings`, `/admin-operations`, `/admin-tutors`, and `/admin-achievements`. In `/admin-operations`, verify the booking queue filters, open a queue item’s detail view, confirm its state-history timeline loads, and use **Open override** to reach the existing preview/apply flow.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
 
-### Tutor booking review smoke check
+### Shared booking list smoke check
 
-With a seeded tutor and a pending request, open the request from `/tutor-bookings` and choose **Review request**. Verify that the accept dialog is centered and compact on desktop, remains within the viewport on mobile, and shows the scheduled date/time, modality, and attendance before the final action. Verify that **Cancel** closes the dialog without changing the booking, while the decline variant keeps the reason required. Only select **Accept booking** when the state transition is intended; online requests move to `scheduled`, while offline requests move to `awaiting_admin_room_approval`. For cancel/complete actions, verify the in-app confirmation dialog appears instead of a browser prompt and that the success/error toast remains visible above any open modal.
+With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with `Earns: X Marks · Total: Y Marks`, and admins see the full list with `Total X Marks · Tutor Y Marks` and no lifecycle mutations. Verify the Upcoming/Pending/Recurring/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that mobile rows keep date, location, and status readable beside the booking summary. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.
 
 ### Tutor subject taxonomy smoke check
 
@@ -67,6 +67,13 @@ bun run db:test          # Starts isolated test PostgreSQL + Redis (docker-compo
 bun run db:migrate       # Apply pending migrations
 bun run db:generate      # Generate new migration from schema changes
 ```
+
+If tutor discovery returns `500` with a missing `subject_category` or
+`tutor_profile_subject` relation, the local database is behind migration
+`0027_subject_taxonomy.sql`. Apply that migration (or the equivalent reviewed
+pending migration) and restart the server. `bun run db:push` can detect broad
+schema drift and ask ambiguous rename questions; review those prompts instead
+of accepting unrelated changes blindly.
 
 For isolated local test runs, the test runner migrates `cogito-test` automatically
 using `apps/server/.env.test` or `apps/server/.env.test.example`.
@@ -195,7 +202,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ### Role-boundary errors
 
-- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use `tutorActions.*` for tutor fulfillment and `adminTutor.*` for admin review.
+- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use protected `booking.listMine`/`booking.get` for the shared booking read surface, `tutorActions.*` for tutor fulfillment, and `adminTutor.*`/`adminBooking.*` for admin review.
 
 ### Redis Connection Errors
 

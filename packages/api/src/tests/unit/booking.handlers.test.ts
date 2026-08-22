@@ -11,6 +11,7 @@ function makeBookingService() {
     getById: mock(async () => ({ id: "b1" })),
     getRescheduleAvailability: mock(async () => [{ id: "slot1" }]),
     listMine: mock(async () => ({ items: [] })),
+    listAccessible: mock(async () => ({ items: [] })),
     cancel: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     proposeReschedule: mock(async () => ({
       id: "b1",
@@ -111,7 +112,7 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.getById).toHaveBeenCalledWith("b1", "u1");
+      expect(booking.getById).toHaveBeenCalledWith("b1", "u1", undefined);
       expect(result).toEqual({ id: "b1" });
     });
   });
@@ -135,7 +136,7 @@ describe("bookingHandler", () => {
   });
 
   describe("listMine", () => {
-    test("calls booking.listMine with session user id and input", async () => {
+    test("calls booking.listAccessible with session user id, role, and input", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
       const context = makeContext("u1");
@@ -146,7 +147,11 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.listMine).toHaveBeenCalledWith("u1", input);
+      expect(booking.listAccessible).toHaveBeenCalledWith(
+        "u1",
+        "student",
+        input,
+      );
       expect(result).toEqual({ items: [] });
     });
   });
@@ -385,7 +390,7 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.listSessions).toHaveBeenCalledWith("b1", "u1");
+      expect(booking.listSessions).toHaveBeenCalledWith("b1", "u1", undefined);
       expect(result).toEqual({ items: [] });
     });
   });

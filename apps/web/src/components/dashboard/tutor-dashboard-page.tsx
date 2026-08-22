@@ -46,7 +46,7 @@ const TERMINAL_STATES = new Set([
 
 export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   const bookings = useQuery(
-    orpc.tutorActions.listBookings.queryOptions({ input: { limit: 20 } }),
+    orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
   );
   const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
   const profile = useQuery(orpc.tutor.getMyProfile.queryOptions());
@@ -89,7 +89,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           </div>
           <Button
             nativeButton={false}
-            render={<Link to="/tutor-bookings" aria-label="Review bookings" />}
+            render={<Link to="/bookings" aria-label="Review bookings" />}
           >
             {reviewQueue.length > 0
               ? `Review ${reviewQueue.length} request${reviewQueue.length === 1 ? "" : "s"}`
@@ -201,10 +201,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
                 size="sm"
                 nativeButton={false}
                 render={
-                  <Link
-                    to="/tutor-bookings"
-                    aria-label="View all tutor bookings"
-                  />
+                  <Link to="/bookings" aria-label="View all tutor bookings" />
                 }
               >
                 View all <IconArrowRight />

@@ -93,8 +93,9 @@ export function BookingDetailPage({
     useState<BookingConfirmation>(null);
   const [declineReason, setDeclineReason] = useState("");
   const isTutor = viewerRole === "tutor";
-  const bookingsPath = isTutor ? "/tutor-bookings" : "/bookings";
-  const bookingsLabel = isTutor ? "Tutor bookings" : "My bookings";
+  const isAdmin = viewerRole === "admin";
+  const bookingsPath = "/bookings";
+  const bookingsLabel = isTutor ? "Tutor bookings" : "Bookings";
   const bookingQuery = useQuery(
     orpc.booking.get.queryOptions({ input: { bookingId } }),
   );
@@ -105,7 +106,7 @@ export function BookingDetailPage({
         queryKey: orpc.booking.get.queryKey({ input: { bookingId } }),
       }),
       queryClient.invalidateQueries({
-        queryKey: orpc.booking.listMine.queryKey({ input: {} }),
+        queryKey: orpc.booking.listMine.queryKey({ input: { limit: 100 } }),
       }),
       queryClient.invalidateQueries({
         queryKey: orpc.tutorActions.listBookings.queryKey({ input: {} }),
@@ -381,7 +382,7 @@ export function BookingDetailPage({
                 value={`${booking.confirmedHeadcount} of ${booking.targetGroupSize} confirmed`}
               />
             </CardBody>
-            {!isTutor && canCancelBooking(booking.currentState) ? (
+            {!isTutor && !isAdmin && canCancelBooking(booking.currentState) ? (
               <CardFooter className="flex-wrap justify-end gap-2">
                 {rescheduleAction}
                 <Button
@@ -502,26 +503,28 @@ export function BookingDetailPage({
             </Card>
           ) : null}
 
-          <BookingLifecycleActions
-            bookingId={bookingId}
-            viewerRole={viewerRole}
-            currentState={booking.currentState}
-            bookingType={booking.type}
-            scheduledStartAt={booking.scheduledStartAt}
-            timezone={booking.timezone}
-            participantRole={viewerParticipant?.role}
-            participantState={viewerParticipant?.confirmationState}
-            perStudentMarks={booking.priceSnapshot?.perStudent}
-            activeProposalId={activeRescheduleProposal?.id}
-            isRescheduleProposer={
-              activeRescheduleProposal?.proposedBy === viewerId
-            }
-            viewerRescheduleDecision={viewerRescheduleDecision}
-            proposedStartAt={activeRescheduleProposal?.proposedStartAt}
-            proposedEndAt={activeRescheduleProposal?.proposedEndAt}
-            rescheduleReason={activeRescheduleProposal?.reason ?? undefined}
-            onBookingChanged={refreshBookingQueries}
-          />
+          {!isAdmin ? (
+            <BookingLifecycleActions
+              bookingId={bookingId}
+              viewerRole={viewerRole}
+              currentState={booking.currentState}
+              bookingType={booking.type}
+              scheduledStartAt={booking.scheduledStartAt}
+              timezone={booking.timezone}
+              participantRole={viewerParticipant?.role}
+              participantState={viewerParticipant?.confirmationState}
+              perStudentMarks={booking.priceSnapshot?.perStudent}
+              activeProposalId={activeRescheduleProposal?.id}
+              isRescheduleProposer={
+                activeRescheduleProposal?.proposedBy === viewerId
+              }
+              viewerRescheduleDecision={viewerRescheduleDecision}
+              proposedStartAt={activeRescheduleProposal?.proposedStartAt}
+              proposedEndAt={activeRescheduleProposal?.proposedEndAt}
+              rescheduleReason={activeRescheduleProposal?.reason ?? undefined}
+              onBookingChanged={refreshBookingQueries}
+            />
+          ) : null}
 
           <Card className="min-w-0 overflow-hidden">
             <CardHeader>

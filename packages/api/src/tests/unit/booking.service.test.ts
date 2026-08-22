@@ -41,6 +41,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findBookingById: mock(async () => null),
     findBookingWithParticipants: mock(async () => null),
     listBookingsByProposer: mock(async () => []),
+    listBookingsForAccess: mock(async () => []),
     findTutorProfile: mock(async () => null),
     findAvailabilitySlot: mock(async () => null),
     findAvailabilityWindowContaining: mock(async () => null),
@@ -564,6 +565,48 @@ describe("BookingService", () => {
         states: undefined,
         limit: 100,
         cursor: undefined,
+      });
+    });
+  });
+
+  describe("listAccessible", () => {
+    test("lists all role-visible bookings for an admin and paginates", async () => {
+      const bookings = Array.from({ length: 3 }, (_, i) => ({
+        id: `b${i}`,
+        scheduledStartAt: new Date("2025-01-01T00:00:00Z"),
+      }));
+      const { service, repo } = createService({
+        repo: { listBookingsForAccess: mock(async () => bookings) },
+      });
+
+      const result = await service.listAccessible("admin1", "admin", {
+        limit: 2,
+      });
+
+      expect(result.items).toHaveLength(2);
+      expect(result.nextCursor).toBe(
+        `${new Date("2025-01-01T00:00:00Z").toISOString()}|b1`,
+      );
+      expect(repo.listBookingsForAccess).toHaveBeenCalledWith("admin1", {
+        states: undefined,
+        limit: 2,
+        cursor: undefined,
+        includeAll: true,
+      });
+    });
+
+    test("uses participant-aware visibility for non-admin roles", async () => {
+      const { service, repo } = createService({
+        repo: { listBookingsForAccess: mock(async () => []) },
+      });
+
+      await service.listAccessible("tutor1", "tutor");
+
+      expect(repo.listBookingsForAccess).toHaveBeenCalledWith("tutor1", {
+        states: undefined,
+        limit: 20,
+        cursor: undefined,
+        includeAll: false,
       });
     });
   });

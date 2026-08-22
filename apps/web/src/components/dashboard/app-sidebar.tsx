@@ -62,11 +62,12 @@ const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/onboarding", label: "My Profile", icon: IconUser },
   { to: "/availability", label: "Availability", icon: IconTimelineEventText },
-  { to: "/tutor-bookings", label: "Bookings", icon: IconCalendarEvent },
+  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
 ] as const;
 
 const adminNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
   { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
   {

@@ -12,7 +12,11 @@ export const listPublishedInput = z
   })
   .optional();
 
-export const listSubjectsInput = z.void();
+// Keep the endpoint's input explicit so the RPC client sends the standard
+// `{ json: {} }` envelope instead of an empty request body. An empty body is
+// parsed as an internal error by the fetch handler before z.void() can accept
+// it, which made tutor discovery fail in the browser.
+export const listSubjectsInput = z.object({});
 
 export const getProfileInput = z.object({
   tutorId: z.string().max(100),

@@ -35,7 +35,7 @@ export type SubjectGroup = {
 };
 
 export function useSubjectTaxonomy() {
-  const query = useQuery(orpc.tutors.listSubjects.queryOptions());
+  const query = useQuery(orpc.tutors.listSubjects.queryOptions({ input: {} }));
 
   return {
     ...query,

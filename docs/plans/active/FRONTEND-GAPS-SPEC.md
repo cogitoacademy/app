@@ -17,6 +17,17 @@ The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This
 
 Tutor onboarding now uses the normalized mother-category/child-subject selector exposed by `tutors.listSubjects`. Tutors must select at least one child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
+### Shared booking list follow-up (2026-08-22)
+
+The booking list is now one role-aware surface at `/_app/bookings`. Students,
+tutors, and admins use the protected `booking.listMine` read contract; the
+service resolves proposer/participant visibility for students, assigned
+bookings for tutors, and the complete set for admins. `/_app/tutor-bookings`
+remains as a compatibility redirect. The list keeps status/action semantics in
+the booking detail page, shows tutor earnings/total Marks where relevant, and
+uses a compact date/location/status arrangement on mobile. Admin detail is
+read-only; admin mutations remain in the operations console.
+
 ---
 
 ## Current Frontend State
@@ -44,7 +55,7 @@ for classmates.
 | `/_app/achievements`         | achivements-page.tsx            | Exists (submission + list)                                                                       |
 | `/_app/profile`              | profile-page.tsx                | Complete — student account name/photo plus learning and parent contact fields                    |
 | `/_app/onboarding`           | onboarding-form.tsx             | Exists (tutor onboarding)                                                                        |
-| `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Exists (incoming list + review link)                                                             |
+| `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Compatibility redirect to the shared `/bookings` list                                             |
 | `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview |
 | `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                               |
 | `/_app/admin-operations`     | admin-operations-page.tsx       | Partial F1 baseline — filtered queue, booking detail/history, override, rooms, and wallet lookup |
