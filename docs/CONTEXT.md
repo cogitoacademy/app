@@ -171,7 +171,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Meeting:** Google Meet (production) / manual link fallback via CircuitBreaker
 - **Deployment:** Coolify on Hetzner VPS (after infrastructure branch)
 
-## DB Schema (27 tables)
+## DB Schema (29 tables)
 
 ### `user` (auth.ts) — CHECK(role IN ('student','tutor','admin'))
 
@@ -243,12 +243,14 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 ### Tutor Module (tutor)
 
 - `getMyProfile`, `updateMyProfile`, `submitForReview`
+- `subjectIds` uses the normalized mother-category/child-subject taxonomy; drafts may save without subjects, but review submission requires at least one active child subject
 - `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `deleteAvailability`
 - `getMyPayouts`
 
 ### TutorDiscovery Module (protected)
 
-- `listPublished`, `getProfile`
+- `listSubjects` (public — active mother categories with selectable child subjects)
+- `listPublished`, `getProfile` (student-only; supports `categoryId` and `subjectId` filters)
 
 ### Invite Module (public + protected)
 
@@ -421,6 +423,8 @@ Booking cancellation and session completion also use in-app Selia confirmation d
 The tutor workspace now has the primary management surfaces: tutor-only onboarding, a Calendly-style availability page, an incoming booking list, and booking detail actions for accept, decline, and complete. Tutors configure multiple weekly-hour ranges per weekday, copy a range to weekdays, choose modality per range, and generate concrete future windows through an end date (up to 52 weeks). Date-specific overrides supersede only the conflicting recurring occurrence, while the weekly calendar preview exposes and removes individual generated windows. Existing bookings remain intact because replacement soft-deactivates availability rather than deleting referenced rows. The incoming list uses the tutor-owned booking query rather than proposer-only `booking.listMine`.
 
 Published tutor profiles remain editable. Bio and availability-summary edits publish immediately; trust-sensitive edits are held in `pendingProfileChanges` with a separate edit-review status, so discovery continues serving the last approved profile until an admin approves the proposal or requests revisions.
+
+Tutor subjects are normalized in `subject_category` (self-referencing mother/child hierarchy) and `tutor_profile_subject` (profile-to-child join). The legacy `expertise` array remains readable for compatibility, while onboarding and published discovery use normalized child subjects. Subject changes on a published profile follow the existing pending-review path and are applied atomically when an admin approves the edit.
 
 The primary Tutor E2E flow has been manually verified with seeded accounts, including availability, incoming booking review, Google Meet link creation, student notification/state, and completion. Tutor reschedule, session notes, payout, and individual series completion are now backend-ready (G6/G7/G16/G18); their UI is tracked in FRONTEND-GAPS-SPEC (F6/F7/F9/F13/F8 — F6/F7/F8/F13 closed, F9 partial). Lateness/no-show support is backend-ready via `support.createTicket` (G1) with the report UI implemented (F3, merged #55).
 

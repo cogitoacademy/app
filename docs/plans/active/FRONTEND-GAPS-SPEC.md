@@ -13,6 +13,10 @@ This document catalogs all PRD-required frontend surfaces that are not yet imple
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
+### Subject taxonomy follow-up (2026-08-22)
+
+Tutor onboarding now uses the normalized mother-category/child-subject selector exposed by `tutors.listSubjects`. Tutors must select at least one child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
+
 ---
 
 ## Current Frontend State

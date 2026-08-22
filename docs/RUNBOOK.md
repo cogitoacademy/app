@@ -24,6 +24,10 @@ The route selects the dashboard from the authenticated session role. A tutor or 
 
 With a seeded tutor and a pending request, open the request from `/tutor-bookings` and choose **Review request**. Verify that the accept dialog is centered and compact on desktop, remains within the viewport on mobile, and shows the scheduled date/time, modality, and attendance before the final action. Verify that **Cancel** closes the dialog without changing the booking, while the decline variant keeps the reason required. Only select **Accept booking** when the state transition is intended; online requests move to `scheduled`, while offline requests move to `awaiting_admin_room_approval`. For cancel/complete actions, verify the in-app confirmation dialog appears instead of a browser prompt and that the success/error toast remains visible above any open modal.
 
+### Tutor subject taxonomy smoke check
+
+Open `/onboarding` as a tutor and verify the subject selector loads active mother categories and their child subjects from `tutors.listSubjects`. Select at least one child subject, save a draft, and confirm the selected subjects reload with the profile. A submission with no child subject must be blocked; published tutor discovery should expose the selected subjects and allow students to filter by mother category or child subject.
+
 ### Development
 
 ```bash
