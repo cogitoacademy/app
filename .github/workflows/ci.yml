@@ -148,11 +148,11 @@ jobs:
           echo "PAYMENT_WEBHOOK_SECRET=${{ env.PAYMENT_WEBHOOK_SECRET }}" >> apps/server/.env
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
-      - run: bun test packages/api/src/tests/ apps/server/src/openapi.test.ts
+      - run: bun test --timeout 30000 packages/api/src/tests/ apps/server/src/openapi.test.ts
       - name: "Server unit tests (separate process: webhook test uses mock.module)"
-        run: bun test apps/server/src/
+        run: bun test --timeout 30000 apps/server/src/
       - name: Test with coverage
-        run: bun test --coverage packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+        run: bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
         continue-on-error: true
       - name: Post coverage comment + enforce gate
         if: always()

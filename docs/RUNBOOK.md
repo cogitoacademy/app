@@ -214,7 +214,7 @@ redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 Run the CI-equivalent coverage suite from the repository root after starting the test Postgres and Redis services:
 
 ```bash
-bun test --coverage packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
 ```
 
 The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% line coverage for `packages/api` and 100% line coverage overall from `coverage/lcov.info`; the Bun command's own function/statement threshold is a separate diagnostic and is not the CI gate.

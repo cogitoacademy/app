@@ -14,7 +14,7 @@ Branch: `f/booking-list-refactor` (PR #93)
 ## Verification
 
 ```bash
-bun test --coverage packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
 ```
 
 The full local run completed with 2,147 passing tests and 0 failures. The final lcov artifact reports 16,253/16,253 API lines and 18,270/18,270 overall lines. Bun may still report its independent function/statement threshold when the command exits; CI's enforced gate is the line coverage check in `.github/scripts/coverage-comment.ts`.
