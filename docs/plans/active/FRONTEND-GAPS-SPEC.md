@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                                                                             |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-22; F1/F8/F13/F14/F16 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; F9/F18 partial) |
+| Status     | Living gap inventory (updated 2026-08-22; F1/F8/F13/F14/F16/F18 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; F9 partial) |
 | Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                                |
 | Created    | 2026-07-29                                                                                                                                                        |
 | Audited    | 2026-08-22                                                                                                                                                        |
@@ -119,10 +119,10 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed                                                                        |
 | F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                |
 | F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed                                                                        |
-| F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | Partial                                                                       |
+| F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal    |
 | F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                |
 
-**Total estimated effort: ~2.5 days for remaining gaps (F9, F18 partial).**
+**Total estimated effort: ~1.5 days for remaining gaps (F9 partial).**
 
 > **Audit 2026-08-14:** F4, F5, F10, F15 verified **closed** in `apps/web` (git HEAD `9b7df5e`). F8, F16, F17 remain partial. All remaining missing gaps have backend procedures ready except F13 (needs new `tutor.getMyPayouts` router) and F16 (needs a new public achievement list procedure).
 
@@ -140,7 +140,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > - **F1 → Closed** — `/_app/admin` is the admin workspace entry point; the operations queue exposes category/urgency/SLA filters, reported reason/source/time-since-report, business-hours deadline/status, and a WhatsApp escalation link. The booking detail loads the full booking read model plus each participant's wallet and booking-scoped ledger entries.
 > - **F9 → Partial** — notes list + textarea with server-side sanitized HTML render (`dangerouslySetInnerHTML`); no rich-text toolbar editor and no client-side DOMPurify.
 > - **F12 → Closed** — `admin-operations-page.tsx` now consumes `room.listPendingApprovals` for offline bookings in `awaiting_admin_room_approval`; admins can assign the requested room, load a booking to choose another room (or use the existing relocate operation), and cancel the pending approval. The backend queue also includes requested-room conflicts with no `room_booking` row.
-> - **F18 → Partial** — invitee confirm/decline/reconfirm wired; **inviter-side `withdraw` UI still missing** (0 references to `withdraw` in `apps/web/src`).
+> - **F18 → Closed (2026-08-22 follow-up)** — invitee confirm/decline/reconfirm plus proposer-side pending-invite withdrawal are wired. The new `booking.withdrawInvite` procedure marks only a pending invitee `withdrawn_pre_h2`, preserves headcount/holds, and notifies the target.
 > - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
 > - **Dead components → still present** — `chart.tsx`, `data.ts`, `user-menu.tsx` have 0 importers in `apps/web/src`.
 
@@ -535,7 +535,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-20, TC-25
 
-**Current state:** **PARTIAL (2026-08-19).** `confirmInvite`/`declineInvite`/`reconfirm` are wired in `booking-lifecycle-actions.tsx` (merged via #55). **Still missing:** inviter-side `withdraw` UI for an invite (0 references to `withdraw` in `apps/web/src`), and the full no-opt-out disclaimer on the invitee acceptance screen (see F14).
+**Current state:** **CLOSED (2026-08-22).** `confirmInvite`/`declineInvite`/`reconfirm` are wired in `booking-lifecycle-actions.tsx` (merged via #55). The proposer now sees pending invitees and can withdraw one through an in-app confirmation dialog backed by `booking.withdrawInvite`. The no-opt-out disclaimer is covered by F14.
 
 **Required:**
 
@@ -543,15 +543,15 @@ Full override form per PRD §Emergency Override UI/UX:
 2. Accept → calls `booking.confirmInvite`
 3. Decline → calls `booking.declineInvite`
 4. Reconfirm flow for invitees whose attendance confirmation expires → calls `booking.reconfirm`
-5. Inviter-side withdraw for an invite → calls `booking.withdrawGroup`
+5. Inviter-side withdraw for a pending invite → calls `booking.withdrawInvite`; marks only that invitee `withdrawn_pre_h2`, keeps headcount/holds unchanged, and notifies the invitee
 6. Post-action states rendered (confirmed/pending/declined/withdrawn) in both the group booking detail and the invitee's booking list
 
 **Acceptance:**
 
 - Invitee can accept/decline a group invite and sees schedule + price + hold + disclaimer first
 - Reconfirmation prompt appears when needed
-- Inviter can withdraw an invite
-- No `confirmInvite`/`declineInvite`/`reconfirm`/`withdraw` gaps remain in `apps/web`
+- Inviter can withdraw a pending invite without affecting confirmed participants or Marks holds
+- No `confirmInvite`/`declineInvite`/`reconfirm`/invite-withdraw gaps remain in `apps/web`
 
 ---
 

@@ -17,6 +17,7 @@ import type {
   bookingActionInput,
   confirmInviteInput,
   declineInviteInput,
+  withdrawInviteInput,
   reconfirmInput,
   withdrawInput,
   proposeRescheduleInput,
@@ -39,6 +40,7 @@ type BookingActionInput = z.infer<typeof bookingActionInput>;
 type RescheduleDecisionInput = BookingActionInput & { proposalId?: string };
 type ConfirmInviteInput = z.infer<typeof confirmInviteInput>;
 type DeclineInviteInput = z.infer<typeof declineInviteInput>;
+type WithdrawInviteInput = z.infer<typeof withdrawInviteInput>;
 type ReconfirmInput = z.infer<typeof reconfirmInput>;
 type WithdrawInput = z.infer<typeof withdrawInput>;
 type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
@@ -369,6 +371,25 @@ export function createBookingHandler(booking: BookingService) {
           booking.declineInvite(
             context.session!.user.id,
             input.bookingId,
+            input.reason,
+          ),
+        mapBookingError,
+      );
+    },
+
+    withdrawInvite: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: WithdrawInviteInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.withdrawInvite(
+            context.session!.user.id,
+            input.bookingId,
+            input.inviteeUserId,
             input.reason,
           ),
         mapBookingError,
