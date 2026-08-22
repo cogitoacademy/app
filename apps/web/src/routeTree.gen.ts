@@ -17,6 +17,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
+import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
 import { Route as AppAdminEconomyRouteImport } from './routes/_app.admin-economy'
 import { Route as AppAdminOperationsRouteImport } from './routes/_app.admin-operations'
@@ -71,6 +72,11 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
 const AppAchievementsRoute = AppAchievementsRouteImport.update({
   id: '/achievements',
   path: '/achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-economy': typeof AppAdminEconomyRoute
   '/admin-operations': typeof AppAdminOperationsRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
   '/admin-economy': typeof AppAdminEconomyRoute
   '/admin-operations': typeof AppAdminOperationsRoute
@@ -214,6 +222,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_app/achievements': typeof AppAchievementsRoute
+  '/_app/admin': typeof AppAdminRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
   '/_app/admin-economy': typeof AppAdminEconomyRoute
   '/_app/admin-operations': typeof AppAdminOperationsRoute
@@ -241,6 +250,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/achievements'
+    | '/admin'
     | '/admin-achievements'
     | '/admin-economy'
     | '/admin-operations'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/achievements'
+    | '/admin'
     | '/admin-achievements'
     | '/admin-economy'
     | '/admin-operations'
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/_app/achievements'
+    | '/_app/admin'
     | '/_app/admin-achievements'
     | '/_app/admin-economy'
     | '/_app/admin-operations'
@@ -377,6 +389,13 @@ declare module '@tanstack/react-router' {
       path: '/achievements'
       fullPath: '/achievements'
       preLoaderRoute: typeof AppAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-achievements': {
@@ -496,6 +515,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
+  AppAdminRoute: typeof AppAdminRoute
   AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
   AppAdminEconomyRoute: typeof AppAdminEconomyRoute
   AppAdminOperationsRoute: typeof AppAdminOperationsRoute
@@ -515,6 +535,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
+  AppAdminRoute: AppAdminRoute,
   AppAdminAchievementsRoute: AppAdminAchievementsRoute,
   AppAdminEconomyRoute: AppAdminEconomyRoute,
   AppAdminOperationsRoute: AppAdminOperationsRoute,

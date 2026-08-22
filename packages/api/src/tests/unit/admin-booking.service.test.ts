@@ -916,7 +916,14 @@ describe("AdminBookingService", () => {
       });
 
       const result = await service.listBookings({ bookingId: "b1" });
-      expect(result.items).toEqual([{ ...booking, escalated: false }]);
+      expect(result.items).toEqual([
+        {
+          ...booking,
+          escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
+        },
+      ]);
     });
 
     test("returns empty list when bookingId provided but not found", async () => {
@@ -961,12 +968,16 @@ describe("AdminBookingService", () => {
           currentState: "confirmed",
           scheduledStartAt: expect.any(Date),
           escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
         },
         {
           id: "b2",
           currentState: "pending",
           scheduledStartAt: expect.any(Date),
           escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
         },
       ]);
       expect(repo.listBookingsByState).toHaveBeenCalledWith(
@@ -1008,12 +1019,16 @@ describe("AdminBookingService", () => {
           currentState: "confirmed",
           scheduledStartAt: expect.any(Date),
           escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
         },
         {
           id: "b11",
           currentState: "confirmed",
           scheduledStartAt: expect.any(Date),
           escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
         },
       ]);
     });
@@ -1040,13 +1055,13 @@ describe("AdminBookingService", () => {
       expect(repo.listBookingsByState).toHaveBeenCalledWith(
         expect.anything(),
         [],
-        2,
+        100,
         undefined,
         { category: "force_cancel", urgency: "high", escalated: true },
       );
     });
 
-    test("flags booking as escalated when overrideMeta.overriddenAt is stale", async () => {
+    test("flags booking as escalated when overrideMeta.overriddenAt passes OQ-04 SLA", async () => {
       const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
       const fresh = new Date().toISOString();
       const repo = mockRepo({
