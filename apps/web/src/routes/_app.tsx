@@ -13,6 +13,7 @@ import { authClient } from "@/lib/auth-client";
 
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/admin": "Admin workspace",
   "/balance": "Balance",
   "/bookings": "Bookings",
   "/tutor-bookings": "Bookings",

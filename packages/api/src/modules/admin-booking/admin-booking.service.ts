@@ -9,6 +9,7 @@ import {
 } from "./admin-booking.errors";
 import { BookingNotEditableError } from "../booking/booking.errors";
 import { BookingStateTransitionError } from "../booking/booking.errors";
+import { computeSlaDeadline } from "../support/support.service";
 import {
   ACTOR_TYPE,
   DEFAULT_PAGE_LIMIT,
@@ -16,7 +17,6 @@ import {
   NOTIFICATION_CATEGORY,
   NOTIFICATION_SEVERITY,
   PAYMENT_STATUS,
-  RESPONSE_WINDOW_MS,
 } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -101,23 +101,33 @@ export interface OverrideInput {
 export type AdminBookingService = ReturnType<typeof createAdminBookingService>;
 
 /**
- * A booking is escalated when it carries an active override record whose
- * overriddenAt timestamp is older than the 12h SLA response window. Computed
- * from booking.override_meta (no column added).
+ * A booking is escalated when its active override report has passed the OQ-04
+ * SLA deadline. The deadline is computed from booking.override_meta so no
+ * schema column is needed and the API can expose the exact deadline to admins.
  */
-function computeEscalated(overrideMeta: unknown): boolean {
-  if (typeof overrideMeta !== "object" || overrideMeta === null) return false;
+function getOverrideReportedAt(overrideMeta: unknown): Date | null {
+  if (typeof overrideMeta !== "object" || overrideMeta === null) return null;
   const overriddenAt = (overrideMeta as Record<string, unknown>).overriddenAt;
-  if (typeof overriddenAt !== "string") return false;
-  const appliedAt = Date.parse(overriddenAt);
-  if (Number.isNaN(appliedAt)) return false;
-  return Date.now() - appliedAt > RESPONSE_WINDOW_MS;
+  if (typeof overriddenAt !== "string") return null;
+  const reportedAt = new Date(overriddenAt);
+  return Number.isNaN(reportedAt.getTime()) ? null : reportedAt;
 }
 
 function toOverrideQueueItem<T extends { overrideMeta: unknown }>(
   row: T,
-): T & { escalated: boolean } {
-  return { ...row, escalated: computeEscalated(row.overrideMeta) };
+): T & {
+  escalated: boolean;
+  reportedAt: Date | null;
+  slaDeadline: Date | null;
+} {
+  const reportedAt = getOverrideReportedAt(row.overrideMeta);
+  const slaDeadline = reportedAt ? computeSlaDeadline(reportedAt) : null;
+  return {
+    ...row,
+    reportedAt,
+    slaDeadline,
+    escalated: slaDeadline !== null && Date.now() >= slaDeadline.getTime(),
+  };
 }
 
 /** Composite keyset cursor: rank, scheduledStartAt, id. */
@@ -483,6 +493,10 @@ export function createAdminBookingService(deps: {
       };
     }
     const limit = Math.min(opts?.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+    // The database can filter category and urgency, but the OQ-04 deadline is
+    // a business-hours calculation. Fetch a wider window for SLA filtering and
+    // apply the authoritative deadline after projection.
+    const repoLimit = opts?.escalated === true ? MAX_PAGE_LIMIT : limit;
     const filters = {
       category: opts?.category,
       urgency: opts?.urgency,
@@ -493,11 +507,22 @@ export function createAdminBookingService(deps: {
       filters.urgency !== undefined ||
       filters.escalated !== undefined;
     const rows = hasFilters
-      ? await repo.listBookingsByState(db, [], limit, opts?.cursor, filters)
-      : await repo.listBookingsByState(db, [], limit, opts?.cursor);
-    const items = rows.slice(0, limit).map(toOverrideQueueItem);
-    const nextCursor =
-      rows.length > limit ? toOverrideCursor(items[items.length - 1]!) : null;
+      ? await repo.listBookingsByState(db, [], repoLimit, opts?.cursor, filters)
+      : await repo.listBookingsByState(db, [], repoLimit, opts?.cursor);
+    const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
+    const matchingItems =
+      opts?.escalated === true
+        ? rawItems.filter((item) => item.escalated)
+        : rawItems;
+    const items = matchingItems.slice(0, limit);
+    const hasMoreMatchingItems = matchingItems.length > limit;
+    const hasMoreRows = rows.length > repoLimit;
+    const cursorItem = hasMoreMatchingItems
+      ? items[items.length - 1]
+      : hasMoreRows
+        ? rawItems[rawItems.length - 1]
+        : undefined;
+    const nextCursor = cursorItem ? toOverrideCursor(cursorItem) : null;
     return { items, nextCursor };
   }
 

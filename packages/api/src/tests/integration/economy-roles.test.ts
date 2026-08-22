@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import {
   auditLog,
   availabilitySlot,
+  notification,
   tutorInvite,
   tutorProfile,
 } from "@cogito-app/db/schema";
@@ -94,6 +95,61 @@ describe("Economy settings role safety", () => {
         ),
       );
     expect(audit).toHaveLength(1);
+
+    const tutorNotifications = await db
+      .select({
+        userId: notification.userId,
+        category: notification.category,
+        title: notification.title,
+        body: notification.body,
+        eventKey: notification.eventKey,
+        metadata: notification.metadata,
+      })
+      .from(notification)
+      .where(eq(notification.userId, tutorId));
+    expect(tutorNotifications).toHaveLength(1);
+    expect(tutorNotifications[0]).toMatchObject({
+      userId: tutorId,
+      category: "system",
+      title: "Cogito rate updated",
+      eventKey: `economy_config_updated:2:${tutorId}`,
+    });
+    expect(tutorNotifications[0]?.body).toContain("Online: Rp55.000 base");
+    expect(tutorNotifications[0]?.metadata).toMatchObject({
+      economyVersion: 2,
+      offlineCogitoIncrementIdr: 45_000,
+    });
+
+    const studentNotifications = await db
+      .select({ id: notification.id })
+      .from(notification)
+      .where(eq(notification.userId, studentId));
+    expect(studentNotifications).toHaveLength(0);
+  });
+
+  test("unchanged admin writes are no-ops", async () => {
+    const current = await adminClient.admin.getEconomySettings();
+    const unchanged = await adminClient.admin.updateEconomySettings({
+      expectedVersion: current.version,
+      onlineCogitoBaseIdr: current.onlineCogitoBaseIdr,
+      onlineCogitoIncrementIdr: current.onlineCogitoIncrementIdr,
+      offlineCogitoBaseIdr: current.offlineCogitoBaseIdr,
+      offlineCogitoIncrementIdr: current.offlineCogitoIncrementIdr,
+    });
+
+    expect(unchanged.version).toBe(current.version);
+
+    const audit = await db
+      .select({ id: auditLog.id })
+      .from(auditLog)
+      .where(eq(auditLog.action, "economy_config_updated"));
+    expect(audit).toHaveLength(1);
+
+    const tutorNotifications = await db
+      .select({ id: notification.id })
+      .from(notification)
+      .where(eq(notification.userId, tutorId));
+    expect(tutorNotifications).toHaveLength(1);
   });
 
   test("new bookings use the active Cogito take and snapshot it", async () => {
