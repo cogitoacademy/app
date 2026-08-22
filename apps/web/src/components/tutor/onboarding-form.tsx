@@ -22,6 +22,7 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   Select,
   SelectItem,
@@ -61,9 +62,6 @@ const TUTOR_STATUS_BADGES: Record<string, TutorStatusBadge> = {
   published: { label: "Published", variant: "success" },
   suspended: { label: "Suspended", variant: "danger" },
 };
-
-const textareaClassName =
-  "min-h-28 w-full resize-y rounded bg-input px-3.5 py-3 text-foreground placeholder:text-dimmed shadow-input ring ring-input-border transition-[color,box-shadow] focus:outline-0 focus:ring-2 focus:ring-primary";
 
 interface OnboardingFormProps {
   accountUser: {
@@ -541,7 +539,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   <FieldDescription>
                     A concise introduction students can scan before booking.
                   </FieldDescription>
-                  <textarea
+                  <Textarea
                     id="tutor-short-bio"
                     name="shortBio"
                     rows={4}
@@ -554,7 +552,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       clearError("shortBio");
                     }}
                     placeholder="Brief introduction about yourself"
-                    className={textareaClassName}
                     aria-invalid={Boolean(errors.shortBio)}
                   />
                   {errors.shortBio ? (

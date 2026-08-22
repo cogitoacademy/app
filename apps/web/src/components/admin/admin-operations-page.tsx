@@ -46,6 +46,7 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   getSelectItemValue,
   Select,
@@ -82,9 +83,8 @@ import {
 } from "@/components/booking/booking-ui";
 import { client, orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
+import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 
-const TEXTAREA_CLASS =
-  "min-h-24 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none placeholder:text-dimmed focus:border-input-accent-border";
 const OVERRIDE_CATEGORIES = [
   "tutor_no_show",
   "medical_emergency",
@@ -913,9 +913,8 @@ function OverrideDialog({
           </div>
           <Field>
             <FieldLabel htmlFor="override-reason">Reason</FieldLabel>
-            <textarea
+            <Textarea
               id="override-reason"
-              className={TEXTAREA_CLASS}
               value={reason}
               maxLength={2_000}
               onChange={(event) => {
@@ -1262,19 +1261,21 @@ function RoomOperations() {
             </Select>
           </Field>
           <Field>
-            <FieldLabel>Start</FieldLabel>
-            <Input
-              type="datetime-local"
+            <FieldLabel htmlFor="room-start-date">Start</FieldLabel>
+            <CrossBrowserDateTimeInput
+              id="room-start"
+              timeAriaLabel="Start time"
               value={startAt}
-              onChange={(event) => setStartAt(event.target.value)}
+              onChange={setStartAt}
             />
           </Field>
           <Field>
-            <FieldLabel>End</FieldLabel>
-            <Input
-              type="datetime-local"
+            <FieldLabel htmlFor="room-end-date">End</FieldLabel>
+            <CrossBrowserDateTimeInput
+              id="room-end"
+              timeAriaLabel="End time"
               value={endAt}
-              onChange={(event) => setEndAt(event.target.value)}
+              onChange={setEndAt}
             />
           </Field>
         </CardBody>

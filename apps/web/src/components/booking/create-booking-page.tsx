@@ -34,6 +34,7 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import {
   getSelectItemValue,
@@ -444,14 +445,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <FieldLabel htmlFor="learning-goal">
                   What do you want to learn?
                 </FieldLabel>
-                <textarea
+                <Textarea
                   id="learning-goal"
                   value={learningGoal}
                   maxLength={2_000}
                   required
                   onChange={(event) => setLearningGoal(event.target.value)}
                   placeholder="Topics, current level, questions, or an outcome you want from the session."
-                  className="min-h-28 w-full resize-y rounded border border-input-border bg-background px-3 py-2 text-base outline-none focus:border-input-accent-border focus:ring-2 focus:ring-primary"
                 />
                 <FieldDescription>
                   {learningGoal.length}/2,000 characters

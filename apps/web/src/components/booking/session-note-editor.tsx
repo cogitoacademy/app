@@ -3,12 +3,10 @@
 import { useRef, useState } from "react";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { sanitizeSessionNoteHtml } from "./session-note-sanitizer";
-
-const TEXTAREA_CLASS =
-  "min-h-32 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none placeholder:text-dimmed focus:border-input-accent-border focus-visible:ring-2 focus-visible:ring-ring/30";
 
 type SessionNoteEditorProps = {
   id: string;
@@ -179,10 +177,9 @@ export function SessionNoteEditor({
           Insert link
         </Button>
       </div>
-      <textarea
+      <Textarea
         ref={textareaRef}
         id={id}
-        className={TEXTAREA_CLASS}
         value={value}
         maxLength={maxLength}
         disabled={disabled}

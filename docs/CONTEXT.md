@@ -293,7 +293,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Booking Module (student mutations + shared authenticated reads)
 
-Tutor availability is modeled as free-time windows rather than pre-sized sessions. The booking UI uses the shared Selia calendar and a cross-browser 24-hour autocomplete time field; students can enter any exact minute, but a start must leave room for the server-fixed 90-minute session inside the selected window. A one-session selection is one-time and multiple selections form a series automatically.
+Tutor availability is modeled as free-time windows rather than pre-sized sessions. The booking UI uses the shared Selia calendar/date picker and a cross-browser 24-hour autocomplete time field; students can enter any exact minute, but a start must leave room for the server-fixed 90-minute session inside the selected window. A one-session selection is one-time and multiple selections form a series automatically.
 
 - `createSolo`, `get`, `listMine`, `cancel`
 - `proposeReschedule` (booking proposer), `acceptReschedule`, `rejectReschedule`, `cancelSession`, `getRescheduleAvailability`
@@ -438,6 +438,8 @@ Booking detail uses a task-detail layout shared by student and tutor views: a co
 Tutor booking review uses a compact responsive accept/decline dialog. The accept path shows the scheduled date/time, modality, attendance, and the next state transition before calling the existing tutor action; the dialog is informational and does not add a new backend procedure.
 
 Booking cancellation and session completion also use in-app Selia confirmation dialogs. Global success/error toasts render above dialog layers so mutation feedback remains visible while a modal is open; native browser confirmation prompts are not used.
+
+Form controls use Selia wrappers for multiline text, numeric amounts, calendar dates, and minute-level times. App-level raw browser date/time/number/select/textarea controls are not used; the wrappers retain semantic native elements underneath for accessibility and form behavior.
 
 **Not full PRD complete:** group/series booking UI, reschedule accept/reject UI (F7), lateness/no-show reporting UI (F3), and public achievements (F16) remain open. Backend support for reschedule accept/reject and lateness/no-show reporting (G1/G6) has landed. The notification center, Knowledge Bank gating UX, email verification, F9 rich-text session notes, and session-expiry warning are implemented. (2026-08-22: J2 now warns during the final 30 minutes and retains the existing 401 redirect; F1 admin workspace, F9 rich-text notes, and F18 proposer-side invite withdrawal are complete; no remaining F1/F9/F18 gap is open.)
 

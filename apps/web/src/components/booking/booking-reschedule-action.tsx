@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
@@ -42,9 +43,6 @@ import {
   isValidMinuteTime,
   MinuteTimeInput,
 } from "./minute-time-input";
-
-const TEXTAREA_CLASS =
-  "min-h-28 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none transition-colors placeholder:text-dimmed focus:border-input-accent-border";
 
 export function canProposeBookingReschedule({
   viewerRole,
@@ -292,9 +290,8 @@ export function BookingRescheduleAction({
               <FieldLabel htmlFor="reschedule-reason">
                 Reason (optional)
               </FieldLabel>
-              <textarea
+              <Textarea
                 id="reschedule-reason"
-                className={TEXTAREA_CLASS}
                 value={reason}
                 maxLength={2_000}
                 onChange={(event) => setReason(event.target.value)}

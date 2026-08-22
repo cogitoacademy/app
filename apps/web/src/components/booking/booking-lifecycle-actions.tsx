@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
@@ -50,9 +51,6 @@ import { SessionNoteEditor } from "./session-note-editor";
 import { sanitizeSessionNoteHtml } from "./session-note-sanitizer";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
-
-const TEXTAREA_CLASS =
-  "min-h-28 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none transition-colors placeholder:text-dimmed focus:border-input-accent-border";
 
 type DialogKind = "report" | "decline-invite" | "withdraw-invite" | null;
 type SupportCategory =
@@ -595,9 +593,8 @@ export function BookingLifecycleActions({
               <FieldLabel htmlFor="invite-decline-reason">
                 Reason (optional)
               </FieldLabel>
-              <textarea
+              <Textarea
                 id="invite-decline-reason"
-                className={TEXTAREA_CLASS}
                 value={inviteDeclineReason}
                 maxLength={2_000}
                 onChange={(event) => setInviteDeclineReason(event.target.value)}
@@ -656,9 +653,8 @@ export function BookingLifecycleActions({
               <FieldLabel htmlFor="invite-withdraw-reason">
                 Reason (optional)
               </FieldLabel>
-              <textarea
+              <Textarea
                 id="invite-withdraw-reason"
-                className={TEXTAREA_CLASS}
                 value={withdrawInviteReason}
                 maxLength={2_000}
                 onChange={(event) =>
@@ -744,9 +740,8 @@ export function BookingLifecycleActions({
               <FieldLabel htmlFor="support-description">
                 What happened?
               </FieldLabel>
-              <textarea
+              <Textarea
                 id="support-description"
-                className={TEXTAREA_CLASS}
                 value={description}
                 maxLength={2_000}
                 onChange={(event) => setDescription(event.target.value)}
