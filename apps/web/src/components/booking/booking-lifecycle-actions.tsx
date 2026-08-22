@@ -77,6 +77,7 @@ export function BookingLifecycleActions({
   viewerRescheduleDecision,
   rescheduleReason,
   onBookingChanged,
+  section = "all",
 }: {
   bookingId: string;
   viewerRole: string;
@@ -94,8 +95,11 @@ export function BookingLifecycleActions({
   viewerRescheduleDecision?: "pending" | "accepted" | "rejected";
   rescheduleReason?: string;
   onBookingChanged: () => void;
+  section?: "all" | "actions" | "supplementary";
 }) {
   const queryClient = useQueryClient();
+  const showActions = section !== "supplementary";
+  const showSupplementary = section !== "actions";
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [supportCategory, setSupportCategory] =
     useState<SupportCategory>("tutor_late");
@@ -129,11 +133,11 @@ export function BookingLifecycleActions({
 
   const notesQuery = useQuery({
     ...orpc.booking.getSessionNotes.queryOptions({ input: { bookingId } }),
-    enabled: isCompleted,
+    enabled: showSupplementary && isCompleted,
   });
   const ticketsQuery = useQuery({
     ...orpc.support.listTickets.queryOptions({ input: { limit: 50 } }),
-    enabled: isStudent,
+    enabled: showSupplementary && isStudent,
   });
   const bookingTickets =
     ticketsQuery.data?.filter((ticket) => ticket.bookingId === bookingId) ?? [];
@@ -249,7 +253,7 @@ export function BookingLifecycleActions({
 
   return (
     <>
-      {hasActions ? (
+      {showActions && hasActions ? (
         <Card>
           <CardHeader>
             <IconBox variant="warning-subtle">
@@ -399,7 +403,7 @@ export function BookingLifecycleActions({
         </Card>
       ) : null}
 
-      {isCompleted ? (
+      {showSupplementary && isCompleted ? (
         <Card>
           <CardHeader>
             <IconBox variant="info-subtle">
@@ -465,7 +469,7 @@ export function BookingLifecycleActions({
         </Card>
       ) : null}
 
-      {bookingTickets.length > 0 ? (
+      {showSupplementary && bookingTickets.length > 0 ? (
         <Card>
           <CardHeader>
             <IconBox variant="warning-subtle">

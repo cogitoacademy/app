@@ -53,6 +53,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@cogito-app/ui/components/selia/dialog";
+import { Divider } from "@cogito-app/ui/components/selia/divider";
 import {
   Item,
   ItemContent,
@@ -274,6 +275,24 @@ export function BookingDetailPage({
       onBookingChanged={refreshBookingQueries}
     />
   ) : null;
+  const lifecycleActionProps = {
+    bookingId,
+    viewerRole,
+    currentState: booking.currentState,
+    bookingType: booking.type,
+    scheduledStartAt: booking.scheduledStartAt,
+    timezone: booking.timezone,
+    participantRole: viewerParticipant?.role,
+    participantState: viewerParticipant?.confirmationState,
+    perStudentMarks: booking.priceSnapshot?.perStudent,
+    activeProposalId: activeRescheduleProposal?.id,
+    isRescheduleProposer: activeRescheduleProposal?.proposedBy === viewerId,
+    viewerRescheduleDecision,
+    proposedStartAt: activeRescheduleProposal?.proposedStartAt,
+    proposedEndAt: activeRescheduleProposal?.proposedEndAt,
+    rescheduleReason: activeRescheduleProposal?.reason ?? undefined,
+    onBookingChanged: refreshBookingQueries,
+  };
 
   const meetingUrl = booking.meetingUrl;
 
@@ -310,7 +329,7 @@ export function BookingDetailPage({
     <Stack
       direction="column"
       spacing="lg"
-      className="mx-auto w-full min-w-0 max-w-5xl"
+      className="mx-auto w-full min-w-0 max-w-7xl"
     >
       <div>
         <Button
@@ -360,49 +379,196 @@ export function BookingDetailPage({
         </div>
       </header>
 
-      <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
-        <div className="grid min-w-0 gap-4">
+      <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,36rem)] lg:auto-rows-max">
+        <div className="grid min-w-0 gap-4 lg:col-start-1 lg:row-start-1">
           <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <CardTitle>Session overview</CardTitle>
               <CardDescription>
-                The essentials for this booking, all in one place.
+                When, how, and who for this booking.
               </CardDescription>
             </CardHeader>
-            <CardBody className="grid gap-5 sm:grid-cols-2">
-              <DetailField
-                icon={<IconCalendarEvent />}
-                label="Date"
-                value={formatBookingDate(
-                  booking.scheduledStartAt,
-                  booking.timezone,
-                )}
-              />
-              <DetailField
-                icon={<IconClock />}
-                label="Session time"
-                value={formatBookingTimeRange(
-                  booking.scheduledStartAt,
-                  booking.scheduledEndAt,
-                  booking.timezone,
-                )}
-              />
-              <DetailField
-                icon={
-                  booking.modality === "online" ? (
-                    <IconDeviceLaptop />
+            <CardBody className="space-y-6">
+              <section
+                aria-labelledby="session-when-title"
+                className="grid gap-5 sm:grid-cols-2"
+              >
+                <DetailField
+                  icon={<IconCalendarEvent />}
+                  label="Date"
+                  value={formatBookingDate(
+                    booking.scheduledStartAt,
+                    booking.timezone,
+                  )}
+                />
+                <DetailField
+                  icon={<IconClock />}
+                  label="Session time"
+                  value={formatBookingTimeRange(
+                    booking.scheduledStartAt,
+                    booking.scheduledEndAt,
+                    booking.timezone,
+                  )}
+                />
+                <span id="session-when-title" className="sr-only">
+                  When
+                </span>
+              </section>
+
+              <Divider aria-hidden="true" />
+
+              <section
+                aria-labelledby="session-access-title"
+                className="space-y-3"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 gap-3">
+                    <IconBox variant="tertiary" size="md" aria-hidden="true">
+                      {booking.modality === "online" ? (
+                        <IconDeviceLaptop />
+                      ) : (
+                        <IconMapPin />
+                      )}
+                    </IconBox>
+                    <div className="min-w-0">
+                      <Text
+                        id="session-access-title"
+                        className="text-sm text-muted"
+                      >
+                        Format & access
+                      </Text>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                        <Text className="font-medium">
+                          {booking.modality === "online" ? "Online" : "Offline"}
+                        </Text>
+                        {booking.modality === "online" && meetingUrl ? (
+                          <Badge variant="success" size="sm" pill>
+                            Ready
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  {booking.modality === "online" && meetingUrl ? (
+                    <Button
+                      className="w-full shrink-0 sm:w-auto"
+                      render={
+                        <a
+                          href={meetingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label="Open meeting room"
+                        />
+                      }
+                      nativeButton={false}
+                    >
+                      <IconDeviceLaptop /> Open meeting room
+                    </Button>
+                  ) : null}
+                </div>
+
+                {booking.modality === "online" ? (
+                  meetingUrl ? (
+                    <Text className="text-sm text-muted">
+                      The meeting room is ready for this session.
+                    </Text>
                   ) : (
-                    <IconMapPin />
+                    <div className="rounded-lg border border-item-border bg-item px-3 py-3">
+                      <Text className="font-medium">
+                        {getMeetingStatusTitle({
+                          bookingState: booking.currentState,
+                          meetingStatus: booking.meetingStatus,
+                          providerStatus: booking.meeting?.status,
+                        })}
+                      </Text>
+                      <Text className="mt-1 text-sm text-muted">
+                        {getMeetingStatusDescription({
+                          bookingState: booking.currentState,
+                          meetingStatus: booking.meetingStatus,
+                          providerStatus: booking.meeting?.status,
+                        })}
+                      </Text>
+                    </div>
                   )
-                }
-                label="Format"
-                value={booking.modality === "online" ? "Online" : "Offline"}
-              />
-              <DetailField
-                icon={<IconUsers />}
-                label="Attendance"
-                value={`${booking.confirmedHeadcount} of ${booking.targetGroupSize} confirmed`}
-              />
+                ) : activeRoomBooking ? (
+                  <div className="rounded-lg border border-item-border bg-item px-3 py-3">
+                    <Text className="font-medium">
+                      {activeRoomBooking.room.name}
+                    </Text>
+                    <Text className="mt-1 break-words text-sm text-muted">
+                      {activeRoomBooking.room.location}
+                    </Text>
+                  </div>
+                ) : (
+                  <Text className="text-sm text-muted">
+                    Room details are not available yet.
+                  </Text>
+                )}
+
+                {booking.meetingStatus === "failed" ? (
+                  <Badge variant="warning" pill>
+                    Retrying automatically
+                  </Badge>
+                ) : null}
+              </section>
+
+              <Divider aria-hidden="true" />
+
+              <section
+                aria-labelledby="participants-title"
+                className="space-y-3"
+              >
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <Text id="participants-title" className="font-medium">
+                      Participants
+                    </Text>
+                    <Text className="text-sm text-muted">
+                      {booking.confirmedHeadcount} of {booking.targetGroupSize}{" "}
+                      confirmed
+                    </Text>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {booking.participants.map((participant) => (
+                    <Item
+                      key={participant.id}
+                      variant="plain"
+                      size="sm"
+                      className="min-w-0 items-center rounded-lg border border-item-border bg-item p-3!"
+                    >
+                      <ItemMedia>
+                        <Avatar size="sm">
+                          {participant.user?.image ? (
+                            <AvatarImage
+                              src={participant.user.image}
+                              alt={
+                                (participant.user?.name ?? "Participant") +
+                                " avatar"
+                              }
+                            />
+                          ) : null}
+                          <AvatarFallback>
+                            {participant.user?.name.slice(0, 2).toUpperCase() ??
+                              "CG"}
+                          </AvatarFallback>
+                        </Avatar>
+                      </ItemMedia>
+                      <ItemContent className="min-w-0 flex-1">
+                        <ItemTitle className="truncate text-sm">
+                          {participant.user?.name ?? "Participant"}
+                        </ItemTitle>
+                        <ItemDescription className="truncate text-xs capitalize">
+                          {participant.role} ·{" "}
+                          {participant.confirmationState.replaceAll("_", " ")}
+                        </ItemDescription>
+                      </ItemContent>
+                    </Item>
+                  ))}
+                </div>
+              </section>
             </CardBody>
             {!isTutor && !isAdmin && canCancelBooking(booking.currentState) ? (
               <CardFooter className="flex-wrap justify-end gap-2">
@@ -524,127 +690,15 @@ export function BookingDetailPage({
               </CardBody>
             </Card>
           ) : null}
-
-          {!isAdmin ? (
-            <BookingLifecycleActions
-              bookingId={bookingId}
-              viewerRole={viewerRole}
-              currentState={booking.currentState}
-              bookingType={booking.type}
-              scheduledStartAt={booking.scheduledStartAt}
-              timezone={booking.timezone}
-              participantRole={viewerParticipant?.role}
-              participantState={viewerParticipant?.confirmationState}
-              perStudentMarks={booking.priceSnapshot?.perStudent}
-              activeProposalId={activeRescheduleProposal?.id}
-              isRescheduleProposer={
-                activeRescheduleProposal?.proposedBy === viewerId
-              }
-              viewerRescheduleDecision={viewerRescheduleDecision}
-              proposedStartAt={activeRescheduleProposal?.proposedStartAt}
-              proposedEndAt={activeRescheduleProposal?.proposedEndAt}
-              rescheduleReason={activeRescheduleProposal?.reason ?? undefined}
-              onBookingChanged={refreshBookingQueries}
-            />
-          ) : null}
-
-          <Card className="min-w-0 overflow-hidden">
-            <CardHeader>
-              <CardTitle>Activity</CardTitle>
-              <CardDescription>
-                A chronological record of this booking
-              </CardDescription>
-            </CardHeader>
-            <CardBody className="px-6">
-              {history.length > 0 ? (
-                <ol aria-label="Booking activity" className="relative">
-                  {history.map((entry) => (
-                    <ActivityTimelineItem
-                      key={entry.id}
-                      entry={entry}
-                      timeZone={booking.timezone}
-                      isLast={entry.id === history[history.length - 1]?.id}
-                    />
-                  ))}
-                </ol>
-              ) : (
-                <Text className="py-4 text-muted">
-                  No activity recorded yet.
-                </Text>
-              )}
-            </CardBody>
-          </Card>
         </div>
 
-        <aside className="grid min-w-0 gap-4 lg:sticky lg:top-4">
-          <Card className="min-w-0 overflow-hidden">
-            <CardHeader>
-              <CardTitle>Session access</CardTitle>
-              <CardDescription>
-                {booking.modality === "online"
-                  ? "Online meeting"
-                  : "Offline room"}
-              </CardDescription>
-            </CardHeader>
-            <CardBody>
-              {booking.modality === "online" ? (
-                meetingUrl ? (
-                  <Button
-                    className="w-full"
-                    render={
-                      <a
-                        href={meetingUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label="Open meeting room"
-                      />
-                    }
-                    nativeButton={false}
-                  >
-                    <IconDeviceLaptop /> Open meeting room
-                  </Button>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="rounded-lg border border-item-border bg-item px-3 py-3">
-                      <Text className="font-medium">
-                        {getMeetingStatusTitle({
-                          bookingState: booking.currentState,
-                          meetingStatus: booking.meetingStatus,
-                          providerStatus: booking.meeting?.status,
-                        })}
-                      </Text>
-                      <Text className="mt-1 text-sm text-muted">
-                        {getMeetingStatusDescription({
-                          bookingState: booking.currentState,
-                          meetingStatus: booking.meetingStatus,
-                          providerStatus: booking.meeting?.status,
-                        })}
-                      </Text>
-                    </div>
-                    {booking.meetingStatus === "failed" ? (
-                      <Badge variant="warning" pill>
-                        Retrying automatically
-                      </Badge>
-                    ) : null}
-                  </div>
-                )
-              ) : activeRoomBooking ? (
-                <div>
-                  <Text className="font-medium">
-                    {activeRoomBooking.room.name}
-                  </Text>
-                  <Text className="mt-1 break-words text-sm text-muted">
-                    {activeRoomBooking.room.location}
-                  </Text>
-                </div>
-              ) : (
-                <Text className="text-sm text-muted">
-                  Room details are not available yet.
-                </Text>
-              )}
-            </CardBody>
-          </Card>
-
+        <aside className="grid min-w-0 gap-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
+          {!isAdmin ? (
+            <BookingLifecycleActions
+              {...lifecycleActionProps}
+              section="actions"
+            />
+          ) : null}
           <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <IconBox variant="warning-subtle">
@@ -676,50 +730,43 @@ export function BookingDetailPage({
               ) : null}
             </CardBody>
           </Card>
+        </aside>
+
+        <div className="grid min-w-0 gap-4 lg:col-start-1 lg:row-start-2">
+          {!isAdmin ? (
+            <BookingLifecycleActions
+              {...lifecycleActionProps}
+              section="supplementary"
+            />
+          ) : null}
 
           <Card className="min-w-0 overflow-hidden">
             <CardHeader>
-              <CardTitle>Participants</CardTitle>
+              <CardTitle>Activity</CardTitle>
               <CardDescription>
-                {booking.confirmedHeadcount} confirmed
+                A chronological record of this booking
               </CardDescription>
             </CardHeader>
-            <CardBody className="space-y-1 p-2">
-              {booking.participants.map((participant) => (
-                <Item
-                  key={participant.id}
-                  variant="plain"
-                  size="sm"
-                  className="min-w-0 items-center"
-                >
-                  <ItemMedia>
-                    <Avatar>
-                      {participant.user?.image ? (
-                        <AvatarImage
-                          src={participant.user.image}
-                          alt={`${participant.user?.name ?? "Participant"} avatar`}
-                        />
-                      ) : null}
-                      <AvatarFallback>
-                        {participant.user?.name.slice(0, 2).toUpperCase() ??
-                          "CG"}
-                      </AvatarFallback>
-                    </Avatar>
-                  </ItemMedia>
-                  <ItemContent className="min-w-0 flex-1">
-                    <ItemTitle className="truncate">
-                      {participant.user?.name ?? "Participant"}
-                    </ItemTitle>
-                    <ItemDescription className="truncate capitalize">
-                      {participant.role} ·{" "}
-                      {participant.confirmationState.replaceAll("_", " ")}
-                    </ItemDescription>
-                  </ItemContent>
-                </Item>
-              ))}
+            <CardBody className="px-6">
+              {history.length > 0 ? (
+                <ol aria-label="Booking activity" className="relative">
+                  {history.map((entry) => (
+                    <ActivityTimelineItem
+                      key={entry.id}
+                      entry={entry}
+                      timeZone={booking.timezone}
+                      isLast={entry.id === history[history.length - 1]?.id}
+                    />
+                  ))}
+                </ol>
+              ) : (
+                <Text className="py-4 text-muted">
+                  No activity recorded yet.
+                </Text>
+              )}
             </CardBody>
           </Card>
-        </aside>
+        </div>
       </div>
 
       <Dialog

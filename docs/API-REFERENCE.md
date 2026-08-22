@@ -464,7 +464,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** `{ booking, participants, history, meetingStatus, meetingUrl }` — access-checked for the proposer, tutor, participants, or admin; participant user objects include the optional profile `image`, and history entries include `fromState`, `toState`, `actorType`, `reason`, and `createdAt`
 - **Errors:** `BOOKING_NOT_FOUND` (404)
 - **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or an admin fallback link, and `failed` when automatic Google Meet creation needs another retry.
-- **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events; the API contract is unchanged.
+- **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places available booking actions above Marks in the rail, and keeps the API contract unchanged.
 
 ### `booking.listMine`
 
