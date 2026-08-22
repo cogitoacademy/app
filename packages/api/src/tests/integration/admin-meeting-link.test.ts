@@ -163,6 +163,17 @@ describe("U1: admin manual meeting-link entry (FR-21/TC-36)", () => {
     // with a url-less manual row — the U1 precondition.
     await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
 
+    // Keep a newer failed provider attempt in the history. Admin entry must
+    // update the newest row because booking GET intentionally reads the newest
+    // meeting event.
+    await db.insert(meetingEvent).values({
+      bookingId: b.id,
+      provider: "google_meet",
+      status: "failed",
+      errorReason: "temporary provider failure",
+      createdAt: new Date(Date.now() + 1),
+    });
+
     const result = await adminClient.adminBooking.setMeetingLink({
       bookingId: b.id,
       url: MEET_URL,

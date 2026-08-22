@@ -10,7 +10,7 @@ The invite form performs an admin-only account preflight by exact normalized ema
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
 
-Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
 | File                  | Purpose                                                  |
 | --------------------- | -------------------------------------------------------- |
@@ -229,7 +229,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 **Service Methods:**
 
-- `getById(bookingId, userId, userRole?)` — Returns booking with access check; admins may inspect any booking
+- `getById(bookingId, userId, userRole?)` — Returns booking with access check; admins may inspect any booking. The read model derives `meetingStatus`/`meetingUrl` and includes participant profile images plus state-history fields used by the booking-detail timeline.
 - `listAccessible(userId, userRole, opts)` — Shared role-aware list: proposer/participant visibility for students, assigned bookings for tutors, and all bookings for admins; cursor-paginated
 - `listMine(userId, opts)` — Paginated list of user's bookings (proposer)
 - `listForTutor(tutorId, opts)` — Paginated list of bookings assigned to a tutor
@@ -242,7 +242,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing
 - `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum; group-series (`type === "series" && targetGroupSize > 1`) is rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule)
 - `cancel(userId, bookingId, reason?)` — Cancels booking; releases all holds; late cancel becomes `late_cancelled`
-- `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; creates meeting for online; sets room approval for offline. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
+- `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
 - `tutorDecline(bookingId, tutorId, reason?)` — Tutor declines; releases all holds
 - `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
@@ -257,7 +257,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Transition-or-skip (M4): transitions past-deadline bookings to their terminal target (shared `EXPIRY_TARGET` with `expireBookings`) FIRST, then releases holds (or forfeits for NO_SHOW); version conflicts / terminal / RESCHEDULE_PROPOSED bookings are skipped without touching the wallet
 - `checkTutorLateness()` — Flags scheduled bookings where the tutor never marked attendance past the 15-min lateness tolerance: keeps the booking SCHEDULED with holds intact, sets `overrideMeta.category = "tutor_lateness_pending"` (admin-queue surface), writes a `tutor_lateness_pending_review` audit record, and notifies proposer + tutor; returns `{ flagged, failed }` (no auto-cancel, no hold release)
-- `retryFailedMeetings()` — Re-creates Google Meet for CONFIRMED online bookings with a failed meetingEvent (up to 3 attempts, driven by the `retry-failed-meetings` job); prevents the CONFIRMED-without-meeting-link dead state
+- `retryFailedMeetings()` — Re-creates Google Meet for CONFIRMED online bookings with a failed meetingEvent (up to 3 attempts, driven by the `retry-failed-meetings` job); successful retry moves the booking to `SCHEDULED`, while exhausted attempts remain available for `adminBooking.setMeetingLink`
 
 **Dependencies:** `BookingRepo`, `BookingWalletPort`, `BookingPricingPort`, `BookingAuditPort`, `BookingNotificationPort`, `BookingMeetingPort`
 
@@ -265,6 +265,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 - State machine enforces valid transitions via `canTransition()`
 - All state transitions are recorded in `bookingStateHistory`
+- Online meeting creation starts when the tutor accepts the booking after required participant confirmations. A successful provider response creates the meeting event and moves the booking to `SCHEDULED`; a failed response leaves it `CONFIRMED` until retry or manual-link intervention.
+- The booking detail read model reports a meeting as `ready` only when `meetingUrl` is non-null, so a URL-less provider row is never presented as an openable link.
 - Group bookings require minimum 2 participants (MIN_GROUP_HEADCOUNT)
 - Series bookings require 2-4 sessions (MIN_SERIES_SESSIONS to MAX_SERIES_SESSIONS)
 - Deadline is set to `now + 12 hours` for new bookings (RESPONSE_WINDOW_MS)
@@ -354,7 +356,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 - Google Meet calls have 30-second timeout
 - Circuit breaker: 5 failures → open for 60 seconds
-- On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`
+- On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
+- Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
 - Offline bookings skip meeting creation entirely (go to `awaiting_admin_room_approval`)
 
 ---

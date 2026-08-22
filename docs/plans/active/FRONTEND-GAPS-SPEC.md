@@ -490,7 +490,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, contextual actions, and chronological activity in the main flow, with session access, Marks, and participant metadata in a sticky desktop rail. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted.
+**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-22).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, contextual actions, and a readable vertical transition timeline in the main flow, with session access, Marks, and participant metadata in a sticky desktop rail. Participant avatars use saved images when available, Marks amounts use the Cogito mark prefix, and online meeting-pending/failed states explain when the link is generated and when retries are active. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted.
 
 **Required:**
 
@@ -498,7 +498,7 @@ Full override form per PRD §Emergency Override UI/UX:
 2. Shows: booking state, type, tutor, participants, scheduled time, meeting link (if created), room (if offline), price, hold amount, state history timeline
 3. Student actions: cancel (pre-H-2), report lateness (F3), accept/reject reschedule (F7)
 4. Tutor actions: accept/decline (existing in tutor-bookings), propose reschedule (F6), complete session (F8), add session notes (F9)
-5. Meeting link visible only after all confirmations (G11 backend)
+5. Meeting link visible only after all confirmations (G11 backend); pending/failed provider states explain generation timing and retry behavior
 6. State history: timeline of all transitions with timestamps and actors
 
 **Acceptance:**

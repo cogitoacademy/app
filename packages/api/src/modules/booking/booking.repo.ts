@@ -937,7 +937,12 @@ export function createBookingRepo(db: DbType) {
         tutor: true,
         proposer: true,
         participants: { with: { user: true } },
-        stateHistory: true,
+        stateHistory: {
+          orderBy: [
+            desc(bookingStateHistory.createdAt),
+            desc(bookingStateHistory.id),
+          ],
+        },
         rescheduleProposals: {
           orderBy: [desc(bookingRescheduleProposal.createdAt)],
           limit: 10,

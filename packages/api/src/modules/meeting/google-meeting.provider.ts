@@ -502,7 +502,7 @@ export function createGoogleMeetingProvider(
       .select()
       .from(meetingEvent)
       .where(eq(meetingEvent.bookingId, bookingId))
-      .orderBy(meetingEvent.createdAt)
+      .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
       .limit(1);
 
     const values = {

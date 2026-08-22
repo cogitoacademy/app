@@ -452,6 +452,54 @@ describe("BookingService", () => {
       expect(result.meetingUrl).toBeNull();
     });
 
+    test("returns pending meeting status when a provider row has no URL", async () => {
+      const booking = {
+        id: "b1",
+        currentState: "scheduled",
+        proposerId: "student1",
+        tutorId: "tutor1",
+        meeting: {
+          id: "m1",
+          status: "created",
+          meetingUrl: null,
+        },
+      };
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => booking),
+        },
+      });
+
+      const result = await service.getById("b1", "student1");
+
+      expect(result.meetingStatus).toBe("pending");
+      expect(result.meetingUrl).toBeNull();
+    });
+
+    test("returns failed meeting status for a failed provider row", async () => {
+      const booking = {
+        id: "b1",
+        currentState: "confirmed",
+        proposerId: "student1",
+        tutorId: "tutor1",
+        meeting: {
+          id: "m1",
+          status: "failed",
+          meetingUrl: null,
+        },
+      };
+      const { service } = createService({
+        repo: {
+          findBookingWithParticipants: mock(async () => booking),
+        },
+      });
+
+      const result = await service.getById("b1", "student1");
+
+      expect(result.meetingStatus).toBe("failed");
+      expect(result.meetingUrl).toBeNull();
+    });
+
     test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: {

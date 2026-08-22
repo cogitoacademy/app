@@ -4,7 +4,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
+  IconAlertTriangle,
   IconArrowLeft,
+  IconCalendarCheck,
+  IconCalendarClock,
   IconCalendarEvent,
   IconCheck,
   IconClock,
@@ -12,9 +15,17 @@ import {
   IconDeviceLaptop,
   IconInfoCircle,
   IconMapPin,
+  IconSend,
+  IconUserCheck,
+  IconUserPlus,
   IconUsers,
+  IconX,
 } from "@tabler/icons-react";
-import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -70,6 +81,8 @@ import {
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { orpc } from "@/utils/orpc";
 
+const COGITO_MARK_SRC = "/cogito-mark.png";
+
 type BookingConfirmation = {
   action: "cancel" | "complete";
   sessionId?: string;
@@ -96,9 +109,16 @@ export function BookingDetailPage({
   const isAdmin = viewerRole === "admin";
   const bookingsPath = "/bookings";
   const bookingsLabel = isTutor ? "Tutor bookings" : "Bookings";
-  const bookingQuery = useQuery(
-    orpc.booking.get.queryOptions({ input: { bookingId } }),
-  );
+  const bookingQuery = useQuery({
+    ...orpc.booking.get.queryOptions({ input: { bookingId } }),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.modality !== "online" || data.meetingStatus === "ready") {
+        return false;
+      }
+      return data.meeting?.status === "manual" ? 60_000 : 30_000;
+    },
+  });
 
   function refreshBookingQueries() {
     void Promise.all([
@@ -254,6 +274,8 @@ export function BookingDetailPage({
       onBookingChanged={refreshBookingQueries}
     />
   ) : null;
+
+  const meetingUrl = booking.meetingUrl;
 
   function requestCancellation() {
     setConfirmationDialog({ action: "cancel" });
@@ -535,33 +557,16 @@ export function BookingDetailPage({
             </CardHeader>
             <CardBody className="px-6 py-2">
               {history.length > 0 ? (
-                <div className="divide-y divide-border">
+                <ol aria-label="Booking activity" className="relative">
                   {history.map((entry) => (
-                    <div key={entry.id} className="relative flex gap-3 py-4">
-                      <IconBox variant="secondary-subtle" size="sm">
-                        <IconClock />
-                      </IconBox>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                          <Text className="font-medium">
-                            {getBookingStateLabel(entry.toState)}
-                          </Text>
-                          <Text className="text-xs text-dimmed">
-                            {new Intl.DateTimeFormat("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }).format(new Date(entry.createdAt))}
-                          </Text>
-                        </div>
-                        <Text className="mt-1 break-words text-sm text-muted">
-                          {entry.reason ?? `Updated by ${entry.actorType}`}
-                        </Text>
-                      </div>
-                    </div>
+                    <ActivityTimelineItem
+                      key={entry.id}
+                      entry={entry}
+                      timeZone={booking.timezone}
+                      isLast={entry.id === history[history.length - 1]?.id}
+                    />
                   ))}
-                </div>
+                </ol>
               ) : (
                 <Text className="py-4 text-muted">
                   No activity recorded yet.
@@ -583,12 +588,12 @@ export function BookingDetailPage({
             </CardHeader>
             <CardBody>
               {booking.modality === "online" ? (
-                booking.meeting?.meetingUrl ? (
+                meetingUrl ? (
                   <Button
                     className="w-full"
                     render={
                       <a
-                        href={booking.meeting.meetingUrl}
+                        href={meetingUrl}
                         target="_blank"
                         rel="noreferrer"
                         aria-label="Open meeting room"
@@ -599,9 +604,29 @@ export function BookingDetailPage({
                     <IconDeviceLaptop /> Open meeting room
                   </Button>
                 ) : (
-                  <Text className="text-sm text-muted">
-                    The meeting link appears after all required confirmations.
-                  </Text>
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-item-border bg-item px-3 py-3">
+                      <Text className="font-medium">
+                        {getMeetingStatusTitle({
+                          bookingState: booking.currentState,
+                          meetingStatus: booking.meetingStatus,
+                          providerStatus: booking.meeting?.status,
+                        })}
+                      </Text>
+                      <Text className="mt-1 text-sm text-muted">
+                        {getMeetingStatusDescription({
+                          bookingState: booking.currentState,
+                          meetingStatus: booking.meetingStatus,
+                          providerStatus: booking.meeting?.status,
+                        })}
+                      </Text>
+                    </div>
+                    {booking.meetingStatus === "failed" ? (
+                      <Badge variant="warning" pill>
+                        Retrying automatically
+                      </Badge>
+                    ) : null}
+                  </div>
                 )
               ) : activeRoomBooking ? (
                 <div>
@@ -631,20 +656,22 @@ export function BookingDetailPage({
             <CardBody className="space-y-4">
               <SummaryRow
                 label="Original price"
-                value={`${booking.originalMarks} Marks`}
+                value={<MarkAmount value={booking.originalMarks} />}
               />
               <SummaryRow
                 label="Currently held"
-                value={`${booking.holdAmount} Marks`}
+                value={<MarkAmount value={booking.holdAmount} />}
               />
               <SummaryRow
                 label="Refunded"
-                value={`${booking.refundedAmount} Marks`}
+                value={<MarkAmount value={booking.refundedAmount} />}
               />
               {booking.priceSnapshot ? (
                 <SummaryRow
                   label="Per participant"
-                  value={`${booking.priceSnapshot.perStudent} Marks`}
+                  value={
+                    <MarkAmount value={booking.priceSnapshot.perStudent} />
+                  }
                 />
               ) : null}
             </CardBody>
@@ -667,6 +694,12 @@ export function BookingDetailPage({
                 >
                   <ItemMedia>
                     <Avatar>
+                      {participant.user?.image ? (
+                        <AvatarImage
+                          src={participant.user.image}
+                          alt={`${participant.user?.name ?? "Participant"} avatar`}
+                        />
+                      ) : null}
                       <AvatarFallback>
                         {participant.user?.name.slice(0, 2).toUpperCase() ??
                           "CG"}
@@ -871,6 +904,228 @@ export function BookingDetailPage({
   );
 }
 
+type BookingActivityEntry = {
+  id: string;
+  fromState: string | null;
+  toState: string;
+  reason: string | null;
+  actorType: string;
+  createdAt: string | Date;
+};
+
+function ActivityTimelineItem({
+  entry,
+  timeZone,
+  isLast,
+}: {
+  entry: BookingActivityEntry;
+  timeZone: string;
+  isLast: boolean;
+}) {
+  return (
+    <li className="relative flex gap-3 pb-6 last:pb-0">
+      {!isLast ? (
+        <span
+          aria-hidden="true"
+          className="absolute bottom-0 left-3.5 top-8 w-px bg-border"
+        />
+      ) : null}
+      <IconBox
+        variant={getActivityIconVariant(entry.toState)}
+        size="sm"
+        circle
+        className="relative z-10"
+        aria-hidden="true"
+      >
+        {getActivityIcon(entry.toState)}
+      </IconBox>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <Text className="font-semibold">
+                {getActivityActionLabel(entry.toState)}
+              </Text>
+              <Text className="text-sm text-muted">by</Text>
+              <Badge
+                variant={getActivityActorVariant(entry.actorType)}
+                size="sm"
+                pill
+              >
+                {formatActivityActor(entry.actorType)}
+              </Badge>
+              <Text className="text-sm text-dimmed">·</Text>
+              <Badge
+                variant={getBookingStateVariant(entry.toState)}
+                size="sm"
+                pill
+              >
+                {getBookingStateLabel(entry.toState)}
+              </Badge>
+              {entry.fromState ? (
+                <Text className="text-sm text-dimmed">
+                  from {getBookingStateLabel(entry.fromState)}
+                </Text>
+              ) : null}
+            </div>
+          </div>
+          <time
+            dateTime={new Date(entry.createdAt).toISOString()}
+            className="shrink-0 text-xs text-dimmed"
+          >
+            {formatActivityTimestamp(entry.createdAt, timeZone)}
+          </time>
+        </div>
+        {entry.reason ? (
+          <div className="mt-3 rounded-lg border border-border/70 bg-accent/50 px-3 py-2">
+            <Text className="text-xs font-medium text-muted">Note</Text>
+            <Text className="mt-1 break-words text-sm text-muted">
+              {entry.reason}
+            </Text>
+          </div>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+function getActivityActionLabel(state: string) {
+  const labels: Record<string, string> = {
+    awaiting_participant_confirmation: "Invite participants",
+    awaiting_tutor_review: "Submit booking",
+    awaiting_reconfirmation: "Request reconfirmation",
+    awaiting_admin_room_approval: "Request room assignment",
+    confirmed: "Approve booking",
+    scheduled: "Schedule session",
+    reschedule_proposed: "Propose reschedule",
+    completed: "Complete session",
+    declined: "Decline booking",
+    cancelled: "Cancel booking",
+    late_cancelled: "Late-cancel booking",
+    no_show: "Mark no-show",
+    expired: "Expire booking",
+  };
+  return labels[state] ?? "Update booking";
+}
+
+function formatActivityActor(actorType: string) {
+  return actorType.charAt(0).toUpperCase() + actorType.slice(1);
+}
+
+function getActivityActorVariant(
+  actorType: string,
+): "primary" | "secondary" | "tertiary" | "info" | "warning" {
+  if (actorType === "tutor") return "info";
+  if (actorType === "admin") return "warning";
+  if (actorType === "system") return "tertiary";
+  return "secondary";
+}
+
+function getActivityIconVariant(
+  state: string,
+):
+  | "success-subtle"
+  | "danger-subtle"
+  | "warning-subtle"
+  | "info-subtle"
+  | "secondary-subtle" {
+  if (["confirmed", "completed"].includes(state)) {
+    return "success-subtle";
+  }
+  if (
+    ["declined", "cancelled", "late_cancelled", "no_show", "expired"].includes(
+      state,
+    )
+  ) {
+    return "danger-subtle";
+  }
+  if (state.startsWith("awaiting") || state === "reschedule_proposed") {
+    return "warning-subtle";
+  }
+  if (state === "scheduled") return "info-subtle";
+  return "secondary-subtle";
+}
+
+function getActivityIcon(state: string) {
+  switch (state) {
+    case "awaiting_participant_confirmation":
+      return <IconUserPlus />;
+    case "awaiting_tutor_review":
+      return <IconSend />;
+    case "awaiting_reconfirmation":
+      return <IconUserCheck />;
+    case "awaiting_admin_room_approval":
+      return <IconMapPin />;
+    case "confirmed":
+      return <IconUserCheck />;
+    case "scheduled":
+      return <IconCalendarCheck />;
+    case "reschedule_proposed":
+      return <IconCalendarClock />;
+    case "completed":
+      return <IconCheck />;
+    case "declined":
+    case "cancelled":
+    case "late_cancelled":
+      return <IconX />;
+    case "no_show":
+      return <IconAlertTriangle />;
+    case "expired":
+      return <IconClock />;
+    default:
+      return <IconClock />;
+  }
+}
+
+function formatActivityTimestamp(value: string | Date, timeZone: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone,
+  }).format(new Date(value));
+}
+
+function getMeetingStatusTitle({
+  bookingState,
+  meetingStatus,
+  providerStatus,
+}: {
+  bookingState: string;
+  meetingStatus: string;
+  providerStatus?: string | null;
+}) {
+  if (meetingStatus === "failed") {
+    return "Meeting link creation needs attention";
+  }
+  if (providerStatus === "manual") return "Meeting link pending admin setup";
+  if (bookingState === "confirmed") return "Preparing your meeting link";
+  return "Meeting link will appear here";
+}
+
+function getMeetingStatusDescription({
+  bookingState,
+  meetingStatus,
+  providerStatus,
+}: {
+  bookingState: string;
+  meetingStatus: string;
+  providerStatus?: string | null;
+}) {
+  if (meetingStatus === "failed") {
+    return "Google Meet creation failed. The system will retry automatically every 5 minutes, then leave the booking for an admin to add a manual link if needed.";
+  }
+  if (providerStatus === "manual") {
+    return "An admin needs to add a meeting URL before the session. This can happen when the automatic meeting provider is unavailable.";
+  }
+  if (bookingState === "confirmed") {
+    return "The booking is confirmed and the link is being generated. This page refreshes automatically while it is being prepared.";
+  }
+  return "The link is generated after the tutor accepts the booking and all required confirmations are complete.";
+}
+
 function DetailField({
   icon,
   label,
@@ -918,12 +1173,35 @@ function ReviewMeta({
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-4">
       <Text className="text-muted">{label}</Text>
       <Text className="font-medium">{value}</Text>
     </div>
+  );
+}
+
+function MarkAmount({ value }: { value: number }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap"
+      aria-label={`${value} Marks`}
+    >
+      <img
+        src={COGITO_MARK_SRC}
+        alt=""
+        aria-hidden="true"
+        className="size-4 shrink-0 object-contain"
+      />
+      <span>{value}</span>
+    </span>
   );
 }
 

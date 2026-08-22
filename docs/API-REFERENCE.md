@@ -445,8 +445,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Protected
 - **Input:** `{ bookingId }`
-- **Output:** `{ booking, participants, history }` — access-checked for the proposer, tutor, participants, or admin
+- **Output:** `{ booking, participants, history, meetingStatus, meetingUrl }` — access-checked for the proposer, tutor, participants, or admin; participant user objects include the optional profile `image`, and history entries include `fromState`, `toState`, `actorType`, `reason`, and `createdAt`
 - **Errors:** `BOOKING_NOT_FOUND` (404)
+- **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or an admin fallback link, and `failed` when automatic Google Meet creation needs another retry.
+- **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events; the API contract is unchanged.
 
 ### `booking.listMine`
 
@@ -595,7 +597,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
-- **Description:** Tutor accepts a solo booking; online goes `scheduled` (creates meeting), offline goes `awaiting_admin_room_approval`
+- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` when the attempt succeeds. If Google Meet creation fails, the booking remains `confirmed` and the `retry-failed-meetings` scheduler retries it every 5 minutes (up to 3 failed attempts); offline goes `awaiting_admin_room_approval`.
 - **Frontend note:** The tutor booking-detail flow presents a responsive confirmation summary before calling this unchanged procedure; the dialog does not change the input, output, or transition rules.
 
 ### `tutorActions.declineBooking`
@@ -760,7 +762,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ bookingId, url }` (`url` must be a valid URL, max 2048 chars)
 - **Output:** `{ bookingId, meetingUrl, status }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) unless the booking is `SCHEDULED`/`CONFIRMED`
-- **Description:** Records a manual meeting URL on a booking as fallback when Google Meet generation failed or is disabled (U1/FR-21); notifies confirmed participants and writes an `admin_set_meeting_link` audit record
+- **Description:** Records a manual meeting URL on a booking as fallback when Google Meet generation failed or is disabled (U1/FR-21); updates the newest meeting-attempt row so the booking detail reads the active link, notifies confirmed participants, and writes an `admin_set_meeting_link` audit record
 
 ### `adminBooking.cancelSeriesSession`
 

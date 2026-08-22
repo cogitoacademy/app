@@ -159,22 +159,27 @@ export type MeetingStatus = "pending" | "ready" | "failed";
  * `meeting.createEvent` fires only on tutor accept (online bookings), and
  * for group bookings tutor accept only happens after every participant
  * confirmed — so "all confirmed AND tutor accepted" is satisfied by
- * construction. Withdrawal after creation does not revoke the link.
+ * construction. Withdrawal after creation does not revoke the link. A
+ * non-failed provider row without a URL stays pending rather than being
+ * reported as ready, so the detail page never renders an empty link as usable.
  */
 function computeMeetingInfo(b: {
   meeting: { status: string; meetingUrl: string | null } | null;
 }): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
   const event = b.meeting;
-  if (
-    !event ||
-    event.status === "pending" ||
-    event.status === "manual" ||
-    event.status === "cancelled"
-  ) {
+  if (!event) {
     return { meetingStatus: "pending", meetingUrl: null };
   }
   if (event.status === "failed") {
     return { meetingStatus: "failed", meetingUrl: null };
+  }
+  if (
+    event.status === "pending" ||
+    event.status === "manual" ||
+    event.status === "cancelled" ||
+    !event.meetingUrl
+  ) {
+    return { meetingStatus: "pending", meetingUrl: null };
   }
   return { meetingStatus: "ready", meetingUrl: event.meetingUrl };
 }

@@ -1,5 +1,5 @@
 import { meetingEvent } from "@cogito-app/db/schema";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { DbOrTx } from "../../lib/tx";
 import type {
   MeetingAttendee,
@@ -70,7 +70,7 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
       .select()
       .from(meetingEvent)
       .where(eq(meetingEvent.bookingId, bookingId))
-      .orderBy(meetingEvent.createdAt)
+      .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
       .limit(1);
 
     const values = {
