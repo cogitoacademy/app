@@ -22,7 +22,7 @@ export interface NormalizedTutorSubject {
     id: string;
     slug: string;
     name: string;
-  } | null;
+  };
 }
 
 export interface SubjectCategoryGroup {
@@ -57,20 +57,18 @@ export function toNormalizedTutorSubject(
   relation: TutorSubjectRelation,
 ): NormalizedTutorSubject | null {
   const subject = relation.subject;
-  if (!subject || !subject.parentId) return null;
+  if (!subject || !subject.parentId || !subject.parent) return null;
 
   return {
     id: subject.id,
     slug: subject.slug,
     name: subject.name,
     description: subject.description,
-    parent: subject.parent
-      ? {
-          id: subject.parent.id,
-          slug: subject.parent.slug,
-          name: subject.parent.name,
-        }
-      : null,
+    parent: {
+      id: subject.parent.id,
+      slug: subject.parent.slug,
+      name: subject.parent.name,
+    },
   };
 }
 

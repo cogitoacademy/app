@@ -13,6 +13,7 @@ import type { BookingPayoutPort } from "../booking";
 import {
   haveSameSubjectIds,
   toNormalizedTutorSubjects,
+  type NormalizedTutorSubject,
   type TutorSubjectRelation,
   validateTutorSubjectIds,
 } from "../tutor-subjects/subject-selection";
@@ -31,20 +32,20 @@ type TutorProfileRow = typeof tutorProfile.$inferSelect;
 type TutorProfileWithSubjectRelations = TutorProfileRow & {
   subjects?: Array<TutorSubjectRelation & { subjectId: string }>;
 };
+type TutorProfileProjection = TutorProfileRow & {
+  subjects: NormalizedTutorSubject[];
+};
 
-function getSubjectRelations(profile: unknown) {
-  const subjects = (profile as TutorProfileWithSubjectRelations | undefined)
-    ?.subjects;
-  return subjects ?? [];
+function getSubjectRelations(profile: TutorProfileWithSubjectRelations | undefined) {
+  return profile?.subjects ?? [];
 }
 
-function projectTutorProfile(profile: unknown) {
-  if (!profile) return profile;
+function projectTutorProfile(
+  profile: TutorProfileWithSubjectRelations,
+): TutorProfileProjection {
   return {
-    ...(profile as Record<string, unknown>),
-    subjects: toNormalizedTutorSubjects(
-      getSubjectRelations(profile),
-    ),
+    ...profile,
+    subjects: toNormalizedTutorSubjects(getSubjectRelations(profile)),
   };
 }
 
@@ -258,7 +259,7 @@ export function createTutorService(deps: {
       }
 
       const updated = await tutorRepo.getByUserId(conn, userId);
-      return projectTutorProfile(updated ?? rows[0]);
+      return projectTutorProfile(updated ?? rows[0]!);
     };
 
     if (!isPublished && subjectIds !== undefined) {
