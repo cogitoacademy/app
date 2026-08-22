@@ -6,6 +6,9 @@ import {
   conflict,
   internalServerError,
 } from "../../lib/errors";
+import { InvalidTutorSubjectSelectionError } from "../tutor-subjects/subject-selection";
+
+export { InvalidTutorSubjectSelectionError } from "../tutor-subjects/subject-selection";
 
 export class TutorProfileNotFoundError extends DomainError {
   readonly domain = "tutor";
@@ -108,6 +111,8 @@ export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof TutorProfileIncompleteError)
     return badRequest(err.message, err);
   if (err instanceof InvalidTutorPricingError)
+    return badRequest(err.message, err);
+  if (err instanceof InvalidTutorSubjectSelectionError)
     return badRequest(err.message, err);
   if (err instanceof OptimisticLockError) return conflict(err.message, err);
   if (err instanceof InvalidDateRangeError) return badRequest(err.message, err);

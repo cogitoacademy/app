@@ -32,6 +32,7 @@ import type { AdminTutorAuditPort } from "./index";
 import type { EmailPort } from "../email/email.service";
 import { escapeHtml } from "../../lib/sanitize";
 import { log } from "../../lib/logger";
+import { validateTutorSubjectIds } from "../tutor-subjects/subject-selection";
 
 export type { ReviewAction };
 
@@ -416,6 +417,7 @@ export function createAdminTutorService(deps: {
 
       let updates: TutorProfileUpdates;
       let newStatus: string;
+      let pendingSubjectIds: string[] | undefined;
       if (input.action === "approve_edits") {
         if (!existing.pendingProfileChanges) {
           throw new InvalidInviteActionError(
@@ -423,8 +425,31 @@ export function createAdminTutorService(deps: {
             input.action,
           );
         }
-        updates = {
+        const pendingProfileChanges = {
           ...existing.pendingProfileChanges,
+        };
+        const rawSubjectIds = pendingProfileChanges.subjectIds;
+        if (rawSubjectIds !== undefined) {
+          if (
+            !Array.isArray(rawSubjectIds) ||
+            !rawSubjectIds.every((subjectId) => typeof subjectId === "string")
+          ) {
+            throw new InvalidInviteActionError(
+              input.tutorProfileId,
+              "approve_edits_invalid_subjects",
+            );
+          }
+          pendingSubjectIds = [...rawSubjectIds];
+          const activeChildSubjects =
+            await adminTutorRepo.listActiveChildSubjects(
+              tx,
+              pendingSubjectIds,
+            );
+          validateTutorSubjectIds(pendingSubjectIds, activeChildSubjects);
+          delete pendingProfileChanges.subjectIds;
+        }
+        updates = {
+          ...pendingProfileChanges,
           onboardingStatus: ONBOARDING_STATUS.PUBLISHED,
           pendingProfileChanges: null,
           profileEditStatus: "none",
@@ -456,6 +481,14 @@ export function createAdminTutorService(deps: {
         input.tutorProfileId,
         updates,
       );
+
+      if (pendingSubjectIds !== undefined) {
+        await adminTutorRepo.replaceTutorProfileSubjects(
+          tx,
+          input.tutorProfileId,
+          pendingSubjectIds,
+        );
+      }
 
       await auditPort.record({
         db: tx,

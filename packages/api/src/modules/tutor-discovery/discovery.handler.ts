@@ -26,6 +26,10 @@ export function createDiscoveryHandler(deps: { service: DiscoveryService }) {
       );
     },
 
+    listSubjects: async ({ context: _context }: { context: Context }) => {
+      return withDomainMap(() => service.listSubjects(), mapDiscoveryError);
+    },
+
     getProfile: async ({
       context: _context,
       input,

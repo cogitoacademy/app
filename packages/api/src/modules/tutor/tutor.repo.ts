@@ -1,5 +1,10 @@
-import { eq, and, gte, sql } from "drizzle-orm";
-import { tutorProfile, availabilitySlot } from "@cogito-app/db/schema";
+import { eq, and, gte, sql, asc, inArray, isNotNull } from "drizzle-orm";
+import {
+  tutorProfile,
+  availabilitySlot,
+  subjectCategory,
+  tutorProfileSubject,
+} from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
 export interface UpdateProfileInput {
@@ -8,6 +13,7 @@ export interface UpdateProfileInput {
   shortBio?: string;
   credentialsSummary?: string;
   expertise?: string[];
+  subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   prices?: Record<string, number>;
   availabilitySummary?: string;
@@ -16,7 +22,7 @@ export interface UpdateProfileInput {
 
 export interface PersistedProfileUpdate extends Omit<
   UpdateProfileInput,
-  "version"
+  "version" | "subjectIds"
 > {
   pendingProfileChanges?: Record<string, unknown>;
   profileEditStatus?: string;
@@ -43,7 +49,64 @@ export interface UpsertAvailabilityInput {
 export async function getByUserId(conn: DbOrTx, userId: string) {
   return conn.query.tutorProfile.findFirst({
     where: eq(tutorProfile.userId, userId),
+    with: {
+      subjects: {
+        with: {
+          subject: {
+            with: { parent: true },
+          },
+        },
+      },
+    },
   });
+}
+
+/**
+ * Finds active child subjects by id. Parent categories are deliberately
+ * excluded so arbitrary expertise strings or mother ids cannot be persisted
+ * as tutor selections.
+ */
+export async function listActiveChildSubjects(
+  conn: DbOrTx,
+  subjectIds: readonly string[],
+) {
+  if (subjectIds.length === 0) return [];
+
+  return conn.query.subjectCategory.findMany({
+    where: and(
+      inArray(subjectCategory.id, [...subjectIds]),
+      eq(subjectCategory.isActive, true),
+      isNotNull(subjectCategory.parentId),
+    ),
+    orderBy: [asc(subjectCategory.sortOrder), asc(subjectCategory.name)],
+  });
+}
+
+/**
+ * Replaces a tutor's normalized subject selections. Callers must validate the
+ * ids before invoking this function; the enclosing transaction makes the
+ * profile update and join-row replacement atomic.
+ */
+export async function replaceProfileSubjects(
+  conn: DbOrTx,
+  tutorProfileId: string,
+  subjectIds: readonly string[],
+) {
+  await conn
+    .delete(tutorProfileSubject)
+    .where(eq(tutorProfileSubject.tutorProfileId, tutorProfileId));
+
+  if (subjectIds.length === 0) return [];
+
+  return conn
+    .insert(tutorProfileSubject)
+    .values(
+      subjectIds.map((subjectId) => ({
+        tutorProfileId,
+        subjectId,
+      })),
+    )
+    .returning();
 }
 
 /**
@@ -216,6 +279,8 @@ export async function deactivateFutureRecurringAvailability(
 export function createTutorRepo() {
   return {
     getByUserId,
+    listActiveChildSubjects,
+    replaceProfileSubjects,
     updateProfileWithVersion,
     updateStatus,
     listAvailability,

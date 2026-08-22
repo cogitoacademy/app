@@ -1,6 +1,12 @@
 import { ORPCError } from "@orpc/server";
 import { DomainError } from "../../lib/domain-errors";
-import { notFound, conflict, internalServerError } from "../../lib/errors";
+import {
+  notFound,
+  conflict,
+  badRequest,
+  internalServerError,
+} from "../../lib/errors";
+import { InvalidTutorSubjectSelectionError } from "../tutor-subjects/subject-selection";
 
 export class InviteNotFoundError extends DomainError {
   readonly domain = "admin-tutor";
@@ -48,5 +54,7 @@ export function mapAdminTutorError(
   if (err instanceof InvalidInviteActionError)
     return conflict(err.message, err);
   if (err instanceof DuplicateInviteError) return conflict(err.message, err);
+  if (err instanceof InvalidTutorSubjectSelectionError)
+    return badRequest(err.message, err);
   return internalServerError(err.message, err);
 }

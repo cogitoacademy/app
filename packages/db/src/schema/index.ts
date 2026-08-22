@@ -4,6 +4,7 @@ export * from "./wallet";
 export * from "./achievement";
 export * from "./tutor-invite";
 export * from "./tutor-profile";
+export * from "./tutor-subject";
 export * from "./audit-log";
 export * from "./mark-package";
 export * from "./payment-record";

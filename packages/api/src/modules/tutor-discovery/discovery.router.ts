@@ -1,9 +1,25 @@
-import { studentProcedure } from "../../procedures";
-import { listPublishedInput, getProfileInput } from "./discovery.types";
+import { publicProcedure, studentProcedure } from "../../procedures";
+import {
+  listPublishedInput,
+  listSubjectsInput,
+  getProfileInput,
+} from "./discovery.types";
 import type { DiscoveryHandler } from "./discovery.handler";
 
 export function createDiscoveryRouter(handler: DiscoveryHandler) {
   return {
+    listSubjects: publicProcedure
+      .route({
+        method: "POST",
+        path: "/tutors/subjects/list",
+        tags: ["Tutors"],
+        summary: "List tutor subject categories",
+        description:
+          "Returns the active mother categories and selectable child subjects",
+      })
+      .input(listSubjectsInput)
+      .handler(handler.listSubjects),
+
     listPublished: studentProcedure
       .route({
         method: "POST",
