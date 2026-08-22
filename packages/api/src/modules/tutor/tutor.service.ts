@@ -36,7 +36,9 @@ type TutorProfileProjection = TutorProfileRow & {
   subjects: NormalizedTutorSubject[];
 };
 
-function getSubjectRelations(profile: TutorProfileWithSubjectRelations | undefined) {
+function getSubjectRelations(
+  profile: TutorProfileWithSubjectRelations | undefined,
+) {
   return profile?.subjects ?? [];
 }
 
@@ -122,7 +124,8 @@ export function validateSubmitForReview(
     throw new TutorProfileIncompleteError(profile.id, missingFields);
   }
 
-  const selectedSubjects = (profile as TutorProfileWithSubjectRelations).subjects;
+  const selectedSubjects = (profile as TutorProfileWithSubjectRelations)
+    .subjects;
   if (!selectedSubjects || selectedSubjects.length === 0) {
     throw new TutorProfileIncompleteError(profile.id, ["subjectIds"]);
   }
@@ -251,11 +254,7 @@ export function createTutorService(deps: {
         throw new OptimisticLockError(profile!.id, version);
 
       if (!isPublished && subjectIds !== undefined) {
-        await tutorRepo.replaceProfileSubjects(
-          conn,
-          profile!.id,
-          subjectIds,
-        );
+        await tutorRepo.replaceProfileSubjects(conn, profile!.id, subjectIds);
       }
 
       const updated = await tutorRepo.getByUserId(conn, userId);
