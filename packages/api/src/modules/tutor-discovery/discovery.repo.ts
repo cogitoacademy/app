@@ -1,12 +1,32 @@
-import { eq, desc, asc, and, gte, sql, type SQL, isNull } from "drizzle-orm";
+import { eq, desc, asc, and, gte, isNull, sql, type SQL } from "drizzle-orm";
 import {
   availabilitySlot,
   subjectCategory,
   tutorProfile,
-  tutorProfileSubject,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+
+const tutorProfileSubjectFilterTable = sql.raw(
+  '"tutor_profile_subject" as "tutorProfileSubjectFilter"',
+);
+const subjectCategoryFilterTable = sql.raw(
+  '"subject_category" as "subjectCategoryFilter"',
+);
+const tutorProfileSubjectFilterSubjectId = sql.raw(
+  '"tutorProfileSubjectFilter"."subject_id"',
+);
+const subjectCategoryFilterId = sql.raw('"subjectCategoryFilter"."id"');
+const tutorProfileSubjectFilterTutorProfileId = sql.raw(
+  '"tutorProfileSubjectFilter"."tutor_profile_id"',
+);
+const subjectCategoryFilterIsActive = sql.raw(
+  '"subjectCategoryFilter"."is_active"',
+);
+const subjectCategoryFilterName = sql.raw('"subjectCategoryFilter"."name"');
+const subjectCategoryFilterParentId = sql.raw(
+  '"subjectCategoryFilter"."parent_id"',
+);
 
 export interface ListPublishedInput {
   search?: string;
@@ -48,12 +68,12 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
         or lower(coalesce(${tutorProfile.expertise}::text, '')) like lower(${q}) escape '\\'
         or exists (
           select 1
-          from ${tutorProfileSubject}
-          inner join ${subjectCategory}
-            on ${tutorProfileSubject.subjectId} = ${subjectCategory.id}
-          where ${tutorProfileSubject.tutorProfileId} = ${tutorProfile.id}
-            and ${subjectCategory.isActive} = true
-            and lower(${subjectCategory.name}) like lower(${q}) escape '\\'
+          from ${tutorProfileSubjectFilterTable}
+          inner join ${subjectCategoryFilterTable}
+            on ${tutorProfileSubjectFilterSubjectId} = ${subjectCategoryFilterId}
+          where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
+            and ${subjectCategoryFilterIsActive} = true
+            and lower(${subjectCategoryFilterName}) like lower(${q}) escape '\\'
         )
       )`,
     );
@@ -66,19 +86,17 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
   }
 
   if (input.categoryId || input.subjectId) {
-    conditions.push(
-      sql`exists (
-        select 1
-        from ${tutorProfileSubject}
-        inner join ${subjectCategory}
-          on ${tutorProfileSubject.subjectId} = ${subjectCategory.id}
-        where ${tutorProfileSubject.tutorProfileId} = ${tutorProfile.id}
-          and ${subjectCategory.isActive} = true
-          and ${subjectCategory.parentId} is not null
-          ${input.categoryId ? sql`and ${subjectCategory.parentId} = ${input.categoryId}` : sql``}
-          ${input.subjectId ? sql`and ${subjectCategory.id} = ${input.subjectId}` : sql``}
-      )`,
-    );
+    conditions.push(sql`exists (
+      select 1
+      from ${tutorProfileSubjectFilterTable}
+      inner join ${subjectCategoryFilterTable}
+        on ${tutorProfileSubjectFilterSubjectId} = ${subjectCategoryFilterId}
+      where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
+        and ${subjectCategoryFilterIsActive} = true
+        and ${subjectCategoryFilterParentId} is not null
+        ${input.categoryId ? sql`and ${subjectCategoryFilterParentId} = ${input.categoryId}` : sql``}
+        ${input.subjectId ? sql`and ${subjectCategoryFilterId} = ${input.subjectId}` : sql``}
+    )`);
   }
 
   return conn.query.tutorProfile.findMany({

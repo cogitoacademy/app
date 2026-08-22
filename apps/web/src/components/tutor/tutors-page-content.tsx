@@ -48,6 +48,20 @@ type PublishedTutor = {
   user: { name: string | null; image: string | null } | null;
 };
 
+const ALL_CATEGORIES_OPTION = { value: "", label: "All categories" };
+const ALL_CHILD_SUBJECTS_OPTION = {
+  value: "",
+  label: "All child subjects",
+};
+const MODALITY_OPTIONS = [
+  { value: "online", label: "Online" },
+  { value: "offline", label: "Offline" },
+  { value: "both", label: "Both" },
+] as const;
+const MODALITY_VALUES = new Map<string, (typeof MODALITY_OPTIONS)[number]>(
+  MODALITY_OPTIONS.map((option) => [option.value, option]),
+);
+
 export function TutorsPageContent() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -59,6 +73,26 @@ export function TutorsPageContent() {
 
   const selectedCategory = categories.find(
     (category) => category.id === categoryId,
+  );
+  const categoryValues = useMemo(
+    () =>
+      new Map(
+        categories.map((category) => [
+          category.id,
+          { value: category.id, label: category.name },
+        ]),
+      ),
+    [categories],
+  );
+  const subjectValues = useMemo(
+    () =>
+      new Map(
+        (selectedCategory?.children ?? []).map((subject) => [
+          subject.id,
+          { value: subject.id, label: subject.name },
+        ]),
+      ),
+    [selectedCategory],
   );
   const tutorListInput = useMemo(
     () => ({
@@ -73,12 +107,15 @@ export function TutorsPageContent() {
     }),
     [categoryId, modality, search, subjectId],
   );
+  const hasActiveFilter = Boolean(categoryId || subjectId || modality);
 
   const { data: tutors = [], isPending } = useQuery({
     ...orpc.tutors.listPublished.queryOptions({
       input: tutorListInput,
     }),
-    placeholderData: keepPreviousData,
+    // Keep search results stable while typing, but never show the previous
+    // unfiltered list while a category/subject/modality filter is loading.
+    placeholderData: hasActiveFilter ? undefined : keepPreviousData,
   });
 
   const selected = selectedId
@@ -112,7 +149,7 @@ export function TutorsPageContent() {
           />
         </InputGroup>
         <Select
-          value={categoryId}
+          value={categoryId ? (categoryValues.get(categoryId) ?? null) : null}
           onValueChange={(value) => {
             setCategoryId(getSelectItemValue(value) ?? "");
             setSubjectId("");
@@ -121,14 +158,19 @@ export function TutorsPageContent() {
           <SelectTrigger className="min-w-0 w-full sm:w-52">
             <SelectValue
               className="min-w-0 flex-1 truncate text-left"
-              placeholder="Mother category"
+              placeholder="All categories"
             />
           </SelectTrigger>
           <SelectPopup>
             <SelectList>
-              <SelectItem value="">All categories</SelectItem>
+              <SelectItem value={ALL_CATEGORIES_OPTION}>
+                All categories
+              </SelectItem>
               {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
+                <SelectItem
+                  key={category.id}
+                  value={categoryValues.get(category.id)}
+                >
                   {category.name}
                 </SelectItem>
               ))}
@@ -136,7 +178,7 @@ export function TutorsPageContent() {
           </SelectPopup>
         </Select>
         <Select
-          value={subjectId}
+          value={subjectId ? (subjectValues.get(subjectId) ?? null) : null}
           disabled={!selectedCategory}
           onValueChange={(value) =>
             setSubjectId(getSelectItemValue(value) ?? "")
@@ -146,15 +188,22 @@ export function TutorsPageContent() {
             <SelectValue
               className="min-w-0 flex-1 truncate text-left"
               placeholder={
-                selectedCategory ? "Child subject" : "Choose category first"
+                selectedCategory
+                  ? "All child subjects"
+                  : "Choose category first"
               }
             />
           </SelectTrigger>
           <SelectPopup>
             <SelectList>
-              <SelectItem value="">All child subjects</SelectItem>
+              <SelectItem value={ALL_CHILD_SUBJECTS_OPTION}>
+                All child subjects
+              </SelectItem>
               {(selectedCategory?.children ?? []).map((subject) => (
-                <SelectItem key={subject.id} value={subject.id}>
+                <SelectItem
+                  key={subject.id}
+                  value={subjectValues.get(subject.id)}
+                >
                   {subject.name}
                 </SelectItem>
               ))}
@@ -162,7 +211,7 @@ export function TutorsPageContent() {
           </SelectPopup>
         </Select>
         <Select
-          value={modality}
+          value={modality ? (MODALITY_VALUES.get(modality) ?? null) : null}
           onValueChange={(value) =>
             setModality(getSelectItemValue(value) ?? "")
           }
@@ -170,15 +219,17 @@ export function TutorsPageContent() {
           <SelectTrigger className="min-w-0 w-full sm:w-44">
             <SelectValue
               className="min-w-0 flex-1 truncate text-left"
-              placeholder="Modality"
+              placeholder="All"
             />
           </SelectTrigger>
           <SelectPopup>
             <SelectList>
-              <SelectItem value="">All</SelectItem>
-              <SelectItem value="online">Online</SelectItem>
-              <SelectItem value="offline">Offline</SelectItem>
-              <SelectItem value="both">Both</SelectItem>
+              <SelectItem value={{ value: "", label: "All" }}>All</SelectItem>
+              {MODALITY_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectList>
           </SelectPopup>
         </Select>

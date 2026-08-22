@@ -4,6 +4,7 @@ import { db } from "@cogito-app/db";
 import {
   tutorInvite,
   tutorProfile,
+  tutorProfileSubject,
   availabilitySlot,
 } from "@cogito-app/db/schema";
 
@@ -93,6 +94,11 @@ describe("Tutor discovery", () => {
       .returning();
     profileId = profile!.id;
 
+    await db.insert(tutorProfileSubject).values({
+      tutorProfileId: profileId,
+      subjectId: "20000000-0000-4000-8000-000000000001",
+    });
+
     await db.insert(availabilitySlot).values({
       tutorId,
       startDate: new Date(Date.now() + 3600_000),
@@ -120,6 +126,20 @@ describe("Tutor discovery", () => {
     });
     expect(profile.displayName).toBe("Prof Discovery");
     expect(profile.user).toBeDefined();
+  });
+
+  test("listPublished filters by mother category", async () => {
+    const matchingTutors = await studentClient.tutors.listPublished({
+      categoryId: "10000000-0000-4000-8000-000000000001",
+    });
+    expect(matchingTutors.some((tutor) => tutor.id === profileId)).toBe(true);
+
+    const nonMatchingTutors = await studentClient.tutors.listPublished({
+      categoryId: "10000000-0000-4000-8000-000000000002",
+    });
+    expect(nonMatchingTutors.some((tutor) => tutor.id === profileId)).toBe(
+      false,
+    );
   });
 
   test("getProfile returns NOT_FOUND for draft profile", async () => {
