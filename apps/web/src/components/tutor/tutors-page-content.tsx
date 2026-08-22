@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { IconSearch } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -30,18 +30,7 @@ import { EmptyStateCard } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 import { TutorCard } from "./tutor-card";
 import { TutorDrawer } from "./tutor-drawer";
-
-const EXPERTISE_OPTIONS = [
-  "Mathematics",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "Computer Science",
-  "Economics",
-  "English",
-  "History",
-  "Other",
-];
+import { useSubjectTaxonomy, type TutorSubject } from "./subject-taxonomy";
 
 type PublishedTutor = {
   id: string;
@@ -50,6 +39,7 @@ type PublishedTutor = {
   shortBio: string | null;
   credentialsSummary: string | null;
   expertise: string[];
+  subjects?: TutorSubject[] | null;
   modality: string | null;
   prices: Record<string, number> | null;
   availabilitySummary: string | null;
@@ -60,22 +50,33 @@ type PublishedTutor = {
 
 export function TutorsPageContent() {
   const [search, setSearch] = useState("");
-  const [expertise, setExpertise] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [subjectId, setSubjectId] = useState("");
   const [modality, setModality] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { data: categories, isError: isTaxonomyError } = useSubjectTaxonomy();
+
+  const selectedCategory = categories.find(
+    (category) => category.id === categoryId,
+  );
+  const tutorListInput = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      categoryId: categoryId || undefined,
+      subjectId: subjectId || undefined,
+      modality: (modality || undefined) as
+        | "online"
+        | "offline"
+        | "both"
+        | undefined,
+    }),
+    [categoryId, modality, search, subjectId],
+  );
 
   const { data: tutors = [], isPending } = useQuery({
     ...orpc.tutors.listPublished.queryOptions({
-      input: {
-        search: search.trim() || undefined,
-        expertise: expertise || undefined,
-        modality: (modality || undefined) as
-          | "online"
-          | "offline"
-          | "both"
-          | undefined,
-      },
+      input: tutorListInput,
     }),
     placeholderData: keepPreviousData,
   });
@@ -111,23 +112,50 @@ export function TutorsPageContent() {
           />
         </InputGroup>
         <Select
-          value={expertise}
-          onValueChange={(value) =>
-            setExpertise(getSelectItemValue(value) ?? "")
-          }
+          value={categoryId}
+          onValueChange={(value) => {
+            setCategoryId(getSelectItemValue(value) ?? "");
+            setSubjectId("");
+          }}
         >
           <SelectTrigger className="min-w-0 w-full sm:w-52">
             <SelectValue
               className="min-w-0 flex-1 truncate text-left"
-              placeholder="Expertise"
+              placeholder="Mother category"
             />
           </SelectTrigger>
           <SelectPopup>
             <SelectList>
-              <SelectItem value="">All</SelectItem>
-              {EXPERTISE_OPTIONS.map((e) => (
-                <SelectItem key={e} value={e}>
-                  {e}
+              <SelectItem value="">All categories</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectList>
+          </SelectPopup>
+        </Select>
+        <Select
+          value={subjectId}
+          disabled={!selectedCategory}
+          onValueChange={(value) =>
+            setSubjectId(getSelectItemValue(value) ?? "")
+          }
+        >
+          <SelectTrigger className="min-w-0 w-full sm:w-56">
+            <SelectValue
+              className="min-w-0 flex-1 truncate text-left"
+              placeholder={
+                selectedCategory ? "Child subject" : "Choose category first"
+              }
+            />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectList>
+              <SelectItem value="">All child subjects</SelectItem>
+              {(selectedCategory?.children ?? []).map((subject) => (
+                <SelectItem key={subject.id} value={subject.id}>
+                  {subject.name}
                 </SelectItem>
               ))}
             </SelectList>
@@ -156,27 +184,12 @@ export function TutorsPageContent() {
         </Select>
       </div>
 
-      <div className="flex flex-wrap gap-2" aria-label="Filter by subject">
-        <Button
-          variant={expertise ? "secondary" : "primary"}
-          size="sm"
-          onClick={() => setExpertise("")}
-        >
-          All subjects
-        </Button>
-        {EXPERTISE_OPTIONS.filter((subject) => subject !== "Other").map(
-          (subject) => (
-            <Button
-              key={subject}
-              variant={expertise === subject ? "primary" : "secondary"}
-              size="sm"
-              onClick={() => setExpertise(subject)}
-            >
-              {subject}
-            </Button>
-          ),
-        )}
-      </div>
+      {isTaxonomyError && (
+        <Text className="text-muted" role="status">
+          Subject filters are temporarily unavailable. You can still search
+          tutors by name or description.
+        </Text>
+      )}
 
       {isPending ? (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -202,7 +215,8 @@ export function TutorsPageContent() {
               variant="secondary"
               onClick={() => {
                 setSearch("");
-                setExpertise("");
+                setCategoryId("");
+                setSubjectId("");
                 setModality("");
               }}
             >

@@ -23,6 +23,22 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     modality: "online",
     prices: { "1": 50 },
     expertise: ["math"],
+    subjects: [
+      {
+        subject: {
+          id: "child-1",
+          slug: "math-olympiad",
+          name: "Mathematics Olympiad",
+          description: null,
+          parentId: "mother-1",
+          parent: {
+            id: "mother-1",
+            slug: "olympiad",
+            name: "Olympiad",
+          },
+        },
+      },
+    ],
     onboardingStatus: "draft",
     publishedAt: null,
     ...overrides,
@@ -142,12 +158,9 @@ describe("Tutor Service", () => {
       ).toThrow(TutorProfileIncompleteError);
     });
 
-    test("throws TutorProfileIncompleteError for empty expertise", () => {
+    test("throws TutorProfileIncompleteError for empty subjects", () => {
       expect(() =>
-        validateSubmitForReview(
-          makeProfile({ expertise: [] }),
-          mockPricingPort,
-        ),
+        validateSubmitForReview(makeProfile({ subjects: [] }), mockPricingPort),
       ).toThrow(TutorProfileIncompleteError);
     });
   });
