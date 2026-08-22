@@ -244,6 +244,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `createGroupSeries(proposerId, input)` — Creates a group series (targetGroupSize 2-6, inviteeUserIds) with upfront per-participant holds for all sessions (FR-20, landed #46)
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
 - `declineInvite(userId, bookingId, reason?)` — Invitee declines
+- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Proposer withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves headcount/holds unchanged, and notifies the invitee
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing
 - `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum; group-series (`type === "series" && targetGroupSize > 1`) is rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule)
 - `cancel(userId, bookingId, reason?)` — Cancels booking; releases all holds; late cancel becomes `late_cancelled`

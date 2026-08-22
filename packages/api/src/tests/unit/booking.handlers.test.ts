@@ -32,6 +32,10 @@ function makeBookingService() {
     createSeries: mock(async () => ({ id: "bs1" })),
     confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
     declineInvite: mock(async () => ({ id: "b1", currentState: "declined" })),
+    withdrawInvite: mock(async () => ({
+      withdrawn: true,
+      inviteeUserId: "u2",
+    })),
     reconfirm: mock(async () => ({ reconfirmed: true })),
     withdraw: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     listSessions: mock(async () => ({ items: [] })),
@@ -341,6 +345,32 @@ describe("bookingHandler", () => {
 
       expect(booking.declineInvite).toHaveBeenCalledWith("u1", "b1", "busy");
       expect(result).toEqual({ id: "b1", currentState: "declined" });
+    });
+  });
+
+  describe("withdrawInvite", () => {
+    test("calls booking.withdrawInvite with proposer, booking, target, and reason", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("u1");
+      const input = {
+        bookingId: "b1",
+        inviteeUserId: "u2",
+        reason: "Schedule changed",
+      };
+
+      const result = await handler.withdrawInvite({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.withdrawInvite).toHaveBeenCalledWith(
+        "u1",
+        "b1",
+        "u2",
+        "Schedule changed",
+      );
+      expect(result).toEqual({ withdrawn: true, inviteeUserId: "u2" });
     });
   });
 

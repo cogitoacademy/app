@@ -566,6 +566,13 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
 
+### `booking.withdrawInvite`
+
+- **Auth:** Student (booking proposer)
+- **Input:** `{ bookingId, inviteeUserId, reason? }`
+- **Output:** `{ withdrawn: true, inviteeUserId }`
+- **Description:** Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`; confirmed headcount and Marks holds are unchanged, and the invitee receives a booking notification.
+
 ### `booking.reconfirm`
 
 - **Auth:** Student (participant)

@@ -16,6 +16,7 @@ import {
   declineBookingInput,
   confirmInviteInput,
   declineInviteInput,
+  withdrawInviteInput,
   reconfirmInput,
   withdrawInput,
   proposeRescheduleInput,
@@ -202,6 +203,18 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(declineInviteInput)
       .handler(handler.declineInvite),
+
+    withdrawInvite: studentProcedure
+      .route({
+        method: "POST",
+        path: "/booking/invite/withdraw",
+        tags: ["Bookings"],
+        summary: "Withdraw a group invitation",
+        description:
+          "The booking proposer withdraws one pending invite before confirmation",
+      })
+      .input(withdrawInviteInput)
+      .handler(handler.withdrawInvite),
 
     reconfirm: studentProcedure
       .route({
