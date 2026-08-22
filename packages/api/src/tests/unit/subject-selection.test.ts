@@ -9,8 +9,9 @@ const child = (id: string) => ({ id });
 
 describe("tutor subject selection", () => {
   test("accepts active child ids and rejects mother ids", () => {
-    expect(() => validateTutorSubjectIds(["child-1"], [child("child-1")])).not
-      .toThrow();
+    expect(() =>
+      validateTutorSubjectIds(["child-1"], [child("child-1")]),
+    ).not.toThrow();
     expect(() => validateTutorSubjectIds(["mother-1"], [])).toThrow(
       "active child subjects",
     );

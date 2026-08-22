@@ -1,13 +1,4 @@
-import {
-  eq,
-  desc,
-  asc,
-  and,
-  gte,
-  sql,
-  type SQL,
-  isNull,
-} from "drizzle-orm";
+import { eq, desc, asc, and, gte, sql, type SQL, isNull } from "drizzle-orm";
 import {
   availabilitySlot,
   subjectCategory,
@@ -124,7 +115,10 @@ async function getProfileById(conn: DbOrTx, tutorId: string) {
 
 async function listSubjects(conn: DbOrTx) {
   return conn.query.subjectCategory.findMany({
-    where: and(eq(subjectCategory.isActive, true), isNull(subjectCategory.parentId)),
+    where: and(
+      eq(subjectCategory.isActive, true),
+      isNull(subjectCategory.parentId),
+    ),
     orderBy: [asc(subjectCategory.sortOrder), asc(subjectCategory.name)],
     with: {
       children: {

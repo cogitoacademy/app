@@ -441,10 +441,7 @@ export function createAdminTutorService(deps: {
           }
           pendingSubjectIds = [...rawSubjectIds];
           const activeChildSubjects =
-            await adminTutorRepo.listActiveChildSubjects(
-              tx,
-              pendingSubjectIds,
-            );
+            await adminTutorRepo.listActiveChildSubjects(tx, pendingSubjectIds);
           validateTutorSubjectIds(pendingSubjectIds, activeChildSubjects);
           delete pendingProfileChanges.subjectIds;
         }

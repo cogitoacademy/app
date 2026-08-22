@@ -70,9 +70,7 @@ export const tutorProfileSubject = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("tutor_profile_subject_tutorProfileId_idx").on(
-      table.tutorProfileId,
-    ),
+    index("tutor_profile_subject_tutorProfileId_idx").on(table.tutorProfileId),
     index("tutor_profile_subject_subjectId_idx").on(table.subjectId),
     uniqueIndex("tutor_profile_subject_profile_subject_uniq").on(
       table.tutorProfileId,
