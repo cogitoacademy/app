@@ -50,7 +50,7 @@ import { formatBookingDate, formatBookingTimeRange } from "./booking-ui";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
-type DialogKind = "report" | "decline-invite" | null;
+type DialogKind = "report" | "decline-invite" | "withdraw-invite" | null;
 type SupportCategory =
   | "tutor_late"
   | "tutor_no_show"
@@ -67,6 +67,8 @@ export function BookingLifecycleActions({
   timezone,
   participantRole,
   participantState,
+  isBookingProposer,
+  pendingInvitees,
   perStudentMarks,
   proposedStartAt,
   proposedEndAt,
@@ -84,6 +86,8 @@ export function BookingLifecycleActions({
   timezone?: string;
   participantRole?: string;
   participantState?: string;
+  isBookingProposer?: boolean;
+  pendingInvitees?: { userId: string; name: string }[];
   perStudentMarks?: number;
   proposedStartAt?: string | Date;
   proposedEndAt?: string | Date;
@@ -99,7 +103,13 @@ export function BookingLifecycleActions({
     useState<SupportCategory>("tutor_late");
   const [description, setDescription] = useState("");
   const [inviteDeclineReason, setInviteDeclineReason] = useState("");
+  const [withdrawInviteReason, setWithdrawInviteReason] = useState("");
+  const [withdrawInviteTarget, setWithdrawInviteTarget] = useState<{
+    userId: string;
+    name: string;
+  } | null>(null);
   const [note, setNote] = useState("");
+  const invitees = pendingInvitees ?? [];
 
   const isStudent = viewerRole === "student";
   const isCompleted = currentState === "completed";
@@ -119,6 +129,12 @@ export function BookingLifecycleActions({
     currentState === "awaiting_participant_confirmation" &&
     participantRole === "invitee" &&
     participantState === "pending";
+  const canWithdrawInvite =
+    isStudent &&
+    Boolean(isBookingProposer) &&
+    (bookingType === "group" || bookingType === "series") &&
+    currentState === "awaiting_participant_confirmation" &&
+    invitees.length > 0;
   const canReconfirm =
     isStudent &&
     currentState === "awaiting_reconfirmation" &&
@@ -216,6 +232,22 @@ export function BookingLifecycleActions({
         showMutationError("Invitation could not be declined", error),
     }),
   );
+  const withdrawInvite = useMutation(
+    orpc.booking.withdrawInvite.mutationOptions({
+      onSuccess: () => {
+        setDialog(null);
+        setWithdrawInviteReason("");
+        setWithdrawInviteTarget(null);
+        toastManager.add({
+          title: "Invitation withdrawn",
+          type: "success",
+        });
+        onBookingChanged();
+      },
+      onError: (error: Error) =>
+        showMutationError("Invitation could not be withdrawn", error),
+    }),
+  );
   const reconfirm = useMutation(
     orpc.booking.reconfirm.mutationOptions({
       onSuccess: (_result, variables) => {
@@ -234,9 +266,13 @@ export function BookingLifecycleActions({
     hasPendingReschedule ||
     canReportLateness ||
     canRespondToInvite ||
-    canReconfirm;
+    canReconfirm ||
+    canWithdrawInvite;
   const decisionPending = accept.isPending || reject.isPending;
-  const invitePending = confirmInvite.isPending || declineInvite.isPending;
+  const invitePending =
+    confirmInvite.isPending ||
+    declineInvite.isPending ||
+    withdrawInvite.isPending;
   const acceptedRescheduleMessage = isRescheduleProposer
     ? bookingType === "group"
       ? "Your proposed time is waiting for the other participants."
@@ -302,6 +338,37 @@ export function BookingLifecycleActions({
                 Accepting reserves {perStudentMarks ?? "the required"} Marks
                 from your wallet.
               </Text>
+            </CardBody>
+          ) : null}
+          {canWithdrawInvite ? (
+            <CardBody className="space-y-3">
+              <div>
+                <Text className="font-medium">Pending invitations</Text>
+                <Text className="text-muted">
+                  Withdraw an invitation before that participant confirms.
+                </Text>
+              </div>
+              <div className="space-y-2">
+                {invitees.map((invitee) => (
+                  <div
+                    key={invitee.userId}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                  >
+                    <Text className="min-w-0 truncate">{invitee.name}</Text>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => {
+                        setWithdrawInviteTarget(invitee);
+                        setDialog("withdraw-invite");
+                      }}
+                      disabled={invitePending}
+                    >
+                      Withdraw invite
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </CardBody>
           ) : null}
           {canReconfirm ? (
@@ -542,6 +609,74 @@ export function BookingLifecycleActions({
               disabled={declineInvite.isPending}
             >
               Decline invitation
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "withdraw-invite"}
+        onOpenChange={(open) => {
+          if (!open && !withdrawInvite.isPending) {
+            setDialog(null);
+            setWithdrawInviteReason("");
+            setWithdrawInviteTarget(null);
+          }
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader className="flex-col items-start gap-1.5">
+            <DialogTitle>
+              Withdraw invitation for{" "}
+              {withdrawInviteTarget?.name ?? "this participant"}?
+            </DialogTitle>
+            <DialogDescription>
+              This removes the pending invitation. It does not change the
+              confirmed headcount or release any participant hold.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <Field>
+              <FieldLabel htmlFor="invite-withdraw-reason">
+                Reason (optional)
+              </FieldLabel>
+              <Textarea
+                id="invite-withdraw-reason"
+                value={withdrawInviteReason}
+                maxLength={2_000}
+                onChange={(event) =>
+                  setWithdrawInviteReason(event.target.value)
+                }
+                placeholder="Explain why the invitation is being withdrawn."
+              />
+            </Field>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setDialog(null);
+                setWithdrawInviteReason("");
+                setWithdrawInviteTarget(null);
+              }}
+              disabled={withdrawInvite.isPending}
+            >
+              Keep invitation
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (!withdrawInviteTarget) return;
+                withdrawInvite.mutate({
+                  bookingId,
+                  inviteeUserId: withdrawInviteTarget.userId,
+                  reason: withdrawInviteReason.trim() || undefined,
+                });
+              }}
+              progress={withdrawInvite.isPending}
+              disabled={!withdrawInviteTarget || withdrawInvite.isPending}
+            >
+              Withdraw invitation
             </Button>
           </DialogFooter>
         </DialogPopup>

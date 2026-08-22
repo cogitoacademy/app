@@ -298,7 +298,7 @@ Tutor availability is modeled as free-time windows rather than pre-sized session
 - `createSolo`, `get`, `listMine`, `cancel`
 - `proposeReschedule` (booking proposer), `acceptReschedule`, `rejectReschedule`, `cancelSession`, `getRescheduleAvailability`
 - `addSessionNote`, `getSessionNotes`
-- `createGroup`, `createSeries`, `createGroupSeries`, `confirmInvite`, `declineInvite`, `reconfirm`, `withdraw`
+- `createGroup`, `createSeries`, `createGroupSeries`, `confirmInvite`, `declineInvite`, `withdrawInvite`, `reconfirm`, `withdraw`
 - `listSessions`
 
 Tutor discovery and every student-owned booking mutation are guarded by `studentProcedure`. The protected booking list/detail/session reads are shared by authenticated parties: students see proposer/participant bookings, tutors see assigned bookings, and admins see all bookings. Tutor/admin accounts still cannot browse the student tutor catalog or create/cancel/confirm/reconfirm/withdraw bookings; tutor fulfillment remains under `tutorActions.*`.
@@ -379,7 +379,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/REVIEW-FIXES-4.md`                          | main (merged)                                                                       | Completed (2026-08-18) — wave-4 audit fixes merged via #68–#70, #75–#76 (docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud 3P guards, G2 email verification)                                                               |
 | `docs/plans/active/WAVE-6-REVIEW-FIXES.md`                        | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83), `fix/wave6-c` (PR #84) — all merged | **Completed (2026-08-19)** — all wave-6 findings (H1–H3, M1–M5, L1–L3, N1–N4, P1–P3) fixed & merged; L3 closed as defense-in-depth                                                                                                            |
 | `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (merged)                                                                       | Active — all U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                                                                                                                                                |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/f1-admin-surface` (follow-up)                                                    | Active — F1 admin workspace, hydrated participant wallet/ledger detail, and OQ-04 SLA projection are complete; F9/F18 remain partial; F12 room approval queue implemented |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/f18-invite-withdraw` (follow-up)                                                 | Active — F1 admin workspace, hydrated participant wallet/ledger detail, and OQ-04 SLA projection are complete; proposer-side pending-invite withdrawal is complete; F9 remains partial; F12 room approval queue implemented |
 | `docs/plans/completed/ECONOMY-RATE-CONTROL.md`                    | main                                                                                | Completed 2026-08-22 — admin-managed Cogito take schedule, IDR tutor honoraria, immutable booking snapshots, and all-role economy E2E |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                                                                   | Active — code gaps 1.1–1.8 done (1.4 now 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                                                                                                                                |
 | `docs/plans/completed/REVIEW-FIXES-3.md`                          | main (merged)                                                                       | Merged to main (#59–#65) — all wave-3 PRs landed; G2 (email verification) was deferred and is now **implemented** by REVIEW-FIXES-4 P4.4 (#76)                                                                                                |
@@ -411,7 +411,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 8. Review Fixes 2 (REVIEW-FIXES-2.md) → merged to main (#50–#57)
 9. Review Fixes 3 (REVIEW-FIXES-3.md — PRs #59–#65) → merged to main
 10. Review Fixes 4 (REVIEW-FIXES-4.md — docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud guards, G2 email verification) → **completed (merged via #68–#70, #75–#76)**
-11. Frontend Gaps (FRONTEND-GAPS-SPEC — F1/F8/F13/F14/F16 closed; F2/F3/F6/F7/F11/F17 closed by merged #55; F12 room approval queue implemented; F9/F18 partial) → after / parallel with #10
+11. Frontend Gaps (FRONTEND-GAPS-SPEC — F1/F8/F13/F14/F16/F18 closed; F2/F3/F6/F7/F11/F17 closed by merged #55; F12 room approval queue implemented; F9 partial) → after / parallel with #10
 12. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
@@ -441,7 +441,7 @@ Booking cancellation and session completion also use in-app Selia confirmation d
 
 Form controls use Selia wrappers for multiline text, numeric amounts, calendar dates, and minute-level times. App-level raw browser date/time/number/select/textarea controls are not used; the wrappers retain semantic native elements underneath for accessibility and form behavior.
 
-**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject UI (F7), lateness/no-show reporting UI (F3), and public achievements (F16) remain open. Backend support for reschedule accept/reject and lateness/no-show reporting (G1/G6) has landed. The notification center, Knowledge Bank gating UX, email verification, and session-expiry warning are implemented. (2026-08-22: J2 now warns during the final 30 minutes and retains the existing 401 redirect; F1 admin workspace is complete; remaining open items are tracked in FRONTEND-GAPS-SPEC: F9/F18 partial.)
+**Not full PRD complete:** group/series booking UI, reschedule accept/reject UI (F7), lateness/no-show reporting UI (F3), and public achievements (F16) remain open. Backend support for reschedule accept/reject and lateness/no-show reporting (G1/G6) has landed. The notification center, Knowledge Bank gating UX, email verification, and session-expiry warning are implemented. (2026-08-22: J2 now warns during the final 30 minutes and retains the existing 401 redirect; F1 admin workspace and F18 proposer-side invite withdrawal are complete; remaining open item is F9 partial.)
 
 ### Tutor
 
@@ -463,7 +463,7 @@ The admin override queue, wallet/ledger view, override preview, room assignment 
 
 ### Backend Gap Groups
 
-- Ready now (merged to main): student solo/group/series booking primitives, reschedule propose/accept/reject, session notes, group invite confirm/decline/reconfirm, wallet/ledger/packages/Knowledge Bank, purchases, achievements, notifications, tutor onboarding/availability/payouts/incoming-booking actions, support tickets (G1), and the admin capabilities listed above (G8–G10, G16–G18).
+- Ready now (merged to main): student solo/group/series booking primitives, reschedule propose/accept/reject, session notes, group invite confirm/decline/reconfirm/withdraw, wallet/ledger/packages/Knowledge Bank, purchases, achievements, notifications, tutor onboarding/availability/payouts/incoming-booking actions, support tickets (G1), and the admin capabilities listed above (G8–G10, G16–G18).
 - Backend PRD U-items (all closed, verified 2026-08-18): manual meeting-link entry (U1→`adminBooking.setMeetingLink`), student self-reschedule (U2), reconfirmation-deadline repricing (U3), group-series full withdrawal blocked (U4), per-participant no-show (U5), admin per-session cancel (U6), per-session reschedule (U7), refund reconciliation guard (U8), **business-hours SLA windows (U9 — closed by REVIEW-FIXES-4 P2.8)**, achievement field parity (U10), registered-user invitee validation (U11), offline room deadline (U12), KB total-balance eligibility (U13), offline room availability in booking creation (U14). Dead-code/silent-failure items tracked in `docs/plans/completed/BACKEND-CLEANUP.md` (completed).
 
 ### Current Execution Order

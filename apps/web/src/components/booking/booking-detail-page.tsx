@@ -535,6 +535,17 @@ export function BookingDetailPage({
               timezone={booking.timezone}
               participantRole={viewerParticipant?.role}
               participantState={viewerParticipant?.confirmationState}
+              isBookingProposer={booking.proposerId === viewerId}
+              pendingInvitees={booking.participants
+                .filter(
+                  (participant) =>
+                    participant.role === "invitee" &&
+                    participant.confirmationState === "pending",
+                )
+                .map((participant) => ({
+                  userId: participant.userId,
+                  name: participant.user?.name ?? "Participant",
+                }))}
               perStudentMarks={booking.priceSnapshot?.perStudent}
               activeProposalId={activeRescheduleProposal?.id}
               isRescheduleProposer={
