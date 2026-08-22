@@ -2,12 +2,12 @@
 
 | Field      | Value                                                                                                                                                             |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-22; F8/F9/F13/F14/F16 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; F1/F18 partial) |
+| Status     | Living gap inventory (updated 2026-08-22; F1/F8/F9/F13/F14/F16 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; F18 partial) |
 | Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                                |
 | Created    | 2026-07-29                                                                                                                                                        |
 | Audited    | 2026-08-22                                                                                                                                                        |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                     |
-| Scope      | Frontend only (`apps/web/`)                                                                                                                                       |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                            |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
@@ -86,7 +86,8 @@ for classmates.
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Compatibility redirect to the shared `/bookings` list                                                                         |
 | `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                              |
 | `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                                                            |
-| `/_app/admin-operations`     | admin-operations-page.tsx       | Partial F1 baseline — filtered queue, booking detail/history, override, rooms, and wallet lookup                              |
+| `/_app/admin`                | admin-dashboard-page.tsx        | Complete F1 admin workspace entry point                                                                                         |
+| `/_app/admin-operations`     | admin-operations-page.tsx       | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and wallet lookup          |
 | `/_app/admin-tutors`         | admin tutor invite + review     | Exists                                                                                                                        |
 | `/_app/admin-achievements`   | achievement-moderation-page.tsx | Exists (moderation UI)                                                                                                        |
 | `/_app/admin-economy`        | economy-settings-page.tsx       | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence    |
@@ -101,7 +102,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 | #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status                                                                        |
 | --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ----------------------------------------------------------------------------- |
-| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Partial — detail/history view added; full participant and SLA surface remains |
+| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | **Closed (2026-08-22)** — dedicated route, hydrated participant wallets/ledger, OQ-04 SLA deadline/status, and escalation link |
 | F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed                                                                        |
 | F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed                                                                        |
 | F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed                                                                        |
@@ -121,7 +122,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | Partial                                                                       |
 | F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                |
 
-**Total estimated effort: ~5.5 days for remaining gaps (F1, F9, F18 partial; J2 open).**
+**Total estimated effort: ~1 day for remaining gaps (F18 partial).**
 
 > **Audit 2026-08-14:** F4, F5, F10, F15 verified **closed** in `apps/web` (git HEAD `9b7df5e`). F8, F16, F17 remain partial. All remaining missing gaps have backend procedures ready except F13 (needs new `tutor.getMyPayouts` router) and F16 (needs a new public achievement list procedure).
 
@@ -129,18 +130,18 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 > **Audit 2026-08-19 (against main `d11962b`):** PR #55 merged (`d4e50e0`). Verified in `apps/web/src`:
 >
-> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The F6 reschedule action now dispatches by viewer role: student proposers use `booking.proposeReschedule`, tutors use `tutorActions.proposeReschedule`. The remaining F1 limitations are recorded above.
+> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The F6 reschedule action now dispatches by viewer role: student proposers use `booking.proposeReschedule`, tutors use `tutorActions.proposeReschedule`. The F1 follow-up branch closes the remaining admin route, participant/wallet/ledger, and OQ-04 SLA presentation gaps.
 >
 > - **F2/F3/F6/F7/F11/F17 → Closed** — override dialog with `previewOverride`/`applyOverride` (`admin-operations-page.tsx`), lateness report via `support.createTicket` (`booking-lifecycle-actions.tsx`), reschedule propose/accept/reject, wallet/ledger lookup tab, booking detail baseline.
 > - **F8 → Closed** — series bookings render a per-session list with per-session "Complete session" buttons calling `completeSession({ bookingId, sessionId })` (`booking-detail-page.tsx`).
 > - **F13 → Closed** — payout card on the tutor dashboard via `tutor.getMyPayouts` (`tutor-dashboard-page.tsx`).
 > - **F14 → Closed** — booking detail renders the backend `disclaimer` in a warning callout (`booking-detail-page.tsx:304`).
 > - **F16 → Closed** — landing page renders live `achievement.listApproved` data with static fallback (`landing-page.tsx:74`).
-> - **F1 → Partial** — admin dashboard + filtered booking queue + override dialog now include a booking-detail/history view backed by `getBookingStateHistory`; the dedicated route, fully hydrated participant/per-wallet detail, and business-hours SLA surface remain open.
+> - **F1 → Closed** — `/_app/admin` is the admin workspace entry point; the operations queue exposes category/urgency/SLA filters, reported reason/source/time-since-report, business-hours deadline/status, and a WhatsApp escalation link. The booking detail loads the full booking read model plus each participant's wallet and booking-scoped ledger entries.
 > - **F9 → Closed** — completed-booking notes now use a toolbar editor for paragraphs/headings, emphasis, lists, and links. Both preview and persisted note rendering pass through a DOMPurify allow-list, with the existing server sanitizer remaining authoritative.
 > - **F12 → Closed** — `admin-operations-page.tsx` now consumes `room.listPendingApprovals` for offline bookings in `awaiting_admin_room_approval`; admins can assign the requested room, load a booking to choose another room (or use the existing relocate operation), and cancel the pending approval. The backend queue also includes requested-room conflicts with no `room_booking` row.
 > - **F18 → Partial** — invitee confirm/decline/reconfirm wired; **inviter-side `withdraw` UI still missing** (0 references to `withdraw` in `apps/web/src`).
-> - **J2 → Open** — no proactive expiry UX; only the 401/403 redirect with `reason=session-expired` (`orpc.ts:26`).
+> - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
 > - **Dead components → still present** — `chart.tsx`, `data.ts`, `user-menu.tsx` have 0 importers in `apps/web/src`.
 
 ---
@@ -151,7 +152,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10 (Admin Override), OQ-04 (SLA escalation), prd.tex:717-728
 
-**Current state:** **PARTIAL (2026-08-22).** Admin dashboard (`admin-dashboard-page.tsx`) + booking queue with category, urgency, and escalated filters, an admin booking-detail dialog, and an override dialog exist (`admin-operations-page.tsx`). The detail dialog consumes `adminBooking.getBookingStateHistory` and shows booking context, core participant roles, affected participant IDs from the latest override, booking-level Marks impact, and the full transition timeline. **Still missing:** a dedicated `/admin` route, a fully hydrated participant roster with per-wallet ledger detail, and the PRD’s business-hours SLA deadline presentation/escalation channel.
+**Current state:** **CLOSED (2026-08-22).** The dedicated `/_app/admin` route owns the admin workspace. The operations queue supports category, urgency, and SLA-status filtering; reports show affected-user count, reason/source, elapsed time, OQ-04 deadline, and escalated status with the WhatsApp escalation channel. The booking-detail dialog consumes the full admin-safe `booking.get` read model, renders the hydrated participant roster with per-wallet balances and booking-scoped ledger entries, and retains state history plus override actions.
 
 **Required:**
 

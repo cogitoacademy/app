@@ -189,6 +189,7 @@ function createServices() {
     wallet: wallet.service,
     payout: booking.service,
     economy: economy.service,
+    notification: notification.service,
   });
   const adminTutor = createAdminTutorModule({
     db,
