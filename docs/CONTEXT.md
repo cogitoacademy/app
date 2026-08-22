@@ -379,7 +379,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/REVIEW-FIXES-4.md`                          | main (merged)                                                                       | Completed (2026-08-18) — wave-4 audit fixes merged via #68–#70, #75–#76 (docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud 3P guards, G2 email verification)                                                               |
 | `docs/plans/active/WAVE-6-REVIEW-FIXES.md`                        | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83), `fix/wave6-c` (PR #84) — all merged | **Completed (2026-08-19)** — all wave-6 findings (H1–H3, M1–M5, L1–L3, N1–N4, P1–P3) fixed & merged; L3 closed as defense-in-depth                                                                                                            |
 | `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (merged)                                                                       | Active — all U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                                                                                                                                                |
-| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/frontend-prd-gaps` (merged #55)                                                  | Active — F1 queue category filters + booking detail/history are implemented; F1 remains partial for full participant/SLA surfaces; F9/F18 partial; F12 room approval queue implemented; booking detail meeting/activity UX refined 2026-08-22 |
+| `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/f1-admin-surface` (follow-up)                                                    | Active — F1 admin workspace, hydrated participant wallet/ledger detail, and OQ-04 SLA projection are complete; F9/F18 remain partial; F12 room approval queue implemented |
 | `docs/plans/completed/ECONOMY-RATE-CONTROL.md`                    | main                                                                                | Completed 2026-08-22 — admin-managed Cogito take schedule, IDR tutor honoraria, immutable booking snapshots, and all-role economy E2E |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                                                                   | Active — code gaps 1.1–1.8 done (1.4 now 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                                                                                                                                |
 | `docs/plans/completed/REVIEW-FIXES-3.md`                          | main (merged)                                                                       | Merged to main (#59–#65) — all wave-3 PRs landed; G2 (email verification) was deferred and is now **implemented** by REVIEW-FIXES-4 P4.4 (#76)                                                                                                |
@@ -411,7 +411,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 8. Review Fixes 2 (REVIEW-FIXES-2.md) → merged to main (#50–#57)
 9. Review Fixes 3 (REVIEW-FIXES-3.md — PRs #59–#65) → merged to main
 10. Review Fixes 4 (REVIEW-FIXES-4.md — docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud guards, G2 email verification) → **completed (merged via #68–#70, #75–#76)**
-11. Frontend Gaps (FRONTEND-GAPS-SPEC — F8/F13/F14/F16 closed by wave-3 P6; F2/F3/F6/F7/F11/F17 closed by merged #55; F12 room approval queue implemented; F1/F9/F18 partial) → after / parallel with #10
+11. Frontend Gaps (FRONTEND-GAPS-SPEC — F1/F8/F13/F14/F16 closed; F2/F3/F6/F7/F11/F17 closed by merged #55; F12 room approval queue implemented; F9/F18 partial) → after / parallel with #10
 12. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
@@ -439,7 +439,7 @@ Tutor booking review uses a compact responsive accept/decline dialog. The accept
 
 Booking cancellation and session completion also use in-app Selia confirmation dialogs. Global success/error toasts render above dialog layers so mutation feedback remains visible while a modal is open; native browser confirmation prompts are not used.
 
-**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject UI (F7), lateness/no-show reporting UI (F3), and public achievements (F16) remain open. Backend support for reschedule accept/reject and lateness/no-show reporting (G1/G6) has landed. The notification center, Knowledge Bank gating UX, email verification, and session-expiry warning are implemented. (2026-08-22: J2 session-expiry UX now warns during the final 30 minutes and retains the existing 401 redirect; remaining open items are tracked in FRONTEND-GAPS-SPEC: F1/F9/F12/F18 partial.)
+**Not full PRD complete:** group/series booking UI, invite confirmation/decline/reconfirmation UI, reschedule accept/reject UI (F7), lateness/no-show reporting UI (F3), and public achievements (F16) remain open. Backend support for reschedule accept/reject and lateness/no-show reporting (G1/G6) has landed. The notification center, Knowledge Bank gating UX, email verification, and session-expiry warning are implemented. (2026-08-22: J2 session-expiry UX now warns during the final 30 minutes and retains the existing 401 redirect; remaining open items are tracked in FRONTEND-GAPS-SPEC: F9/F18 partial.)
 
 ### Tutor
 
@@ -457,7 +457,7 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 
 Backend is ready for user role management, tutor invite/review, achievement moderation, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, refund corrections, and the active economy schedule. The /admin-economy screen lets admins edit the four Cogito take fields in Rp 5,000 increments with optimistic versioning; updates are audit-logged and apply only to future/new repricing snapshots. Achievement moderation remains the safest next Admin UI quick win.
 
-The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin operations UI now also provides category filtering plus a booking-detail/history dialog backed by `adminBooking.getBookingStateHistory`, and the Rooms tab has a dedicated `room.listPendingApprovals` queue with assign/choose-another/cancel actions; F1 remains partial for a dedicated `/admin` route, fully hydrated participant/per-wallet detail, and business-hours SLA presentation. F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8).
+The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin workspace is now available at `/admin`; its operations queue provides category/urgency/SLA filters, OQ-04 business-hours deadlines, escalation status/channel, and report context, while booking detail loads the full participant read model plus per-wallet balances and booking-scoped ledger entries. The Rooms tab has a dedicated `room.listPendingApprovals` queue with assign/choose-another/cancel actions. F1/F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8).
 
 ### Backend Gap Groups
 
@@ -470,7 +470,7 @@ The admin override queue, wallet/ledger view, override preview, room assignment 
 2. Complete Student series booking UI and its booking detail/session presentation.
 3. Complete group invite accept/decline and reconfirmation UI; group creation and debounced student lookup are implemented.
 4. Keep achievement moderation/public surfacing at the end of the frontend queue.
-5. Admin booking override and offline-room UI (F1/F2/F11/F12) — backend landed (G8–G10, G13–G14); F2/F11/F12 implemented, F1 now has queue filters + detail/history but remains partial for full participant/SLA surfaces.
+5. Admin booking override and offline-room UI (F1/F2/F11/F12) — backend landed (G8–G10, G13–G14); F1/F2/F11/F12 implemented, including the dedicated admin workspace, hydrated participant wallet/ledger detail, and OQ-04 SLA projection.
 
 ## Known Bugs
 

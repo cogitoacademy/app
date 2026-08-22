@@ -112,7 +112,7 @@ describe("Admin override queue (G8)", () => {
     expect(order.length).toBe(4);
   });
 
-  test("escalated flag is true for stale override requests (overriddenAt older than 12h)", async () => {
+  test("escalated flag is true after the OQ-04 SLA deadline", async () => {
     const staleId = (await insertBooking(tutorId, studentId, {
       currentState: "confirmed",
       scheduledStartAt: new Date(Date.now() + 6 * 3600_000),
