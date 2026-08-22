@@ -83,6 +83,7 @@ type SubjectSelectorProps = {
   selectedSubjects?: TutorSubject[] | null;
   onChange: (subjectIds: string[]) => void;
   error?: string;
+  triggerId?: string;
 };
 
 export function SubjectSelector({
@@ -90,6 +91,7 @@ export function SubjectSelector({
   selectedSubjects,
   onChange,
   error,
+  triggerId,
 }: SubjectSelectorProps) {
   const { data: categories, isPending, isError } = useSubjectTaxonomy();
   const [categoryId, setCategoryId] = useState("");
@@ -126,6 +128,19 @@ export function SubjectSelector({
   const activeCategory = categories.find(
     (category) => category.id === activeCategoryId,
   );
+  const categoryValues = useMemo(
+    () =>
+      new Map(
+        categories.map((category) => [
+          category.id,
+          { value: category.id, label: category.name },
+        ]),
+      ),
+    [categories],
+  );
+  const selectedCategoryValue = activeCategory
+    ? (categoryValues.get(activeCategory.id) ?? null)
+    : null;
 
   function toggleSubject(subjectId: string) {
     if (selectedIds.includes(subjectId)) {
@@ -159,18 +174,21 @@ export function SubjectSelector({
       )}
 
       <Select
-        value={categoryId}
+        value={selectedCategoryValue}
         onValueChange={(value) =>
           setCategoryId(getSelectItemValue(value) ?? "")
         }
       >
-        <SelectTrigger aria-label="Mother category">
+        <SelectTrigger id={triggerId} aria-label="Subject category">
           <SelectValue placeholder="Choose a mother category" />
         </SelectTrigger>
         <SelectPopup>
           <SelectList>
             {categories.map((category) => (
-              <SelectItem key={category.id} value={category.id}>
+              <SelectItem
+                key={category.id}
+                value={categoryValues.get(category.id)}
+              >
                 {category.name}
               </SelectItem>
             ))}

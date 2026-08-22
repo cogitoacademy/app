@@ -27,7 +27,11 @@ With seeded student, tutor, and admin sessions, open `/bookings` and verify the 
 
 ### Tutor subject taxonomy smoke check
 
-Open `/onboarding` as a tutor and verify the subject selector loads active mother categories and their child subjects from `tutors.listSubjects`. Select at least one child subject, save a draft, and confirm the selected subjects reload with the profile. A submission with no child subject must be blocked; published tutor discovery should expose the selected subjects and allow students to filter by mother category or child subject.
+Open `/onboarding` as a tutor and verify the subject selector loads active mother categories and their child subjects from `tutors.listSubjects`. After choosing a mother category, the selector trigger must show its human-readable name rather than the category UUID. Select at least one child subject, save a draft, and confirm the selected subjects reload with the profile. A submission with no child subject must be blocked; published tutor discovery should expose the selected subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values.
+
+### Profile UX smoke check
+
+Open `/profile` as a student and `/onboarding` as a tutor at desktop and narrow widths. Verify the account card shows the current name, profile image (or initials), and read-only sign-in email; changing the name or image enables only the account save action. On the student page, learning and parent/guardian fields use separate sections with one learning-profile save action. On the tutor page, profile status and review feedback remain visible, fields are grouped into public profile/teaching setup/availability sections, and the sticky action area offers draft save plus submit-for-review only when the profile is editable. Confirm the browser console has no runtime errors and that no profile API contract changes are required.
 
 The authenticated shell shows a session-expiry warning during the final 30 minutes of Better Auth's seven-day session. The warning includes a sign-in-again action; an API `401` remains the fallback redirect for expired sessions.
 

@@ -17,6 +17,12 @@ The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This
 
 Tutor onboarding now uses the normalized mother-category/child-subject selector exposed by `tutors.listSubjects`. Tutors must select at least one child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
+The onboarding and tutor-list selectors store normalized IDs/values for submission or filtering but render human-readable labels in their triggers, so backend UUIDs remain hidden from users.
+
+### Profile UX follow-up (2026-08-22)
+
+The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
+
 ### Shared booking list follow-up (2026-08-22)
 
 The booking list is now one role-aware surface at `/_app/bookings`. Students,
@@ -55,8 +61,8 @@ for classmates.
 | `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                          |
 | `/_app/tutors/$tutorId/book` | create-booking-page.tsx         | Exists (solo/group/series creation)                                                              |
 | `/_app/achievements`         | achivements-page.tsx            | Exists (submission + list)                                                                       |
-| `/_app/profile`              | profile-page.tsx                | Complete — student account name/photo plus learning and parent contact fields                    |
-| `/_app/onboarding`           | onboarding-form.tsx             | Exists (tutor onboarding)                                                                        |
+| `/_app/profile`              | profile-page.tsx                | Complete — responsive account identity, completion indicator, learning profile, and parent/guardian sections |
+| `/_app/onboarding`           | onboarding-form.tsx             | Complete baseline — responsive tutor profile sections, visible review status/feedback, pricing grid, and consolidated actions |
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Compatibility redirect to the shared `/bookings` list                                             |
 | `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview |
 | `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                               |

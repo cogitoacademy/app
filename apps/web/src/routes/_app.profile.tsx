@@ -14,7 +14,16 @@ export const Route = createFileRoute("/_app/profile")({
 });
 
 function RouteComponent() {
+  const { session } = Route.useRouteContext();
   const { profile, user, isLoading } = useRole();
+  const sessionUser = session.data?.user as CogitoUser | undefined;
+  const profileUser = user
+    ? {
+        name: user.name || sessionUser?.name || "",
+        email: user.email || sessionUser?.email || "",
+        image: user.image ?? sessionUser?.image ?? null,
+      }
+    : sessionUser;
   const profileRecord: Record<string, string | null | undefined> | undefined =
     profile
       ? Object.fromEntries(
@@ -26,6 +35,10 @@ function RouteComponent() {
       : undefined;
 
   return (
-    <ProfilePage profile={profileRecord} user={user} isLoading={isLoading} />
+    <ProfilePage
+      profile={profileRecord}
+      user={profileUser}
+      isLoading={isLoading}
+    />
   );
 }

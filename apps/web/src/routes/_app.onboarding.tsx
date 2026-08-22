@@ -1,6 +1,12 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import type { CogitoUser } from "@cogito-app/auth";
+import {
+  Card,
+  CardBody,
+  CardDescription,
+  CardTitle,
+} from "@cogito-app/ui/components/selia/card";
 import { orpc } from "@/utils/orpc";
 import { OnboardingForm } from "@/components/tutor/onboarding-form";
 import Loader from "@/components/loader";
@@ -27,30 +33,30 @@ function RouteComponent() {
   if (isLoading) return <Loader />;
   if (error || !profile) {
     return (
-      <div className="p-8 text-center">
-        <p className="text-muted">
-          No tutor profile found. You may need to claim a tutor invitation
-          first.
-        </p>
-      </div>
+      <Card className="mx-auto w-full max-w-2xl">
+        <CardBody className="flex flex-col items-center gap-2 text-center">
+          <CardTitle>Tutor profile unavailable</CardTitle>
+          <CardDescription>
+            No tutor profile found. You may need to claim a tutor invitation
+            first.
+          </CardDescription>
+        </CardBody>
+      </Card>
     );
   }
 
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">My Tutor Profile</h1>
-      <OnboardingForm
-        accountUser={{
-          name: user.name,
-          email: user.email,
-          image: user.image,
-        }}
-        profile={{
-          ...profile,
-          expertise: profile.expertise ?? [],
-          proofUrls: profile.proofUrls ?? [],
-        }}
-      />
-    </div>
+    <OnboardingForm
+      accountUser={{
+        name: user.name,
+        email: user.email,
+        image: user.image,
+      }}
+      profile={{
+        ...profile,
+        expertise: profile.expertise ?? [],
+        proofUrls: profile.proofUrls ?? [],
+      }}
+    />
   );
 }

@@ -1,6 +1,10 @@
 "use client";
 
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
@@ -33,46 +37,55 @@ export function TutorPricingFields({
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <Text className="font-medium">
-        Session prices (Marks per student for each group size)
-      </Text>
-      {[1, 2, 3, 4, 5, 6].map((size) => {
-        const key = String(size);
-        const floor = minPrice(key);
-        return (
-          <Field key={key}>
-            <FieldLabel>
-              Class for {size} — minimum {floor} Marks
-            </FieldLabel>
-            <Input
-              type="number"
-              min={floor}
-              value={prices[key] ?? ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === "") {
-                  const next = { ...prices };
-                  delete next[key];
-                  onChange(next);
-                } else {
-                  const num = parseInt(val, 10);
-                  if (!isNaN(num) && num >= 0) {
-                    onChange({ ...prices, [key]: num });
+    <div className="flex flex-col gap-4">
+      <div>
+        <Text className="font-medium">Session prices</Text>
+        <Text className="mt-1 text-sm text-muted">
+          Set the Marks charged per student for each group size. Prices cannot
+          be lower than the recommended minimum.
+        </Text>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3, 4, 5, 6].map((size) => {
+          const key = String(size);
+          const floor = minPrice(key);
+          return (
+            <Field key={key}>
+              <FieldLabel htmlFor={`tutor-price-${key}`}>
+                Group of {size}
+              </FieldLabel>
+              <Input
+                id={`tutor-price-${key}`}
+                name={`price-${key}`}
+                type="number"
+                min={floor}
+                value={prices[key] ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === "") {
+                    const next = { ...prices };
+                    delete next[key];
+                    onChange(next);
+                  } else {
+                    const number = parseInt(value, 10);
+                    if (!Number.isNaN(number) && number >= 0) {
+                      onChange({ ...prices, [key]: number });
+                    }
                   }
-                }
-                if (errors.prices) {
-                  // parent should clear this — we just fire onChange
-                }
-              }}
-              placeholder={String(floor)}
-            />
-          </Field>
-        );
-      })}
-      {errors.prices && (
-        <Text className="text-sm text-danger">{errors.prices}</Text>
-      )}
+                }}
+                placeholder={String(floor)}
+                aria-invalid={Boolean(errors.prices)}
+              />
+              <FieldDescription>Minimum {floor} Marks/student</FieldDescription>
+            </Field>
+          );
+        })}
+      </div>
+      {errors.prices ? (
+        <Text className="text-sm text-danger" role="alert">
+          {errors.prices}
+        </Text>
+      ) : null}
     </div>
   );
 }

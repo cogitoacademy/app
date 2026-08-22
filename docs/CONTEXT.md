@@ -408,6 +408,8 @@ Use this section as the current role-readiness baseline. Re-audit only after the
 
 The student My Profile surface supports self-service account name and profile-image updates through Better Auth, alongside learning/contact fields. The sign-in email remains read-only on this page. Student identity edits do not require admin review.
 
+Student profile UX is organized as a responsive account-identity card plus separate learning and parent/guardian sections. The page shows profile completion, keeps account identity saving separate from learning-profile saving, and uses one visible save action for the learning fields.
+
 **Primary promotion flow is ready:** email/password auth -> tutor discovery -> solo booking -> Marks hold -> booking list/detail -> cancellation. Profile, balance/top-up, basic achievements, notification bell, calendar export, and WhatsApp contact surfaces are also present.
 
 Booking detail uses a task-detail layout shared by student and tutor views: a compact identity-and-status header, a single primary content flow for schedule, session actions, and activity, and a sticky metadata rail for session access, Marks, and participants. All existing lifecycle actions and data remain available without changing the booking API.
@@ -424,7 +426,9 @@ The tutor workspace now has the primary management surfaces: tutor-only onboardi
 
 Published tutor profiles remain editable. Bio and availability-summary edits publish immediately; trust-sensitive edits are held in `pendingProfileChanges` with a separate edit-review status, so discovery continues serving the last approved profile until an admin approves the proposal or requests revisions.
 
-Tutor subjects are normalized in `subject_category` (self-referencing mother/child hierarchy) and `tutor_profile_subject` (profile-to-child join). The legacy `expertise` array remains readable for compatibility, while onboarding and published discovery use normalized child subjects. Subject changes on a published profile follow the existing pending-review path and are applied atomically when an admin approves the edit.
+Tutor onboarding uses the same account-identity card as the student profile, then groups public profile, teaching setup, and availability/proof fields into responsive sections. Profile status and admin feedback stay visible above the form, while draft/save and submit-for-review actions are consolidated into one sticky action area. These are UI-only changes; the existing tutor profile and Better Auth mutations remain unchanged.
+
+Tutor subjects are normalized in `subject_category` (self-referencing mother/child hierarchy) and `tutor_profile_subject` (profile-to-child join). The legacy `expertise` array remains readable for compatibility, while onboarding and published discovery use normalized child subjects. Subject changes on a published profile follow the existing pending-review path and are applied atomically when an admin approves the edit. The onboarding category selector and student tutor-list filters keep UUIDs as submission/query values but render human-readable labels; raw subject IDs should never be shown to tutors or students.
 
 The primary Tutor E2E flow has been manually verified with seeded accounts, including availability, incoming booking review, Google Meet link creation, student notification/state, and completion. Tutor reschedule, session notes, payout, and individual series completion are now backend-ready (G6/G7/G16/G18); their UI is tracked in FRONTEND-GAPS-SPEC (F6/F7/F9/F13/F8 — F6/F7/F8/F13 closed, F9 partial). Lateness/no-show support is backend-ready via `support.createTicket` (G1) with the report UI implemented (F3, merged #55).
 
