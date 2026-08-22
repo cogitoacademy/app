@@ -2,10 +2,10 @@
 
 | Field      | Value                                                                                                                                                     |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-19; F8/F13/F14/F16 closed by REVIEW-FIXES-3 P6; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F1/F9/F12/F18 partial) |
+| Status     | Living gap inventory (updated 2026-08-22; F8/F13/F14/F16 closed by REVIEW-FIXES-3 P6; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F1/F9/F12/F18 partial) |
 | Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                        |
 | Created    | 2026-07-29                                                                                                                                                |
-| Audited    | 2026-08-19                                                                                                                                                |
+| Audited    | 2026-08-22                                                                                                                                                |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                             |
 | Scope      | Frontend only (`apps/web/`)                                                                                                                               |
 
@@ -43,7 +43,7 @@ for classmates.
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Exists (incoming list + review link)                                                             |
 | `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview |
 | `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                               |
-| `/_app/admin-operations`     | admin-operations-page.tsx       | Partial F1 baseline — booking queue, rooms, and wallet lookup                                    |
+| `/_app/admin-operations`     | admin-operations-page.tsx       | Partial F1 baseline — filtered queue, booking detail/history, override, rooms, and wallet lookup |
 | `/_app/admin-tutors`         | admin tutor invite + review     | Exists                                                                                           |
 | `/_app/admin-achievements`   | achievement-moderation-page.tsx | Exists (moderation UI)                                                                           |
 
@@ -57,7 +57,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 | #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status                         |
 | --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ------------------------------ |
-| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Partial                        |
+| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Partial — detail/history view added; full participant and SLA surface remains |
 | F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed                         |
 | F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed                         |
 | F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed                         |
@@ -84,12 +84,14 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 > **Audit 2026-08-19 (against main `d11962b`):** PR #55 merged (`d4e50e0`). Verified in `apps/web/src`:
 >
+> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the remaining F1 limitations are recorded above.
+>
 > - **F2/F3/F6/F7/F11/F17 → Closed** — override dialog with `previewOverride`/`applyOverride` (`admin-operations-page.tsx`), lateness report via `support.createTicket` (`booking-lifecycle-actions.tsx`), reschedule propose/accept/reject, wallet/ledger lookup tab, booking detail baseline.
 > - **F8 → Closed** — series bookings render a per-session list with per-session "Complete session" buttons calling `completeSession({ bookingId, sessionId })` (`booking-detail-page.tsx`).
 > - **F13 → Closed** — payout card on the tutor dashboard via `tutor.getMyPayouts` (`tutor-dashboard-page.tsx`).
 > - **F14 → Closed** — booking detail renders the backend `disclaimer` in a warning callout (`booking-detail-page.tsx:304`).
 > - **F16 → Closed** — landing page renders live `achievement.listApproved` data with static fallback (`landing-page.tsx:74`).
-> - **F1 → Partial** — admin dashboard + booking queue + override dialog exist, but there is no admin booking-detail view with full state history (`getBookingStateHistory` is not consumed anywhere in `apps/web`).
+> - **F1 → Partial** — admin dashboard + filtered booking queue + override dialog now include a booking-detail/history view backed by `getBookingStateHistory`; the dedicated route, fully hydrated participant/per-wallet detail, and business-hours SLA surface remain open.
 > - **F9 → Partial** — notes list + textarea with server-side sanitized HTML render (`dangerouslySetInnerHTML`); no rich-text toolbar editor and no client-side DOMPurify.
 > - **F12 → Partial** — room assign/relocate/cancel operations exist (`admin-operations-page.tsx` `RoomOperations`), but there is no dedicated `awaiting_admin_room_approval` approval queue.
 > - **F18 → Partial** — invitee confirm/decline/reconfirm wired; **inviter-side `withdraw` UI still missing** (0 references to `withdraw` in `apps/web/src`).
@@ -104,7 +106,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10 (Admin Override), OQ-04 (SLA escalation), prd.tex:717-728
 
-**Current state:** **PARTIAL (2026-08-19).** Admin dashboard (`admin-dashboard-page.tsx`) + booking queue with urgency/escalated filters and an override dialog (`admin-operations-page.tsx`) exist (merged #55). **Still missing:** an admin booking-detail view with full state history — `getBookingStateHistory` is not consumed anywhere in `apps/web`.
+**Current state:** **PARTIAL (2026-08-22).** Admin dashboard (`admin-dashboard-page.tsx`) + booking queue with category, urgency, and escalated filters, an admin booking-detail dialog, and an override dialog exist (`admin-operations-page.tsx`). The detail dialog consumes `adminBooking.getBookingStateHistory` and shows booking context, core participant roles, affected participant IDs from the latest override, booking-level Marks impact, and the full transition timeline. **Still missing:** a dedicated `/admin` route, a fully hydrated participant roster with per-wallet ledger detail, and the PRD’s business-hours SLA deadline presentation/escalation channel.
 
 **Required:**
 

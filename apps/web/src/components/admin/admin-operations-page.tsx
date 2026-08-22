@@ -6,8 +6,11 @@ import {
   IconAlertTriangle,
   IconBuilding,
   IconCalendarEvent,
+  IconClock,
   IconCoins,
+  IconEye,
   IconSearch,
+  IconUsers,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -88,9 +91,14 @@ const MARKS_ACTIONS = [
   "compensate_credit",
   "compensate_deduct",
 ] as const;
+const OVERRIDE_LIST_CATEGORIES = [
+  ...OVERRIDE_CATEGORIES,
+  "tutor_lateness_pending",
+] as const;
 type OverrideCategory = (typeof OVERRIDE_CATEGORIES)[number];
 type MarksAction = (typeof MARKS_ACTIONS)[number];
 type Urgency = "all" | "high" | "medium" | "low";
+type OverrideCategoryFilter = "all" | (typeof OVERRIDE_LIST_CATEGORIES)[number];
 
 export function AdminOperationsPage() {
   return (
@@ -130,11 +138,14 @@ export function AdminOperationsPage() {
 
 function BookingQueue() {
   const queryClient = useQueryClient();
+  const [category, setCategory] = useState<OverrideCategoryFilter>("all");
   const [urgency, setUrgency] = useState<Urgency>("all");
   const [escalatedOnly, setEscalatedOnly] = useState(false);
+  const [details, setDetails] = useState<QueueItem | null>(null);
   const [selected, setSelected] = useState<QueueItem | null>(null);
   const queryInput = {
     limit: 50,
+    ...(category !== "all" ? { category } : {}),
     ...(urgency !== "all" ? { urgency } : {}),
     ...(escalatedOnly ? { escalated: true } : {}),
   };
@@ -146,6 +157,29 @@ function BookingQueue() {
     <Stack direction="column" spacing="md">
       <Card>
         <CardBody className="flex flex-wrap items-end gap-3">
+          <Field className="min-w-56">
+            <FieldLabel>Override category</FieldLabel>
+            <Select
+              value={category}
+              onValueChange={(value) =>
+                setCategory(getSelectItemValue(value) as OverrideCategoryFilter)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectList>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {OVERRIDE_LIST_CATEGORIES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {humanize(value)}
+                    </SelectItem>
+                  ))}
+                </SelectList>
+              </SelectPopup>
+            </Select>
+          </Field>
           <Field className="min-w-48">
             <FieldLabel>Urgency</FieldLabel>
             <Select
@@ -198,6 +232,7 @@ function BookingQueue() {
                     <TableHead>Booking</TableHead>
                     <TableHead>Schedule</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Override</TableHead>
                     <TableHead>Marks</TableHead>
                     <TableHead />
                   </TableRow>
@@ -229,15 +264,35 @@ function BookingQueue() {
                           ) : null}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        {getOverrideCategory(item.overrideMeta) ? (
+                          <Badge variant="secondary">
+                            {humanize(getOverrideCategory(item.overrideMeta)!)}
+                          </Badge>
+                        ) : (
+                          <Text className="text-xs text-muted">
+                            Standard review
+                          </Text>
+                        )}
+                      </TableCell>
                       <TableCell>{item.holdAmount} held</TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setSelected(item)}
-                        >
-                          Review
-                        </Button>
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setDetails(item)}
+                          >
+                            <IconEye /> Details
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="plain"
+                            onClick={() => setSelected(item)}
+                          >
+                            Override
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -256,6 +311,14 @@ function BookingQueue() {
           </CardBody>
         </Card>
       )}
+      <AdminBookingDetailDialog
+        booking={details}
+        onClose={() => setDetails(null)}
+        onOpenOverride={(booking) => {
+          setDetails(null);
+          setSelected(booking);
+        }}
+      />
       <OverrideDialog
         booking={selected}
         onClose={() => setSelected(null)}
@@ -273,6 +336,279 @@ function BookingQueue() {
 type QueueItem = Awaited<
   ReturnType<typeof client.adminBooking.listBookings>
 >["items"][number];
+
+type StateHistoryItem = Awaited<
+  ReturnType<typeof client.adminBooking.getBookingStateHistory>
+>[number];
+
+function AdminBookingDetailDialog({
+  booking,
+  onClose,
+  onOpenOverride,
+}: {
+  booking: QueueItem | null;
+  onClose: () => void;
+  onOpenOverride: (booking: QueueItem) => void;
+}) {
+  const historyQuery = useQuery({
+    ...orpc.adminBooking.getBookingStateHistory.queryOptions({
+      input: { bookingId: booking?.id ?? "" },
+    }),
+    enabled: booking !== null,
+  });
+  const metadata = getOverrideMetadata(booking?.overrideMeta);
+  const affectedParticipants = getStringArray(metadata?.affectedParticipants);
+
+  return (
+    <Dialog open={booking !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogPopup className="max-w-4xl">
+        <DialogHeader className="flex-col items-start gap-1">
+          <DialogTitle>Booking detail</DialogTitle>
+          <DialogDescription className="break-all">
+            {booking?.id} · admin review context
+          </DialogDescription>
+        </DialogHeader>
+        {booking ? (
+          <DialogBody className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={getBookingStateVariant(booking.currentState)}>
+                {getBookingStateLabel(booking.currentState)}
+              </Badge>
+              {booking.escalated ? (
+                <Badge variant="danger">SLA escalated</Badge>
+              ) : null}
+              <Text className="text-sm text-muted">
+                {booking.type} · {booking.modality}
+              </Text>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <AdminMetricCard
+                label="Session"
+                value={formatBookingDate(
+                  booking.scheduledStartAt,
+                  booking.timezone,
+                )}
+              />
+              <AdminMetricCard
+                label="Urgency"
+                value={getUrgencyLabel(booking.currentState)}
+              />
+              <AdminMetricCard
+                label="Confirmation"
+                value={`${booking.confirmedHeadcount} of ${booking.targetGroupSize} confirmed`}
+              />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <IconBox variant="secondary-subtle" size="sm">
+                    <IconUsers />
+                  </IconBox>
+                  <CardTitle>Participants</CardTitle>
+                  <CardDescription>
+                    Core booking roles and the users affected by the latest
+                    admin action.
+                  </CardDescription>
+                </CardHeader>
+                <CardBody className="space-y-3">
+                  <AdminParticipantRow
+                    label="Proposer"
+                    userId={booking.proposerId}
+                  />
+                  <AdminParticipantRow label="Tutor" userId={booking.tutorId} />
+                  {affectedParticipants.length > 0 ? (
+                    <div className="border-t border-border pt-3">
+                      <Text className="text-xs font-medium text-muted">
+                        Affected by latest override
+                      </Text>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {affectedParticipants.map((userId) => (
+                          <Badge key={userId} variant="secondary">
+                            {userId}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <IconBox variant="warning-subtle" size="sm">
+                    <IconCoins />
+                  </IconBox>
+                  <CardTitle>Wallet impact</CardTitle>
+                  <CardDescription>
+                    Booking-level Marks reservation and override context.
+                  </CardDescription>
+                </CardHeader>
+                <CardBody className="space-y-2">
+                  <AdminMetricRow
+                    label="Original reservation"
+                    value={`${booking.originalMarks} Marks`}
+                  />
+                  <AdminMetricRow
+                    label="Currently held"
+                    value={`${booking.holdAmount} Marks`}
+                  />
+                  <AdminMetricRow
+                    label="Refunded"
+                    value={`${booking.refundedAmount} Marks`}
+                  />
+                  <AdminMetricRow
+                    label="Latest Marks action"
+                    value={
+                      typeof metadata?.marksAction === "string"
+                        ? humanize(metadata.marksAction)
+                        : "No override action"
+                    }
+                  />
+                </CardBody>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <IconBox variant="info-subtle" size="sm">
+                  <IconClock />
+                </IconBox>
+                <CardTitle>State history</CardTitle>
+                <CardDescription>
+                  Every recorded transition, oldest first.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="px-6 py-2">
+                {historyQuery.isPending ? (
+                  <Text className="py-4 text-muted">
+                    Loading state history…
+                  </Text>
+                ) : historyQuery.isError ? (
+                  <div className="py-4">
+                    <Text>
+                      {historyQuery.error instanceof Error
+                        ? historyQuery.error.message
+                        : "State history could not be loaded."}
+                    </Text>
+                    <Button
+                      className="mt-3"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void historyQuery.refetch()}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                ) : historyQuery.data.length > 0 ? (
+                  <div className="divide-y divide-border">
+                    {historyQuery.data.map((entry) => (
+                      <AdminHistoryRow
+                        key={entry.id}
+                        entry={entry}
+                        timezone={booking.timezone}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <Text className="py-4 text-muted">
+                    No state transitions recorded yet.
+                  </Text>
+                )}
+              </CardBody>
+            </Card>
+          </DialogBody>
+        ) : null}
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+          {booking ? (
+            <Button onClick={() => onOpenOverride(booking)}>
+              Open override
+            </Button>
+          ) : null}
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
+function AdminMetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card>
+      <CardBody className="space-y-1">
+        <Text className="text-xs text-muted">{label}</Text>
+        <Text className="font-medium">{value}</Text>
+      </CardBody>
+    </Card>
+  );
+}
+
+function AdminMetricRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border pb-2 last:border-b-0 last:pb-0">
+      <Text className="text-sm text-muted">{label}</Text>
+      <Text className="text-right text-sm font-medium">{value}</Text>
+    </div>
+  );
+}
+
+function AdminParticipantRow({
+  label,
+  userId,
+}: {
+  label: string;
+  userId: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <Text className="text-sm text-muted">{label}</Text>
+      <Text className="break-all text-right font-mono text-xs">{userId}</Text>
+    </div>
+  );
+}
+
+function AdminHistoryRow({
+  entry,
+  timezone,
+}: {
+  entry: StateHistoryItem;
+  timezone: string;
+}) {
+  return (
+    <div className="relative flex gap-3 py-4">
+      <IconBox variant="secondary-subtle" size="sm">
+        <IconClock />
+      </IconBox>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <Text className="font-medium">
+              {entry.fromState
+                ? `${getBookingStateLabel(entry.fromState)} → `
+                : "Created → "}
+              {getBookingStateLabel(entry.toState)}
+            </Text>
+            <Badge variant="secondary">{humanize(entry.actorType)}</Badge>
+          </div>
+          <Text className="text-xs text-dimmed">
+            {formatBookingDate(entry.createdAt, timezone)}
+          </Text>
+        </div>
+        <Text className="mt-1 break-words text-sm text-muted">
+          {entry.reason ?? `Updated by ${humanize(entry.actorType)}`}
+        </Text>
+        {entry.actorId ? (
+          <Text className="mt-1 break-all font-mono text-xs text-dimmed">
+            Actor: {entry.actorId}
+          </Text>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 function OverrideDialog({
   booking,
@@ -768,6 +1104,35 @@ function ErrorCard({
       </CardBody>
     </Card>
   );
+}
+function getOverrideMetadata(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+function getOverrideCategory(value: unknown) {
+  const category = getOverrideMetadata(value)?.category;
+  return typeof category === "string" ? category : null;
+}
+function getStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+function getUrgencyLabel(state: string) {
+  if (
+    [
+      "awaiting_tutor_review",
+      "awaiting_participant_confirmation",
+      "awaiting_reconfirmation",
+      "reschedule_proposed",
+      "awaiting_admin_room_approval",
+    ].includes(state)
+  ) {
+    return "High";
+  }
+  if (["confirmed", "scheduled"].includes(state)) return "Medium";
+  return "Low";
 }
 function humanize(value: string) {
   return value

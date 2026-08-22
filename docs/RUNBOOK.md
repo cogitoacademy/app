@@ -16,7 +16,7 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations.
 - Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/tutor-bookings`, `/availability`, and `/onboarding`.
-- Admin: priority operations and moderation counts; actions link to `/admin-operations`, `/admin-tutors`, and `/admin-achievements`.
+- Admin: priority operations and moderation counts; actions link to `/admin-operations`, `/admin-tutors`, and `/admin-achievements`. In `/admin-operations`, verify the booking queue filters, open a queue item’s detail view, confirm its state-history timeline loads, and use **Open override** to reach the existing preview/apply flow.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
 

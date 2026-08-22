@@ -92,7 +92,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — override queue with urgency, before/after override preview, state history, and admin refunds.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency, booking detail/history review, before/after override preview, state history, and admin refunds.
 
 **Files:**
 

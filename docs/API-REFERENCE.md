@@ -727,7 +727,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ bookingId }`
 - **Output:** `{ items: BookingStateHistory[] }`
-- **Description:** Returns full state transition history for a booking
+- **Description:** Returns full state transition history for a booking. The admin operations detail view uses this procedure to render the chronological review timeline.
 
 ### `adminBooking.adminRefund`
 
