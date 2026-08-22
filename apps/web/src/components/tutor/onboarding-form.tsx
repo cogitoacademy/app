@@ -17,7 +17,6 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import {
   Field,
   FieldDescription,
@@ -39,18 +38,7 @@ import { IconPhoto, IconUser } from "@tabler/icons-react";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
-
-const EXPERTISE_OPTIONS = [
-  "Mathematics",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "Computer Science",
-  "Economics",
-  "English",
-  "History",
-  "Other",
-];
+import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
 
 type Modality = "online" | "offline" | "both";
 
@@ -66,6 +54,7 @@ interface OnboardingFormProps {
     shortBio: string | null;
     credentialsSummary: string | null;
     expertise: string[];
+    subjects?: TutorSubject[] | null;
     modality: string | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
@@ -76,6 +65,7 @@ interface OnboardingFormProps {
       displayName: string;
       credentialsSummary: string;
       expertise: string[];
+      subjectIds: string[];
       modality: Modality;
       prices: Record<string, number>;
       proofUrls: string[];
@@ -101,6 +91,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     credentialsSummary:
       pending.credentialsSummary ?? profile.credentialsSummary ?? "",
     expertise: pending.expertise ?? profile.expertise ?? [],
+    subjectIds:
+      pending.subjectIds ??
+      profile.subjects?.map((subject) => subject.id) ??
+      [],
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
     prices: pending.prices ?? (profile.prices as Record<string, number>) ?? {},
     availabilitySummary: profile.availabilitySummary ?? "",
@@ -203,6 +197,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       shortBio?: string;
       credentialsSummary?: string;
       expertise?: string[];
+      subjectIds?: string[];
       modality?: Modality;
       prices?: Record<string, number>;
       availabilitySummary?: string;
@@ -213,6 +208,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (form.credentialsSummary)
       payload.credentialsSummary = form.credentialsSummary;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
+    if (form.subjectIds.length > 0) payload.subjectIds = form.subjectIds;
     if (form.modality) payload.modality = form.modality;
     if (form.prices && Object.keys(form.prices).length > 0) {
       const cleanPrices = Object.fromEntries(
@@ -233,8 +229,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (!form.credentialsSummary)
       validationErrors.credentialsSummary = "Required";
     if (!form.modality) validationErrors.modality = "Required";
-    if (form.expertise.length === 0)
-      validationErrors.expertise = "Select at least one";
+    if (form.subjectIds.length === 0)
+      validationErrors.subjects = "Select at least one child subject";
     if (!form.prices || Object.keys(form.prices).length === 0)
       validationErrors.prices = "Required";
 
@@ -253,17 +249,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     } catch {
       // handled by mutation callbacks
     }
-  }
-
-  function addExpertise(item: string) {
-    if (!form.expertise.includes(item)) {
-      setForm({ ...form, expertise: [...form.expertise, item] });
-      clearError("expertise");
-    }
-  }
-
-  function removeExpertise(item: string) {
-    setForm({ ...form, expertise: form.expertise.filter((e) => e !== item) });
   }
 
   function addProofUrl() {
@@ -455,33 +440,20 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               </Field>
 
               <Field>
-                <FieldLabel>Expertise / Competition Tracks *</FieldLabel>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {form.expertise.map((item) => (
-                    <Chip key={item}>
-                      {item}
-                      <ChipButton onClick={() => removeExpertise(item)}>
-                        ×
-                      </ChipButton>
-                    </Chip>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {EXPERTISE_OPTIONS.filter(
-                    (opt) => !form.expertise.includes(opt),
-                  ).map((opt) => (
-                    <Chip
-                      key={opt}
-                      variant="outline"
-                      onClick={() => addExpertise(opt)}
-                    >
-                      + {opt}
-                    </Chip>
-                  ))}
-                </div>
-                {errors.expertise && (
-                  <FieldError>{errors.expertise}</FieldError>
-                )}
+                <FieldLabel>Subjects / Competition Tracks *</FieldLabel>
+                <FieldDescription>
+                  Choose one or more child subjects. Students will use these
+                  categories to find your profile.
+                </FieldDescription>
+                <SubjectSelector
+                  selectedIds={form.subjectIds}
+                  selectedSubjects={profile.subjects}
+                  onChange={(subjectIds) => {
+                    setForm({ ...form, subjectIds });
+                    clearError("subjects");
+                  }}
+                  error={errors.subjects}
+                />
               </Field>
 
               <div className="flex justify-end">

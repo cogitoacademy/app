@@ -18,6 +18,7 @@ import {
   ItemMeta,
   ItemTitle,
 } from "@cogito-app/ui/components/selia/item";
+import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -46,6 +47,7 @@ export type TutorSummaryData = {
   displayName: string | null;
   shortBio: string | null;
   expertise: string[];
+  subjects?: TutorSubject[] | null;
   modality: string | null;
   prices?: Record<string, number> | null;
   user: { name: string | null; image: string | null } | null;
@@ -67,6 +69,15 @@ export function TutorSummary({
   const startingPrice = tutor.prices
     ? Math.min(...Object.values(tutor.prices))
     : null;
+  const subjectLabels = groupTutorSubjects(
+    tutor.subjects,
+    tutor.expertise,
+  ).flatMap((group) =>
+    group.children.map((child) => ({
+      id: child.id,
+      label: group.parent ? `${group.parent.name}: ${child.name}` : child.name,
+    })),
+  );
 
   return (
     <Item className="items-center border-0 bg-transparent p-0!" size="lg">
@@ -92,14 +103,14 @@ export function TutorSummary({
           {tutor.shortBio ?? "A verified Cogito tutor ready to help you learn."}
         </ItemDescription>
         <ItemMeta className="mt-2 flex flex-wrap gap-1.5">
-          {tutor.expertise.slice(0, 3).map((expertise) => (
-            <Badge key={expertise} variant="tertiary" size="sm">
-              {expertise}
+          {subjectLabels.slice(0, 3).map((subject) => (
+            <Badge key={subject.id} variant="tertiary" size="sm">
+              {subject.label}
             </Badge>
           ))}
-          {tutor.expertise.length > 3 && (
+          {subjectLabels.length > 3 && (
             <Badge variant="secondary" size="sm">
-              +{tutor.expertise.length - 3}
+              +{subjectLabels.length - 3}
             </Badge>
           )}
           {startingPrice !== null && (

@@ -23,6 +23,7 @@ import {
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { IconX } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
+import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -54,6 +55,7 @@ type TutorDrawerProps = {
     shortBio: string | null;
     credentialsSummary: string | null;
     expertise: string[];
+    subjects?: TutorSubject[] | null;
     modality: string | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
@@ -78,6 +80,10 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
   const prices = selectedTutor.prices ?? {};
   const priceEntries = Object.entries(prices).toSorted(
     ([a], [b]) => Number(a) - Number(b),
+  );
+  const subjectGroups = groupTutorSubjects(
+    selectedTutor.subjects,
+    selectedTutor.expertise,
   );
 
   return (
@@ -115,16 +121,27 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               </div>
             )}
 
-            {t.expertise && t.expertise.length > 0 && (
+            {subjectGroups.length > 0 && (
               <div className="mb-4">
                 <Heading size="sm" className="mb-2">
-                  Expertise
+                  Subjects
                 </Heading>
-                <div className="flex flex-wrap gap-1.5">
-                  {t.expertise.map((e) => (
-                    <Badge key={e} variant="secondary" size="sm">
-                      {e}
-                    </Badge>
+                <div className="flex flex-col gap-2">
+                  {subjectGroups.map((group) => (
+                    <div key={group.parent?.id ?? group.children[0]?.id}>
+                      {group.parent && (
+                        <Text className="mb-1 text-sm font-medium">
+                          {group.parent.name}
+                        </Text>
+                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {group.children.map((subject) => (
+                          <Badge key={subject.id} variant="secondary" size="sm">
+                            {subject.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
