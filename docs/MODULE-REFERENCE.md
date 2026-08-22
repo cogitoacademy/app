@@ -67,7 +67,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 - `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminUpdateEconomySettingsInput`
 - `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`
-- `admin.repo.ts` — `findUserById`, `listUsers`, `updateUserRole`
+- `admin.repo.ts` — `findUserById`, `listUsers`, `listUserIdsByRole`, `updateUserRole`
 - `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
 - `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
@@ -80,9 +80,9 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
 - `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
 - `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
-- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only
+- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; fan-outs one durable in-app rate-change notification to every current tutor, while identical values return the current config without a write
 
-**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`
+**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`, `NotificationPort`
 
 **Business Rules:**
 
@@ -92,6 +92,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - Economy writes require the current `version`; stale writes fail with `ECONOMY_CONFIG_CONFLICT`
 - Economy base and increment values are validated in Rp 5,000 increments; increments are non-negative
 - Existing booking price snapshots are immutable when the active schedule changes
+- Rate-change notifications are in-app system notifications for all users whose current role is `tutor`; event keys are unique per economy version and tutor
+- Re-saving the same four schedule values is a no-op and does not increment the economy version, write audit, or fan out notifications
 
 ---
 

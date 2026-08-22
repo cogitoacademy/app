@@ -28,6 +28,9 @@ and online/offline Cogito take schedule are visible. Change a Cogito base or inc
 by a valid Rp 5,000 step, save, reload, and verify the version increments and the
 preview for class sizes 1–6 changes. The save is optimistic-lock protected and affects
 only future booking/repricing snapshots; existing booking snapshots must remain unchanged.
+After a successful change, verify a `Cogito rate updated` in-app notification appears
+for every current tutor. Re-saving the same values should not increment the version,
+add an audit row, or create another notification.
 As a student or tutor, opening `/admin-economy` must redirect away and direct
 `admin.getEconomySettings`/update calls must return FORBIDDEN.
 

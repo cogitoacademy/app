@@ -166,6 +166,9 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - New tutor profiles store IDR base honoraria. Tutor discovery and booking
   creation derive the current Marks price from the active economy config, while
   every new booking stores an immutable economy version and IDR/Marks snapshot.
+  Admin Cogito take changes affect future booking snapshots only and send one
+  durable in-app system notification to every current tutor; identical saves
+  are no-ops.
   Existing profiles/bookings that still use the legacy Marks map remain readable
   during migration.
 
@@ -196,6 +199,8 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 ### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status + profile_edit_status; keeps approved public values separate from pending reviewed edits; stores IDR base honoraria in `base_rates_idr`
 
 ### `economyConfig` (economy-config.ts) — singleton active Marks value, IDR tutor honorarium parameters, and admin-managed Cogito take schedule
+
+### `notification` (notification.ts) — durable in-app notifications; economy schedule changes use a per-version/per-tutor event key and the `system` category
 
 ### `availabilitySlot` (availability-slot.ts) — tutor availability windows (one-time + weekly-generated)
 
