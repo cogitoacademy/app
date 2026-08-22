@@ -36,6 +36,8 @@ read-only; admin mutations remain in the operations console. Marks values use
 the Cogito mark icon as a prefix, and visible status badges reveal the state
 explanation on hover or keyboard focus.
 
+The shared booking list orders active/all rows by the nearest scheduled start while keeping past/cancelled history newest-first. Defaults are role-aware: students see Upcoming, tutors see Pending when requests exist (or Upcoming otherwise), and admins see All; an explicit `tab` query parameter wins.
+
 ---
 
 ## Current Frontend State

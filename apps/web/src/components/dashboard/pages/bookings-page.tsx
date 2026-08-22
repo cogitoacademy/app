@@ -96,7 +96,7 @@ const COGITO_MARK_SRC = "/cogito-mark.png";
 export function BookingsPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { tab?: BookingTab };
-  const activeTab = isBookingTab(search.tab) ? search.tab : "upcoming";
+  const requestedTab = isBookingTab(search.tab) ? search.tab : undefined;
   const { role, isLoading: isRoleLoading } = useRole();
   const bookingsQuery = useQuery(
     orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
@@ -108,14 +108,15 @@ export function BookingsPage() {
   );
   const now = Date.now();
   const tabCounts = useMemo(() => getTabCounts(bookings, now), [bookings, now]);
+  const activeTab =
+    requestedTab ??
+    getDefaultBookingTab(isRoleLoading ? undefined : role, tabCounts.pending);
   const visibleBookings = useMemo(
     () =>
       getBookingsForTab(bookings, activeTab, now).toSorted((left, right) => {
         const leftTime = new Date(left.scheduledStartAt).getTime();
         const rightTime = new Date(right.scheduledStartAt).getTime();
-        return activeTab === "past" ||
-          activeTab === "cancelled" ||
-          activeTab === "all"
+        return activeTab === "past" || activeTab === "cancelled"
           ? rightTime - leftTime
           : leftTime - rightTime;
       }),
@@ -492,6 +493,15 @@ function getTabCounts(bookings: BookingListItem[], now: number) {
       getBookingsForTab(bookings, value, now).length,
     ]),
   ) as Record<BookingTab, number>;
+}
+
+function getDefaultBookingTab(
+  role: string | undefined,
+  pendingCount: number,
+): BookingTab {
+  if (role === "admin") return "all";
+  if (role === "tutor" && pendingCount > 0) return "pending";
+  return "upcoming";
 }
 
 function groupBookingsByMonth(bookings: BookingListItem[]) {
