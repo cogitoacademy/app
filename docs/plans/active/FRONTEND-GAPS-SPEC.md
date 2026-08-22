@@ -610,12 +610,13 @@ Follow existing frontend conventions:
 
 ### Selia Components Available
 
-Card, Button, Badge, Heading, Text, Stack, Input, Field, Select, Menu, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Toast. See AGENTS.md for full list + import paths.
+Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Toast. See AGENTS.md for full list + import paths.
 
 ---
 
 ### Version Notes
 
+- v1.10 (2026-08-22): Replaced app-level browser-native date/time/number/select/textarea controls with Selia wrappers and the shared minute-level date/time primitives. This is a UI-only refactor; RPC, schema, and state-machine contracts are unchanged.
 - v1.9 (2026-08-22): Tutor discovery category and child-subject filters now support multi-select values with label-preserving triggers and normalized array filters.
 - v1.8 (2026-08-22): Refined booking detail participants, Marks prefix, activity timeline, and online meeting status. The detail page uses profile images with initials fallback, a newest-first activity line with transition-specific icons and one destination-state badge, 30–60 second refresh while a meeting link is pending, and explicit copy for `confirmed` provider retries. The meeting providers now update the newest meeting-attempt row for manual-link fallback, and the booking read model never reports a URL-less row as `ready`.
 - v1.7 (2026-08-22): Replaced booking cancel/complete browser confirmation prompts with Selia dialogs and raised the global toast layer above dialog overlays so mutation feedback remains visible. No booking API or state-machine contract changed.

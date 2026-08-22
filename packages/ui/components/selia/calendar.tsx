@@ -1,35 +1,80 @@
 "use client";
 
+import * as React from "react";
 import { DayPicker, type DayPickerProps } from "react-day-picker";
 import { cn } from "@cogito-app/ui/lib/utils";
-import { IconChevronDown } from "@tabler/icons-react";
+import {
+  getSelectItemValue,
+  Select,
+  SelectItem,
+  SelectList,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "./select";
 
 export type CalendarProps = DayPickerProps;
 
 function CalendarSelect(props: React.ComponentProps<"select">) {
-  const { className, children, ...rest } = props;
+  const {
+    className,
+    children,
+    value,
+    onChange,
+    disabled,
+    id,
+    title,
+    "aria-label": ariaLabel,
+    "aria-labelledby": ariaLabelledBy,
+    ...rest
+  } = props;
+  const selectedValue = value === undefined ? null : String(value);
+
   return (
-    <div className="relative inline-flex">
-      <select
-        {...rest}
+    <Select
+      value={selectedValue}
+      disabled={disabled}
+      onValueChange={(nextValue) => {
+        const next = getSelectItemValue(nextValue);
+        if (next === null) return;
+        onChange?.({
+          target: { value: next },
+          currentTarget: { value: next },
+        } as React.ChangeEvent<HTMLSelectElement>);
+      }}
+      {...rest}
+    >
+      <SelectTrigger
+        id={id}
+        title={title}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
+        variant="plain"
         className={cn(
-          "h-8 appearance-none rounded bg-accent pl-2.5 pr-7",
-          "text-sm text-foreground font-medium",
-          "border border-border cursor-pointer",
-          "hover:bg-accent/80",
-          "focus-visible:outline-2 focus-visible:outline-primary",
+          "h-8 w-auto min-w-24 rounded bg-accent px-2.5 text-sm font-medium text-foreground",
+          "hover:bg-accent/80 focus-visible:outline-2 focus-visible:outline-primary",
           className,
         )}
       >
-        {children}
-      </select>
-      <IconChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 size-3.5 text-muted pointer-events-none" />
-    </div>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPopup className="min-w-32">
+        <SelectList>{children}</SelectList>
+      </SelectPopup>
+    </Select>
   );
 }
 
-function CalendarOption(props: React.ComponentProps<"option">) {
-  return <option {...props} />;
+function CalendarOption({
+  value,
+  disabled,
+  children,
+}: React.ComponentProps<"option">) {
+  return (
+    <SelectItem value={String(value ?? "")} disabled={disabled}>
+      {children}
+    </SelectItem>
+  );
 }
 
 export function Calendar({

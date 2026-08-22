@@ -10,6 +10,8 @@ The invite form performs an admin-only account preflight by exact normalized ema
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
 
+The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts.
+
 Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
 | File                  | Purpose                                                  |

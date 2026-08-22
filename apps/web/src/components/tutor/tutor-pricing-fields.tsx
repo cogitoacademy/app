@@ -5,7 +5,7 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
-import { Input } from "@cogito-app/ui/components/selia/input";
+import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 const MIN_BASE_RATE_IDR = 50_000;
@@ -53,28 +53,25 @@ export function TutorPricingFields({
               <FieldLabel htmlFor={"tutor-base-rate-" + key}>
                 {key === "online" ? "Online" : "Offline"} base rate
               </FieldLabel>
-              <Input
+              <NumberField
                 id={"tutor-base-rate-" + key}
                 name={"base-rate-" + key}
-                type="number"
                 min={MIN_BASE_RATE_IDR}
                 step={5_000}
-                value={value ?? ""}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  if (nextValue === "") {
+                value={value ?? null}
+                onValueChange={(nextValue) => {
+                  if (nextValue === null) {
                     const next = { ...baseRatesIdr };
                     delete next[key];
                     onChange(next);
                     return;
                   }
-                  const number = Number.parseInt(nextValue, 10);
-                  if (!Number.isNaN(number)) {
-                    onChange({ ...baseRatesIdr, [key]: number });
-                  }
+                  onChange({ ...baseRatesIdr, [key]: nextValue });
                 }}
-                placeholder={String(MIN_BASE_RATE_IDR)}
-                aria-invalid={Boolean(errors.baseRatesIdr)}
+                inputProps={{
+                  placeholder: String(MIN_BASE_RATE_IDR),
+                  "aria-invalid": Boolean(errors.baseRatesIdr),
+                }}
               />
               <FieldDescription>
                 Minimum {formatIdr(MIN_BASE_RATE_IDR)} · +{" "}

@@ -46,6 +46,10 @@ Verify the role-aware default tab: students open on Upcoming, tutors open on Pen
 
 Open an online booking detail and verify participant avatars use the saved profile image when present and initials otherwise, while every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. If provider creation fails, the booking remains `confirmed`, the detail card says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. Confirm that a manual admin URL becomes visible after `adminBooking.setMeetingLink`, including after multiple failed provider rows.
 
+### Form-control smoke check
+
+On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
+
 ### Reschedule proposal smoke check
 
 From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, verify that a student booking proposer submits through `/rpc/booking/reschedule/propose` and a tutor submits through `/rpc/tutor/booking/reschedule/propose`. Both should show the success toast and move the booking to `reschedule_proposed`; a tutor may choose a custom time outside the published availability window. A tutor receiving `403 Student access required` indicates the frontend is using the wrong procedure. Group bookings still in `awaiting_participant_confirmation` intentionally wait for invitees before rescheduling is enabled.
