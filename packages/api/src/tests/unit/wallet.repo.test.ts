@@ -291,6 +291,20 @@ describe("findLedgerEntries", () => {
     expect(result).toHaveLength(1);
     expect(chain.where).toHaveBeenCalledTimes(1);
   });
+
+  test("filters ledger entries by event key", async () => {
+    const rows = [{ id: "l1", walletId: "w1", eventKey: "purchase.p1" }];
+    const { select, chain } = makeSelectConn(rows);
+    const conn: any = { select };
+
+    const result = await findLedgerEntries(conn, "w1", {
+      limit: 20,
+      eventKey: "purchase.p1",
+    });
+
+    expect(result).toEqual(rows);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("listActivePackages", () => {

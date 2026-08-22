@@ -283,4 +283,128 @@ describe("AdminTutorRepo", () => {
       });
     });
   });
+
+  describe("findUserAccountsByEmail", () => {
+    test("returns undefined when the email has no user account", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const findFirst = mock(async () => undefined);
+      const findMany = mock(async () => []);
+      const repo = createAdminTutorRepo();
+
+      await expect(
+        repo.findUserAccountsByEmail(
+          {
+            query: {
+              user: { findFirst },
+              account: { findMany },
+            },
+          } as any,
+          "missing@example.com",
+        ),
+      ).resolves.toBeUndefined();
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    test("returns the user and linked auth providers", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const user = { id: "u1", email: "tutor@example.com" };
+      const accounts = [{ providerId: "google" }];
+      const findFirst = mock(async () => user);
+      const findMany = mock(async () => accounts);
+      const repo = createAdminTutorRepo();
+
+      await expect(
+        repo.findUserAccountsByEmail(
+          {
+            query: {
+              user: { findFirst },
+              account: { findMany },
+            },
+          } as any,
+          user.email,
+        ),
+      ).resolves.toEqual({ ...user, accounts });
+      expect(findMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("subject helpers", () => {
+    test("returns no child subjects for an empty id list", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const findMany = mock(async () => []);
+      const repo = createAdminTutorRepo();
+
+      await expect(
+        repo.listActiveChildSubjects(
+          { query: { subjectCategory: { findMany } } } as any,
+          [],
+        ),
+      ).resolves.toEqual([]);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    test("lists active child subjects", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const rows = [{ id: "s1", parentId: "parent-1", isActive: true }];
+      const findMany = mock(async () => rows);
+      const repo = createAdminTutorRepo();
+
+      await expect(
+        repo.listActiveChildSubjects(
+          { query: { subjectCategory: { findMany } } } as any,
+          ["s1"],
+        ),
+      ).resolves.toEqual(rows);
+      expect(findMany).toHaveBeenCalledTimes(1);
+    });
+
+    test("deletes and inserts tutor profile subjects", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const where = mock(async () => undefined);
+      const deleteQuery = mock(() => ({ where }));
+      const returning = mock(async () => [
+        { tutorProfileId: "p1", subjectId: "s1" },
+      ]);
+      const values = mock(() => ({ returning }));
+      const insert = mock(() => ({ values }));
+      const repo = createAdminTutorRepo();
+
+      await expect(
+        repo.replaceTutorProfileSubjects(
+          { delete: deleteQuery, insert } as any,
+          "p1",
+          ["s1"],
+        ),
+      ).resolves.toEqual([{ tutorProfileId: "p1", subjectId: "s1" }]);
+      expect(deleteQuery).toHaveBeenCalledTimes(1);
+      expect(values).toHaveBeenCalledWith([
+        { tutorProfileId: "p1", subjectId: "s1" },
+      ]);
+    });
+
+    test("does not insert subjects when the replacement list is empty", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const where = mock(async () => undefined);
+      const deleteQuery = mock(() => ({ where }));
+      const insert = mock(() => ({
+        values: mock(() => ({ returning: mock(async () => []) })),
+      }));
+      const repo = createAdminTutorRepo();
+
+      await expect(
+        repo.replaceTutorProfileSubjects(
+          { delete: deleteQuery, insert } as any,
+          "p1",
+          [],
+        ),
+      ).resolves.toEqual([]);
+      expect(insert).not.toHaveBeenCalled();
+    });
+  });
 });

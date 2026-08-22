@@ -3,6 +3,7 @@ import { DomainError } from "../../lib/domain-errors";
 import {
   BookingNotFoundError,
   BookingNotEditableError,
+  BookingSessionNotEndedError,
   InsufficientMarksError,
   BookingConflictError,
   BookingStateTransitionError,
@@ -52,6 +53,16 @@ describe("booking.errors", () => {
       msg: "Booking is not editable",
       args: ["bk_1"],
       details: { id: "bk_1" },
+    },
+    {
+      cls: BookingSessionNotEndedError,
+      code: "BOOKING_SESSION_NOT_ENDED",
+      msg: "Session has not ended yet",
+      args: ["bk_1", new Date("2025-01-02T03:04:05.000Z")],
+      details: {
+        id: "bk_1",
+        scheduledEndAt: "2025-01-02T03:04:05.000Z",
+      },
     },
     {
       cls: InsufficientMarksError,

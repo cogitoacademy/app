@@ -53,7 +53,7 @@
     "test:api": "bun test --env-file apps/server/.env.test packages/api/src/tests",
     "test:e2e": "turbo -F @cogito-app/e2e test",
     "test:e2e:ui": "turbo -F @cogito-app/e2e test:ui",
-    "test:coverage": "bun test --coverage --env-file apps/server/.env.test packages/api/src/tests",
+    "test:coverage": "bun test --coverage --env-file apps/server/.env.test packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts",
     "prepare": "lefthook install"
   },
   "dependencies": {

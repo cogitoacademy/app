@@ -97,6 +97,14 @@ describe("sanitizeHtml", () => {
     expect(sanitizeHtml("<!-- hidden -->visible")).toBe("visible");
   });
 
+  test("keeps an unclosed comment marker escaped", () => {
+    expect(sanitizeHtml("before <!-- hidden")).toBe("before &lt;!-- hidden");
+  });
+
+  test("escapes malformed tag markers", () => {
+    expect(sanitizeHtml("before <123> after")).toBe("before &lt;123> after");
+  });
+
   test("returns empty string for empty input", () => {
     expect(sanitizeHtml("")).toBe("");
   });

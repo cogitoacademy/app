@@ -186,6 +186,30 @@ describe("createSchedulerService", () => {
     expect(result).toEqual({ released: 3 });
   });
 
+  test("handles retry-failed-meetings job", async () => {
+    const onRetryFailedMeetings = mock(async () => ({
+      succeeded: 2,
+      failed: 1,
+    }));
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+      onRetryFailedMeetings,
+    });
+
+    const result = await capturedJobHandler!({
+      id: "retry-1",
+      name: "retry-failed-meetings",
+      data: {},
+    });
+
+    expect(onRetryFailedMeetings).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ succeeded: 2, failed: 1 });
+  });
+
   test("handles check-tutor-lateness job", async () => {
     const onCheckTutorLateness = mock(async () => ({
       flagged: 2,
@@ -405,6 +429,57 @@ describe("createSchedulerService", () => {
     expect(commandName).toBe("cogitoDlqPush");
     expect(args[0]).toBe("cogito:dlq");
     expect(args[2]).toBe("100");
+  });
+
+  test("logs when the DLQ Redis list cannot be updated", async () => {
+    mockRunCommand.mockRejectedValueOnce(new Error("redis unavailable"));
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    await capturedDlqJobHandler!({
+      id: "dlq-error",
+      name: "expire-bookings",
+      data: { failedReason: "boom" },
+    });
+
+    expect(
+      logCaptures.some(
+        (entry) => entry.entry?.action === "scheduler_dlq_list_failed",
+      ),
+    ).toBe(true);
+  });
+
+  test("logs when adding a failed job to the DLQ fails", async () => {
+    mockDlqQueueAdd.mockRejectedValueOnce(new Error("dlq unavailable"));
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    capturedFailedHandler!(
+      {
+        id: "job-error",
+        name: "expire-bookings",
+        attemptsMade: 3,
+        data: {},
+      },
+      new Error("job failed"),
+    );
+    await Promise.resolve();
+
+    expect(
+      logCaptures.some(
+        (entry) => entry.entry?.action === "scheduler_dlq_add_failed",
+      ),
+    ).toBe(true);
   });
 
   test("N2: queue-level defaultJobOptions bounds completed/failed retention", () => {

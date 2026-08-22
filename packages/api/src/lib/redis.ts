@@ -213,22 +213,104 @@ export function logRedisFallback(service: string, error: unknown): void {
   });
 }
 
+export function redisRetryStrategy(times: number): number | null {
+  if (times > 10) return null;
+  return Math.min(times * 200, 5000);
+}
+
+export function logRedisConnectionError(err: Error): void {
+  log({
+    level: "error",
+    action: "redis_connection_error",
+    error: { message: err.message },
+  });
+}
+
 export function getRedisClient(): RedisClient {
-  if (redisClient) return redisClient;
-  redisClient = new InMemoryRedis();
+  redisClient ??= new InMemoryRedis();
   return redisClient;
+}
+
+export function createRedisFallback(): RedisClient {
+  log({
+    level: "info",
+    action: "redis_fallback",
+    message: "REDIS_URL not configured, using in-memory fallback",
+  });
+  return new InMemoryRedis();
+}
+
+type RedisAdapterClient = {
+  get(key: string): Promise<string | null>;
+  set(
+    key: string,
+    value: string,
+    ...args: (string | number)[]
+  ): Promise<string | null>;
+  del(key: string): Promise<number>;
+  exists(key: string): Promise<number>;
+  incr(key: string): Promise<number>;
+  expire(key: string, seconds: number): Promise<number>;
+  pexpire(key: string, ms: number): Promise<number>;
+  ttl(key: string): Promise<number>;
+  pttl(key: string): Promise<number>;
+  hset(key: string, ...fields: [string, string][]): Promise<number>;
+  hget(key: string, field: string): Promise<string | null>;
+  hgetall(key: string): Promise<Record<string, string>>;
+  hdel(key: string, ...fields: string[]): Promise<number>;
+  eval(
+    script: string,
+    keyCount: number,
+    ...args: (string | number)[]
+  ): Promise<unknown>;
+  ping(): Promise<string>;
+  quit(): Promise<string>;
+  on(event: "error", listener: (err: Error) => void): unknown;
+  on(event: "connect", listener: () => void): unknown;
+};
+
+export function createRedisAdapter(client: RedisAdapterClient): RedisClient {
+  return {
+    get: (key: string) => client.get(key),
+    set: (key: string, value: string, ...args: RedisSetArg[]) => {
+      const redisArgs: (string | number)[] = [];
+      for (const arg of args) {
+        if (arg.type === "EX") {
+          redisArgs.push("EX", arg.value);
+        } else if (arg.type === "PX") {
+          redisArgs.push("PX", arg.value);
+        } else if (arg.type === "NX") {
+          redisArgs.push("NX");
+        } else if (arg.type === "XX") {
+          redisArgs.push("XX");
+        }
+      }
+      return client.set(key, value, ...redisArgs);
+    },
+    del: (key: string) => client.del(key),
+    exists: (key: string) => client.exists(key),
+    incr: (key: string) => client.incr(key),
+    expire: (key: string, seconds: number) => client.expire(key, seconds),
+    pexpire: (key: string, ms: number) => client.pexpire(key, ms),
+    ttl: (key: string) => client.ttl(key),
+    pttl: (key: string) => client.pttl(key),
+    hset: (key: string, ...fields: [string, string][]) =>
+      client.hset(key, ...fields),
+    hget: (key: string, field: string) => client.hget(key, field),
+    hgetall: (key: string) => client.hgetall(key),
+    hdel: (key: string, ...fields: string[]) => client.hdel(key, ...fields),
+    eval: (script: string, keys: string[], args: (string | number)[]) =>
+      client.eval(script, keys.length, ...keys, ...args),
+    ping: () => client.ping(),
+    quit: () => client.quit(),
+  };
 }
 
 export function initRedis(url?: string): RedisClient {
   if (redisClient) return redisClient;
 
   if (!url) {
-    log({
-      level: "info",
-      action: "redis_fallback",
-      message: "REDIS_URL not configured, using in-memory fallback",
-    });
-    redisClient = new InMemoryRedis();
+    redisClient = createRedisFallback();
     return redisClient;
   }
 
@@ -236,60 +318,18 @@ export function initRedis(url?: string): RedisClient {
     const IORedis = require("ioredis");
     const client = new IORedis(url, {
       maxRetriesPerRequest: 3,
-      retryStrategy(times: number) {
-        if (times > 10) return null;
-        return Math.min(times * 200, 5000);
-      },
+      retryStrategy: redisRetryStrategy,
       lazyConnect: true,
       connectTimeout: 5000,
     });
 
-    client.on("error", (err: Error) => {
-      log({
-        level: "error",
-        action: "redis_connection_error",
-        error: { message: err.message },
-      });
-    });
+    client.on("error", logRedisConnectionError);
 
     client.on("connect", () => {
       log({ level: "info", action: "redis_connected" });
     });
 
-    const adapter: RedisClient = {
-      get: (key: string) => client.get(key),
-      set: (key: string, value: string, ...args: RedisSetArg[]) => {
-        const redisArgs: (string | number)[] = [];
-        for (const arg of args) {
-          if (arg.type === "EX") {
-            redisArgs.push("EX", arg.value);
-          } else if (arg.type === "PX") {
-            redisArgs.push("PX", arg.value);
-          } else if (arg.type === "NX") {
-            redisArgs.push("NX");
-          } else if (arg.type === "XX") {
-            redisArgs.push("XX");
-          }
-        }
-        return client.set(key, value, ...redisArgs);
-      },
-      del: (key: string) => client.del(key),
-      exists: (key: string) => client.exists(key),
-      incr: (key: string) => client.incr(key),
-      expire: (key: string, seconds: number) => client.expire(key, seconds),
-      pexpire: (key: string, ms: number) => client.pexpire(key, ms),
-      ttl: (key: string) => client.ttl(key),
-      pttl: (key: string) => client.pttl(key),
-      hset: (key: string, ...fields: [string, string][]) =>
-        client.hset(key, ...fields),
-      hget: (key: string, field: string) => client.hget(key, field),
-      hgetall: (key: string) => client.hgetall(key),
-      hdel: (key: string, ...fields: string[]) => client.hdel(key, ...fields),
-      eval: (script: string, keys: string[], args: (string | number)[]) =>
-        client.eval(script, keys.length, ...keys, ...args),
-      ping: () => client.ping(),
-      quit: () => client.quit(),
-    };
+    const adapter = createRedisAdapter(client as RedisAdapterClient);
 
     redisClient = adapter;
     log({

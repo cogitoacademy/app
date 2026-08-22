@@ -3349,17 +3349,26 @@ export function createBookingService(deps: {
               snap?.tutorHonorariumIdr ??
               (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
           }
-          continue;
+        } else {
+          completedSessions++;
+          const snap = b.priceSnapshot;
+          totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
+          cogitoTake += snap?.cogitoTake ?? 0;
+          tutorPayout += snap?.tutorShare ?? 0;
+          tutorPayoutIdr +=
+            snap?.tutorHonorariumIdr ??
+            (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
         }
+      } else {
+        completedSessions++;
+        const snap = b.priceSnapshot;
+        totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
+        cogitoTake += snap?.cogitoTake ?? 0;
+        tutorPayout += snap?.tutorShare ?? 0;
+        tutorPayoutIdr +=
+          snap?.tutorHonorariumIdr ??
+          (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
       }
-      completedSessions++;
-      const snap = b.priceSnapshot;
-      totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
-      cogitoTake += snap?.cogitoTake ?? 0;
-      tutorPayout += snap?.tutorShare ?? 0;
-      tutorPayoutIdr +=
-        snap?.tutorHonorariumIdr ??
-        (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
     }
 
     return {

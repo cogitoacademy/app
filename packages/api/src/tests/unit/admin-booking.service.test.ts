@@ -6,6 +6,7 @@ import {
   OverrideMarksParticipantsRequiredError,
   TerminalStateOverrideError,
 } from "../../modules/admin-booking/admin-booking.errors";
+import { BookingStateTransitionError } from "../../modules/booking/booking.errors";
 
 function makeDb() {
   return {
@@ -1422,5 +1423,53 @@ describe("AdminBookingService", () => {
         expect(e.code).toBe("ADMIN_BOOKING_NOT_FOUND");
       }
     });
+  });
+});
+
+describe("AdminBookingService additional guards", () => {
+  test("setMeetingLink rejects when the meeting port is not configured", async () => {
+    const service = createAdminBookingService({
+      db: makeDb(),
+      repo: mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+        })),
+      }),
+      auditPort: makeAuditPort(),
+      wallet: makeWalletPort() as any,
+      refund: makeRefundPort(),
+    });
+
+    await expect(
+      service.setMeetingLink("admin1", {
+        bookingId: "b1",
+        url: "https://meet.example.com/manual",
+      }),
+    ).rejects.toThrow("Meeting port not configured");
+  });
+
+  test("cancelSeriesSession rejects a session that is no longer scheduled", async () => {
+    const service = createAdminBookingService({
+      db: makeDb(),
+      repo: mockRepo({
+        findSessionById: mock(async () => ({
+          id: "s1",
+          seriesBookingId: "b1",
+          currentState: "completed",
+          holdAmount: 50,
+        })),
+      }),
+      auditPort: makeAuditPort(),
+      wallet: makeWalletPort() as any,
+      refund: makeRefundPort(),
+    });
+
+    await expect(
+      service.cancelSeriesSession("admin1", {
+        sessionId: "s1",
+        marksAction: "release",
+      }),
+    ).rejects.toThrow(BookingStateTransitionError);
   });
 });

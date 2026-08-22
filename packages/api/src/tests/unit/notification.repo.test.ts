@@ -254,6 +254,29 @@ describe("listNotifications", () => {
     expect(select).toHaveBeenCalledTimes(1);
     expect(where).toHaveBeenCalledTimes(1);
   });
+
+  test("rejects a malformed cursor", async () => {
+    const conn = { select: mock(() => ({})) } as any;
+    await expect(
+      listNotifications(conn, "u1", { cursor: "missing-separator", limit: 5 }),
+    ).rejects.toThrow("Invalid notification cursor");
+  });
+
+  test("adds the composite cursor condition for a valid cursor", async () => {
+    const limit = mock(async () => []);
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select } as any;
+
+    await listNotifications(conn, "u1", {
+      unreadOnly: true,
+      cursor: "2026-01-01T00:00:00.000Z|n1",
+      limit: 5,
+    });
+    expect(where).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("countUnread", () => {

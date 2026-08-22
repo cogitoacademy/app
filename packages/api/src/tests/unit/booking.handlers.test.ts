@@ -49,6 +49,7 @@ function makeBookingService() {
       bookingId: "b1",
       attendanceState: "present",
     })),
+    listForTutor: mock(async () => ({ items: [] })),
   };
 }
 
@@ -516,6 +517,24 @@ describe("tutorActionsHandler", () => {
         id: "b1",
         currentState: "reschedule_proposed",
       });
+    });
+  });
+
+  describe("listBookings", () => {
+    test("calls booking.listForTutor with session user id and input", async () => {
+      const booking = makeBookingService();
+      booking.listForTutor.mockResolvedValue({ items: [{ id: "b1" }] });
+      const handler = createTutorActionsHandler(booking as any);
+      const context = makeContext("t1");
+      const input = { limit: 10, cursor: "cursor-1" };
+
+      const result = await handler.listBookings({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.listForTutor).toHaveBeenCalledWith("t1", input);
+      expect(result).toEqual({ items: [{ id: "b1" }] });
     });
   });
 

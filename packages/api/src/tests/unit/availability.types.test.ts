@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createWeeklyAvailabilityInput,
   deleteAvailabilityInput,
+  replaceWeeklyAvailabilityInput,
   upsertAvailabilityInput,
 } from "../../modules/tutor/availability.types";
 
@@ -85,6 +86,67 @@ describe("upsertAvailabilityInput", () => {
       recurrenceRule: "a".repeat(256),
     });
     expect(result.success).toBe(false);
+  });
+
+  test("rejects a weekly range whose end time is not after its start time", () => {
+    const result = replaceWeeklyAvailabilityInput.safeParse({
+      effectiveFrom: future(2),
+      repeatUntil: future(30),
+      ranges: [
+        {
+          dayOfWeek: 1,
+          startTime: "10:00",
+          endTime: "10:00",
+          modality: "online",
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe(
+        "endTime must be after startTime",
+      );
+    }
+  });
+
+  test("rejects a weekly replacement ending before its effective date", () => {
+    const effectiveFrom = future(10);
+    const result = replaceWeeklyAvailabilityInput.safeParse({
+      effectiveFrom,
+      repeatUntil: future(2),
+      ranges: [],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.error.issues.some(
+          (issue) =>
+            issue.message === "repeatUntil must be on or after effectiveFrom",
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("rejects a weekly replacement scheduled beyond 52 weeks", () => {
+    const effectiveFrom = future(2);
+    const effectiveDate = new Date(effectiveFrom);
+    const result = replaceWeeklyAvailabilityInput.safeParse({
+      effectiveFrom,
+      repeatUntil: new Date(
+        effectiveDate.getTime() + 367 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      ranges: [],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.error.issues.some(
+          (issue) =>
+            issue.message ===
+            "Weekly availability can be scheduled for up to 52 weeks",
+        ),
+      ).toBe(true);
+    }
   });
 });
 

@@ -161,4 +161,36 @@ describe("createFallbackMeetingProvider", () => {
     expect(errorLog).toBeDefined();
     expect(errorLog.bookingId).toBe("b1");
   });
+
+  test("setManualLink creates a local row when no meeting exists", async () => {
+    const createdRow = {
+      id: "me_new",
+      bookingId: "b4",
+      provider: "manual",
+      status: "created",
+      meetingUrl: "https://meet.example.com/b4",
+      externalEventId: null,
+    };
+    const limit = mock(async () => []);
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const returning = mock(async () => [createdRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const db = { select, insert } as any;
+
+    const provider = createFallbackMeetingProvider(db);
+    const result = await provider.setManualLink("b4", createdRow.meetingUrl);
+
+    expect(result).toEqual(createdRow);
+    expect(values).toHaveBeenCalledWith({
+      bookingId: "b4",
+      provider: "manual",
+      status: "created",
+      meetingUrl: "https://meet.example.com/b4",
+      externalEventId: null,
+    });
+  });
 });

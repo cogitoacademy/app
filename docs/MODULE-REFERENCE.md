@@ -1,10 +1,12 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
 The invite form performs an admin-only account preflight by exact normalized email. Provider facts come from Better Auth `account.providerId` rows (`google`, `credential`, or both); admin-role accounts are shown as ineligible and cannot be submitted from the UI.
+
+Google OAuth is enabled only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured; a partial configuration disables the provider rather than creating an empty provider entry. Redis access goes through the adapter boundary in `packages/api/src/lib/redis.ts`, so the in-memory fallback exposes the same command surface for tests and defensive runtime degradation while production remains Redis-backed.
 
 ## Overview
 

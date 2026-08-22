@@ -5,11 +5,18 @@ import postgres from "postgres";
 
 import * as schema from "./schema";
 
-if (isProductionLike(env.NODE_ENV) && !env.DB_SSL_REJECT_UNAUTHORIZED) {
-  console.warn(
-    "WARNING: DB_SSL_REJECT_UNAUTHORIZED is false in production/staging. SSL certificate verification is disabled.",
-  );
+export function warnIfInsecureProductionSsl(
+  nodeEnv: string,
+  rejectUnauthorized: boolean,
+) {
+  if (isProductionLike(nodeEnv) && !rejectUnauthorized) {
+    console.warn(
+      "WARNING: DB_SSL_REJECT_UNAUTHORIZED is false in production/staging. SSL certificate verification is disabled.",
+    );
+  }
 }
+
+warnIfInsecureProductionSsl(env.NODE_ENV, env.DB_SSL_REJECT_UNAUTHORIZED);
 
 const SENSITIVE_PARAM = /(password|secret|token|authorization|cookie|bearer)/i;
 const SECRET_SHAPED = /^(sk_|whsec_|xox[baprs]-|eyJ[a-zA-Z0-9_-]+\.)/i;

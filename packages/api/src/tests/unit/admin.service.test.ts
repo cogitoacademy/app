@@ -9,6 +9,7 @@ import {
   LastAdminError,
   WalletNotFoundError,
   InvalidLedgerFilterError,
+  EconomyConfigConflictError,
 } from "../../modules/admin/admin.errors";
 
 function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
@@ -227,6 +228,59 @@ describe("Admin Service", () => {
       } catch (e: any) {
         expect(e).toBeInstanceOf(InvalidLedgerFilterError);
       }
+    });
+  });
+
+  describe("payouts and economy settings", () => {
+    test("rejects invalid tutor payout dateFrom and dateTo filters", async () => {
+      const payout = { getTutorPayouts: mock(async () => []) };
+      const service = createAdminService({
+        adminRepo: {} as any,
+        auditPort: {} as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout,
+      });
+
+      await expect(
+        service.getTutorPayouts({ tutorId: "t1", dateFrom: "not-a-date" }),
+      ).rejects.toThrow(InvalidLedgerFilterError);
+      await expect(
+        service.getTutorPayouts({ tutorId: "t1", dateTo: "not-a-date" }),
+      ).rejects.toThrow(InvalidLedgerFilterError);
+    });
+
+    test("maps a failed economy update to a conflict", async () => {
+      const economy = {
+        getConfig: mock(async () => ({
+          id: "default",
+          version: 1,
+          onlineCogitoBaseIdr: 50_000,
+          onlineCogitoIncrementIdr: 20_000,
+          offlineCogitoBaseIdr: 90_000,
+          offlineCogitoIncrementIdr: 40_000,
+        })),
+        updateConfig: mock(async () => null),
+      };
+      const db = { transaction: mock(async (fn: any) => fn({})) };
+      const service = createAdminService({
+        adminRepo: {} as any,
+        auditPort: { record: mock(async () => {}) },
+        db: db as any,
+        wallet: {} as any,
+        payout: {} as any,
+        economy: economy as any,
+      });
+
+      await expect(
+        service.updateEconomySettings("admin1", {
+          expectedVersion: 1,
+          onlineCogitoBaseIdr: 55_000,
+          onlineCogitoIncrementIdr: 20_000,
+          offlineCogitoBaseIdr: 90_000,
+          offlineCogitoIncrementIdr: 40_000,
+        }),
+      ).rejects.toThrow(EconomyConfigConflictError);
     });
   });
 

@@ -88,11 +88,12 @@ export function validateUpdateInput(
       | "online"
       | "offline"
       | "both";
-    const error =
-      pricingPort.validateBaseRates?.(
-        input.baseRatesIdr as Record<string, number>,
-        modality,
-      ) ?? "IDR pricing is not configured";
+    const error = pricingPort.validateBaseRates
+      ? pricingPort.validateBaseRates(
+          input.baseRatesIdr as Record<string, number>,
+          modality,
+        )
+      : "IDR pricing is not configured";
     if (error) {
       throw new InvalidTutorPricingError(profile.id, error);
     }
@@ -152,11 +153,12 @@ export function validateSubmitForReview(
       | "online"
       | "offline"
       | "both";
-    const error =
-      pricingPort.validateBaseRates?.(
-        profile.baseRatesIdr as Record<string, number>,
-        modality,
-      ) ?? "IDR pricing is not configured";
+    const error = pricingPort.validateBaseRates
+      ? pricingPort.validateBaseRates(
+          profile.baseRatesIdr as Record<string, number>,
+          modality,
+        )
+      : "IDR pricing is not configured";
     if (error) {
       throw new InvalidTutorPricingError(profile.id, error);
     }

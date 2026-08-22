@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 ## Overview
 
@@ -9,6 +9,10 @@ All API endpoints use **POST** method (oRPC convention). Auth is via session coo
 The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures.
 
 The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract.
+
+### Verification
+
+CI runs the API integration/unit suite together with the env, auth, and database package tests. The coverage gate requires 100% line coverage for `packages/api` and 100% line coverage overall; coverage is reported from the same lcov artifact used by `.github/scripts/coverage-comment.ts`.
 
 ### Auth Levels
 

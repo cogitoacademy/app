@@ -154,6 +154,25 @@ describe("WalletService", () => {
       expect(repo.atomicRelease).toHaveBeenCalledTimes(1);
       expect(repo.insertLedger).toHaveBeenCalledTimes(1);
     });
+
+    test("throws when the held balance cannot be released", async () => {
+      const repo = makeRepo({
+        atomicRelease: mock(async (): Promise<AtomicResult> => ({
+          success: false,
+          reason: "insufficient_held",
+        })),
+      });
+      const service = createWalletService(repo as any, makeDb());
+
+      await expect(
+        service.release(makeDb(), {
+          walletId: "wallet1",
+          amount: 50,
+          eventKey: "release.2",
+          actorType: "system",
+        }),
+      ).rejects.toThrow(InsufficientBalanceError);
+    });
   });
 
   describe("deduct", () => {
@@ -294,6 +313,26 @@ describe("WalletService", () => {
       expect(result).toEqual(updated);
       expect(repo.atomicCompensateDeduct).toHaveBeenCalledTimes(1);
       expect(repo.insertLedger).toHaveBeenCalledTimes(1);
+    });
+
+    test("throws when a compensate_deduct would overdraw available funds", async () => {
+      const repo = makeRepo({
+        atomicCompensateDeduct: mock(async (): Promise<AtomicResult> => ({
+          success: false,
+          reason: "insufficient_balance",
+        })),
+      });
+      const service = createWalletService(repo as any, makeDb());
+
+      await expect(
+        service.compensate(makeDb(), {
+          walletId: "wallet1",
+          amount: 150,
+          eventKey: "comp.3",
+          actorType: "system",
+          type: "compensate_deduct",
+        }),
+      ).rejects.toThrow(InsufficientBalanceError);
     });
   });
 
