@@ -272,14 +272,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ items: [{ id, slug, name, description?, children: [{ id, slug, name, description? }] }] }`
-- **Description:** Returns the active mother categories and selectable child subjects used by tutor onboarding and student filters.
+- **Description:** Returns the active mother categories and selectable child subjects used by tutor onboarding and student filters. The UIs submit child/category IDs for persistence or filtering but display category and subject names to users.
 
 ### `tutors.listPublished`
 
 - **Auth:** Student
-- **Input:** `{ search?, expertise?, categoryId?, subjectId?, modality?, limit?, offset? }` (`limit` default 20, max 50)
+- **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
 - **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, parent }]`
-- **Description:** `categoryId` filters by a mother category; `subjectId` filters by an exact child subject. Search matches normalized child subject names as well as legacy profile text.
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array.
 
 ### `tutors.getProfile`
 

@@ -142,6 +142,31 @@ describe("Tutor discovery", () => {
     );
   });
 
+  test("listPublished accepts multiple category and subject filters", async () => {
+    const categoryMatches = await studentClient.tutors.listPublished({
+      categoryIds: [
+        "10000000-0000-4000-8000-000000000002",
+        "10000000-0000-4000-8000-000000000001",
+      ],
+    });
+    expect(categoryMatches.some((tutor) => tutor.id === profileId)).toBe(true);
+
+    const subjectMatches = await studentClient.tutors.listPublished({
+      subjectIds: [
+        "20000000-0000-4000-8000-000000000002",
+        "20000000-0000-4000-8000-000000000001",
+      ],
+    });
+    expect(subjectMatches.some((tutor) => tutor.id === profileId)).toBe(true);
+
+    const nonMatchingSubjects = await studentClient.tutors.listPublished({
+      subjectIds: ["20000000-0000-4000-8000-000000000004"],
+    });
+    expect(nonMatchingSubjects.some((tutor) => tutor.id === profileId)).toBe(
+      false,
+    );
+  });
+
   test("getProfile returns NOT_FOUND for draft profile", async () => {
     const draftEmail = `draft.${ts}@cogito.test`;
     await signUpAndSignIn(draftEmail, "Test1234!", "Draft Tutor");

@@ -91,6 +91,10 @@ describe("Discovery Service", () => {
       expect(listPublished).toHaveBeenCalledWith({
         search: "math",
         expertise: undefined,
+        categoryId: undefined,
+        subjectId: undefined,
+        categoryIds: undefined,
+        subjectIds: undefined,
         modality: undefined,
         limit: 20,
         offset: 0,
@@ -109,9 +113,36 @@ describe("Discovery Service", () => {
       expect(listPublished).toHaveBeenCalledWith({
         search: undefined,
         expertise: undefined,
+        categoryId: undefined,
+        subjectId: undefined,
+        categoryIds: undefined,
+        subjectIds: undefined,
         modality: undefined,
         limit: 10,
         offset: 5,
+      });
+    });
+
+    test("passes multiple category and subject filters to the repo", async () => {
+      const listPublished = mock(async () => []);
+      const repo = makeRepo({ listPublished });
+      const service = createDiscoveryService({ repo });
+
+      await service.listPublished({
+        categoryIds: ["category-1", "category-2"],
+        subjectIds: ["subject-1", "subject-2"],
+      });
+
+      expect(listPublished).toHaveBeenCalledWith({
+        search: undefined,
+        expertise: undefined,
+        categoryId: undefined,
+        subjectId: undefined,
+        categoryIds: ["category-1", "category-2"],
+        subjectIds: ["subject-1", "subject-2"],
+        modality: undefined,
+        limit: 20,
+        offset: 0,
       });
     });
 

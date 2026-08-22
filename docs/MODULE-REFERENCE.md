@@ -639,6 +639,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - Mother categories are the seven competition areas currently presented by Cogito Academy: Model United Nations, Public Speaking, Olympiad, World Scholar's Cup, Essay & Scientific Writing, Debate, and Business Plan
 - Only active child rows are selectable by tutors; each selection belongs to exactly one mother category
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
+- The onboarding and student tutor-list selectors keep normalized IDs for persistence/filtering while rendering human-readable labels; raw UUIDs are an implementation detail and must not appear in user-facing triggers
 
 ---
 
@@ -658,8 +659,9 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 **Service Methods:**
 
 - `listSubjects()` — Returns active mother categories grouped with active child subjects
-- `listPublished(filters)` — Paginated list of published tutor profiles with category, child-subject, legacy expertise, and modality filters
+- `listPublished(filters)` — Paginated list of published tutor profiles with category, child-subject, legacy expertise, and modality filters; `categoryIds` and `subjectIds` are ORed within each facet, combined as an AND across facets, and enforced through one correlated normalized subject-existence check that returns no rows when there is no match
 - `getProfile(userId)` — Returns full tutor profile
+- Frontend filter selects normalize displayed objects back to primitive category/subject ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, child-subject options are the union of the selected mother categories, and the query is debounced by 300 ms.
 
 **Dependencies:** `DiscoveryRepo`
 

@@ -17,7 +17,7 @@ The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This
 
 Tutor onboarding now uses the normalized mother-category/child-subject selector exposed by `tutors.listSubjects`. Tutors must select at least one child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding and tutor-list selectors store normalized IDs/values for submission or filtering but render human-readable labels in their triggers, so backend UUIDs remain hidden from users.
+The onboarding and tutor-list selectors store normalized IDs/values for submission or filtering but render human-readable labels in their triggers, so backend UUIDs remain hidden from users. The tutor list now supports selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
 
 ### Profile UX follow-up (2026-08-22)
 

@@ -33,9 +33,25 @@ export interface ListPublishedInput {
   expertise?: string;
   categoryId?: string;
   subjectId?: string;
+  categoryIds?: string[];
+  subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   limit: number;
   offset: number;
+}
+
+function normalizeFilterIds(
+  ids: readonly string[] | undefined,
+  id: string | undefined,
+) {
+  return [...new Set(ids?.length ? ids : id ? [id] : [])];
+}
+
+function sqlValueList(values: readonly string[]) {
+  return sql`(${sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `,
+  )})`;
 }
 
 /**
@@ -85,17 +101,20 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
     );
   }
 
-  if (input.categoryId || input.subjectId) {
+  const categoryIds = normalizeFilterIds(input.categoryIds, input.categoryId);
+  const subjectIds = normalizeFilterIds(input.subjectIds, input.subjectId);
+
+  if (categoryIds.length > 0 || subjectIds.length > 0) {
     conditions.push(sql`exists (
       select 1
       from ${tutorProfileSubjectFilterTable}
       inner join ${subjectCategoryFilterTable}
         on ${tutorProfileSubjectFilterSubjectId} = ${subjectCategoryFilterId}
-      where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
+        where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
         and ${subjectCategoryFilterIsActive} = true
         and ${subjectCategoryFilterParentId} is not null
-        ${input.categoryId ? sql`and ${subjectCategoryFilterParentId} = ${input.categoryId}` : sql``}
-        ${input.subjectId ? sql`and ${subjectCategoryFilterId} = ${input.subjectId}` : sql``}
+        ${categoryIds.length > 0 ? sql`and ${subjectCategoryFilterParentId} in ${sqlValueList(categoryIds)}` : sql``}
+        ${subjectIds.length > 0 ? sql`and ${subjectCategoryFilterId} in ${sqlValueList(subjectIds)}` : sql``}
     )`);
   }
 

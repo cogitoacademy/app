@@ -84,6 +84,25 @@ describe("DiscoveryRepo", () => {
       expect(callArg.where).toBeDefined();
     });
 
+    test("filters by multiple categories and subjects", async () => {
+      const profiles = [{ id: "tp1" }];
+      const findMany = mock(async () => profiles);
+      const conn = makeConn(findMany);
+      const repo = createDiscoveryRepo(conn);
+
+      const result = await repo.listPublished({
+        categoryIds: ["category-1", "category-2"],
+        subjectIds: ["subject-1", "subject-2"],
+        limit: 20,
+        offset: 0,
+      });
+
+      expect(result).toEqual(profiles);
+      expect(findMany).toHaveBeenCalledTimes(1);
+      const callArg = findMany.mock.calls[0]![0];
+      expect(callArg.where).toBeDefined();
+    });
+
     test("combines multiple filters", async () => {
       const profiles = [{ id: "tp1" }];
       const findMany = mock(async () => profiles);

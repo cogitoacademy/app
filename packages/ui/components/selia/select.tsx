@@ -131,6 +131,14 @@ export function getSelectItemValue(value: unknown): string | null {
   return null;
 }
 
+export function getSelectItemValues(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : [value];
+
+  return values
+    .map((item) => getSelectItemValue(item))
+    .filter((item): item is string => item !== null && item !== "");
+}
+
 export function Select({
   children,
   value,
@@ -241,7 +249,7 @@ export function SelectValue({
       className={cn(className)}
       {...props}
     >
-      {(value: string | SelectItem | null) => (
+      {(value: string | SelectItem | SelectItem[] | null) => (
         <SelectRenderValue value={value} placeholder={placeholder} />
       )}
     </BaseSelect.Value>

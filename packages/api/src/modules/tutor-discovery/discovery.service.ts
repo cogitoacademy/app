@@ -62,6 +62,8 @@ export function createDiscoveryService(deps: { repo: DiscoveryRepo }) {
     expertise?: string;
     categoryId?: string;
     subjectId?: string;
+    categoryIds?: string[];
+    subjectIds?: string[];
     modality?: "online" | "offline" | "both";
     limit?: number;
     offset?: number;
@@ -71,6 +73,8 @@ export function createDiscoveryService(deps: { repo: DiscoveryRepo }) {
       expertise: opts?.expertise,
       categoryId: opts?.categoryId,
       subjectId: opts?.subjectId,
+      categoryIds: opts?.categoryIds,
+      subjectIds: opts?.subjectIds,
       modality: opts?.modality,
       limit: opts?.limit ?? 20,
       offset: opts?.offset ?? 0,

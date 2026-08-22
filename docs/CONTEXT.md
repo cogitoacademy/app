@@ -252,7 +252,8 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 ### TutorDiscovery Module (protected)
 
 - `listSubjects` (public — active mother categories with selectable child subjects)
-- `listPublished`, `getProfile` (student-only; supports `categoryId` and `subjectId` filters)
+- `listPublished`, `getProfile` (student-only; supports single or multi-value `categoryId`/`subjectId` filters via normalized subject joins; a missing match returns an empty list)
+- Shared Selia select controls keep category/subject IDs and modality values for query inputs while rendering labels; the tutor list allows multiple mother categories and child subjects, with empty arrays meaning “All”. Search and filter changes debounce `listPublished` by 300 ms so rapid typing or multi-select toggles coalesce into one request.
 
 ### Invite Module (public + protected)
 

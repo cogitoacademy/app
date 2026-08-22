@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { IconSearch } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -17,6 +17,7 @@ import {
 } from "@cogito-app/ui/components/selia/input-group";
 import {
   getSelectItemValue,
+  getSelectItemValues,
   Select,
   SelectItem,
   SelectList,
@@ -48,11 +49,6 @@ type PublishedTutor = {
   user: { name: string | null; image: string | null } | null;
 };
 
-const ALL_CATEGORIES_OPTION = { value: "", label: "All categories" };
-const ALL_CHILD_SUBJECTS_OPTION = {
-  value: "",
-  label: "All child subjects",
-};
 const MODALITY_OPTIONS = [
   { value: "online", label: "Online" },
   { value: "offline", label: "Offline" },
@@ -61,19 +57,39 @@ const MODALITY_OPTIONS = [
 const MODALITY_VALUES = new Map<string, (typeof MODALITY_OPTIONS)[number]>(
   MODALITY_OPTIONS.map((option) => [option.value, option]),
 );
+const TUTOR_LIST_DEBOUNCE_MS = 300;
 
 export function TutorsPageContent() {
   const [search, setSearch] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [subjectId, setSubjectId] = useState("");
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [subjectIds, setSubjectIds] = useState<string[]>([]);
   const [modality, setModality] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: categories, isError: isTaxonomyError } = useSubjectTaxonomy();
 
-  const selectedCategory = categories.find(
-    (category) => category.id === categoryId,
+  const selectedCategories = useMemo(
+    () => categories.filter((category) => categoryIds.includes(category.id)),
+    [categories, categoryIds],
   );
+  const availableSubjects = useMemo(() => {
+    const subjects = new Map<string, TutorSubject>();
+
+    for (const category of selectedCategories) {
+      for (const subject of category.children) {
+        subjects.set(subject.id, {
+          ...subject,
+          parent: {
+            id: category.id,
+            slug: category.slug,
+            name: category.name,
+          },
+        });
+      }
+    }
+
+    return [...subjects.values()];
+  }, [selectedCategories]);
   const categoryValues = useMemo(
     () =>
       new Map(
@@ -87,31 +103,75 @@ export function TutorsPageContent() {
   const subjectValues = useMemo(
     () =>
       new Map(
-        (selectedCategory?.children ?? []).map((subject) => [
+        availableSubjects.map((subject) => [
           subject.id,
           { value: subject.id, label: subject.name },
         ]),
       ),
-    [selectedCategory],
+    [availableSubjects],
+  );
+  const selectedCategoryValues = useMemo(
+    () =>
+      categoryIds
+        .map((id) => categoryValues.get(id))
+        .filter((value): value is NonNullable<typeof value> => value != null),
+    [categoryIds, categoryValues],
+  );
+  const selectedSubjectValues = useMemo(
+    () =>
+      subjectIds
+        .map((id) => subjectValues.get(id))
+        .filter((value): value is NonNullable<typeof value> => value != null),
+    [subjectIds, subjectValues],
   );
   const tutorListInput = useMemo(
     () => ({
       search: search.trim() || undefined,
-      categoryId: categoryId || undefined,
-      subjectId: subjectId || undefined,
+      // Keep the singular fields for rolling/stale API instances. The
+      // current API prefers the array fields, so multiple selections still
+      // use the complete multi-select contract after the server reloads.
+      categoryId: categoryIds.length === 1 ? categoryIds[0] : undefined,
+      subjectId: subjectIds.length === 1 ? subjectIds[0] : undefined,
+      categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
+      subjectIds: subjectIds.length > 0 ? subjectIds : undefined,
       modality: (modality || undefined) as
         | "online"
         | "offline"
         | "both"
         | undefined,
     }),
-    [categoryId, modality, search, subjectId],
+    [categoryIds, modality, search, subjectIds],
   );
-  const hasActiveFilter = Boolean(categoryId || subjectId || modality);
+  const [debouncedTutorListInput, setDebouncedTutorListInput] =
+    useState(tutorListInput);
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedTutorListInput(tutorListInput),
+      TUTOR_LIST_DEBOUNCE_MS,
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [tutorListInput]);
+  const hasActiveFilter =
+    categoryIds.length > 0 || subjectIds.length > 0 || Boolean(modality);
+
+  function handleCategoryChange(value: unknown) {
+    const nextCategoryIds = getSelectItemValues(value);
+    setCategoryIds(nextCategoryIds);
+
+    const nextSubjectIds = new Set(
+      categories
+        .filter((category) => nextCategoryIds.includes(category.id))
+        .flatMap((category) => category.children.map((subject) => subject.id)),
+    );
+    setSubjectIds((current) =>
+      current.filter((subjectId) => nextSubjectIds.has(subjectId)),
+    );
+  }
 
   const { data: tutors = [], isPending } = useQuery({
     ...orpc.tutors.listPublished.queryOptions({
-      input: tutorListInput,
+      input: debouncedTutorListInput,
     }),
     // Keep search results stable while typing, but never show the previous
     // unfiltered list while a category/subject/modality filter is loading.
@@ -149,11 +209,9 @@ export function TutorsPageContent() {
           />
         </InputGroup>
         <Select
-          value={categoryId ? (categoryValues.get(categoryId) ?? null) : null}
-          onValueChange={(value) => {
-            setCategoryId(getSelectItemValue(value) ?? "");
-            setSubjectId("");
-          }}
+          multiple
+          value={selectedCategoryValues}
+          onValueChange={handleCategoryChange}
         >
           <SelectTrigger className="min-w-0 w-full sm:w-52">
             <SelectValue
@@ -163,9 +221,6 @@ export function TutorsPageContent() {
           </SelectTrigger>
           <SelectPopup>
             <SelectList>
-              <SelectItem value={ALL_CATEGORIES_OPTION}>
-                All categories
-              </SelectItem>
               {categories.map((category) => (
                 <SelectItem
                   key={category.id}
@@ -178,17 +233,16 @@ export function TutorsPageContent() {
           </SelectPopup>
         </Select>
         <Select
-          value={subjectId ? (subjectValues.get(subjectId) ?? null) : null}
-          disabled={!selectedCategory}
-          onValueChange={(value) =>
-            setSubjectId(getSelectItemValue(value) ?? "")
-          }
+          multiple
+          value={selectedSubjectValues}
+          disabled={categoryIds.length === 0}
+          onValueChange={(value) => setSubjectIds(getSelectItemValues(value))}
         >
           <SelectTrigger className="min-w-0 w-full sm:w-56">
             <SelectValue
               className="min-w-0 flex-1 truncate text-left"
               placeholder={
-                selectedCategory
+                categoryIds.length > 0
                   ? "All child subjects"
                   : "Choose category first"
               }
@@ -196,10 +250,7 @@ export function TutorsPageContent() {
           </SelectTrigger>
           <SelectPopup>
             <SelectList>
-              <SelectItem value={ALL_CHILD_SUBJECTS_OPTION}>
-                All child subjects
-              </SelectItem>
-              {(selectedCategory?.children ?? []).map((subject) => (
+              {availableSubjects.map((subject) => (
                 <SelectItem
                   key={subject.id}
                   value={subjectValues.get(subject.id)}
@@ -266,8 +317,8 @@ export function TutorsPageContent() {
               variant="secondary"
               onClick={() => {
                 setSearch("");
-                setCategoryId("");
-                setSubjectId("");
+                setCategoryIds([]);
+                setSubjectIds([]);
                 setModality("");
               }}
             >
