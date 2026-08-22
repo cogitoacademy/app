@@ -528,6 +528,7 @@ export function BookingDetailPage({
           {!isAdmin ? (
             <BookingLifecycleActions
               bookingId={bookingId}
+              viewerId={viewerId}
               viewerRole={viewerRole}
               currentState={booking.currentState}
               bookingType={booking.type}
