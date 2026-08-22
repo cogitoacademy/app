@@ -1,7 +1,8 @@
-import { eq, and, gte, lte, ne, desc, inArray } from "drizzle-orm";
-import { room, roomBooking } from "@cogito-app/db/schema";
+import { eq, and, gte, lte, ne, desc, asc, inArray } from "drizzle-orm";
+import { booking, room, roomBooking } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { ROOM_BOOKING_STATUS } from "../../shared/constants";
+import { BOOKING_STATE } from "../booking/booking-state.types";
 
 export type RoomRepo = ReturnType<typeof createRoomRepo>;
 
@@ -13,6 +14,80 @@ export type RoomRepo = ReturnType<typeof createRoomRepo>;
  */
 export async function findActiveRooms(conn: DbOrTx) {
   return conn.select().from(room).where(eq(room.isActive, true));
+}
+
+/**
+ * Lists offline bookings waiting for admin room approval. A booking may not
+ * have a requested room row when the requested room was already occupied, so
+ * this intentionally starts from booking and left-joins the optional request.
+ */
+export async function findPendingRoomApprovals(conn: DbOrTx, limit = 50) {
+  return conn
+    .select({
+      bookingId: booking.id,
+      bookingType: booking.type,
+      modality: booking.modality,
+      currentState: booking.currentState,
+      tutorId: booking.tutorId,
+      proposerId: booking.proposerId,
+      targetGroupSize: booking.targetGroupSize,
+      confirmedHeadcount: booking.confirmedHeadcount,
+      scheduledStartAt: booking.scheduledStartAt,
+      scheduledEndAt: booking.scheduledEndAt,
+      timezone: booking.timezone,
+      deadlineAt: booking.deadlineAt,
+      originalMarks: booking.originalMarks,
+      holdAmount: booking.holdAmount,
+      requestedRoomBookingId: roomBooking.id,
+      requestedRoomId: roomBooking.roomId,
+      requestedRoomName: room.name,
+      requestedRoomLocation: room.location,
+      requestedRoomCapacity: room.capacity,
+      requestedAt: roomBooking.createdAt,
+    })
+    .from(booking)
+    .leftJoin(
+      roomBooking,
+      and(
+        eq(roomBooking.bookingId, booking.id),
+        eq(roomBooking.status, ROOM_BOOKING_STATUS.REQUESTED),
+      ),
+    )
+    .leftJoin(room, eq(room.id, roomBooking.roomId))
+    .where(
+      and(
+        eq(booking.currentState, BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL),
+        eq(booking.modality, "offline"),
+      ),
+    )
+    .orderBy(asc(booking.scheduledStartAt), asc(booking.id))
+    .limit(limit);
+}
+
+/**
+ * Finds a pending offline booking that has no room-booking row yet. This is
+ * used only by the admin cancellation path for requested-room conflicts.
+ */
+export async function findPendingApprovalBookingById(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  const [row] = await conn
+    .select({
+      id: booking.id,
+      scheduledStartAt: booking.scheduledStartAt,
+      scheduledEndAt: booking.scheduledEndAt,
+    })
+    .from(booking)
+    .where(
+      and(
+        eq(booking.id, bookingId),
+        eq(booking.currentState, BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL),
+        eq(booking.modality, "offline"),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 /**
@@ -204,6 +279,8 @@ export async function findCancellableRoomBookingByBookingId(
 export function createRoomRepo() {
   return {
     findActiveRooms,
+    findPendingRoomApprovals,
+    findPendingApprovalBookingById,
     insertRoom,
     findRoomById,
     findRoomBookings,

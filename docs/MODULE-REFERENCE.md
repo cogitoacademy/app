@@ -485,27 +485,29 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 **Files:**
 
-- `room.types.ts` — Zod schemas for list/create/assign/check-availability/relocate/cancel inputs
+- `room.types.ts` — Zod schemas for list/pending-approval/create/assign/check-availability/relocate/cancel inputs
 - `room.errors.ts` — `RoomNotFoundError`, `RoomBookingConflictError`
-- `room.repo.ts` — room queries, room-booking insert/update/find
-- `room.service.ts` — `listActive`, `createRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`
-- `room.handler.ts` — `list`, `create`, `assign`, `checkAvailability`, `relocate`, `cancelBooking`
-- `room.router.ts` — `list`/`checkAvailability` protected; `create`/`assign`/`relocate`/`cancelBooking` admin-only
+- `room.repo.ts` — room queries, pending approval lookup, room-booking insert/update/find
+- `room.service.ts` — `listActive`, `listPendingApprovals`, `createRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`
+- `room.handler.ts` — `list`, `listPendingApprovals`, `create`, `assign`, `checkAvailability`, `relocate`, `cancelBooking`
+- `room.router.ts` — `list`/`checkAvailability` protected; `listPendingApprovals`/`create`/`assign`/`relocate`/`cancelBooking` admin-only
 
 **Service Methods:**
 
 - `listActive()` — Returns active rooms
+- `listPendingApprovals(limit?)` — Returns offline bookings in `AWAITING_ADMIN_ROOM_APPROVAL`, including bookings with no requested room row after a requested-room conflict
 - `createRoom({ name, location, capacity })` — Creates a room
 - `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` and notifies tutor + confirmed students (#46, G14)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
 - `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise) and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6)
-- `cancelRoomBooking(bookingId)` — Cancels the booking's room assignment (booking continues without a room); notifies tutor + confirmed students (#46)
+- `cancelRoomBooking(bookingId, actorId?)` — Cancels the booking's room assignment; while awaiting approval it also delegates the booking cancellation/hold release/audit through `RoomBookingPort`, including the no-requested-room conflict case; notifies tutor + confirmed students (#46)
 
 **Dependencies:** `RoomRepo`, `RoomNotificationPort`, `RoomBookingPort` (transition to scheduled)
 
 **Business Rules:**
 
 - Room bookings have status `requested`/`confirmed`/`relocated`/`cancelled`
+- The admin pending-approval queue is sourced from offline bookings in `awaiting_admin_room_approval`; the requested room is optional because room creation can report a conflict and let the booking continue to admin review
 - G14 (assign → scheduled + notifications) fixed in #46
 - Remaining gap G13: `checkAvailability` is not yet integrated into booking creation — tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`
 

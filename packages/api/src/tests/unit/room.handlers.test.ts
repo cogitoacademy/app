@@ -4,6 +4,7 @@ import { createRoomHandler } from "../../modules/room/room.handler";
 function makeRoomService() {
   return {
     listActive: mock(async () => [{ id: "r1" }]),
+    listPendingApprovals: mock(async () => [{ bookingId: "b1" }]),
     createRoom: mock(async () => ({ id: "r1" })),
     assignRoom: mock(async () => ({
       id: "rb1",
@@ -25,6 +26,21 @@ describe("roomHandler", () => {
 
       expect(roomService.listActive).toHaveBeenCalledWith();
       expect(result).toEqual([{ id: "r1" }]);
+    });
+  });
+
+  describe("listPendingApprovals", () => {
+    test("passes the requested limit to room.listPendingApprovals", async () => {
+      const roomService = makeRoomService();
+      const handler = createRoomHandler(roomService as any);
+
+      const result = await handler.listPendingApprovals({
+        context: { session: { user: { id: "u1" } } },
+        input: { limit: 25 },
+      } as any);
+
+      expect(roomService.listPendingApprovals).toHaveBeenCalledWith(25);
+      expect(result).toEqual([{ bookingId: "b1" }]);
     });
   });
 

@@ -16,6 +16,10 @@ function makeRoom(overrides: Record<string, unknown> = {}) {
 function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
   return {
     findActiveRooms: mock(async (_conn: any) => []),
+    findPendingRoomApprovals: mock(async (_conn: any, _limit?: number) => []),
+    findPendingApprovalBookingById: mock(
+      async (_conn: any, _bookingId: string) => null,
+    ),
     insertRoom: mock(async (_conn: any, _values: any) => ({})),
     findRoomById: mock(async (_conn: any, _roomId: string) => null),
     findRoomBookings: mock(async (_conn: any) => []),
@@ -50,6 +54,29 @@ describe("createRoomService", () => {
       const service = createRoomService(repo, makeDb());
       const result = await service.listActive();
       expect(result).toEqual(rooms);
+    });
+  });
+
+  describe("listPendingApprovals", () => {
+    test("returns pending room approvals from repo", async () => {
+      const approvals = [
+        {
+          bookingId: "b1",
+          currentState: "awaiting_admin_room_approval",
+          requestedRoomId: "room1",
+        },
+      ];
+      const repo = makeRepo({
+        findPendingRoomApprovals: mock(async (_conn, limit) => {
+          expect(limit).toBe(25);
+          return approvals;
+        }),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      const result = await service.listPendingApprovals(25);
+
+      expect(result).toEqual(approvals);
     });
   });
 
@@ -349,6 +376,38 @@ describe("createRoomService", () => {
       const service = createRoomService(repo, makeDb());
       const result = await service.cancelRoomBooking("b1");
       expect(result.status).toBe("cancelled");
+    });
+
+    test("M6: cancels a pending booking when no requested room row exists", async () => {
+      const repo = makeRepo({
+        findCancellableRoomBookingByBookingId: mock(async () => null),
+        findPendingApprovalBookingById: mock(async () => ({
+          id: "b1",
+          scheduledStartAt: new Date("2024-01-01T10:00:00Z"),
+          scheduledEndAt: new Date("2024-01-01T11:00:00Z"),
+        })),
+      });
+      const bookingPort = {
+        transitionBookingToScheduled: mock(async () => {}),
+        getBookingRecipients: mock(async () => ({
+          tutorId: "tutor1",
+          participantUserIds: ["student1"],
+        })),
+        cancelOfflineBooking: mock(async () => {}),
+      };
+
+      const service = createRoomService(repo, makeDb(), bookingPort);
+      const result = await service.cancelRoomBooking("b1", "admin1");
+
+      expect(bookingPort.cancelOfflineBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        "admin1",
+      );
+      expect(result).toMatchObject({
+        bookingId: "b1",
+        status: "cancelled",
+      });
     });
   });
 

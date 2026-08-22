@@ -10,6 +10,10 @@ const endAfterStart = (d: { startAt: Date; endAt: Date }) =>
 
 export const listRoomsInput = z.void();
 
+export const listPendingRoomApprovalsInput = z.object({
+  limit: z.number().int().min(1).max(100).optional(),
+});
+
 export const createRoomInput = z.object({
   name: z.string().min(1).max(255),
   location: z.string().min(1).max(255),
@@ -53,6 +57,9 @@ export const cancelRoomInput = z.object({
 });
 
 export type CreateRoomInput = z.infer<typeof createRoomInput>;
+export type ListPendingRoomApprovalsInput = z.infer<
+  typeof listPendingRoomApprovalsInput
+>;
 export type AssignRoomInput = z.infer<typeof assignRoomInput>;
 export type CheckAvailabilityInput = z.infer<typeof checkAvailabilityInput>;
 export type RelocateRoomInput = z.infer<typeof relocateRoomInput>;

@@ -1,5 +1,6 @@
 import {
   listRoomsInput,
+  listPendingRoomApprovalsInput,
   createRoomInput,
   assignRoomInput,
   checkAvailabilityInput,
@@ -21,6 +22,18 @@ export function createRoomRouter(handler: RoomHandler) {
       })
       .input(listRoomsInput)
       .handler(handler.list),
+
+    listPendingApprovals: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/rooms/pending-approvals",
+        tags: ["Admin", "Rooms"],
+        summary: "List pending room approvals",
+        description:
+          "Returns offline bookings waiting for admin room approval, including requested-room conflicts",
+      })
+      .input(listPendingRoomApprovalsInput)
+      .handler(handler.listPendingApprovals),
 
     create: adminProcedure
       .route({
