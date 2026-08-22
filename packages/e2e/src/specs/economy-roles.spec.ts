@@ -55,18 +55,54 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
   await expect(page.getByText("Cogito take schedule")).toBeVisible();
   await expect(page.locator("#online-cogito-base")).toHaveValue(/^[0-9]+$/);
 
-  await page.locator("#online-cogito-base").fill("55000");
-  await page.locator("#online-cogito-increment").fill("25000");
+  const onlineBaseInput = page.locator("#online-cogito-base");
+  const onlineIncrementInput = page.locator("#online-cogito-increment");
+  const originalOnlineBase = Number(await onlineBaseInput.inputValue());
+  const originalOnlineIncrement = Number(
+    await onlineIncrementInput.inputValue(),
+  );
+  const updatedOnlineBase = originalOnlineBase + 5_000;
+  const updatedOnlineIncrement = originalOnlineIncrement + 5_000;
+
+  await onlineBaseInput.fill(String(updatedOnlineBase));
+  await onlineIncrementInput.fill(String(updatedOnlineIncrement));
   await page.getByRole("button", { name: "Save take schedule" }).click();
   await expect(page.getByText("Economy settings saved")).toBeVisible();
-  await expect(page.getByText("Rp 55.000").first()).toBeVisible();
+  await expect(onlineBaseInput).toHaveValue(String(updatedOnlineBase));
+
+  const tutorContext = await page.context().browser()!.newContext();
+  const tutorPage = await tutorContext.newPage();
+  try {
+    await login(tutorPage, TUTOR_EMAIL, TUTOR_PASSWORD);
+    await tutorPage.goto("/notifications");
+    await expect(
+      tutorPage
+        .getByRole("heading", { name: "Notifications", exact: true })
+        .last(),
+    ).toBeVisible();
+    await expect(
+      tutorPage.getByText("Cogito rate updated", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      tutorPage.getByText(
+        `Online: Rp${updatedOnlineBase.toLocaleString("id-ID")} base`,
+        { exact: false },
+      ),
+    ).toBeVisible();
+  } finally {
+    await tutorContext.close();
+  }
 
   await page.reload();
-  await expect(page.locator("#online-cogito-base")).toHaveValue("55000");
+  await expect(page.locator("#online-cogito-base")).toHaveValue(
+    String(updatedOnlineBase),
+  );
 
-  // Keep the seeded environment deterministic for the rest of the suite.
-  await page.locator("#online-cogito-base").fill("50000");
-  await page.locator("#online-cogito-increment").fill("20000");
+  // Restore the state that was present before this test.
+  await page.locator("#online-cogito-base").fill(String(originalOnlineBase));
+  await page
+    .locator("#online-cogito-increment")
+    .fill(String(originalOnlineIncrement));
   await page.getByRole("button", { name: "Save take schedule" }).click();
   await expect(page.getByText("Economy settings saved")).toBeVisible();
 });

@@ -262,7 +262,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                 Book a session
               </Heading>
               <Text className="text-muted">
-                Review current availability, choose a modality, and send a solo
+                Review current availability, choose a modality, and send a
                 booking request.
               </Text>
             </div>
@@ -284,7 +284,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               />
             }
           >
-            Book a solo session
+            Book a session
           </Button>
           <DrawerClose
             render={<Button variant="secondary" aria-label="Close drawer" />}

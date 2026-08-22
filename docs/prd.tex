@@ -781,6 +781,7 @@ Tutor cards and tutor profiles show the final Marks per student before the stude
     \item Class size is capped at $N \in \{1,2,3,4,5,6\}$.
     \item Tutors configure an IDR one-student base honorarium for each supported modality. The value must be at least Rp 50,000 and must use Rp 5,000 increments.
     \item Admin configures the active Cogito take schedule: online base Rp 50,000 and increment Rp 20,000; offline base Rp 90,000 and increment Rp 40,000 by default. Each editable value uses Rp 5,000 increments; increments may be zero but may not be negative.
+    \item When an admin changes any active Cogito take value, every current tutor account receives a durable in-app notification describing the new online/offline schedule. Re-saving identical values is a no-op and does not create a new version, audit event, or notification.
     \item The default one-student base honorarium is Rp 175,000 for online classes and Rp 225,000 for offline classes.
     \item Tutors may change their base honorarium without a ceiling; changing a rate affects future bookings only.
     \item Tutors receive an IDR honorarium from Cogito. Tutors do not receive, hold, withdraw, or convert Marks.
@@ -982,6 +983,8 @@ Late cancel / no-show / emergency override & Yes & Yes, affected participants & 
 Tutor reschedule proposed / approved & Yes & Yes, affected participants & Requires student approval. \\
 \hline
 Group repricing / reconfirmation request & Yes & Yes, all current participants & Cost changes must be explicit. \\
+\hline
+Active Cogito take schedule changed & Yes & No & Notify every current tutor in-app; applies to future booking/repricing snapshots only. Identical saves do not emit a notification. \\
 \hline
 Payment / refund / emergency refund & Yes & Yes, payer & Wallet event. \\
 \hline

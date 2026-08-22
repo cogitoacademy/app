@@ -145,9 +145,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ expectedVersion, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr }` (IDR values use Rp 5,000 increments; bases are at least Rp 5,000; increments are non-negative)
-- **Output:** The updated economy settings object, with `version` incremented
+- **Output:** The updated economy settings object; `version` increments only when at least one schedule value changes
 - **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
-- **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged.
+- **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. Every user currently assigned the `tutor` role receives one durable in-app `system` notification per new economy version; the notification is deduplicated by version and tutor id. Saving identical values is a no-op and creates no new audit event or notification.
 
 ---
 
@@ -761,8 +761,8 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
-- **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Paginated booking list sorted by urgency
+- **Output:** `{ items: Booking[] & { reportedAt: string | null, slaDeadline: string | null, escalated: boolean }[], nextCursor }`
+- **Description:** Paginated booking list sorted by urgency. For override reports, `reportedAt` comes from `overrideMeta.overriddenAt`, `slaDeadline` applies OQ-04 (30 minutes Mon–Sat 09:00–21:00 WIB, otherwise 4 hours), and `escalated` is computed against that business-hours deadline.
 
 ### `adminBooking.getBookingStateHistory`
 

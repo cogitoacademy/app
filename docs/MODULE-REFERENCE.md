@@ -67,7 +67,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 - `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminUpdateEconomySettingsInput`
 - `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`
-- `admin.repo.ts` — `findUserById`, `listUsers`, `updateUserRole`
+- `admin.repo.ts` — `findUserById`, `listUsers`, `listUserIdsByRole`, `updateUserRole`
 - `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
 - `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
@@ -80,9 +80,9 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
 - `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
 - `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
-- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only
+- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; fan-outs one durable in-app rate-change notification to every current tutor, while identical values return the current config without a write
 
-**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`
+**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`, `NotificationPort`
 
 **Business Rules:**
 
@@ -92,12 +92,14 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - Economy writes require the current `version`; stale writes fail with `ECONOMY_CONFIG_CONFLICT`
 - Economy base and increment values are validated in Rp 5,000 increments; increments are non-negative
 - Existing booking price snapshots are immutable when the active schedule changes
+- Rate-change notifications are in-app system notifications for all users whose current role is `tutor`; event keys are unique per economy version and tutor
+- Re-saving the same four schedule values is a no-op and does not increment the economy version, write audit, or fan out notifications
 
 ---
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — filtered override queue with urgency, booking detail/history review, before/after override preview, state history, and admin refunds.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, booking detail/history review, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds.
 
 **Files:**
 
@@ -110,7 +112,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 **Service Methods:**
 
-- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated
+- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`
 - `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking

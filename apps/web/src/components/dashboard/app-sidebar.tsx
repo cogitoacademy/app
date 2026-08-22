@@ -56,7 +56,7 @@ const tutorNavItems = [
 ] as const;
 
 const adminNavItems = [
-  { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/admin", label: "Dashboard", icon: IconHome },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
   { to: "/admin-economy", label: "Economy settings", icon: IconAdjustments },
