@@ -19,6 +19,10 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
 
+### Competition Calendar smoke check
+
+As an authenticated user, open `/calendar` and confirm published Sanity competitions render in the month grid. Verify today, outside-month days, multi-day spans, and the `+N more` overflow popup; select an event from either the grid or popup and confirm the responsive details modal shows categories, level, scale, organizer, location, timeline, registration deadline, description, and the available external-link actions. Switch to **Agenda**, confirm the 30-day grouped list and rich event cards, use `M`/`A` to switch views, and verify previous/next period plus **Today** navigation. The calendar remains read-only and the browser console should remain free of runtime errors.
+
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
 
 ### Economy rate-control smoke check

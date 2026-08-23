@@ -19,6 +19,10 @@ Tutor onboarding now uses the normalized mother-category/child-subject selector 
 
 The onboarding and tutor-list selectors store normalized IDs/values for submission or filtering but render human-readable labels in their triggers, so backend UUIDs remain hidden from users. The tutor list now supports selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
 
+### Competition Calendar parity follow-up (2026-08-23)
+
+The authenticated calendar now carries the full read-only interaction model from `cogito-acad`: a responsive month grid with multi-day spans and overflow popup, a 30-day agenda view with rich event cards, period navigation, `M`/`A` keyboard shortcuts, and a responsive details modal with metadata and external actions. The app intentionally keeps its own Selia components, design tokens, Tabler icon set, and English-only copy; Sanity remains the source of truth and the API contract is unchanged.
+
 ### Profile UX follow-up (2026-08-22)
 
 The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
@@ -107,7 +111,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | **Closed (2026-08-22)** — dedicated route, hydrated participant wallets/ledger, OQ-04 SLA deadline/status, and escalation link |
 | F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed                                                                                                                         |
 | F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed                                                                                                                         |
-| F4  | Competition Calendar link                     | FR-11                  | Sanity content module + protected route      | 1.5d   | **Closed (authenticated Sanity-backed calendar)**                                                                              |
+| F4  | Competition Calendar link                     | FR-11                  | Sanity content module + protected route      | 1.5d   | **Closed (authenticated Sanity-backed calendar with academy-parity month/agenda/modal UX)**                                     |
 | F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed                                                                                                                         |
 | F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed                                                                                                                         |
 | F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed                                                                                                                         |

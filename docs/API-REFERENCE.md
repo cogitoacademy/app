@@ -19,7 +19,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `[{ id, title, description, location, categories: [{ id, name, coreCategory }], educationLevels, startDate, endDate, scale, organizer, registrationDeadline, registrationLink, socialMediaLink }]`
-- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA.
+- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract.
 
 ### `content.listStudentResources`
 
