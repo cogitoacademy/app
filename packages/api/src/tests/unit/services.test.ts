@@ -1,6 +1,86 @@
 import { describe, test, expect } from "bun:test";
+import {
+  createProviderRefundDelegate,
+  resolveGoogleMeetConfig,
+  resolveXenditConfig,
+} from "../../services";
 
 describe("Services conditional logic", () => {
+  test("resolves OAuth Google Meet configuration", () => {
+    expect(
+      resolveGoogleMeetConfig({
+        googleClientId: "client",
+        googleClientSecret: "secret",
+        refreshToken: "refresh",
+      }),
+    ).toEqual({
+      authType: "oauth_refresh_token",
+      clientId: "client",
+      clientSecret: "secret",
+      refreshToken: "refresh",
+      calendarId: "primary",
+    });
+  });
+
+  test("resolves service-account Google Meet configuration", () => {
+    expect(
+      resolveGoogleMeetConfig({
+        clientEmail: "service@example.com",
+        privateKey: "private-key",
+        impersonatedUser: "tutor@example.com",
+        calendarId: "calendar-1",
+      }),
+    ).toEqual({
+      authType: "service_account",
+      clientEmail: "service@example.com",
+      privateKey: "private-key",
+      impersonatedUser: "tutor@example.com",
+      calendarId: "calendar-1",
+    });
+  });
+
+  test("returns no Google Meet config when credentials are incomplete", () => {
+    expect(
+      resolveGoogleMeetConfig({ clientEmail: "service@example.com" }),
+    ).toBe(undefined);
+  });
+
+  test("resolves Xendit configuration only for a complete Xendit setup", () => {
+    expect(
+      resolveXenditConfig({
+        provider: "xendit",
+        secretKey: "secret",
+        webhookToken: "token",
+        successRedirectUrl: "https://app.test/success",
+        failureRedirectUrl: "https://app.test/failure",
+        defaultPaymentMethod: "qris",
+      }),
+    ).toMatchObject({
+      secretKey: "secret",
+      webhookToken: "token",
+      defaultPaymentMethod: "qris",
+    });
+    expect(
+      resolveXenditConfig({
+        provider: "stub",
+        defaultPaymentMethod: "ewallet_ovo",
+      }),
+    ).toBeUndefined();
+  });
+
+  test("creates a provider refund delegate", async () => {
+    const refund = async (
+      paymentRequestId: string,
+      amountIdr: number,
+      reason?: string,
+    ) => ({ providerRefundId: `${paymentRequestId}:${amountIdr}:${reason}` });
+    const delegate = createProviderRefundDelegate({ refund });
+
+    await expect(delegate("pay-1", 5000, "duplicate")).resolves.toEqual({
+      providerRefundId: "pay-1:5000:duplicate",
+    });
+  });
+
   test("Google Meet enabled when env vars are truthy", () => {
     const GOOGLE_MEET_ENABLED = true;
     const GOOGLE_CLIENT_EMAIL = "test@example.com";

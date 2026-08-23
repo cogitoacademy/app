@@ -7,7 +7,7 @@ import {
   paymentRecord,
 } from "@cogito-app/db/schema";
 import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
-import { PAYMENT_STATUS, RESPONSE_WINDOW_MS } from "../../shared/constants";
+import { PAYMENT_STATUS } from "../../shared/constants";
 import type { DbOrTx } from "../../lib/tx";
 
 export type AdminBookingRepo = ReturnType<typeof createAdminBookingRepo>;
@@ -128,11 +128,9 @@ export async function listBookingsByState(
   if (opts?.urgency) {
     conditions.push(inArray(booking.currentState, URGENCY_BANDS[opts.urgency]));
   }
-  if (opts?.escalated === true) {
-    conditions.push(
-      sql`${booking.overrideMeta}->>'overriddenAt' < ${new Date(Date.now() - RESPONSE_WINDOW_MS).toISOString()}`,
-    );
-  }
+  // `escalated` is intentionally not applied in SQL. OQ-04 uses a
+  // business-hours deadline, so the service projects each report timestamp
+  // through the authoritative SLA calculator before filtering.
 
   return conn
     .select()

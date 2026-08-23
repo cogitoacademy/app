@@ -1,13 +1,13 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                                             |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-22; F8/F13/F14/F16 closed by REVIEW-FIXES-3 P6; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; F1/F9/F18 partial) |
-| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                                |
-| Created    | 2026-07-29                                                                                                                                                        |
-| Audited    | 2026-08-22                                                                                                                                                        |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                     |
-| Scope      | Frontend only (`apps/web/`)                                                                                                                                       |
+| Field      | Value                                                                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Living gap inventory (updated 2026-08-22; F1/F8/F9/F13/F14/F16/F18 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed) |
+| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                  |
+| Created    | 2026-07-29                                                                                                                          |
+| Audited    | 2026-08-22                                                                                                                          |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                       |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                              |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
@@ -86,10 +86,11 @@ for classmates.
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Compatibility redirect to the shared `/bookings` list                                                                         |
 | `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                              |
 | `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                                                            |
-| `/_app/admin-operations`     | admin-operations-page.tsx       | Partial F1 baseline — filtered queue, booking detail/history, override, rooms, and wallet lookup                              |
+| `/_app/admin`                | admin-dashboard-page.tsx        | Complete F1 admin workspace entry point                                                                                       |
+| `/_app/admin-operations`     | admin-operations-page.tsx       | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and wallet lookup          |
 | `/_app/admin-tutors`         | admin tutor invite + review     | Exists                                                                                                                        |
 | `/_app/admin-achievements`   | achievement-moderation-page.tsx | Exists (moderation UI)                                                                                                        |
-| `/_app/admin-economy`        | economy-settings-page.tsx       | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence    |
+| `/_app/admin-economy`        | economy-settings-page.tsx       | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence   |
 
 ### Remaining gaps (no complete surface yet)
 
@@ -99,29 +100,29 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 ## Frontend Gap Summary
 
-| #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status                                                                        |
-| --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ----------------------------------------------------------------------------- |
-| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | Partial — detail/history view added; full participant and SLA surface remains |
-| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed                                                                        |
-| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed                                                                        |
-| F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed                                                                        |
-| F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed                                                                        |
-| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed                                                                        |
-| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed                                                                        |
-| F8  | Series session completion UI                  | FR-20                  | G18                                         | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | Partial                                                                       |
-| F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed                                                                        |
-| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed                                                                        |
-| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | **Closed (room approval queue)**                                              |
-| F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed                                                                        |
-| F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                |
-| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed                                                                        |
-| F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | Partial                                                                       |
-| F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                |
+| #   | Gap                                           | PRD Ref                | Depends on (backend)                        | Effort | Status                                                                                                                         |
+| --- | --------------------------------------------- | ---------------------- | ------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | **Closed (2026-08-22)** — dedicated route, hydrated participant wallets/ledger, OQ-04 SLA deadline/status, and escalation link |
+| F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed                                                                                                                         |
+| F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed                                                                                                                         |
+| F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed                                                                                                                         |
+| F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed                                                                                                                         |
+| F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed                                                                                                                         |
+| F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed                                                                                                                         |
+| F8  | Series session completion UI                  | FR-20                  | G18                                         | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                          | 1.5d   | **Closed (2026-08-22)** — toolbar editor, client DOMPurify render pass, and author context                                     |
+| F10 | Notifications page                            | FR-17                  | G17                                         | 1.5d   | Closed                                                                                                                         |
+| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                          | 1d     | Closed                                                                                                                         |
+| F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | **Closed (room approval queue)**                                                                                               |
+| F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed                                                                                                                         |
+| F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed                                                                                                                         |
+| F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal                                                      |
+| F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                                                                  |
 
-**Total estimated effort: ~5.5 days for remaining gaps (F1, F9, F18 partial; J2 open).**
+**Total estimated effort: ~0 days for remaining tracked gaps (F1–F19 are closed).**
 
 > **Audit 2026-08-14:** F4, F5, F10, F15 verified **closed** in `apps/web` (git HEAD `9b7df5e`). F8, F16, F17 remain partial. All remaining missing gaps have backend procedures ready except F13 (needs new `tutor.getMyPayouts` router) and F16 (needs a new public achievement list procedure).
 
@@ -129,19 +130,20 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 > **Audit 2026-08-19 (against main `d11962b`):** PR #55 merged (`d4e50e0`). Verified in `apps/web/src`:
 >
-> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The F6 reschedule action now dispatches by viewer role: student proposers use `booking.proposeReschedule`, tutors use `tutorActions.proposeReschedule`. The remaining F1 limitations are recorded above.
+> **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The F6 reschedule action now dispatches by viewer role: student proposers use `booking.proposeReschedule`, tutors use `tutorActions.proposeReschedule`. The F1 follow-up branch closes the remaining admin route, participant/wallet/ledger, and OQ-04 SLA presentation gaps.
 >
 > - **F2/F3/F6/F7/F11/F17 → Closed** — override dialog with `previewOverride`/`applyOverride` (`admin-operations-page.tsx`), lateness report via `support.createTicket` (`booking-lifecycle-actions.tsx`), reschedule propose/accept/reject, wallet/ledger lookup tab, booking detail baseline.
 > - **F8 → Closed** — series bookings render a per-session list with per-session "Complete session" buttons calling `completeSession({ bookingId, sessionId })` (`booking-detail-page.tsx`).
 > - **F13 → Closed** — payout card on the tutor dashboard via `tutor.getMyPayouts` (`tutor-dashboard-page.tsx`).
 > - **F14 → Closed** — booking detail renders the backend `disclaimer` in a warning callout (`booking-detail-page.tsx:304`).
 > - **F16 → Closed** — landing page renders live `achievement.listApproved` data with static fallback (`landing-page.tsx:74`).
-> - **F1 → Partial** — admin dashboard + filtered booking queue + override dialog now include a booking-detail/history view backed by `getBookingStateHistory`; the dedicated route, fully hydrated participant/per-wallet detail, and business-hours SLA surface remain open.
-> - **F9 → Partial** — notes list + textarea with server-side sanitized HTML render (`dangerouslySetInnerHTML`); no rich-text toolbar editor and no client-side DOMPurify.
+> - **F1 → Closed** — `/_app/admin` is the admin workspace entry point; the operations queue exposes category/urgency/SLA filters, reported reason/source/time-since-report, business-hours deadline/status, and a WhatsApp escalation link. The booking detail loads the full booking read model plus each participant's wallet and booking-scoped ledger entries.
+> - **F9 → Closed** — completed-booking notes now use a toolbar editor for paragraphs/headings, emphasis, lists, and links. Both preview and persisted note rendering pass through a DOMPurify allow-list, with the existing server sanitizer remaining authoritative.
 > - **F12 → Closed** — `admin-operations-page.tsx` now consumes `room.listPendingApprovals` for offline bookings in `awaiting_admin_room_approval`; admins can assign the requested room, load a booking to choose another room (or use the existing relocate operation), and cancel the pending approval. The backend queue also includes requested-room conflicts with no `room_booking` row.
-> - **F18 → Partial** — invitee confirm/decline/reconfirm wired; **inviter-side `withdraw` UI still missing** (0 references to `withdraw` in `apps/web/src`).
-> - **J2 → Open** — no proactive expiry UX; only the 401/403 redirect with `reason=session-expired` (`orpc.ts:26`).
-> - **Dead components → still present** — `chart.tsx`, `data.ts`, `user-menu.tsx` have 0 importers in `apps/web/src`.
+> - **F18 → Closed (2026-08-22 follow-up)** — invitee confirm/decline/reconfirm plus proposer-side pending-invite withdrawal are wired. The new `booking.withdrawInvite` procedure marks only a pending invitee `withdrawn_pre_h2`, preserves headcount/holds, and notifies the target.
+> - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
+> - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
+> - **Dead components → Closed** — the previously unused `chart.tsx`, `data.ts`, and `user-menu.tsx` files were removed; no references remain in `apps/web/src`.
 
 ---
 
@@ -151,7 +153,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10 (Admin Override), OQ-04 (SLA escalation), prd.tex:717-728
 
-**Current state:** **PARTIAL (2026-08-22).** Admin dashboard (`admin-dashboard-page.tsx`) + booking queue with category, urgency, and escalated filters, an admin booking-detail dialog, and an override dialog exist (`admin-operations-page.tsx`). The detail dialog consumes `adminBooking.getBookingStateHistory` and shows booking context, core participant roles, affected participant IDs from the latest override, booking-level Marks impact, and the full transition timeline. **Still missing:** a dedicated `/admin` route, a fully hydrated participant roster with per-wallet ledger detail, and the PRD’s business-hours SLA deadline presentation/escalation channel.
+**Current state:** **CLOSED (2026-08-22).** The dedicated `/_app/admin` route owns the admin workspace. The operations queue supports category, urgency, and SLA-status filtering; reports show affected-user count, reason/source, elapsed time, OQ-04 deadline, and escalated status with the WhatsApp escalation channel. The booking-detail dialog consumes the full admin-safe `booking.get` read model, renders the hydrated participant roster with per-wallet balances and booking-scoped ledger entries, and retains state history plus override actions.
 
 **Required:**
 
@@ -334,13 +336,13 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-09, DL-18, prd.tex:1033-1043
 
-**Current state:** **PARTIAL (2026-08-19).** Notes list + textarea on completed bookings, rendered via `dangerouslySetInnerHTML` with **server-side** `sanitizeHtml` (backend `packages/api/src/lib/sanitize.ts`). No rich-text toolbar editor (headings/lists/emphasis) and no client-side DOMPurify — FR-09's formatting requirements are only partially met.
+**Current state:** **CLOSED (2026-08-22).** Completed bookings expose a shared notes view for both parties and a toolbar editor supporting paragraphs, headings, bold, italic, bullet lists, numbered lists, and safe links. Preview and persisted note rendering use a DOMPurify allow-list before `dangerouslySetInnerHTML`; the API still sanitizes and validates content server-side.
 
 **Required (after G7 backend):**
 
 1. On booking detail (after session completed), "Add session note" section
 2. Rich-text editor supporting: paragraphs, headings, bullet lists, numbered lists, links, bold, italic
-3. Sanitize on render (DOMPurify)
+3. Sanitize on render (DOMPurify allow-list; server sanitizer remains authoritative)
 4. "View notes" section showing all notes from both parties
 5. Only visible after session is completed
 
@@ -534,7 +536,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-20, TC-25
 
-**Current state:** **PARTIAL (2026-08-19).** `confirmInvite`/`declineInvite`/`reconfirm` are wired in `booking-lifecycle-actions.tsx` (merged via #55). **Still missing:** inviter-side `withdraw` UI for an invite (0 references to `withdraw` in `apps/web/src`), and the full no-opt-out disclaimer on the invitee acceptance screen (see F14).
+**Current state:** **CLOSED (2026-08-22).** `confirmInvite`/`declineInvite`/`reconfirm` are wired in `booking-lifecycle-actions.tsx` (merged via #55). The proposer now sees pending invitees and can withdraw one through an in-app confirmation dialog backed by `booking.withdrawInvite`. The no-opt-out disclaimer is covered by F14.
 
 **Required:**
 
@@ -542,15 +544,15 @@ Full override form per PRD §Emergency Override UI/UX:
 2. Accept → calls `booking.confirmInvite`
 3. Decline → calls `booking.declineInvite`
 4. Reconfirm flow for invitees whose attendance confirmation expires → calls `booking.reconfirm`
-5. Inviter-side withdraw for an invite → calls `booking.withdrawGroup`
+5. Inviter-side withdraw for a pending invite → calls `booking.withdrawInvite`; marks only that invitee `withdrawn_pre_h2`, keeps headcount/holds unchanged, and notifies the invitee
 6. Post-action states rendered (confirmed/pending/declined/withdrawn) in both the group booking detail and the invitee's booking list
 
 **Acceptance:**
 
 - Invitee can accept/decline a group invite and sees schedule + price + hold + disclaimer first
 - Reconfirmation prompt appears when needed
-- Inviter can withdraw an invite
-- No `confirmInvite`/`declineInvite`/`reconfirm`/`withdraw` gaps remain in `apps/web`
+- Inviter can withdraw a pending invite without affecting confirmed participants or Marks holds
+- No `confirmInvite`/`declineInvite`/`reconfirm`/invite-withdraw gaps remain in `apps/web`
 
 ---
 
@@ -558,7 +560,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** J2 (foundation-hardening), session expiry (7 days)
 
-**Current state:** **LAZY HANDLING ONLY (2026-08-19).** No proactive expiry UX. `_app.tsx` `beforeLoad` calls `getSession()` and redirects when the session is gone; `orpc.ts` `QueryCache` redirects on 401/403 with `reason=session-expired`. There is no countdown, toast, or pre-expiry warning.
+**Current state:** **CLOSED (2026-08-22).** `SessionExpiryNotice` is mounted in the authenticated shell, warns during the final 30 minutes, and redirects through the existing `reason=session-expired` fallback when the session is gone.
 
 **Required:**
 
@@ -576,11 +578,9 @@ Full override form per PRD §Emergency Override UI/UX:
 
 ### Dead Components Cleanup
 
-**Current state (2026-08-19):** Three components still have **0 importers** in `apps/web` and are candidates for removal:
+**Current state:** **CLOSED (2026-08-22).** The previously unused components were removed after a repo-wide importer check; no references remain in `apps/web`:
 
-- `chart.tsx`
-- `data.ts`
-- `user-menu.tsx`
+- `chart.tsx`, `data.ts`, and `user-menu.tsx`
 
 **Required:**
 
@@ -610,7 +610,7 @@ Follow existing frontend conventions:
 
 ### Selia Components Available
 
-Card, Button, Badge, Heading, Text, Stack, Input, Field, Select, Menu, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Toast. See AGENTS.md for full list + import paths.
+Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Toast. See AGENTS.md for full list + import paths.
 
 ---
 
@@ -618,6 +618,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Field, Select, Menu, Table, It
 
 - v1.11 (2026-08-22): Moved available Booking actions above Marks in the sticky desktop rail while keeping session notes/support reports in the main content flow. Narrow layouts place actions and Marks before Activity. No booking API or state-machine contract changed.
  - v1.10 (2026-08-22): Moved format/access and participant identity details into the booking detail overview. The overview keeps meeting/room access prominent, shows participant images/names/roles/statuses in a responsive list, and leaves only Marks in the sticky metadata rail. No booking API or state-machine contract changed.
+- v1.10a (2026-08-22): Replaced app-level browser-native date/time/number/select/textarea controls with Selia wrappers and the shared minute-level date/time primitives. This is a UI-only refactor; RPC, schema, and state-machine contracts are unchanged.
 - v1.9 (2026-08-22): Tutor discovery category and child-subject filters now support multi-select values with label-preserving triggers and normalized array filters.
 - v1.8 (2026-08-22): Refined booking detail participants, Marks prefix, activity timeline, and online meeting status. The detail page uses profile images with initials fallback, a newest-first activity line with transition-specific icons and one destination-state badge, 30–60 second refresh while a meeting link is pending, and explicit copy for `confirmed` provider retries. The meeting providers now update the newest meeting-attempt row for manual-link fallback, and the booking read model never reports a URL-less row as `ready`.
 - v1.7 (2026-08-22): Replaced booking cancel/complete browser confirmation prompts with Selia dialogs and raised the global toast layer above dialog overlays so mutation feedback remains visible. No booking API or state-machine contract changed.

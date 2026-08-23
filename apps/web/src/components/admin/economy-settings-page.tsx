@@ -26,7 +26,7 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
-import { Input } from "@cogito-app/ui/components/selia/input";
+import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -209,14 +209,16 @@ export function EconomySettingsPage() {
                   <FieldLabel htmlFor="online-cogito-base">
                     Base take · class for 1
                   </FieldLabel>
-                  <Input
+                  <NumberField
                     id="online-cogito-base"
-                    type="number"
                     min={5_000}
                     step={5_000}
-                    value={form.onlineCogitoBaseIdr}
-                    onChange={(event) =>
-                      updateField("onlineCogitoBaseIdr", event.target.value)
+                    value={parseAmount(form.onlineCogitoBaseIdr)}
+                    onValueChange={(value) =>
+                      updateField(
+                        "onlineCogitoBaseIdr",
+                        value === null ? "" : String(value),
+                      )
                     }
                   />
                   <FieldDescription>
@@ -230,16 +232,15 @@ export function EconomySettingsPage() {
                   <FieldLabel htmlFor="online-cogito-increment">
                     Additional student increment
                   </FieldLabel>
-                  <Input
+                  <NumberField
                     id="online-cogito-increment"
-                    type="number"
                     min={0}
                     step={5_000}
-                    value={form.onlineCogitoIncrementIdr}
-                    onChange={(event) =>
+                    value={parseAmount(form.onlineCogitoIncrementIdr)}
+                    onValueChange={(value) =>
                       updateField(
                         "onlineCogitoIncrementIdr",
-                        event.target.value,
+                        value === null ? "" : String(value),
                       )
                     }
                   />
@@ -255,14 +256,16 @@ export function EconomySettingsPage() {
                   <FieldLabel htmlFor="offline-cogito-base">
                     Base take · class for 1
                   </FieldLabel>
-                  <Input
+                  <NumberField
                     id="offline-cogito-base"
-                    type="number"
                     min={5_000}
                     step={5_000}
-                    value={form.offlineCogitoBaseIdr}
-                    onChange={(event) =>
-                      updateField("offlineCogitoBaseIdr", event.target.value)
+                    value={parseAmount(form.offlineCogitoBaseIdr)}
+                    onValueChange={(value) =>
+                      updateField(
+                        "offlineCogitoBaseIdr",
+                        value === null ? "" : String(value),
+                      )
                     }
                   />
                   <FieldDescription>
@@ -276,16 +279,15 @@ export function EconomySettingsPage() {
                   <FieldLabel htmlFor="offline-cogito-increment">
                     Additional student increment
                   </FieldLabel>
-                  <Input
+                  <NumberField
                     id="offline-cogito-increment"
-                    type="number"
                     min={0}
                     step={5_000}
-                    value={form.offlineCogitoIncrementIdr}
-                    onChange={(event) =>
+                    value={parseAmount(form.offlineCogitoIncrementIdr)}
+                    onValueChange={(value) =>
                       updateField(
                         "offlineCogitoIncrementIdr",
-                        event.target.value,
+                        value === null ? "" : String(value),
                       )
                     }
                   />

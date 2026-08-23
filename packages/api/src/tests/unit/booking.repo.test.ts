@@ -185,6 +185,21 @@ describe("createBookingRepo", () => {
     });
   });
 
+  describe("listActiveTutorAvailability", () => {
+    test("lists active future availability ordered by start date", async () => {
+      const slots = [{ id: "slot-1", tutorId: "t1", isActive: true }];
+      const findMany = mock(() => Promise.resolve(slots));
+      const conn: any = { query: { availabilitySlot: { findMany } } };
+      const repo = makeBookingRepo();
+
+      const result = await repo.listActiveTutorAvailability(conn, "t1");
+
+      expect(result).toEqual(slots);
+      expect(findMany).toHaveBeenCalledTimes(1);
+      expect(findMany.mock.calls[0]?.[0].limit).toBe(100);
+    });
+  });
+
   describe("findParticipant", () => {
     test("returns participant when found", async () => {
       const participant = {
@@ -755,5 +770,104 @@ describe("createBookingRepo", () => {
       expect(findMany).toHaveBeenCalledTimes(1);
       expect(findMany.mock.calls[0]?.[0]).toMatchObject({ limit: 11 });
     });
+  });
+});
+
+describe("createBookingRepo additional query paths", () => {
+  test("finds an availability window containing the requested session", async () => {
+    const slot = { id: "slot-1", tutorId: "tutor-1" };
+    const findFirst = mock(async () => slot);
+    const repo = createBookingRepo({
+      query: { availabilitySlot: { findFirst } },
+    } as any);
+    const start = new Date("2026-08-24T10:00:00.000Z");
+    const end = new Date("2026-08-24T11:30:00.000Z");
+
+    await expect(
+      repo.findAvailabilityWindowContaining(
+        { query: { availabilitySlot: { findFirst } } } as any,
+        "tutor-1",
+        start,
+        end,
+      ),
+    ).resolves.toEqual(slot);
+    expect(findFirst).toHaveBeenCalledTimes(1);
+    expect(findFirst.mock.calls[0]?.[0]).toHaveProperty("where");
+  });
+
+  test("updates booking session times", async () => {
+    const updateConn = makeUpdateConn();
+    updateConn.where.mockReturnValue(Promise.resolve(undefined));
+    const repo = makeBookingRepo();
+    const start = new Date("2026-08-24T10:00:00.000Z");
+    const end = new Date("2026-08-24T11:30:00.000Z");
+
+    await repo.updateBookingSessionTimes(updateConn as any, "session-1", {
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+    });
+
+    expect(updateConn.update).toHaveBeenCalledTimes(1);
+    expect(updateConn.set).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduledStartAt: start, scheduledEndAt: end }),
+    );
+    expect(updateConn.where).toHaveBeenCalledTimes(1);
+  });
+
+  test("cancels scheduled sessions belonging to a series", async () => {
+    const updateConn = makeUpdateConn();
+    updateConn.where.mockReturnValue(Promise.resolve(undefined));
+    const repo = makeBookingRepo();
+
+    await repo.cancelAllSessions(updateConn as any, "series-1");
+
+    expect(updateConn.update).toHaveBeenCalledTimes(1);
+    expect(updateConn.set).toHaveBeenCalledWith({ currentState: "cancelled" });
+    expect(updateConn.where).toHaveBeenCalledTimes(1);
+  });
+
+  test("lists bookings for a viewer with participant access filters", async () => {
+    const rows = [{ id: "booking-1" }];
+    const nestedWhere = mock(async () => []);
+    const nestedFrom = mock(() => ({ where: nestedWhere }));
+    const select = mock(() => ({ from: nestedFrom }));
+    const findMany = mock(async () => rows);
+    const repo = createBookingRepo({
+      select,
+      query: { booking: { findMany } },
+    } as any);
+
+    await expect(
+      repo.listBookingsForAccess("student-1", {
+        limit: 10,
+        states: ["confirmed"],
+        cursor: "2026-08-24T10:00:00.000Z|booking-0",
+      }),
+    ).resolves.toEqual(rows);
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(nestedFrom).toHaveBeenCalledTimes(1);
+    expect(nestedWhere).toHaveBeenCalledTimes(1);
+    expect(findMany.mock.calls[0]?.[0]).toHaveProperty("limit", 11);
+  });
+
+  test("lists all bookings for an admin without a relation subquery", async () => {
+    const rows = [{ id: "booking-1" }];
+    const select = mock(() => ({
+      from: mock(() => ({ where: mock(async () => []) })),
+    }));
+    const findMany = mock(async () => rows);
+    const repo = createBookingRepo({
+      select,
+      query: { booking: { findMany } },
+    } as any);
+
+    await expect(
+      repo.listBookingsForAccess("admin-1", {
+        limit: 20,
+        includeAll: true,
+      }),
+    ).resolves.toEqual(rows);
+    expect(select).not.toHaveBeenCalled();
+    expect(findMany.mock.calls[0]?.[0].where).toBeUndefined();
   });
 });

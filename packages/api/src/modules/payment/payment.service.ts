@@ -516,16 +516,6 @@ export function createPaymentService(deps: {
             },
             tx,
           );
-        } else {
-          await repo.updatePaymentStatus(
-            record.id,
-            {
-              status: input.status,
-              providerEventId: input.providerEventId,
-              failureReason: input.failureReason ?? null,
-            },
-            tx,
-          );
         }
       }
 

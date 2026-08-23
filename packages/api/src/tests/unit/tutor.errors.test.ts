@@ -7,6 +7,7 @@ import {
   AvailabilitySlotOverlapError,
   TutorProfileIncompleteError,
   InvalidTutorPricingError,
+  InvalidDateRangeError,
   mapTutorError,
 } from "../../modules/tutor/tutor.errors";
 
@@ -158,6 +159,12 @@ describe("tutor.errors", () => {
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {
       const result = mapTutorError(new TestDomainError());
       expect(result.status).toBe(500);
+    });
+
+    it("maps InvalidDateRangeError to BAD_REQUEST", () => {
+      const err = new InvalidDateRangeError("dateFrom");
+      expect(err.details).toEqual({ field: "dateFrom" });
+      expect(mapTutorError(err).status).toBe(400);
     });
   });
 });

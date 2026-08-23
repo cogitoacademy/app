@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   IconAlertTriangle,
   IconBuilding,
@@ -41,6 +46,7 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   getSelectItemValue,
   Select,
@@ -77,9 +83,8 @@ import {
 } from "@/components/booking/booking-ui";
 import { client, orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
+import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 
-const TEXTAREA_CLASS =
-  "min-h-24 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none placeholder:text-dimmed focus:border-input-accent-border";
 const OVERRIDE_CATEGORIES = [
   "tutor_no_show",
   "medical_emergency",
@@ -101,6 +106,7 @@ type OverrideCategory = (typeof OVERRIDE_CATEGORIES)[number];
 type MarksAction = (typeof MARKS_ACTIONS)[number];
 type Urgency = "all" | "high" | "medium" | "low";
 type OverrideCategoryFilter = "all" | (typeof OVERRIDE_LIST_CATEGORIES)[number];
+type SlaFilter = "all" | "escalated";
 
 export function AdminOperationsPage() {
   return (
@@ -142,14 +148,14 @@ function BookingQueue() {
   const queryClient = useQueryClient();
   const [category, setCategory] = useState<OverrideCategoryFilter>("all");
   const [urgency, setUrgency] = useState<Urgency>("all");
-  const [escalatedOnly, setEscalatedOnly] = useState(false);
+  const [slaFilter, setSlaFilter] = useState<SlaFilter>("all");
   const [details, setDetails] = useState<QueueItem | null>(null);
   const [selected, setSelected] = useState<QueueItem | null>(null);
   const queryInput = {
     limit: 50,
     ...(category !== "all" ? { category } : {}),
     ...(urgency !== "all" ? { urgency } : {}),
-    ...(escalatedOnly ? { escalated: true } : {}),
+    ...(slaFilter === "escalated" ? { escalated: true } : {}),
   };
   const queueQuery = useQuery(
     orpc.adminBooking.listBookings.queryOptions({ input: queryInput }),
@@ -203,12 +209,25 @@ function BookingQueue() {
               </SelectPopup>
             </Select>
           </Field>
-          <Button
-            variant={escalatedOnly ? "primary" : "secondary"}
-            onClick={() => setEscalatedOnly((value) => !value)}
-          >
-            <IconAlertTriangle /> Escalated only
-          </Button>
+          <Field className="min-w-48">
+            <FieldLabel>SLA status</FieldLabel>
+            <Select
+              value={slaFilter}
+              onValueChange={(value) =>
+                setSlaFilter(getSelectItemValue(value) as SlaFilter)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectList>
+                  <SelectItem value="all">All SLA statuses</SelectItem>
+                  <SelectItem value="escalated">Escalated only</SelectItem>
+                </SelectList>
+              </SelectPopup>
+            </Select>
+          </Field>
         </CardBody>
       </Card>
       {queueQuery.isPending ? (
@@ -235,6 +254,8 @@ function BookingQueue() {
                     <TableHead>Schedule</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Override</TableHead>
+                    <TableHead>Affected users</TableHead>
+                    <TableHead>SLA</TableHead>
                     <TableHead>Marks</TableHead>
                     <TableHead />
                   </TableRow>
@@ -276,6 +297,22 @@ function BookingQueue() {
                             Standard review
                           </Text>
                         )}
+                        <Text className="mt-1 max-w-48 text-xs text-muted">
+                          {getOverrideReason(item.overrideMeta) ??
+                            "No reported reason"}
+                        </Text>
+                        <Text className="text-xs text-dimmed">
+                          Source: admin override
+                        </Text>
+                      </TableCell>
+                      <TableCell>
+                        {getStringArray(
+                          getOverrideMetadata(item.overrideMeta)
+                            ?.affectedParticipants,
+                        ).length || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <SlaStatus item={item} timezone={item.timezone} />
                       </TableCell>
                       <TableCell>{item.holdAmount} held</TableCell>
                       <TableCell>
@@ -342,6 +379,13 @@ type QueueItem = Awaited<
 type StateHistoryItem = Awaited<
   ReturnType<typeof client.adminBooking.getBookingStateHistory>
 >[number];
+type AdminBookingDetail = Awaited<ReturnType<typeof client.booking.get>>;
+type AdminParticipant = AdminBookingDetail["participants"][number];
+type AdminWallet = Awaited<ReturnType<typeof client.admin.getWallet>>;
+type AdminLedgerPage = Awaited<
+  ReturnType<typeof client.admin.listLedgerEntries>
+>;
+type AdminLedgerEntry = AdminLedgerPage["items"][number];
 
 function AdminBookingDetailDialog({
   booking,
@@ -357,6 +401,33 @@ function AdminBookingDetailDialog({
       input: { bookingId: booking?.id ?? "" },
     }),
     enabled: booking !== null,
+  });
+  const bookingQuery = useQuery({
+    ...orpc.booking.get.queryOptions({
+      input: { bookingId: booking?.id ?? "" },
+    }),
+    enabled: booking !== null,
+  });
+  const participants = bookingQuery.data?.participants ?? [];
+  const walletQueries = useQueries({
+    queries: participants.map((participant) => ({
+      ...orpc.admin.getWallet.queryOptions({
+        input: { userId: participant.userId },
+      }),
+      enabled: booking !== null && bookingQuery.isSuccess,
+    })),
+  });
+  const ledgerQueries = useQueries({
+    queries: participants.map((participant) => ({
+      ...orpc.admin.listLedgerEntries.queryOptions({
+        input: {
+          userId: participant.userId,
+          bookingId: booking?.id,
+          limit: 8,
+        },
+      }),
+      enabled: booking !== null && bookingQuery.isSuccess,
+    })),
   });
   const metadata = getOverrideMetadata(booking?.overrideMeta);
   const affectedParticipants = getStringArray(metadata?.affectedParticipants);
@@ -379,12 +450,13 @@ function AdminBookingDetailDialog({
               {booking.escalated ? (
                 <Badge variant="danger">SLA escalated</Badge>
               ) : null}
+              <SlaStatus item={booking} timezone={booking.timezone} />
               <Text className="text-sm text-muted">
                 {booking.type} · {booking.modality}
               </Text>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-4">
               <AdminMetricCard
                 label="Session"
                 value={formatBookingDate(
@@ -400,7 +472,42 @@ function AdminBookingDetailDialog({
                 label="Confirmation"
                 value={`${booking.confirmedHeadcount} of ${booking.targetGroupSize} confirmed`}
               />
+              <AdminMetricCard
+                label="SLA deadline"
+                value={formatSlaDeadline(booking.slaDeadline, booking.timezone)}
+              />
             </div>
+
+            <Card>
+              <CardHeader>
+                <IconBox variant="danger-subtle" size="sm">
+                  <IconAlertTriangle />
+                </IconBox>
+                <CardTitle>Report context</CardTitle>
+                <CardDescription>
+                  Why this booking entered the admin queue and when the response
+                  window started.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="grid gap-3 sm:grid-cols-3">
+                <AdminMetricRow label="Source" value="Admin override" />
+                <AdminMetricRow
+                  label="Reported"
+                  value={formatReportedAt(booking.reportedAt, booking.timezone)}
+                />
+                <AdminMetricRow
+                  label="Time since report"
+                  value={formatTimeSince(booking.reportedAt)}
+                />
+                <div className="sm:col-span-3">
+                  <Text className="text-sm text-muted">Reported reason</Text>
+                  <Text className="mt-1 break-words text-sm">
+                    {getOverrideReason(booking.overrideMeta) ??
+                      "No reported reason"}
+                  </Text>
+                </div>
+              </CardBody>
+            </Card>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>
@@ -410,30 +517,39 @@ function AdminBookingDetailDialog({
                   </IconBox>
                   <CardTitle>Participants</CardTitle>
                   <CardDescription>
-                    Core booking roles and the users affected by the latest
-                    admin action.
+                    Hydrated participant roster with confirmation state and
+                    per-wallet ledger activity.
                   </CardDescription>
                 </CardHeader>
                 <CardBody className="space-y-3">
-                  <AdminParticipantRow
-                    label="Proposer"
-                    userId={booking.proposerId}
-                  />
-                  <AdminParticipantRow label="Tutor" userId={booking.tutorId} />
-                  {affectedParticipants.length > 0 ? (
-                    <div className="border-t border-border pt-3">
-                      <Text className="text-xs font-medium text-muted">
-                        Affected by latest override
-                      </Text>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {affectedParticipants.map((userId) => (
-                          <Badge key={userId} variant="secondary">
-                            {userId}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
+                  {bookingQuery.isPending ? (
+                    <Text className="text-muted">
+                      Loading participant wallets…
+                    </Text>
+                  ) : bookingQuery.isError ? (
+                    <Text className="text-danger-foreground">
+                      Participant detail could not be loaded.
+                    </Text>
+                  ) : participants.length > 0 ? (
+                    participants.map((participant, index) => (
+                      <AdminParticipantWalletCard
+                        key={participant.id}
+                        participant={participant}
+                        affected={affectedParticipants.includes(
+                          participant.userId,
+                        )}
+                        wallet={walletQueries[index]?.data}
+                        walletLoading={walletQueries[index]?.isPending ?? false}
+                        ledger={ledgerQueries[index]?.data?.items ?? []}
+                        ledgerLoading={ledgerQueries[index]?.isPending ?? false}
+                        timezone={booking.timezone}
+                      />
+                    ))
+                  ) : (
+                    <Text className="text-muted">
+                      No participant records were returned.
+                    </Text>
+                  )}
                 </CardBody>
               </Card>
 
@@ -557,17 +673,91 @@ function AdminMetricRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AdminParticipantRow({
-  label,
-  userId,
+function AdminParticipantWalletCard({
+  participant,
+  affected,
+  wallet,
+  walletLoading,
+  ledger,
+  ledgerLoading,
+  timezone,
 }: {
-  label: string;
-  userId: string;
+  participant: AdminParticipant;
+  affected: boolean;
+  wallet?: AdminWallet;
+  walletLoading: boolean;
+  ledger: AdminLedgerEntry[];
+  ledgerLoading: boolean;
+  timezone: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <Text className="text-sm text-muted">{label}</Text>
-      <Text className="break-all text-right font-mono text-xs">{userId}</Text>
+    <div className="rounded-lg border border-item-border bg-item p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Text className="font-medium">
+              {participant.user?.name ?? "Unknown participant"}
+            </Text>
+            <Badge variant="secondary">{humanize(participant.role)}</Badge>
+            {affected ? <Badge variant="warning">Affected</Badge> : null}
+          </div>
+          <Text className="truncate text-xs text-muted">
+            {participant.user?.email ?? participant.userId}
+          </Text>
+          <Text className="break-all font-mono text-[0.65rem] text-dimmed">
+            {participant.userId} · {humanize(participant.confirmationState)}
+          </Text>
+        </div>
+        {walletLoading ? (
+          <Text className="text-xs text-muted">Loading wallet…</Text>
+        ) : wallet ? (
+          <div className="grid grid-cols-3 gap-3 text-right">
+            <WalletMetric label="Total" value={wallet.totalBalance} />
+            <WalletMetric label="Held" value={wallet.heldBalance} />
+            <WalletMetric label="Available" value={wallet.availableBalance} />
+          </div>
+        ) : (
+          <Text className="text-xs text-danger-foreground">
+            Wallet unavailable
+          </Text>
+        )}
+      </div>
+      <div className="mt-3 border-t border-border pt-3">
+        <Text className="text-xs font-medium text-muted">Booking ledger</Text>
+        {ledgerLoading ? (
+          <Text className="mt-1 text-xs text-muted">Loading entries…</Text>
+        ) : ledger.length > 0 ? (
+          <div className="mt-1 divide-y divide-border">
+            {ledger.slice(0, 4).map((entry) => (
+              <div
+                className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs"
+                key={entry.id}
+              >
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">{humanize(entry.entryType)}</Badge>
+                  <Text className="text-muted">
+                    {formatBookingDate(entry.createdAt, timezone)}
+                  </Text>
+                </div>
+                <Text className="font-medium">{formatMarks(entry.amount)}</Text>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Text className="mt-1 text-xs text-muted">
+            No ledger entry references this booking.
+          </Text>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WalletMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <Text className="text-[0.65rem] text-muted">{label}</Text>
+      <Text className="text-xs font-medium">{formatMarks(value)}</Text>
     </div>
   );
 }
@@ -723,9 +913,8 @@ function OverrideDialog({
           </div>
           <Field>
             <FieldLabel htmlFor="override-reason">Reason</FieldLabel>
-            <textarea
+            <Textarea
               id="override-reason"
-              className={TEXTAREA_CLASS}
               value={reason}
               maxLength={2_000}
               onChange={(event) => {
@@ -1072,19 +1261,21 @@ function RoomOperations() {
             </Select>
           </Field>
           <Field>
-            <FieldLabel>Start</FieldLabel>
-            <Input
-              type="datetime-local"
+            <FieldLabel htmlFor="room-start-date">Start</FieldLabel>
+            <CrossBrowserDateTimeInput
+              id="room-start"
+              timeAriaLabel="Start time"
               value={startAt}
-              onChange={(event) => setStartAt(event.target.value)}
+              onChange={setStartAt}
             />
           </Field>
           <Field>
-            <FieldLabel>End</FieldLabel>
-            <Input
-              type="datetime-local"
+            <FieldLabel htmlFor="room-end-date">End</FieldLabel>
+            <CrossBrowserDateTimeInput
+              id="room-end"
+              timeAriaLabel="End time"
               value={endAt}
-              onChange={(event) => setEndAt(event.target.value)}
+              onChange={setEndAt}
             />
           </Field>
         </CardBody>
@@ -1318,6 +1509,10 @@ function getOverrideCategory(value: unknown) {
   const category = getOverrideMetadata(value)?.category;
   return typeof category === "string" ? category : null;
 }
+function getOverrideReason(value: unknown) {
+  const reason = getOverrideMetadata(value)?.reason;
+  return typeof reason === "string" && reason.trim() ? reason : null;
+}
 function getStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((entry): entry is string => typeof entry === "string");
@@ -1341,6 +1536,66 @@ function humanize(value: string) {
   return value
     .replaceAll("_", " ")
     .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function SlaStatus({
+  item,
+  timezone,
+}: {
+  item: Pick<QueueItem, "escalated" | "reportedAt" | "slaDeadline">;
+  timezone: string;
+}) {
+  if (!item.slaDeadline) {
+    return <Text className="text-xs text-muted">Not reported</Text>;
+  }
+
+  return (
+    <div className="min-w-32 space-y-1">
+      <Badge variant={item.escalated ? "danger" : "success"}>
+        {item.escalated ? "Expired" : "Within SLA"}
+      </Badge>
+      <Text className="text-xs text-muted">
+        Due {formatReportedAt(item.slaDeadline, timezone)}
+      </Text>
+      <Text className="text-xs text-dimmed">
+        {formatTimeSince(item.reportedAt)}
+      </Text>
+      {item.escalated ? (
+        <a
+          className="text-xs font-medium text-primary underline underline-offset-2"
+          href="https://wa.me/62881011990195"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Escalate this booking via WhatsApp"
+        >
+          WhatsApp escalation
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+function formatReportedAt(value: string | Date | null, timezone: string) {
+  return value ? formatBookingDate(value, timezone) : "Not reported";
+}
+
+function formatSlaDeadline(value: string | Date | null, timezone: string) {
+  if (!value) return "Not reported";
+  return formatBookingDate(value, timezone);
+}
+
+function formatTimeSince(value: string | Date | null) {
+  if (!value) return "No active report";
+  const elapsedMs = Math.max(0, Date.now() - new Date(value).getTime());
+  const elapsedMinutes = Math.floor(elapsedMs / 60_000);
+  if (elapsedMinutes < 60) return `${elapsedMinutes}m since report`;
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) return `${elapsedHours}h since report`;
+  return `${Math.floor(elapsedHours / 24)}d since report`;
+}
+
+function formatMarks(value: number) {
+  return `${new Intl.NumberFormat("id-ID").format(value)} Marks`;
 }
 
 function toDateTimeLocalInput(value: string | Date, timeZone: string) {

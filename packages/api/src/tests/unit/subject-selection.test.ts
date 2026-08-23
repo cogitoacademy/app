@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   haveSameSubjectIds,
+  toSubjectCategoryGroup,
   toNormalizedTutorSubjects,
   validateTutorSubjectIds,
 } from "../../modules/tutor-subjects/subject-selection";
@@ -70,6 +71,41 @@ describe("tutor subject selection", () => {
         },
       },
     ]);
+  });
+
+  test("projects a subject category and its children", () => {
+    const category = {
+      id: "cat-1",
+      slug: "languages",
+      name: "Languages",
+      description: "Language subjects",
+      children: [
+        {
+          id: "child-1",
+          slug: "english",
+          name: "English",
+          description: null,
+        },
+      ],
+    } as any;
+
+    expect(toSubjectCategoryGroup(category)).toEqual({
+      id: "cat-1",
+      slug: "languages",
+      name: "Languages",
+      description: "Language subjects",
+      children: [
+        {
+          id: "child-1",
+          slug: "english",
+          name: "English",
+          description: null,
+        },
+      ],
+    });
+    expect(
+      toSubjectCategoryGroup({ ...category, children: undefined }),
+    ).toEqual(expect.objectContaining({ children: [] }));
   });
 
   test("compares selections without depending on input order", () => {

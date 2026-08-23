@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -16,7 +16,7 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations.
 - Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/bookings`, `/availability`, and `/onboarding`.
-- Admin: priority operations and moderation counts; actions link to `/bookings`, `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify the booking queue filters, open a queue item’s detail view, confirm its state-history timeline loads, and use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
+- Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
@@ -48,6 +48,14 @@ Verify the role-aware default tab: students open on Upcoming, tutors open on Pen
 ### Booking detail smoke check
 
 Open an online booking detail and verify the overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above Marks in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. Confirm that a manual admin URL becomes visible after `adminBooking.setMeetingLink`, including after multiple failed provider rows. For an offline booking, verify the same overview section shows the room name and location instead of a meeting CTA.
+
+### Form-control smoke check
+
+On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
+
+On a completed booking, verify the Session notes card is visible to both tutor and student. Select text and exercise bold, italic, heading, paragraph, bullet, numbered-list, and safe-link actions; confirm the live preview matches the persisted note after reload, the author label distinguishes your note from the other participant's note, and an attempted `<script>` or `javascript:` link is removed by the render sanitizer.
+
+For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount and Marks holds unchanged, and creates a notification for that invitee. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply.
 
 ### Reschedule proposal smoke check
 
@@ -200,6 +208,16 @@ redis-cli LLEN "cogito-jobs:wait"  # Jobs waiting
 redis-cli LLEN "cogito-jobs:failed" # Failed jobs
 redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 ```
+
+## Test and Coverage
+
+Run the CI-equivalent coverage suite from the repository root after starting the test Postgres and Redis services:
+
+```bash
+bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+```
+
+The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% line coverage for `packages/api` and 100% line coverage overall from `coverage/lcov.info`; the Bun command's own function/statement threshold is a separate diagnostic and is not the CI gate.
 
 ## Common Errors
 

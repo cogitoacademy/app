@@ -1069,4 +1069,18 @@ describe("NotificationService dispatchQueuedEmails (outbox consumer)", () => {
     expect(result).toEqual({ sent: 0, failed: 0 });
     expect(repo.claimPendingDispatches).toHaveBeenCalledTimes(0);
   });
+
+  test("counts claimed rows as failed when no email port is configured", async () => {
+    const repo = makeRepo({
+      claimPendingDispatches: mock(async () => [queuedRow()]),
+    });
+    const service = createNotificationService(repo, undefined as any, {
+      db: {} as any,
+    });
+
+    await expect(service.dispatchQueuedEmails()).resolves.toEqual({
+      sent: 0,
+      failed: 1,
+    });
+  });
 });

@@ -69,8 +69,16 @@ function pctNum(hit: number, found: number): number {
   return (hit / found) * 100;
 }
 
+function relativePath(filePath: string): string {
+  const normalized = filePath.replaceAll("\\", "/");
+  const cwd = process.cwd().replaceAll("\\", "/").replace(/\/+$/, "");
+  return normalized.startsWith(`${cwd}/`)
+    ? normalized.slice(cwd.length + 1)
+    : normalized;
+}
+
 function isApiFile(f: string): boolean {
-  const normalized = f.replace(process.cwd() + "/", "");
+  const normalized = relativePath(f);
   return (
     normalized.startsWith("packages/api/src/") &&
     !normalized.includes("/tests/")
@@ -188,9 +196,10 @@ async function main() {
     .toSorted((a, b) => a.linesHit / a.linesFound - b.linesHit / b.linesFound)
     .slice(0, 15)
     .map((r) => {
-      const shortPath = r.file
-        .replace(process.cwd() + "/", "")
-        .replace(/^\/home\/runner\/work\/[^/]+\/[^/]+\//, "");
+      const shortPath = relativePath(r.file).replace(
+        /^\/home\/runner\/work\/[^/]+\/[^/]+\//,
+        "",
+      );
       return `| ${shortPath} | ${pct(r.linesHit, r.linesFound)} | ${pct(r.functionsHit, r.functionsFound)} |`;
     });
 

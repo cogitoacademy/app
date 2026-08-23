@@ -6,6 +6,7 @@ import {
   OverrideMarksParticipantsRequiredError,
   TerminalStateOverrideError,
 } from "../../modules/admin-booking/admin-booking.errors";
+import { BookingStateTransitionError } from "../../modules/booking/booking.errors";
 
 function makeDb() {
   return {
@@ -916,7 +917,14 @@ describe("AdminBookingService", () => {
       });
 
       const result = await service.listBookings({ bookingId: "b1" });
-      expect(result.items).toEqual([{ ...booking, escalated: false }]);
+      expect(result.items).toEqual([
+        {
+          ...booking,
+          escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
+        },
+      ]);
     });
 
     test("returns empty list when bookingId provided but not found", async () => {
@@ -961,12 +969,16 @@ describe("AdminBookingService", () => {
           currentState: "confirmed",
           scheduledStartAt: expect.any(Date),
           escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
         },
         {
           id: "b2",
           currentState: "pending",
           scheduledStartAt: expect.any(Date),
           escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
         },
       ]);
       expect(repo.listBookingsByState).toHaveBeenCalledWith(
@@ -1008,12 +1020,16 @@ describe("AdminBookingService", () => {
           currentState: "confirmed",
           scheduledStartAt: expect.any(Date),
           escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
         },
         {
           id: "b11",
           currentState: "confirmed",
           scheduledStartAt: expect.any(Date),
           escalated: false,
+          reportedAt: null,
+          slaDeadline: null,
         },
       ]);
     });
@@ -1040,13 +1056,13 @@ describe("AdminBookingService", () => {
       expect(repo.listBookingsByState).toHaveBeenCalledWith(
         expect.anything(),
         [],
-        2,
+        100,
         undefined,
         { category: "force_cancel", urgency: "high", escalated: true },
       );
     });
 
-    test("flags booking as escalated when overrideMeta.overriddenAt is stale", async () => {
+    test("flags booking as escalated when overrideMeta.overriddenAt passes OQ-04 SLA", async () => {
       const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
       const fresh = new Date().toISOString();
       const repo = mockRepo({
@@ -1407,5 +1423,53 @@ describe("AdminBookingService", () => {
         expect(e.code).toBe("ADMIN_BOOKING_NOT_FOUND");
       }
     });
+  });
+});
+
+describe("AdminBookingService additional guards", () => {
+  test("setMeetingLink rejects when the meeting port is not configured", async () => {
+    const service = createAdminBookingService({
+      db: makeDb(),
+      repo: mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+        })),
+      }),
+      auditPort: makeAuditPort(),
+      wallet: makeWalletPort() as any,
+      refund: makeRefundPort(),
+    });
+
+    await expect(
+      service.setMeetingLink("admin1", {
+        bookingId: "b1",
+        url: "https://meet.example.com/manual",
+      }),
+    ).rejects.toThrow("Meeting port not configured");
+  });
+
+  test("cancelSeriesSession rejects a session that is no longer scheduled", async () => {
+    const service = createAdminBookingService({
+      db: makeDb(),
+      repo: mockRepo({
+        findSessionById: mock(async () => ({
+          id: "s1",
+          seriesBookingId: "b1",
+          currentState: "completed",
+          holdAmount: 50,
+        })),
+      }),
+      auditPort: makeAuditPort(),
+      wallet: makeWalletPort() as any,
+      refund: makeRefundPort(),
+    });
+
+    await expect(
+      service.cancelSeriesSession("admin1", {
+        sessionId: "s1",
+        marksAction: "release",
+      }),
+    ).rejects.toThrow(BookingStateTransitionError);
   });
 });

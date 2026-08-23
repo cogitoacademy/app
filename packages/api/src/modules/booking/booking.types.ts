@@ -99,6 +99,12 @@ export const declineInviteInput = z.object({
   reason: z.string().max(2000).optional(),
 });
 
+export const withdrawInviteInput = z.object({
+  bookingId: z.string().max(100),
+  inviteeUserId: z.string().max(100),
+  reason: z.string().max(2000).optional(),
+});
+
 export const reconfirmInput = z.object({
   bookingId: z.string().max(100),
   accept: z.boolean(),
@@ -173,6 +179,7 @@ export type CreateGroupSeriesInput = z.infer<typeof createGroupSeriesInput>;
 export type BookingActionInput = z.infer<typeof bookingActionInput>;
 export type ConfirmInviteInput = z.infer<typeof confirmInviteInput>;
 export type DeclineInviteInput = z.infer<typeof declineInviteInput>;
+export type WithdrawInviteInput = z.infer<typeof withdrawInviteInput>;
 export type ReconfirmInput = z.infer<typeof reconfirmInput>;
 export type WithdrawInput = z.infer<typeof withdrawInput>;
 export type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;

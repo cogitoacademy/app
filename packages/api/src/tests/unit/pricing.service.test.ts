@@ -194,6 +194,23 @@ describe("Pricing Service", () => {
       expect(
         pricing.validateBaseRates({ online: 175_000 }, "both", config),
       ).toContain("offline");
+      expect(pricing.validateBaseRates({}, "online", config)).toContain(
+        "required",
+      );
+      expect(
+        pricing.validateBaseRates(
+          { online: 175_000, hybrid: 175_000 },
+          "online",
+          config,
+        ),
+      ).toContain("Invalid modality");
+    });
+
+    test("requires a database when economy config is requested without dependencies", async () => {
+      const pricingWithEconomy = createPricingService({ economy: {} as any });
+      await expect(pricingWithEconomy.getEconomyConfig()).rejects.toThrow(
+        "A database connection is required for economy config",
+      );
     });
   });
 });

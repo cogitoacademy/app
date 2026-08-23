@@ -156,6 +156,24 @@ describe("Discovery Service", () => {
       expect(result).toEqual([]);
     });
 
+    test("uses online as the default modality for IDR profiles without a modality", async () => {
+      const profile = makeProfile({
+        modality: null as any,
+        baseRatesIdr: { online: 175_000 },
+      });
+      const repo = makeRepo({ listPublished: mock(async () => [profile]) });
+      const pricing = {
+        ...createPricingService(),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const service = createDiscoveryService({ repo, pricing });
+      const result = await service.listPublished();
+
+      expect(result[0]?.pricesByModality?.online).toBeDefined();
+      expect(result[0]?.pricesByModality?.offline).toBeUndefined();
+    });
+
     test("projects current Marks prices from IDR base rates and economy config", async () => {
       const profile = makeProfile({
         modality: "both",
@@ -206,6 +224,55 @@ describe("Discovery Service", () => {
       expect(listFutureAvailability).toHaveBeenCalledWith("u1");
       expect(result.id).toBe("tp1");
       expect(result.availabilitySlots).toEqual(availabilitySlots);
+    });
+
+    test("projects economy prices for a profile loaded by id", async () => {
+      const profile = makeProfile({
+        modality: "both",
+        baseRatesIdr: { online: 175_000, offline: 225_000 },
+      });
+      const repo = makeRepo({
+        getProfileById: mock(async () => profile),
+        listFutureAvailability: mock(async () => []),
+      });
+      const pricing = {
+        ...createPricingService(),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const service = createDiscoveryService({ repo, pricing });
+      const result = await service.getProfile("tp1");
+
+      expect(result.pricesByModality?.online).toBeDefined();
+      expect(result.pricesByModality?.offline).toBeDefined();
+    });
+
+    test("lists subject category groups", async () => {
+      const repo = makeRepo({
+        listSubjects: mock(
+          async () =>
+            [
+              {
+                id: "cat-1",
+                slug: "math",
+                name: "Math",
+                description: null,
+                children: [],
+              },
+            ] as any,
+        ),
+      });
+      const service = createDiscoveryService({ repo });
+
+      await expect(service.listSubjects()).resolves.toEqual([
+        {
+          id: "cat-1",
+          slug: "math",
+          name: "Math",
+          description: null,
+          children: [],
+        },
+      ]);
     });
 
     test("throws TutorProfileNotFoundError when not found", async () => {

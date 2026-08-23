@@ -269,6 +269,70 @@ describe("XenditPaymentProvider (2024-11-11 API)", () => {
       }),
     ).rejects.toThrow("Payment provider error: 500 Internal Server Error");
   });
+
+  test("createIntent retries transient network failures", async () => {
+    globalThis.fetch = mock(() => {
+      throw new TypeError("network failure");
+    }) as never;
+
+    await expect(
+      provider.createIntent({
+        paymentId: "pay_network",
+        amountIdr: 50000,
+        providerReference: "xendit-pay-network",
+      }),
+    ).rejects.toThrow("network failure");
+  });
+
+  test("createIntent retries AbortError failures", async () => {
+    const abortError = new Error("request aborted");
+    abortError.name = "AbortError";
+    globalThis.fetch = mock(() => {
+      throw abortError;
+    }) as never;
+
+    await expect(
+      provider.createIntent({
+        paymentId: "pay_abort",
+        amountIdr: 50000,
+        providerReference: "xendit-pay-abort",
+      }),
+    ).rejects.toThrow("request aborted");
+  });
+
+  test("logs the open circuit-breaker state after repeated provider failures", async () => {
+    const circuitProvider = createXenditPaymentProvider(opts);
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((callback: TimerHandler) => {
+      if (typeof callback === "function") callback();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+    try {
+      globalThis.fetch = mock(() => {
+        throw new TypeError("circuit outage");
+      }) as never;
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await expect(
+          circuitProvider.createIntent({
+            paymentId: `pay_circuit_${attempt}`,
+            amountIdr: 50000,
+            providerReference: `xendit-circuit-${attempt}`,
+          }),
+        ).rejects.toThrow("circuit outage");
+      }
+
+      await expect(
+        circuitProvider.createIntent({
+          paymentId: "pay_circuit_open",
+          amountIdr: 50000,
+          providerReference: "xendit-circuit-open",
+        }),
+      ).rejects.toThrow("Circuit breaker is open");
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
 });
 
 describe("XenditPaymentProvider verifyWebhook (2024-11-11)", () => {
@@ -420,5 +484,95 @@ describe("XenditPaymentProvider verifyWebhook (2024-11-11)", () => {
 
     const payload = await provider.verifyWebhook(body, opts.webhookToken);
     expect(payload.providerEventId).toBe("py_missing");
+  });
+});
+
+describe("XenditPaymentProvider refund", () => {
+  test("creates a provider-side refund and returns its id", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    globalThis.fetch = mock((url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: "rfd_123" }), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }) as never;
+    const provider = createXenditPaymentProvider(opts);
+
+    await expect(
+      provider.refund("pr_123", 43_000, "CUSTOMER_REQUEST"),
+    ).resolves.toEqual({ providerRefundId: "rfd_123" });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://api.xendit.co/v3/refunds");
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      payment_request_id: "pr_123",
+      currency: "IDR",
+      amount: 43_000,
+      reason: "CUSTOMER_REQUEST",
+    });
+  });
+
+  test("maps a JSON refund provider error to service unavailable", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error_code: "REFUND_FAILED" }), {
+          status: 422,
+          statusText: "Unprocessable Entity",
+        }),
+      ),
+    ) as never;
+    const provider = createXenditPaymentProvider(opts);
+
+    await expect(provider.refund("pr_123", 43_000)).rejects.toThrow(
+      "Payment provider refund error: 422 REFUND_FAILED",
+    );
+  });
+
+  test("maps a non-JSON refund provider error to service unavailable", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response("gateway down", {
+          status: 503,
+          statusText: "Service Unavailable",
+        }),
+      ),
+    ) as never;
+    const provider = createXenditPaymentProvider(opts);
+
+    await expect(provider.refund("pr_123", 43_000)).rejects.toThrow(
+      "Payment provider refund error: 503 Service Unavailable",
+    );
+  });
+
+  test("rejects a successful refund response without an id", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({}), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    ) as never;
+    const provider = createXenditPaymentProvider(opts);
+
+    await expect(provider.refund("pr_123", 43_000)).rejects.toThrow(
+      "Payment provider returned invalid refund response",
+    );
+  });
+
+  test("refund retries transient AbortError failures", async () => {
+    const abortError = new Error("refund request aborted");
+    abortError.name = "AbortError";
+    globalThis.fetch = mock(() => {
+      throw abortError;
+    }) as never;
+    const provider = createXenditPaymentProvider(opts);
+
+    await expect(provider.refund("pr_abort", 43_000)).rejects.toThrow(
+      "refund request aborted",
+    );
   });
 });

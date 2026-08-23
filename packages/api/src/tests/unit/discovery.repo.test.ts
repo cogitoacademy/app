@@ -199,4 +199,20 @@ describe("DiscoveryRepo", () => {
       expect(callArg.limit).toBe(30);
     });
   });
+
+  describe("listSubjects", () => {
+    test("lists active parent categories with active children", async () => {
+      const categories = [{ id: "cat-1", children: [] }];
+      const findMany = mock(async () => categories);
+      const conn = {
+        query: {
+          subjectCategory: { findMany },
+        },
+      } as any;
+      const repo = createDiscoveryRepo(conn);
+
+      await expect(repo.listSubjects()).resolves.toEqual(categories);
+      expect(findMany).toHaveBeenCalledTimes(1);
+    });
+  });
 });

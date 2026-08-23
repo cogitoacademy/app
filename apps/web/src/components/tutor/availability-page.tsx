@@ -25,10 +25,10 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import {
   getSelectItemValue,
   Select,
@@ -43,6 +43,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { formatBookingTimeRange } from "@/components/booking/booking-ui";
+import { MinuteTimeInput } from "@/components/booking/minute-time-input";
 import { orpc } from "@/utils/orpc";
 
 const TIMEZONE = "Asia/Jakarta";
@@ -329,31 +330,31 @@ export function AvailabilityPage() {
                             key={range.id}
                             className="grid gap-2 sm:grid-cols-[1fr_1fr_10rem_auto]"
                           >
-                            <Input
-                              type="time"
-                              aria-label={`${label} start`}
+                            <MinuteTimeInput
+                              id={`availability-${day}-${range.id}-start`}
+                              ariaLabel={`${label} start`}
                               value={range.start}
-                              onChange={(event) =>
+                              onChange={(nextTime) =>
                                 updateDay(day, (current) => ({
                                   ...current,
                                   ranges: current.ranges.map((item) =>
                                     item.id === range.id
-                                      ? { ...item, start: event.target.value }
+                                      ? { ...item, start: nextTime }
                                       : item,
                                   ),
                                 }))
                               }
                             />
-                            <Input
-                              type="time"
-                              aria-label={`${label} end`}
+                            <MinuteTimeInput
+                              id={`availability-${day}-${range.id}-end`}
+                              ariaLabel={`${label} end`}
                               value={range.end}
-                              onChange={(event) =>
+                              onChange={(nextTime) =>
                                 updateDay(day, (current) => ({
                                   ...current,
                                   ranges: current.ranges.map((item) =>
                                     item.id === range.id
-                                      ? { ...item, end: event.target.value }
+                                      ? { ...item, end: nextTime }
                                       : item,
                                   ),
                                 }))
@@ -446,12 +447,11 @@ export function AvailabilityPage() {
             <CardFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-end">
               <Field className="sm:max-w-56">
                 <FieldLabel htmlFor="schedule-until">Generate until</FieldLabel>
-                <Input
+                <DatePicker
                   id="schedule-until"
-                  type="date"
-                  min={dateKey(Date.now() + DAY_MS)}
+                  minDate={dateKey(Date.now() + DAY_MS)}
                   value={repeatUntil}
-                  onChange={(event) => setRepeatUntil(event.target.value)}
+                  onChange={setRepeatUntil}
                 />
               </Field>
               <Button type="submit" progress={replaceWeekly.isPending}>
@@ -476,34 +476,33 @@ export function AvailabilityPage() {
               <form onSubmit={saveOverride} className="space-y-3">
                 <Field>
                   <FieldLabel htmlFor="override-date">Date</FieldLabel>
-                  <Input
+                  <DatePicker
                     id="override-date"
-                    type="date"
-                    min={dateKey(Date.now() + DAY_MS)}
+                    minDate={dateKey(Date.now() + DAY_MS)}
                     value={overrideDate}
-                    onChange={(event) => setOverrideDate(event.target.value)}
+                    onChange={setOverrideDate}
                   />
                 </Field>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="time"
-                    aria-label="Override start"
+                  <MinuteTimeInput
+                    id="override-start"
+                    ariaLabel="Override start"
                     value={override.start}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setOverride((current) => ({
                         ...current,
-                        start: event.target.value,
+                        start: value,
                       }))
                     }
                   />
-                  <Input
-                    type="time"
-                    aria-label="Override end"
+                  <MinuteTimeInput
+                    id="override-end"
+                    ariaLabel="Override end"
                     value={override.end}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setOverride((current) => ({
                         ...current,
-                        end: event.target.value,
+                        end: value,
                       }))
                     }
                   />

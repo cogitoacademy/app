@@ -1,16 +1,22 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
 The invite form performs an admin-only account preflight by exact normalized email. Provider facts come from Better Auth `account.providerId` rows (`google`, `credential`, or both); admin-role accounts are shown as ineligible and cannot be submitted from the UI.
 
+Google OAuth is enabled only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured; a partial configuration disables the provider rather than creating an empty provider entry. Redis access goes through the adapter boundary in `packages/api/src/lib/redis.ts`, so the in-memory fallback exposes the same command surface for tests and defensive runtime degradation while production remains Redis-backed.
+
 ## Overview
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
 
-Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability, while the overview keeps format/access and participant profile/name/status information together for quick scanning and the rail surfaces available booking actions above Marks. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts.
+
+Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+
+The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning, while the sticky desktop rail surfaces available booking actions above Marks. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
 | File                  | Purpose                                                  |
 | --------------------- | -------------------------------------------------------- |
@@ -99,7 +105,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — filtered override queue with urgency, booking detail/history review, before/after override preview, state history, and admin refunds.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, booking detail/history review, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds.
 
 **Files:**
 
@@ -112,7 +118,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 **Service Methods:**
 
-- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated
+- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`
 - `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
@@ -246,6 +252,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `createGroupSeries(proposerId, input)` — Creates a group series (targetGroupSize 2-6, inviteeUserIds) with upfront per-participant holds for all sessions (FR-20, landed #46)
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
 - `declineInvite(userId, bookingId, reason?)` — Invitee declines
+- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Proposer withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves headcount/holds unchanged, and notifies the invitee
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing
 - `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum; group-series (`type === "series" && targetGroupSize > 1`) is rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule)
 - `cancel(userId, bookingId, reason?)` — Cancels booking; releases all holds; late cancel becomes `late_cancelled`
@@ -255,8 +262,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
 - `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason?)` — Shared service used by the student-proposer and tutor RPC routes; proposes a fixed 90-minute replacement for one session
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state.
-- `addSessionNote(userId, bookingId, content)` — Adds a sanitized note to a completed session
-- `getSessionNotes(userId, bookingId)` — Lists notes for a completed session
+- `addSessionNote(userId, bookingId, content)` — Adds a server-sanitized HTML note to a completed session; the web editor emits only the supported paragraph/heading/emphasis/list/link markup
+- `getSessionNotes(userId, bookingId)` — Lists every party's notes for a completed session; the web client applies a DOMPurify allow-list before rendering
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled
 - `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking

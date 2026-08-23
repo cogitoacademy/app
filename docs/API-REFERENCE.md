@@ -1,12 +1,18 @@
 # Cogito API Reference
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 ## Overview
 
 All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`.
 
 The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures.
+
+The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract.
+
+### Verification
+
+CI runs the API integration/unit suite together with the env, auth, and database package tests. The coverage gate requires 100% line coverage for `packages/api` and 100% line coverage overall; coverage is reported from the same lcov artifact used by `.github/scripts/coverage-comment.ts`.
 
 ### Auth Levels
 
@@ -521,14 +527,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId, content }` (`content` max 10,000 chars, sanitized)
 - **Output:** `{ note }`
-- **Description:** Adds a note to a completed session
+- **Description:** Adds a note to a completed session. The web editor sends allow-listed HTML for paragraphs/headings, emphasis, lists, and links; the API sanitizer remains authoritative before persistence.
 
 ### `booking.getSessionNotes`
 
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId }`
 - **Output:** `{ items: SessionNote[] }`
-- **Description:** Lists notes for a completed session
+- **Description:** Returns all notes for the completed booking so both parties can read the shared session record. The web client applies a DOMPurify allow-list before rendering note HTML.
 
 ### `booking.createGroup`
 
@@ -565,6 +571,13 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
+
+### `booking.withdrawInvite`
+
+- **Auth:** Student (booking proposer)
+- **Input:** `{ bookingId, inviteeUserId, reason? }`
+- **Output:** `{ withdrawn: true, inviteeUserId }`
+- **Description:** Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`; confirmed headcount and Marks holds are unchanged, and the invitee receives a booking notification.
 
 ### `booking.reconfirm`
 
@@ -754,8 +767,8 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
-- **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Paginated booking list sorted by urgency
+- **Output:** `{ items: Booking[] & { reportedAt: string | null, slaDeadline: string | null, escalated: boolean }[], nextCursor }`
+- **Description:** Paginated booking list sorted by urgency. For override reports, `reportedAt` comes from `overrideMeta.overriddenAt`, `slaDeadline` applies OQ-04 (30 minutes Mon–Sat 09:00–21:00 WIB, otherwise 4 hours), and `escalated` is computed against that business-hours deadline.
 
 ### `adminBooking.getBookingStateHistory`
 

@@ -203,6 +203,36 @@ describe("AdminTutor Service", () => {
       expect(result.hasPassword).toBe(true);
     });
 
+    test("inspectInvitee reports a not-found email", async () => {
+      const service = createAdminTutorService(makeDeps() as any);
+      await expect(
+        service.inspectInvitee({ email: "missing@example.com" }),
+      ).resolves.toEqual({
+        exists: false,
+        email: "missing@example.com",
+        name: null,
+        role: null,
+        providers: [],
+        hasGoogle: false,
+        hasPassword: false,
+      });
+    });
+
+    test("reports a failed invite email delivery", async () => {
+      const deps = makeDeps({
+        emailPort: {
+          send: mock(async () => {
+            throw new Error("mail provider down");
+          }),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.sendInviteAgain("admin1", "inv1"),
+      ).resolves.toMatchObject({ id: "inv1", emailDelivery: "failed" });
+    });
+
     test("createInvite throws DuplicateInviteError when active invite exists", async () => {
       const deps = makeDeps({
         adminTutorRepo: {
@@ -450,6 +480,117 @@ describe("AdminTutor Service", () => {
         adminNote: "Please update bio",
       });
       expect(result.id).toBe("p1");
+    });
+
+    test("rejects approving edits when there are no pending changes", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.reviewTutorProfile("admin1", {
+          tutorProfileId: "p1",
+          action: "approve_edits",
+        }),
+      ).rejects.toThrow(InvalidInviteActionError);
+    });
+
+    test("rejects requesting edit changes when there are no pending changes", async () => {
+      const deps = makeDeps();
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.reviewTutorProfile("admin1", {
+          tutorProfileId: "p1",
+          action: "request_edit_changes",
+        }),
+      ).rejects.toThrow(InvalidInviteActionError);
+    });
+
+    test("rejects approving edits with malformed subject ids", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ pendingProfileChanges: { subjectIds: ["s1", 3] } }),
+          ),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.reviewTutorProfile("admin1", {
+          tutorProfileId: "p1",
+          action: "approve_edits",
+        }),
+      ).rejects.toThrow(InvalidInviteActionError);
+    });
+
+    test("approves pending profile edits and replaces subjects", async () => {
+      const listActiveChildSubjects = mock(async () => [{ id: "s1" }]);
+      const replaceTutorProfileSubjects = mock(async () => []);
+      const updateTutorProfile = mock(async () =>
+        makeProfile({
+          onboardingStatus: "published",
+        }),
+      );
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({
+              pendingProfileChanges: { bio: "updated", subjectIds: ["s1"] },
+            }),
+          ),
+          listActiveChildSubjects,
+          replaceTutorProfileSubjects,
+          updateTutorProfile,
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      const result = await service.reviewTutorProfile("admin1", {
+        tutorProfileId: "p1",
+        action: "approve_edits",
+      });
+
+      expect(result.onboardingStatus).toBe("published");
+      expect(listActiveChildSubjects).toHaveBeenCalledWith(expect.anything(), [
+        "s1",
+      ]);
+      expect(replaceTutorProfileSubjects).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        ["s1"],
+      );
+      expect(updateTutorProfile).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({
+          onboardingStatus: "published",
+          pendingProfileChanges: null,
+          profileEditStatus: "none",
+        }),
+      );
+    });
+
+    test("requests edit changes only when pending changes exist", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ pendingProfileChanges: { bio: "updated" } }),
+          ),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.reviewTutorProfile("admin1", {
+          tutorProfileId: "p1",
+          action: "request_edit_changes",
+          adminNote: "Please add more detail",
+        }),
+      ).resolves.toMatchObject({ id: "p1" });
     });
   });
 });

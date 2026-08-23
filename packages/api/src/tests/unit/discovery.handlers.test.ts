@@ -14,6 +14,7 @@ function makeService(
     getProfile: mock(
       async () => ({ id: "t1", displayName: "Tutor" }) as ProfileProjection,
     ),
+    listSubjects: mock(async () => []),
     ...overrides,
   } as DiscoveryService;
 }
@@ -46,6 +47,19 @@ describe("discoveryHandlers", () => {
       });
 
       expect(listPublished).toHaveBeenCalledWith({});
+    });
+  });
+
+  describe("listSubjects", () => {
+    test("calls service.listSubjects", async () => {
+      const listSubjects = mock(async () => [{ id: "cat-1", children: [] }]);
+      const service = makeService({ listSubjects } as any);
+      const handler = createDiscoveryHandler({ service });
+
+      const result = await handler.listSubjects({ context: {} as any });
+
+      expect(listSubjects).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([{ id: "cat-1", children: [] }]);
     });
   });
 
