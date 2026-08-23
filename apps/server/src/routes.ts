@@ -350,6 +350,71 @@ export function createServer() {
       }
       return new Response(file);
     })
+    .get(
+      "/content/student-resources/:resourceId/file",
+      async (routeContext) => {
+        const { params, set } = routeContext;
+        const context = await createContext({ context: routeContext });
+        const sessionUser = context.session?.user as
+          | { id: string; role?: string }
+          | undefined;
+
+        if (!sessionUser) {
+          set.status = 401;
+          return { error: "Unauthorized" };
+        }
+        if (sessionUser.role !== "student") {
+          set.status = 403;
+          return { error: "Forbidden" };
+        }
+
+        const access = await context.services.wallet.knowledgeBankEligible(
+          sessionUser.id,
+        );
+        if (!access.eligible) {
+          set.status = 403;
+          return { error: "Knowledge Bank access requires 35 Marks" };
+        }
+
+        const file = await context.services.content.getStudentResourceFile(
+          params.resourceId,
+        );
+        if (!file?.fileUrl) {
+          set.status = 404;
+          return { error: "Not found" };
+        }
+
+        let upstream: Response;
+        try {
+          upstream = await fetch(file.fileUrl);
+        } catch {
+          set.status = 502;
+          return { error: "Unable to retrieve resource" };
+        }
+
+        if (!upstream.ok || !upstream.body) {
+          set.status = 502;
+          return { error: "Unable to retrieve resource" };
+        }
+
+        const filename =
+          (file.fileName ?? "knowledge-bank-resource.pdf")
+            .replace(/[^a-zA-Z0-9._-]/g, "_")
+            .replace(/\.{2,}/g, ".")
+            .replace(/^\.+/, "")
+            .slice(0, 120) || "knowledge-bank-resource.pdf";
+
+        return new Response(upstream.body, {
+          headers: {
+            "Content-Type": file.mimeType ?? "application/pdf",
+            "Content-Disposition": `inline; filename="${filename}"`,
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      },
+      { parse: "none" },
+    )
     .post(
       "/uploads/*",
       async ({ params, set, request }) => {

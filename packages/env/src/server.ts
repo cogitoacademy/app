@@ -43,10 +43,13 @@ const serverShape = {
   PAYMENT_PROVIDER: z.enum(["stub", "xendit"]).default("stub"),
   STUB_WEBHOOK_ALLOWED: boolSchema(false),
   PAYMENT_WEBHOOK_SECRET: z.string().min(32),
-  COMPETITION_CALENDAR_URL: z
+  SANITY_PROJECT_ID: z.string().min(1).default("skfmwuke"),
+  SANITY_DATASET: z.string().min(1).default("development"),
+  SANITY_API_VERSION: z
     .string()
-    .url()
-    .default("https://cogitoacademy.id/en/calendar"),
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .default("2024-03-01"),
+  SANITY_API_TOKEN: z.string().min(1).optional(),
   WEBHOOK_ALLOWED_IPS: z.string().optional(),
   XENDIT_SECRET_KEY: z.string().min(1).optional(),
   XENDIT_WEBHOOK_TOKEN: z.string().min(1).optional(),

@@ -70,19 +70,14 @@ const adminNavItems = [
 
 const resourceItems = [
   {
-    href: "https://cogitoacademy.id/en/calendar",
+    to: "/calendar",
     label: "Competition Calendar",
     icon: IconCalendarEvent,
   },
   {
-    href: "https://www.cogitoacademy.id/en/student-resources",
+    to: "/student-resources",
     label: "Knowledge Bank",
     icon: IconLibrary,
-  },
-  {
-    href: "https://wa.me/6288101190195",
-    label: "WhatsApp Support",
-    icon: IconBrandWhatsapp,
   },
 ] as const;
 
@@ -110,6 +105,8 @@ export function AppSidebar({
         : studentNavItems;
   const profilePath = role === "tutor" ? "/onboarding" : "/profile";
   const profileLabel = role === "tutor" ? "My Profile" : "Profile";
+  const visibleResourceItems =
+    role === "student" ? resourceItems : [resourceItems[0]];
 
   function signOut() {
     authClient.signOut({
@@ -183,20 +180,14 @@ export function AppSidebar({
           <SidebarGroup>
             <SidebarGroupTitle>Resources</SidebarGroupTitle>
             <SidebarList>
-              {resourceItems.map((item) => {
+              {visibleResourceItems.map((item) => {
                 const Icon = item.icon;
 
                 return (
-                  <SidebarItem key={item.href}>
+                  <SidebarItem key={item.to}>
                     <SidebarItemButton
-                      render={
-                        <a
-                          href={item.href}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={item.label}
-                        />
-                      }
+                      active={pathname === item.to}
+                      render={<Link to={item.to} aria-label={item.label} />}
                     >
                       <Icon />
                       {item.label}
@@ -204,6 +195,21 @@ export function AppSidebar({
                   </SidebarItem>
                 );
               })}
+              <SidebarItem>
+                <SidebarItemButton
+                  render={
+                    <a
+                      href="https://wa.me/6288101190195"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="WhatsApp Support"
+                    />
+                  }
+                >
+                  <IconBrandWhatsapp />
+                  WhatsApp Support
+                </SidebarItemButton>
+              </SidebarItem>
             </SidebarList>
           </SidebarGroup>
         </SidebarMenu>

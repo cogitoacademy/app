@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { LandingPage } from "@/components/marketing/landing-page";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({
-  component: LandingPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/login" });
+  },
 });

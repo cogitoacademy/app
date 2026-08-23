@@ -107,10 +107,17 @@ export default function SignInForm({
               block
               size="lg"
               onClick={() => {
+                const callbackUrl = new URL(
+                  "/auth/callback",
+                  window.location.origin,
+                );
+                if (redirectPath) {
+                  callbackUrl.searchParams.set("redirect", redirectPath);
+                }
                 authClient.signIn.social(
                   {
                     provider: "google",
-                    callbackURL: `${window.location.origin}/auth/callback`,
+                    callbackURL: callbackUrl.toString(),
                   },
                   {
                     onError: (error) => {

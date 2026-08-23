@@ -20,7 +20,6 @@ const walletService = {
 
 const walletHandler = createWalletHandler({
   wallet: walletService as any,
-  competitionCalendarUrl: "https://example.com/calendar",
 });
 
 describe("walletHandler", () => {
@@ -80,14 +79,6 @@ describe("walletHandler", () => {
 
       expect(walletService.knowledgeBankEligible).toHaveBeenCalledWith("u1");
       expect(result).toEqual({ eligible: true, balance: 40, threshold: 35 });
-    });
-  });
-
-  describe("competitionCalendarLink", () => {
-    test("returns url from env.COMPETITION_CALENDAR_URL", async () => {
-      const result = await walletHandler.competitionCalendarLink();
-
-      expect(result).toEqual({ url: "https://example.com/calendar" });
     });
   });
 });

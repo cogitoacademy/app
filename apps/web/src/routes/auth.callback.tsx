@@ -2,9 +2,11 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import type { CogitoUser } from "@cogito-app/auth";
 import { authClient } from "@/lib/auth-client";
+import { validateLoginSearch } from "./-login-search";
 
 export const Route = createFileRoute("/auth/callback")({
-  beforeLoad: async () => {
+  validateSearch: validateLoginSearch,
+  beforeLoad: async ({ search }) => {
     const session = await authClient.getSession({
       query: { disableCookieCache: true },
     });
@@ -17,6 +19,9 @@ export const Route = createFileRoute("/auth/callback")({
     }
     if (role === "admin") {
       throw redirect({ to: "/admin-tutors" });
+    }
+    if (search.redirect) {
+      throw redirect({ to: search.redirect });
     }
     throw redirect({ to: "/dashboard" });
   },

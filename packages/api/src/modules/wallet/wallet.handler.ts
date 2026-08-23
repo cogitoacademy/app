@@ -11,13 +11,9 @@ export type WalletHandler = ReturnType<typeof createWalletHandler>;
 
 interface WalletHandlerDeps {
   wallet: WalletService;
-  competitionCalendarUrl: string;
 }
 
-export function createWalletHandler({
-  wallet,
-  competitionCalendarUrl,
-}: WalletHandlerDeps) {
+export function createWalletHandler({ wallet }: WalletHandlerDeps) {
   return {
     get: async ({ context }: { context: Context }) => {
       return withDomainMap(async () => {
@@ -53,12 +49,6 @@ export function createWalletHandler({
     knowledgeBankEligible: async ({ context }: { context: Context }) => {
       return withDomainMap(async () => {
         return wallet.knowledgeBankEligible(context.session!.user.id);
-      }, mapWalletError);
-    },
-
-    competitionCalendarLink: async () => {
-      return withDomainMap(async () => {
-        return { url: competitionCalendarUrl };
       }, mapWalletError);
     },
   };

@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-22; F1/F8/F9/F13/F14/F16/F18 closed; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed) |
+| Status     | Living gap inventory (updated 2026-08-23; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed) |
 | Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                  |
 | Created    | 2026-07-29                                                                                                                          |
 | Audited    | 2026-08-22                                                                                                                          |
@@ -76,6 +76,8 @@ for classmates.
 | `/_app`                      | App layout + sidebar            | Exists                                                                                                                        |
 | `/_app/dashboard`            | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                                               |
 | `/_app/balance`              | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                                                         |
+| `/_app/calendar`             | competition-calendar-page.tsx   | Complete — authenticated, English-only read-only calendar backed by published Sanity content                              |
+| `/_app/student-resources`    | student-resources-page.tsx      | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                             |
 | `/_app/bookings`             | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                                                          |
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                         |
 | `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                                                       |
@@ -105,7 +107,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F1  | Admin dashboard + override queue              | FR-10, OQ-04           | G8, G9, G10                                 | 3d     | **Closed (2026-08-22)** — dedicated route, hydrated participant wallets/ledger, OQ-04 SLA deadline/status, and escalation link |
 | F2  | Admin override form with before/after preview | FR-10, prd.tex:717-728 | G10                                         | 2d     | Closed                                                                                                                         |
 | F3  | Report tutor lateness/no-show button          | FR-14, DL-26           | G1                                          | 1d     | Closed                                                                                                                         |
-| F4  | Competition Calendar link                     | FR-11                  | None (external link)                        | 0.5d   | Closed                                                                                                                         |
+| F4  | Competition Calendar link                     | FR-11                  | Sanity content module + protected route      | 1.5d   | **Closed (authenticated Sanity-backed calendar)**                                                                              |
 | F5  | WhatsApp support button                       | FR-14, OQ-04           | None (external link)                        | 0.5d   | Closed                                                                                                                         |
 | F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                          | 1d     | Closed                                                                                                                         |
 | F7  | Student reschedule approval UI                | FR-15                  | G6                                          | 1d     | Closed                                                                                                                         |
@@ -116,8 +118,8 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F12 | Admin room approval UI                        | FR-22                  | G14                                         | 1d     | **Closed (room approval queue)**                                                                                               |
 | F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43) | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
 | F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                         | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
-| F15 | Knowledge Bank gating flow (full)             | FR-12                  | None (wallet.knowledgeBankEligible exists)  | 0.5d   | Closed                                                                                                                         |
-| F16 | Achievements public landing surfacing         | FR-18                  | Needs new public achievement list procedure | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
+| F15 | Knowledge Bank gating flow (full)             | FR-12                  | Sanity content module + protected file proxy | 1.5d   | **Closed (student-only app content with protected files)**                                                                      |
+| F16 | Achievements public landing surfacing         | FR-18                  | No active app landing route; public procedure retained | 1d     | **Scope retired (2026-08-23)**                                                                                              |
 | F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                     | 2d     | Closed                                                                                                                         |
 | F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal                                                      |
 | F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                                                                  |
@@ -136,7 +138,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > - **F8 → Closed** — series bookings render a per-session list with per-session "Complete session" buttons calling `completeSession({ bookingId, sessionId })` (`booking-detail-page.tsx`).
 > - **F13 → Closed** — payout card on the tutor dashboard via `tutor.getMyPayouts` (`tutor-dashboard-page.tsx`).
 > - **F14 → Closed** — booking detail renders the backend `disclaimer` in a warning callout (`booking-detail-page.tsx:304`).
-> - **F16 → Closed** — landing page renders live `achievement.listApproved` data with static fallback (`landing-page.tsx:74`).
+> - **F16 → Scope retired (2026-08-23)** — the unused app landing page is archived and `/` redirects directly to `/login`; `achievement.listApproved` remains available for a future public surface.
 > - **F1 → Closed** — `/_app/admin` is the admin workspace entry point; the operations queue exposes category/urgency/SLA filters, reported reason/source/time-since-report, business-hours deadline/status, and a WhatsApp escalation link. The booking detail loads the full booking read model plus each participant's wallet and booking-scoped ledger entries.
 > - **F9 → Closed** — completed-booking notes now use a toolbar editor for paragraphs/headings, emphasis, lists, and links. Both preview and persisted note rendering pass through a DOMPurify allow-list, with the existing server sanitizer remaining authoritative.
 > - **F12 → Closed** — `admin-operations-page.tsx` now consumes `room.listPendingApprovals` for offline bookings in `awaiting_admin_room_approval`; admins can assign the requested room, load a booking to choose another room (or use the existing relocate operation), and cancel the pending approval. The backend queue also includes requested-room conflicts with no `room_booking` row.
@@ -232,18 +234,19 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-11
 
-**Current state:** **CLOSED (2026-08-14).** Competition Calendar link is present in the authenticated sidebar, on the dashboard, and on the marketing landing page. No work remains; kept here for the record.
+**Current state:** **CLOSED (2026-08-23).** Competition Calendar is an authenticated app route backed by the published Sanity source. The bilingual academy landing page sends users to app login with a `/calendar` return path; the legacy localized pages redirect to that login CTA.
 
 **Required:**
 
-1. Student dashboard: add Competition Calendar entry/link to `cogitoacademy.id/en/calendar`
-2. Public landing page: link to calendar (if public site is part of this app)
+1. Student dashboard: expose the authenticated `/calendar` route
+2. Public bilingual landing page: link to app login with the calendar return path
 3. No Marks condition — any signed-in student can open it
 
 **Acceptance:**
 
-- Student dashboard has visible Competition Calendar link
-- Clicking opens external calendar at `cogitoacademy.id/en/calendar`
+- Authenticated users can browse published competition entries in the app
+- Calendar data is projected from Sanity on the server and is English-only in the app
+- Clicking the academy CTA opens app login and returns to `/calendar`
 
 ---
 
@@ -251,7 +254,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-14, OQ-04, prd.tex:1260
 
-**Current state:** **CLOSED (2026-08-14).** WhatsApp support link (`wa.me/6288101190195`) is present in the authenticated sidebar, on the dashboard, and on the marketing landing page. No work remains; kept here for the record.
+**Current state:** **CLOSED (2026-08-14).** WhatsApp support link (`wa.me/6288101190195`) is present in the authenticated sidebar and on the dashboard. The unused app marketing landing page is archived; no work remains here.
 
 **Required:**
 
@@ -469,11 +472,11 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-12, DL-16
 
-**Current state:** **CLOSED (2026-08-14).** `balance-page.tsx` shows the exact DL-16 copy and gates the Knowledge Bank behind eligibility computed client-side via `totalBalance >= 35`. No Marks deduction. Backend `wallet.knowledgeBankEligible` exists but is unused by the UI.
+**Current state:** **CLOSED (2026-08-23).** The balance page and authenticated Knowledge Bank route use the server-side `wallet.knowledgeBankEligible` rule. Eligible students see published Sanity resource metadata and protected PDF previews; below-threshold students remain in the app with a top-up CTA.
 
 **Required:**
 
-1. Verify the "Open Knowledge Bank" button links to the external Knowledge Bank URL
+1. Verify the "Open Knowledge Bank" button links to the authenticated `/student-resources` route
 2. User-facing copy must say: "Knowledge Bank access requires at least 35 Marks in your wallet. You are not paying 35 Marks to open it." (DL-16)
 3. If below 35 Marks: show "Top up your wallet to unlock the Knowledge Bank" with link to balance/top-up
 4. Opening Knowledge Bank must NOT deduct Marks (verify no deduction entry created)
@@ -483,16 +486,17 @@ Full override form per PRD §Emergency Override UI/UX:
 - Student with ≥35 Marks → can open Knowledge Bank, no deduction
 - Student with <35 Marks → blocked, prompted to top up
 - Copy is parent-legible (prd.tex:315)
+- Resource files are streamed through the authenticated app server; Sanity asset URLs are not exposed to the browser
 
 ---
 
 ### F16: Achievements Public Landing Surfacing
 
-**Status: CLOSED (REVIEW-FIXES-3 P6)** — new public procedure `achievement.listApproved` (approved + visible, with display name) and the landing page's achievements section now renders live data (fallback to the static highlights when empty).
+**Status: SCOPE RETIRED (2026-08-23)** — the app no longer exposes a public landing page; `/` redirects directly to `/login` and the legacy landing component is archived. The public `achievement.listApproved` procedure remains available for a future public surface.
 
 **PRD:** FR-18
 
-**Current state:** **CLOSED (2026-08-19).** Public procedure `achievement.listApproved` (approved + visible, with display name) exists and the landing page's achievements section renders live data with a static-highlights fallback (`landing-page.tsx:74`).
+**Current state:** **SCOPE RETIRED (2026-08-23).** The former app landing page was archived because the digital app starts at authentication. `achievement.listApproved` remains implemented, but no active app route consumes it.
 
 **Required:**
 

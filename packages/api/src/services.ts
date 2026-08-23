@@ -22,6 +22,8 @@ import { createAdminBookingModule } from "./modules/admin-booking";
 import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
 import type { MeetingModule } from "./modules/meeting";
+import { createContentModule } from "./modules/content";
+import type { ContentService } from "./modules/content/content.service";
 import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
 import { createStorage } from "./lib/storage";
@@ -63,6 +65,7 @@ import type { SupportService } from "./modules/support/support.service";
 import type { SupportHandler } from "./modules/support/support.handler";
 import type { UploadService } from "./modules/upload/upload.service";
 import type { UploadHandler } from "./modules/upload/upload.handler";
+import type { ContentHandler } from "./modules/content/content.handler";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -83,6 +86,7 @@ export interface ServiceRegistry {
   refund: RefundService;
   support: SupportService;
   upload: UploadService;
+  content: ContentService;
   meeting: MeetingModule;
 }
 
@@ -104,6 +108,7 @@ export interface HandlerRegistry {
   room: RoomHandler;
   support: SupportHandler;
   upload: UploadHandler;
+  content: ContentHandler;
 }
 
 export interface GoogleMeetConfigInput {
@@ -215,6 +220,7 @@ function createServices() {
 
   // Core modules
   const wallet = createWalletModule({ db });
+  const content = createContentModule({ wallet: wallet.service });
   const auth = createAuthModule({ db, wallet: wallet.service });
   const notification = createNotificationModule({ db, email: email.service });
 
@@ -349,6 +355,7 @@ function createServices() {
     refund: refund.service,
     support: support.service,
     upload: upload.service,
+    content: content.service,
     meeting,
   };
 
@@ -370,6 +377,7 @@ function createServices() {
     room: room.handler,
     support: support.handler,
     upload: upload.handler,
+    content: content.handler,
   };
 
   return { services, handlers, redis };

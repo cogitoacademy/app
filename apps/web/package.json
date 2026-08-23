@@ -25,6 +25,7 @@
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-router": "^1.170.25",
     "better-auth": "catalog:",
+    "date-fns": "^4.4.0",
     "dompurify": "^3.4.14",
     "dotenv": "catalog:",
     "next-themes": "catalog:",

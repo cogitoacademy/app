@@ -79,12 +79,7 @@ export function DashboardPage() {
               variant="outline"
               nativeButton={false}
               render={
-                <a
-                  href="https://cogitoacademy.id/en/calendar"
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Open competition calendar"
-                />
+                <Link to="/calendar" aria-label="Open competition calendar" />
               }
               className="w-full sm:w-auto"
             >
@@ -216,12 +211,7 @@ function SupportCard() {
           variant="outline"
           nativeButton={false}
           render={
-            <a
-              href="https://cogitoacademy.id/en/calendar"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open competition calendar"
-            />
+            <Link to="/calendar" aria-label="Open competition calendar" />
           }
         >
           Competition Calendar

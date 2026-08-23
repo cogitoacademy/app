@@ -1,0 +1,28 @@
+import { protectedProcedure, studentProcedure } from "../../procedures";
+import type { ContentHandler } from "./content.handler";
+
+export function createContentRouter(handler: ContentHandler) {
+  return {
+    listCompetitions: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/content/competitions/list",
+        tags: ["Content"],
+        summary: "List competition calendar events",
+        description:
+          "Returns the published, English competition calendar for authenticated users",
+      })
+      .handler(handler.listCompetitions),
+
+    listStudentResources: studentProcedure
+      .route({
+        method: "POST",
+        path: "/content/student-resources/list",
+        tags: ["Content"],
+        summary: "List Knowledge Bank resources",
+        description:
+          "Returns published Knowledge Bank resources for students meeting the 35-Mark threshold",
+      })
+      .handler(handler.listStudentResources),
+  };
+}

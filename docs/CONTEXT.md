@@ -10,6 +10,15 @@ Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Spec
 
 The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, upcoming sessions, availability, profile status, and payout totals. Admins see escalated booking operations plus pending tutor-profile and achievement review queues. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. The authenticated shell uses the profile image in the sidebar user avatar when available and falls back to initials. Booking rows use the Cogito mark icon as the Marks prefix, keep time/location/tutor in the booking metadata column, show student participants (not the tutor) in the avatar stack, use the per-student amount for a single-session group's `You pay` value, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These are frontend compositions of existing oRPC procedures; there is no dashboard-specific backend endpoint.
 
+## Authenticated editorial content
+
+Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only.
+
+- `content.listCompetitions` is protected for every authenticated role and powers `/_app/calendar`.
+- `content.listStudentResources` is student-only and returns resources only after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count).
+- Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/student-resources/:resourceId/file` rechecks the student role and wallet threshold, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers.
+- The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
+
 The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students, Pending for tutors when requests need review (otherwise Upcoming), and All for admins; an explicit `tab` query parameter overrides the role-aware default.
 
 The booking detail page uses participant `user.image` values with initials as the fallback, prefixes Marks values with `/cogito-mark.png`, and renders state history as a newest-first transition timeline (`fromState → toState`, actor type, timestamp, and reason). Each transition uses a context icon (users for participant actions, calendar for scheduling, map pin for rooms, and check/X/alert icons for outcomes) while the destination state remains the single colored status badge. The overview puts schedule first, merges modality and meeting/room state into a prominent `Format & access` subsection, and shows participant profile images, names, roles, and confirmation states in a compact responsive list. Available booking actions sit above Marks in the sticky desktop rail, while notes and support reports remain in the main flow. For online sessions, meeting creation starts when the tutor accepts after required confirmations. A successful link moves the booking to `scheduled`; a failed Google attempt leaves it `confirmed` for the 5-minute retry job, while a manual fallback is entered by an admin. The detail page surfaces these states and refreshes while a link is pending. Manual-link entry updates the newest meeting-attempt row so the detail read stays consistent after multiple retries.
@@ -47,7 +56,7 @@ cogito-app/
 │   ├── server/              # Elysia HTTP server (port 3001)
 │   │   └── src/
 │   │       ├── index.ts     # Bootstrap: init logger → create server → listen
-│   │       ├── routes.ts    # Mount: evlog + cors + /api/auth + /rpc + /health
+│   │       ├── routes.ts    # Mount: evlog + cors + /api/auth + /rpc + protected content proxy + /health
 │   │       └── middleware.ts # identifyUser (evlog/better-auth)
 │   └── web/                 # Vite + React 19 + TanStack Router
 ├── packages/
@@ -240,7 +249,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ### `supportTicket` (support-ticket.ts) — lateness/no-show + issue reports; status + sla_deadline
 
-## API Modules (17 routers + internal modules)
+## API Modules (18 routers + internal modules)
 
 All procedures are POST (oRPC convention). Auth via session cookies.
 
@@ -278,13 +287,13 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 - `list`, `create`, `update`, `delete`
 - `adminList`, `adminReview`
-- `listApproved` (public — public landing surfacing for approved achievements)
+- `listApproved` (public — retained for a future/public academy achievement surface; the app root now redirects to login)
 - Verification evidence is owner/admin-only; optional activity documentation is the public-safe image.
 - The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell.
 
 ### Wallet Module (protected)
 
-- `get`, `listLedger`, `listPackages`, `knowledgeBankEligible`, `competitionCalendarLink`
+- `get`, `listLedger`, `listPackages`, `knowledgeBankEligible`
 - (`hold`/`release`/`deduct`/`credit`/`compensate` are service-layer only — not exposed over RPC)
 
 ### Pricing Module (internal)
@@ -563,14 +572,14 @@ Status column: **Fixed** = verified in code on main after #17 merge; **Open** = 
 
 ### 2026-08-14 audit additions (implemented in `docs/plans/completed/BACKEND-HARDENING-PHASE2.md` via PR #46)
 
-Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B6/B8/B9 are **Fixed**; B4 remains **Open** (tracked as U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`).
+Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B4/B6/B8/B9 are **Fixed**; U13 remains retained as an implemented reference in `docs/plans/active/PRD-GAPS-PHASE3.md`.
 
 > Note: these B-IDs are distinct from the B1–B6/N-series IDs in the production-readiness plan above (same letter, different findings).
 
 | ID  | Finding                                                                                                                                                                                           | Severity | Status                                                                                                                                  |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | B3  | Group booking with 2 ≤ headcount < target EXPIRES at the 12h deadline instead of repricing + reconfirming (FR-16/TC-18) — `expireBookings` `booking.service.ts:2009-2048` has no headcount branch | High     | **Fixed (#46)** — headcount branch reprices to `AWAITING_RECONFIRMATION` + 12h deadline + notify. Reconfirmation-deadline sub-case → U3 |
-| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                                                            | Medium   | **Open** — tracked U13 in `docs/plans/active/PRD-GAPS-PHASE3.md`                                                                        |
+| B4  | Knowledge Bank eligibility uses `availableBalance` not total balance (DL-16) — `wallet.service.ts:431`                                                                                            | Medium   | **Fixed (REVIEW-FIXES-2 PR F / U13)** — `knowledgeBankEligible` uses total balance, so held Marks count                                                                                             |
 | B6  | No payment/refund notifications at all (notification matrix rows unfulfilled) — `payment.service.ts` writes none                                                                                  | Medium   | **Fixed (#46)** — `payment.{id}.credited`/`.refunded` (+ admin refund payer notify)                                                     |
 | B8  | Group-series creation flow missing entirely — `createSeries` hardcodes `targetGroupSize:1` (FR-20 TC-24/25/27/28/30/32-34) — `booking.service.ts:1881`                                            | Medium   | **Fixed (#46)** — `createGroupSeries` with upfront per-session holds                                                                    |
 | B9  | `cancelSession` after H-2 throws instead of forfeiting Marks (series rules) — `booking.service.ts:1134-1140`                                                                                      | Low-Med  | **Fixed (#46)** — post-H2 cancelSession forfeits the session hold                                                                       |
