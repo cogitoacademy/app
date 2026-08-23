@@ -50,6 +50,8 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 - `listStudentResources()` — returns resource metadata without asset URLs
 - `getStudentResourceFile(resourceId)` — resolves the published asset URL and file metadata for the already-authorized proxy
 
+The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons.
+
 **Business Rules:**
 
 - Sanity is queried with `perspective: "published"`; the API token, if used, stays server-side.
