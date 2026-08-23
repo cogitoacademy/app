@@ -58,6 +58,9 @@ type TutorDrawerProps = {
     subjects?: TutorSubject[] | null;
     modality: string | null;
     prices: Record<string, number> | null;
+    pricesByModality?: Partial<
+      Record<"online" | "offline", Record<string, number>>
+    > | null;
     availabilitySummary: string | null;
     proofUrls: string[] | null;
     publishedAt: Date | null;
@@ -77,10 +80,20 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
   const tutorName =
     selectedTutor.displayName ?? selectedTutor.user?.name ?? "Tutor";
 
-  const prices = selectedTutor.prices ?? {};
-  const priceEntries = Object.entries(prices).toSorted(
-    ([a], [b]) => Number(a) - Number(b),
-  );
+  const priceSections = selectedTutor.pricesByModality
+    ? (
+        Object.entries(selectedTutor.pricesByModality) as Array<
+          ["online" | "offline", Record<string, number> | undefined]
+        >
+      ).flatMap(([modality, prices]) =>
+        prices ? [{ modality, entries: Object.entries(prices) }] : [],
+      )
+    : [
+        {
+          modality: selectedTutor.modality === "offline" ? "offline" : "online",
+          entries: Object.entries(selectedTutor.prices ?? {}),
+        },
+      ];
   const subjectGroups = groupTutorSubjects(
     selectedTutor.subjects,
     selectedTutor.expertise,
@@ -147,36 +160,55 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               </div>
             )}
 
-            {priceEntries.length > 0 && (
+            {priceSections.some(({ entries }) => entries.length > 0) && (
               <div className="mb-4">
                 <Heading size="sm" className="mb-2">
                   Pricing
                 </Heading>
-                <div className="rounded-lg border border-item-border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-item">
-                        <th className="px-3 py-2 text-left text-muted">
-                          Group Size
-                        </th>
-                        <th className="px-3 py-2 text-right text-muted">
-                          Price (Marks)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {priceEntries.map(([size, price]) => (
-                        <tr key={size} className="border-t border-item-border">
-                          <td className="px-3 py-2">
-                            {size} student{Number(size) > 1 ? "s" : ""}
-                          </td>
-                          <td className="px-3 py-2 text-right font-medium">
-                            {price}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="flex flex-col gap-3">
+                  {priceSections.map(({ modality, entries }) => {
+                    const sortedEntries = entries.toSorted(
+                      ([a], [b]) => Number(a) - Number(b),
+                    );
+                    if (sortedEntries.length === 0) return null;
+                    return (
+                      <div
+                        key={modality}
+                        className="rounded-lg border border-item-border overflow-hidden"
+                      >
+                        <div className="bg-item px-3 py-2 text-sm font-medium">
+                          {modality === "offline" ? "Offline" : "Online"}
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-t border-item-border">
+                              <th className="px-3 py-2 text-left text-muted">
+                                Group Size
+                              </th>
+                              <th className="px-3 py-2 text-right text-muted">
+                                Price (Marks)
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedEntries.map(([size, price]) => (
+                              <tr
+                                key={size}
+                                className="border-t border-item-border"
+                              >
+                                <td className="px-3 py-2">
+                                  {size} student{Number(size) > 1 ? "s" : ""}
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium">
+                                  {price}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -230,7 +262,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                 Book a session
               </Heading>
               <Text className="text-muted">
-                Review current availability, choose a modality, and send a solo
+                Review current availability, choose a modality, and send a
                 booking request.
               </Text>
             </div>
@@ -252,7 +284,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               />
             }
           >
-            Book a solo session
+            Book a session
           </Button>
           <DrawerClose
             render={<Button variant="secondary" aria-label="Close drawer" />}

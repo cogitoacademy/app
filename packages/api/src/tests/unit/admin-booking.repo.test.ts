@@ -8,6 +8,7 @@ import {
   updateBookingHoldAmount,
   createAdminBookingRepo,
   listBookingsByState,
+  getStateHistory,
 } from "../../modules/admin-booking/admin-booking.repo";
 
 function makeUpdateConn(returned: any[] = [{}]) {
@@ -220,6 +221,40 @@ describe("admin-booking.repo", () => {
       const result = await listBookingsByState(conn, ["confirmed"], 1, "b4");
       expect(result).toEqual(rows);
       expect(conn.where).toHaveBeenCalled();
+    });
+
+    test("falls back to a legacy id cursor for malformed composite cursors", async () => {
+      const conn = makeSelectConn([{ id: "b5" }]) as any;
+
+      await listBookingsByState(conn, [], 2, "not-a-rank~not-a-date~b4");
+
+      expect(conn.where).toHaveBeenCalled();
+    });
+
+    test("accepts a valid urgency composite cursor", async () => {
+      const conn = makeSelectConn([{ id: "b5" }]) as any;
+
+      await listBookingsByState(conn, [], 2, "1~2026-08-24T10:00:00.000Z~b4", {
+        category: "force_cancel",
+        urgency: "high",
+      });
+
+      expect(conn.where).toHaveBeenCalled();
+    });
+  });
+
+  describe("getStateHistory", () => {
+    test("returns chronological state history", async () => {
+      const rows = [{ bookingId: "b1", toState: "confirmed" }];
+      const orderBy = mock(() => Promise.resolve(rows));
+      const where = mock(() => ({ orderBy }));
+      const from = mock(() => ({ where }));
+      const select = mock(() => ({ from }));
+
+      await expect(getStateHistory({ select } as any, "b1")).resolves.toEqual(
+        rows,
+      );
+      expect(orderBy).toHaveBeenCalledTimes(1);
     });
   });
 });

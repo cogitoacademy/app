@@ -2,11 +2,6 @@
 
 import type { CogitoUser } from "@cogito-app/auth";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -17,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
-import { Divider } from "@cogito-app/ui/components/selia/divider";
 import {
   Field,
   FieldDescription,
@@ -25,19 +19,11 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
-import { Stack } from "@cogito-app/ui/components/selia/stack";
+import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import {
-  IconBook2,
-  IconMail,
-  IconPhoto,
-  IconSchool,
-  IconUser,
-  IconUsers,
-} from "@tabler/icons-react";
+import { IconBook2, IconSchool, IconUsers } from "@tabler/icons-react";
 import {
   type FormAsyncValidateOrFn,
   type FormValidateOrFn,
@@ -46,8 +32,9 @@ import {
 } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { orpc } from "@/utils/orpc";
 import { authClient } from "@/lib/auth-client";
+import { AccountIdentityCard } from "@/components/profile/account-identity-card";
+import { orpc } from "@/utils/orpc";
 
 type ProfileValues = {
   phoneNumber: string;
@@ -62,7 +49,7 @@ type ProfileRecord = Partial<
   Record<keyof ProfileValues, string | null | undefined>
 >;
 
-type ProfileUser = Pick<CogitoUser, "name" | "email" | "image" | "role">;
+type ProfileUser = Pick<CogitoUser, "name" | "email" | "image">;
 type ProfileSyncValidator = FormValidateOrFn<ProfileValues> | undefined;
 type ProfileAsyncValidator = FormAsyncValidateOrFn<ProfileValues> | undefined;
 
@@ -92,16 +79,6 @@ function getProfileValues(profile?: ProfileRecord): ProfileValues {
   };
 }
 
-function getInitials(name?: string) {
-  return (name ?? "Student")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 function FieldBlock({
   form,
   name,
@@ -109,6 +86,8 @@ function FieldBlock({
   description,
   placeholder,
   type = "text",
+  autoComplete,
+  className,
 }: {
   form: ProfileForm;
   name: keyof ProfileValues;
@@ -116,11 +95,13 @@ function FieldBlock({
   description?: string;
   placeholder: string;
   type?: "email" | "tel" | "text";
+  autoComplete?: string;
+  className?: string;
 }) {
   return (
     <form.Field name={name}>
       {(field) => (
-        <Field>
+        <Field className={className}>
           <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
           {description ? (
             <FieldDescription>{description}</FieldDescription>
@@ -129,6 +110,7 @@ function FieldBlock({
             id={field.name}
             name={field.name}
             type={type}
+            autoComplete={autoComplete}
             value={field.state.value}
             onBlur={field.handleBlur}
             onChange={(event) => field.handleChange(event.target.value)}
@@ -159,6 +141,20 @@ export function ProfilePage({
     name: user?.name ?? "",
     image: user?.image ?? "",
   }));
+
+  useEffect(() => {
+    if (!user) return;
+
+    setAccountForm((current) =>
+      current.name || current.image
+        ? current
+        : { name: user.name ?? "", image: user.image ?? "" },
+    );
+  }, [user]);
+
+  const accountChanged =
+    accountForm.name.trim() !== (user?.name ?? "").trim() ||
+    accountForm.image.trim() !== (user?.image ?? "").trim();
 
   const accountMutation = useMutation({
     mutationFn: async () => {
@@ -218,7 +214,7 @@ export function ProfilePage({
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="mx-auto w-full max-w-6xl">
         <CardBody>
           <Text className="text-muted">Loading your profile...</Text>
         </CardBody>
@@ -227,215 +223,193 @@ export function ProfilePage({
   }
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        void form.handleSubmit();
-      }}
-    >
-      <Stack direction="column" spacing="lg">
-        <div>
-          <Heading size="md">My Profile</Heading>
-          <Text className="mt-1 text-muted">
-            Keep your learning details and parent contact information current.
-          </Text>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <Avatar size="lg">
-              <AvatarImage
-                src={accountForm.image || undefined}
-                alt={accountForm.name || "Student profile"}
-              />
-              <AvatarFallback>{getInitials(accountForm.name)}</AvatarFallback>
-            </Avatar>
-            <CardTitle>Account Identity</CardTitle>
-            <CardDescription>
-              Update the name and photo used across your Cogito account.
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="grid gap-5 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="student-account-name">
-                <IconUser aria-hidden="true" /> Account name
-              </FieldLabel>
-              <Input
-                id="student-account-name"
-                name="accountName"
-                autoComplete="name"
-                value={accountForm.name}
-                onChange={(event) =>
-                  setAccountForm((current) => ({
-                    ...current,
-                    name: event.target.value,
-                  }))
-                }
-                placeholder="Your full name"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="student-profile-image">
-                <IconPhoto aria-hidden="true" /> Profile image URL
-              </FieldLabel>
-              <Input
-                id="student-profile-image"
-                name="profileImageUrl"
-                type="url"
-                autoComplete="url"
-                value={accountForm.image}
-                onChange={(event) =>
-                  setAccountForm((current) => ({
-                    ...current,
-                    image: event.target.value,
-                  }))
-                }
-                placeholder="https://example.com/photo.jpg"
-              />
-            </Field>
-            <Field className="sm:col-span-2">
-              <FieldLabel htmlFor="student-account-email">
-                <IconMail aria-hidden="true" /> Sign-in email
-              </FieldLabel>
-              <Input
-                id="student-account-email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                value={user?.email ?? ""}
-                disabled
-              />
-              <FieldDescription>
-                Your sign-in email cannot be changed from this page.
-              </FieldDescription>
-            </Field>
-          </CardBody>
-          <CardFooter className="flex-wrap justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge variant="info">Student account</Badge>
-              <Text className="text-sm text-muted">
-                {completedFields}/6 details added
-              </Text>
-            </div>
-            <Button
-              type="button"
-              progress={accountMutation.isPending}
-              disabled={accountMutation.isPending || !accountForm.name.trim()}
-              onClick={() => accountMutation.mutate()}
+    <div className="mx-auto w-full max-w-6xl">
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <Badge variant="info" pill>
+              Student profile
+            </Badge>
+            <Heading className="mt-3" size="lg">
+              Make your profile work for you
+            </Heading>
+            <Text className="mt-2 max-w-2xl text-muted">
+              Keep your learning details and parent contact information current
+              so tutors can prepare for every session.
+            </Text>
+          </div>
+          <div className="w-full md:max-w-48 md:text-right">
+            <Text className="text-sm text-muted">Profile completion</Text>
+            <Text className="mt-1 text-xl font-semibold">
+              {completedFields}/6 details added
+            </Text>
+            <div
+              className="mt-3 h-2 overflow-hidden rounded-full bg-accent"
+              role="progressbar"
+              aria-label="Profile completion"
+              aria-valuemin={0}
+              aria-valuemax={6}
+              aria-valuenow={completedFields}
             >
-              Save Account Identity
-            </Button>
-          </CardFooter>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <IconBox variant="info-subtle">
-              <IconUser aria-hidden="true" />
-            </IconBox>
-            <CardTitle>Contact details</CardTitle>
-            <CardDescription>
-              How tutors and the Cogito team can reach you.
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="grid gap-5 sm:grid-cols-2">
-            <FieldBlock
-              form={form}
-              name="phoneNumber"
-              label="Phone number"
-              description="Use a WhatsApp number if possible."
-              type="tel"
-              placeholder="e.g. +62 812-3456-7890"
-            />
-          </CardBody>
-
-          <Divider />
-
-          <CardHeader>
-            <IconBox variant="secondary-subtle">
-              <IconSchool aria-hidden="true" />
-            </IconBox>
-            <CardTitle>School</CardTitle>
-            <CardDescription>
-              Helps tutors prepare sessions at the right level.
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="grid gap-5 sm:grid-cols-2">
-            <FieldBlock
-              form={form}
-              name="schoolName"
-              label="School name"
-              placeholder="e.g. SMA Negeri 1 Jakarta"
-            />
-            <FieldBlock
-              form={form}
-              name="gradeLevel"
-              label="Grade level"
-              placeholder="e.g. Grade 11"
-            />
-          </CardBody>
-
-          <Divider />
-
-          <CardHeader>
-            <IconBox variant="tertiary-subtle">
-              <IconUsers aria-hidden="true" />
-            </IconBox>
-            <CardTitle>Parent or guardian</CardTitle>
-            <CardDescription>
-              Optional, but useful for coordination and important updates.
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="grid gap-5 sm:grid-cols-2">
-            <FieldBlock
-              form={form}
-              name="parentName"
-              label="Parent / guardian name"
-              placeholder="e.g. Jane Doe"
-            />
-            <FieldBlock
-              form={form}
-              name="parentPhone"
-              label="Parent / guardian phone"
-              type="tel"
-              placeholder="e.g. +62 812-3456-7890"
-            />
-            <div className="sm:col-span-2">
-              <FieldBlock
-                form={form}
-                name="parentEmail"
-                label="Parent / guardian email"
-                type="email"
-                placeholder="e.g. parent@example.com"
+              <div
+                className="h-full rounded-full bg-primary transition-[width]"
+                style={{ width: `${(completedFields / 6) * 100}%` }}
               />
             </div>
-          </CardBody>
-          <CardFooter className="justify-between">
-            <div className="hidden items-center gap-2 text-sm text-muted sm:flex">
-              <IconBook2 className="size-4" />
-              Your details are only used for your Cogito learning experience.
-            </div>
-            <form.Subscribe
-              selector={(state) => ({
-                canSubmit: state.canSubmit,
-                isDirty: state.isDirty,
-                isSubmitting: state.isSubmitting,
-              })}
-            >
-              {({ canSubmit, isDirty, isSubmitting }) => (
-                <Button
-                  type="submit"
-                  disabled={!canSubmit || !isDirty || isSubmitting}
-                  progress={isSubmitting}
-                >
-                  Save changes
-                </Button>
-              )}
-            </form.Subscribe>
-          </CardFooter>
-        </Card>
-      </Stack>
-    </form>
+          </div>
+        </header>
+
+        <AccountIdentityCard
+          idPrefix="student-account"
+          roleLabel="Student"
+          name={accountForm.name}
+          email={user?.email ?? ""}
+          image={accountForm.image}
+          hasChanges={accountChanged}
+          isSaving={accountMutation.isPending}
+          footerNote="Your account identity is separate from your learning profile and does not need admin review."
+          onNameChange={(name) =>
+            setAccountForm((current) => ({ ...current, name }))
+          }
+          onImageChange={(image) =>
+            setAccountForm((current) => ({ ...current, image }))
+          }
+          onSave={() => accountMutation.mutate()}
+        />
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void form.handleSubmit();
+          }}
+          className="flex flex-col gap-6"
+        >
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <IconBox variant="info-subtle">
+                  <IconSchool aria-hidden="true" />
+                </IconBox>
+                <CardTitle>Learning profile</CardTitle>
+                <CardDescription>
+                  Help tutors understand your study context before a session.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="grid gap-5 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Heading size="sm">Contact details</Heading>
+                  <Text className="mt-1 text-sm text-muted">
+                    Use a WhatsApp number if possible for session coordination.
+                  </Text>
+                </div>
+                <FieldBlock
+                  form={form}
+                  name="phoneNumber"
+                  label="Phone number"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="e.g. +62 812-3456-7890"
+                  className="sm:col-span-2 sm:max-w-md"
+                />
+                <div className="sm:col-span-2 border-t border-card-separator pt-5">
+                  <Heading size="sm">School</Heading>
+                  <Text className="mt-1 text-sm text-muted">
+                    This helps tutors prepare sessions at the right level.
+                  </Text>
+                </div>
+                <FieldBlock
+                  form={form}
+                  name="schoolName"
+                  label="School name"
+                  autoComplete="organization"
+                  placeholder="e.g. SMA Negeri 1 Jakarta"
+                />
+                <FieldBlock
+                  form={form}
+                  name="gradeLevel"
+                  label="Grade level"
+                  placeholder="e.g. Grade 11"
+                />
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <IconBox variant="tertiary-subtle">
+                  <IconUsers aria-hidden="true" />
+                </IconBox>
+                <CardTitle>Parent or guardian</CardTitle>
+                <CardDescription>
+                  Optional contact details for coordination and important
+                  updates.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="grid gap-5 sm:grid-cols-2">
+                <FieldBlock
+                  form={form}
+                  name="parentName"
+                  label="Parent / guardian name"
+                  autoComplete="name"
+                  placeholder="e.g. Jane Doe"
+                />
+                <FieldBlock
+                  form={form}
+                  name="parentPhone"
+                  label="Parent / guardian phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="e.g. +62 812-3456-7890"
+                />
+                <FieldBlock
+                  form={form}
+                  name="parentEmail"
+                  label="Parent / guardian email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="e.g. parent@example.com"
+                  className="sm:col-span-2"
+                />
+              </CardBody>
+            </Card>
+          </div>
+
+          <Card>
+            <CardFooter className="flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <IconBox variant="info-subtle" size="sm">
+                  <IconBook2 aria-hidden="true" />
+                </IconBox>
+                <div>
+                  <Text className="font-medium">Keep your profile current</Text>
+                  <Text className="mt-1 text-sm text-muted">
+                    These details are only used to support your Cogito learning
+                    experience.
+                  </Text>
+                </div>
+              </div>
+              <form.Subscribe
+                selector={(state) => ({
+                  canSubmit: state.canSubmit,
+                  isDirty: state.isDirty,
+                  isSubmitting: state.isSubmitting,
+                })}
+              >
+                {({ canSubmit, isDirty, isSubmitting }) => (
+                  <Button
+                    type="submit"
+                    className="w-full sm:w-auto"
+                    disabled={!canSubmit || !isDirty || isSubmitting}
+                    progress={isSubmitting}
+                  >
+                    Save learning profile
+                  </Button>
+                )}
+              </form.Subscribe>
+            </CardFooter>
+          </Card>
+        </form>
+      </div>
+    </div>
   );
 }

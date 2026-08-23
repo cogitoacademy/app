@@ -4,6 +4,7 @@ import {
   BookingNotFoundError,
   TerminalStateOverrideError,
   InvalidRefundStateError,
+  BookingOverrideConflictError,
   OverrideMarksParticipantsRequiredError,
   mapAdminBookingError,
 } from "../../modules/admin-booking/admin-booking.errors";
@@ -73,6 +74,16 @@ describe("admin-booking.errors", () => {
       expect(err.domain).toBe("admin-booking");
       expect(err.details).toEqual({ id: "bk_1" });
       expect(err.name).toBe("OverrideMarksParticipantsRequiredError");
+    });
+  });
+  describe("BookingOverrideConflictError", () => {
+    it("should expose the concurrent-update details", () => {
+      const err = new BookingOverrideConflictError("bk_1");
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err.code).toBe("BOOKING_OVERRIDE_CONFLICT");
+      expect(err.domain).toBe("admin-booking");
+      expect(err.message).toBe("Booking changed concurrently");
+      expect(err.details).toEqual({ id: "bk_1" });
     });
   });
   describe("mapAdminBookingError", () => {

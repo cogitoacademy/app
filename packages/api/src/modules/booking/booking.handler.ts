@@ -17,6 +17,7 @@ import type {
   bookingActionInput,
   confirmInviteInput,
   declineInviteInput,
+  withdrawInviteInput,
   reconfirmInput,
   withdrawInput,
   proposeRescheduleInput,
@@ -39,6 +40,7 @@ type BookingActionInput = z.infer<typeof bookingActionInput>;
 type RescheduleDecisionInput = BookingActionInput & { proposalId?: string };
 type ConfirmInviteInput = z.infer<typeof confirmInviteInput>;
 type DeclineInviteInput = z.infer<typeof declineInviteInput>;
+type WithdrawInviteInput = z.infer<typeof withdrawInviteInput>;
 type ReconfirmInput = z.infer<typeof reconfirmInput>;
 type WithdrawInput = z.infer<typeof withdrawInput>;
 type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
@@ -110,7 +112,12 @@ export function createBookingHandler(booking: BookingService) {
       input: GetBookingInput;
     }) => {
       return withDomainMap(
-        () => booking.getById(input.bookingId, context.session!.user.id),
+        () =>
+          booking.getById(
+            input.bookingId,
+            context.session!.user.id,
+            context.session!.user.role ?? undefined,
+          ),
         mapBookingError,
       );
     },
@@ -140,7 +147,12 @@ export function createBookingHandler(booking: BookingService) {
       input: ListMineInput;
     }) => {
       return withDomainMap(
-        () => booking.listMine(context.session!.user.id, input),
+        () =>
+          booking.listAccessible(
+            context.session!.user.id,
+            context.session!.user.role ?? "student",
+            input,
+          ),
         mapBookingError,
       );
     },
@@ -365,6 +377,25 @@ export function createBookingHandler(booking: BookingService) {
       );
     },
 
+    withdrawInvite: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: WithdrawInviteInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.withdrawInvite(
+            context.session!.user.id,
+            input.bookingId,
+            input.inviteeUserId,
+            input.reason,
+          ),
+        mapBookingError,
+      );
+    },
+
     reconfirm: async ({
       context,
       input,
@@ -409,7 +440,12 @@ export function createBookingHandler(booking: BookingService) {
       input: ListSessionsInput;
     }) => {
       return withDomainMap(
-        () => booking.listSessions(input.bookingId, context.session!.user.id),
+        () =>
+          booking.listSessions(
+            input.bookingId,
+            context.session!.user.id,
+            context.session!.user.role ?? undefined,
+          ),
         mapBookingError,
       );
     },

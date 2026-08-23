@@ -3,12 +3,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
-import { Input } from "@cogito-app/ui/components/selia/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-} from "@cogito-app/ui/components/selia/input-group";
-import { Kbd } from "@cogito-app/ui/components/selia/kbd";
 import {
   Menu,
   MenuItem,
@@ -34,20 +28,17 @@ import {
   IconBrandWhatsapp,
   IconCertificate,
   IconCoins,
+  IconAdjustments,
   IconHome,
   IconLibrary,
   IconLogout,
-  IconSearch,
   IconSelector,
-  IconSettings,
   IconShieldCheck,
   IconTimelineEventText,
   IconUser,
   IconUserSquare,
   IconUsersGroup,
 } from "@tabler/icons-react";
-import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
-
 import { authClient } from "@/lib/auth-client";
 
 const studentNavItems = [
@@ -60,14 +51,15 @@ const studentNavItems = [
 
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
-  { to: "/onboarding", label: "My Profile", icon: IconUser },
   { to: "/availability", label: "Availability", icon: IconTimelineEventText },
-  { to: "/tutor-bookings", label: "Bookings", icon: IconCalendarEvent },
+  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
 ] as const;
 
 const adminNavItems = [
-  { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/admin", label: "Dashboard", icon: IconHome },
+  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
+  { to: "/admin-economy", label: "Economy settings", icon: IconAdjustments },
   { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
   {
     to: "/admin-achievements",
@@ -97,10 +89,12 @@ const resourceItems = [
 export function AppSidebar({
   userName,
   userEmail,
+  userImage,
   role,
 }: {
   userName?: string | null;
   userEmail?: string | null;
+  userImage?: string | null;
   role?: string;
 }) {
   const navigate = useNavigate();
@@ -134,16 +128,21 @@ export function AppSidebar({
     >
       <SidebarHeader>
         <SidebarLogo>
-          <IconBox variant="secondary">
+          {/* <IconBox variant="secondary">
             <img
               src="/c of cogito.png"
               alt="logo"
               className="relative z-1 size-6"
             />
-          </IconBox>
-          <span className="font-semibold">Cogito Academy</span>
+          </IconBox> */}
+          <img
+            src="/cogito-academy-logo.webp"
+            alt="logo"
+            className="relative z-1 h-12"
+          />
+          {/* <span className="font-semibold">Cogito Academy</span> */}
         </SidebarLogo>
-        <InputGroup className="mt-4">
+        {/* <InputGroup className="mt-4">
           <InputGroupAddon>
             <IconSearch />
           </InputGroupAddon>
@@ -151,7 +150,7 @@ export function AppSidebar({
           <InputGroupAddon align="end">
             <Kbd>/</Kbd>
           </InputGroupAddon>
-        </InputGroup>
+        </InputGroup> */}
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
@@ -219,7 +218,10 @@ export function AppSidebar({
                   render={
                     <SidebarItemButton>
                       <Avatar>
-                        <AvatarImage alt="Avatar" />
+                        <AvatarImage
+                          src={userImage ?? undefined}
+                          alt={`${userName ?? "User"} avatar`}
+                        />
                         <AvatarFallback>
                           {userName?.slice(0, 2).toUpperCase() ?? "CG"}
                         </AvatarFallback>
@@ -243,10 +245,6 @@ export function AppSidebar({
                       {profileLabel}
                     </MenuItem>
                   </Link>
-                  <MenuItem>
-                    <IconSettings />
-                    Settings
-                  </MenuItem>
                   <MenuItem onClick={signOut}>
                     <IconLogout />
                     Sign out

@@ -1,5 +1,6 @@
 import { describe, test, expect, mock } from "bun:test";
 import { createAdminTutorService } from "../../modules/admin-tutor/admin-tutor.service";
+import { createAdminTutorHandler } from "../../modules/admin-tutor/admin-tutor.handler";
 import { ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 
 function makeAdminTutorRepo(overrides: Record<string, unknown> = {}) {
@@ -48,6 +49,34 @@ function makeDb() {
 }
 
 describe("AdminTutorHandler", () => {
+  test("routes inspectInvitee and sendInviteAgain through the domain mapper", async () => {
+    const service = {
+      inspectInvitee: mock(async (input: unknown) => ({ input })),
+      sendInviteAgain: mock(async (adminId: string, inviteId: string) => ({
+        adminId,
+        inviteId,
+      })),
+    } as any;
+    const handler = createAdminTutorHandler(service);
+    const context = {
+      session: { user: { id: "admin-1" } },
+    } as any;
+
+    await expect(
+      handler.inspectInvitee({
+        context,
+        input: { email: "tutor@example.com" },
+      }),
+    ).resolves.toEqual({ input: { email: "tutor@example.com" } });
+    await expect(
+      handler.sendInviteAgain({ context, input: { inviteId: "inv-1" } }),
+    ).resolves.toEqual({ adminId: "admin-1", inviteId: "inv-1" });
+    expect(service.inspectInvitee).toHaveBeenCalledWith({
+      email: "tutor@example.com",
+    });
+    expect(service.sendInviteAgain).toHaveBeenCalledWith("admin-1", "inv-1");
+  });
+
   describe("listInvites with default empty input", () => {
     test("calls adminTutorService.listInvites with default empty object", async () => {
       const listInvites = mock(async () => []);

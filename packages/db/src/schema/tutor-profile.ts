@@ -30,6 +30,10 @@ export const tutorProfile = pgTable(
     expertise: jsonb("expertise").$type<string[]>().default([]),
     modality: text("modality"),
     prices: jsonb("prices").$type<Record<string, number>>(),
+    baseRatesIdr:
+      jsonb("base_rates_idr").$type<
+        Partial<{ online: number; offline: number }>
+      >(),
     availabilitySummary: text("availability_summary"),
     proofUrls: jsonb("proof_urls").$type<string[]>().default([]),
     onboardingStatus: text("onboarding_status").notNull().default("draft"),
@@ -41,6 +45,7 @@ export const tutorProfile = pgTable(
         expertise: string[];
         subjectIds: string[];
         modality: "online" | "offline" | "both";
+        baseRatesIdr: Partial<{ online: number; offline: number }>;
         prices: Record<string, number>;
         proofUrls: string[];
       }>

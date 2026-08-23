@@ -1,12 +1,18 @@
 # Cogito API Reference
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 ## Overview
 
 All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`.
 
-The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: student (`booking.listMine`, `tutors.listPublished`, `wallet.get`), tutor (`tutorActions.listBookings`, `tutor.listAvailability`, `tutor.getMyProfile`, `tutor.getMyPayouts`), and admin (`adminBooking.listBookings`, `adminTutor.listTutorProfiles`, `achievement.adminList`).
+The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures.
+
+The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract.
+
+### Verification
+
+CI runs the API integration/unit suite together with the env, auth, and database package tests. The coverage gate requires 100% line coverage for `packages/api` and 100% line coverage overall; coverage is reported from the same lcov artifact used by `.github/scripts/coverage-comment.ts`.
 
 ### Auth Levels
 
@@ -130,9 +136,24 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ tutorId, dateFrom?, dateTo? }`
-- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` at 7,000 IDR/Mark)
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` is summed from IDR tutor-honorarium snapshots; legacy pre-economy bookings use the compatibility path)
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
 - **Description:** Tutor payout summary from completed bookings in a date range
+
+### `admin.getEconomySettings`
+
+- **Auth:** Admin
+- **Input:** None
+- **Output:** `{ id, markValueIdr, minTutorBaseRateIdr, onlineTutorIncrementIdr, offlineTutorIncrementIdr, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr, version, updatedBy, createdAt, updatedAt }`
+- **Description:** Returns the active Marks computational value and the online/offline tutor and Cogito schedules used for new booking snapshots.
+
+### `admin.updateEconomySettings`
+
+- **Auth:** Admin
+- **Input:** `{ expectedVersion, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr }` (IDR values use Rp 5,000 increments; bases are at least Rp 5,000; increments are non-negative)
+- **Output:** The updated economy settings object; `version` increments only when at least one schedule value changes
+- **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
+- **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. Every user currently assigned the `tutor` role receives one durable in-app `system` notification per new economy version; the notification is deduplicated by version and tutor id. Saving identical values is a no-op and creates no new audit event or notification.
 
 ---
 
@@ -272,20 +293,21 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ items: [{ id, slug, name, description?, children: [{ id, slug, name, description? }] }] }`
-- **Description:** Returns the active mother categories and selectable child subjects used by tutor onboarding and student filters.
+- **Description:** Returns the active mother categories and selectable child subjects used by tutor onboarding and student filters. The UIs submit child/category IDs for persistence or filtering but display category and subject names to users.
 
 ### `tutors.listPublished`
 
 - **Auth:** Student
-- **Input:** `{ search?, expertise?, categoryId?, subjectId?, modality?, limit?, offset? }` (`limit` default 20, max 50)
-- **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, parent }]`
-- **Description:** `categoryId` filters by a mother category; `subjectId` filters by an exact child subject. Search matches normalized child subject names as well as legacy profile text.
+- **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
+- **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, parent }]` and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response.
 
 ### `tutors.getProfile`
 
 - **Auth:** Student
 - **Input:** `{ tutorId }`
-- **Output:** `{ profile }`
+- **Output:** `{ profile }` with computed `pricesByModality` Marks maps
+- **Description:** Returns the published tutor profile and future availability slots for the booking form. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
 
 ---
 
@@ -445,15 +467,17 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Protected
 - **Input:** `{ bookingId }`
-- **Output:** `{ booking, participants, history }` — ownership-checked
+- **Output:** `{ booking, participants, history, meetingStatus, meetingUrl }` — access-checked for the proposer, tutor, participants, or admin; participant user objects include the optional profile `image`, and history entries include `fromState`, `toState`, `actorType`, `reason`, and `createdAt`
 - **Errors:** `BOOKING_NOT_FOUND` (404)
+- **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or an admin fallback link, and `failed` when automatic Google Meet creation needs another retry.
+- **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events; the API contract is unchanged.
 
 ### `booking.listMine`
 
-- **Auth:** Student
+- **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Returns bookings where the user is proposer
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Recurring/All by nearest scheduled start, while Past/Cancelled remain newest-first. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip.
 
 ### `booking.cancel`
 
@@ -487,7 +511,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.proposeReschedule`
 
 - **Auth:** Student (booking proposer)
-- **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
+- **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
 - **Output:** `{ booking }`
 - **Description:** Proposes a new fixed 90-minute time for one booking session; proposals expire after 24 hours and require tutor plus all active-student approval
 
@@ -503,14 +527,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId, content }` (`content` max 10,000 chars, sanitized)
 - **Output:** `{ note }`
-- **Description:** Adds a note to a completed session
+- **Description:** Adds a note to a completed session. The web editor sends allow-listed HTML for paragraphs/headings, emphasis, lists, and links; the API sanitizer remains authoritative before persistence.
 
 ### `booking.getSessionNotes`
 
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId }`
 - **Output:** `{ items: SessionNote[] }`
-- **Description:** Lists notes for a completed session
+- **Description:** Returns all notes for the completed booking so both parties can read the shared session record. The web client applies a DOMPurify allow-list before rendering note HTML.
 
 ### `booking.createGroup`
 
@@ -547,6 +571,13 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
+
+### `booking.withdrawInvite`
+
+- **Auth:** Student (booking proposer)
+- **Input:** `{ bookingId, inviteeUserId, reason? }`
+- **Output:** `{ withdrawn: true, inviteeUserId }`
+- **Description:** Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`; confirmed headcount and Marks holds are unchanged, and the invitee receives a booking notification.
 
 ### `booking.reconfirm`
 
@@ -585,7 +616,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **RPC path:** `/rpc/tutor/booking/reschedule/propose`
 - **Auth:** Tutor
-- **Input:** `{ bookingId, sessionId?, proposedStartAt, reason? }`
+- **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
 - **Output:** `{ booking }`
 - **Description:** Tutor proposes a new fixed 90-minute time for one session; tutor proposals may be outside the original availability window and require every active student's acceptance
 
@@ -595,7 +626,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
-- **Description:** Tutor accepts a solo booking; online goes `scheduled` (creates meeting), offline goes `awaiting_admin_room_approval`
+- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` when the attempt succeeds. If Google Meet creation fails, the booking remains `confirmed` and the `retry-failed-meetings` scheduler retries it every 5 minutes (up to 3 failed attempts); offline goes `awaiting_admin_room_approval`.
 - **Frontend note:** The tutor booking-detail flow presents a responsive confirmation summary before calling this unchanged procedure; the dialog does not change the input, output, or transition rules.
 
 ### `tutorActions.declineBooking`
@@ -736,8 +767,8 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
-- **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Paginated booking list sorted by urgency
+- **Output:** `{ items: Booking[] & { reportedAt: string | null, slaDeadline: string | null, escalated: boolean }[], nextCursor }`
+- **Description:** Paginated booking list sorted by urgency. For override reports, `reportedAt` comes from `overrideMeta.overriddenAt`, `slaDeadline` applies OQ-04 (30 minutes Mon–Sat 09:00–21:00 WIB, otherwise 4 hours), and `escalated` is computed against that business-hours deadline.
 
 ### `adminBooking.getBookingStateHistory`
 
@@ -760,7 +791,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ bookingId, url }` (`url` must be a valid URL, max 2048 chars)
 - **Output:** `{ bookingId, meetingUrl, status }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) unless the booking is `SCHEDULED`/`CONFIRMED`
-- **Description:** Records a manual meeting URL on a booking as fallback when Google Meet generation failed or is disabled (U1/FR-21); notifies confirmed participants and writes an `admin_set_meeting_link` audit record
+- **Description:** Records a manual meeting URL on a booking as fallback when Google Meet generation failed or is disabled (U1/FR-21); updates the newest meeting-attempt row so the booking detail reads the active link, notifies confirmed participants, and writes an `admin_set_meeting_link` audit record
 
 ### `adminBooking.cancelSeriesSession`
 

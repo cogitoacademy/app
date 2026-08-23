@@ -5,6 +5,7 @@ import {
   adminGetWalletInput,
   adminListLedgerEntriesInput,
   adminGetTutorPayoutsInput,
+  adminUpdateEconomySettingsInput,
 } from "./admin.types";
 import type { AdminHandler } from "./admin.handler";
 
@@ -67,5 +68,28 @@ export function createAdminRouter(handler: AdminHandler) {
       })
       .input(adminGetTutorPayoutsInput)
       .handler(handler.getTutorPayouts),
+
+    getEconomySettings: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/economy/get",
+        tags: ["Admin", "Economy"],
+        summary: "Get active economy settings",
+        description:
+          "Returns the active Cogito take schedule and computational Mark value",
+      })
+      .handler(handler.getEconomySettings),
+
+    updateEconomySettings: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/economy/update",
+        tags: ["Admin", "Economy"],
+        summary: "Update the Cogito take schedule",
+        description:
+          "Updates future-booking Cogito take rates with optimistic locking and an audit record",
+      })
+      .input(adminUpdateEconomySettingsInput)
+      .handler(handler.updateEconomySettings),
   };
 }

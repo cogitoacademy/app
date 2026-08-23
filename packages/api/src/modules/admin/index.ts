@@ -12,6 +12,8 @@ import { createAdminHandler } from "./admin.handler";
 import type { AdminService } from "./admin.service";
 import type { AdminHandler } from "./admin.handler";
 import type { BookingPayoutPort } from "../booking";
+import type { EconomyService } from "../economy";
+import type { NotificationWriteParams } from "../notification/notification.service";
 
 export type AdminModule = ReturnType<typeof createAdminModule>;
 
@@ -27,11 +29,19 @@ export interface AdminWalletPort {
   ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }>;
 }
 
+export type AdminEconomyPort = EconomyService;
+
+export interface AdminNotificationPort {
+  write(params: NotificationWriteParams): Promise<void>;
+}
+
 export function createAdminModule(deps: {
   db: DbType;
   audit: AdminAuditPort;
   wallet: AdminWalletPort;
   payout: BookingPayoutPort;
+  economy: AdminEconomyPort;
+  notification: AdminNotificationPort;
 }) {
   const repo = createAdminRepo();
   const service = createAdminService({
@@ -40,6 +50,8 @@ export function createAdminModule(deps: {
     db: deps.db,
     wallet: deps.wallet,
     payout: deps.payout,
+    economy: deps.economy,
+    notification: deps.notification,
   });
   const handler = createAdminHandler(service);
   return { service, handler };

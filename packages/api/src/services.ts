@@ -4,6 +4,7 @@ import { initRedis } from "./lib/redis";
 import { initIdempotencyStores } from "./lib/idempotency";
 import { createAuditModule } from "./modules/audit";
 import { createPricingModule } from "./modules/pricing";
+import { createEconomyModule } from "./modules/economy";
 import { createWalletModule } from "./modules/wallet";
 import { createAuthModule } from "./modules/auth";
 import { createAdminModule } from "./modules/admin";
@@ -105,36 +106,101 @@ export interface HandlerRegistry {
   upload: UploadHandler;
 }
 
+export interface GoogleMeetConfigInput {
+  googleMeetClientId?: string;
+  googleClientId?: string;
+  googleMeetClientSecret?: string;
+  googleClientSecret?: string;
+  refreshToken?: string;
+  clientEmail?: string;
+  privateKey?: string;
+  impersonatedUser?: string;
+  calendarId?: string;
+}
+
+export function resolveGoogleMeetConfig(input: GoogleMeetConfigInput) {
+  const clientId = input.googleMeetClientId ?? input.googleClientId;
+  const clientSecret = input.googleMeetClientSecret ?? input.googleClientSecret;
+
+  if (clientId && clientSecret && input.refreshToken) {
+    return {
+      authType: "oauth_refresh_token" as const,
+      clientId,
+      clientSecret,
+      refreshToken: input.refreshToken,
+      calendarId: input.calendarId ?? "primary",
+    };
+  }
+
+  if (input.clientEmail && input.privateKey) {
+    return {
+      authType: "service_account" as const,
+      clientEmail: input.clientEmail,
+      privateKey: input.privateKey,
+      impersonatedUser: input.impersonatedUser,
+      calendarId: input.calendarId ?? "primary",
+    };
+  }
+
+  return undefined;
+}
+
+export interface XenditConfigInput {
+  provider: string;
+  secretKey?: string;
+  webhookToken?: string;
+  successRedirectUrl?: string;
+  failureRedirectUrl?: string;
+  defaultPaymentMethod: "ewallet_ovo" | "qris" | "va_bca";
+}
+
+export function resolveXenditConfig(input: XenditConfigInput) {
+  if (input.provider !== "xendit" || !input.secretKey || !input.webhookToken) {
+    return undefined;
+  }
+
+  return {
+    secretKey: input.secretKey,
+    webhookToken: input.webhookToken,
+    successRedirectUrl: input.successRedirectUrl ?? "",
+    failureRedirectUrl: input.failureRedirectUrl ?? "",
+    defaultPaymentMethod: input.defaultPaymentMethod,
+  };
+}
+
+export function createProviderRefundDelegate(provider: {
+  refund(
+    paymentRequestId: string,
+    amountIdr: number,
+    reason?: string,
+  ): Promise<{ providerRefundId: string }>;
+}) {
+  return (paymentRequestId: string, amountIdr: number, reason?: string) =>
+    provider.refund(paymentRequestId, amountIdr, reason);
+}
+
 function createServices() {
   const redis = initRedis(env.REDIS_URL);
   initIdempotencyStores(redis);
-  const googleMeetClientId = env.GOOGLE_MEET_CLIENT_ID ?? env.GOOGLE_CLIENT_ID;
-  const googleMeetClientSecret =
-    env.GOOGLE_MEET_CLIENT_SECRET ?? env.GOOGLE_CLIENT_SECRET;
-  const googleMeetConfig =
-    googleMeetClientId &&
-    googleMeetClientSecret &&
-    env.GOOGLE_MEET_REFRESH_TOKEN
-      ? {
-          authType: "oauth_refresh_token" as const,
-          clientId: googleMeetClientId,
-          clientSecret: googleMeetClientSecret,
-          refreshToken: env.GOOGLE_MEET_REFRESH_TOKEN,
-          calendarId: env.GOOGLE_CALENDAR_ID ?? "primary",
-        }
-      : env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY
-        ? {
-            authType: "service_account" as const,
-            clientEmail: env.GOOGLE_CLIENT_EMAIL,
-            privateKey: env.GOOGLE_PRIVATE_KEY,
-            impersonatedUser: env.GOOGLE_IMPERSONATED_USER,
-            calendarId: env.GOOGLE_CALENDAR_ID ?? "primary",
-          }
-        : undefined;
+  const googleMeetConfig = resolveGoogleMeetConfig({
+    googleMeetClientId: env.GOOGLE_MEET_CLIENT_ID,
+    googleClientId: env.GOOGLE_CLIENT_ID,
+    googleMeetClientSecret: env.GOOGLE_MEET_CLIENT_SECRET,
+    googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    refreshToken: env.GOOGLE_MEET_REFRESH_TOKEN,
+    clientEmail: env.GOOGLE_CLIENT_EMAIL,
+    privateKey: env.GOOGLE_PRIVATE_KEY,
+    impersonatedUser: env.GOOGLE_IMPERSONATED_USER,
+    calendarId: env.GOOGLE_CALENDAR_ID,
+  });
 
   // Infrastructure modules
   const audit = createAuditModule();
-  const pricing = createPricingModule();
+  const economy = createEconomyModule({ db });
+  const pricing = createPricingModule({
+    db,
+    economy: economy.service,
+  });
   const email = createEmailModule({
     resendApiKey: env.RESEND_API_KEY,
     emailFrom: env.EMAIL_FROM,
@@ -183,6 +249,8 @@ function createServices() {
     audit: audit.service,
     wallet: wallet.service,
     payout: booking.service,
+    economy: economy.service,
+    notification: notification.service,
   });
   const adminTutor = createAdminTutorModule({
     db,
@@ -196,7 +264,7 @@ function createServices() {
     audit: audit.service,
     payout: booking.service,
   });
-  const discovery = createDiscoveryModule({ db });
+  const discovery = createDiscoveryModule({ db, pricing: pricing.service });
   const invite = createInviteModule({ db, audit: audit.service });
   const achievement = createAchievementModule({
     db,
@@ -214,18 +282,14 @@ function createServices() {
     db,
     wallet: wallet.service,
     provider: env.PAYMENT_PROVIDER,
-    xenditConfig:
-      env.PAYMENT_PROVIDER === "xendit" &&
-      env.XENDIT_SECRET_KEY &&
-      env.XENDIT_WEBHOOK_TOKEN
-        ? {
-            secretKey: env.XENDIT_SECRET_KEY!,
-            webhookToken: env.XENDIT_WEBHOOK_TOKEN!,
-            successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL ?? "",
-            failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL ?? "",
-            defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,
-          }
-        : undefined,
+    xenditConfig: resolveXenditConfig({
+      provider: env.PAYMENT_PROVIDER,
+      secretKey: env.XENDIT_SECRET_KEY,
+      webhookToken: env.XENDIT_WEBHOOK_TOKEN,
+      successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL,
+      failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL,
+      defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,
+    }),
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
     notification: notification.service,
     audit: audit.service,
@@ -241,8 +305,9 @@ function createServices() {
       ...refund.service,
       // X1: the provider refund runs against the active payment provider
       // (Xendit real refund / stub mock id).
-      refundWithProvider: (paymentRequestId, amountIdr, reason) =>
-        payment.service.provider.refund(paymentRequestId, amountIdr, reason),
+      refundWithProvider: createProviderRefundDelegate(
+        payment.service.provider,
+      ),
     },
     notification: notification.service,
     meeting,

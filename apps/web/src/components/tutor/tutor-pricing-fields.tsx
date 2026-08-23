@@ -1,78 +1,115 @@
 "use client";
 
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
-import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
+import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
-const FLOOR_PRICES: Record<string, { online: number; offline: number }> = {
-  "1": { online: 42, offline: 50 },
-  "2": { online: 35, offline: 45 },
-  "3": { online: 28, offline: 40 },
-  "4": { online: 24, offline: 35 },
-  "5": { online: 21, offline: 30 },
-  "6": { online: 19, offline: 27 },
-};
+const MIN_BASE_RATE_IDR = 50_000;
+const TUTOR_INCREMENT_IDR = { online: 30_000, offline: 40_000 } as const;
 
 interface PricingFieldsProps {
   modality: string;
-  prices: Record<string, number>;
-  onChange: (prices: Record<string, number>) => void;
+  baseRatesIdr: Partial<{ online: number; offline: number }>;
+  onChange: (
+    baseRatesIdr: Partial<{ online: number; offline: number }>,
+  ) => void;
   errors: Record<string, string>;
+}
+
+function formatIdr(value: number) {
+  return "Rp " + value.toLocaleString("id-ID");
 }
 
 export function TutorPricingFields({
   modality,
-  prices,
+  baseRatesIdr,
   onChange,
   errors,
 }: PricingFieldsProps) {
-  const minPrice = (size: string) => {
-    if (modality === "online") return FLOOR_PRICES[size].online;
-    if (modality === "offline") return FLOOR_PRICES[size].offline;
-    return Math.min(FLOOR_PRICES[size].online, FLOOR_PRICES[size].offline);
-  };
+  const modalities =
+    modality === "both"
+      ? (["online", "offline"] as const)
+      : ([modality] as const);
 
   return (
-    <div className="flex flex-col gap-3">
-      <Text className="font-medium">
-        Session prices (Marks per student for each group size)
-      </Text>
-      {[1, 2, 3, 4, 5, 6].map((size) => {
-        const key = String(size);
-        const floor = minPrice(key);
-        return (
-          <Field key={key}>
-            <FieldLabel>
-              Class for {size} — minimum {floor} Marks
-            </FieldLabel>
-            <Input
-              type="number"
-              min={floor}
-              value={prices[key] ?? ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === "") {
-                  const next = { ...prices };
-                  delete next[key];
-                  onChange(next);
-                } else {
-                  const num = parseInt(val, 10);
-                  if (!isNaN(num) && num >= 0) {
-                    onChange({ ...prices, [key]: num });
+    <div className="flex flex-col gap-4">
+      <div>
+        <Text className="font-medium">Base honorarium</Text>
+        <Text className="mt-1 text-sm text-muted">
+          Set your one-student IDR honorarium. Values use Rp 5,000 increments;
+          Cogito adds the platform take separately.
+        </Text>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {modalities.map((currentModality) => {
+          const key = currentModality as "online" | "offline";
+          const value = baseRatesIdr[key];
+          return (
+            <Field key={key}>
+              <FieldLabel htmlFor={"tutor-base-rate-" + key}>
+                {key === "online" ? "Online" : "Offline"} base rate
+              </FieldLabel>
+              <NumberField
+                id={"tutor-base-rate-" + key}
+                name={"base-rate-" + key}
+                min={MIN_BASE_RATE_IDR}
+                step={5_000}
+                value={value ?? null}
+                onValueChange={(nextValue) => {
+                  if (nextValue === null) {
+                    const next = { ...baseRatesIdr };
+                    delete next[key];
+                    onChange(next);
+                    return;
                   }
-                }
-                if (errors.prices) {
-                  // parent should clear this — we just fire onChange
-                }
-              }}
-              placeholder={String(floor)}
-            />
-          </Field>
+                  onChange({ ...baseRatesIdr, [key]: nextValue });
+                }}
+                inputProps={{
+                  placeholder: String(MIN_BASE_RATE_IDR),
+                  "aria-invalid": Boolean(errors.baseRatesIdr),
+                }}
+              />
+              <FieldDescription>
+                Minimum {formatIdr(MIN_BASE_RATE_IDR)} · +{" "}
+                {formatIdr(TUTOR_INCREMENT_IDR[key])} per additional student
+              </FieldDescription>
+            </Field>
+          );
+        })}
+      </div>
+      {modalities.map((currentModality) => {
+        const key = currentModality as "online" | "offline";
+        const base = baseRatesIdr[key];
+        if (typeof base !== "number") return null;
+        const increment = TUTOR_INCREMENT_IDR[key];
+        return (
+          <div
+            key={currentModality + "-breakdown"}
+            className="rounded-lg bg-accent px-3 py-2 text-sm text-muted"
+          >
+            <Text className="font-medium capitalize">
+              {currentModality} honorarium preview
+            </Text>
+            <Text className="mt-1 text-sm text-muted">
+              {Array.from({ length: 6 }, (_, index) => {
+                const size = index + 1;
+                return (
+                  "Class " + size + ": " + formatIdr(base + index * increment)
+                );
+              }).join(" · ")}
+            </Text>
+          </div>
         );
       })}
-      {errors.prices && (
-        <Text className="text-sm text-danger">{errors.prices}</Text>
-      )}
+      {errors.baseRatesIdr ? (
+        <Text className="text-sm text-danger" role="alert">
+          {errors.baseRatesIdr}
+        </Text>
+      ) : null}
     </div>
   );
 }

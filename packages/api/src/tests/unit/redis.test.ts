@@ -1,13 +1,16 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { InMemoryRedis, COGITO_NS } from "../../lib/redis";
-
-class TestInMemoryRedis extends InMemoryRedis {}
+import {
+  InMemoryRedis,
+  COGITO_NS,
+  logRedisConnectionError,
+  redisRetryStrategy,
+} from "../../lib/redis";
 
 describe("InMemoryRedis", () => {
-  let redis: TestInMemoryRedis;
+  let redis: InMemoryRedis;
 
   beforeEach(() => {
-    redis = new TestInMemoryRedis();
+    redis = new InMemoryRedis();
   });
 
   describe("get/set", () => {
@@ -190,5 +193,193 @@ describe("COGITO_NS", () => {
     expect(COGITO_NS.RATE_LIMIT).toBe("cogito:rl");
     expect(COGITO_NS.CIRCUIT_BREAKER).toBe("cogito:cb");
     expect(COGITO_NS.SESSION).toBe("cogito:sess");
+  });
+});
+
+describe("Redis client helpers", () => {
+  test("getRedisClient lazily returns a shared fallback client", async () => {
+    const fresh = await import("../../lib/redis.ts?get-client-fresh");
+    const first = fresh.getRedisClient();
+    expect(first).toBe(fresh.getRedisClient());
+    expect(first).toBeInstanceOf(fresh.InMemoryRedis);
+  });
+
+  test("initRedis uses a shared in-memory fallback when no URL is configured", async () => {
+    const fresh = await import("../../lib/redis.ts?init-fallback-fresh");
+    const first = fresh.initRedis();
+    expect(first).toBe(fresh.initRedis());
+    expect(first).toBeInstanceOf(fresh.InMemoryRedis);
+  });
+
+  test("retry strategy caps retries and eventually stops", () => {
+    expect(redisRetryStrategy(3)).toBe(600);
+    expect(redisRetryStrategy(11)).toBeNull();
+  });
+
+  test("connection errors are logged without throwing", () => {
+    expect(() =>
+      logRedisConnectionError(new Error("connection failed")),
+    ).not.toThrow();
+  });
+
+  test("exercises every in-memory Redis command on a fresh module instance", async () => {
+    const fresh = await import("../../lib/redis.ts?memory-methods-fresh");
+    const client = new fresh.InMemoryRedis();
+
+    expect(
+      await client.set("value", "one", { type: "PX", value: 60_000 }),
+    ).toBe("OK");
+    expect(await client.set("value", "two", { type: "NX" })).toBeNull();
+    expect(await client.set("missing", "two", { type: "XX" })).toBeNull();
+    expect(await client.set("value", "two", { type: "XX" })).toBe("OK");
+    expect(await client.get("value")).toBe("two");
+    expect(await client.exists("value")).toBe(1);
+    expect(await client.incr("counter")).toBe(1);
+    expect(await client.expire("value", 60)).toBe(1);
+    expect(await client.pexpire("value", 60_000)).toBe(1);
+    expect(await client.ttl("value")).toBeGreaterThan(0);
+    expect(await client.pttl("value")).toBeGreaterThan(0);
+    expect(await client.ttl("missing")).toBe(-2);
+    expect(await client.pttl("missing")).toBe(-2);
+    expect(await client.expire("missing", 1)).toBe(0);
+    expect(await client.pexpire("missing", 1)).toBe(0);
+
+    expect(await client.hset("hash", ["a", "1"], ["b", "2"])).toBe(2);
+    expect(await client.hset("hash", ["a", "3"])).toBe(0);
+    expect(await client.hget("hash", "a")).toBe("3");
+    expect(await client.hgetall("hash")).toEqual({ a: "3", b: "2" });
+    expect(await client.hdel("hash", "a", "missing")).toBe(1);
+    expect(await client.hdel("hash", "b")).toBe(1);
+    expect(await client.hdel("missing-hash", "field")).toBe(0);
+    expect(await client.hgetall("hash")).toEqual({});
+    expect(await client.del("value")).toBe(1);
+    expect(await client.del("value")).toBe(0);
+    expect(await client.ping()).toBe("PONG");
+    expect(await client.quit()).toBe("OK");
+    await expect(client.eval("", [], [])).rejects.toThrow("not supported");
+
+    const originalNow = Date.now;
+    let now = 1_000_000;
+    Date.now = () => now;
+    try {
+      await client.set("expired", "value", { type: "EX", value: 1 });
+      now += 2_000;
+      expect(await client.get("expired")).toBeNull();
+      expect(await client.exists("expired")).toBe(0);
+      expect(await client.hget("expired", "field")).toBeNull();
+      expect(await client.hgetall("expired")).toEqual({});
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const calls: unknown[][] = [];
+    const fakeClient = {
+      get: async (key: string) => {
+        calls.push(["get", key]);
+        return "value";
+      },
+      set: async (key: string, value: string, ...args: (string | number)[]) => {
+        calls.push(["set", key, value, ...args]);
+        return "OK";
+      },
+      del: async (key: string) => {
+        calls.push(["del", key]);
+        return 1;
+      },
+      exists: async (key: string) => {
+        calls.push(["exists", key]);
+        return 1;
+      },
+      incr: async (key: string) => {
+        calls.push(["incr", key]);
+        return 2;
+      },
+      expire: async (key: string, seconds: number) => {
+        calls.push(["expire", key, seconds]);
+        return 1;
+      },
+      pexpire: async (key: string, ms: number) => {
+        calls.push(["pexpire", key, ms]);
+        return 1;
+      },
+      ttl: async (key: string) => {
+        calls.push(["ttl", key]);
+        return 1;
+      },
+      pttl: async (key: string) => {
+        calls.push(["pttl", key]);
+        return 1;
+      },
+      hset: async (key: string, ...fields: [string, string][]) => {
+        calls.push(["hset", key, ...fields]);
+        return fields.length;
+      },
+      hget: async (key: string, field: string) => {
+        calls.push(["hget", key, field]);
+        return "value";
+      },
+      hgetall: async (key: string) => {
+        calls.push(["hgetall", key]);
+        return { field: "value" };
+      },
+      hdel: async (key: string, ...fields: string[]) => {
+        calls.push(["hdel", key, ...fields]);
+        return fields.length;
+      },
+      eval: async (
+        script: string,
+        keyCount: number,
+        ...args: (string | number)[]
+      ) => {
+        calls.push(["eval", script, keyCount, ...args]);
+        return "evaluated";
+      },
+      ping: async () => {
+        calls.push(["ping"]);
+        return "PONG";
+      },
+      quit: async () => {
+        calls.push(["quit"]);
+        return "OK";
+      },
+    };
+    const adapter = fresh.createRedisAdapter(fakeClient as any);
+
+    await adapter.get("key");
+    await adapter.set(
+      "key",
+      "value",
+      { type: "EX", value: 1 },
+      { type: "PX", value: 2 },
+      { type: "NX" },
+      { type: "XX" },
+    );
+    await adapter.del("key");
+    await adapter.exists("key");
+    await adapter.incr("key");
+    await adapter.expire("key", 1);
+    await adapter.pexpire("key", 2);
+    await adapter.ttl("key");
+    await adapter.pttl("key");
+    await adapter.hset("hash", ["field", "value"]);
+    await adapter.hget("hash", "field");
+    await adapter.hgetall("hash");
+    await adapter.hdel("hash", "field");
+    await adapter.eval("return 1", ["key"], ["arg"]);
+    await adapter.ping();
+    await adapter.quit();
+    expect(calls).toHaveLength(16);
+
+    expect(fresh.redisRetryStrategy(1)).toBe(200);
+    expect(fresh.redisRetryStrategy(11)).toBeNull();
+    fresh.logRedisFallback("coverage", new Error("fallback"));
+    fresh.logRedisConnectionError(new Error("connection"));
+    const fallback = fresh.createRedisFallback();
+    expect(fallback).toBeInstanceOf(fresh.InMemoryRedis);
+
+    const connected = fresh.initRedis("redis://localhost:6379");
+    await expect(connected.ping()).resolves.toBe("PONG");
+    await connected.quit();
+    expect(fresh.getRedisClient()).toBe(connected);
   });
 });

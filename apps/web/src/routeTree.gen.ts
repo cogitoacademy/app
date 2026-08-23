@@ -17,7 +17,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
+import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
+import { Route as AppAdminEconomyRouteImport } from './routes/_app.admin-economy'
 import { Route as AppAdminOperationsRouteImport } from './routes/_app.admin-operations'
 import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
 import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
@@ -72,9 +74,19 @@ const AppAchievementsRoute = AppAchievementsRouteImport.update({
   path: '/achievements',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
   id: '/admin-achievements',
   path: '/admin-achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminEconomyRoute = AppAdminEconomyRouteImport.update({
+  id: '/admin-economy',
+  path: '/admin-economy',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminOperationsRoute = AppAdminOperationsRouteImport.update({
@@ -156,7 +168,9 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-economy': typeof AppAdminEconomyRoute
   '/admin-operations': typeof AppAdminOperationsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
   '/availability': typeof AppAvailabilityRoute
@@ -180,7 +194,9 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
+  '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-economy': typeof AppAdminEconomyRoute
   '/admin-operations': typeof AppAdminOperationsRoute
   '/admin-tutors': typeof AppAdminTutorsRoute
   '/availability': typeof AppAvailabilityRoute
@@ -206,7 +222,9 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_app/achievements': typeof AppAchievementsRoute
+  '/_app/admin': typeof AppAdminRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
+  '/_app/admin-economy': typeof AppAdminEconomyRoute
   '/_app/admin-operations': typeof AppAdminOperationsRoute
   '/_app/admin-tutors': typeof AppAdminTutorsRoute
   '/_app/availability': typeof AppAvailabilityRoute
@@ -232,7 +250,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/achievements'
+    | '/admin'
     | '/admin-achievements'
+    | '/admin-economy'
     | '/admin-operations'
     | '/admin-tutors'
     | '/availability'
@@ -256,7 +276,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/achievements'
+    | '/admin'
     | '/admin-achievements'
+    | '/admin-economy'
     | '/admin-operations'
     | '/admin-tutors'
     | '/availability'
@@ -281,7 +303,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/_app/achievements'
+    | '/_app/admin'
     | '/_app/admin-achievements'
+    | '/_app/admin-economy'
     | '/_app/admin-operations'
     | '/_app/admin-tutors'
     | '/_app/availability'
@@ -367,11 +391,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAchievementsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-achievements': {
       id: '/_app/admin-achievements'
       path: '/admin-achievements'
       fullPath: '/admin-achievements'
       preLoaderRoute: typeof AppAdminAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin-economy': {
+      id: '/_app/admin-economy'
+      path: '/admin-economy'
+      fullPath: '/admin-economy'
+      preLoaderRoute: typeof AppAdminEconomyRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin-operations': {
@@ -477,7 +515,9 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
+  AppAdminRoute: typeof AppAdminRoute
   AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
+  AppAdminEconomyRoute: typeof AppAdminEconomyRoute
   AppAdminOperationsRoute: typeof AppAdminOperationsRoute
   AppAdminTutorsRoute: typeof AppAdminTutorsRoute
   AppAvailabilityRoute: typeof AppAvailabilityRoute
@@ -495,7 +535,9 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
+  AppAdminRoute: AppAdminRoute,
   AppAdminAchievementsRoute: AppAdminAchievementsRoute,
+  AppAdminEconomyRoute: AppAdminEconomyRoute,
   AppAdminOperationsRoute: AppAdminOperationsRoute,
   AppAdminTutorsRoute: AppAdminTutorsRoute,
   AppAvailabilityRoute: AppAvailabilityRoute,

@@ -40,7 +40,7 @@
 	{\Large \textbf{Product Requirements Document}}\\[8pt]
 	{\normalsize Prepared by Andreandhiki Riyanta Putra}\\
 	{\normalsize Reviewed by Argya Vityasy}\\
-	{\normalsize Date: May 29, 2026}
+	{\normalsize Date: August 22, 2026}
 \end{center}
 
 \vspace{1em}
@@ -55,7 +55,7 @@ The recommended Phase 0 scope is:
 	\item student / tutor / admin access,
 	\item Marks wallet and ledger,
 	\item payment integration,
-	\item tutor self-pricing with Cogito floor prices,
+	\item tutor self-pricing through IDR-denominated base honoraria and the client-defined Cogito take schedule,
 	\item tutor listing and basic discovery,
 	\item solo booking core,
 	\item full group booking flow,
@@ -77,9 +77,9 @@ The recommended Phase 0 scope is:
 \hline
 \textbf{Document Title} & Cogito Platform Phase 0 --- Product Requirements Document \\
 \hline
-	\textbf{Document Version} & 1.0 \\
+\textbf{Document Version} & 1.6 \\
 \hline
-	\textbf{Document Status} & Client Review \\
+	\textbf{Document Status} & Client-aligned revision \\
 \hline
 \textbf{Creation Date} & May 26, 2026 \\
 \hline
@@ -117,7 +117,7 @@ The recommended Phase 0 scope is:
 	\hline
 	1.0              & June 1, 2026  & Incorporated client feedback: finalized Marks packages, 35-Mark Knowledge Bank access threshold, public and dashboard Competition Calendar access, fixed online/offline take schedules, registered-user group invitations, offline room flow simplification, and Google Meet dependency question. \\
 	\hline
-	1.1              & June 3, 2026  & Clarified tutor self-pricing economics: Cogito tables define baseline floors, tutors may price above floor, and Cogito earns 1 extra Mark for every 5 accumulated Marks above baseline. \\
+	1.1              & June 3, 2026  & Historical tutor self-pricing revision: baseline floors and the accumulated extra-take rule were defined here; these assumptions are superseded by the client-aligned IDR honorarium model in version 1.5. \\
 	\hline
 	1.2              & June 3, 2026  & Added invite-only tutor onboarding, account-claim flow, tutor profile statuses, and acceptance coverage for existing-user email matching. \\
 	\hline
@@ -125,6 +125,10 @@ The recommended Phase 0 scope is:
 	\hline
 	1.4              & June 3, 2026  & Resolved client open questions: purchased Marks are non-convertible to rupiah, Google Meet attendee automation is desired but requires API feasibility confirmation, lateness tolerance is 15 minutes for tutors and students, emergency override cases are defined, and booking response / reconfirmation windows are 12 hours. \\
 	\hline
+1.5              & August 22, 2026  & Incorporated the client-provided Marks Economy, Regulatory Compliance \& Engineering Blueprint dated August 15, 2026: IDR-denominated tutor honoraria, fixed online/offline Cogito take schedules, revised Marks packages, Rp 5,000 computational value, and direct IDR tutor compensation. \\
+\hline
+1.6              & August 22, 2026  & Added the admin-managed active Cogito take schedule, optimistic versioning, auditability, future-booking effective date, and immutable economic snapshots for existing bookings. \\
+\hline
 \end{tabular}
 
 \section{Document Governance}
@@ -139,7 +143,7 @@ This PRD governs what the product must do and what users must be able to do in P
     \item When the implementation and this PRD disagree, this PRD wins until it is updated through version control.
 \end{itemize}
 
-This PRD implements the selected Package 2 technical scope plus the approved notification and achievements additions. Strategic-doc items such as archetype routing, free diagnostic sessions, referral mechanics, premium Knowledge Bank gating, university profile builder, and other growth modules remain deferred unless separately approved. Client feedback dated June 1, 2026 supersedes earlier package, Knowledge Bank threshold, and take-rate assumptions in this PRD.
+This PRD implements the selected Package 2 technical scope plus the approved notification and achievements additions. Strategic-doc items such as archetype routing, free diagnostic sessions, referral mechanics, premium Knowledge Bank gating, university profile builder, and other growth modules remain deferred unless separately approved. The client-provided ``Marks Economy, Regulatory Compliance \& Engineering Blueprint'' dated August 15, 2026 supersedes the earlier Marks-denominated tutor pricing, Rp 7,000-per-Mark tutor payout, and package assumptions in this PRD. The blueprint is treated as the source for the Phase 0 economic model, while this PRD remains the product source of truth for implementation behavior.
 
 \section{Commercial Notes}
 
@@ -196,7 +200,7 @@ DL-13 & May 29, 2026 & Confirmed group participant withdrawal before H-2 trigger
 \hline
 DL-14 & May 29, 2026 & Phase 0 follows Package 2 from the technical proposal plus approved notifications and achievements additions; archetypes, free diagnostic sessions, referral mechanics, and premium Knowledge Bank gating remain deferred unless separately approved. & Final \\
 \hline
-DL-15 & May 30, 2026 & Tutor tier-based pricing is removed from Phase 0; standard session prices are tutor-set per group size and must meet Cogito floor prices. Any tier display, if retained later, is only a credibility signal and does not affect pricing. & Final \\
+DL-15 & August 15, 2026 & Tutor tier-based pricing and Marks-denominated tutor self-pricing are removed from Phase 0. Tutors set an IDR base honorarium for each supported modality in Rp 5,000 increments; group honoraria are derived from the fixed online/offline increment schedule. & Final \\
 \hline
 DL-16 & June 1, 2026 & Knowledge Bank access requires student login and at least 35 total Marks in the wallet. This is an eligibility threshold, not a 35-Mark fee. & Final \\
 \hline
@@ -210,7 +214,7 @@ DL-20 & June 1, 2026 & Offline booking remains in Phase 0, simplified to student
 \hline
 DL-21 & June 1, 2026 & All Phase 0 class sessions are 90 minutes and Marks do not expire. & Final \\
 \hline
-DL-22 & June 3, 2026 & The online/offline pricing tables are baseline floor schedules. Tutors may set prices above the baseline. For every 5 Marks of accumulated price increase above the baseline total, Cogito receives 1 additional Mark; the remaining increase is added to tutor share. & Final \\
+DL-22 & August 15, 2026 & The active online/offline schedules define the Cogito take in IDR. They are initialized from the client-approved defaults and may be changed by an admin for future bookings only; the tutor honorarium remains the tutor's IDR base rate plus the modality-specific per-student increment. Student-facing booking prices are derived by converting the total IDR to Marks at the Rp 5,000 computational value and rounding up per student. & Final \\
 \hline
 DL-23 & June 3, 2026 & Tutor access is invite-only. Public signup cannot self-select tutor access. Admin invites tutors by email; accepting the invite either creates a new account or attaches tutor access to an existing user with the same verified email. Tutor profiles remain unpublished until onboarding is complete and admin approval is recorded. & Final \\
 \hline
@@ -220,20 +224,27 @@ DL-25 & June 3, 2026 & Booking confirmation, participant confirmation, reconfirm
 \hline
 DL-26 & June 3, 2026 & Lateness tolerance is 15 minutes for both tutors and students. Tutor absence beyond 15 minutes cancels the meeting and returns held Marks to affected students. Students can report tutor lateness / no-show from the booking detail page. & Final \\
 \hline
+DL-27 & August 15, 2026 & Marks are closed-loop prepaid learning credits. The computational value is Rp 5,000 per Mark; approved package prices range from Rp 6,250 per Mark down to Rp 5,000 per Mark, with the package premium retained by Cogito as platform spread. & Final \\
+\hline
+DL-28 & August 15, 2026 & Tutors do not hold, withdraw, or convert Marks. Tutor compensation is an IDR honorarium paid from Cogito's operating account through the approved payroll / disbursement process. & Final \\
+\hline
+DL-29 & August 22, 2026 & Admin may edit the active Cogito take schedule in Rp 5,000 increments with optimistic version control. The change is audited and applies only when a new booking or repricing snapshot is created; a booking's persisted snapshot is immutable for ordinary rate changes. & Final \\
+\hline
 \end{longtable}
 \normalsize
 
 \section{Open Questions}
 
 \begin{itemize}
-    \item \textbf{OQ-01: Resolved.} Client confirmed Explorer Pack at 200 Marks, Rp 1,570,000 (~Rp 7,800 / Mark base + payment gateway processing fee). Earlier draft value of Rp 3,320,000 is superseded.
+    \item \textbf{OQ-01: Resolved.} The client-approved package structure is Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, and Pioneer 400 Marks / Rp 2,000,000. These values supersede all earlier package drafts.
     \item \textbf{OQ-02: Resolved.} All Phase 0 class sessions are 90 minutes.
     \item \textbf{OQ-03: Resolved.} Marks do not expire in Phase 0.
     \item \textbf{OQ-04: Resolved.} Emergency override cases are defined in the Emergency Override Rules section. Default support response time for booking exceptions and emergency overrides is 30 minutes during business hours (Monday--Saturday, 09:00--21:00 WIB) and 4 hours outside business hours. The admin dashboard must display a queue sorted by urgency (time-to-session, booking state, Marks at stake). Auto-acknowledge must be sent immediately on request. If no admin action is taken within the SLA window, the request must escalate via WhatsApp to Cogito Academy's support number: +62 881-0119-90195. This SLA is measured and reported in the admin dashboard.
     \item \textbf{OQ-05: Resolved with implementation dependency.} Cogito already has a Google account for Google Meet usage. The desired product behavior is automatic Google Calendar / Google Meet event creation using a Cogito-controlled Google account, with tutor and confirmed student emails added as event attendees. This is considered feasible in concept, but final implementation must validate Google Calendar API capability, authorization method, quota / cost implications, and any account setup requirements before launch. If setup requires client action, the developer and client should hold a setup meeting to connect the Google account securely and confirm the API configuration. The fallback state ``meeting link pending'' remains required for graceful degradation.
-    \item \textbf{OQ-06: Resolved.} Purchased Marks cannot be converted back to rupiah. Unused Marks remain in the student's wallet because Marks do not expire. Cash refunds are limited to actual payment errors or admin-approved corrections where cash was captured incorrectly.
+    \item \textbf{OQ-06: Resolved.} Purchased Marks are non-refundable, non-transferable, and cannot be converted to rupiah after a valid purchase. Unused Marks remain in the student's wallet because Marks do not expire. Payment-error corrections remain possible when cash was captured incorrectly.
     \item \textbf{OQ-07: Resolved.} Lateness is tolerated up to 15 minutes for both tutors and students. If the tutor does not arrive within 15 minutes after scheduled start, the meeting is considered cancelled and affected students' held Marks are returned. Students must have a booking-detail report button for tutor lateness / no-show. Student lateness beyond 15 minutes may be marked late / no-show under the normal late-cancel / no-show policy unless admin override applies.
     \item \textbf{OQ-08: Resolved.} Booking response windows are 12 hours per step unless the session starts sooner. This applies to tutor response, participant confirmation, repricing / reconfirmation, and offline room approval. When scheduling fails or a booking expires, held Marks must be released back to available balance within 12 hours after the failure / expiry event.
+    \item \textbf{OQ-09: Resolved.} The client-provided Marks Economy, Regulatory Compliance \& Engineering Blueprint dated August 15, 2026 is the approved economic reference for Phase 0. Its regulatory interpretation must still be validated with qualified Indonesian legal and financial counsel before production launch.
 \end{itemize}
 
 \section{Product Understanding}
@@ -269,8 +280,9 @@ The goal of Phase 0 is to deliver one complete, reliable loop:
 	\item transaction history / ledger,
 	\item hold / release / refund logic,
 	\item invite-only tutor onboarding and admin approval,
-	\item tutor self-pricing and floor validation,
-	\item tutor list, summary profile, credentials summary, expertise, price, and availability visibility,
+	\item tutor self-pricing through IDR-denominated base honoraria and increment validation,
+	\item tutor honorarium breakdown and payout-request / payroll-support visibility,
+	\item tutor list, summary profile, credentials summary, expertise, computed Marks price per student, and availability visibility,
 	\item solo booking lifecycle,
 	\item full group booking lifecycle,
 	\item booking change policy (cancel / reschedule, late-cancel override),
@@ -294,7 +306,7 @@ The goal of Phase 0 is to deliver one complete, reliable loop:
 	\item inviting non-registered users into group classes,
 	\item AI-based long-term ecosystem modules,
 	\item subscription billing or recurring membership plans,
-	\item automated tutor payout accounting inside Phase 0 unless separately approved,
+	\item automated external bank or disbursement-provider payout integration unless separately approved,
 	\item rebuilding Competition Calendar or Knowledge Bank content inside the new app,
 	\item mobile app delivery for Phase 0.
 \end{itemize}
@@ -305,10 +317,10 @@ The goal of Phase 0 is to deliver one complete, reliable loop:
 The student is the main booking and payment user. The student purchases Marks, discovers tutors, books sessions, and tracks booking history and balance.
 
 \subsection{Tutor}
-The tutor is an invite-only supply-side user. A public user cannot self-select the tutor role during signup. A tutor receives incoming bookings, manages availability, accepts or declines sessions, sets session prices at or above Cogito floors, and marks sessions complete after the tutor profile is approved and published.
+The tutor is an invite-only supply-side user. A public user cannot self-select the tutor role during signup. A tutor receives incoming bookings, manages availability, accepts or declines sessions, sets an IDR base honorarium for each supported modality in Rp 5,000 increments, reviews the derived honorarium for class sizes 1--6, and marks sessions complete after the tutor profile is approved and published.
 
 \subsection{Admin}
-The admin monitors bookings, wallet activity, tutor pricing compliance, and exceptions. The admin also performs corrections when needed.
+The admin monitors bookings, wallet activity, tutor pricing compliance, the active Cogito take schedule, and exceptions. The admin can update the active Cogito take schedule for future bookings, with optimistic version control and an audit trail, and performs corrections when needed.
 
 \subsection{Parent Contact}
 A parent may be stored as contact information on the student profile, but Phase 0 does not require a dedicated parent account.
@@ -326,9 +338,9 @@ Public & Existing public landing page remains in place; approved achievements ma
 \hline
 Student & Login / signup, dashboard, wallet and Marks purchase, tutor discovery, tutor profile, solo and group booking flow, booking detail / history, report tutor lateness / no-show action, notifications, achievements submission, Competition Calendar dashboard entry, Knowledge Bank button, and WhatsApp support button. Public signup creates student / default access only and cannot create tutor access. \\
 \hline
-Tutor & Invite acceptance, account claim, onboarding, dashboard, availability management, incoming bookings, booking detail, reschedule proposal, session completion, and session notes. \\
+Tutor & Invite acceptance, account claim, onboarding, dashboard, IDR honorarium setup and breakdown, payout request / payroll status, availability management, incoming bookings, booking detail, reschedule proposal, session completion, and session notes. \\
 \hline
-Admin & Login, dashboard, user lookup, tutor invitation, tutor onboarding review, booking monitor, booking detail and state history, wallet / ledger view, override / reconciliation, tutor price floor review, achievement moderation, and audit review. \\
+Admin & Login, dashboard, user lookup, tutor invitation, tutor onboarding review, booking monitor, booking detail and state history, wallet / ledger view, override / reconciliation, tutor honorarium review, economy settings, achievement moderation, and audit review. \\
 \hline
 \end{tabular}
 
@@ -359,7 +371,9 @@ Complete session and add notes & No & Yes & No & Completion is tutor-driven. \\
 \hline
 View all bookings and ledger entries & No & No & Yes & Admin uses this for monitoring and support. \\
 \hline
-Set own tutor prices & No & Yes & Yes & Tutors set prices for group sizes 1--6 at or above Cogito floors; admin can review or correct exceptions. \\
+Set own tutor base honorarium & No & Yes & Yes & Tutors set IDR base honoraria for supported modalities in Rp 5,000 increments, with a minimum of Rp 50,000; admin can review or correct exceptions. \\
+\hline
+Manage active Cogito take schedule & No & No & Yes & Admin edits online/offline base take and per-student increments in Rp 5,000 increments; changes are audited and affect future booking snapshots only. \\
 \hline
 Invite tutor by email & No & No & Yes & Admin sends tutor invites; public users cannot request or self-assign tutor access. \\
 \hline
@@ -406,11 +420,11 @@ Moderate achievements & No & No & Yes & Approve, reject, archive, or restore as 
 	\hline
 	FR-03           & As a student, I want to see my Marks balance and transaction history so I can trust the wallet.                        & \textbf{Requirement:} The system shall display total Marks balance, held Marks, available Marks, and maintain an immutable ledger. \newline \textbf{Acceptance:} Every purchase, deduction, hold, release, and refund creates a ledger entry with timestamp, reference, amount, and resulting balances. Available balance is total balance minus held Marks.                                                                                                                                                                                                                                                                                                                                               \\
 	\hline
-	FR-04           & As a student, I want to buy Marks through a payment provider so I can fund bookings.                                   & \textbf{Requirement:} The system shall support Marks purchase through an external payment integration and approved package pricing. \newline \textbf{Acceptance:} Successful payment increases balance and records a receipt; failed or pending payments do not credit Marks. The package cards show Starter Pack (50 Marks / Rp 430,000), Learner Pack (120 Marks / Rp 990,000), Explorer Pack (200 Marks / Rp 1,570,000), and Pioneer Pack (300 Marks / Rp 2,180,000).                                                                                                                                                                                                                                                                                                                                                                 \\
+	FR-04           & As a student, I want to buy Marks through a payment provider so I can fund bookings.                                   & \textbf{Requirement:} The system shall support Marks purchase through an external payment integration and the client-approved package pricing. \newline \textbf{Acceptance:} Successful payment increases balance and records a receipt; failed or pending payments do not credit Marks. The package cards show Starter Pack (50 Marks / Rp 312,500), Learner Pack (120 Marks / Rp 690,000), Explorer Pack (200 Marks / Rp 1,070,000), and Pioneer Pack (400 Marks / Rp 2,000,000).                                                                                                                                                                                                                                                                                                                                                                 \\
 	\hline
-	FR-05           & As an admin, I want tutor prices to respect Cogito floors.                                         & \textbf{Requirement:} The system shall validate tutor-set prices against Cogito floor prices for each group size. \newline \textbf{Acceptance:} Admin can review tutor prices, prices below the floor cannot be published, no tier-based pricing logic exists in Phase 0, and prices above floor use the approved extra-take rule: Cogito receives 1 extra Mark for every accumulated 5 Marks above the baseline total.                                                                                                                                                                                                                                                                                                                                 \\
+	FR-05           & As an admin, I want tutor honoraria and Cogito fees to follow the approved economic model.                                         & \textbf{Requirement:} The system shall validate tutor base honoraria in IDR and calculate class costs from the active admin-managed modality schedules. \newline \textbf{Acceptance:} Admin can review tutor base honoraria; each supported modality accepts values no lower than Rp 50,000 and only in Rp 5,000 increments; online honorarium increases by Rp 30,000 per additional student, offline honorarium increases by Rp 40,000, online Cogito take is Rp 50,000 plus Rp 20,000 per additional student, and offline Cogito take is Rp 90,000 plus Rp 40,000 per additional student.                                                                                                                                                                                                                                                                                                                                 \\
 	\hline
-	FR-06           & As a student, I want enough tutor information to make a booking decision.                                              & \textbf{Requirement:} The system shall provide a tutor list with summary profile, credentials summary, expertise, tutor-set prices in Marks, and availability. \newline \textbf{Acceptance:} The listing is usable without requiring a separate content system for these core booking details. Tutor cards and profiles must show the tutor's prices for supported group sizes, and every confirmed booking stores a price snapshot so future tutor price changes do not affect existing bookings.                                                                                                                                                                                        \\
+	FR-06           & As a student, I want enough tutor information to make a booking decision.                                              & \textbf{Requirement:} The system shall provide a tutor list with summary profile, credentials summary, expertise, computed Marks price per student for supported class sizes and modalities, and availability. \newline \textbf{Acceptance:} The listing is usable without requiring a separate content system for these core booking details. Student-facing cards and profiles show the final Marks per student and class-size indicator; tutor IDR honorarium inputs are not presented as a student cash-out or Marks-conversion rate. Every confirmed booking stores an economic snapshot so future tutor rate changes do not affect existing bookings.                                                                                                                                                                                        \\
 	\hline
 	FR-07           & As a student, I want to book a solo session so I can get help directly from a tutor.                                   & \textbf{Requirement:} The system shall support tutor selection, slot selection, booking confirmation, and lifecycle tracking for solo bookings. \newline \textbf{Acceptance:} Solo bookings move through the expected states (created, accepted / declined, completed, cancelled) and remain visible in booking history.                                                                                                                                                                                                                                                                                         \\
 	\hline
@@ -436,7 +450,7 @@ FR-12           & As a student, I want clear Knowledge Bank access rules so I kn
 	\hline
 	FR-18           & As a student, I want to submit achievements from my dashboard so I can showcase them publicly.                         & \textbf{Requirement:} The system shall provide an Achievements dashboard page with a submission CTA, review status, and moderation flow. \newline \textbf{Acceptance:} The dashboard shows a CTA such as \textit{Submit your achievements to show them off on Cogito Academy}, students can submit achievement items, admins can approve or reject them, and approved entries may be surfaced on Cogito's existing public landing page.                                                                                                                                                                                        \\
 	\hline
-	FR-19           & As a tutor, I want to set my own prices so I can price my time appropriately.                         & \textbf{Requirement:} The system shall let each tutor set six standard session prices: one for each group size from 1 to 6 students. \newline \textbf{Acceptance:} Each price is stored in Marks, must be at or above the Cogito floor for that group size, has no ceiling, and changes do not retroactively affect confirmed bookings. When the tutor-set price is above the floor, the extra Marks are split using the accumulated extra-take rule: Cogito receives 1 extra Mark for every full 5 Marks above the baseline total, and the remainder is added to tutor share.                                                                                                                                                                                        \\
+	FR-19           & As a tutor, I want to set my own IDR honorarium so I can price my time appropriately.                         & \textbf{Requirement:} The system shall let each tutor set an IDR-denominated one-student base honorarium for each supported modality. \newline \textbf{Acceptance:} Base honoraria are stored in IDR, use Rp 5,000 increments, have a minimum of Rp 50,000, and generate the exact honorarium for class sizes 1--6 using the approved online / offline increment schedule. Tutors see the resulting IDR honorarium breakdown and may request payout in IDR; tutors do not receive, hold, or cash out Marks. Rate changes apply only to future bookings, and confirmed bookings retain their stored economic snapshot.                                                                                                                                                                                        \\
 	\hline
 	FR-20           & As a student, I want to book a short series of sessions in one flow.                         & \textbf{Requirement:} The system shall support series bookings of up to 4 explicitly selected sessions with the same tutor, session type, and group composition. \newline \textbf{Acceptance:} The booking form lists all selected dates and times, holds Marks for all sessions upfront, and sends the full series to the tutor for accept / decline as one package. Partial tutor acceptance is not allowed.                                                                                                                                                                                        \\
 	\hline
@@ -446,10 +460,12 @@ FR-12           & As a student, I want clear Knowledge Bank access rules so I kn
 	\hline
 	FR-23           & As an admin, I want tutor access to be invite-only so Cogito controls tutor quality and prevents unauthorized tutor signup.                         & \textbf{Requirement:} The system shall support admin-created tutor invitations by email. Public signup must not expose a tutor role option. Admin shall be able to invite a new tutor by email, resend or revoke pending invites, and view invite status. \newline \textbf{Acceptance:} A tutor invite can be created only by admin. If the invited email does not belong to an existing user, accepting the invite creates the user account and a linked tutor onboarding record. If the invited email already belongs to an existing user, accepting the invite attaches tutor access to that existing user after login / email ownership verification. Admin does not manually create or know tutor passwords. Expired or revoked invites cannot create or attach tutor access, and every invite creation, acceptance, revocation, and role attachment is auditable.                                                                                                                                                                                        \\
 	\hline
-	FR-24           & As a tutor, I want a clear onboarding path before I become visible to students.                         & \textbf{Requirement:} The system shall keep tutor profiles unpublished until onboarding is complete and admin approval is recorded. \newline \textbf{Acceptance:} After invite acceptance, the tutor enters onboarding and must provide required profile data: display name, short bio, credentials summary, expertise / competition tracks, availability, supported modality, and prices for class sizes 1--6 at or above Cogito floors. Optional proof files or links may be captured for admin review. The tutor can save incomplete onboarding as draft but cannot receive bookings or appear in student discovery until admin publishes the profile. Admin can approve, request changes, unpublish, or suspend a tutor profile with an audit reason.                                                                                                                                                                                        \\
+	FR-24           & As a tutor, I want a clear onboarding path before I become visible to students.                         & \textbf{Requirement:} The system shall keep tutor profiles unpublished until onboarding is complete and admin approval is recorded. \newline \textbf{Acceptance:} After invite acceptance, the tutor enters onboarding and must provide required profile data: display name, short bio, credentials summary, expertise / competition tracks, availability, supported modality, and an IDR base honorarium for each supported modality in Rp 5,000 increments and at least Rp 50,000. The UI shows the derived honorarium for class sizes 1--6. Optional proof files or links may be captured for admin review. The tutor can save incomplete onboarding as draft but cannot receive bookings or appear in student discovery until admin publishes the profile. Admin can approve, request changes, unpublish, or suspend a tutor profile with an audit reason.                                                                                                                                                                                        \\
 	\hline
 \end{longtable}
 \normalsize
+
+\textbf{FR-05 clarification.} The schedules named in FR-05 are active configuration values, not compile-time constants. Admin may update the four Cogito take fields from the Economy Settings screen; changes are validated, versioned, audited, and used only for future booking or repricing snapshots.
 
 \section{Data Model Overview}
 
@@ -459,7 +475,8 @@ The data model is product-facing and names the records the implementation must p
     \item \textbf{User}: identity, role, status, and auth reference.
     \item \textbf{StudentProfile}: student details plus optional parent contact information.
     \item \textbf{TutorInvite}: admin-created invitation containing invited email, invite status, token reference, expiry, invited by, accepted by, revoked by, and audit timestamps.
-    \item \textbf{TutorProfile}: tutor bio, expertise, display prices, availability summary, onboarding status, publication status, and admin review metadata.
+    \item \textbf{TutorProfile}: tutor bio, expertise, IDR base honoraria by supported modality, derived honorarium display, availability summary, onboarding status, publication status, and admin review metadata.
+    \item \textbf{EconomyConfig}: the active Marks computational value, minimum tutor base honorarium, tutor increments, online/offline Cogito take bases and increments, optimistic version, last updater, and update timestamps.
     \item \textbf{Wallet}: total balance, held balance, available balance, and owner reference.
     \item \textbf{LedgerEntry}: immutable Marks movement record.
 	\item \textbf{Booking}: booking type, current state, state history, timing, and pricing references.
@@ -533,7 +550,8 @@ Tutor access is not self-service. Phase 0 uses an admin-invited tutor flow so Co
     \item expertise / competition tracks,
     \item availability,
     \item supported modality: online, offline, or both,
-    \item standard session prices for class sizes 1--6, validated against Cogito floors,
+    \item IDR base honorarium for each supported modality, validated for the Rp 50,000 minimum and Rp 5,000 increments,
+    \item derived honorarium breakdown for class sizes 1--6,
     \item optional credential proof links or files for admin review.
 \end{itemize}
 
@@ -593,7 +611,7 @@ The booking record shall have one canonical current state and a persistent state
 	\item booking id, booking type, tutor id, proposer id, participant ids.
 	\item current state, previous state, state reason, state history.
 	\item target group size, confirmed headcount, deadline at, scheduled start time, timezone.
-	\item original Marks amount, repriced Marks amount, hold amount, refunded amount.
+	\item tutor base rate IDR, tutor honorarium IDR, Cogito take IDR, total IDR, total Marks, Marks per student, actual Marks pooled, original Marks amount, repriced Marks amount, hold amount, refunded amount.
 	\item room id / room status for offline bookings and meeting event id / meeting URL for online bookings.
 	\item cancellation reason, reschedule metadata, override metadata, notification flags.
 \end{itemize}
@@ -608,45 +626,44 @@ Marks are Cogito's internal platform currency. Marks are not transferable betwee
     \item Each package card must show Marks amount, IDR price, effective Rp / Mark rate, and any best-value label approved by Cogito.
     \item The purchase screen must not allow a custom Marks amount in Phase 0 unless package design is changed and approved.
     \item If a student starts a booking without enough available Marks, the booking flow may send the student to top up, then return them to the booking flow after successful payment.
-    \item All four package values are approved for Phase 0 seed data: Starter 50 Marks / Rp 430,000, Learner 120 Marks / Rp 990,000, Explorer 200 Marks / Rp 1,570,000, Pioneer 300 Marks / Rp 2,180,000.
+    \item All four package values are approved for Phase 0 seed data: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000.
 \end{itemize}
 
 \textbf{Approved package table}
 
-The following package table is the approved Phase 0 wallet top-up structure. All four package prices are client-confirmed; the small gap between per-Mark rate and displayed IDR price is the payment gateway processing fee.
+The following package table is the approved Phase 0 wallet top-up structure. Package prices are the amount charged to the student. The Rp 5,000 computational value is used for booking economics; any package premium above that value is retained by Cogito as platform spread at purchase.
 
-\begin{tabular}{|p{3.0cm}|p{3.0cm}|p{3.4cm}|p{3.4cm}|}
+\begin{tabular}{|p{2.4cm}|p{1.4cm}|p{2.5cm}|p{2.5cm}|p{3.1cm}|}
 \hline
-\textbf{Package} & \textbf{Marks} & \textbf{IDR Price} & \textbf{Effective Rate} \\
+\textbf{Package} & \textbf{Marks} & \textbf{Price / Mark} & \textbf{Total Price} & \textbf{Platform Spread} \\
 \hline
-Starter Pack & 50 Marks & Rp 430,000 & ~Rp 8,500 / Mark \\
+Starter Pack & 50 Marks & Rp 6,250 & Rp 312,500 & Rp 62,500 (20.0\%) \\
 \hline
-Learner Pack & 120 Marks & Rp 990,000 & ~Rp 8,200 / Mark \\
+Learner Pack & 120 Marks & Rp 5,750 & Rp 690,000 & Rp 90,000 (13.0\%) \\
 \hline
-Explorer Pack & 200 Marks & Rp 1,570,000 & ~Rp 7,800 / Mark \\
+Explorer Pack & 200 Marks & Rp 5,350 & Rp 1,070,000 & Rp 70,000 (6.5\%) \\
 \hline
-Pioneer Pack & 300 Marks & Rp 2,180,000 & ~Rp 7,250 / Mark \\
+Pioneer Pack & 400 Marks & Rp 5,000 & Rp 2,000,000 & Rp 0 (volume baseline) \\
 \hline
 \end{tabular}
 
-The Explorer Pack price is Rp 1,570,000 (200 Marks at ~Rp 7,800 / Mark base + payment gateway processing fee), confirmed by the client. An earlier draft value of Rp 3,320,000 is superseded and is not used in Phase 0 seed data.
+The package table above supersedes all earlier package values, including the previous 300-Mark Pioneer Pack and the previous Explorer Pack draft.
 
 \textbf{Approved economics constants}
 \begin{itemize}
-    \item Student purchase rates vary by package size: smaller packages cost more per Mark and larger packages cost less per Mark.
-    \item Approved student purchase rate range follows the approved package table: approximately Rp 8,500 / Mark (Starter Pack) to Rp 7,250 / Mark (Pioneer Pack). Per-Mark rates are the pre-fee base; displayed IDR prices include the payment gateway processing fee so the amount the student pays is the value shown in the table.
-    \item Reference student purchase rate for illustrations: Rp 7,250 / Mark (Pioneer Pack), with the working-average rate of approximately Rp 7,800 / Mark available for Phase 0 illustrations.
-    \item Tutor payout rate: Rp 7,000 / Mark.
-    \item Reference exchange margin: Rp 250 / Mark at the Rp 7,250 reference average. This margin is separate from the session take.
+    \item Computational value: 1 Mark = Rp 5,000 for class pricing, Cogito take calculations, and conversion calculations.
+    \item Student acquisition rates vary by package size from Rp 6,250 / Mark down to Rp 5,000 / Mark.
+    \item The difference between the package purchase price and the Marks' Rp 5,000 computational value is platform spread retained by Cogito at purchase.
+    \item Tutor compensation is not a Marks conversion. Tutors receive an IDR honorarium under a separate service / honorarium agreement and do not hold or cash out Marks.
+    \item Cogito's session take is calculated in IDR from the modality schedule and is separate from the package spread.
 \end{itemize}
 
 \textbf{Ledger rules}
 \begin{itemize}
 	\item The wallet keeps \textbf{total balance} and \textbf{held balance}; available balance is total minus held.
-	\item Students purchase Marks in approved packages: Starter 50 Marks / Rp 430,000, Learner 120 Marks / Rp 990,000, Explorer 200 Marks / Rp 1,570,000, Pioneer 300 Marks / Rp 2,180,000.
-	\item Purchased Marks cannot be converted back to rupiah and do not expire. Unused purchased Marks remain in the student's wallet.
-	\item Tutor payout uses the fixed approved payout rate of Rp 7,000 / Mark.
-	\item The reference student purchase rate for illustrations is Rp 7,250 / Mark (Pioneer Pack); the working-average rate of approximately Rp 7,800 / Mark is available for Phase 0 illustrations. Displayed IDR prices include the payment gateway processing fee.
+	\item Students purchase Marks in approved packages: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000.
+	\item Purchased Marks are non-refundable, non-transferable, cannot be converted back to rupiah, and do not expire after a valid purchase. Unused purchased Marks remain in the student's wallet.
+	\item Tutor honorarium is calculated and reported in IDR. Any payout request or disbursement uses the tutor's IDR honorarium balance, not a Marks cash-out rate.
 	\item Knowledge Bank access checks wallet balance continuously and requires at least 35 Marks.
 	\item Successful Marks purchase creates a credit entry.
 	\item Booking hold creates a hold entry.
@@ -753,99 +770,123 @@ Lateness tolerance is 15 minutes for both tutors and students.
     \item Phase 0 does not automatically suspend tutors based on lateness or no-show count. Admin may manually unpublish or suspend a tutor if repeated reliability issues warrant action.
 \end{itemize}
 
-\section{Group Booking Pricing and Deadline Rules}
+\section{Session Pricing, Marks Conversion, and Group Deadline Rules}
 
-Group booking pricing is based on the final confirmed headcount and the tutor's published price for that group size. Phase 0 shall not introduce hidden discount tiers or tier-based pricing.
+Session pricing is based on the final confirmed headcount, the tutor's IDR base honorarium, the session modality, and the active Cogito take schedule. The active schedule starts with the client-approved defaults and is admin-configurable for future bookings; Phase 0 does not use tier-based tutor pricing or a Marks-to-IDR tutor cash-out rate.
 
-Tutor cards and tutor profiles show booking prices in Marks before the student starts booking. Class for 1 sessions show the per-student price for size 1. Class for 2 through class for 6 sessions show the starting group price or pricing basis for that size, and the final payable amount is recalculated against confirmed headcount during confirmation or reconfirmation.
+Tutor cards and tutor profiles show the final Marks per student before the student starts booking, together with a literal class-size indicator. The tutor-facing surfaces show the IDR base honorarium and derived honorarium breakdown. The final student payable amount is recalculated against confirmed headcount during confirmation or reconfirmation.
 
-\textbf{Standard 90-minute floor pricing}
-
-Each tutor must publish one price for each group size from 1 to 6 students. Published prices are per student, stored in Marks, and must be at or above the Cogito floor price below. There is no ceiling. Tutor price changes apply only to future bookings; confirmed bookings keep their stored price snapshot.
-
-\textit{Online classes at floor price}
-
-\begin{tabular}{|p{2.5cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|}
-\hline
-\textbf{Students} & \textbf{Floor / Student} & \textbf{Total Pooled} & \textbf{Tutor Share} & \textbf{Cogito Take} \\
-\hline
-1 & 42 Marks & 42 Marks & 30 Marks & 12 Marks \\
-\hline
-2 & 35 Marks & 70 Marks & 54 Marks & 16 Marks \\
-\hline
-3 & 28 Marks & 84 Marks & 64 Marks & 20 Marks \\
-\hline
-4 & 24 Marks & 96 Marks & 74 Marks & 22 Marks \\
-\hline
-5 & 21 Marks & 105 Marks & 81 Marks & 24 Marks \\
-\hline
-6 & 19 Marks & 114 Marks & 88 Marks & 26 Marks \\
-\hline
-\end{tabular}
-
-\textit{Offline classes at Cogito campus at floor price}
-
-\begin{tabular}{|p{2.5cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|}
-\hline
-\textbf{Students} & \textbf{Floor / Student} & \textbf{Total Pooled} & \textbf{Tutor Share} & \textbf{Cogito Take} \\
-\hline
-1 & 50 Marks & 50 Marks & 35 Marks & 15 Marks \\
-\hline
-2 & 45 Marks & 90 Marks & 70 Marks & 20 Marks \\
-\hline
-3 & 40 Marks & 120 Marks & 95 Marks & 25 Marks \\
-\hline
-4 & 35 Marks & 140 Marks & 115 Marks & 25 Marks \\
-\hline
-5 & 30 Marks & 150 Marks & 120 Marks & 30 Marks \\
-\hline
-6 & 27 Marks & 162 Marks & 127 Marks & 35 Marks \\
-\hline
-\end{tabular}
-
-The tables above define Cogito's baseline / minimum price schedule, not a maximum price schedule. Tutors may set prices above the floor for any supported group size. At the baseline price, tutor share and Cogito take follow the corresponding table row. When the tutor-set price is above the baseline, the system calculates the increase at the total pooled level and applies the extra-take rule below.
-
-\textbf{Extra-take rule for above-baseline tutor prices}
+\textbf{Core constraints}
 \begin{itemize}
-    \item Baseline total = baseline floor per student $\times$ final confirmed headcount.
-    \item Tutor total = tutor-set per-student price $\times$ final confirmed headcount.
-    \item Extra total = tutor total $-$ baseline total.
-    \item If extra total is less than 0, the price is invalid and cannot be published.
-    \item Cogito extra take = $\lfloor$ extra total $/ 5 \rfloor$ Marks.
-    \item Tutor extra share = extra total $-$ Cogito extra take.
-    \item Final Cogito take = baseline Cogito take + Cogito extra take.
-    \item Final tutor share = baseline tutor share + tutor extra share.
-    \item Tutor payout converts final tutor share Marks to IDR at Rp 7,000 / Mark.
+    \item Class size is capped at $N \in \{1,2,3,4,5,6\}$.
+    \item Tutors configure an IDR one-student base honorarium for each supported modality. The value must be at least Rp 50,000 and must use Rp 5,000 increments.
+    \item Admin configures the active Cogito take schedule: online base Rp 50,000 and increment Rp 20,000; offline base Rp 90,000 and increment Rp 40,000 by default. Each editable value uses Rp 5,000 increments; increments may be zero but may not be negative.
+    \item When an admin changes any active Cogito take value, every current tutor account receives a durable in-app notification describing the new online/offline schedule. Re-saving identical values is a no-op and does not create a new version, audit event, or notification.
+    \item The default one-student base honorarium is Rp 175,000 for online classes and Rp 225,000 for offline classes.
+    \item Tutors may change their base honorarium without a ceiling; changing a rate affects future bookings only.
+    \item Tutors receive an IDR honorarium from Cogito. Tutors do not receive, hold, withdraw, or convert Marks.
 \end{itemize}
 
-This means Cogito receives 1 additional Mark for every full 5 Marks of accumulated price increase above the baseline total. Any remainder below the next 5-Mark threshold goes to the tutor. For example, if extra total is 4 Marks, Cogito extra take is 0 and all 4 Marks go to the tutor. If extra total is 5 Marks, Cogito extra take is 1 and 4 Marks go to the tutor. If extra total is 12 Marks, Cogito extra take is 2 and 10 Marks go to the tutor.
+\textbf{Tutor honorarium}
+\begin{verbatim}
+Online:  tutorHonorariumIDR(N)  = baseRateIDR + (N - 1) * 30,000
+Offline: tutorHonorariumIDR(N) = baseRateIDR + (N - 1) * 40,000
+\end{verbatim}
 
-\textbf{Pricing examples}
+\textbf{Cogito take}
+\begin{verbatim}
+Online:  cogitoTakeIDR(N)  = activeOnlineBase + (N - 1) * activeOnlineIncrement
+Offline: cogitoTakeIDR(N) = activeOfflineBase + (N - 1) * activeOfflineIncrement
+\end{verbatim}
 
+\textbf{Student Marks calculation}
+\begin{verbatim}
+Total IDR           = tutor honorarium + Cogito take
+Total Marks         = Total IDR / 5,000
+Marks per student   = ceiling(Total Marks / N)
+Actual Marks pooled = Marks per student * N
+\end{verbatim}
+
+The IDR total is calculated before student billing. Students see only the final Marks per student and a clear class-size indicator. The actual Marks held or deducted for a group is the rounded-up per-student amount multiplied by the confirmed headcount. Any rounding difference is platform spread and does not increase the tutor's IDR honorarium.
+
+\textit{Default online class economics}
+
+\begin{center}
+\scriptsize
+\begin{tabular}{|c|p{2.1cm}|p{1.8cm}|p{1.8cm}|c|c|c|}
+\hline
+\textbf{Students} & \textbf{Tutor honorarium} & \textbf{Cogito take} & \textbf{Total IDR} & \textbf{Total Marks} & \textbf{Marks / student} & \textbf{Actual Marks pooled} \\
+\hline
+1 & Rp 175,000 & Rp 50,000 & Rp 225,000 & 45 & 45 & 45 \\
+\hline
+2 & Rp 205,000 & Rp 70,000 & Rp 275,000 & 55 & 28 & 56 \\
+\hline
+3 & Rp 235,000 & Rp 90,000 & Rp 325,000 & 65 & 22 & 66 \\
+\hline
+4 & Rp 265,000 & Rp 110,000 & Rp 375,000 & 75 & 19 & 76 \\
+\hline
+5 & Rp 295,000 & Rp 130,000 & Rp 425,000 & 85 & 17 & 85 \\
+\hline
+6 & Rp 325,000 & Rp 150,000 & Rp 475,000 & 95 & 16 & 96 \\
+\hline
+\end{tabular}
+\end{center}
+\normalsize
+
+\textit{Default offline class economics at Cogito campus}
+
+\begin{center}
+\scriptsize
+\begin{tabular}{|c|p{2.1cm}|p{1.8cm}|p{1.8cm}|c|c|c|}
+\hline
+\textbf{Students} & \textbf{Tutor honorarium} & \textbf{Cogito take} & \textbf{Total IDR} & \textbf{Total Marks} & \textbf{Marks / student} & \textbf{Actual Marks pooled} \\
+\hline
+1 & Rp 225,000 & Rp 90,000 & Rp 315,000 & 63 & 63 & 63 \\
+\hline
+2 & Rp 265,000 & Rp 130,000 & Rp 395,000 & 79 & 40 & 80 \\
+\hline
+3 & Rp 305,000 & Rp 170,000 & Rp 475,000 & 95 & 32 & 96 \\
+\hline
+4 & Rp 345,000 & Rp 210,000 & Rp 555,000 & 111 & 28 & 112 \\
+\hline
+5 & Rp 385,000 & Rp 250,000 & Rp 635,000 & 127 & 26 & 130 \\
+\hline
+6 & Rp 425,000 & Rp 290,000 & Rp 715,000 & 143 & 24 & 144 \\
+\hline
+\end{tabular}
+\end{center}
+\normalsize
+
+The tables above show the default economics for reference. A tutor's selected base honorarium is substituted into the same formulas for the supported modality and confirmed headcount. The resulting IDR amounts are snapshot on the booking before Marks are held.
+
+\textbf{Price-point examples}
 \begin{itemize}
-    \item Online class for 1 at floor: student pays 42 Marks, tutor share is 30 Marks, Cogito take is 12 Marks.
-    \item Online class for 1 above floor: tutor sets 50 Marks. Extra total = 50 $-$ 42 = 8 Marks. Cogito extra take = $\lfloor 8 / 5 \rfloor$ = 1 Mark. Tutor extra share = 7 Marks. Final tutor share = 37 Marks. Final Cogito take = 13 Marks.
-    \item Online class for 3 at floor: each student pays 28 Marks, total pooled is 84 Marks, tutor share is 64 Marks, Cogito take is 20 Marks.
-    \item Online class for 3 above floor: tutor sets 32 Marks per student. Tutor total = 96 Marks. Extra total = 96 $-$ 84 = 12 Marks. Cogito extra take = $\lfloor 12 / 5 \rfloor$ = 2 Marks. Tutor extra share = 10 Marks. Final tutor share = 74 Marks. Final Cogito take = 22 Marks.
+    \item Extreme low end, junior online tutor at a Rp 75,000 base rate: 1 student produces Rp 125,000 total or 25 Marks; 4 students produce Rp 275,000 total or 55 Marks, which bills as 14 Marks per student.
+    \item Extreme high end, specialist offline masterclass at a Rp 500,000 base rate: 1 student produces Rp 590,000 total or 118 Marks; 6 students produce Rp 990,000 total or 198 Marks, which bills as 33 Marks per student.
+    \item Cogito's base operational margin remains protected regardless of the tutor's base rate.
 \end{itemize}
 
 Class-size labels should be literal, e.g. ``class for 1'', ``class for 2'', through ``class for 6''; Phase 0 must not use solo / duo / trio naming in student-facing class-size labels.
 
 \textbf{Rules}
 \begin{itemize}
-    \item Each group booking stores target group size, minimum confirmed headcount, deadline at, provisional total, and final total.
+    \item Each group booking stores target group size, minimum confirmed headcount, deadline at, provisional and final IDR totals, provisional and final Marks per student, actual Marks pooled, and the economic snapshot used for the booking.
     \item Default response window for each booking step is 12 hours unless the session starts sooner or admin records a shorter operational cutoff.
     \item The 12-hour window applies to tutor response, participant confirmation, repricing / reconfirmation, and offline room approval.
     \item Before the deadline, invitees can accept or decline, but the provisional total stays based on the target group size.
     \item At the deadline, the system computes confirmed headcount.
-    \item Final total = per-participant rate $\times$ confirmed headcount.
+    \item Final tutor honorarium IDR = base rate IDR + modality increment $\times$ (confirmed headcount $-$ 1).
+    \item Final Cogito take IDR = the active modality take schedule for the confirmed headcount at the time the snapshot is created.
+    \item Final total IDR = tutor honorarium IDR + Cogito take IDR.
+    \item Final total Marks = final total IDR / Rp 5,000; Marks per student = $\lceil$ final total Marks / confirmed headcount $\rceil$; actual Marks pooled = Marks per student $\times$ confirmed headcount.
     \item If confirmed headcount is below 2, the booking expires and all held Marks are released back to available balance within 12 hours after expiry.
-    \item {\sloppy If confirmed headcount is 2 or more but below target, the system enters awaiting\_reconfirmation and sends the final price to all remaining participants.\par}
-    \item Every remaining participant, including the proposer if they are part of the group, must reconfirm the repriced total.
+    \item {\sloppy If confirmed headcount is 2 or more but below target, the system enters awaiting\_reconfirmation and sends the final Marks per student and class-size price to all remaining participants.\par}
+    \item Every remaining participant, including the proposer if they are part of the group, must reconfirm the recalculated Marks per student.
+    \item An admin schedule update never mutates an existing booking's persisted economic snapshot; repricing creates a new snapshot using the active version.
     \item If any confirmation changes the headcount again, the system recalculates and reissues the reconfirmation request.
     \item If reconfirmation deadline passes without all required approvals, the booking expires and the held amount is released within 12 hours after expiry.
     \item Tutor-initiated time changes also force awaiting\_reconfirmation if the confirmed participants are affected.
-    \item If a confirmed group participant withdraws before H-2, the system releases that participant's held Marks, recalculates the final total for the remaining confirmed headcount, and moves the booking to awaiting\_reconfirmation.
+    \item If a confirmed group participant withdraws before H-2, the system releases that participant's held Marks, recalculates the tutor honorarium IDR, Cogito take IDR, final Marks per student, and actual Marks pooled for the remaining confirmed headcount, and moves the booking to awaiting\_reconfirmation.
     \item Remaining participants must accept the updated price before the reconfirmation deadline. If all remaining participants accept and the headcount remains valid, the booking continues; otherwise, the booking expires and held Marks are released within 12 hours after expiry.
     \item If a confirmed group participant withdraws after H-2, the withdrawal is treated as a late cancel or no-show and does not trigger automatic repricing or refund unless an admin override is recorded.
     \item Online group bookings may proceed to scheduled after tutor acceptance and required participant confirmation.
@@ -942,6 +983,8 @@ Late cancel / no-show / emergency override & Yes & Yes, affected participants & 
 Tutor reschedule proposed / approved & Yes & Yes, affected participants & Requires student approval. \\
 \hline
 Group repricing / reconfirmation request & Yes & Yes, all current participants & Cost changes must be explicit. \\
+\hline
+Active Cogito take schedule changed & Yes & No & Notify every current tutor in-app; applies to future booking/repricing snapshots only. Identical saves do not emit a notification. \\
 \hline
 Payment / refund / emergency refund & Yes & Yes, payer & Wallet event. \\
 \hline
@@ -1112,11 +1155,11 @@ No feature is complete until the corresponding tests exist and pass.
 	\hline
 	TC-04          & Verify failed or pending payment does not credit Marks.              & A payment attempt is started.                                          & 1. Simulate failed or pending payment status. 2. Check the wallet balance. \newline No credit is added and no completed purchase entry appears.                                                                                                                                                                 \\
 	\hline
-	TC-05          & Verify tutor prices respect Cogito floors.                      & Tutor and admin can edit tutor pricing.                                    & 1. Try to publish a price below the floor. 2. Publish valid prices for group sizes 1--6. 3. Open the tutor card and profile. \newline Below-floor prices are rejected, valid prices are displayed, and no tier-based pricing is used.                                                                                                                                                                       \\
+	TC-05          & Verify tutor honorarium constraints and Cogito schedules.                      & Tutor can edit base honoraria; admin can review them and edit the active Cogito take schedule.                                    & 1. Try to publish a base honorarium below Rp 50,000 or outside Rp 5,000 increments. 2. Publish valid online and offline base honoraria. 3. Inspect the derived class-size breakdown. \newline Invalid IDR values are rejected, valid values produce the active modality increments for class sizes 1--6, and no tier-based pricing or Marks cash-out rate is used.                                                                                                                                                                       \\
 	\hline
-	TC-06          & Verify above-floor tutor pricing split.         & Tutor prices are configured above floor for at least one individual class and one group class.                                        & 1. Set online class for 1 to 50 Marks. 2. Complete the class and inspect the payout split. 3. Set online class for 3 to 32 Marks per student, confirm 3 students, complete the class, and inspect the payout split. \newline For class for 1, final split is tutor 37 Marks and Cogito 13 Marks. For class for 3, final split is tutor 74 Marks and Cogito 22 Marks. In both cases Cogito extra take equals one Mark per full 5 Marks accumulated above baseline.                                                                                                                                                                    \\
+	TC-06          & Verify IDR honorarium, Cogito take, and Marks conversion.         & Tutor has the default online base honorarium of Rp 175,000 and default offline base honorarium of Rp 225,000.                                        & 1. Calculate online class for 1 and online class for 3. 2. Calculate offline class for 1 and offline class for 3. 3. Inspect the stored economic snapshot and student hold. \newline Online class for 1 is Rp 175,000 tutor honorarium + Rp 50,000 Cogito take = Rp 225,000 = 45 Marks. Online class for 3 is Rp 235,000 + Rp 90,000 = Rp 325,000 = 65 total Marks = 22 Marks per student and 66 actual Marks pooled. Offline class for 1 is Rp 225,000 + Rp 90,000 = Rp 315,000 = 63 Marks. Tutor compensation remains an IDR honorarium and is not calculated as Marks cash-out.                                                                                                                                                                    \\
 	\hline
-	TC-07          & Verify tutor listing shows the required booking information.         & Multiple tutors are configured.                                        & 1. Open the tutor list. 2. Review each tutor card. \newline Each card shows summary profile, expertise, tutor-set Marks prices, and availability.                                                                                                                                                                    \\
+	TC-07          & Verify tutor listing shows the required booking information.         & Multiple tutors and modalities are configured.                                        & 1. Open the tutor list. 2. Review each tutor card. \newline Each card shows summary profile, expertise, availability, modality, and the computed Marks per student for the relevant class sizes; tutor-facing views show IDR honorarium details separately.                                                                                                                                                                    \\
 	\hline
 	TC-08          & Verify admin-invited new tutor account claim.                                       & Admin is logged in and invited email has no existing account.              & 1. Admin sends tutor invite. 2. Tutor opens invite link and creates an account. 3. Tutor verifies email ownership and starts onboarding. \newline A user account and draft tutor profile are created, the invite becomes accepted, no admin-created password exists, and the tutor is not visible in discovery before publication.                                                                                                              \\
 	\hline
@@ -1255,7 +1298,7 @@ The PRD is ready for development handoff. The build should proceed with the foll
 \begin{itemize}
     \item Treat Google Meet automation as an early technical spike. Target behavior is automatic Google Calendar / Google Meet event creation with tutor and confirmed student emails as attendees. Manual meeting-link entry remains the guaranteed v1 fallback if API setup blocks launch.
     \item Arrange a client / developer setup call if Google API authorization requires access to Cogito Academy's Google account.
-    \item Implement the booking, Marks ledger, and override domains test-first. The highest-risk rules are 12-hour response windows, above-floor tutor pricing split, no Marks-to-rupiah conversion, admin-verified tutor no-show return, and payment-error reconciliation.
+    \item Implement the booking, Marks ledger, and override domains test-first. The highest-risk rules are 12-hour response windows, IDR honorarium and Cogito take calculations, Rp 5,000 Marks conversion and per-student rounding, no Marks-to-rupiah conversion, admin-verified tutor no-show return, and payment-error reconciliation.
     \item Build admin override UX as a guarded workflow with required reason, category, affected users, Marks action, before / after preview, and audit history. Do not implement one-click override actions.
     \item Use Cogito Academy WhatsApp support number +62 881-0119-90195 for support button and SLA escalation configuration.
     \item Phase 0 flags tutor reliability issues for admin review only. Do not auto-suspend tutors based on no-show / lateness counts.
@@ -1285,12 +1328,15 @@ The PRD is ready for development handoff. The build should proceed with the foll
 	\item \textbf{Marks}: Cogito's internal booking currency. Marks are not transferable between accounts and have no value outside the platform.
 	\item \textbf{Ledger}: the immutable transaction history for Marks movement.
 	\item \textbf{Available Balance}: total Marks balance minus held Marks.
-	\item \textbf{Floor Price}: minimum per-student price a tutor may set for a group size.
-	\item \textbf{Baseline Total}: floor price per student multiplied by final confirmed headcount.
-	\item \textbf{Extra Total}: tutor-set total price minus baseline total.
-	\item \textbf{Cogito Take}: baseline number of Marks Cogito deducts from total class revenue at session completion, plus 1 extra Mark for every full 5 Marks accumulated above the baseline total.
-	\item \textbf{Tutor Net}: baseline tutor share plus remaining above-baseline Marks after Cogito extra take, converted to IDR at the tutor payout rate.
-	\item \textbf{Exchange Margin}: spread between student purchase rate and tutor payout rate on Marks flowing through the platform.
+	\item \textbf{Computational Mark Value}: Rp 5,000 used to calculate class totals and convert IDR economics into Marks.
+	\item \textbf{Marks Acquisition Rate}: the package-specific student purchase price per Mark, ranging from Rp 6,250 to Rp 5,000.
+	\item \textbf{Platform Spread}: the difference between the student's package purchase price and the Marks' Rp 5,000 computational value, retained by Cogito at purchase.
+	\item \textbf{Tutor Base Honorarium}: the tutor-configured one-student IDR honorarium for a supported modality, in Rp 5,000 increments and no lower than Rp 50,000.
+	\item \textbf{Tutor Honorarium}: the tutor base honorarium plus the modality-specific increment for each additional student.
+	\item \textbf{Cogito Take}: the IDR platform fee calculated from the fixed online or offline modality schedule.
+	\item \textbf{Marks per Student}: the ceiling of total Marks divided by the confirmed headcount.
+	\item \textbf{Actual Marks Pooled}: Marks per student multiplied by the confirmed headcount; this is the amount held or deducted from the participants.
+	\item \textbf{Direct IDR Compensation}: tutor honorarium paid by Cogito from its operating account; it is not a Marks cash-out.
 	\item \textbf{Hold / Release / Refund}: wallet states tied to booking outcomes.
 	\item \textbf{Series Booking}: up to 4 explicitly selected sessions booked as one package with the same tutor, session type, and group composition.
 	\item \textbf{Tutor Invite}: admin-created invitation that allows a specific email address to claim or attach tutor access.

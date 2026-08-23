@@ -15,6 +15,7 @@ export interface UpdateProfileInput {
   expertise?: string[];
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";
+  baseRatesIdr?: Partial<{ online: number; offline: number }>;
   prices?: Record<string, number>;
   availabilitySummary?: string;
   proofUrls?: string[];

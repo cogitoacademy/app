@@ -937,7 +937,12 @@ export function createBookingRepo(db: DbType) {
         tutor: true,
         proposer: true,
         participants: { with: { user: true } },
-        stateHistory: true,
+        stateHistory: {
+          orderBy: [
+            desc(bookingStateHistory.createdAt),
+            desc(bookingStateHistory.id),
+          ],
+        },
         rescheduleProposals: {
           orderBy: [desc(bookingRescheduleProposal.createdAt)],
           limit: 10,
@@ -976,6 +981,7 @@ export function createBookingRepo(db: DbType) {
         tutor: true,
         proposer: true,
         participants: { with: { user: true } },
+        roomBookings: { with: { room: true } },
       },
     });
   }
@@ -999,6 +1005,61 @@ export function createBookingRepo(db: DbType) {
         tutor: true,
         proposer: true,
         participants: { with: { user: true } },
+        roomBookings: { with: { room: true } },
+      },
+    });
+  }
+
+  /**
+   * Lists every booking visible to a signed-in viewer. Students see bookings
+   * they proposed or joined, tutors see assigned bookings, and admins see the
+   * complete booking set. The relation checks stay server-side so the list
+   * cannot be widened by a client-provided user id.
+   */
+  async function listBookingsForAccess(
+    userId: string,
+    opts: {
+      states?: string[];
+      limit: number;
+      cursor?: string;
+      includeAll?: boolean;
+    },
+  ) {
+    const conditions = [];
+    if (!opts.includeAll) {
+      const participantBooking = db
+        .select({ id: bookingParticipant.id })
+        .from(bookingParticipant)
+        .where(
+          and(
+            eq(bookingParticipant.bookingId, booking.id),
+            eq(bookingParticipant.userId, userId),
+          ),
+        );
+      conditions.push(
+        or(
+          eq(booking.proposerId, userId),
+          eq(booking.tutorId, userId),
+          exists(participantBooking),
+        ),
+      );
+    }
+    if (opts.states?.length) {
+      conditions.push(inArray(booking.currentState, opts.states));
+    }
+    if (opts.cursor) {
+      conditions.push(bookingCursorCondition(opts.cursor));
+    }
+
+    return db.query.booking.findMany({
+      where: conditions.length > 0 ? and(...conditions) : undefined,
+      orderBy: [desc(booking.scheduledStartAt), desc(booking.id)],
+      limit: opts.limit + 1,
+      with: {
+        tutor: true,
+        proposer: true,
+        participants: { with: { user: true } },
+        roomBookings: { with: { room: true } },
       },
     });
   }
@@ -1008,6 +1069,7 @@ export function createBookingRepo(db: DbType) {
     findBookingWithParticipants,
     listBookingsByProposer,
     listBookingsByTutor,
+    listBookingsForAccess,
     findTutorProfile,
     findAvailabilitySlot,
     findAvailabilityWindowContaining,

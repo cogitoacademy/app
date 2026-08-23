@@ -13,9 +13,10 @@ import { authClient } from "@/lib/auth-client";
 
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/admin": "Admin workspace",
   "/balance": "Balance",
-  "/bookings": "My Bookings",
-  "/tutor-bookings": "Tutor Bookings",
+  "/bookings": "Bookings",
+  "/tutor-bookings": "Bookings",
   "/achievements": "Achievements",
   "/tutors": "Tutors",
   "/profile": "Profile",
@@ -25,6 +26,7 @@ const routeTitles: Record<string, string> = {
   "/admin-tutors": "Manage Tutors",
   "/admin-achievements": "Achievement Moderation",
   "/admin-operations": "Operations",
+  "/admin-economy": "Economy Settings",
 };
 
 export const Route = createFileRoute("/_app")({
@@ -45,6 +47,13 @@ function RouteComponent() {
   const { session } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  // Route guards normally prevent this state, but auth failures can resolve
+  // during a navigation while the shell is still mounted. Keep the shell from
+  // dereferencing an absent auth result and let the route recover at login.
+  if (!session?.data?.user) {
+    return null;
+  }
+
   const title = pathname.startsWith("/bookings/")
     ? "Booking Details"
     : pathname.startsWith("/tutors/")
@@ -56,12 +65,13 @@ function RouteComponent() {
       title={title}
       sidebar={
         <AppSidebar
-          userEmail={session.data?.user.email}
-          userName={session.data?.user.name}
-          role={(session.data?.user as CogitoUser | undefined)?.role}
+          userEmail={session.data.user.email}
+          userImage={session.data.user.image}
+          userName={session.data.user.name}
+          role={(session.data.user as CogitoUser).role}
         />
       }
-      sessionExpiresAt={session.data?.session.expiresAt}
+      sessionExpiresAt={session.data.session.expiresAt}
     >
       <Outlet />
     </Layout>

@@ -12,3 +12,4 @@ export * from "./availability-slot";
 export * from "./notification";
 export * from "./booking";
 export * from "./support-ticket";
+export * from "./economy-config";

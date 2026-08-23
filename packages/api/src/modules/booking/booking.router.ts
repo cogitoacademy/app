@@ -16,6 +16,7 @@ import {
   declineBookingInput,
   confirmInviteInput,
   declineInviteInput,
+  withdrawInviteInput,
   reconfirmInput,
   withdrawInput,
   proposeRescheduleInput,
@@ -66,13 +67,14 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(getBookingInput)
       .handler(handler.getRescheduleAvailability),
 
-    listMine: studentProcedure
+    listMine: protectedProcedure
       .route({
         method: "POST",
         path: "/booking/list-mine",
         tags: ["Bookings"],
-        summary: "List my bookings",
-        description: "Returns bookings where the user is proposer",
+        summary: "List accessible bookings",
+        description:
+          "Returns bookings related to the signed-in user; admins receive the full booking set",
       })
       .input(listMineInput)
       .handler(handler.listMine),
@@ -202,6 +204,18 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(declineInviteInput)
       .handler(handler.declineInvite),
 
+    withdrawInvite: studentProcedure
+      .route({
+        method: "POST",
+        path: "/booking/invite/withdraw",
+        tags: ["Bookings"],
+        summary: "Withdraw a group invitation",
+        description:
+          "The booking proposer withdraws one pending invite before confirmation",
+      })
+      .input(withdrawInviteInput)
+      .handler(handler.withdrawInvite),
+
     reconfirm: studentProcedure
       .route({
         method: "POST",
@@ -243,7 +257,7 @@ export function createBookingRouter(handler: BookingHandler) {
         tags: ["Bookings"],
         summary: "Propose a new booking time",
         description:
-          "Tutor or booking proposer creates or counters a reschedule proposal",
+          "Booking proposer creates or counters a reschedule proposal",
       })
       .input(proposeRescheduleInput)
       .handler(handler.proposeReschedule),

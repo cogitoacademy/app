@@ -6,7 +6,9 @@ import type {
   GroupSize,
   Modality,
   PriceSnapshot,
+  EconomyPriceSnapshot,
 } from "../pricing/pricing.service";
+import type { EconomyParameters } from "../economy";
 import type { NotificationWriteParams } from "../notification/notification.service";
 import type {
   WalletSnapshot,
@@ -38,6 +40,13 @@ export interface BookingPricingPort {
     tutorPricePerStudent: number,
     confirmedHeadcount: GroupSize,
   ): PriceSnapshot;
+  computeEconomics?(
+    modality: Modality,
+    baseRateIdr: number,
+    confirmedHeadcount: GroupSize,
+    config: EconomyParameters,
+  ): EconomyPriceSnapshot;
+  getEconomyConfig?(conn?: DbOrTx): Promise<EconomyParameters>;
 }
 
 export interface BookingAuditPort {

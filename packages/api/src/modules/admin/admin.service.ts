@@ -1,7 +1,11 @@
 import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
-import type { AdminAuditPort, AdminWalletPort } from "./index";
+import type {
+  AdminAuditPort,
+  AdminNotificationPort,
+  AdminWalletPort,
+} from "./index";
 import type { BookingPayoutPort } from "../booking";
 import {
   UserNotFoundError,
@@ -9,7 +13,9 @@ import {
   OptimisticLockError,
   WalletNotFoundError,
   InvalidLedgerFilterError,
+  EconomyConfigConflictError,
 } from "./admin.errors";
+import type { EconomyService } from "../economy";
 
 export interface ListUsersInput {
   limit?: number;
@@ -71,14 +77,29 @@ export interface GetTutorPayoutsInput {
   dateTo?: string;
 }
 
+export interface UpdateEconomySettingsInput {
+  expectedVersion: number;
+  onlineCogitoBaseIdr: number;
+  onlineCogitoIncrementIdr: number;
+  offlineCogitoBaseIdr: number;
+  offlineCogitoIncrementIdr: number;
+}
+
+function formatIdr(amount: number): string {
+  return `Rp${amount.toLocaleString("id-ID")}`;
+}
+
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
   db: DbType;
   wallet: AdminWalletPort;
   payout: BookingPayoutPort;
+  economy?: EconomyService;
+  notification?: AdminNotificationPort;
 }) {
-  const { adminRepo, auditPort, db, wallet, payout } = deps;
+  const { adminRepo, auditPort, db, wallet, payout, economy, notification } =
+    deps;
 
   async function listUsers(
     input: ListUsersInput = {},
@@ -208,7 +229,110 @@ export function createAdminService(deps: {
     });
   }
 
-  return { listUsers, setRole, getWallet, listLedgerEntries, getTutorPayouts };
+  async function getEconomySettings() {
+    if (!economy) throw new Error("Economy service is not configured");
+    return economy.getConfig(db);
+  }
+
+  async function updateEconomySettings(
+    adminId: string,
+    input: UpdateEconomySettingsInput,
+  ) {
+    if (!economy) throw new Error("Economy service is not configured");
+
+    return db.transaction(async (tx) => {
+      const before = await economy.getConfig(tx);
+      if (before.version !== input.expectedVersion) {
+        throw new EconomyConfigConflictError(input.expectedVersion);
+      }
+
+      const nextValues = {
+        onlineCogitoBaseIdr: input.onlineCogitoBaseIdr,
+        onlineCogitoIncrementIdr: input.onlineCogitoIncrementIdr,
+        offlineCogitoBaseIdr: input.offlineCogitoBaseIdr,
+        offlineCogitoIncrementIdr: input.offlineCogitoIncrementIdr,
+      };
+
+      const hasChanges = Object.entries(nextValues).some(
+        ([key, value]) => value !== before[key as keyof typeof nextValues],
+      );
+      if (!hasChanges) return before;
+
+      const updated = await economy.updateConfig(tx, {
+        expectedVersion: input.expectedVersion,
+        updatedBy: adminId,
+        values: nextValues,
+      });
+      if (!updated) {
+        throw new EconomyConfigConflictError(input.expectedVersion);
+      }
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "economy_config_updated",
+        targetId: updated.id,
+        targetType: "economy_config",
+        beforeState: {
+          onlineCogitoBaseIdr: before.onlineCogitoBaseIdr,
+          onlineCogitoIncrementIdr: before.onlineCogitoIncrementIdr,
+          offlineCogitoBaseIdr: before.offlineCogitoBaseIdr,
+          offlineCogitoIncrementIdr: before.offlineCogitoIncrementIdr,
+          version: before.version,
+        },
+        afterState: {
+          onlineCogitoBaseIdr: updated.onlineCogitoBaseIdr,
+          onlineCogitoIncrementIdr: updated.onlineCogitoIncrementIdr,
+          offlineCogitoBaseIdr: updated.offlineCogitoBaseIdr,
+          offlineCogitoIncrementIdr: updated.offlineCogitoIncrementIdr,
+          version: updated.version,
+        },
+      });
+
+      if (notification) {
+        const tutorIds = await adminRepo.listUserIdsByRole(tx, USER_ROLE.TUTOR);
+        const notificationBody =
+          `Online: ${formatIdr(updated.onlineCogitoBaseIdr)} base + ` +
+          `${formatIdr(updated.onlineCogitoIncrementIdr)} per student. ` +
+          `Offline: ${formatIdr(updated.offlineCogitoBaseIdr)} base + ` +
+          `${formatIdr(updated.offlineCogitoIncrementIdr)} per student. ` +
+          "The new schedule applies to new bookings; existing booking snapshots are unchanged.";
+
+        await Promise.all(
+          tutorIds.map((tutorId) =>
+            notification.write({
+              db: tx,
+              userId: tutorId,
+              category: "system",
+              title: "Cogito rate updated",
+              body: notificationBody,
+              eventKey: `economy_config_updated:${updated.version}:${tutorId}`,
+              metadata: {
+                economyVersion: updated.version,
+                onlineCogitoBaseIdr: updated.onlineCogitoBaseIdr,
+                onlineCogitoIncrementIdr: updated.onlineCogitoIncrementIdr,
+                offlineCogitoBaseIdr: updated.offlineCogitoBaseIdr,
+                offlineCogitoIncrementIdr: updated.offlineCogitoIncrementIdr,
+              },
+            }),
+          ),
+        );
+      }
+
+      return updated;
+    });
+  }
+
+  return {
+    listUsers,
+    setRole,
+    getWallet,
+    listLedgerEntries,
+    getTutorPayouts,
+    getEconomySettings,
+    updateEconomySettings,
+  };
 }
 
 export type AdminService = ReturnType<typeof createAdminService>;

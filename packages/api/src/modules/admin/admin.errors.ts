@@ -45,6 +45,19 @@ export class InvalidLedgerFilterError extends DomainError {
   }
 }
 
+export class EconomyConfigConflictError extends DomainError {
+  readonly domain = "admin";
+  constructor(expectedVersion: number) {
+    super(
+      "ECONOMY_CONFIG_CONFLICT",
+      "Economy settings were updated by another admin",
+      {
+        expectedVersion,
+      },
+    );
+  }
+}
+
 export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof UserNotFoundError) return notFound(err.message, err);
   if (err instanceof WalletNotFoundError) return notFound(err.message, err);
@@ -52,5 +65,7 @@ export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof OptimisticLockError) return conflict(err.message, err);
   if (err instanceof InvalidLedgerFilterError)
     return badRequest(err.message, err);
+  if (err instanceof EconomyConfigConflictError)
+    return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

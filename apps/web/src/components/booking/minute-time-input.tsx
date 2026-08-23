@@ -11,6 +11,7 @@ export function MinuteTimeInput({
   value,
   onChange,
   id,
+  ariaLabel,
   disabled,
   minTime,
   maxTime,
@@ -18,6 +19,7 @@ export function MinuteTimeInput({
   value: string;
   onChange: (value: string) => void;
   id?: string;
+  ariaLabel?: string;
   disabled?: boolean;
   minTime?: string;
   maxTime?: string;
@@ -43,6 +45,7 @@ export function MinuteTimeInput({
       <IconClock className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" />
       <Input
         id={id}
+        aria-label={ariaLabel}
         type="text"
         inputMode="numeric"
         autoComplete="off"
@@ -148,11 +151,13 @@ export function CrossBrowserDateTimeInput({
   value,
   onChange,
   min,
+  timeAriaLabel,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   min?: string;
+  timeAriaLabel?: string;
 }) {
   const [date = "", time = ""] = value.split("T");
   return (
@@ -169,6 +174,7 @@ export function CrossBrowserDateTimeInput({
       />
       <MinuteTimeInput
         id={`${id}-time`}
+        ariaLabel={timeAriaLabel}
         value={time}
         onChange={(nextTime) => onChange(`${date}T${nextTime}`)}
       />

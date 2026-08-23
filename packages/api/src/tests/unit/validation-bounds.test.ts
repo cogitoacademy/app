@@ -46,6 +46,21 @@ const LONG_SEARCH = "a".repeat(201);
 const LONG_TIMEZONE = "a".repeat(51);
 
 describe("Validation bounds — string .max()", () => {
+  test("baseRatesIdr accepts online/offline keys and rejects other keys", () => {
+    expect(
+      updateMyProfileInput.safeParse({
+        version: 1,
+        baseRatesIdr: { online: 100000, offline: 120000 },
+      }).success,
+    ).toBe(true);
+    expect(
+      updateMyProfileInput.safeParse({
+        version: 1,
+        baseRatesIdr: { hybrid: 100000 },
+      }).success,
+    ).toBe(false);
+  });
+
   test("ID field: bookingId rejects >100 chars", () => {
     const result = bookingActionInput.safeParse({ bookingId: LONG_ID });
     expect(result.success).toBe(false);

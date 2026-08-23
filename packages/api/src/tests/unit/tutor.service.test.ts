@@ -12,6 +12,7 @@ import {
   InvalidTutorPricingError,
   AvailabilitySlotOverlapError,
   OptimisticLockError,
+  InvalidDateRangeError,
 } from "../../modules/tutor/tutor.errors";
 
 function makeProfile(overrides: Record<string, unknown> = {}) {
@@ -66,6 +67,11 @@ const mockPricingPort: PricingPort = {
 const failPricingPort: PricingPort = {
   ...mockPricingPort,
   validatePrices: () => "Prices are invalid",
+};
+
+const idrPricingPort: PricingPort = {
+  ...mockPricingPort,
+  validateBaseRates: () => null,
 };
 
 describe("Tutor Service", () => {
@@ -125,6 +131,26 @@ describe("Tutor Service", () => {
         ),
       ).not.toThrow();
     });
+
+    test("validates IDR base rates when updating a profile", () => {
+      expect(() =>
+        validateUpdateInput(
+          makeProfile(),
+          { baseRatesIdr: { online: 175_000 }, version: 1 },
+          idrPricingPort,
+        ),
+      ).not.toThrow();
+      expect(() =>
+        validateUpdateInput(
+          makeProfile(),
+          { baseRatesIdr: { online: 45_000 }, version: 1 },
+          {
+            ...idrPricingPort,
+            validateBaseRates: () => "Base rate is too low",
+          },
+        ),
+      ).toThrow(InvalidTutorPricingError);
+    });
   });
 
   describe("validateSubmitForReview", () => {
@@ -163,6 +189,30 @@ describe("Tutor Service", () => {
         validateSubmitForReview(makeProfile({ subjects: [] }), mockPricingPort),
       ).toThrow(TutorProfileIncompleteError);
     });
+
+    test("validates IDR base rates during review submission", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ baseRatesIdr: { online: 175_000 } }),
+          idrPricingPort,
+        ),
+      ).not.toThrow();
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ baseRatesIdr: { online: 45_000 } }),
+          {
+            ...idrPricingPort,
+            validateBaseRates: () => "Base rate is too low",
+          },
+        ),
+      ).toThrow(InvalidTutorPricingError);
+    });
+
+    test("validates legacy Marks prices during review submission", () => {
+      expect(() =>
+        validateSubmitForReview(makeProfile(), failPricingPort),
+      ).toThrow(InvalidTutorPricingError);
+    });
   });
 
   describe("createTutorService", () => {
@@ -186,6 +236,7 @@ describe("Tutor Service", () => {
             return fn(tx);
           }),
         },
+        payout: { getTutorPayouts: mock(async () => []) },
         ...overrides,
       };
     }
@@ -231,6 +282,72 @@ describe("Tutor Service", () => {
       await expect(
         service.updateMyProfile("u1", { displayName: "New", version: 5 }),
       ).rejects.toThrow(OptimisticLockError);
+    });
+
+    test("published profile stores changed subject ids as pending edits", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        subjects: [
+          {
+            subjectId: "child-1",
+            subject: makeProfile().subjects[0].subject,
+          },
+        ],
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          listActiveChildSubjects: mock(async () => [{ id: "child-2" }]),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        subjectIds: ["child-2"],
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        deps.db,
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: { subjectIds: ["child-2"] },
+          profileEditStatus: "pending_review",
+        }),
+      );
+    });
+
+    test("published profile removes an unchanged subject edit", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        subjects: [
+          {
+            subjectId: "child-1",
+            subject: makeProfile().subjects[0].subject,
+          },
+        ],
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          listActiveChildSubjects: mock(async () => [{ id: "child-1" }]),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        subjectIds: ["child-1"],
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledTimes(1);
     });
 
     test("submitForReview throws TutorProfileNotFoundError for null profile", async () => {
@@ -387,6 +504,19 @@ describe("Tutor Service", () => {
       expect(upsertAvailability).not.toHaveBeenCalled();
     });
 
+    test("createWeeklyAvailability rejects an empty occurrence range", async () => {
+      const deps = makeDeps();
+      const service = createTutorService(deps as any);
+      await expect(
+        service.createWeeklyAvailability("u1", {
+          startDate: new Date("2026-09-10T10:00:00Z"),
+          endDate: new Date("2026-09-10T11:00:00Z"),
+          repeatUntil: new Date("2026-09-01T10:00:00Z"),
+          modality: "online",
+        }),
+      ).rejects.toThrow("Weekly availability can be scheduled");
+    });
+
     test("replaceWeeklyAvailability atomically replaces recurring windows and preserves overrides", async () => {
       const deactivateFutureRecurringAvailability = mock(async () => {});
       const upsertAvailability = mock(
@@ -505,6 +635,75 @@ describe("Tutor Service", () => {
           modality: "online",
         }),
       ).rejects.toThrow(TutorProfileNotFoundError);
+    });
+
+    test("replaceWeeklyAvailability skips occurrences covered by one-off overrides", async () => {
+      const upsertAvailability = mock(async () => ({ id: "slot1" }));
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listAvailability: mock(async () => [
+            {
+              id: "override",
+              isRecurring: false,
+              startDate: new Date("2026-08-17T02:00:00Z"),
+              endDate: new Date("2026-08-17T03:00:00Z"),
+            },
+          ]),
+          upsertAvailability,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      const result = await service.replaceWeeklyAvailability("u1", {
+        effectiveFrom: new Date("2026-08-17T00:00:00+07:00"),
+        repeatUntil: new Date("2026-08-17T23:59:59+07:00"),
+        ranges: [
+          {
+            dayOfWeek: 1,
+            startTime: "09:00",
+            endTime: "10:00",
+            modality: "online",
+          },
+        ],
+      });
+
+      expect(result).toEqual([]);
+      expect(upsertAvailability).not.toHaveBeenCalled();
+    });
+
+    test("replaceWeeklyAvailability rejects overlapping weekly ranges", async () => {
+      const service = createTutorService(makeDeps() as any);
+      await expect(
+        service.replaceWeeklyAvailability("u1", {
+          effectiveFrom: new Date("2026-08-17T00:00:00+07:00"),
+          repeatUntil: new Date("2026-08-17T23:59:59+07:00"),
+          ranges: [
+            {
+              dayOfWeek: 1,
+              startTime: "09:00",
+              endTime: "11:00",
+              modality: "online",
+            },
+            {
+              dayOfWeek: 1,
+              startTime: "10:00",
+              endTime: "12:00",
+              modality: "online",
+            },
+          ],
+        }),
+      ).rejects.toThrow(AvailabilitySlotOverlapError);
+    });
+
+    test("getMyPayouts rejects invalid date filters", async () => {
+      const service = createTutorService(makeDeps() as any);
+      await expect(
+        service.getMyPayouts("u1", { dateFrom: "not-a-date" }),
+      ).rejects.toThrow(InvalidDateRangeError);
+      await expect(
+        service.getMyPayouts("u1", { dateTo: "not-a-date" }),
+      ).rejects.toThrow(InvalidDateRangeError);
     });
 
     test("deleteAvailability throws TutorProfileNotFoundError when slot not found", async () => {

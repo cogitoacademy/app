@@ -159,22 +159,27 @@ export type MeetingStatus = "pending" | "ready" | "failed";
  * `meeting.createEvent` fires only on tutor accept (online bookings), and
  * for group bookings tutor accept only happens after every participant
  * confirmed — so "all confirmed AND tutor accepted" is satisfied by
- * construction. Withdrawal after creation does not revoke the link.
+ * construction. Withdrawal after creation does not revoke the link. A
+ * non-failed provider row without a URL stays pending rather than being
+ * reported as ready, so the detail page never renders an empty link as usable.
  */
 function computeMeetingInfo(b: {
   meeting: { status: string; meetingUrl: string | null } | null;
 }): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
   const event = b.meeting;
-  if (
-    !event ||
-    event.status === "pending" ||
-    event.status === "manual" ||
-    event.status === "cancelled"
-  ) {
+  if (!event) {
     return { meetingStatus: "pending", meetingUrl: null };
   }
   if (event.status === "failed") {
     return { meetingStatus: "failed", meetingUrl: null };
+  }
+  if (
+    event.status === "pending" ||
+    event.status === "manual" ||
+    event.status === "cancelled" ||
+    !event.meetingUrl
+  ) {
+    return { meetingStatus: "pending", meetingUrl: null };
   }
   return { meetingStatus: "ready", meetingUrl: event.meetingUrl };
 }
@@ -368,12 +373,12 @@ export function createBookingService(deps: {
     }
 
     const newSize = remaining.length;
-    const pricePerStudent = (profile.prices?.[String(newSize)] ??
-      DEFAULT_SOLO_PRICE) as number;
-    const newSnapshot = pricing.computeSplit(
+    const newSnapshot = await computePriceSnapshot(
+      tx,
+      profile,
       b.modality as Modality,
-      pricePerStudent,
       newSize as GroupSize,
+      b.priceSnapshot,
     );
     const newPerStudent = newSnapshot.perStudent;
     const oldPerStudent = b.priceSnapshot?.perStudent ?? newPerStudent;
@@ -468,6 +473,89 @@ export function createBookingService(deps: {
     };
   }
 
+  type EconomicSnapshot = {
+    perStudent: number;
+    markValueIdr?: number;
+    economyVersion?: number;
+    tutorBaseRateIdr?: number;
+    tutorIncrementIdr?: number;
+    cogitoBaseTakeIdr?: number;
+    cogitoIncrementIdr?: number;
+  };
+
+  /**
+   * New tutor profiles use IDR base honoraria. Legacy profiles keep the old
+   * Marks map until they are edited through onboarding, so existing bookings
+   * and migrations remain readable while the new economy rolls out.
+   */
+  async function computePriceSnapshot(
+    conn: DbOrTx,
+    profile: {
+      prices?: Record<string, number> | null;
+      baseRatesIdr?: { online?: number; offline?: number } | null;
+    },
+    modality: Modality,
+    groupSize: GroupSize,
+    previousSnapshot?: EconomicSnapshot | null,
+  ) {
+    const baseRates = profile.baseRatesIdr;
+    const baseRateIdr =
+      previousSnapshot?.tutorBaseRateIdr ??
+      (modality === MODALITY.OFFLINE ? baseRates?.offline : baseRates?.online);
+    if (typeof baseRateIdr !== "number") {
+      return pricing.computeSplit(
+        modality,
+        (profile.prices?.[String(groupSize)] ?? DEFAULT_SOLO_PRICE) as number,
+        groupSize,
+      );
+    }
+
+    if (!pricing.getEconomyConfig || !pricing.computeEconomics) {
+      throw new Error("IDR pricing is not configured");
+    }
+    const current = await pricing.getEconomyConfig(conn);
+    const config =
+      previousSnapshot?.markValueIdr !== undefined
+        ? {
+            ...current,
+            version: previousSnapshot.economyVersion ?? current.version,
+            markValueIdr: previousSnapshot.markValueIdr,
+            onlineTutorIncrementIdr:
+              modality === MODALITY.ONLINE &&
+              previousSnapshot.tutorIncrementIdr !== undefined
+                ? previousSnapshot.tutorIncrementIdr
+                : current.onlineTutorIncrementIdr,
+            offlineTutorIncrementIdr:
+              modality === MODALITY.OFFLINE &&
+              previousSnapshot.tutorIncrementIdr !== undefined
+                ? previousSnapshot.tutorIncrementIdr
+                : current.offlineTutorIncrementIdr,
+            onlineCogitoBaseIdr:
+              modality === MODALITY.ONLINE &&
+              previousSnapshot.cogitoBaseTakeIdr !== undefined
+                ? previousSnapshot.cogitoBaseTakeIdr
+                : current.onlineCogitoBaseIdr,
+            offlineCogitoBaseIdr:
+              modality === MODALITY.OFFLINE &&
+              previousSnapshot.cogitoBaseTakeIdr !== undefined
+                ? previousSnapshot.cogitoBaseTakeIdr
+                : current.offlineCogitoBaseIdr,
+            onlineCogitoIncrementIdr:
+              modality === MODALITY.ONLINE &&
+              previousSnapshot.cogitoIncrementIdr !== undefined
+                ? previousSnapshot.cogitoIncrementIdr
+                : current.onlineCogitoIncrementIdr,
+            offlineCogitoIncrementIdr:
+              modality === MODALITY.OFFLINE &&
+              previousSnapshot.cogitoIncrementIdr !== undefined
+                ? previousSnapshot.cogitoIncrementIdr
+                : current.offlineCogitoIncrementIdr,
+          }
+        : current;
+
+    return pricing.computeEconomics(modality, baseRateIdr, groupSize, config);
+  }
+
   function assertSessionFitsAvailability(
     slot: { startDate: Date; endDate: Date; modality: string },
     session: { scheduledStartAt: Date; scheduledEndAt: Date },
@@ -522,10 +610,12 @@ export function createBookingService(deps: {
    * @throws {BookingNotFoundError} if the booking does not exist
    * @throws {BookingNotOwnedError} if the user lacks access
    */
-  async function getById(bookingId: string, userId: string) {
+  async function getById(bookingId: string, userId: string, userRole?: string) {
     const b = await repo.findBookingWithParticipants(bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    await assertBookingAccess(b, userId, db, bookingId);
+    if (userRole !== "admin") {
+      await assertBookingAccess(b, userId, db, bookingId);
+    }
     return {
       ...b,
       disclaimer: computeDisclaimer(b),
@@ -588,6 +678,34 @@ export function createBookingService(deps: {
   }
 
   /**
+   * Lists bookings visible to the signed-in role. This is the shared read
+   * contract for the role-aware booking list: students include invitations,
+   * tutors include assigned bookings, and admins include all bookings.
+   */
+  async function listAccessible(
+    userId: string,
+    userRole: string,
+    opts: { cursor?: string; limit?: number; states?: string[] } = {},
+  ) {
+    const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+    const rows = await repo.listBookingsForAccess(userId, {
+      states: opts.states,
+      limit,
+      cursor: opts.cursor,
+      includeAll: userRole === "admin",
+    });
+    const items = rows.slice(0, limit);
+    const nextCursor =
+      rows.length > limit
+        ? encodeBookingCursor(
+            items[items.length - 1]!.scheduledStartAt,
+            items[items.length - 1]!.id,
+          )
+        : null;
+    return { items, nextCursor };
+  }
+
+  /**
    * Creates a solo booking, holds Marks, and notifies the tutor.
    *
    * @param proposerId - the student creating the booking
@@ -622,11 +740,7 @@ export function createBookingService(deps: {
       throw new BookingNotEditableError(input.tutorId);
     }
 
-    const priceSnapshot = pricing.computeSplit(
-      modality,
-      (profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE) as number,
-      1,
-    );
+    const priceSnapshot = await computePriceSnapshot(db, profile, modality, 1);
     const totalMarks = priceSnapshot.perStudent * 1;
 
     const w = await wallet.getByUserId(db, proposerId);
@@ -2094,12 +2208,11 @@ export function createBookingService(deps: {
     assertSessionFitsAvailability(slot, session, input.modality);
 
     const size = input.targetGroupSize;
-    const pricePerStudent = (profile.prices?.[String(size)] ??
-      DEFAULT_SOLO_PRICE) as number;
-    const priceSnapshot = pricing.computeSplit(
+    const priceSnapshot = await computePriceSnapshot(
+      db,
+      profile,
       input.modality,
-      pricePerStudent,
-      size as 1 | 2 | 3 | 4 | 5 | 6,
+      size as GroupSize,
     );
     const totalMarks = priceSnapshot.perStudent * size;
 
@@ -2187,7 +2300,7 @@ export function createBookingService(deps: {
           body: [
             "You have been invited to a group session. Confirm within 12 hours.",
             `Schedule: ${session.scheduledStartAt.toISOString()}`,
-            `Per-student price: ${pricePerStudent} Marks`,
+            `Per-student price: ${priceSnapshot.perStudent} Marks`,
             `Total Marks held on acceptance: ${totalMarks}`,
             `View and accept in-platform: ${formatInviteCta(bookingId)}`,
           ].join(" "),
@@ -2388,6 +2501,68 @@ export function createBookingService(deps: {
       });
 
       return { declined: true };
+    });
+  }
+
+  async function withdrawInvite(
+    proposerId: string,
+    bookingId: string,
+    inviteeUserId: string,
+    reason?: string,
+  ) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
+        throw new BookingNotAwaitingConfirmationError(
+          bookingId,
+          b.currentState,
+        );
+      }
+      if (b.proposerId !== proposerId) {
+        throw new BookingNotOwnedError(bookingId, proposerId);
+      }
+      if (
+        b.type !== BOOKING_TYPE.GROUP &&
+        !(b.type === BOOKING_TYPE.SERIES && b.targetGroupSize > 1)
+      ) {
+        throw new BookingNotEditableError(bookingId);
+      }
+
+      const participant = await repo.findParticipant(
+        tx,
+        bookingId,
+        inviteeUserId,
+      );
+      if (!participant)
+        throw new BookingParticipantNotFoundError(inviteeUserId);
+      if (participant.role !== "invitee") {
+        throw new BookingNotEditableError(bookingId);
+      }
+      if (participant.confirmationState !== CONFIRMATION_STATE.PENDING) {
+        throw new BookingParticipantAlreadyConfirmedError(participant.id);
+      }
+
+      await repo.updateParticipantState(tx, participant.id, {
+        confirmationState: CONFIRMATION_STATE.WITHDRAWN_PRE_H2,
+        withdrawnAt: new Date(),
+        withdrawnReason: reason,
+      });
+      await notification.writeBestEffort({
+        db: tx,
+        userId: inviteeUserId,
+        bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Group invitation withdrawn",
+        body: reason
+          ? `The booking proposer withdrew your invitation. Reason: ${reason}`
+          : "The booking proposer withdrew your invitation.",
+        eventKey: `booking.${bookingId}.invite_withdrawn.${inviteeUserId}`,
+        emailRequired: true,
+      });
+
+      return { withdrawn: true, inviteeUserId };
     });
   }
 
@@ -2800,11 +2975,10 @@ export function createBookingService(deps: {
     );
     assertNoIntraSeriesOverlap(sessions);
 
-    const pricePerStudent = (profile.prices?.["1"] ??
-      DEFAULT_SOLO_PRICE) as number;
-    const priceSnapshot = pricing.computeSplit(
+    const priceSnapshot = await computePriceSnapshot(
+      db,
+      profile,
       input.modality,
-      pricePerStudent,
       1,
     );
     const perSession = priceSnapshot.perStudent;
@@ -2972,11 +3146,10 @@ export function createBookingService(deps: {
     }
 
     const size = input.targetGroupSize;
-    const pricePerStudent = (profile.prices?.[String(size)] ??
-      DEFAULT_SOLO_PRICE) as number;
-    const priceSnapshot = pricing.computeSplit(
+    const priceSnapshot = await computePriceSnapshot(
+      db,
+      profile,
       input.modality,
-      pricePerStudent,
       size as GroupSize,
     );
     const perSession = priceSnapshot.perStudent;
@@ -3115,10 +3288,16 @@ export function createBookingService(deps: {
     });
   }
 
-  async function listSessions(bookingId: string, userId: string) {
+  async function listSessions(
+    bookingId: string,
+    userId: string,
+    userRole?: string,
+  ) {
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    await assertBookingAccess(b, userId, db, bookingId);
+    if (userRole !== "admin") {
+      await assertBookingAccess(b, userId, db, bookingId);
+    }
     if (b.type !== BOOKING_TYPE.SERIES)
       throw new BookingNotEditableError(bookingId);
     return repo.listSessionsBySeriesId(db, bookingId);
@@ -3149,6 +3328,7 @@ export function createBookingService(deps: {
     let totalMarks = 0;
     let cogitoTake = 0;
     let tutorPayout = 0;
+    let tutorPayoutIdr = 0;
 
     for (const b of bookings) {
       if (b.type === BOOKING_TYPE.SERIES) {
@@ -3162,18 +3342,33 @@ export function createBookingService(deps: {
           for (const s of completed) {
             completedSessions++;
             const snap = s.priceSnapshot ?? b.priceSnapshot;
-            totalMarks += snap?.baseline ?? 0;
+            totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
             cogitoTake += snap?.cogitoTake ?? 0;
             tutorPayout += snap?.tutorShare ?? 0;
+            tutorPayoutIdr +=
+              snap?.tutorHonorariumIdr ??
+              (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
           }
-          continue;
+        } else {
+          completedSessions++;
+          const snap = b.priceSnapshot;
+          totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
+          cogitoTake += snap?.cogitoTake ?? 0;
+          tutorPayout += snap?.tutorShare ?? 0;
+          tutorPayoutIdr +=
+            snap?.tutorHonorariumIdr ??
+            (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
         }
+      } else {
+        completedSessions++;
+        const snap = b.priceSnapshot;
+        totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
+        cogitoTake += snap?.cogitoTake ?? 0;
+        tutorPayout += snap?.tutorShare ?? 0;
+        tutorPayoutIdr +=
+          snap?.tutorHonorariumIdr ??
+          (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
       }
-      completedSessions++;
-      const snap = b.priceSnapshot;
-      totalMarks += snap?.baseline ?? 0;
-      cogitoTake += snap?.cogitoTake ?? 0;
-      tutorPayout += snap?.tutorShare ?? 0;
     }
 
     return {
@@ -3181,7 +3376,7 @@ export function createBookingService(deps: {
       totalMarks,
       cogitoTake,
       tutorPayout,
-      tutorPayoutIdr: Math.round(tutorPayout * TUTOR_PAYOUT_RATE_IDR),
+      tutorPayoutIdr: Math.round(tutorPayoutIdr),
     };
   }
 
@@ -3882,12 +4077,14 @@ export function createBookingService(deps: {
     getRescheduleAvailability,
     listMine,
     listForTutor,
+    listAccessible,
     createSolo,
     createGroup,
     createSeries,
     createGroupSeries,
     confirmInvite,
     declineInvite,
+    withdrawInvite,
     reconfirm,
     withdraw,
     cancel,

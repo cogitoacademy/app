@@ -12,6 +12,111 @@ export type SelectItem = {
   icon?: React.ReactNode;
 };
 
+type SelectItemElementProps = {
+  value?: unknown;
+  children?: React.ReactNode;
+};
+
+function toSelectItemValue(value: unknown, label: React.ReactNode) {
+  return typeof value === "object" ? value : { value, label };
+}
+
+function collectSelectItemValues(children: React.ReactNode): unknown[] {
+  const values: unknown[] = [];
+
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return;
+
+    if (child.type === SelectItem) {
+      const props = child.props as SelectItemElementProps;
+      values.push(toSelectItemValue(props.value, props.children));
+      return;
+    }
+
+    const nestedChildren = (child.props as SelectItemElementProps).children;
+    if (nestedChildren) {
+      values.push(...collectSelectItemValues(nestedChildren));
+    }
+  });
+
+  return values;
+}
+
+function collectRootItemValues(items: unknown): unknown[] {
+  if (Array.isArray(items)) {
+    const values: unknown[] = [];
+
+    for (const item of items) {
+      if (
+        item !== null &&
+        typeof item === "object" &&
+        "items" in item &&
+        Array.isArray(item.items)
+      ) {
+        values.push(...collectRootItemValues(item.items));
+      } else if (item !== null && typeof item === "object" && "value" in item) {
+        values.push(item);
+      }
+    }
+
+    return values;
+  }
+
+  if (items !== null && typeof items === "object") {
+    return Object.entries(items).map(([value, label]) => ({ value, label }));
+  }
+
+  return [];
+}
+
+function normalizeSingleSelectValue(
+  value: unknown,
+  itemValues: readonly unknown[],
+) {
+  if (value === null || value === undefined) return value;
+
+  const itemValue = getSelectItemValue(value);
+  if (itemValue === "") return null;
+  if (itemValue === null) return value;
+
+  return (
+    itemValues.find(
+      (candidate) => getSelectItemValue(candidate) === itemValue,
+    ) ?? value
+  );
+}
+
+function normalizeSelectValue(
+  value: unknown,
+  itemValues: readonly unknown[],
+  multiple: boolean,
+) {
+  if (multiple && Array.isArray(value)) {
+    return value.map((item) => normalizeSingleSelectValue(item, itemValues));
+  }
+
+  return normalizeSingleSelectValue(value, itemValues);
+}
+
+function toSelectChangeValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => getSelectItemValue(item) ?? item);
+  }
+
+  return getSelectItemValue(value) ?? value;
+}
+
+function areSelectValuesEqual(itemValue: unknown, selectedValue: unknown) {
+  const itemId = getSelectItemValue(itemValue);
+  const selectedId = getSelectItemValue(selectedValue);
+
+  if (itemId !== null && selectedId !== null) {
+    return itemId === selectedId;
+  }
+
+  return Object.is(itemValue, selectedValue);
+}
+
 export function getSelectItemValue(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (
@@ -26,10 +131,54 @@ export function getSelectItemValue(value: unknown): string | null {
   return null;
 }
 
+export function getSelectItemValues(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : [value];
+
+  return values
+    .map((item) => getSelectItemValue(item))
+    .filter((item): item is string => item !== null && item !== "");
+}
+
 export function Select({
+  children,
+  value,
+  defaultValue,
+  onValueChange,
+  items,
+  multiple,
+  isItemEqualToValue,
   ...props
 }: React.ComponentProps<typeof BaseSelect.Root>) {
-  return <BaseSelect.Root {...props} />;
+  const itemValues = React.useMemo(() => {
+    const values = collectSelectItemValues(children);
+    return values.length > 0 ? values : collectRootItemValues(items);
+  }, [children, items]);
+  const normalizedValue = normalizeSelectValue(
+    value,
+    itemValues,
+    multiple === true,
+  );
+  const normalizedDefaultValue = normalizeSelectValue(
+    defaultValue,
+    itemValues,
+    multiple === true,
+  );
+
+  return (
+    <BaseSelect.Root
+      {...props}
+      items={items}
+      multiple={multiple}
+      isItemEqualToValue={isItemEqualToValue ?? areSelectValuesEqual}
+      value={normalizedValue}
+      defaultValue={normalizedDefaultValue}
+      onValueChange={(nextValue, details) =>
+        onValueChange?.(toSelectChangeValue(nextValue), details)
+      }
+    >
+      {children}
+    </BaseSelect.Root>
+  );
 }
 
 export const selectTriggerVariants = cva(
@@ -100,7 +249,7 @@ export function SelectValue({
       className={cn(className)}
       {...props}
     >
-      {(value: string | SelectItem | null) => (
+      {(value: string | SelectItem | SelectItem[] | null) => (
         <SelectRenderValue value={value} placeholder={placeholder} />
       )}
     </BaseSelect.Value>
@@ -228,7 +377,7 @@ export function SelectItem({
   return (
     <BaseSelect.Item
       data-slot="select-item"
-      value={typeof value === "object" ? value : { value, label: children }}
+      value={toSelectItemValue(value, children)}
       className={cn(
         "flex items-center text-popover-foreground py-2.5 px-3 gap-3.5 rounded select-none cursor-pointer",
         "group-data-[side=none]:min-w-[calc(var(--anchor-width))]",

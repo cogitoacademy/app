@@ -1,21 +1,57 @@
-import { eq, desc, asc, and, gte, sql, type SQL, isNull } from "drizzle-orm";
+import { eq, desc, asc, and, gte, isNull, sql, type SQL } from "drizzle-orm";
 import {
   availabilitySlot,
   subjectCategory,
   tutorProfile,
-  tutorProfileSubject,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+
+const tutorProfileSubjectFilterTable = sql.raw(
+  '"tutor_profile_subject" as "tutorProfileSubjectFilter"',
+);
+const subjectCategoryFilterTable = sql.raw(
+  '"subject_category" as "subjectCategoryFilter"',
+);
+const tutorProfileSubjectFilterSubjectId = sql.raw(
+  '"tutorProfileSubjectFilter"."subject_id"',
+);
+const subjectCategoryFilterId = sql.raw('"subjectCategoryFilter"."id"');
+const tutorProfileSubjectFilterTutorProfileId = sql.raw(
+  '"tutorProfileSubjectFilter"."tutor_profile_id"',
+);
+const subjectCategoryFilterIsActive = sql.raw(
+  '"subjectCategoryFilter"."is_active"',
+);
+const subjectCategoryFilterName = sql.raw('"subjectCategoryFilter"."name"');
+const subjectCategoryFilterParentId = sql.raw(
+  '"subjectCategoryFilter"."parent_id"',
+);
 
 export interface ListPublishedInput {
   search?: string;
   expertise?: string;
   categoryId?: string;
   subjectId?: string;
+  categoryIds?: string[];
+  subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   limit: number;
   offset: number;
+}
+
+function normalizeFilterIds(
+  ids: readonly string[] | undefined,
+  id: string | undefined,
+) {
+  return [...new Set(ids?.length ? ids : id ? [id] : [])];
+}
+
+function sqlValueList(values: readonly string[]) {
+  return sql`(${sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `,
+  )})`;
 }
 
 /**
@@ -48,12 +84,12 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
         or lower(coalesce(${tutorProfile.expertise}::text, '')) like lower(${q}) escape '\\'
         or exists (
           select 1
-          from ${tutorProfileSubject}
-          inner join ${subjectCategory}
-            on ${tutorProfileSubject.subjectId} = ${subjectCategory.id}
-          where ${tutorProfileSubject.tutorProfileId} = ${tutorProfile.id}
-            and ${subjectCategory.isActive} = true
-            and lower(${subjectCategory.name}) like lower(${q}) escape '\\'
+          from ${tutorProfileSubjectFilterTable}
+          inner join ${subjectCategoryFilterTable}
+            on ${tutorProfileSubjectFilterSubjectId} = ${subjectCategoryFilterId}
+          where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
+            and ${subjectCategoryFilterIsActive} = true
+            and lower(${subjectCategoryFilterName}) like lower(${q}) escape '\\'
         )
       )`,
     );
@@ -65,20 +101,21 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
     );
   }
 
-  if (input.categoryId || input.subjectId) {
-    conditions.push(
-      sql`exists (
-        select 1
-        from ${tutorProfileSubject}
-        inner join ${subjectCategory}
-          on ${tutorProfileSubject.subjectId} = ${subjectCategory.id}
-        where ${tutorProfileSubject.tutorProfileId} = ${tutorProfile.id}
-          and ${subjectCategory.isActive} = true
-          and ${subjectCategory.parentId} is not null
-          ${input.categoryId ? sql`and ${subjectCategory.parentId} = ${input.categoryId}` : sql``}
-          ${input.subjectId ? sql`and ${subjectCategory.id} = ${input.subjectId}` : sql``}
-      )`,
-    );
+  const categoryIds = normalizeFilterIds(input.categoryIds, input.categoryId);
+  const subjectIds = normalizeFilterIds(input.subjectIds, input.subjectId);
+
+  if (categoryIds.length > 0 || subjectIds.length > 0) {
+    conditions.push(sql`exists (
+      select 1
+      from ${tutorProfileSubjectFilterTable}
+      inner join ${subjectCategoryFilterTable}
+        on ${tutorProfileSubjectFilterSubjectId} = ${subjectCategoryFilterId}
+        where ${tutorProfileSubjectFilterTutorProfileId} = ${tutorProfile.id}
+        and ${subjectCategoryFilterIsActive} = true
+        and ${subjectCategoryFilterParentId} is not null
+        ${categoryIds.length > 0 ? sql`and ${subjectCategoryFilterParentId} in ${sqlValueList(categoryIds)}` : sql``}
+        ${subjectIds.length > 0 ? sql`and ${subjectCategoryFilterId} in ${sqlValueList(subjectIds)}` : sql``}
+    )`);
   }
 
   return conn.query.tutorProfile.findMany({

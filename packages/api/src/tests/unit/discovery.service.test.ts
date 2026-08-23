@@ -6,6 +6,8 @@ import {
 } from "../../modules/tutor-discovery/discovery.service";
 import { TutorProfileNotFoundError } from "../../modules/tutor-discovery/discovery.errors";
 import type { DiscoveryRepo } from "../../modules/tutor-discovery/discovery.repo";
+import { createPricingService } from "../../modules/pricing/pricing.service";
+import { DEFAULT_ECONOMY_CONFIG } from "../../modules/economy";
 
 function makeProfile(
   overrides: Partial<ProfileWithUser> = {},
@@ -91,6 +93,10 @@ describe("Discovery Service", () => {
       expect(listPublished).toHaveBeenCalledWith({
         search: "math",
         expertise: undefined,
+        categoryId: undefined,
+        subjectId: undefined,
+        categoryIds: undefined,
+        subjectIds: undefined,
         modality: undefined,
         limit: 20,
         offset: 0,
@@ -109,9 +115,36 @@ describe("Discovery Service", () => {
       expect(listPublished).toHaveBeenCalledWith({
         search: undefined,
         expertise: undefined,
+        categoryId: undefined,
+        subjectId: undefined,
+        categoryIds: undefined,
+        subjectIds: undefined,
         modality: undefined,
         limit: 10,
         offset: 5,
+      });
+    });
+
+    test("passes multiple category and subject filters to the repo", async () => {
+      const listPublished = mock(async () => []);
+      const repo = makeRepo({ listPublished });
+      const service = createDiscoveryService({ repo });
+
+      await service.listPublished({
+        categoryIds: ["category-1", "category-2"],
+        subjectIds: ["subject-1", "subject-2"],
+      });
+
+      expect(listPublished).toHaveBeenCalledWith({
+        search: undefined,
+        expertise: undefined,
+        categoryId: undefined,
+        subjectId: undefined,
+        categoryIds: ["category-1", "category-2"],
+        subjectIds: ["subject-1", "subject-2"],
+        modality: undefined,
+        limit: 20,
+        offset: 0,
       });
     });
 
@@ -121,6 +154,45 @@ describe("Discovery Service", () => {
 
       const result = await service.listPublished();
       expect(result).toEqual([]);
+    });
+
+    test("uses online as the default modality for IDR profiles without a modality", async () => {
+      const profile = makeProfile({
+        modality: null as any,
+        baseRatesIdr: { online: 175_000 },
+      });
+      const repo = makeRepo({ listPublished: mock(async () => [profile]) });
+      const pricing = {
+        ...createPricingService(),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const service = createDiscoveryService({ repo, pricing });
+      const result = await service.listPublished();
+
+      expect(result[0]?.pricesByModality?.online).toBeDefined();
+      expect(result[0]?.pricesByModality?.offline).toBeUndefined();
+    });
+
+    test("projects current Marks prices from IDR base rates and economy config", async () => {
+      const profile = makeProfile({
+        modality: "both",
+        baseRatesIdr: { online: 175_000, offline: 225_000 },
+      });
+      const repo = makeRepo({ listPublished: mock(async () => [profile]) });
+      const pricing = {
+        ...createPricingService(),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const service = createDiscoveryService({ repo, pricing });
+      const result = await service.listPublished();
+
+      expect(result[0]?.pricesByModality?.online?.["1"]).toBe(45);
+      expect(result[0]?.pricesByModality?.online?.["2"]).toBe(28);
+      expect(result[0]?.pricesByModality?.offline?.["1"]).toBe(63);
+      expect(result[0]?.prices).toEqual(result[0]?.pricesByModality?.online);
+      expect(pricing.getEconomyConfig).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -152,6 +224,55 @@ describe("Discovery Service", () => {
       expect(listFutureAvailability).toHaveBeenCalledWith("u1");
       expect(result.id).toBe("tp1");
       expect(result.availabilitySlots).toEqual(availabilitySlots);
+    });
+
+    test("projects economy prices for a profile loaded by id", async () => {
+      const profile = makeProfile({
+        modality: "both",
+        baseRatesIdr: { online: 175_000, offline: 225_000 },
+      });
+      const repo = makeRepo({
+        getProfileById: mock(async () => profile),
+        listFutureAvailability: mock(async () => []),
+      });
+      const pricing = {
+        ...createPricingService(),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const service = createDiscoveryService({ repo, pricing });
+      const result = await service.getProfile("tp1");
+
+      expect(result.pricesByModality?.online).toBeDefined();
+      expect(result.pricesByModality?.offline).toBeDefined();
+    });
+
+    test("lists subject category groups", async () => {
+      const repo = makeRepo({
+        listSubjects: mock(
+          async () =>
+            [
+              {
+                id: "cat-1",
+                slug: "math",
+                name: "Math",
+                description: null,
+                children: [],
+              },
+            ] as any,
+        ),
+      });
+      const service = createDiscoveryService({ repo });
+
+      await expect(service.listSubjects()).resolves.toEqual([
+        {
+          id: "cat-1",
+          slug: "math",
+          name: "Math",
+          description: null,
+          children: [],
+        },
+      ]);
     });
 
     test("throws TutorProfileNotFoundError when not found", async () => {

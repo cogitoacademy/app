@@ -6,6 +6,7 @@ import {
   findRoomById,
   findRoomBookings,
   insertRoomBooking,
+  findRequestedRoomBookingByBookingId,
 } from "../../modules/room/room.repo";
 
 function makeSelectConn(rows: any[] = [], hasLimit = false) {
@@ -142,6 +143,19 @@ describe("insertRoomBooking", () => {
 
     expect(result).toEqual(inserted);
     expect(conn.insert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("findRequestedRoomBookingByBookingId", () => {
+  test("returns the latest requested room booking", async () => {
+    const row = { id: "rb1", bookingId: "b1", status: "requested" };
+    const findFirst = mock(async () => row);
+    const conn: any = { query: { roomBooking: { findFirst } } };
+
+    await expect(
+      findRequestedRoomBookingByBookingId(conn, "b1"),
+    ).resolves.toEqual(row);
+    expect(findFirst).toHaveBeenCalledTimes(1);
   });
 });
 

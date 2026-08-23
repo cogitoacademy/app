@@ -29,18 +29,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
+import {
+  getRescheduleProposalRoute,
+  RESCHEDULE_PROPOSAL_ROUTE,
+} from "./booking-reschedule-routing";
 import {
   addMinutesToTime,
   isTimeWithinRange,
   isValidMinuteTime,
   MinuteTimeInput,
 } from "./minute-time-input";
-
-const TEXTAREA_CLASS =
-  "min-h-28 w-full resize-y rounded-lg border border-input-border bg-background px-3 py-2 text-foreground outline-none transition-colors placeholder:text-dimmed focus:border-input-accent-border";
 
 export function canProposeBookingReschedule({
   viewerRole,
@@ -83,7 +85,8 @@ export function BookingRescheduleAction({
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [reason, setReason] = useState("");
-  const isTutor = viewerRole === "tutor";
+  const proposalRoute = getRescheduleProposalRoute(viewerRole);
+  const isTutor = proposalRoute === RESCHEDULE_PROPOSAL_ROUTE.tutor;
   const availabilityQuery = useQuery({
     ...orpc.booking.getRescheduleAvailability.queryOptions({
       input: { bookingId },
@@ -114,27 +117,32 @@ export function BookingRescheduleAction({
   const validTime =
     isValidMinuteTime(newTime) &&
     (!usingAvailability || isTimeWithinRange(newTime, minTime, maxTime));
+  const proposalMutationOptions = {
+    onSuccess: () => {
+      setOpen(false);
+      toastManager.add({
+        title: "New time proposed",
+        description: "The original time stays active until everyone accepts.",
+        type: "success",
+      });
+      onBookingChanged();
+    },
+    onError: (error: Error) =>
+      toastManager.add({
+        title: "Reschedule proposal failed",
+        description: getUserFacingError(
+          error,
+          "The new time could not be proposed.",
+        ),
+        type: "error",
+      }),
+  };
   const propose = useMutation(
-    orpc.booking.proposeReschedule.mutationOptions({
-      onSuccess: () => {
-        setOpen(false);
-        toastManager.add({
-          title: "New time proposed",
-          description: "The original time stays active until everyone accepts.",
-          type: "success",
-        });
-        onBookingChanged();
-      },
-      onError: (error: Error) =>
-        toastManager.add({
-          title: "Reschedule proposal failed",
-          description: getUserFacingError(
-            error,
-            "The new time could not be proposed.",
-          ),
-          type: "error",
-        }),
-    }),
+    proposalRoute === RESCHEDULE_PROPOSAL_ROUTE.tutor
+      ? orpc.tutorActions.proposeReschedule.mutationOptions(
+          proposalMutationOptions,
+        )
+      : orpc.booking.proposeReschedule.mutationOptions(proposalMutationOptions),
   );
 
   return (
@@ -282,9 +290,8 @@ export function BookingRescheduleAction({
               <FieldLabel htmlFor="reschedule-reason">
                 Reason (optional)
               </FieldLabel>
-              <textarea
+              <Textarea
                 id="reschedule-reason"
-                className={TEXTAREA_CLASS}
                 value={reason}
                 maxLength={2_000}
                 onChange={(event) => setReason(event.target.value)}

@@ -21,6 +21,9 @@ const envFile =
     (candidate) => existsSync(path.resolve(process.cwd(), candidate)),
   ) ??
   "../../apps/server/.env.test.example";
+const resolvedEnvFile = path.resolve(process.cwd(), envFile);
+const serverCwd = path.resolve(process.cwd(), "../../apps/server");
+const webCwd = path.resolve(process.cwd(), "../../apps/web");
 
 export default defineConfig({
   testDir: "./src/specs",
@@ -42,7 +45,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `bun --env-file ${envFile} run --cwd ../../apps/server dev`,
+      command: `bun --env-file=${resolvedEnvFile} run dev`,
+      cwd: serverCwd,
       url: `${serverUrl}/health`,
       reuseExistingServer: true,
       timeout: 120_000,
@@ -50,7 +54,8 @@ export default defineConfig({
       stdout: "pipe",
     },
     {
-      command: `bun --env-file ${envFile} run --cwd ../../apps/web dev`,
+      command: `bun --env-file=${resolvedEnvFile} run dev`,
+      cwd: webCwd,
       url: webUrl,
       reuseExistingServer: true,
       timeout: 120_000,

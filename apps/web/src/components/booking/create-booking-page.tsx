@@ -34,6 +34,7 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import {
   getSelectItemValue,
@@ -302,9 +303,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
     );
   const selectedSlot = selectedSlots[0] ?? null;
-  const perSessionPrice = Number(profile.prices?.["1"] ?? DEFAULT_SOLO_PRICE);
+  const pricesForModality =
+    profile.pricesByModality?.[effectiveModality] ?? profile.prices;
+  const perSessionPrice = Number(
+    pricesForModality?.["1"] ?? DEFAULT_SOLO_PRICE,
+  );
   const baseSessionPrice = isGroupBooking
-    ? Number(profile.prices?.[String(invitees.length + 1)] ?? perSessionPrice)
+    ? Number(
+        pricesForModality?.[String(invitees.length + 1)] ?? perSessionPrice,
+      )
     : perSessionPrice;
   const price = baseSessionPrice * Math.max(selectedSlots.length, 1);
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
@@ -420,7 +427,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
       <form
         onSubmit={submitBooking}
-        className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:items-start"
+        className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.65fr)] lg:items-start"
       >
         <div className="space-y-4">
           <Card>
@@ -438,14 +445,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <FieldLabel htmlFor="learning-goal">
                   What do you want to learn?
                 </FieldLabel>
-                <textarea
+                <Textarea
                   id="learning-goal"
                   value={learningGoal}
                   maxLength={2_000}
                   required
                   onChange={(event) => setLearningGoal(event.target.value)}
                   placeholder="Topics, current level, questions, or an outcome you want from the session."
-                  className="min-h-28 w-full resize-y rounded border border-input-border bg-background px-3 py-2 text-base outline-none focus:border-input-accent-border focus:ring-2 focus:ring-primary"
                 />
                 <FieldDescription>
                   {learningGoal.length}/2,000 characters

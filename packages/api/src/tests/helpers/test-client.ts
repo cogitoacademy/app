@@ -1,7 +1,7 @@
 import { createRouterClient } from "@orpc/server";
 import { auth } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
-import { user } from "@cogito-app/db/schema";
+import { economyConfig, user } from "@cogito-app/db/schema";
 import { eq } from "drizzle-orm";
 
 import { appRouter, type AppRouter } from "../../routers";
@@ -119,6 +119,18 @@ export async function resetDatabase() {
     `TRUNCATE TABLE ${TRUNCATE_TABLES.map((t) => `"${t}"`).join(", ")} CASCADE`,
   );
   await seedMarkPackages();
+  await db.update(economyConfig).set({
+    markValueIdr: 5_000,
+    minTutorBaseRateIdr: 50_000,
+    onlineTutorIncrementIdr: 30_000,
+    offlineTutorIncrementIdr: 40_000,
+    onlineCogitoBaseIdr: 50_000,
+    onlineCogitoIncrementIdr: 20_000,
+    offlineCogitoBaseIdr: 90_000,
+    offlineCogitoIncrementIdr: 40_000,
+    version: 1,
+    updatedBy: null,
+  });
 }
 
 async function seedMarkPackages() {

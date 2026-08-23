@@ -1,16 +1,20 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
 The invite form performs an admin-only account preflight by exact normalized email. Provider facts come from Better Auth `account.providerId` rows (`google`, `credential`, or both); admin-role accounts are shown as ineligible and cannot be submitted from the UI.
 
+Google OAuth is enabled only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured; a partial configuration disables the provider rather than creating an empty provider entry. Redis access goes through the adapter boundary in `packages/api/src/lib/redis.ts`, so the in-memory fallback exposes the same command surface for tests and defensive runtime degradation while production remains Redis-backed.
+
 ## Overview
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
 
-Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts.
+
+Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
 | File                  | Purpose                                                  |
 | --------------------- | -------------------------------------------------------- |
@@ -61,15 +65,15 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 ## Admin Module
 
-**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, and payout summaries.
+**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, payout summaries, and active economy schedule management.
 
 **Files:**
 
-- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`
-- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`
-- `admin.repo.ts` — `findUserById`, `listUsers`, `updateUserRole`
-- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`
-- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`
+- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminUpdateEconomySettingsInput`
+- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`
+- `admin.repo.ts` — `findUserById`, `listUsers`, `listUserIdsByRole`, `updateUserRole`
+- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
+- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
@@ -79,20 +83,27 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `getWallet({ userId })` — Returns any user's wallet balances; throws `WalletNotFoundError`
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
 - `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
+- `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
+- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; fan-outs one durable in-app rate-change notification to every current tutor, while identical values return the current config without a write
 
-**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`
+**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`, `NotificationPort`
 
 **Business Rules:**
 
 - Cannot remove the last admin role from the system
 - Role changes are audit-logged
 - Ledger filters must target exactly one wallet (`walletId` or `userId`, not both)
+- Economy writes require the current `version`; stale writes fail with `ECONOMY_CONFIG_CONFLICT`
+- Economy base and increment values are validated in Rp 5,000 increments; increments are non-negative
+- Existing booking price snapshots are immutable when the active schedule changes
+- Rate-change notifications are in-app system notifications for all users whose current role is `tutor`; event keys are unique per economy version and tutor
+- Re-saving the same four schedule values is a no-op and does not increment the economy version, write audit, or fan out notifications
 
 ---
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — filtered override queue with urgency, booking detail/history review, before/after override preview, state history, and admin refunds.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, booking detail/history review, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds.
 
 **Files:**
 
@@ -105,7 +116,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 **Service Methods:**
 
-- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated
+- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`
 - `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
@@ -225,11 +236,12 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
-- `booking.router.ts` — Student-owned booking mutations use `studentProcedure`; shared party reads/notes stay protected; `tutorActions.*` uses `tutorProcedure`
+- `booking.router.ts` — Student-owned booking mutations use `studentProcedure`; shared booking/detail/session reads stay protected; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
 
 **Service Methods:**
 
-- `getById(bookingId, userId)` — Returns booking with access check
+- `getById(bookingId, userId, userRole?)` — Returns booking with access check; admins may inspect any booking. The read model derives `meetingStatus`/`meetingUrl` and includes participant profile images plus state-history fields used by the booking-detail timeline.
+- `listAccessible(userId, userRole, opts)` — Shared role-aware list: proposer/participant visibility for students, assigned bookings for tutors, and all bookings for admins; cursor-paginated
 - `listMine(userId, opts)` — Paginated list of user's bookings (proposer)
 - `listForTutor(tutorId, opts)` — Paginated list of bookings assigned to a tutor
 - `createSolo(proposerId, input)` — Creates solo booking with wallet hold, overlap check, and notification
@@ -238,25 +250,26 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `createGroupSeries(proposerId, input)` — Creates a group series (targetGroupSize 2-6, inviteeUserIds) with upfront per-participant holds for all sessions (FR-20, landed #46)
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
 - `declineInvite(userId, bookingId, reason?)` — Invitee declines
+- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Proposer withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves headcount/holds unchanged, and notifies the invitee
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing
 - `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum; group-series (`type === "series" && targetGroupSize > 1`) is rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule)
 - `cancel(userId, bookingId, reason?)` — Cancels booking; releases all holds; late cancel becomes `late_cancelled`
-- `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; creates meeting for online; sets room approval for offline. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
+- `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
 - `tutorDecline(bookingId, tutorId, reason?)` — Tutor declines; releases all holds
 - `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
-- `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason?)` — Tutor or booking proposer proposes a fixed 90-minute replacement for one session
+- `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason?)` — Shared service used by the student-proposer and tutor RPC routes; proposes a fixed 90-minute replacement for one session
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state.
-- `addSessionNote(userId, bookingId, content)` — Adds a sanitized note to a completed session
-- `getSessionNotes(userId, bookingId)` — Lists notes for a completed session
+- `addSessionNote(userId, bookingId, content)` — Adds a server-sanitized HTML note to a completed session; the web editor emits only the supported paragraph/heading/emphasis/list/link markup
+- `getSessionNotes(userId, bookingId)` — Lists every party's notes for a completed session; the web client applies a DOMPurify allow-list before rendering
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled
 - `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
-- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Transition-or-skip (M4): transitions past-deadline bookings to their terminal target (shared `EXPIRY_TARGET` with `expireBookings`) FIRST, then releases holds (or forfeits for NO_SHOW); version conflicts / terminal / RESCHEDULE_PROPOSED bookings are skipped without touching the wallet
 - `checkTutorLateness()` — Flags scheduled bookings where the tutor never marked attendance past the 15-min lateness tolerance: keeps the booking SCHEDULED with holds intact, sets `overrideMeta.category = "tutor_lateness_pending"` (admin-queue surface), writes a `tutor_lateness_pending_review` audit record, and notifies proposer + tutor; returns `{ flagged, failed }` (no auto-cancel, no hold release)
-- `retryFailedMeetings()` — Re-creates Google Meet for CONFIRMED online bookings with a failed meetingEvent (up to 3 attempts, driven by the `retry-failed-meetings` job); prevents the CONFIRMED-without-meeting-link dead state
+- `retryFailedMeetings()` — Re-creates Google Meet for CONFIRMED online bookings with a failed meetingEvent (up to 3 attempts, driven by the `retry-failed-meetings` job); successful retry moves the booking to `SCHEDULED`, while exhausted attempts remain available for `adminBooking.setMeetingLink`
 
 **Dependencies:** `BookingRepo`, `BookingWalletPort`, `BookingPricingPort`, `BookingAuditPort`, `BookingNotificationPort`, `BookingMeetingPort`
 
@@ -264,6 +277,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 - State machine enforces valid transitions via `canTransition()`
 - All state transitions are recorded in `bookingStateHistory`
+- Online meeting creation starts when the tutor accepts the booking after required participant confirmations. A successful provider response creates the meeting event and moves the booking to `SCHEDULED`; a failed response leaves it `CONFIRMED` until retry or manual-link intervention.
+- The booking detail read model reports a meeting as `ready` only when `meetingUrl` is non-null, so a URL-less provider row is never presented as an openable link.
 - Group bookings require minimum 2 participants (MIN_GROUP_HEADCOUNT)
 - Series bookings require 2-4 sessions (MIN_SERIES_SESSIONS to MAX_SERIES_SESSIONS)
 - Deadline is set to `now + 12 hours` for new bookings (RESPONSE_WINDOW_MS)
@@ -274,7 +289,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
 - Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. Only the tutor may propose outside the original availability window.
 - Optimistic locking via `version` field prevents concurrent state changes
-- Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run.
+- New IDR booking snapshots copy the active economy version, tutor base/increment, tutor honorarium, Cogito take, total IDR, total Marks, and rounded pooled Marks. Later economy updates do not mutate those snapshots.
+- Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run. The protected booking list/detail/session reads are available to authenticated parties, while admins can inspect the full booking set; tutor fulfillment remains under `tutorActions.*`.
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
 - Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) are **implemented** — U3/U5–U7 closed by REVIEW-FIXES-3 P3.8/P5 (see `docs/plans/active/PRD-GAPS-PHASE3.md`, all U-items closed); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)
@@ -353,7 +369,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 - Google Meet calls have 30-second timeout
 - Circuit breaker: 5 failures → open for 60 seconds
-- On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`
+- On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
+- Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
 - Offline bookings skip meeting creation entirely (go to `awaiting_admin_room_approval`)
 
 ---
@@ -426,26 +443,56 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 
 ---
 
-## Pricing Module
+## Economy Module
 
-**Purpose:** Pure pricing calculations — no dependencies, no database.
+**Purpose:** Persistent singleton for the active Marks and IDR economy parameters used by pricing and admin controls.
 
 **Files:**
 
-- `pricing.service.ts` — `computeSplit`, `validatePrices`
+- `economy.types.ts` — `EconomyParameters`, `EconomyConfigUpdate`, defaults, and singleton id
+- `economy.repo.ts` — `getOrCreate`, `updateWithVersion`
+- `economy.service.ts` — `getConfig`, `updateConfig`
+- `economy/index.ts` — module wiring and exports
 
 **Service Methods:**
 
-- `computeSplit(total, headcount)` — Returns `{ perStudent, baseline, tutorShare, cogitoTake }` with 20% Cogito take
+- `getConfig(conn)` — Reads the singleton, creating the client-approved defaults if missing
+- `updateConfig(conn, input)` — Validates the version and writes the active schedule with `updatedBy`
+
+**Business Rules:**
+
+- Computational value defaults to Rp 5,000 per Mark
+- Tutor minimum base defaults to Rp 50,000; online/offline tutor increments default to Rp 30,000/Rp 40,000
+- Cogito take defaults to online Rp 50,000 + Rp 20,000 per additional student and offline Rp 90,000 + Rp 40,000 per additional student
+- Admin may edit only the active Cogito take fields through `admin.*`; every update is audit-logged
+- The config version is copied into new economic snapshots; existing snapshots do not change
+
+**Dependencies:** `DbType`
+
+---
+
+## Pricing Module
+
+**Purpose:** Pricing validation plus IDR-to-Marks calculations; the calculation functions are pure while active configuration is read through the Economy port.
+
+**Files:**
+
+- `pricing.service.ts` — `computeSplit`, `validatePrices`, `validateBaseRates`, `computeEconomics`, `getEconomyConfig`
+
+**Service Methods:**
+
+- `computeSplit(modality, tutorPricePerStudent, headcount)` — Legacy compatibility split for profiles that still use the old Marks pricing map
+- `computeEconomics(modality, baseRateIdr, headcount, config)` — Returns the IDR honorarium, IDR Cogito take, total IDR, total Marks, rounded per-student Marks, and immutable snapshot fields
 - `validatePrices(prices, modality)` — Validates floor prices by modality; returns error string or null
+- `validateBaseRates(baseRatesIdr, modality, config?)` — Validates minimum IDR base honorarium, supported modalities, and Rp 5,000 increments
 
 **Dependencies:** None (pure functions)
 
 **Business Rules:**
 
-- Cogito takes 20% of baseline
-- Floor prices: online `{"1": 30, "2": 25, "3": 20, "4": 18, "5": 15, "6": 12}`, offline +10 on each
-- `both` modality uses the higher floor price for each group size
+- New IDR economics use the active Economy config and calculate tutor honorarium and Cogito take separately
+- Total IDR is converted at the configured Mark value, then Marks per student is rounded up
+- `both` profile modality still requires both IDR base rates; a booking always selects online or offline
 - Group sizes 1-6 only
 
 ---
@@ -617,6 +664,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - Profile updates use optimistic locking (`version`)
+- New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; the legacy Marks map remains readable during migration
 - New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
 
@@ -635,6 +683,7 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - Mother categories are the seven competition areas currently presented by Cogito Academy: Model United Nations, Public Speaking, Olympiad, World Scholar's Cup, Essay & Scientific Writing, Debate, and Business Plan
 - Only active child rows are selectable by tutors; each selection belongs to exactly one mother category
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
+- The onboarding and student tutor-list selectors keep normalized IDs for persistence/filtering while rendering human-readable labels; raw UUIDs are an implementation detail and must not appear in user-facing triggers
 
 ---
 
@@ -647,17 +696,19 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 - `discovery.types.ts` — Zod schemas for taxonomy listing and search filters
 - `discovery.errors.ts` — `TutorNotFoundError`
 - `discovery.repo.ts` — `listSubjects`, `listPublished`, `findByUserId`
-- `discovery.service.ts` — `listSubjects()`, `listPublished(filters)`, `getProfile(userId)`
+- `discovery.service.ts` — `listSubjects()`, `listPublished(filters)`, `getProfile(userId)`, active Marks price projection
 - `discovery.handler.ts` — Maps handler context/input
 - `discovery.router.ts` — Public `listSubjects` plus student-only tutor routes
 
 **Service Methods:**
 
 - `listSubjects()` — Returns active mother categories grouped with active child subjects
-- `listPublished(filters)` — Paginated list of published tutor profiles with category, child-subject, legacy expertise, and modality filters
-- `getProfile(userId)` — Returns full tutor profile
+- `listPublished(filters)` — Paginated list of published tutor profiles with category, child-subject, legacy expertise, and modality filters; `categoryIds` and `subjectIds` are ORed within each facet, combined as an AND across facets, and enforced through one correlated normalized subject-existence check that returns no rows when there is no match
+- `getProfile(userId)` — Returns full tutor profile and future availability
+- IDR profiles receive `pricesByModality` Marks maps computed from the active economy config; legacy profiles keep their stored Marks map and no student discovery response exposes the tutor's IDR base honorarium
+- Frontend filter selects normalize displayed objects back to primitive category/subject ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, child-subject options are the union of the selected mother categories, and the query is debounced by 300 ms.
 
-**Dependencies:** `DiscoveryRepo`
+**Dependencies:** `DiscoveryRepo`, `PricingPort`
 
 ---
 

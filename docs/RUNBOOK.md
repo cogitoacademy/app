@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -12,22 +12,62 @@ Tutor invitation delivery should be smoke-tested in both desktop and mobile emai
 
 ### Dashboard smoke check
 
-After a web deployment, sign in once as each supported role and open `/dashboard`:
+After a web deployment, sign in once as each supported role and open `/dashboard`. Verify the sidebar user menu shows the authenticated profile image when one is configured and uses initials when it is not:
 
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations.
-- Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/tutor-bookings`, `/availability`, and `/onboarding`.
-- Admin: priority operations and moderation counts; actions link to `/admin-operations`, `/admin-tutors`, and `/admin-achievements`. In `/admin-operations`, verify the booking queue filters, open a queue item’s detail view, confirm its state-history timeline loads, and use **Open override** to reach the existing preview/apply flow.
+- Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/bookings`, `/availability`, and `/onboarding`.
+- Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
 
-### Tutor booking review smoke check
+### Economy rate-control smoke check
 
-With a seeded tutor and a pending request, open the request from `/tutor-bookings` and choose **Review request**. Verify that the accept dialog is centered and compact on desktop, remains within the viewport on mobile, and shows the scheduled date/time, modality, and attendance before the final action. Verify that **Cancel** closes the dialog without changing the booking, while the decline variant keeps the reason required. Only select **Accept booking** when the state transition is intended; online requests move to `scheduled`, while offline requests move to `awaiting_admin_room_approval`. For cancel/complete actions, verify the in-app confirmation dialog appears instead of a browser prompt and that the success/error toast remains visible above any open modal.
+As an admin, open `/admin-economy`, confirm the Marks value, tutor minimum/increments,
+and online/offline Cogito take schedule are visible. Change a Cogito base or increment
+by a valid Rp 5,000 step, save, reload, and verify the version increments and the
+preview for class sizes 1–6 changes. The save is optimistic-lock protected and affects
+only future booking/repricing snapshots; existing booking snapshots must remain unchanged.
+After a successful change, verify a `Cogito rate updated` in-app notification appears
+for every current tutor. Re-saving the same values should not increment the version,
+add an audit row, or create another notification.
+As a student or tutor, opening `/admin-economy` must redirect away and direct
+`admin.getEconomySettings`/update calls must return FORBIDDEN.
+
+Tutor onboarding should show IDR base honorarium fields (online/offline), enforce the
+Rp 50,000 minimum and Rp 5,000 steps, and must not describe Marks as cash-out. Student
+tutor discovery and booking previews should show computed Marks per student for the
+selected modality; legacy profiles without `baseRatesIdr` remain readable.
+
+### Shared booking list smoke check
+
+With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with the Cogito mark icon before `Earns: X` and `Total: Y`, and admins see the full list with the icon before `Total X` and `Tutor Y`, with no lifecycle mutations. Verify the Upcoming/Pending/Recurring/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that hovering/focusing a visible status badge shows its explanation. Confirm mobile rows keep date, location, and tutor name readable beside the booking summary, while desktop time/location/tutor metadata stays aligned and the action button remains at the far edge. For single-session group bookings, student `You pay` must show the per-student amount, and the participant avatar stack must not include the tutor. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.
+
+Verify the role-aware default tab: students open on Upcoming, tutors open on Pending when a pending request exists (otherwise Upcoming), and admins open on All. An explicit `?tab=` selection must override the default. Upcoming/Pending/Recurring/All rows should be ordered by the nearest scheduled date, while Past/Cancelled show the most recent history first.
+
+### Booking detail smoke check
+
+Open an online booking detail and verify participant avatars use the saved profile image when present and initials otherwise, while every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. If provider creation fails, the booking remains `confirmed`, the detail card says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. Confirm that a manual admin URL becomes visible after `adminBooking.setMeetingLink`, including after multiple failed provider rows.
+
+### Form-control smoke check
+
+On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
+
+On a completed booking, verify the Session notes card is visible to both tutor and student. Select text and exercise bold, italic, heading, paragraph, bullet, numbered-list, and safe-link actions; confirm the live preview matches the persisted note after reload, the author label distinguishes your note from the other participant's note, and an attempted `<script>` or `javascript:` link is removed by the render sanitizer.
+
+For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount and Marks holds unchanged, and creates a notification for that invitee. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply.
+
+### Reschedule proposal smoke check
+
+From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, verify that a student booking proposer submits through `/rpc/booking/reschedule/propose` and a tutor submits through `/rpc/tutor/booking/reschedule/propose`. Both should show the success toast and move the booking to `reschedule_proposed`; a tutor may choose a custom time outside the published availability window. A tutor receiving `403 Student access required` indicates the frontend is using the wrong procedure. Group bookings still in `awaiting_participant_confirmation` intentionally wait for invitees before rescheduling is enabled.
 
 ### Tutor subject taxonomy smoke check
 
-Open `/onboarding` as a tutor and verify the subject selector loads active mother categories and their child subjects from `tutors.listSubjects`. Select at least one child subject, save a draft, and confirm the selected subjects reload with the profile. A submission with no child subject must be blocked; published tutor discovery should expose the selected subjects and allow students to filter by mother category or child subject.
+Open `/onboarding` as a tutor and verify the subject selector loads active mother categories and their child subjects from `tutors.listSubjects`. After choosing a mother category, the selector trigger must show its human-readable name rather than the category UUID. Select at least one child subject, save a draft, and confirm the selected subjects reload with the profile. A submission with no child subject must be blocked; published tutor discovery should expose the selected subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm the category and child-subject controls support selecting multiple values, show `+N more` when needed, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs.
+
+### Profile UX smoke check
+
+Open `/profile` as a student and `/onboarding` as a tutor at desktop and narrow widths. Verify the account card shows the current name, profile image (or initials), and read-only sign-in email; changing the name or image enables only the account save action. On the student page, learning and parent/guardian fields use separate sections with one learning-profile save action. On the tutor page, profile status and review feedback remain visible, fields are grouped into public profile/teaching setup/availability sections, and the sticky action area offers draft save plus submit-for-review only when the profile is editable. Confirm the browser console has no runtime errors and that no profile API contract changes are required.
 
 The authenticated shell shows a session-expiry warning during the final 30 minutes of Better Auth's seven-day session. The warning includes a sign-in-again action; an API `401` remains the fallback redirect for expired sessions.
 
@@ -67,6 +107,29 @@ bun run db:test          # Starts isolated test PostgreSQL + Redis (docker-compo
 bun run db:migrate       # Apply pending migrations
 bun run db:generate      # Generate new migration from schema changes
 ```
+
+If tutor discovery returns `500` with a missing `subject_category` or
+`tutor_profile_subject` relation, the local database is behind migration
+`0027_subject_taxonomy.sql`. Apply that migration (or the equivalent reviewed
+pending migration) and restart the server. `bun run db:push` can detect broad
+schema drift and ask ambiguous rename questions; review those prompts instead
+of accepting unrelated changes blindly.
+
+The IDR economy and admin rate-control surface require migration
+`0028_economy_config.sql`. Run `bun run db:migrate` before starting the server;
+it adds `tutor_profile.base_rates_idr`, creates the singleton
+`economy_config` row with client-approved defaults, and is safe to rerun.
+
+With the migration present, selecting a mother category or child subject
+should execute the normalized relation filter and return either matching
+tutors or an empty list—not a `500`. If only filtered requests fail, restart
+the server after the latest API build and inspect the emitted SQL for the
+`tutor_profile_subject`/`subject_category` filter aliases.
+
+If `support.listTickets` returns `500` and the server log reports a missing
+`support_ticket` relation, apply migration `0013_grey_sphinx.sql` and restart
+the server. The procedure reads this table directly; a missing relation is a
+database migration problem, not an empty ticket list.
 
 For isolated local test runs, the test runner migrates `cogito-test` automatically
 using `apps/server/.env.test` or `apps/server/.env.test.example`.
@@ -146,6 +209,16 @@ redis-cli LLEN "cogito-jobs:failed" # Failed jobs
 redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 ```
 
+## Test and Coverage
+
+Run the CI-equivalent coverage suite from the repository root after starting the test Postgres and Redis services:
+
+```bash
+bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+```
+
+The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% line coverage for `packages/api` and 100% line coverage overall from `coverage/lcov.info`; the Bun command's own function/statement threshold is a separate diagnostic and is not the CI gate.
+
 ## Common Errors
 
 ### `BOOKING_CONFLICT` (409)
@@ -195,7 +268,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ### Role-boundary errors
 
-- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use `tutorActions.*` for tutor fulfillment and `adminTutor.*` for admin review.
+- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use protected `booking.listMine`/`booking.get` for the shared booking read surface, `tutorActions.*` for tutor fulfillment, and `adminTutor.*`/`adminBooking.*` for admin review.
 
 ### Redis Connection Errors
 
@@ -411,6 +484,17 @@ Default local test ports:
 - Web: `3100`
 - Server: `3101`
 - PostgreSQL: `6767` (test container; shared with dev container — see note above)
+
+Economy role checks:
+
+```bash
+bun scripts/run-test-suite.mjs api packages/api/src/tests/integration/economy-roles.test.ts
+bun scripts/run-test-suite.mjs e2e --grep economy --reporter=line
+```
+
+The role suite covers student, tutor, and admin authorization plus the
+admin-update → future-booking snapshot path. The E2E runner starts the isolated
+web/server ports above and seeds deterministic role credentials.
 
 ## GHCR / Docker Deploy (CD)
 

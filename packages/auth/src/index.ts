@@ -93,6 +93,19 @@ export function assertPasswordPolicy(password: string) {
   return null;
 }
 
+export function resolveGoogleSocialProviders(input: {
+  clientId?: string;
+  clientSecret?: string;
+}) {
+  if (!input.clientId || !input.clientSecret) return {};
+  return {
+    google: {
+      clientId: input.clientId,
+      clientSecret: input.clientSecret,
+    },
+  };
+}
+
 export function createAuth() {
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -154,15 +167,10 @@ export function createAuth() {
         }
       },
     },
-    socialProviders:
-      env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-        ? {
-            google: {
-              clientId: env.GOOGLE_CLIENT_ID,
-              clientSecret: env.GOOGLE_CLIENT_SECRET,
-            },
-          }
-        : {},
+    socialProviders: resolveGoogleSocialProviders({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    }),
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     advanced: {

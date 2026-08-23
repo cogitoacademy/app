@@ -3,11 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@cogito-app/ui/components/selia/avatar";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
+import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
@@ -16,14 +13,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
-import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
+import { Heading } from "@cogito-app/ui/components/selia/heading";
+import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   Select,
   SelectItem,
@@ -34,13 +33,35 @@ import {
 } from "@cogito-app/ui/components/selia/select";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconPhoto, IconUser } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconCalendarClock,
+  IconSchool,
+  IconShieldCheck,
+  IconUser,
+} from "@tabler/icons-react";
+
 import { authClient } from "@/lib/auth-client";
+import { AccountIdentityCard } from "@/components/profile/account-identity-card";
 import { orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
 import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
 
 type Modality = "online" | "offline" | "both";
+
+type TutorStatusBadge = {
+  label: string;
+  variant: "secondary" | "danger" | "warning" | "success" | "info";
+};
+
+const TUTOR_STATUS_BADGES: Record<string, TutorStatusBadge> = {
+  draft: { label: "Draft", variant: "secondary" },
+  pending_review: { label: "Needs review", variant: "warning" },
+  changes_requested: { label: "Changes requested", variant: "danger" },
+  approved_unpublished: { label: "Approved", variant: "info" },
+  published: { label: "Published", variant: "success" },
+  suspended: { label: "Suspended", variant: "danger" },
+};
 
 interface OnboardingFormProps {
   accountUser: {
@@ -56,6 +77,7 @@ interface OnboardingFormProps {
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
+    baseRatesIdr: Partial<{ online: number; offline: number }> | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
     proofUrls: string[];
@@ -67,6 +89,7 @@ interface OnboardingFormProps {
       expertise: string[];
       subjectIds: string[];
       modality: Modality;
+      baseRatesIdr: Partial<{ online: number; offline: number }>;
       prices: Record<string, number>;
       proofUrls: string[];
     }> | null;
@@ -96,12 +119,20 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       profile.subjects?.map((subject) => subject.id) ??
       [],
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
-    prices: pending.prices ?? (profile.prices as Record<string, number>) ?? {},
+    baseRatesIdr: pending.baseRatesIdr ??
+      profile.baseRatesIdr ?? {
+        online: 175_000,
+        offline: 225_000,
+      },
     availabilitySummary: profile.availabilitySummary ?? "",
     proofUrls: pending.proofUrls ?? profile.proofUrls ?? [],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [newProofUrl, setNewProofUrl] = useState("");
+
+  const accountChanged =
+    accountForm.name.trim() !== accountUser.name.trim() ||
+    accountForm.image.trim() !== (accountUser.image ?? "").trim();
 
   const accountMutation = useMutation({
     mutationFn: async () => {
@@ -199,40 +230,62 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       expertise?: string[];
       subjectIds?: string[];
       modality?: Modality;
+      baseRatesIdr?: Partial<{ online: number; offline: number }>;
       prices?: Record<string, number>;
       availabilitySummary?: string;
       proofUrls?: string[];
     } = { version: profile.version };
-    if (form.displayName) payload.displayName = form.displayName;
-    if (form.shortBio) payload.shortBio = form.shortBio;
-    if (form.credentialsSummary)
-      payload.credentialsSummary = form.credentialsSummary;
+    const displayName = form.displayName.trim();
+    const shortBio = form.shortBio.trim();
+    const credentialsSummary = form.credentialsSummary.trim();
+    const availabilitySummary = form.availabilitySummary.trim();
+
+    if (displayName) payload.displayName = displayName;
+    if (shortBio) payload.shortBio = shortBio;
+    if (credentialsSummary) payload.credentialsSummary = credentialsSummary;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (form.subjectIds.length > 0) payload.subjectIds = form.subjectIds;
     if (form.modality) payload.modality = form.modality;
-    if (form.prices && Object.keys(form.prices).length > 0) {
-      const cleanPrices = Object.fromEntries(
-        Object.entries(form.prices).filter(([, v]) => v > 0),
+    if (form.baseRatesIdr && Object.keys(form.baseRatesIdr).length > 0) {
+      const cleanBaseRates = Object.fromEntries(
+        Object.entries(form.baseRatesIdr).filter(([, value]) => value > 0),
       );
-      if (Object.keys(cleanPrices).length > 0) payload.prices = cleanPrices;
+      if (Object.keys(cleanBaseRates).length > 0) {
+        payload.baseRatesIdr = cleanBaseRates as Partial<{
+          online: number;
+          offline: number;
+        }>;
+      }
     }
-    if (form.availabilitySummary)
-      payload.availabilitySummary = form.availabilitySummary;
+    if (availabilitySummary) payload.availabilitySummary = availabilitySummary;
     if (form.proofUrls.length > 0) payload.proofUrls = form.proofUrls;
     return payload;
   }
 
   async function handleSubmitForReview() {
     const validationErrors: Record<string, string> = {};
-    if (!form.displayName) validationErrors.displayName = "Required";
-    if (!form.shortBio) validationErrors.shortBio = "Required";
-    if (!form.credentialsSummary)
+    if (!form.displayName.trim()) validationErrors.displayName = "Required";
+    if (!form.shortBio.trim()) validationErrors.shortBio = "Required";
+    if (!form.credentialsSummary.trim())
       validationErrors.credentialsSummary = "Required";
     if (!form.modality) validationErrors.modality = "Required";
     if (form.subjectIds.length === 0)
       validationErrors.subjects = "Select at least one child subject";
-    if (!form.prices || Object.keys(form.prices).length === 0)
-      validationErrors.prices = "Required";
+    const requiredRates =
+      form.modality === "both"
+        ? ["online", "offline"]
+        : form.modality
+          ? [form.modality]
+          : [];
+    if (
+      requiredRates.some(
+        (key) =>
+          typeof form.baseRatesIdr[key as "online" | "offline"] !== "number",
+      )
+    ) {
+      validationErrors.baseRatesIdr =
+        "Add a valid IDR base honorarium for each selected modality";
+    }
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -240,6 +293,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         title: "Please fill all required fields",
         type: "error",
       });
+      const firstError = Object.keys(validationErrors)[0];
+      const focusTarget =
+        firstError === "subjects"
+          ? "tutor-subject-category"
+          : `tutor-${firstError}`;
+      window.setTimeout(() => document.getElementById(focusTarget)?.focus(), 0);
       return;
     }
 
@@ -252,359 +311,497 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   }
 
   function addProofUrl() {
-    if (newProofUrl && !form.proofUrls.includes(newProofUrl)) {
-      setForm({ ...form, proofUrls: [...form.proofUrls, newProofUrl] });
-      setNewProofUrl("");
-    }
+    const proofUrl = newProofUrl.trim();
+    if (!proofUrl || form.proofUrls.includes(proofUrl)) return;
+
+    setForm((current) => ({
+      ...current,
+      proofUrls: [...current.proofUrls, proofUrl],
+    }));
+    setNewProofUrl("");
   }
 
   function removeProofUrl(url: string) {
-    setForm({ ...form, proofUrls: form.proofUrls.filter((u) => u !== url) });
+    setForm((current) => ({
+      ...current,
+      proofUrls: current.proofUrls.filter((item) => item !== url),
+    }));
   }
 
   const isDraft =
     profile.onboardingStatus === "draft" ||
     profile.onboardingStatus === "changes_requested";
   const isEditable = isDraft || profile.onboardingStatus === "published";
-
-  const statusMessages: Record<string, string> = {
-    pending_review:
-      "Your profile is under review. You'll be notified once an admin approves it.",
-    approved_unpublished:
-      "Your profile has been approved and is awaiting publication by admin.",
-    published:
-      profile.profileEditStatus === "pending_review"
-        ? "Your profile is live. Important changes are waiting for admin review; students still see the approved version."
-        : profile.profileEditStatus === "changes_requested"
-          ? "Your profile is live, but the admin requested revisions to your proposed changes."
-          : "Your tutor profile is live! You can update it anytime; important changes will be reviewed before going live.",
-    suspended:
-      "Your tutor profile has been suspended. Please contact admin for details.",
+  const statusBadge = TUTOR_STATUS_BADGES[profile.onboardingStatus] ?? {
+    label: profile.onboardingStatus.replaceAll("_", " "),
+    variant: "secondary" as const,
   };
+  const statusIconVariant =
+    statusBadge.variant === "success"
+      ? "success-subtle"
+      : statusBadge.variant === "danger"
+        ? "danger-subtle"
+        : statusBadge.variant === "warning"
+          ? "warning-subtle"
+          : "info-subtle";
+  const statusMessage = isDraft
+    ? profile.onboardingStatus === "changes_requested"
+      ? "Review the feedback below, update the requested fields, then submit your profile again."
+      : "Complete the required sections below. You can save a draft at any time before submitting for review."
+    : profile.onboardingStatus === "pending_review"
+      ? "Your profile is under review. You will be notified once an admin approves it."
+      : profile.onboardingStatus === "approved_unpublished"
+        ? "Your profile has been approved and is waiting for publication by an admin."
+        : profile.onboardingStatus === "published"
+          ? profile.profileEditStatus === "pending_review"
+            ? "Your profile is live. Important changes are waiting for admin review; students still see the approved version."
+            : profile.profileEditStatus === "changes_requested"
+              ? "Your profile is live, but the admin requested revisions to your proposed changes."
+              : "Your tutor profile is live. You can update it anytime; important changes are reviewed before going live."
+          : profile.onboardingStatus === "suspended"
+            ? "Your tutor profile has been suspended. Please contact admin for details."
+            : "Your profile status will appear here as it moves through review.";
+  const hasReviewFeedback =
+    (profile.adminReviewNote &&
+      profile.onboardingStatus === "changes_requested") ||
+    (profile.profileEditAdminNote &&
+      profile.profileEditStatus === "changes_requested");
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <Badge variant="info" pill>
+            Tutor profile
+          </Badge>
+          <Heading className="mt-3" size="lg">
+            {isDraft ? "Build your tutor profile" : "Your tutor profile"}
+          </Heading>
+          <Text className="mt-2 max-w-2xl text-muted">
+            Give students a clear picture of your expertise, teaching format,
+            and availability.
+          </Text>
+        </div>
+        <div className="flex flex-wrap gap-2 md:justify-end">
+          <Badge variant={statusBadge.variant} size="lg" pill>
+            {statusBadge.label}
+          </Badge>
+          {profile.profileEditStatus === "pending_review" ? (
+            <Badge variant="warning" size="lg" pill>
+              Changes under review
+            </Badge>
+          ) : null}
+        </div>
+      </header>
+
       <Card>
-        <CardHeader>
-          <Avatar size="lg">
-            <AvatarImage
-              src={accountForm.image || undefined}
-              alt={accountForm.name || "Tutor profile"}
-            />
-            <AvatarFallback>
-              {(accountForm.name.trim()[0] || "T").toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <CardTitle>Account Identity</CardTitle>
-          <CardDescription>
-            Update the name and photo used across your Cogito account.
-          </CardDescription>
-        </CardHeader>
-        <CardBody className="flex flex-col gap-4">
-          <Field>
-            <FieldLabel>
-              <IconUser className="size-4" /> Account name
-            </FieldLabel>
-            <Input
-              value={accountForm.name}
-              onChange={(event) =>
-                setAccountForm((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              placeholder="Your full name"
-            />
-          </Field>
-          <Field>
-            <FieldLabel>
-              <IconPhoto className="size-4" /> Profile image URL
-            </FieldLabel>
-            <Input
-              type="url"
-              value={accountForm.image}
-              onChange={(event) =>
-                setAccountForm((current) => ({
-                  ...current,
-                  image: event.target.value,
-                }))
-              }
-              placeholder="https://example.com/your-photo.jpg"
-            />
-            <FieldDescription>
-              Use a publicly accessible image URL. Direct file upload is not
-              available yet.
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel>Signed-in email</FieldLabel>
-            <Input value={accountUser.email} disabled />
-            <FieldDescription>
-              Your sign-in email cannot be changed from this page.
-            </FieldDescription>
-          </Field>
+        <CardBody className="flex items-start gap-3">
+          <IconBox variant={statusIconVariant} circle>
+            <IconShieldCheck aria-hidden="true" />
+          </IconBox>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Heading size="sm">Profile status</Heading>
+              <Badge variant={statusBadge.variant} size="sm" pill>
+                {statusBadge.label}
+              </Badge>
+            </div>
+            <Text className="mt-1 text-muted">{statusMessage}</Text>
+          </div>
         </CardBody>
-        <CardFooter className="justify-end">
-          <Button
-            progress={accountMutation.isPending}
-            disabled={accountMutation.isPending || !accountForm.name.trim()}
-            onClick={() => accountMutation.mutate()}
-          >
-            Save account profile
-          </Button>
-        </CardFooter>
       </Card>
 
-      {profile.adminReviewNote &&
-        profile.onboardingStatus === "changes_requested" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Admin Feedback</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <Text>{profile.adminReviewNote}</Text>
-            </CardBody>
-          </Card>
-        )}
+      <AccountIdentityCard
+        idPrefix="tutor-account"
+        roleLabel="Tutor"
+        name={accountForm.name}
+        email={accountUser.email}
+        image={accountForm.image}
+        hasChanges={accountChanged}
+        isSaving={accountMutation.isPending}
+        footerNote="Your account name and photo are separate from the public tutor profile review."
+        onNameChange={(name) =>
+          setAccountForm((current) => ({ ...current, name }))
+        }
+        onImageChange={(image) =>
+          setAccountForm((current) => ({ ...current, image }))
+        }
+        onSave={() => accountMutation.mutate()}
+      />
 
-      {statusMessages[profile.onboardingStatus] && !isDraft && (
-        <Card>
-          <CardBody>
-            <Text className="text-center">
-              {statusMessages[profile.onboardingStatus]}
-            </Text>
+      {hasReviewFeedback ? (
+        <Card className="ring-warning-border bg-warning/5" role="status">
+          <CardHeader>
+            <IconBox variant="warning-subtle">
+              <IconAlertTriangle aria-hidden="true" />
+            </IconBox>
+            <CardTitle>Review feedback</CardTitle>
+            <CardDescription>
+              Update the relevant section before submitting again.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="grid gap-4">
+            {profile.adminReviewNote &&
+            profile.onboardingStatus === "changes_requested" ? (
+              <div>
+                <Text className="font-medium">Admin feedback</Text>
+                <Text className="mt-1 text-muted">
+                  {profile.adminReviewNote}
+                </Text>
+              </div>
+            ) : null}
+            {profile.profileEditAdminNote &&
+            profile.profileEditStatus === "changes_requested" ? (
+              <div>
+                <Text className="font-medium">Feedback on profile changes</Text>
+                <Text className="mt-1 text-muted">
+                  {profile.profileEditAdminNote}
+                </Text>
+              </div>
+            ) : null}
           </CardBody>
         </Card>
-      )}
+      ) : null}
 
-      {profile.profileEditAdminNote &&
-        profile.profileEditStatus === "changes_requested" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Feedback on profile changes</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <Text>{profile.profileEditAdminNote}</Text>
-            </CardBody>
-          </Card>
-        )}
-
-      {isEditable && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
-            </CardHeader>
-            <CardBody className="flex flex-col gap-4">
-              <Field>
-                <FieldLabel>Display Name *</FieldLabel>
-                <Input
-                  value={form.displayName}
-                  onChange={(e) => {
-                    setForm({ ...form, displayName: e.target.value });
-                    clearError("displayName");
-                  }}
-                  placeholder="How students will see your name"
-                />
-                {errors.displayName && (
-                  <FieldError>{errors.displayName}</FieldError>
-                )}
-              </Field>
-
-              <Field>
-                <FieldLabel>Short Bio *</FieldLabel>
-                <Input
-                  value={form.shortBio}
-                  onChange={(e) => {
-                    setForm({ ...form, shortBio: e.target.value });
-                    clearError("shortBio");
-                  }}
-                  placeholder="Brief introduction about yourself"
-                />
-                {errors.shortBio && <FieldError>{errors.shortBio}</FieldError>}
-              </Field>
-
-              <Field>
-                <FieldLabel>Credentials Summary *</FieldLabel>
-                <Input
-                  value={form.credentialsSummary}
-                  onChange={(e) => {
-                    setForm({ ...form, credentialsSummary: e.target.value });
-                    clearError("credentialsSummary");
-                  }}
-                  placeholder="Degrees, certifications, achievements"
-                />
-                {errors.credentialsSummary && (
-                  <FieldError>{errors.credentialsSummary}</FieldError>
-                )}
-              </Field>
-
-              <Field>
-                <FieldLabel>Subjects / Competition Tracks *</FieldLabel>
-                <FieldDescription>
-                  Choose one or more child subjects. Students will use these
-                  categories to find your profile.
-                </FieldDescription>
-                <SubjectSelector
-                  selectedIds={form.subjectIds}
-                  selectedSubjects={profile.subjects}
-                  onChange={(subjectIds) => {
-                    setForm({ ...form, subjectIds });
-                    clearError("subjects");
-                  }}
-                  error={errors.subjects}
-                />
-              </Field>
-
-              <div className="flex justify-end">
-                <Button
-                  progress={updateMutation.isPending}
-                  disabled={updateMutation.isPending}
-                  onClick={() => updateMutation.mutate(getSavePayload())}
-                >
-                  {profile.onboardingStatus === "published"
-                    ? "Save changes"
-                    : "Save Progress"}
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Modality & Pricing</CardTitle>
-            </CardHeader>
-            <CardBody className="flex flex-col gap-4">
-              <Field>
-                <FieldLabel>Teaching Modality *</FieldLabel>
-                <Select
-                  value={form.modality}
-                  onValueChange={(val) => {
-                    const modalityVal =
-                      typeof val === "object" && val !== null && "value" in val
-                        ? (val as { value: string }).value
-                        : val;
-                    setForm({ ...form, modality: modalityVal as Modality });
-                    clearError("modality");
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select modality" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="offline">
-                        Offline (at Cogito campus)
-                      </SelectItem>
-                      <SelectItem value="both">
-                        Both online and offline
-                      </SelectItem>
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
-                {errors.modality && <FieldError>{errors.modality}</FieldError>}
-              </Field>
-
-              {form.modality && (
-                <TutorPricingFields
-                  modality={form.modality}
-                  prices={form.prices}
-                  onChange={(prices) => setForm({ ...form, prices })}
-                  errors={errors}
-                />
-              )}
-
-              <div className="flex justify-end">
-                <Button
-                  progress={updateMutation.isPending}
-                  disabled={updateMutation.isPending}
-                  onClick={() => updateMutation.mutate(getSavePayload())}
-                >
-                  Save Progress
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Availability & Credentials Proof</CardTitle>
-            </CardHeader>
-            <CardBody className="flex flex-col gap-4">
-              <Field>
-                <FieldLabel>Availability Summary</FieldLabel>
-                <Input
-                  value={form.availabilitySummary}
-                  onChange={(e) =>
-                    setForm({ ...form, availabilitySummary: e.target.value })
-                  }
-                  placeholder="e.g. Weekdays 3-6 PM, Saturdays 9 AM-12 PM"
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Credential Proof URLs (optional)</FieldLabel>
-                <div className="flex gap-2">
+      {isEditable ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            updateMutation.mutate(getSavePayload());
+          }}
+          className="flex flex-col gap-6"
+        >
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card className="min-w-0">
+              <CardHeader>
+                <IconBox variant="secondary-subtle">
+                  <IconUser aria-hidden="true" />
+                </IconBox>
+                <CardTitle>Public profile</CardTitle>
+                <CardDescription>
+                  This is the first information students use to understand your
+                  teaching style.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="grid gap-5 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="tutor-display-name">
+                    Display name <span aria-hidden="true">*</span>
+                  </FieldLabel>
                   <Input
+                    id="tutor-display-name"
+                    name="displayName"
+                    autoComplete="name"
+                    value={form.displayName}
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        displayName: event.target.value,
+                      }));
+                      clearError("displayName");
+                    }}
+                    placeholder="How students will see your name"
+                    aria-invalid={Boolean(errors.displayName)}
+                  />
+                  {errors.displayName ? (
+                    <FieldError>{errors.displayName}</FieldError>
+                  ) : null}
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="tutor-credentials-summary">
+                    Credentials summary <span aria-hidden="true">*</span>
+                  </FieldLabel>
+                  <Input
+                    id="tutor-credentials-summary"
+                    name="credentialsSummary"
+                    value={form.credentialsSummary}
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        credentialsSummary: event.target.value,
+                      }));
+                      clearError("credentialsSummary");
+                    }}
+                    placeholder="Degrees, certifications, achievements"
+                    aria-invalid={Boolean(errors.credentialsSummary)}
+                  />
+                  {errors.credentialsSummary ? (
+                    <FieldError>{errors.credentialsSummary}</FieldError>
+                  ) : null}
+                </Field>
+
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="tutor-short-bio">
+                    Short bio <span aria-hidden="true">*</span>
+                  </FieldLabel>
+                  <FieldDescription>
+                    A concise introduction students can scan before booking.
+                  </FieldDescription>
+                  <Textarea
+                    id="tutor-short-bio"
+                    name="shortBio"
+                    rows={4}
+                    value={form.shortBio}
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        shortBio: event.target.value,
+                      }));
+                      clearError("shortBio");
+                    }}
+                    placeholder="Brief introduction about yourself"
+                    aria-invalid={Boolean(errors.shortBio)}
+                  />
+                  {errors.shortBio ? (
+                    <FieldError>{errors.shortBio}</FieldError>
+                  ) : null}
+                </Field>
+
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="tutor-subject-category">
+                    Subjects and competition tracks *
+                  </FieldLabel>
+                  <FieldDescription>
+                    Choose one or more child subjects so students can find your
+                    profile in the right category.
+                  </FieldDescription>
+                  <SubjectSelector
+                    triggerId="tutor-subject-category"
+                    selectedIds={form.subjectIds}
+                    selectedSubjects={profile.subjects}
+                    onChange={(subjectIds) => {
+                      setForm((current) => ({ ...current, subjectIds }));
+                      clearError("subjects");
+                    }}
+                    error={errors.subjects}
+                  />
+                </Field>
+              </CardBody>
+            </Card>
+
+            <Card className="min-w-0">
+              <CardHeader>
+                <IconBox variant="info-subtle">
+                  <IconSchool aria-hidden="true" />
+                </IconBox>
+                <CardTitle>Teaching setup</CardTitle>
+                <CardDescription>
+                  Set the session format and your IDR honorarium. Cogito
+                  calculates the student Marks price from the active economy.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="flex flex-col gap-5">
+                <Field>
+                  <FieldLabel htmlFor="tutor-modality">
+                    Teaching modality <span aria-hidden="true">*</span>
+                  </FieldLabel>
+                  <Select
+                    value={form.modality}
+                    onValueChange={(val) => {
+                      const modalityVal =
+                        typeof val === "object" &&
+                        val !== null &&
+                        "value" in val
+                          ? (val as { value: string }).value
+                          : val;
+                      setForm((current) => ({
+                        ...current,
+                        modality: modalityVal as Modality,
+                      }));
+                      clearError("modality");
+                    }}
+                  >
+                    <SelectTrigger id="tutor-modality">
+                      <SelectValue placeholder="Select a teaching format" />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectList>
+                        <SelectItem value="online">Online</SelectItem>
+                        <SelectItem value="offline">
+                          Offline (at Cogito campus)
+                        </SelectItem>
+                        <SelectItem value="both">
+                          Both online and offline
+                        </SelectItem>
+                      </SelectList>
+                    </SelectPopup>
+                  </Select>
+                  {errors.modality ? (
+                    <FieldError>{errors.modality}</FieldError>
+                  ) : null}
+                </Field>
+
+                {form.modality ? (
+                  <TutorPricingFields
+                    modality={form.modality}
+                    baseRatesIdr={form.baseRatesIdr}
+                    onChange={(baseRatesIdr) => {
+                      setForm((current) => ({ ...current, baseRatesIdr }));
+                      clearError("baseRatesIdr");
+                    }}
+                    errors={errors}
+                  />
+                ) : (
+                  <Text className="rounded-lg bg-accent px-3 py-2 text-sm text-muted">
+                    Choose a teaching modality to see the recommended group
+                    pricing fields.
+                  </Text>
+                )}
+              </CardBody>
+            </Card>
+          </div>
+
+          <Card className="min-w-0">
+            <CardHeader>
+              <IconBox variant="tertiary-subtle">
+                <IconCalendarClock aria-hidden="true" />
+              </IconBox>
+              <CardTitle>Availability and proof</CardTitle>
+              <CardDescription>
+                Give students a useful scheduling hint and add optional evidence
+                for admin review.
+              </CardDescription>
+            </CardHeader>
+            <CardBody className="grid gap-6 lg:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="tutor-availability-summary">
+                  Availability summary
+                </FieldLabel>
+                <FieldDescription>
+                  A short guide; exact bookable windows are managed separately
+                  in Availability.
+                </FieldDescription>
+                <Input
+                  id="tutor-availability-summary"
+                  name="availabilitySummary"
+                  value={form.availabilitySummary}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      availabilitySummary: event.target.value,
+                    }))
+                  }
+                  placeholder="e.g. Weekdays 3–6 PM, Saturdays 9 AM–12 PM"
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="tutor-proof-url">
+                  Credential proof URLs
+                </FieldLabel>
+                <FieldDescription>
+                  Optional public links to certificates, portfolios, or results.
+                </FieldDescription>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="tutor-proof-url"
+                    name="proofUrl"
+                    type="url"
+                    autoComplete="url"
                     value={newProofUrl}
-                    onChange={(e) => setNewProofUrl(e.target.value)}
+                    onChange={(event) => setNewProofUrl(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addProofUrl();
+                      }
+                    }}
                     placeholder="https://..."
                   />
                   <Button
+                    type="button"
                     variant="secondary"
+                    className="shrink-0 sm:w-auto"
                     onClick={addProofUrl}
-                    disabled={!newProofUrl}
+                    disabled={!newProofUrl.trim()}
                   >
-                    Add
+                    Add link
                   </Button>
                 </div>
-                {form.proofUrls.length > 0 && (
-                  <div className="flex flex-col gap-1 mt-2">
+                {form.proofUrls.length > 0 ? (
+                  <ul
+                    className="mt-2 flex flex-col gap-2"
+                    aria-label="Credential proof links"
+                  >
                     {form.proofUrls.map((url) => (
-                      <div
+                      <li
                         key={url}
-                        className="flex items-center gap-2 text-sm"
+                        className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-item px-3 py-2"
                       >
-                        <Text className="truncate max-w-xs">{url}</Text>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="min-w-0 truncate text-sm text-foreground underline underline-offset-2"
+                        >
+                          {url}
+                        </a>
                         <Button
+                          type="button"
                           variant="plain"
-                          size="sm"
+                          size="xs"
                           onClick={() => removeProofUrl(url)}
                         >
                           Remove
                         </Button>
-                      </div>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
+                ) : (
+                  <Text className="mt-2 text-sm text-muted">
+                    No proof links added yet.
+                  </Text>
                 )}
               </Field>
             </CardBody>
           </Card>
 
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="secondary"
-              progress={updateMutation.isPending}
-              disabled={updateMutation.isPending}
-              onClick={() => updateMutation.mutate(getSavePayload())}
-            >
-              {profile.onboardingStatus === "published"
-                ? "Save profile changes"
-                : "Save Draft"}
-            </Button>
-            {isDraft ? (
-              <Button
-                progress={submitMutation.isPending}
-                disabled={submitMutation.isPending}
-                onClick={handleSubmitForReview}
-              >
-                Submit for Review
-              </Button>
-            ) : null}
-          </div>
-        </>
-      )}
+          <Card className="sticky bottom-4 z-10 overflow-hidden">
+            <CardFooter className="flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <Text className="font-medium">
+                  {isDraft
+                    ? "Ready to move your profile forward?"
+                    : "Profile updates"}
+                </Text>
+                <Text className="mt-1 text-sm text-muted">
+                  {isDraft
+                    ? "Save a draft while you work, or submit the completed profile for admin review."
+                    : "Save public changes here; trust-sensitive edits may wait for admin review."}
+                </Text>
+              </div>
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+                <Button
+                  type="submit"
+                  variant={isDraft ? "secondary" : "primary"}
+                  className="w-full sm:w-auto"
+                  progress={updateMutation.isPending}
+                  disabled={
+                    updateMutation.isPending || submitMutation.isPending
+                  }
+                >
+                  {isDraft ? "Save draft" : "Save profile changes"}
+                </Button>
+                {isDraft ? (
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto"
+                    progress={submitMutation.isPending}
+                    disabled={
+                      updateMutation.isPending || submitMutation.isPending
+                    }
+                    onClick={handleSubmitForReview}
+                  >
+                    Submit for review
+                  </Button>
+                ) : null}
+              </div>
+            </CardFooter>
+          </Card>
+        </form>
+      ) : null}
     </div>
   );
 }

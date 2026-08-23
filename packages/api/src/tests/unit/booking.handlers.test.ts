@@ -11,6 +11,7 @@ function makeBookingService() {
     getById: mock(async () => ({ id: "b1" })),
     getRescheduleAvailability: mock(async () => [{ id: "slot1" }]),
     listMine: mock(async () => ({ items: [] })),
+    listAccessible: mock(async () => ({ items: [] })),
     cancel: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     proposeReschedule: mock(async () => ({
       id: "b1",
@@ -31,6 +32,10 @@ function makeBookingService() {
     createSeries: mock(async () => ({ id: "bs1" })),
     confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
     declineInvite: mock(async () => ({ id: "b1", currentState: "declined" })),
+    withdrawInvite: mock(async () => ({
+      withdrawn: true,
+      inviteeUserId: "u2",
+    })),
     reconfirm: mock(async () => ({ reconfirmed: true })),
     withdraw: mock(async () => ({ id: "b1", currentState: "cancelled" })),
     listSessions: mock(async () => ({ items: [] })),
@@ -44,6 +49,7 @@ function makeBookingService() {
       bookingId: "b1",
       attendanceState: "present",
     })),
+    listForTutor: mock(async () => ({ items: [] })),
   };
 }
 
@@ -111,7 +117,7 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.getById).toHaveBeenCalledWith("b1", "u1");
+      expect(booking.getById).toHaveBeenCalledWith("b1", "u1", undefined);
       expect(result).toEqual({ id: "b1" });
     });
   });
@@ -135,7 +141,7 @@ describe("bookingHandler", () => {
   });
 
   describe("listMine", () => {
-    test("calls booking.listMine with session user id and input", async () => {
+    test("calls booking.listAccessible with session user id, role, and input", async () => {
       const booking = makeBookingService();
       const handler = createBookingHandler(booking as any);
       const context = makeContext("u1");
@@ -146,7 +152,11 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.listMine).toHaveBeenCalledWith("u1", input);
+      expect(booking.listAccessible).toHaveBeenCalledWith(
+        "u1",
+        "student",
+        input,
+      );
       expect(result).toEqual({ items: [] });
     });
   });
@@ -339,6 +349,32 @@ describe("bookingHandler", () => {
     });
   });
 
+  describe("withdrawInvite", () => {
+    test("calls booking.withdrawInvite with proposer, booking, target, and reason", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("u1");
+      const input = {
+        bookingId: "b1",
+        inviteeUserId: "u2",
+        reason: "Schedule changed",
+      };
+
+      const result = await handler.withdrawInvite({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.withdrawInvite).toHaveBeenCalledWith(
+        "u1",
+        "b1",
+        "u2",
+        "Schedule changed",
+      );
+      expect(result).toEqual({ withdrawn: true, inviteeUserId: "u2" });
+    });
+  });
+
   describe("reconfirm", () => {
     test("calls booking.reconfirm with session user id, bookingId, and accept", async () => {
       const booking = makeBookingService();
@@ -385,7 +421,7 @@ describe("bookingHandler", () => {
         input: input as any,
       });
 
-      expect(booking.listSessions).toHaveBeenCalledWith("b1", "u1");
+      expect(booking.listSessions).toHaveBeenCalledWith("b1", "u1", undefined);
       expect(result).toEqual({ items: [] });
     });
   });
@@ -481,6 +517,24 @@ describe("tutorActionsHandler", () => {
         id: "b1",
         currentState: "reschedule_proposed",
       });
+    });
+  });
+
+  describe("listBookings", () => {
+    test("calls booking.listForTutor with session user id and input", async () => {
+      const booking = makeBookingService();
+      booking.listForTutor.mockResolvedValue({ items: [{ id: "b1" }] });
+      const handler = createTutorActionsHandler(booking as any);
+      const context = makeContext("t1");
+      const input = { limit: 10, cursor: "cursor-1" };
+
+      const result = await handler.listBookings({
+        context: context as any,
+        input: input as any,
+      });
+
+      expect(booking.listForTutor).toHaveBeenCalledWith("t1", input);
+      expect(result).toEqual({ items: [{ id: "b1" }] });
     });
   });
 

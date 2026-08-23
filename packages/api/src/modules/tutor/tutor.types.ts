@@ -16,6 +16,17 @@ export const updateMyProfileInput = z.object({
     })
     .optional(),
   modality: z.enum(["online", "offline", "both"]).optional(),
+  baseRatesIdr: z
+    .record(z.string(), z.number().int())
+    .refine(
+      (record) =>
+        Object.keys(record).length <= 2 &&
+        Object.keys(record).every(
+          (key) => key === "online" || key === "offline",
+        ),
+      { message: "baseRatesIdr must only contain online/offline keys" },
+    )
+    .optional(),
   prices: z
     .record(z.string(), z.number())
     .refine(

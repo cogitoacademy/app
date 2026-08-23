@@ -162,6 +162,48 @@ describe("PaymentService", () => {
       expect(result.providerReference).toBe("stub:user1:pkg1");
     });
 
+    test("persists a provider request id when refreshing a PENDING intent", async () => {
+      const updatePaymentStatus = mock(async () => {});
+      const provider = {
+        ...makeProvider(),
+        createIntent: mock(async () => ({
+          checkoutUrl: "https://checkout.test/refreshed",
+          paymentRequestId: "pr_refreshed",
+        })),
+      };
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay_existing",
+          status: PAYMENT_STATUS.PENDING,
+          providerReference: "stub:user1:pkg1",
+        })),
+        updatePaymentStatus,
+      });
+
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+      expect(result.checkoutUrl).toBe("https://checkout.test/refreshed");
+      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
+        status: PAYMENT_STATUS.PENDING,
+        providerRequestId: "pr_refreshed",
+        checkoutUrl: "https://checkout.test/refreshed",
+      });
+    });
+
     test("H4: PENDING re-purchase returns the stored checkoutUrl without re-calling the provider", async () => {
       const provider = makeProvider();
       const updatePaymentStatus = mock(async () => {});
@@ -200,6 +242,7 @@ describe("PaymentService", () => {
     });
 
     test("B6: createIntent reuses the existing row when its insert conflicts (check-then-insert race)", async () => {
+      let lookupCount = 0;
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
           id: "pkg1",
@@ -211,12 +254,17 @@ describe("PaymentService", () => {
         // The pre-check misses the row (race window), the insert loses the
         // unique provider_reference conflict, and the re-read finds the
         // winner's PENDING row — createIntent must reuse it.
-        findPaymentByProviderReference: mock(async () => ({
-          id: "pay_winner",
-          status: "PENDING",
-          walletId: "w1",
-          providerReference: "stub:user1:pkg1",
-        })),
+        findPaymentByProviderReference: mock(async () => {
+          lookupCount += 1;
+          return lookupCount === 1
+            ? null
+            : {
+                id: "pay_winner",
+                status: "PENDING",
+                walletId: "w1",
+                providerReference: "stub:user1:pkg1",
+              };
+        }),
         insertPayment: mock(async () => null),
       });
       const db = makeDb();
@@ -233,6 +281,129 @@ describe("PaymentService", () => {
       expect(result.paymentId).toBe("pay_winner");
       expect(result.providerReference).toBe("stub:user1:pkg1");
       expect(result.checkoutUrl).toBeDefined();
+    });
+
+    test("B6: persists the winner's provider request id when refreshing its intent", async () => {
+      let lookupCount = 0;
+      const updatePaymentStatus = mock(async () => {});
+      const provider = {
+        ...makeProvider(),
+        createIntent: mock(async () => ({
+          checkoutUrl: "https://checkout.test/winner",
+          paymentRequestId: "pr_winner",
+        })),
+      };
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => {
+          lookupCount += 1;
+          return lookupCount === 1
+            ? null
+            : {
+                id: "pay_winner",
+                status: PAYMENT_STATUS.PENDING,
+                providerReference: "stub:user1:pkg1",
+              };
+        }),
+        insertPayment: mock(async () => null),
+        updatePaymentStatus,
+      });
+
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+
+      await service.createIntent("user1", "w1", "pkg1");
+      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_winner", {
+        status: PAYMENT_STATUS.PENDING,
+        providerRequestId: "pr_winner",
+        checkoutUrl: "https://checkout.test/winner",
+      });
+    });
+
+    test("B6: reuses the winner's stored checkout URL", async () => {
+      let lookupCount = 0;
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => {
+          lookupCount += 1;
+          return lookupCount === 1
+            ? null
+            : {
+                id: "pay_winner",
+                status: PAYMENT_STATUS.PENDING,
+                providerReference: "stub:user1:pkg1",
+                checkoutUrl: "https://checkout.test/winner-stored",
+              };
+        }),
+        insertPayment: mock(async () => null),
+      });
+
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+      expect(result.checkoutUrl).toBe("https://checkout.test/winner-stored");
+      expect(provider.createIntent).not.toHaveBeenCalled();
+    });
+
+    test("persists a provider request id for a newly created intent", async () => {
+      const updatePaymentStatus = mock(async () => {});
+      const provider = {
+        ...makeProvider(),
+        createIntent: mock(async () => ({
+          checkoutUrl: "https://checkout.test/new",
+          paymentRequestId: "pr_new",
+        })),
+      };
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        insertPayment: mock(async () => {}),
+        updatePaymentStatus,
+      });
+
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+
+      await service.createIntent("user1", "w1", "pkg1");
+      expect(updatePaymentStatus).toHaveBeenCalledWith(expect.any(String), {
+        status: PAYMENT_STATUS.PENDING,
+        providerRequestId: "pr_new",
+        checkoutUrl: "https://checkout.test/new",
+      });
     });
 
     test("createIntent re-purchases after a FAILED payment (new checkout)", async () => {
