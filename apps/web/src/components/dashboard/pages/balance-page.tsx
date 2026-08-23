@@ -28,6 +28,7 @@ import {
   IconArrowsExchange,
 } from "@tabler/icons-react";
 import { cn } from "@cogito-app/ui/lib/utils";
+import { Link } from "@tanstack/react-router";
 
 import { EmptyState } from "@/components/empty-state";
 import { StatCard } from "../stat-card";
@@ -189,10 +190,8 @@ export function BalancePage() {
               <Button
                 className="w-full sm:ml-auto sm:w-auto sm:shrink-0 group"
                 render={
-                  <a
-                    href="https://knowledge.cogito.academy"
-                    target="_blank"
-                    rel="noreferrer"
+                  <Link
+                    to="/student-resources"
                     aria-label="Open Knowledge Bank"
                   />
                 }

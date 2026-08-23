@@ -42,14 +42,5 @@ export function createWalletRouter(handler: WalletHandler) {
         summary: "Knowledge Bank eligibility",
       })
       .handler(handler.knowledgeBankEligible),
-
-    competitionCalendarLink: protectedProcedure
-      .route({
-        method: "POST",
-        path: "/wallet/competition-calendar",
-        tags: ["Wallet"],
-        summary: "Competition calendar link",
-      })
-      .handler(handler.competitionCalendarLink),
   };
 }

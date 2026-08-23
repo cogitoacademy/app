@@ -25,10 +25,12 @@ import { Route as AppAdminTutorsRouteImport } from './routes/_app.admin-tutors'
 import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
+import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
+import { Route as AppStudentResourcesRouteImport } from './routes/_app.student-resources'
 import { Route as AppTutorBookingsRouteImport } from './routes/_app.tutor-bookings'
 import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
@@ -114,6 +116,11 @@ const AppBookingsRoute = AppBookingsRouteImport.update({
   path: '/bookings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCalendarRoute = AppCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -132,6 +139,11 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
 const AppProfileRoute = AppProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppStudentResourcesRoute = AppStudentResourcesRouteImport.update({
+  id: '/student-resources',
+  path: '/student-resources',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTutorBookingsRoute = AppTutorBookingsRouteImport.update({
@@ -176,10 +188,12 @@ export interface FileRoutesByFullPath {
   '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
+  '/calendar': typeof AppCalendarRoute
   '/dashboard': typeof AppDashboardRoute
   '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
+  '/student-resources': typeof AppStudentResourcesRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -202,10 +216,12 @@ export interface FileRoutesByTo {
   '/availability': typeof AppAvailabilityRoute
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
+  '/calendar': typeof AppCalendarRoute
   '/dashboard': typeof AppDashboardRoute
   '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
+  '/student-resources': typeof AppStudentResourcesRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -230,10 +246,12 @@ export interface FileRoutesById {
   '/_app/availability': typeof AppAvailabilityRoute
   '/_app/balance': typeof AppBalanceRoute
   '/_app/bookings': typeof AppBookingsRoute
+  '/_app/calendar': typeof AppCalendarRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/notifications': typeof AppNotificationsRoute
   '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/profile': typeof AppProfileRoute
+  '/_app/student-resources': typeof AppStudentResourcesRoute
   '/_app/tutor-bookings': typeof AppTutorBookingsRoute
   '/_app/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -258,10 +276,12 @@ export interface FileRouteTypes {
     | '/availability'
     | '/balance'
     | '/bookings'
+    | '/calendar'
     | '/dashboard'
     | '/notifications'
     | '/onboarding'
     | '/profile'
+    | '/student-resources'
     | '/tutor-bookings'
     | '/tutors'
     | '/auth/callback'
@@ -284,10 +304,12 @@ export interface FileRouteTypes {
     | '/availability'
     | '/balance'
     | '/bookings'
+    | '/calendar'
     | '/dashboard'
     | '/notifications'
     | '/onboarding'
     | '/profile'
+    | '/student-resources'
     | '/tutor-bookings'
     | '/tutors'
     | '/auth/callback'
@@ -311,10 +333,12 @@ export interface FileRouteTypes {
     | '/_app/availability'
     | '/_app/balance'
     | '/_app/bookings'
+    | '/_app/calendar'
     | '/_app/dashboard'
     | '/_app/notifications'
     | '/_app/onboarding'
     | '/_app/profile'
+    | '/_app/student-resources'
     | '/_app/tutor-bookings'
     | '/_app/tutors'
     | '/auth/callback'
@@ -447,6 +471,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBookingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/calendar': {
+      id: '/_app/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AppCalendarRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -473,6 +504,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/student-resources': {
+      id: '/_app/student-resources'
+      path: '/student-resources'
+      fullPath: '/student-resources'
+      preLoaderRoute: typeof AppStudentResourcesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/tutor-bookings': {
@@ -523,10 +561,12 @@ interface AppRouteChildren {
   AppAvailabilityRoute: typeof AppAvailabilityRoute
   AppBalanceRoute: typeof AppBalanceRoute
   AppBookingsRoute: typeof AppBookingsRoute
+  AppCalendarRoute: typeof AppCalendarRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
+  AppStudentResourcesRoute: typeof AppStudentResourcesRoute
   AppTutorBookingsRoute: typeof AppTutorBookingsRoute
   AppTutorsRoute: typeof AppTutorsRoute
   AppBookingsBookingIdRoute: typeof AppBookingsBookingIdRoute
@@ -543,10 +583,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppAvailabilityRoute: AppAvailabilityRoute,
   AppBalanceRoute: AppBalanceRoute,
   AppBookingsRoute: AppBookingsRoute,
+  AppCalendarRoute: AppCalendarRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppNotificationsRoute: AppNotificationsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
+  AppStudentResourcesRoute: AppStudentResourcesRoute,
   AppTutorBookingsRoute: AppTutorBookingsRoute,
   AppTutorsRoute: AppTutorsRoute,
   AppBookingsBookingIdRoute: AppBookingsBookingIdRoute,

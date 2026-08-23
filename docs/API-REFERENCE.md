@@ -4,11 +4,36 @@ Last updated: 2026-08-23
 
 ## Overview
 
-All API endpoints use **POST** method (oRPC convention). Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`.
+All oRPC endpoints use **POST** method. Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`. The protected Knowledge Bank file proxy is the documented exception and uses `GET`.
 
 The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures.
 
 The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract.
+
+## Authenticated Editorial Content (`content.*`)
+
+Sanity is queried only by the API server. The browser receives normalized content through protected procedures; Knowledge Bank asset URLs are intentionally omitted from list responses.
+
+### `content.listCompetitions`
+
+- **Auth:** Protected
+- **Input:** None
+- **Output:** `[{ id, title, description, location, categories: [{ id, name, coreCategory }], educationLevels, startDate, endDate, scale, organizer, registrationDeadline, registrationLink, socialMediaLink }]`
+- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA.
+
+### `content.listStudentResources`
+
+- **Auth:** Student
+- **Input:** None
+- **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
+- **Description:** Returns published Knowledge Bank metadata only when the student's total Marks balance meets the 35-Mark threshold. Held Marks count toward eligibility. Below the threshold, `items` is empty and the access state explains the lock.
+
+### `GET /content/student-resources/:resourceId/file`
+
+- **Auth:** Student with current total balance at or above the threshold
+- **Input:** `resourceId` path parameter
+- **Output:** Streamed Sanity file, normally `application/pdf`
+- **Description:** Revalidates the session and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. This is an Elysia file route, not an oRPC procedure.
 
 ### Verification
 
@@ -337,8 +362,8 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **RPC path:** `/rpc/achievements/listApproved`
 - **Auth:** Public
 - **Input:** None
-- **Output:** `{ items: Achievement[] }` — approved + visible achievements with the owner's `displayName` attached (public landing, F16)
-- **Description:** Returns approved and visible achievements for the public landing page; rejected/pending achievements are never exposed
+- **Output:** `{ items: Achievement[] }` — approved + visible achievements with the owner's `displayName` attached (public procedure retained for a future/public academy surface)
+- **Description:** Returns approved and visible achievements; rejected/pending achievements are never exposed. The app root now redirects to login, so no active app landing page consumes this procedure.
 
 ### `achievement.list`
 
@@ -405,17 +430,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `wallet.knowledgeBankEligible`
 
-- **Auth:** Protected
+- **Auth:** Student
 - **Input:** None
 - **Output:** `{ eligible, balance, threshold }`
 - **Description:** Checks Knowledge Bank gating (min balance threshold); eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, per PRD DL-16 / U13). No Marks are deducted.
-
-### `wallet.competitionCalendarLink`
-
-- **Auth:** Protected
-- **Input:** None
-- **Output:** `{ url }`
-- **Description:** Returns the external competition-calendar link
 
 > Note: `hold`/`release`/`deduct`/`credit`/`compensate` are service-layer methods only — they are not exposed over RPC; other modules call them via consumer-driven ports.
 

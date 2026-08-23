@@ -303,12 +303,7 @@ function KnowledgeBankCard({ eligible }: { eligible: boolean }) {
           nativeButton={false}
           render={
             eligible ? (
-              <a
-                href="https://knowledge.cogito.academy"
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Open Knowledge Bank"
-              />
+              <Link to="/student-resources" aria-label="Open Knowledge Bank" />
             ) : (
               <Link to="/balance" aria-label="View Marks balance" />
             )
@@ -357,12 +352,7 @@ function CompetitionCalendarCard() {
           className="mt-4 -ml-3"
           nativeButton={false}
           render={
-            <a
-              href="https://cogitoacademy.id/en/calendar"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open competition calendar"
-            />
+            <Link to="/calendar" aria-label="Open competition calendar" />
           }
         >
           Explore calendar <IconArrowRight />

@@ -77,7 +77,7 @@ The recommended Phase 0 scope is:
 \hline
 \textbf{Document Title} & Cogito Platform Phase 0 --- Product Requirements Document \\
 \hline
-\textbf{Document Version} & 1.6 \\
+\textbf{Document Version} & 1.7 \\
 \hline
 	\textbf{Document Status} & Client-aligned revision \\
 \hline
@@ -129,6 +129,8 @@ The recommended Phase 0 scope is:
 \hline
 1.6              & August 22, 2026  & Added the admin-managed active Cogito take schedule, optimistic versioning, auditability, future-booking effective date, and immutable economic snapshots for existing bookings. \\
 \hline
+1.7              & August 23, 2026  & Moved Competition Calendar and Knowledge Bank delivery into the authenticated app while retaining Sanity as the editorial source of truth; the bilingual academy landing page now uses login CTAs with return paths. \\
+\hline
 \end{tabular}
 
 \section{Document Governance}
@@ -176,7 +178,7 @@ DL-01 & May 28, 2026 & Phase 0 is an operating platform, not a marketing site. &
 \hline
 DL-02 & May 28, 2026 & Parent account and dedicated parent dashboard are deferred from Phase 0. & Final \\
 \hline
-DL-03 & May 28, 2026 & Competition Calendar and Knowledge Bank remain external systems and are not rebuilt in Phase 0. & Final \\
+DL-03 & August 23, 2026 & Competition Calendar and Knowledge Bank are delivered inside the authenticated app, while Sanity remains the editorial source of truth and the bilingual academy landing page remains the public CTA surface. & Final \\
 \hline
 DL-04 & May 28, 2026 & The Marks ledger is immutable and every balance change creates a new ledger entry. & Final \\
 \hline
@@ -290,7 +292,7 @@ The goal of Phase 0 is to deliver one complete, reliable loop:
 	\item achievements dashboard CTA / submission flow,
 	\item tutor availability and incoming booking tools,
 	\item admin monitoring, override, and reconciliation tools,
-	\item practical links to existing Competition Calendar and Knowledge Bank,
+\item authenticated Competition Calendar and Knowledge Bank app surfaces backed by the existing Sanity content,
 	\item support button to Cogito Academy WhatsApp (+62 881-0119-90195).
 \end{itemize}
 
@@ -302,12 +304,12 @@ The goal of Phase 0 is to deliver one complete, reliable loop:
 	\item rich progress reporting and advanced analytics,
 	\item referral system and watchlists,
 	\item free diagnostic sessions,
-	\item rebuilding Knowledge Bank content inside the new app,
+\item a separate public Knowledge Bank page outside the authenticated app,
 	\item inviting non-registered users into group classes,
 	\item AI-based long-term ecosystem modules,
 	\item subscription billing or recurring membership plans,
 	\item automated external bank or disbursement-provider payout integration unless separately approved,
-	\item rebuilding Competition Calendar or Knowledge Bank content inside the new app,
+\item a second editorial database for Competition Calendar or Knowledge Bank content,
 	\item mobile app delivery for Phase 0.
 \end{itemize}
 
@@ -334,9 +336,9 @@ Wallet, booking, and refund copy should remain parent-legible even without a ded
 \hline
 \textbf{Surface} & \textbf{Required screens / behavior} \\
 \hline
-Public & Existing public landing page remains in place; approved achievements may be surfaced there. Competition Calendar remains publicly accessible as a public website page. \\
+Public & Existing bilingual public landing page remains in place; approved achievements may be surfaced there. Calendar and Knowledge Bank CTAs send visitors to app login with an internal return path; the content itself is authenticated. \\
 \hline
-Student & Login / signup, dashboard, wallet and Marks purchase, tutor discovery, tutor profile, solo and group booking flow, booking detail / history, report tutor lateness / no-show action, notifications, achievements submission, Competition Calendar dashboard entry, Knowledge Bank button, and WhatsApp support button. Public signup creates student / default access only and cannot create tutor access. \\
+Student & Login / signup, dashboard, wallet and Marks purchase, tutor discovery, tutor profile, solo and group booking flow, booking detail / history, report tutor lateness / no-show action, notifications, achievements submission, authenticated Competition Calendar, 35-Mark-gated Knowledge Bank, and WhatsApp support button. Public signup creates student / default access only and cannot create tutor access. \\
 \hline
 Tutor & Invite acceptance, account claim, onboarding, dashboard, IDR honorarium setup and breakdown, payout request / payroll status, availability management, incoming bookings, booking detail, reschedule proposal, session completion, and session notes. \\
 \hline
@@ -434,9 +436,9 @@ Moderate achievements & No & No & Yes & Approve, reject, archive, or restore as 
 	\hline
 	FR-10           & As an admin, I want monitoring and override tools so exceptions do not block operations.                               & \textbf{Requirement:} The system shall provide admin visibility into bookings, wallet states, emergency overrides, and reconciliation actions. \newline \textbf{Acceptance:} Admin can inspect booking and ledger records, apply corrections or emergency overrides only for defined emergency cases, retain an auditable change trail, and see exception reports sorted by urgency. Every emergency override must record reason, actor, affected Marks, and user-visible outcome.                                                                                                                                                                                                                                                                                        \\
 	\hline
-	FR-11           & As a user, I want access to Competition Calendar without rebuilding it in the new app.                                 & \textbf{Requirement:} The system shall expose Competition Calendar on the public Cogito Academy website and inside the student dashboard while keeping the current content source of truth. \newline \textbf{Acceptance:} Public visitors can open the current calendar at \texttt{cogitoacademy.id/en/calendar}; signed-in students can also open the same calendar from the dashboard without any Marks condition; the existing website / CMS remains authoritative.                                                                                                                                                                                                                                                                                                                                         \\
+FR-11           & As a user, I want access to Competition Calendar after signing in.                                 & \textbf{Requirement:} The system shall expose the published Competition Calendar inside the authenticated app for every signed-in role while keeping Sanity as the editorial source of truth. The bilingual public academy site shall provide login CTAs with a calendar return path. \newline \textbf{Acceptance:} A signed-in user can browse the English app calendar without a Marks condition; public academy calendar URLs redirect to app login; the existing Sanity content remains authoritative.                                                                                                                                                                                                                                                                                                                                         \\
 	\hline
-FR-12           & As a student, I want clear Knowledge Bank access rules so I know when content is available.                                           & \textbf{Requirement:} The system shall link to the existing Knowledge Bank and gate student access by login plus wallet threshold. \newline \textbf{Acceptance:} Knowledge Bank access is available only after signing into the student dashboard and only if the student's wallet has at least 35 Marks. The UI must state clearly that 35 Marks is a minimum wallet-balance requirement, not a 35-Mark access fee, and opening the Knowledge Bank must not deduct Marks.                                                                                                                                                                                                                                                                                                                                                                 \\
+FR-12           & As a student, I want clear Knowledge Bank access rules so I know when content is available.                                           & \textbf{Requirement:} The system shall provide the Knowledge Bank inside the authenticated app, backed by the existing Sanity source, and gate student access by login plus wallet threshold. \newline \textbf{Acceptance:} Knowledge Bank access is available only after signing into the student dashboard and only if the student's wallet has at least 35 Marks. The UI must state clearly that 35 Marks is a minimum wallet-balance requirement, not a 35-Mark access fee, opening the Knowledge Bank must not deduct Marks, and resource files must be served only through an authenticated app path.                                                                                                                                                                                                                                                                                                                                                                 \\
 	\hline
 	FR-13           & As support staff, I want the system to preserve history so disputes can be reviewed later.                             & \textbf{Requirement:} The system shall preserve booking and wallet history for support and dispute handling. \newline \textbf{Acceptance:} Historical booking and ledger records remain queryable and linked to the relevant student, tutor, and payment references.                                                                                                                                                                                                                                                                                                                                             \\
 	\hline
@@ -1352,7 +1354,7 @@ The PRD is ready for development handoff. The build should proceed with the foll
 	\item \textbf{Late cancel / no-show}: a late change after H-2 that is blocked by default and may trigger Marks deduction.
 	\item \textbf{Critical notification}: a booking, payment, refund, or schedule-change event that also sends email.
 	\item \textbf{Achievements}: student-submitted items that may be moderated before public display.
-	\item \textbf{External content source of truth}: the existing website / CMS that continues to own Competition Calendar and Knowledge Bank content.
+\item \textbf{Editorial content source of truth}: the existing Sanity CMS that owns Competition Calendar and Knowledge Bank content, with authenticated app delivery.
 \end{itemize}
 
 \subsection{Booking Flow Diagrams}

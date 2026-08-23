@@ -17,6 +17,7 @@ The frontend form-control refactor remains outside this service boundary. Selia 
 Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
 The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning, while the sticky desktop rail surfaces available booking actions above Marks. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+Editorial content integration is also read-only: Sanity remains the source of truth, while the app's API enforces session/role/Marks access before returning content or streaming Knowledge Bank files. The academy's bilingual presentation is resolved to English in the server projection; the authenticated app does not carry a locale selector for these surfaces.
 
 | File                  | Purpose                                                  |
 | --------------------- | -------------------------------------------------------- |
@@ -27,6 +28,34 @@ The booking-detail overview keeps format/access and participant profile/name/sta
 | `{module}.handler.ts` | DI factory: adapts `{ context, input }` to service calls |
 | `{module}.router.ts`  | oRPC route definitions with auth middleware              |
 | `index.ts`            | `createModule()` factory, exports public API             |
+
+---
+
+## Content Module
+
+**Purpose:** Deliver published Competition Calendar and Knowledge Bank content from Sanity to authenticated app users without duplicating editorial documents into PostgreSQL.
+
+**Files:**
+
+- `content.types.ts` — normalized competition/resource/file projections and the resource-id input shape
+- `content.service.ts` — server-side Sanity client, published-perspective GROQ queries, English localization fallback, and asset metadata lookup
+- `content.handler.ts` — protected competition read and student-only Knowledge Bank threshold gate
+- `content.router.ts` — `content.listCompetitions` and `content.listStudentResources`
+- `index.ts` — `createContentModule({ wallet, client? })` composition factory
+- `apps/server/src/routes.ts` — authenticated PDF streaming proxy for resource files
+
+**Service Methods:**
+
+- `listCompetitions()` — returns published competitions ordered by start date with English title/description/location projections
+- `listStudentResources()` — returns resource metadata without asset URLs
+- `getStudentResourceFile(resourceId)` — resolves the published asset URL and file metadata for the already-authorized proxy
+
+**Business Rules:**
+
+- Sanity is queried with `perspective: "published"`; the API token, if used, stays server-side.
+- Competition Calendar requires an authenticated session but is not Marks-gated.
+- Knowledge Bank requires the student role and `wallet.knowledgeBankEligible`; the existing 35-Mark total-balance rule includes held Marks.
+- Resource files are streamed through the app with private/no-store headers. Raw Sanity asset URLs are never returned by the list procedure.
 
 ---
 
@@ -46,7 +75,7 @@ The booking-detail overview keeps format/access and participant profile/name/sta
 **Service Methods:**
 
 - `list(userId)` — Returns achievements for a user
-- `listApprovedPublic()` — Returns approved + visible achievements with the owner's display name for the public landing (F16)
+- `listApprovedPublic()` — Returns approved + visible achievements with the owner's display name for a future/public academy surface (F16; no active app landing route)
 - `create(userId, input)` — Creates achievement in `pending` status
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
@@ -750,7 +779,7 @@ The booking-detail overview keeps format/access and participant profile/name/sta
 - `wallet.errors.ts` — `WalletNotFoundError`, `InsufficientBalanceError`
 - `wallet.repo.ts` — Atomic operations: `atomicHold`, `atomicRelease`, `atomicDeduct`, `atomicCredit`, `atomicCompensateCredit`, `atomicCompensateDeduct`, plus `insertLedger`, `findLedgerEntries`
 - `wallet.service.ts` — `getOrCreate`, `hold`, `release`, `deduct`, `credit`, `compensate`, `listLedger`, `knowledgeBankEligible`, `listActivePackages`
-- `wallet.handler.ts` — `get`, `listLedger`, `listPackages`, `knowledgeBankEligible`, `competitionCalendarLink`
+- `wallet.handler.ts` — `get`, `listLedger`, `listPackages`, `knowledgeBankEligible`
 - `wallet.router.ts` — Protected routes
 
 **Service Methods:**
