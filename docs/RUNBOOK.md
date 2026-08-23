@@ -57,6 +57,10 @@ Open an online booking detail and verify the overview shows date/time first, the
 
 On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
 
+### Achievement form smoke check
+
+As a student, open `/achievements`, choose **Add Achievement**, and verify the Category and Level selects open above the modal and update their triggers. Open **Awarding Date**, confirm the calendar is visible above the modal, select a day, and verify the trigger shows the chosen date. Open the calendar month/year dropdowns as well; each popup must remain clickable and must not be hidden behind the dialog backdrop. This is a UI-only check; the existing `achievement.create` input and `awardingDate` contract remain unchanged.
+
 On a completed booking, verify the Session notes card is visible to both tutor and student. Select text and exercise bold, italic, heading, paragraph, bullet, numbered-list, and safe-link actions; confirm the live preview matches the persisted note after reload, the author label distinguishes your note from the other participant's note, and an attempted `<script>` or `javascript:` link is removed by the render sanitizer.
 
 For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount and Marks holds unchanged, and creates a notification for that invitee. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply.

@@ -624,6 +624,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.12 (2026-08-23): Fixed the shared Selia portal layer for `DatePicker` and `SelectPopup` so achievement-form date, Category, Level, and calendar month/year controls remain above modal dialogs and clickable. No RPC, schema, or persistence contract changed.
 - v1.11 (2026-08-22): Moved available Booking actions above Marks in the sticky desktop rail while keeping session notes/support reports in the main content flow. Narrow layouts place actions and Marks before Activity. No booking API or state-machine contract changed.
 - v1.10 (2026-08-22): Moved format/access and participant identity details into the booking detail overview. The overview keeps meeting/room access prominent, shows participant images/names/roles/statuses in a responsive list, and leaves only Marks in the sticky metadata rail. No booking API or state-machine contract changed.
 - v1.10a (2026-08-22): Replaced app-level browser-native date/time/number/select/textarea controls with Selia wrappers and the shared minute-level date/time primitives. This is a UI-only refactor; RPC, schema, and state-machine contracts are unchanged.

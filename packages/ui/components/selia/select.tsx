@@ -325,6 +325,7 @@ export function SelectPopup({
     <BaseSelect.Portal>
       <BaseSelect.Backdrop />
       <BaseSelect.Positioner
+        className="z-[1000]"
         align={align}
         alignOffset={alignOffset}
         side={side}

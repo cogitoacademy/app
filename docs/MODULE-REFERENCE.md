@@ -12,7 +12,7 @@ Google OAuth is enabled only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SEC
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
 
-The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts.
+The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
 
 Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
@@ -91,6 +91,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Achievements start in `pending` status
 - Only the owning student can create/update/delete their achievements
 - `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available only to the owner/admin workflows, while `documentationUrl` is optional public-safe documentation
+- The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
 - Optimistic locking prevents lost updates (`version` field)
 - Admin review changes status to `approved` or `rejected`
 

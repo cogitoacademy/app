@@ -290,7 +290,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 - `adminList`, `adminReview`
 - `listApproved` (public — retained for a future/public academy achievement surface; the app root now redirects to login)
 - Verification evidence is owner/admin-only; optional activity documentation is the public-safe image.
-- The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell.
+- The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell. Its portal-based date picker and Category/Level selects render above the achievement dialog so students can interact with every popup control.
 
 ### Wallet Module (protected)
 
@@ -450,7 +450,7 @@ Tutor booking review uses a compact responsive accept/decline dialog. The accept
 
 Booking cancellation and session completion also use in-app Selia confirmation dialogs. Global success/error toasts render above dialog layers so mutation feedback remains visible while a modal is open; native browser confirmation prompts are not used.
 
-Form controls use Selia wrappers for multiline text, numeric amounts, calendar dates, and minute-level times. App-level raw browser date/time/number/select/textarea controls are not used; the wrappers retain semantic native elements underneath for accessibility and form behavior.
+Form controls use Selia wrappers for multiline text, numeric amounts, calendar dates, and minute-level times. App-level raw browser date/time/number/select/textarea controls are not used; the wrappers retain semantic native elements underneath for accessibility and form behavior. Portal-based Selia popups use an overlay layer above dialogs, including date and select controls inside the student achievement form.
 
 **Tracked PRD product surfaces are complete:** group/series booking UI, reschedule accept/reject, lateness/no-show reporting, public achievements, F1 admin operations, F9 rich-text session notes, F18 proposer-side invite withdrawal, J2 session-expiry warning, and the dead-component cleanup are implemented. Backend support for the related workflows (G1/G6 and the existing booking procedures) has landed. Operational follow-ups remain in `docs/plans/active/DEFERRED-OPS-TASKS.md`.
 

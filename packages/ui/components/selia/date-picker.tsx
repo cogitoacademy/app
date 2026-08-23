@@ -67,10 +67,10 @@ export function DatePicker({
         </span>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Positioner align="start" sideOffset={4}>
+        <Popover.Positioner align="start" sideOffset={4} className="z-[1000]">
           <Popover.Popup
             className={cn(
-              "z-50 bg-popover text-popover-foreground",
+              "z-[1000] bg-popover text-popover-foreground",
               "border border-popover-border rounded-xl",
               "shadow-popover outline-none",
               "data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
