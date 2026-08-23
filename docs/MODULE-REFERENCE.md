@@ -16,6 +16,8 @@ The frontend form-control refactor remains outside this service boundary. Selia 
 
 Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
+The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning, while the sticky desktop rail surfaces available booking actions above Marks. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+
 | File                  | Purpose                                                  |
 | --------------------- | -------------------------------------------------------- |
 | `{module}.types.ts`   | Zod input/output schemas                                 |
