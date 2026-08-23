@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+
+import { env } from "@cogito-app/env/server";
+
 import {
   assertPasswordPolicy,
   auth,
@@ -108,7 +111,9 @@ describe("auth email hooks", () => {
       calls.push(params);
     });
     await sendWelcome(user);
-    expect(calls).toEqual([{ user, loginUrl: "http://localhost:3000/login" }]);
+    expect(calls).toEqual([
+      { user, loginUrl: `${env.CORS_ORIGIN.replace(/\/$/, "")}/login` },
+    ]);
   });
 
   test("welcome hook swallows sender failures", async () => {

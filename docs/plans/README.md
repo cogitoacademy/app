@@ -4,9 +4,7 @@
 
 | Plan                                                    | Branch                               | PR  | Status                                                                                                    |
 | ------------------------------------------------------- | ------------------------------------ | --- | --------------------------------------------------------------------------------------------------------- |
-| [WAVE-6-REVIEW-FIXES.md](active/WAVE-6-REVIEW-FIXES.md) | `fix/wave6-review-fixes` (future PR) | —   | Active — H1–H3/M1–M5/L1–L2 open, L3 partial; N1–N4 added (2026-08-19)                                     |
-| [PRD-GAPS-PHASE3.md](active/PRD-GAPS-PHASE3.md)         | main (merged)                        | —   | All U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                     |
-| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md)   | main (merged #55)                    | —   | F8/F13/F14/F16 closed (REVIEW-FIXES-3 P6); F2/F3/F6/F7/F11/F17 closed (merged #55); F1/F9/F12/F18 partial |
+| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md)   | main (merged #55)                    | —   | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface             |
 | [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md)   | main (post-merge)                    | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending        |
 
 ## Completed (merged to main)
@@ -30,6 +28,8 @@
 | [REVIEW-FIXES-4-AGENT-PROMPT.md](completed/REVIEW-FIXES-4-AGENT-PROMPT.md)                         | main (merged #77)                  | —                                              |
 | [TUTOR-INVITE-HARDENING.md](completed/TUTOR-INVITE-HARDENING.md)                                   | main (merged #55)                  | —                                              |
 | [BACKEND-CLEANUP.md](completed/BACKEND-CLEANUP.md)                                                 | main (merged)                      | —                                              |
+| [PRD-GAPS-PHASE3.md](completed/PRD-GAPS-PHASE3.md)                                                   | main (merged)                      | Completed 2026-08-17 — all U-items closed      |
+| [WAVE-6-REVIEW-FIXES.md](completed/WAVE-6-REVIEW-FIXES.md)                                             | `fix/wave6-a` / `fix/wave6-b` / `fix/wave6-c` | #82–#84 — all findings fixed and merged |
 | [COVERAGE-100.md](completed/COVERAGE-100.md)                                                       | `f/booking-list-refactor` (PR #93) | Completed 2026-08-23 — 100% line coverage gate |
 
 ## Archive (superseded / historical)

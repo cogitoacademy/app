@@ -2,11 +2,11 @@
 
 | Field      | Value                                                                               |
 | ---------- | ----------------------------------------------------------------------------------- |
-| Status     | Active — all U-items closed (verified 2026-08-17; U9 closed by REVIEW-FIXES-4 P2.8) |
-| Branch     | main (future PRs)                                                                   |
+| Status     | **Completed (2026-08-17)** — all U-items closed; U9 closed by REVIEW-FIXES-4 P2.8  |
+| Branch     | main (merged)                                                                      |
 | Created    | 2026-08-14 (audit of git HEAD `ec8b16c`, post-#46)                                  |
 | Depends on | #36/#39–#43 (G1–G20) + #46 (BACKEND-HARDENING-PHASE2) merged to main                |
-| Next       | After this spec: `BACKEND-CLEANUP.md`, then FRONTEND-GAPS-SPEC                      |
+| Next       | Follow-up operational work is tracked in `DEFERRED-OPS-TASKS.md`                    |
 | Scope      | Backend-only                                                                        |
 
 This spec catalogs the PRD requirements the backend **does not yet implement** that were found by the 2026-08-14 PRD-vs-code audit (read `docs/prd.tex` FR/DL/TC references and compare against code at HEAD `ec8b16c`). Statuses re-verified against code at `6c80391` (2026-08-17): **U9 (support SLA business-hours) was the only remaining Partial** — closed by `REVIEW-FIXES-4.md` P2.8 (H5): business-hours WIB SLA computation + auto-ack + escalation hook landed (WhatsApp adapter itself remains out of scope). Every other U-item is closed/implemented (U1–U8, U10–U14), the last tranche by `REVIEW-FIXES-3.md` P5 (merged via #64) and `P6` (#65).

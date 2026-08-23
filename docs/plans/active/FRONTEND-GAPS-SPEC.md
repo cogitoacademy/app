@@ -122,7 +122,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                         | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal                                                      |
 | F19 | Admin economy rate-control UI                 | FR-05, DL-29           | Economy module + migration 0028             | 1d     | **Closed** — active schedule editor and all-role E2E coverage                                                                  |
 
-**Total estimated effort: ~0 days for remaining tracked gaps (F1, F9, and F18 are closed).**
+**Total estimated effort: ~0 days for remaining tracked gaps (F1–F19 are closed).**
 
 > **Audit 2026-08-14:** F4, F5, F10, F15 verified **closed** in `apps/web` (git HEAD `9b7df5e`). F8, F16, F17 remain partial. All remaining missing gaps have backend procedures ready except F13 (needs new `tutor.getMyPayouts` router) and F16 (needs a new public achievement list procedure).
 
@@ -142,7 +142,8 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > - **F12 → Closed** — `admin-operations-page.tsx` now consumes `room.listPendingApprovals` for offline bookings in `awaiting_admin_room_approval`; admins can assign the requested room, load a booking to choose another room (or use the existing relocate operation), and cancel the pending approval. The backend queue also includes requested-room conflicts with no `room_booking` row.
 > - **F18 → Closed (2026-08-22 follow-up)** — invitee confirm/decline/reconfirm plus proposer-side pending-invite withdrawal are wired. The new `booking.withdrawInvite` procedure marks only a pending invitee `withdrawn_pre_h2`, preserves headcount/holds, and notifies the target.
 > - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
-> - **Dead components → still present** — `chart.tsx`, `data.ts`, `user-menu.tsx` have 0 importers in `apps/web/src`.
+> - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
+> - **Dead components → Closed** — the previously unused `chart.tsx`, `data.ts`, and `user-menu.tsx` files were removed; no references remain in `apps/web/src`.
 
 ---
 
@@ -511,7 +512,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-22).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, contextual actions, and a readable vertical transition timeline in the main flow, with session access, Marks, and participant metadata in a sticky desktop rail. Participant avatars use saved images when available, Marks amounts use the Cogito mark prefix, and online meeting-pending/failed states explain when the link is generated and when retries are active. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted.
+**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-22).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and available booking actions, with actions above Marks in the sticky desktop rail and notes/support/activity in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. No booking API or state-machine contract changed.
 
 **Required:**
 
@@ -559,7 +560,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** J2 (foundation-hardening), session expiry (7 days)
 
-**Current state:** **LAZY HANDLING ONLY (2026-08-19).** No proactive expiry UX. `_app.tsx` `beforeLoad` calls `getSession()` and redirects when the session is gone; `orpc.ts` `QueryCache` redirects on 401/403 with `reason=session-expired`. There is no countdown, toast, or pre-expiry warning.
+**Current state:** **CLOSED (2026-08-22).** `SessionExpiryNotice` is mounted in the authenticated shell, warns during the final 30 minutes, and redirects through the existing `reason=session-expired` fallback when the session is gone.
 
 **Required:**
 
@@ -577,11 +578,9 @@ Full override form per PRD §Emergency Override UI/UX:
 
 ### Dead Components Cleanup
 
-**Current state (2026-08-19):** Three components still have **0 importers** in `apps/web` and are candidates for removal:
+**Current state:** **CLOSED (2026-08-22).** The previously unused components were removed after a repo-wide importer check; no references remain in `apps/web`:
 
-- `chart.tsx`
-- `data.ts`
-- `user-menu.tsx`
+- `chart.tsx`, `data.ts`, and `user-menu.tsx`
 
 **Required:**
 
@@ -617,7 +616,9 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
-- v1.10 (2026-08-22): Replaced app-level browser-native date/time/number/select/textarea controls with Selia wrappers and the shared minute-level date/time primitives. This is a UI-only refactor; RPC, schema, and state-machine contracts are unchanged.
+- v1.11 (2026-08-22): Moved available Booking actions above Marks in the sticky desktop rail while keeping session notes/support reports in the main content flow. Narrow layouts place actions and Marks before Activity. No booking API or state-machine contract changed.
+ - v1.10 (2026-08-22): Moved format/access and participant identity details into the booking detail overview. The overview keeps meeting/room access prominent, shows participant images/names/roles/statuses in a responsive list, and leaves only Marks in the sticky metadata rail. No booking API or state-machine contract changed.
+- v1.10a (2026-08-22): Replaced app-level browser-native date/time/number/select/textarea controls with Selia wrappers and the shared minute-level date/time primitives. This is a UI-only refactor; RPC, schema, and state-machine contracts are unchanged.
 - v1.9 (2026-08-22): Tutor discovery category and child-subject filters now support multi-select values with label-preserving triggers and normalized array filters.
 - v1.8 (2026-08-22): Refined booking detail participants, Marks prefix, activity timeline, and online meeting status. The detail page uses profile images with initials fallback, a newest-first activity line with transition-specific icons and one destination-state badge, 30–60 second refresh while a meeting link is pending, and explicit copy for `confirmed` provider retries. The meeting providers now update the newest meeting-attempt row for manual-link fallback, and the booking read model never reports a URL-less row as `ready`.
 - v1.7 (2026-08-22): Replaced booking cancel/complete browser confirmation prompts with Selia dialogs and raised the global toast layer above dialog overlays so mutation feedback remains visible. No booking API or state-machine contract changed.
