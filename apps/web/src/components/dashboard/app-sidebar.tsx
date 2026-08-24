@@ -32,6 +32,7 @@ import {
   IconHome,
   IconLibrary,
   IconLogout,
+  IconRoute,
   IconSelector,
   IconShieldCheck,
   IconTimelineEventText,
@@ -70,6 +71,11 @@ const adminNavItems = [
 
 const resourceItems = [
   {
+    to: "/guide",
+    label: "How it works",
+    icon: IconRoute,
+  },
+  {
     to: "/calendar",
     label: "Competition Calendar",
     icon: IconCalendarEvent,
@@ -106,7 +112,7 @@ export function AppSidebar({
   const profilePath = role === "tutor" ? "/onboarding" : "/profile";
   const profileLabel = role === "tutor" ? "My Profile" : "Profile";
   const visibleResourceItems =
-    role === "student" ? resourceItems : [resourceItems[0]];
+    role === "student" ? resourceItems : resourceItems.slice(0, 2);
 
   function signOut() {
     authClient.signOut({

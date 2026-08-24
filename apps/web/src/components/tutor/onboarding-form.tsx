@@ -200,16 +200,18 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
   const submitMutation = useMutation(
     orpc.tutor.submitForReview.mutationOptions({
-      onSuccess: () => {
+      onSuccess: async () => {
         toastManager.add({
           title: "Profile submitted for review!",
           type: "success",
         });
-        void queryClient.invalidateQueries({
-          queryKey: orpc.tutor.getMyProfile.key(),
-        });
-        void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
-        void navigate({ to: "/dashboard" });
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orpc.tutor.getMyProfile.key(),
+          }),
+          queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() }),
+        ]);
+        await navigate({ to: "/dashboard", replace: true });
       },
       onError: (error: unknown) => {
         const message =

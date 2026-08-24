@@ -29,6 +29,7 @@ const routeTitles: Record<string, string> = {
   "/admin-economy": "Economy Settings",
   "/calendar": "Competition Calendar",
   "/student-resources": "Knowledge Bank",
+  "/guide": "How Cogito Works",
 };
 
 export const Route = createFileRoute("/_app")({

@@ -31,6 +31,7 @@
 | [PRD-GAPS-PHASE3.md](completed/PRD-GAPS-PHASE3.md)                                                 | main (merged)                                 | Completed 2026-08-17 — all U-items closed      |
 | [WAVE-6-REVIEW-FIXES.md](completed/WAVE-6-REVIEW-FIXES.md)                                         | `fix/wave6-a` / `fix/wave6-b` / `fix/wave6-c` | #82–#84 — all findings fixed and merged        |
 | [COVERAGE-100.md](completed/COVERAGE-100.md)                                                       | `f/booking-list-refactor` (PR #93)            | Completed 2026-08-23 — 100% line coverage gate |
+| [INTERACTIVE-GUIDE.md](completed/INTERACTIVE-GUIDE.md)                                               | main                                         | Completed 2026-08-23 — role-aware visual product guide |
 
 ## Archive (superseded / historical)
 

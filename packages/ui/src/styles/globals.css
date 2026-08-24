@@ -4,6 +4,7 @@
 @source "../../components/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 @import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -186,8 +187,8 @@
 @theme inline {
   --font-sans: "Inter Variable", sans-serif;
   --font-mono:
-    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+    "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -330,6 +331,13 @@
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
+}
+
+@layer base {
+  .font-mono {
+    font-variant-ligatures: common-ligatures contextual;
+    font-feature-settings: "liga" 1, "calt" 1;
+  }
 }
 
 @layer base {

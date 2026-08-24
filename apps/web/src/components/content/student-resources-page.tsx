@@ -201,7 +201,7 @@ export function StudentResourcesPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredItems.map((resource) => (
               <Card key={resource.id} className="flex flex-col">
-                <CardHeader className="items-start!">
+                <CardHeader className="h-full items-start!">
                   <div className="flex items-start justify-between gap-3">
                     <CardTitle className="line-clamp-2">
                       {resource.title}
@@ -215,7 +215,7 @@ export function StudentResourcesPage() {
                       "Curated Cogito learning material."}
                   </CardDescription>
                 </CardHeader>
-                <CardBody className="mt-auto flex items-center justify-between gap-3 pt-0!">
+                <CardBody className="flex items-center justify-between gap-3">
                   <Badge variant="secondary" size="sm">
                     {getCategoryLabel(resource.category)}
                   </Badge>

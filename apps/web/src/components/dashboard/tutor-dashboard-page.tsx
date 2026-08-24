@@ -5,11 +5,9 @@ import { Link } from "@tanstack/react-router";
 import {
   IconArrowRight,
   IconCalendarCheck,
-  IconCalendarEvent,
   IconClock,
   IconCoins,
   IconInbox,
-  IconSparkles,
   IconUserCheck,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -27,22 +25,19 @@ import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
+import { EmptyState } from "@/components/empty-state";
+import {
+  isUpcomingBooking,
+  NextLessonSection,
+  type BookingCardData,
+} from "@/components/booking/booking-card";
+import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
 import {
   formatBookingDate,
   getBookingStateLabel,
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
-import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
-
-const TERMINAL_STATES = new Set([
-  "completed",
-  "cancelled",
-  "late_cancelled",
-  "declined",
-  "no_show",
-  "expired",
-]);
 
 export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   const bookings = useQuery(
@@ -52,52 +47,44 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   const profile = useQuery(orpc.tutor.getMyProfile.queryOptions());
   const payouts = useQuery(orpc.tutor.getMyPayouts.queryOptions({ input: {} }));
 
-  const items = bookings.data?.items ?? [];
+  const items = (bookings.data?.items ?? []) as BookingCardData[];
   const reviewQueue = items.filter(
     (booking) => booking.currentState === "awaiting_tutor_review",
   );
   const upcoming = items
-    .filter(
-      (booking) =>
-        !TERMINAL_STATES.has(booking.currentState) &&
-        new Date(booking.scheduledEndAt).getTime() >= Date.now(),
-    )
+    .filter((booking) => isUpcomingBooking(booking))
     .toSorted(
       (a, b) =>
         new Date(a.scheduledStartAt).getTime() -
         new Date(b.scheduledStartAt).getTime(),
     );
   const nextBooking = upcoming[0];
-  const firstName = tutorName.trim().split(/\s+/)[0] || "Tutor";
   const profileStatus = profile.data?.onboardingStatus ?? "draft";
 
   return (
     <Stack direction="column" spacing="lg">
-      <Card className="overflow-hidden bg-primary/10">
-        <CardBody className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <Badge variant="primary" pill>
-              <IconSparkles className="size-3.5" /> Tutor workspace
-            </Badge>
-            <Heading className="mt-4 text-3xl">
-              Welcome back, {firstName}
-            </Heading>
-            <Text className="mt-2 max-w-2xl text-muted">
-              Start with student requests, then keep your next session and
-              teaching availability on track.
-            </Text>
-          </div>
-          <Button
-            nativeButton={false}
-            render={<Link to="/bookings" aria-label="Review bookings" />}
-          >
-            {reviewQueue.length > 0
-              ? `Review ${reviewQueue.length} request${reviewQueue.length === 1 ? "" : "s"}`
-              : "View bookings"}
-            <IconArrowRight />
-          </Button>
-        </CardBody>
-      </Card>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
+        <DashboardWelcomeCard
+          name={tutorName}
+          viewerRole="tutor"
+          reviewCount={reviewQueue.length}
+        />
+
+        <TeachingSetupCard profileStatus={profileStatus} />
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <ReviewRequestsCard
+          isLoading={bookings.isPending}
+          reviewQueue={reviewQueue}
+        />
+
+        <NextLessonSection
+          booking={nextBooking}
+          isLoading={bookings.isPending}
+          viewerRole="tutor"
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -181,112 +168,115 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           </div>
         </CardBody>
       </Card>
-
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
-        <Card>
-          <CardHeader>
-            <IconBox variant="info-subtle">
-              <IconCalendarEvent />
-            </IconBox>
-            <CardTitle>
-              {reviewQueue.length > 0 ? "Requests to review" : "Next session"}
-            </CardTitle>
-            <CardDescription>
-              {reviewQueue.length > 0
-                ? "Student requests waiting for your decision."
-                : "Your nearest active teaching commitment."}
-            </CardDescription>
-            <CardHeaderAction>
-              <Button
-                variant="plain"
-                size="sm"
-                nativeButton={false}
-                render={
-                  <Link to="/bookings" aria-label="View all tutor bookings" />
-                }
-              >
-                View all <IconArrowRight />
-              </Button>
-            </CardHeaderAction>
-          </CardHeader>
-          <CardBody>
-            {bookings.isPending ? (
-              <div className="h-28 animate-pulse rounded-lg bg-accent" />
-            ) : reviewQueue.length > 0 ? (
-              <Stack direction="column" spacing="sm" className="m-0!">
-                {reviewQueue.slice(0, 3).map((booking) => (
-                  <BookingAction
-                    key={booking.id}
-                    booking={booking}
-                    actionLabel="Review request"
-                  />
-                ))}
-              </Stack>
-            ) : nextBooking ? (
-              <BookingAction booking={nextBooking} actionLabel="View session" />
-            ) : (
-              <EmptyState
-                icon={<IconCalendarEvent />}
-                title="No sessions queued"
-                description="New requests and upcoming lessons will appear here."
-                tone="secondary"
-                size="compact"
-                className="rounded-lg"
-              />
-            )}
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <IconBox variant="primary-subtle">
-              <IconUserCheck />
-            </IconBox>
-            <CardTitle>Teaching setup</CardTitle>
-            <CardDescription>
-              Keep your profile and bookable hours ready.
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="flex flex-col gap-3">
-            <div className="flex items-center justify-between rounded-lg bg-accent p-4">
-              <Text className="font-medium">Profile status</Text>
-              <Badge
-                variant={profileStatus === "published" ? "success" : "warning"}
-                pill
-                className="capitalize"
-              >
-                {profileStatus.replaceAll("_", " ")}
-              </Badge>
-            </div>
-            <Button
-              variant="secondary"
-              block
-              nativeButton={false}
-              render={
-                <Link
-                  to="/availability"
-                  aria-label="Manage tutor availability"
-                />
-              }
-            >
-              Manage availability <IconArrowRight />
-            </Button>
-            {profileStatus !== "published" ? (
-              <Button
-                variant="outline"
-                block
-                nativeButton={false}
-                render={
-                  <Link to="/onboarding" aria-label="Complete tutor profile" />
-                }
-              >
-                Complete tutor profile <IconArrowRight />
-              </Button>
-            ) : null}
-          </CardBody>
-        </Card>
-      </div>
     </Stack>
+  );
+}
+
+function TeachingSetupCard({ profileStatus }: { profileStatus: string }) {
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <IconBox variant="primary-subtle">
+          <IconUserCheck />
+        </IconBox>
+        <CardTitle>Teaching setup</CardTitle>
+        <CardDescription>
+          Keep your profile and bookable hours ready.
+        </CardDescription>
+      </CardHeader>
+      <CardBody className="flex flex-col gap-3">
+        <div className="flex items-center justify-between rounded-lg bg-accent p-4">
+          <Text className="font-medium">Profile status</Text>
+          <Badge
+            variant={profileStatus === "published" ? "success" : "warning"}
+            pill
+            className="capitalize"
+          >
+            {profileStatus.replaceAll("_", " ")}
+          </Badge>
+        </div>
+        <Button
+          variant="secondary"
+          block
+          nativeButton={false}
+          render={
+            <Link to="/availability" aria-label="Manage tutor availability" />
+          }
+        >
+          Manage availability <IconArrowRight />
+        </Button>
+        {profileStatus !== "published" ? (
+          <Button
+            variant="outline"
+            block
+            nativeButton={false}
+            render={
+              <Link to="/onboarding" aria-label="Complete tutor profile" />
+            }
+          >
+            Complete tutor profile <IconArrowRight />
+          </Button>
+        ) : null}
+      </CardBody>
+    </Card>
+  );
+}
+
+function ReviewRequestsCard({
+  isLoading,
+  reviewQueue,
+}: {
+  isLoading: boolean;
+  reviewQueue: BookingCardData[];
+}) {
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <IconBox variant="warning-subtle">
+          <IconInbox />
+        </IconBox>
+        <CardTitle>Requests to review</CardTitle>
+        <CardDescription>
+          Student requests waiting for your decision.
+        </CardDescription>
+        <CardHeaderAction>
+          <Button
+            variant="plain"
+            size="sm"
+            nativeButton={false}
+            render={
+              <Link to="/bookings" aria-label="View all tutor bookings" />
+            }
+          >
+            View all <IconArrowRight />
+          </Button>
+        </CardHeaderAction>
+      </CardHeader>
+      <CardBody>
+        {isLoading ? (
+          <div className="h-28 animate-pulse rounded-lg bg-accent" />
+        ) : reviewQueue.length > 0 ? (
+          <Stack direction="column" spacing="sm" className="m-0!">
+            {reviewQueue.slice(0, 3).map((booking) => (
+              <BookingAction
+                key={booking.id}
+                booking={booking}
+                actionLabel="Review request"
+              />
+            ))}
+          </Stack>
+        ) : (
+          <EmptyState
+            icon={<IconInbox />}
+            title="No requests to review"
+            description="New student requests will appear here."
+            size="compact"
+            tone="secondary"
+            className="rounded-lg"
+          />
+        )}
+      </CardBody>
+    </Card>
   );
 }
 
@@ -323,13 +313,10 @@ function BookingAction({
   booking,
   actionLabel,
 }: {
-  booking: {
-    id: string;
-    currentState: string;
-    scheduledStartAt: string | Date;
-    timezone: string;
-    proposer: { name: string } | null;
-  };
+  booking: Pick<
+    BookingCardData,
+    "id" | "currentState" | "scheduledStartAt" | "timezone" | "proposer"
+  >;
   actionLabel: string;
 }) {
   return (
