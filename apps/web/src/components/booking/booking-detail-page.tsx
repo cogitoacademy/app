@@ -32,7 +32,6 @@ import {
   Card,
   CardBody,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
@@ -44,6 +43,13 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
+import {
+  Popover,
+  PopoverDescription,
+  PopoverPopup,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@cogito-app/ui/components/selia/popover";
 import {
   Dialog,
   DialogBody,
@@ -68,6 +74,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   canCancelBooking,
   formatBookingDate,
+  formatBookingDateOnly,
   formatBookingTimeRange,
   getBookingStateDescription,
   getBookingStateLabel,
@@ -255,6 +262,8 @@ export function BookingDetailPage({
   ] as "pending" | "accepted" | "rejected" | undefined;
   const canReview = isTutor && booking.currentState === "awaiting_tutor_review";
   const canComplete = isTutor && booking.currentState === "scheduled";
+  const canCancel =
+    !isTutor && !isAdmin && canCancelBooking(booking.currentState);
   const sessionHasEnded =
     new Date(booking.scheduledEndAt).getTime() <= Date.now();
   const tutorActionPending =
@@ -358,7 +367,7 @@ export function BookingDetailPage({
       </div>
 
       <header className="border-b border-border pb-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch sm:justify-between">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Text className="text-sm font-medium text-muted">
@@ -385,9 +394,68 @@ export function BookingDetailPage({
               </div>
             ) : null}
           </div>
-          <Badge variant={getBookingStateVariant(booking.currentState)} pill>
-            {getBookingStateLabel(booking.currentState)}
-          </Badge>
+          <div className="flex flex-col items-start gap-3 sm:items-end sm:justify-between">
+            <Badge variant={getBookingStateVariant(booking.currentState)} pill>
+              {getBookingStateLabel(booking.currentState)}
+            </Badge>
+            {canReview || canCancel || canProposeReschedule || canComplete ? (
+              <div
+                className="flex w-full flex-col gap-2 sm:mt-auto sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end"
+                role="group"
+                aria-label="Booking actions"
+              >
+                {rescheduleAction}
+                {canReview ? (
+                  <>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setReviewDialog("decline")}
+                      progress={decline.isPending}
+                      disabled={tutorActionPending}
+                    >
+                      Decline request
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setReviewDialog("accept")}
+                      progress={accept.isPending}
+                      disabled={tutorActionPending}
+                    >
+                      Accept booking
+                    </Button>
+                  </>
+                ) : canCancel ? (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={requestCancellation}
+                    progress={cancel.isPending}
+                    disabled={cancel.isPending}
+                  >
+                    Cancel booking
+                  </Button>
+                ) : null}
+                {canComplete ? (
+                  <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
+                    <Text className="max-w-60 text-xs text-muted sm:text-right">
+                      {sessionHasEnded
+                        ? "Confirm completion to settle the held Marks."
+                        : "Completion becomes available after the scheduled end time."}
+                    </Text>
+                    <Button
+                      size="sm"
+                      onClick={completeSession}
+                      progress={complete.isPending}
+                      disabled={!sessionHasEnded || tutorActionPending}
+                    >
+                      Complete session
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -406,65 +474,86 @@ export function BookingDetailPage({
                 className="grid gap-5 sm:grid-cols-2"
               >
                 <DetailField
-                  icon={<IconCalendarEvent />}
-                  label="Date"
-                  value={formatBookingDate(
-                    booking.scheduledStartAt,
-                    booking.timezone,
-                  )}
+                  icon={<IconCalendarClock />}
+                  label="Date & time"
+                  value={
+                    <span className="inline-flex flex-wrap items-center gap-x-2">
+                      <span>
+                        {formatBookingDateOnly(
+                          booking.scheduledStartAt,
+                          booking.timezone,
+                        )}
+                      </span>
+                      <span className="text-dimmed" aria-hidden="true">
+                        ·
+                      </span>
+                      <span>
+                        {formatBookingTimeRange(
+                          booking.scheduledStartAt,
+                          booking.scheduledEndAt,
+                          booking.timezone,
+                        )}
+                      </span>
+                    </span>
+                  }
                 />
-                <DetailField
-                  icon={<IconClock />}
-                  label="Session time"
-                  value={formatBookingTimeRange(
-                    booking.scheduledStartAt,
-                    booking.scheduledEndAt,
-                    booking.timezone,
-                  )}
-                />
-                <span id="session-when-title" className="sr-only">
-                  When
-                </span>
-              </section>
-
-              <Divider aria-hidden="true" />
-
-              <section
-                aria-labelledby="session-access-title"
-                className="space-y-3"
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 gap-3">
-                    <IconBox variant="tertiary" size="md" aria-hidden="true">
-                      {booking.modality === "online" ? (
-                        <IconDeviceLaptop />
-                      ) : (
-                        <IconMapPin />
-                      )}
-                    </IconBox>
-                    <div className="min-w-0">
-                      <Text
-                        id="session-access-title"
-                        className="text-sm text-muted"
-                      >
-                        Format & access
+                <div className="flex min-w-0 flex-wrap items-start gap-3">
+                  <IconBox variant="tertiary" size="md" aria-hidden="true">
+                    {booking.modality === "online" ? (
+                      <IconDeviceLaptop />
+                    ) : (
+                      <IconMapPin />
+                    )}
+                  </IconBox>
+                  <div className="min-w-0 flex-1">
+                    <Text
+                      id="session-access-title"
+                      className="text-sm text-muted"
+                    >
+                      Format & access
+                    </Text>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                      <Text className="font-medium text-base/5">
+                        {booking.modality === "online" ? "Online" : "Offline"}
                       </Text>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                        <Text className="font-medium">
-                          {booking.modality === "online" ? "Online" : "Offline"}
-                        </Text>
-                        {booking.modality === "online" && meetingUrl ? (
+                      {booking.modality === "online" ? (
+                        meetingUrl ? (
                           <Badge variant="success" size="sm" pill>
                             Ready
                           </Badge>
-                        ) : null}
-                      </div>
+                        ) : (
+                          <MeetingStatusPopover
+                            bookingState={booking.currentState}
+                            meetingStatus={booking.meetingStatus}
+                            providerStatus={booking.meeting?.status}
+                          />
+                        )
+                      ) : null}
                     </div>
+                    {booking.modality === "online" ? (
+                      meetingUrl ? (
+                        <Text className="mt-1 text-sm text-muted">
+                          The meeting room is ready for this session.
+                        </Text>
+                      ) : null
+                    ) : activeRoomBooking ? (
+                      <>
+                        <Text className="mt-1 font-medium">
+                          {activeRoomBooking.room.name}
+                        </Text>
+                        <Text className="mt-0.5 break-words text-sm text-muted">
+                          {activeRoomBooking.room.location}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text className="mt-1 text-sm text-muted">
+                        Room details are not available yet.
+                      </Text>
+                    )}
                   </div>
-
                   {booking.modality === "online" && meetingUrl ? (
                     <Button
-                      className="w-full shrink-0 sm:w-auto"
+                      className="shrink-0"
                       render={
                         <a
                           href={meetingUrl}
@@ -479,50 +568,9 @@ export function BookingDetailPage({
                     </Button>
                   ) : null}
                 </div>
-
-                {booking.modality === "online" ? (
-                  meetingUrl ? (
-                    <Text className="text-sm text-muted">
-                      The meeting room is ready for this session.
-                    </Text>
-                  ) : (
-                    <div className="rounded-lg border border-item-border bg-item px-3 py-3">
-                      <Text className="font-medium">
-                        {getMeetingStatusTitle({
-                          bookingState: booking.currentState,
-                          meetingStatus: booking.meetingStatus,
-                          providerStatus: booking.meeting?.status,
-                        })}
-                      </Text>
-                      <Text className="mt-1 text-sm text-muted">
-                        {getMeetingStatusDescription({
-                          bookingState: booking.currentState,
-                          meetingStatus: booking.meetingStatus,
-                          providerStatus: booking.meeting?.status,
-                        })}
-                      </Text>
-                    </div>
-                  )
-                ) : activeRoomBooking ? (
-                  <div className="rounded-lg border border-item-border bg-item px-3 py-3">
-                    <Text className="font-medium">
-                      {activeRoomBooking.room.name}
-                    </Text>
-                    <Text className="mt-1 break-words text-sm text-muted">
-                      {activeRoomBooking.room.location}
-                    </Text>
-                  </div>
-                ) : (
-                  <Text className="text-sm text-muted">
-                    Room details are not available yet.
-                  </Text>
-                )}
-
-                {booking.meetingStatus === "failed" ? (
-                  <Badge variant="warning" pill>
-                    Retrying automatically
-                  </Badge>
-                ) : null}
+                <span id="session-when-title" className="sr-only">
+                  When
+                </span>
               </section>
 
               <Divider aria-hidden="true" />
@@ -531,15 +579,20 @@ export function BookingDetailPage({
                 aria-labelledby="participants-title"
                 className="space-y-3"
               >
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <Text id="participants-title" className="font-medium">
-                      Participants
-                    </Text>
-                    <Text className="text-sm text-muted">
-                      {booking.confirmedHeadcount} of {booking.targetGroupSize}{" "}
-                      confirmed
-                    </Text>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <IconBox variant="tertiary" size="md" aria-hidden="true">
+                      <IconUsers />
+                    </IconBox>
+                    <div className="min-w-0">
+                      <Text id="participants-title" className="font-medium">
+                        Participants
+                      </Text>
+                      <Text className="text-sm text-muted">
+                        {booking.confirmedHeadcount} of{" "}
+                        {booking.targetGroupSize} confirmed
+                      </Text>
+                    </div>
                   </div>
                 </div>
 
@@ -582,64 +635,6 @@ export function BookingDetailPage({
                 </div>
               </section>
             </CardBody>
-            {!isTutor && !isAdmin && canCancelBooking(booking.currentState) ? (
-              <CardFooter className="flex-wrap justify-end gap-2">
-                {rescheduleAction}
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={requestCancellation}
-                  progress={cancel.isPending}
-                  disabled={cancel.isPending}
-                >
-                  Cancel booking
-                </Button>
-              </CardFooter>
-            ) : canReview ? (
-              <CardFooter className="justify-end gap-2">
-                {rescheduleAction}
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setReviewDialog("decline")}
-                  progress={decline.isPending}
-                  disabled={tutorActionPending}
-                >
-                  Decline request
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => setReviewDialog("accept")}
-                  progress={accept.isPending}
-                  disabled={tutorActionPending}
-                >
-                  Accept booking
-                </Button>
-              </CardFooter>
-            ) : canComplete ? (
-              <CardFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <Text className="text-sm text-muted">
-                  {sessionHasEnded
-                    ? "Confirm completion to settle the held Marks."
-                    : "Completion becomes available after the scheduled end time."}
-                </Text>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {rescheduleAction}
-                  <Button
-                    size="sm"
-                    onClick={completeSession}
-                    progress={complete.isPending}
-                    disabled={!sessionHasEnded || tutorActionPending}
-                  >
-                    Complete session
-                  </Button>
-                </div>
-              </CardFooter>
-            ) : canProposeReschedule ? (
-              <CardFooter className="flex-wrap justify-end gap-2">
-                {rescheduleAction}
-              </CardFooter>
-            ) : null}
           </Card>
 
           {booking.type === "series" ? (
@@ -1147,6 +1142,51 @@ function formatActivityTimestamp(value: string | Date, timeZone: string) {
   }).format(new Date(value));
 }
 
+function MeetingStatusPopover({
+  bookingState,
+  meetingStatus,
+  providerStatus,
+}: {
+  bookingState: string;
+  meetingStatus: string;
+  providerStatus?: string | null;
+}) {
+  const requiresAttention =
+    meetingStatus === "failed" || providerStatus === "manual";
+  const title = getMeetingStatusTitle({
+    bookingState,
+    meetingStatus,
+    providerStatus,
+  });
+  const description = getMeetingStatusDescription({
+    bookingState,
+    meetingStatus,
+    providerStatus,
+  });
+  const StatusIcon = requiresAttention ? IconAlertTriangle : IconInfoCircle;
+
+  return (
+    <Popover>
+      <PopoverTrigger render={<Badge variant="warning" size="sm" />}>
+        <StatusIcon aria-hidden="true" />
+      </PopoverTrigger>
+      <PopoverPopup align="center" className="space-y-2">
+        <PopoverTitle>{title}</PopoverTitle>
+        <PopoverDescription>{description}</PopoverDescription>
+        {meetingStatus === "failed" ? (
+          <Badge variant="warning" size="sm" pill>
+            Retrying automatically
+          </Badge>
+        ) : providerStatus === "manual" ? (
+          <Badge variant="warning" size="sm" pill>
+            Admin setup needed
+          </Badge>
+        ) : null}
+      </PopoverPopup>
+    </Popover>
+  );
+}
+
 function getMeetingStatusTitle({
   bookingState,
   meetingStatus,
@@ -1192,7 +1232,7 @@ function DetailField({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
 }) {
   return (
     <div className="flex gap-3">
@@ -1201,7 +1241,7 @@ function DetailField({
       </IconBox>
       <div>
         <Text className="text-sm text-muted">{label}</Text>
-        <Text className="font-medium">{value}</Text>
+        <Text className="font-medium text-base/5">{value}</Text>
       </div>
     </div>
   );

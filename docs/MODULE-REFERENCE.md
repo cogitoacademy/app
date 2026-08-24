@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
@@ -12,11 +12,15 @@ Google OAuth is enabled only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SEC
 
 The `packages/api` package implements business logic using a 4-layer architecture: **Router → Handler → Service → Repository**. Each module lives in `packages/api/src/modules/{module}/` with these files:
 
-The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
+The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
 
-Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. Student and tutor dashboards derive their next lesson from the same non-terminal, non-pending upcoming set and render the shared `BookingListCard`, so visual changes to the booking card apply to all three surfaces. They also render the shared `DashboardWelcomeCard` with role-specific copy and destinations, keeping the SVG illustration, minimum height, spacing, and CTA structure aligned. The tutor dashboard presents welcome/setup first and keeps the review queue and next lesson in the next visible row, with a stable empty/loading review card. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
-The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning, while the sticky desktop rail surfaces available booking actions above Marks. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+The authenticated frontend guide is a read-only, code-managed journey map at `/guide`. Its content lives in `apps/web/src/components/guide/guide-content.ts`, while `guide-page.tsx` renders the responsive Scandinavian timeline, standalone top-level role switcher, full-width guide content, right-side sticky desktop chapter sidebar, stacked mobile chapter navigation, default-open step details with a global collapse/expand control, status badges, expandable exception branches, and feature CTAs using Selia primitives. Visibility is role-scoped: student → Student; tutor → Tutor + Student; admin → Admin + Tutor + Student. In development, the page mounts the anti-slop Tweaks Bar from `apps/web/public/tweaks-bar.js` for live visual tuning; it is not part of the production product surface. The guide is documentation of existing behavior and does not create a service module or API contract.
+
+The shared frontend pending state is rendered by `apps/web/src/components/loader.tsx` using the Selia `bg-spinner` and `bg-spinner-dark` utilities; it is reused by the router rather than introducing a separate service module.
+
+The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. Admin review and override actions remain in the dedicated admin operations surface. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 Editorial content integration is also read-only: Sanity remains the source of truth, while the app's API enforces session/role/Marks access before returning content or streaming Knowledge Bank files. The academy's bilingual presentation is resolved to English in the server projection; the authenticated app does not carry a locale selector for these surfaces.
 
 | File                  | Purpose                                                  |
@@ -322,7 +326,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Wallet holds are released on cancel, decline, and expiry
 - Overlap detection prevents double-booking tutor slots
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
-- Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. Only the tutor may propose outside the original availability window.
+- Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. The booking proposer may propose or counter in the eligible pre-terminal states, including `confirmed` and `scheduled`; student proposals remain subject to current/new H-2 checks. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. Only the tutor may propose outside the original availability window. Force-majeure exceptions are handled by support/admin operations with an auditable reason and an admin override decision rather than an automatic H-2 bypass.
 - Optimistic locking via `version` field prevents concurrent state changes
 - New IDR booking snapshots copy the active economy version, tutor base/increment, tutor honorarium, Cogito take, total IDR, total Marks, and rounded pooled Marks. Later economy updates do not mutate those snapshots.
 - Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run. The protected booking list/detail/session reads are available to authenticated parties, while admins can inspect the full booking set; tutor fulfillment remains under `tutorActions.*`.
@@ -407,6 +411,8 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
 - Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
 - Offline bookings skip meeting creation entirely (go to `awaiting_admin_room_approval`)
+- The booking detail surface maps unavailable online-link states to a compact Selia info/warning popover; failed attempts expose the retry status and manual-provider rows expose the admin setup status without changing meeting data or RPC contracts
+- The booking detail overview merges the date and session hours into one `Date & time` field and places Format & access beside it in a responsive two-column grid that stacks on narrow screens
 
 ---
 
@@ -682,7 +688,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - `getMyProfile(userId)` — Returns tutor profile
 - `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). Published profiles apply bio and availability-summary edits immediately, while trust-sensitive edits are stored as pending changes for admin review so discovery continues serving the approved values.
-- `submitForReview(userId)` — Validates required fields + pricing, then sets `onboardingStatus` to `pending_review`; records audit log
+- `submitForReview(userId)` — Validates required fields + pricing, then sets `onboardingStatus` to `pending_review`; records audit log. The web onboarding form redirects to `/dashboard` after the mutation succeeds.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps

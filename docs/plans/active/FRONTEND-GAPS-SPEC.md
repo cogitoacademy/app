@@ -47,6 +47,20 @@ while keeping past/cancelled history newest-first. Defaults are role-aware:
 students see Upcoming, tutors see Pending when requests exist (or Upcoming
 otherwise), and admins see All; an explicit `tab` query parameter wins.
 
+### Dashboard next-lesson and onboarding follow-up (2026-08-24)
+
+Student and tutor dashboards now derive the nearest future non-terminal,
+non-pending booking from the existing `booking.listMine` read model. Both
+surfaces render the extracted `BookingListCard` used by `/_app/bookings`, with
+the same date tile, participant metadata, Marks treatment, status tooltip, and
+booking-detail action. The tutor dashboard now puts welcome and teaching setup
+beside each other, then keeps the review queue and next-lesson section in the
+next visible row; the review card has a stable loading/empty state. Student and
+tutor now share the same SVG welcome-card component and sizing while retaining
+role-specific copy and links. A successful tutor onboarding submission
+invalidates the profile/auth queries and redirects to `/dashboard` with history
+replacement. No API or database contract changed.
+
 ### Booking detail UX follow-up (2026-08-22)
 
 The detail page now renders participant profile images with initials fallback,
@@ -520,7 +534,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-22).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and available booking actions, with actions above Marks in the sticky desktop rail and notes/support/activity in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. No booking API or state-machine contract changed.
+**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above Marks or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. Admin review and override actions remain on the dedicated admin operations surface. No booking API or state-machine contract changed.
 
 **Required:**
 
@@ -618,12 +632,19 @@ Follow existing frontend conventions:
 
 ### Selia Components Available
 
-Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Toast. See AGENTS.md for full list + import paths.
+Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Popover, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Toast. See AGENTS.md for full list + import paths.
 
 ---
 
 ### Version Notes
 
+- v1.20 (2026-08-24): Moved eligible `Propose new time` and `Complete session` buttons into the booking-detail header action group beneath the state badge; removed their card-footer duplicates. Documented that the booking proposer may reschedule in `confirmed`/`scheduled` before H-2, while force-majeure exceptions require support/admin handling and an auditable override. No RPC, schema, or persistence contract changed.
+- v1.19 (2026-08-24): Replaced the outer booking-detail overview flex-wrap with a responsive two-column grid for the merged `Date & time` and `Format & access` fields; the grid stacks on narrow screens while inner status/CTA content can still wrap. No RPC, schema, or persistence contract changed.
+- v1.18 (2026-08-24): Merged the booking-detail date and session hours into one `Date & time` field with a calendar-clock icon, keeping Format & access as the second flex-wrapped overview field. No RPC, schema, or persistence contract changed.
+- v1.17 (2026-08-24): Refined the booking-detail overview row so Date is date-only, Session time owns the hour display, Format & access shares the same flex-wrapped row, Participants uses the matching Selia `IconBox`, and desktop header actions align to the bottom of the right column beneath the status badge. No RPC, schema, or persistence contract changed.
+- v1.15 (2026-08-24): Reduced booking-detail vertical density by replacing the full online meeting-pending/failed status panel with an accessible Selia info/warning icon popover. The popover retains the existing explanation and retry/admin setup badge; ready links and the meeting CTA are unchanged. No RPC, schema, or persistence contract changed.
+- v1.13 (2026-08-24): Refined tutor availability controls so weekly minute-time fields share the compact start-field width with a centered range separator, suggestions can grow beyond the field, and modality triggers keep icons beside labels. This remains presentation-only; RPC, schema, and persistence contracts are unchanged.
+- v1.14 (2026-08-24): Moved role-appropriate primary booking actions below the shared status badge. Tutor review keeps propose/decline/accept together; students see their available propose/cancel actions in the same header slot. Admins continue to use the dedicated operations and override workflow. No RPC, schema, or persistence contract changed.
 - v1.12 (2026-08-23): Fixed the shared Selia portal layer for `DatePicker` and `SelectPopup` so achievement-form date, Category, Level, and calendar month/year controls remain above modal dialogs and clickable. No RPC, schema, or persistence contract changed.
 - v1.16 (2026-08-24): Hardened email sign-in/sign-up transitions: await Better Auth success and a fresh session before navigation, suppress the overlapping auth-store refetch during the handoff, and make the authenticated parent guard use the fresh session. Added E2E coverage against an intermediate `/login` navigation. No auth API or persistence contract changed.
 - v1.11 (2026-08-22): Moved available Booking actions above Marks in the sticky desktop rail while keeping session notes/support reports in the main content flow. Narrow layouts place actions and Marks before Activity. No booking API or state-machine contract changed.

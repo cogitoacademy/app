@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -18,8 +18,8 @@ Open `/login` in a clean browser and sign in as a student, tutor, and admin. The
 
 After a web deployment, sign in once as each supported role and open `/dashboard`. Verify the sidebar user menu shows the authenticated profile image when one is configured and uses initials when it is not:
 
-- Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations.
-- Tutor: request count, next session, availability/profile readiness, and payout total; actions link to `/bookings`, `/availability`, and `/onboarding`.
+- Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations. Confirm the welcome card shows the SVG illustration and shared spacing/sizing used by the tutor dashboard. If a booking exists, confirm the next-lesson card matches the booking-list date tile, participant metadata, Marks display, status tooltip, and detail action.
+- Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/onboarding`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial onboarding form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the submission form.
 - Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
 
@@ -28,6 +28,20 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 As an authenticated user, open `/calendar` and confirm published Sanity competitions render in the month grid. Verify today, outside-month days, multi-day spans, and the `+N more` overflow popup; select an event from either the grid or popup and confirm the responsive details modal shows categories, level, scale, organizer, location, timeline, registration deadline, description, and the available external-link actions. Switch to **Agenda**, confirm the 30-day grouped list and rich event cards, use `M`/`A` to switch views, and verify previous/next period plus **Today** navigation. The calendar remains read-only and the browser console should remain free of runtime errors.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
+
+### How Cogito Works guide smoke check
+
+Open `/guide` after signing in as each supported role. Verify the guide loads without API requests beyond the existing authenticated shell, presents the correct journey by default, and exposes the following views:
+
+- Student: Student only.
+- Tutor: Tutor and Student.
+- Admin: Admin, Tutor, and Student.
+
+Select each available role view from the standalone control at the top and confirm the URL updates with `?view=...`, all step details are open on first load, and a disallowed view falls back to the role's default. On desktop, verify the guide content fills the available main column and the chapter navigation remains visible as a sticky secondary sidebar on the right while marking the chapter currently in view; on narrow screens, verify it stacks above the content without horizontal scrolling. Use the global Collapse/Expand details control and individual timeline buttons with both pointer and keyboard input; verify the height and content transitions are smooth, reduced-motion preferences remove the motion, and statuses, What if? branches, and CTAs remain readable. Check that CTAs open the existing tutor, booking, profile, operations, achievement, economy, calendar, balance, and resource surfaces.
+
+Guide copy is maintained in `apps/web/src/components/guide/guide-content.ts`. When a booking state, role responsibility, or linked route changes, update the corresponding typed step/branch and the guide content test in the same change. The guide is intentionally code-managed in v1; no admin editor, CMS publish step, or API migration is required. During local visual refinement, toggle the development-only Tweaks Bar with `Ctrl/Cmd+Shift+.`; treat its values as exploration until the chosen change is copied deliberately into the guide styles.
+
+The shared route pending state uses the Selia spinner from `apps/web/src/components/loader.tsx`. If a navigation smoke test catches a loading state, verify the spinner remains visible in both light and dark themes and stops animating under reduced-motion preferences.
 
 ### Economy rate-control smoke check
 
@@ -57,9 +71,11 @@ Verify the role-aware default tab: students open on Upcoming, tutors open on Pen
 
 Open an online booking detail and verify the overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above Marks in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. Confirm that a manual admin URL becomes visible after `adminBooking.setMeetingLink`, including after multiple failed provider rows. For an offline booking, verify the same overview section shows the room name and location instead of a meeting CTA.
 
+The overview row must show one `Date & time` field with the date and session hours merged beside `Format & access` in a two-column desktop grid; on narrow screens the two fields stack without horizontal overflow. For unavailable online meeting links, the `Format & access` section now shows only the compact info/warning trigger; activate it with mouse, keyboard, and touch to verify the Selia popover exposes the pending/failed explanation plus retry or admin setup status. Ready links must keep the `Ready` badge and meeting CTA. Confirm the Participants heading uses the matching Selia `IconBox`, and on desktop all eligible booking actions, including propose and complete, sit at the bottom of the right header column beneath the state badge.
+
 ### Form-control smoke check
 
-On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
+On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. On `/availability`, confirm both weekly time fields stay compact and equal in width with a centered dash between them, while focusing a time field allows its suggestions to extend beyond the field when needed; confirm the modality trigger keeps its icon and label on one row. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
 
 ### Achievement form smoke check
 
@@ -71,7 +87,7 @@ For a group booking with a pending invite, verify the invitee sees **Accept invi
 
 ### Reschedule proposal smoke check
 
-From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, verify that a student booking proposer submits through `/rpc/booking/reschedule/propose` and a tutor submits through `/rpc/tutor/booking/reschedule/propose`. Both should show the success toast and move the booking to `reschedule_proposed`; a tutor may choose a custom time outside the published availability window. A tutor receiving `403 Student access required` indicates the frontend is using the wrong procedure. Group bookings still in `awaiting_participant_confirmation` intentionally wait for invitees before rescheduling is enabled.
+From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, verify that a student booking proposer submits through `/rpc/booking/reschedule/propose` and a tutor submits through `/rpc/tutor/booking/reschedule/propose`. Both should show the success toast and move the booking to `reschedule_proposed`; a tutor may choose a custom time outside the published availability window. A student proposal in `confirmed` or `scheduled` remains valid before H-2, while a proposal at or after H-2 must be rejected as not editable. A tutor receiving `403 Student access required` indicates the frontend is using the wrong procedure. Group bookings still in `awaiting_participant_confirmation` intentionally wait for invitees before rescheduling is enabled. Force-majeure requests after H-2 follow support/admin exception handling and require an auditable override decision rather than the normal reschedule mutation.
 
 ### Tutor subject taxonomy smoke check
 

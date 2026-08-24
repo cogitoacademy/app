@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 
 ## Overview
 
@@ -8,9 +8,13 @@ All oRPC endpoints use **POST** method. Auth is via session cookies (Better Auth
 
 Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The web client waits for the successful auth response and a fresh session read before entering an authenticated route; the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. This changes no request or response shape.
 
-The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures.
+The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. This adds no RPC endpoint or input/output change.
 
-The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract. Portal-based date and select popups render above dialog layers so modal forms remain interactive.
+The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The development-only anti-slop Tweaks Bar is a static browser asset and does not change the production API surface.
+
+The global route pending loader is also presentation-only. It adds no RPC procedure, request input, response output, or persistence contract.
+
+The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract. The availability range separator is visual only; time suggestions may render wider than their compact input, and modality triggers preserve their icon-label row without changing the weekly range payload. Portal-based date and select popups render above dialog layers so modal forms remain interactive.
 
 ## Authenticated Editorial Content (`content.*`)
 
@@ -490,14 +494,16 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** `{ booking, participants, history, meetingStatus, meetingUrl }` — access-checked for the proposer, tutor, participants, or admin; participant user objects include the optional profile `image`, and history entries include `fromState`, `toState`, `actorType`, `reason`, and `createdAt`
 - **Errors:** `BOOKING_NOT_FOUND` (404)
 - **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or an admin fallback link, and `failed` when automatic Google Meet creation needs another retry.
-- **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places available booking actions above Marks in the rail, and keeps the API contract unchanged.
+- **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places role-appropriate primary actions (including reschedule and completion when eligible) directly below the status badge, keeps contextual actions above Marks or in the main flow, and keeps the API contract unchanged.
+
+**UI behavior note:** The booking detail surface uses a compact accessible Selia info/warning icon popover for unavailable online-link explanations and retry/admin setup status. Its overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and does not change the `booking.get` response contract.
 
 ### `booking.listMine`
 
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Recurring/All by nearest scheduled start, while Past/Cancelled remain newest-first. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip.
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Recurring/All by nearest scheduled start, while Past/Cancelled remain newest-first. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 
@@ -533,7 +539,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (booking proposer)
 - **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
 - **Output:** `{ booking }`
-- **Description:** Proposes a new fixed 90-minute time for one booking session; proposals expire after 24 hours and require tutor plus all active-student approval
+- **Description:** Proposes a new fixed 90-minute time for one booking session; the booking proposer may use the route in the eligible pre-terminal states, including `confirmed` and `scheduled`. Student proposals must remain outside the current and proposed session's H-2 window; otherwise the API rejects the mutation as not editable. Proposals expire after 24 hours and require tutor plus all active-student approval. Force-majeure exceptions are handled through support/admin operations and an auditable admin override, not by bypassing this route.
 
 ### `booking.cancelSession`
 

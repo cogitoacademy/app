@@ -86,6 +86,19 @@ export function formatBookingDate(
   }).format(new Date(value));
 }
 
+export function formatBookingDateOnly(
+  value: string | Date,
+  timeZone = "Asia/Jakarta",
+) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone,
+  }).format(new Date(value));
+}
+
 export function formatBookingTimeRange(
   start: string | Date,
   end: string | Date,
