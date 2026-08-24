@@ -73,7 +73,7 @@ export function MinuteTimeInput({
         <div
           id={id ? `${id}-suggestions` : undefined}
           role="listbox"
-          className="absolute z-50 mt-1 grid max-h-52 w-full grid-cols-2 overflow-auto rounded border border-popover-border bg-popover p-1 shadow-popover"
+          className="absolute z-50 mt-1 grid max-h-52 w-max min-w-full max-w-none grid-cols-2 overflow-auto rounded border border-popover-border bg-popover p-1 shadow-popover"
         >
           {suggestions.map((time) => (
             <button

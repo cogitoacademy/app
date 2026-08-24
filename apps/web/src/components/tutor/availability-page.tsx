@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconCalendarEvent,
@@ -69,6 +76,16 @@ type AvailabilitySlot = {
   isRecurring: boolean;
   modality?: Modality;
 };
+
+const MODALITY_OPTIONS: ReadonlyArray<{
+  value: Modality;
+  label: string;
+  icon?: ReactNode;
+}> = [
+  { value: "online", label: "Online", icon: <IconDeviceLaptop /> },
+  { value: "offline", label: "Offline", icon: <IconMapPin /> },
+  { value: "both", label: "Both" },
+];
 
 const newRange = (): TimeRange => ({
   id: crypto.randomUUID(),
@@ -303,7 +320,7 @@ export function AvailabilityPage() {
                 Choose when students can normally book you.
               </CardDescription>
             </CardHeader>
-            <CardBody className="divide-y divide-item-border">
+            <CardBody className="divide-y divide-item-border py-0">
               {DAYS.map(([day, label]) => {
                 const value = schedule[day]!;
                 return (
@@ -328,7 +345,7 @@ export function AvailabilityPage() {
                         {value.ranges.map((range) => (
                           <div
                             key={range.id}
-                            className="grid gap-2 sm:grid-cols-[1fr_1fr_10rem_auto]"
+                            className="grid gap-2 sm:grid-cols-[6rem_1rem_6rem_9rem_auto]"
                           >
                             <MinuteTimeInput
                               id={`availability-${day}-${range.id}-start`}
@@ -345,6 +362,12 @@ export function AvailabilityPage() {
                                 }))
                               }
                             />
+                            <span
+                              aria-hidden="true"
+                              className="flex items-center justify-center text-muted"
+                            >
+                              -
+                            </span>
                             <MinuteTimeInput
                               id={`availability-${day}-${range.id}-end`}
                               ariaLabel={`${label} end`}
@@ -375,7 +398,7 @@ export function AvailabilityPage() {
                             />
                             <Button
                               type="button"
-                              variant="plain"
+                              variant="danger"
                               size="sm-icon"
                               aria-label={`Remove ${label} hours`}
                               disabled={value.ranges.length === 1}
@@ -396,7 +419,7 @@ export function AvailabilityPage() {
                           <Button
                             type="button"
                             variant="plain"
-                            size="sm"
+                            size="xs"
                             disabled={value.ranges.length >= 3}
                             onClick={() =>
                               updateDay(day, (current) => ({
@@ -410,7 +433,7 @@ export function AvailabilityPage() {
                           <Button
                             type="button"
                             variant="plain"
-                            size="sm"
+                            size="xs"
                             onClick={() => {
                               const source = value.ranges;
                               setSchedule((current) =>
@@ -521,7 +544,7 @@ export function AvailabilityPage() {
           </Card>
           <Card>
             <CardHeader>
-              <IconBox variant="secondary-subtle">
+              <IconBox variant="tertiary">
                 <IconSettings />
               </IconBox>
               <CardTitle>Scheduling rules</CardTitle>
@@ -643,13 +666,12 @@ function ModalitySelect({
       </SelectTrigger>
       <SelectPopup>
         <SelectList>
-          <SelectItem value="online">
-            <IconDeviceLaptop /> Online
-          </SelectItem>
-          <SelectItem value="offline">
-            <IconMapPin /> Offline
-          </SelectItem>
-          <SelectItem value="both">Both</SelectItem>
+          {MODALITY_OPTIONS.map((option) => (
+            <SelectItem key={option.value} value={option}>
+              {option.icon}
+              {option.label}
+            </SelectItem>
+          ))}
         </SelectList>
       </SelectPopup>
     </Select>
