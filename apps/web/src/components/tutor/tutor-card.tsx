@@ -110,7 +110,7 @@ export function TutorSummary({
         <ItemDescription className="line-clamp-2">
           {tutor.shortBio ?? "A verified Cogito tutor ready to help you learn."}
         </ItemDescription>
-        <ItemMeta className="mt-2 flex flex-wrap gap-1.5">
+        <ItemMeta className="flex flex-wrap gap-1.5">
           {subjectLabels.slice(0, 3).map((subject) => (
             <Badge key={subject.id} variant="tertiary" size="sm">
               {subject.label}
