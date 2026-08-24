@@ -13,10 +13,10 @@ Tasks deferred from production-readiness (#18) and infrastructure (#19) that cou
 
 - [x] Keep the Hostinger company profile on the apex `cogitoacademy.id`.
 - [x] Route `api.cogitoacademy.id` to the API/Auth/health/webhook service.
-- [x] Route `app.cogitoacademy.id` to the frontend and bake the API subdomain
-  into the production Vite image.
-- [ ] Configure the two Coolify resource domains and add the API + web deploy
-  webhook secrets in GitHub Actions.
+- [x] Route `app.cogitoacademy.id` to the Cloudflare Pages frontend and set the
+  production Pages variable `VITE_SERVER_URL=https://api.cogitoacademy.id`.
+- [ ] Configure the Coolify API domain and add the API deploy webhook secrets
+  in GitHub Actions; configure the Pages custom domain/build variables.
 
 ---
 
@@ -97,16 +97,19 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 - Provision Hetzner VPS with provision.sh
 - Install Coolify + create admin account
 - Add GHCR as Docker registry in Coolify
-- Create PostgreSQL, Redis, server, web services in Coolify
-- Configure domains + auto-HTTPS in Coolify
-- Configure DNS (api.cogitoacademy.id, app.cogitoacademy.id → VPS IP)
-- Verify Coolify auto-deploys on new image push
-- Verify both domains serve with HTTPS
+- Create PostgreSQL, Redis, and server services in Coolify; keep the frontend on Pages
+- Set `DB_SSL_ENABLED=false` for Coolify's bundled non-TLS PostgreSQL service;
+  keep it true for managed PostgreSQL endpoints that require TLS
+- Configure the API domain + auto-HTTPS in Coolify
+- Configure DNS (`api.cogitoacademy.id` A → VPS; `app.cogitoacademy.id` CNAME → Pages)
+- Verify Coolify auto-deploys the API image and Pages deploys the frontend
+- Verify the API and frontend domains serve with HTTPS
 
 ### 4.2 CI/CD Secrets
 
 - Add GHCR secrets to GitHub repo
-- Add Coolify webhook URLs to GitHub secrets
+- Add the Coolify API webhook URLs to GitHub secrets
+- Configure the Cloudflare Pages Git integration and production/preview variables
 - Verify CD builds and pushes to GHCR on push to staging
 
 ### 4.3 Monitoring
@@ -123,8 +126,8 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 
 ### 4.5 Docker Build Verification
 
-- Verify Docker builds succeed locally
-- Verify both images start and respond to health checks
+- Verify the server Docker image builds locally and responds to its health check
+- Verify the Pages frontend build succeeds with the production API URL
 
 ---
 

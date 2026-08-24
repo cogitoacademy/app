@@ -17,6 +17,7 @@ describe("server env boolean coercion (H1)", () => {
     "TRUST_PROXY",
     "STUB_WEBHOOK_ALLOWED",
     "SCHEDULER_ENABLED",
+    "DB_SSL_ENABLED",
     "DB_SSL_REJECT_UNAUTHORIZED",
   ];
 
@@ -53,7 +54,7 @@ describe("server env boolean coercion (H1)", () => {
     const parsed = serverEnvSchema.safeParse({ ...validEnv, [v]: "" });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      if (v === "DB_SSL_REJECT_UNAUTHORIZED") {
+      if (v === "DB_SSL_ENABLED" || v === "DB_SSL_REJECT_UNAUTHORIZED") {
         expect((parsed.data as Record<string, unknown>)[v]).toBe(true); // default true
       } else {
         expect((parsed.data as Record<string, unknown>)[v]).toBe(false); // default false

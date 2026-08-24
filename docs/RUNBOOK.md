@@ -14,11 +14,11 @@ Tutor invitation delivery should be smoke-tested in both desktop and mobile emai
 
 - Company profile: `https://cogitoacademy.id` (kept on Hostinger)
 - API/Auth/health/webhooks: `https://api.cogitoacademy.id`
-- Frontend: `https://app.cogitoacademy.id`
+- Frontend: `https://app.cogitoacademy.id` (Cloudflare Pages)
 
-Do not point the apex DNS record at the VPS. Configure only the `api` and
-`app` subdomains to the Droplet; `coolify` may be added as a separate private
-administration subdomain.
+Do not point the apex DNS record at the VPS. Point only `api` to the Droplet
+with an A record. Point `app` to the Cloudflare Pages project with a CNAME;
+`coolify` may be added as a separate administration subdomain on the VPS.
 
 ### Login/auth smoke check
 
@@ -302,6 +302,10 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 - `ECONNREFUSED` — PostgreSQL not running. Run `bun run db:start`.
 - `ECONNREFUSED` during tests — Start the isolated test DB with `bun run db:test`.
 - `connection timeout` — Check `DATABASE_URL` in `.env`.
+- `server does not support SSL` or repeated `db_retry` in Coolify — Coolify's
+  bundled PostgreSQL is non-TLS. Set `DB_SSL_ENABLED=false` on the API service,
+  redeploy, and keep `DB_SSL_REJECT_UNAUTHORIZED=true` for any deployment where
+  `DB_SSL_ENABLED=true`.
 
 ### Test Safety Guard
 
@@ -318,9 +322,11 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ## Rollback a Deployment
 
-Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/app/{server,web}`). Rollback is done in Coolify:
+API deployments are Coolify auto-deploys from the GHCR server image
+(`ghcr.io/cogitoacademy/app/server`). Roll back the API in Coolify; frontend
+deployments are managed by Cloudflare Pages from GitHub.
 
-1. Open the Coolify dashboard → the service (server / web)
+1. Open the Coolify dashboard → the server service
 2. Use **Rollback to previous release** (Coolify keeps the previous image/version)
 3. Verify health: `curl https://api.cogitoacademy.id/health`
 4. If a database migration was part of the deployment, check migration status:
@@ -421,6 +427,7 @@ Key environment variables (see `.env.example` for full list):
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                               |
 | `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated)                                                                                                                |
 | `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs |
+| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                   |
 | `DB_SSL_REJECT_UNAUTHORIZED`                                                                  | No       | Reject unauthorized TLS certificates on the DB connection (default true)                                                                                     |
 | `METRICS_TOKEN`                                                                               | No       | Bearer token for the metrics endpoint                                                                                                                        |
 | `UPLOAD_DIR`                                                                                  | No       | Local upload directory when R2 is not configured (default `./uploads`)                                                                                       |
@@ -498,6 +505,10 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
 
 ## Deploy Secrets (CD webhooks)
 
+The CD workflows deploy only the API on Coolify. Cloudflare Pages deploys the
+frontend automatically from the connected GitHub repository; it does not need a
+Coolify web webhook.
+
 The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing.
 
 **Setup (one-time, user action):**
@@ -505,9 +516,7 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
 1. Coolify → your service → **Webhooks** tab → copy the **Deploy webhook** URL.
 2. GitHub → repo **Settings → Secrets and variables → Actions**:
    - `COOLIFY_STAGING_SERVER_WEBHOOK` — staging API service webhook URL
-   - `COOLIFY_STAGING_WEBHOOK` — staging web service webhook URL
    - `COOLIFY_PROD_SERVER_WEBHOOK` — production API service webhook URL
-   - `COOLIFY_PROD_WEBHOOK` — production web service webhook URL
 3. Push to `staging` (or `main`) and verify the "Trigger Coolify deploy" step is green.
 
 Until the secrets are set, CD pushes will fail at the trigger step by design (a silent no-op deploy is worse than a red build).
@@ -545,15 +554,17 @@ web/server ports above and seeds deterministic role credentials.
 
 ## GHCR / Docker Deploy (CD)
 
-The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
+The CD workflows build only the API image (`apps/server/Dockerfile`) and push
+it to `ghcr.io/cogitoacademy/app/server`. Cloudflare Pages builds and deploys
+the frontend from the GitHub repository.
 
 If a push fails with `denied: installation not allowed to Create organization package`:
 
 1. **Workflow permission (code, already fixed):** the job must declare `permissions: { contents: read, packages: write }` so the `GITHUB_TOKEN` can write to GHCR.
-2. **Org-level (requires an org admin):** the `cogitoacademy` org must allow GitHub Actions to create packages. Either enable it in **Org Settings → Actions → General → Workflow permissions → "Read and write permissions"** (with "Allow GitHub Actions to create and approve pull requests" as needed), or initialize the packages once by pushing any image under `ghcr.io/cogitoacademy/app/{server,web}` with an org member account:
+2. **Org-level (requires an org admin):** the `cogitoacademy` org must allow GitHub Actions to create packages. Either enable it in **Org Settings → Actions → General → Workflow permissions → "Read and write permissions"**, or initialize the server package once with an org member account:
    ```bash
    docker pull oven/bun:1.3.14
    docker tag oven/bun:1.3.14 ghcr.io/cogitoacademy/app/server:init
-   docker push ghcr.io/cogitoacademy/app/server:init   # repeat for /web
-   ```
+   docker push ghcr.io/cogitoacademy/app/server:init
+  ```
    After the packages exist, the workflows push without org changes.

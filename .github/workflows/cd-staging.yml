@@ -30,27 +30,14 @@ jobs:
           docker build -t ghcr.io/${{ github.repository }}/server:staging -f apps/server/Dockerfile .
           docker push ghcr.io/${{ github.repository }}/server:staging
 
-      - name: Build and push web
-        run: |
-          docker build \
-            -t ghcr.io/${{ github.repository }}/web:staging \
-            -f apps/web/Dockerfile \
-            --build-arg VITE_SERVER_URL=https://staging.cogitoacademy.id \
-            .
-          docker push ghcr.io/${{ github.repository }}/web:staging
-
       - name: Trigger Coolify server deploy
         # Fail loudly when the webhook secret is unset or the request fails —
         # a silent no-op deploy is worse than a red build.
         run: |
           curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_STAGING_SERVER_WEBHOOK }}
 
-      - name: Trigger Coolify web deploy
-        run: |
-          curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_STAGING_WEBHOOK }}
-
       - name: Health check
-        # Same bounded retry loop as cd-prod: Coolify restarts the container
+        # Same bounded retry loop as cd-prod: Coolify restarts the API container
         # asynchronously, so poll until the API is healthy (up to ~5 min).
         run: |
           for i in $(seq 1 20); do

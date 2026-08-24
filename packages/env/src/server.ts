@@ -76,6 +76,7 @@ const serverShape = {
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("noreply@cogitoacademy.id"),
   METRICS_TOKEN: z.string().optional(),
+  DB_SSL_ENABLED: boolSchema(true),
   DB_SSL_REJECT_UNAUTHORIZED: boolSchema(true),
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),

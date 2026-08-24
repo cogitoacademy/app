@@ -7,16 +7,21 @@ import * as schema from "./schema";
 
 export function warnIfInsecureProductionSsl(
   nodeEnv: string,
+  sslEnabled: boolean,
   rejectUnauthorized: boolean,
 ) {
-  if (isProductionLike(nodeEnv) && !rejectUnauthorized) {
+  if (isProductionLike(nodeEnv) && sslEnabled && !rejectUnauthorized) {
     console.warn(
-      "WARNING: DB_SSL_REJECT_UNAUTHORIZED is false in production/staging. SSL certificate verification is disabled.",
+      "WARNING: DB_SSL_REJECT_UNAUTHORIZED is false while DB SSL is enabled in production/staging. SSL certificate verification is disabled.",
     );
   }
 }
 
-warnIfInsecureProductionSsl(env.NODE_ENV, env.DB_SSL_REJECT_UNAUTHORIZED);
+warnIfInsecureProductionSsl(
+  env.NODE_ENV,
+  env.DB_SSL_ENABLED,
+  env.DB_SSL_REJECT_UNAUTHORIZED,
+);
 
 const SENSITIVE_PARAM = /(password|secret|token|authorization|cookie|bearer)/i;
 const SECRET_SHAPED = /^(sk_|whsec_|xox[baprs]-|eyJ[a-zA-Z0-9_-]+\.)/i;
@@ -48,9 +53,10 @@ export function createDb(connectionString?: string) {
     connection: {
       statement_timeout: 30_000,
     },
-    ...(isProductionLike(env.NODE_ENV) && {
-      ssl: { rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED },
-    }),
+    ssl:
+      isProductionLike(env.NODE_ENV) && env.DB_SSL_ENABLED
+        ? { rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED }
+        : false,
     ...(env.NODE_ENV === "development" && {
       onquery: (query: { sql: string; params: unknown[] }) => {
         const redactedParams = query.params.map((p) => redactParam(p));

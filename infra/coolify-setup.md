@@ -4,7 +4,11 @@
 
 - Coolify installed and running on VPS (http://\<ip\>:8000)
 - GitHub Container Registry (GHCR) accessible
-- DNS configured: api.cogitoacademy.id, app.cogitoacademy.id → VPS IP
+- DNS configured:
+  - `api.cogitoacademy.id` → VPS IP (A record)
+  - `app.cogitoacademy.id` → Cloudflare Pages project (CNAME)
+  - `coolify.cogitoacademy.id` → VPS IP (optional administration hostname)
+- Cloudflare Pages project connected to this GitHub repository
 
 ## Step 1: Add Docker Registry
 
@@ -40,6 +44,8 @@
 5. Network: `cogito-prod` (same as postgres + redis)
 6. Environment variables (from .env.prod):
    - DATABASE_URL=postgresql://cogito:password@postgres-prod:5432/cogito
+   - DB_SSL_ENABLED=false (Coolify's bundled PostgreSQL is non-TLS)
+   - DB_SSL_REJECT_UNAUTHORIZED=true (only relevant when DB_SSL_ENABLED=true)
    - REDIS_URL=redis://redis-prod:6379
    - BETTER_AUTH_SECRET=...
    - BETTER_AUTH_URL=https://api.cogitoacademy.id
@@ -57,38 +63,46 @@
 9. Auto-deploy: ON (deploy when new image pushed)
 10. Deploy
 
-## Step 5: Create Web Service
+## Step 5: Configure Cloudflare Pages
 
-1. Add Service → Docker Image
-2. Image: `ghcr.io/<org>/cogito-app/web:latest`
-3. Name: `cogito-web`
-4. Port: 80
-5. Network: `cogito-prod`
-6. Domain: app.cogitoacademy.id
-7. Auto-deploy: ON
-8. Deploy
+1. Cloudflare Dashboard → Workers & Pages → select the Pages project.
+2. In **Custom domains**, add `app.cogitoacademy.id` and activate it.
+3. If DNS is still hosted at Hostinger, create this record there:
+   - Type: `CNAME`
+   - Name: `app`
+   - Target: `<your-project>.pages.dev`
+4. Configure the Git build:
+   - Root directory: `/`
+   - Build command: `bun install --frozen-lockfile && bun run build:web`
+   - Build output directory: `apps/web/dist`
+5. In Pages → Settings → Environment variables, add for **Production**:
+   - `VITE_SERVER_URL=https://api.cogitoacademy.id`
+6. Deploy the project.
 
-> **VITE_SERVER_URL is baked at build time** (the CD workflow passes it as a
-> `--build-arg`; the web image has no runtime env). The frontend calls the API
-> at the absolute URL `https://api.cogitoacademy.id` (same site as
-> `app.cogitoacademy.id`, so the `SameSite=Strict` session cookie is sent and
-> CORS is allowed via `CORS_ORIGIN`). Do not set `VITE_SERVER_URL` in the
-> Coolify web service env — it has no effect on the built image.
+> **VITE_SERVER_URL is baked at build time.** Pages injects it during the build;
+> it is public frontend configuration, not a secret. The frontend calls the API
+> at `https://api.cogitoacademy.id`, while the API allows
+> `https://app.cogitoacademy.id` through `CORS_ORIGIN`.
 
 ## Step 6: Configure Caddy Routing
 
 Coolify automatically configures Caddy reverse proxy:
 
 - api.cogitoacademy.id/* → cogito-server:3001
-- app.cogitoacademy.id → cogito-web:80
+
+The `app` hostname is served by Cloudflare Pages and must not be added as a
+Coolify application domain.
 
 ## Step 7: Repeat for Staging
 
 Same as above but:
 
 - Project: "cogito-staging"
-- Images tagged :staging
-- Domains: staging.cogitoacademy.id (API), staging-app.cogitoacademy.id (web)
+- Image tagged `:staging` for the API service
+- Domain: `staging.cogitoacademy.id` for the API service
+- Cloudflare Pages preview/staging domain: `staging-app.cogitoacademy.id` (optional)
+- Pages Preview environment variable:
+  `VITE_SERVER_URL=https://staging.cogitoacademy.id`
 - PAYMENT_PROVIDER=stub
 - SCHEDULER_ENABLED=true
 

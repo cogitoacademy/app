@@ -33,29 +33,14 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/server:latest
           docker push ghcr.io/${{ github.repository }}/server:v${{ github.sha }}
 
-      - name: Build and push web
-        run: |
-          docker build \
-            -t ghcr.io/${{ github.repository }}/web:latest \
-            -f apps/web/Dockerfile \
-            --build-arg VITE_SERVER_URL=https://api.cogitoacademy.id \
-            .
-          docker tag ghcr.io/${{ github.repository }}/web:latest ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
-          docker push ghcr.io/${{ github.repository }}/web:latest
-          docker push ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
-
       - name: Trigger Coolify server deploy
         # Fail loudly when the webhook secret is unset or the request fails —
         # a silent no-op deploy is worse than a red build.
         run: |
           curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
 
-      - name: Trigger Coolify web deploy
-        run: |
-          curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }}
-
       - name: Health check
-        # Coolify pulls the new image and restarts the container asynchronously;
+        # Coolify pulls the new server image and restarts the container asynchronously;
         # a single sleep+curl is flaky. Poll with a bounded retry loop (up to
         # ~5 min) and fail the job only if the API never comes back healthy.
         run: |

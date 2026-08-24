@@ -3,6 +3,7 @@ import { describe, test, expect, mock } from "bun:test";
 const mockEnv = {
   DATABASE_URL: "postgresql://test:test@localhost:5432/test",
   NODE_ENV: "test",
+  DB_SSL_ENABLED: false,
   DB_SSL_REJECT_UNAUTHORIZED: false,
 };
 
@@ -48,8 +49,16 @@ describe("db", () => {
   test("warns for insecure production SSL configuration", async () => {
     const { warnIfInsecureProductionSsl } = await import("../../index");
     expect(() =>
-      warnIfInsecureProductionSsl("production", false),
+      warnIfInsecureProductionSsl("production", true, false),
     ).not.toThrow();
+  });
+
+  test("disables TLS when DB_SSL_ENABLED is false", async () => {
+    const { createDb } = await import("../../index");
+    mockEnv.NODE_ENV = "production";
+    mockEnv.DB_SSL_ENABLED = false;
+    createDb();
+    expect(postgresOptions.at(-1)?.ssl).toBe(false);
   });
 
   test("redacts sensitive development query parameters", async () => {

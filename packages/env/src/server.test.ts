@@ -22,12 +22,14 @@ describe("server environment schema", () => {
       TRUST_PROXY: " true ",
       SCHEDULER_ENABLED: "0",
       GOOGLE_MEET_ENABLED: false,
+      DB_SSL_ENABLED: "",
       DB_SSL_REJECT_UNAUTHORIZED: "",
     });
 
     expect(result.TRUST_PROXY).toBe(true);
     expect(result.SCHEDULER_ENABLED).toBe(false);
     expect(result.GOOGLE_MEET_ENABLED).toBe(false);
+    expect(result.DB_SSL_ENABLED).toBe(true);
     expect(result.DB_SSL_REJECT_UNAUTHORIZED).toBe(true);
   });
 

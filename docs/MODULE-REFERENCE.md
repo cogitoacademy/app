@@ -14,9 +14,15 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 Production runtime URL configuration is intentionally separate from module
 contracts: API modules are served from `api.cogitoacademy.id`, frontend links
-and CORS use `app.cogitoacademy.id`, and the apex `cogitoacademy.id` remains
-the external company profile. Services that generate user-facing links use
-`CORS_ORIGIN`, so they point to the frontend host rather than the API host.
+and CORS use `app.cogitoacademy.id` (served by Cloudflare Pages), and the apex
+`cogitoacademy.id` remains the external company profile. Services that generate
+user-facing links use `CORS_ORIGIN`, so they point to the frontend host rather
+than the API host.
+
+Database bootstrap uses `SELECT 1` before the API starts serving traffic. The
+Coolify private PostgreSQL service is non-TLS, so that deployment sets
+`DB_SSL_ENABLED=false`; `DB_SSL_REJECT_UNAUTHORIZED` applies only to TLS-backed
+managed or external PostgreSQL services.
 
 The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
 
