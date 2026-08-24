@@ -4,7 +4,7 @@
 
 - Coolify installed and running on VPS (http://\<ip\>:8000)
 - GitHub Container Registry (GHCR) accessible
-- DNS configured: cogitoacademy.id, app.cogitoacademy.id → VPS IP
+- DNS configured: api.cogitoacademy.id, app.cogitoacademy.id → VPS IP
 
 ## Step 1: Add Docker Registry
 
@@ -42,21 +42,18 @@
    - DATABASE_URL=postgresql://cogito:password@postgres-prod:5432/cogito
    - REDIS_URL=redis://redis-prod:6379
    - BETTER_AUTH_SECRET=...
-   - BETTER_AUTH_URL=https://cogitoacademy.id
+   - BETTER_AUTH_URL=https://api.cogitoacademy.id
    - CORS_ORIGIN=https://app.cogitoacademy.id
    - TRUST_PROXY=true (required — Caddy terminates TLS and forwards
      x-forwarded-for; without it rate limiting and the webhook IP
      allowlist see Caddy's IP instead of the client's)
    - ... (all vars from .env.prod)
 7. Health check: GET /health
-8. Domain: cogitoacademy.id (Coolify auto-configures Caddy + HTTPS)
-   - Path: /rpc → this service (Coolify handles routing)
-   - Path: /api → this service
-   - Path: /health → this service
-   - Path: /webhooks → this service (payment provider webhooks —
-     `POST /webhooks/payments/:provider` must be reachable from the
-     internet; without this path the webhook 404s and payments never
-     confirm)
+8. Domain: api.cogitoacademy.id (Coolify auto-configures Caddy + HTTPS)
+   - All API paths (`/rpc`, `/api`, `/health`, `/webhooks`) route to this
+     service. The payment webhook endpoint
+     (`POST /webhooks/payments/:provider`) must be reachable from the
+     internet; otherwise payments never confirm.
 9. Auto-deploy: ON (deploy when new image pushed)
 10. Deploy
 
@@ -73,7 +70,7 @@
 
 > **VITE_SERVER_URL is baked at build time** (the CD workflow passes it as a
 > `--build-arg`; the web image has no runtime env). The frontend calls the API
-> at the absolute URL `https://cogitoacademy.id` (same site as
+> at the absolute URL `https://api.cogitoacademy.id` (same site as
 > `app.cogitoacademy.id`, so the `SameSite=Strict` session cookie is sent and
 > CORS is allowed via `CORS_ORIGIN`). Do not set `VITE_SERVER_URL` in the
 > Coolify web service env — it has no effect on the built image.
@@ -82,16 +79,8 @@
 
 Coolify automatically configures Caddy reverse proxy:
 
-- cogitoacademy.id/rpc/\* → cogito-server:3001
-- cogitoacademy.id/api/\* → cogito-server:3001
-- cogitoacademy.id/health → cogito-server:3001
-- cogitoacademy.id/webhooks/\* → cogito-server:3001 (payment webhooks)
-- cogitoacademy.id/\* → cogito-web:80
-
-Or use separate domains:
-
+- api.cogitoacademy.id/* → cogito-server:3001
 - app.cogitoacademy.id → cogito-web:80
-- cogitoacademy.id/rpc, /api, /health, /webhooks → cogito-server:3001
 
 ## Step 7: Repeat for Staging
 
@@ -99,7 +88,7 @@ Same as above but:
 
 - Project: "cogito-staging"
 - Images tagged :staging
-- Domains: staging.cogitoacademy.id, staging-app.cogitoacademy.id
+- Domains: staging.cogitoacademy.id (API), staging-app.cogitoacademy.id (web)
 - PAYMENT_PROVIDER=stub
 - SCHEDULER_ENABLED=true
 
@@ -126,7 +115,7 @@ This prevents disk overflow from logs.
 
 Configure via Uptime Kuma UI:
 
-- Monitor `https://cogitoacademy.id/health` every 60s
+- Monitor `https://api.cogitoacademy.id/health` every 60s
 - Monitor `https://staging.cogitoacademy.id/health` every 60s
 - Monitor `https://app.cogitoacademy.id` (frontend) every 60s
 - Alert on downtime (configure webhook/email notifications)
@@ -140,6 +129,6 @@ Configure via Uptime Kuma UI:
 
 ## Step 11: Verify
 
-- `curl https://cogitoacademy.id/health` → 200
+- `curl https://api.cogitoacademy.id/health` → 200
 - `curl https://app.cogitoacademy.id` → frontend HTML
 - Coolify dashboard shows all services as "running"

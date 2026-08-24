@@ -10,6 +10,16 @@ Tutor invitation delivery should be smoke-tested in both desktop and mobile emai
 
 ## Starting the Server
 
+### Production URL topology
+
+- Company profile: `https://cogitoacademy.id` (kept on Hostinger)
+- API/Auth/health/webhooks: `https://api.cogitoacademy.id`
+- Frontend: `https://app.cogitoacademy.id`
+
+Do not point the apex DNS record at the VPS. Configure only the `api` and
+`app` subdomains to the Droplet; `coolify` may be added as a separate private
+administration subdomain.
+
 ### Login/auth smoke check
 
 Open `/login` in a clean browser and sign in as a student, tutor, and admin. The email button may show progress while the auth request and fresh session read complete; it must then go directly to `/dashboard`, `/onboarding`, or `/admin-tutors` without an intermediate `/login` navigation. Verify a wrong password returns the form with an error and the button is usable again. For a return link such as `/login?redirect=/bookings`, verify it lands on the validated target after the same handoff.
@@ -312,7 +322,7 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
 
 1. Open the Coolify dashboard → the service (server / web)
 2. Use **Rollback to previous release** (Coolify keeps the previous image/version)
-3. Verify health: `curl https://cogitoacademy.id/health`
+3. Verify health: `curl https://api.cogitoacademy.id/health`
 4. If a database migration was part of the deployment, check migration status:
    ```bash
    bun run db:studio  # Check migration table
@@ -394,8 +404,8 @@ Key environment variables (see `.env.example` for full list):
 | --------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                 |
 | `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                                                                                              |
-| `BETTER_AUTH_URL`                                                                             | Yes      | Base URL for auth cookies                                                                                                                                    |
-| `CORS_ORIGIN`                                                                                 | Yes      | Allowed CORS origin                                                                                                                                          |
+| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                 |
+| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                        |
 | `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                                                                                              |
 | `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                                                                                          |
 | `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                                                                                 |
@@ -494,8 +504,10 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
 
 1. Coolify → your service → **Webhooks** tab → copy the **Deploy webhook** URL.
 2. GitHub → repo **Settings → Secrets and variables → Actions**:
-   - `COOLIFY_STAGING_WEBHOOK` — staging service webhook URL
-   - `COOLIFY_PROD_WEBHOOK` — production service webhook URL
+   - `COOLIFY_STAGING_SERVER_WEBHOOK` — staging API service webhook URL
+   - `COOLIFY_STAGING_WEBHOOK` — staging web service webhook URL
+   - `COOLIFY_PROD_SERVER_WEBHOOK` — production API service webhook URL
+   - `COOLIFY_PROD_WEBHOOK` — production web service webhook URL
 3. Push to `staging` (or `main`) and verify the "Trigger Coolify deploy" step is green.
 
 Until the secrets are set, CD pushes will fail at the trigger step by design (a silent no-op deploy is worse than a red build).

@@ -38,15 +38,19 @@ jobs:
           docker build \
             -t ghcr.io/${{ github.repository }}/web:latest \
             -f apps/web/Dockerfile \
-            --build-arg VITE_SERVER_URL=https://cogitoacademy.id \
+            --build-arg VITE_SERVER_URL=https://api.cogitoacademy.id \
             .
           docker tag ghcr.io/${{ github.repository }}/web:latest ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
           docker push ghcr.io/${{ github.repository }}/web:latest
           docker push ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
 
-      - name: Trigger Coolify deploy
+      - name: Trigger Coolify server deploy
         # Fail loudly when the webhook secret is unset or the request fails —
         # a silent no-op deploy is worse than a red build.
+        run: |
+          curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
+
+      - name: Trigger Coolify web deploy
         run: |
           curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }}
 
@@ -56,7 +60,7 @@ jobs:
         # ~5 min) and fail the job only if the API never comes back healthy.
         run: |
           for i in $(seq 1 20); do
-            if curl -fsS --max-time 10 https://cogitoacademy.id/health; then
+            if curl -fsS --max-time 10 https://api.cogitoacademy.id/health; then
               echo "API healthy after ${i} attempts"
               exit 0
             fi

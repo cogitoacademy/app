@@ -14,13 +14,14 @@ RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 COPY . .
-# W4: the API lives on a different origin than the frontend (cogitoacademy.id
+# W4: the API lives on a different origin than the frontend (api.cogitoacademy.id
 # vs app.cogitoacademy.id) and nginx.conf has no /rpc proxy, so VITE_SERVER_URL
 # MUST be an absolute URL. A relative value like /rpc would (a) fail the
 # z.url() env validation at bundle load and (b) resolve against the frontend
-# origin (app.cogitoacademy.id/rpc), which nothing routes to the server.
+# origin (app.cogitoacademy.id/rpc), which the static nginx container does not
+# route to the API.
 # CI passes the per-environment value via --build-arg (cd-prod/cd-staging).
-ARG VITE_SERVER_URL=https://cogitoacademy.id
+ARG VITE_SERVER_URL=https://api.cogitoacademy.id
 ENV VITE_SERVER_URL=$VITE_SERVER_URL
 RUN bun run build:web
 

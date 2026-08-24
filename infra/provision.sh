@@ -81,6 +81,6 @@ echo "1. Access Coolify at http://<server-ip>:8000 (restrict port 8000 to your a
 echo "2. Create admin account in Coolify UI"
 echo "3. Add GitHub Container Registry as a Docker registry in Coolify"
 echo "4. Create services for PostgreSQL, Redis, server, and web"
-echo "5. Configure domains: cogitoacademy.id, app.cogitoacademy.id"
-echo "6. Configure DNS: cogitoacademy.id → this server IP"
+echo "5. Configure domains: api.cogitoacademy.id, app.cogitoacademy.id"
+echo "6. Configure DNS: api/app.cogitoacademy.id → this server IP"
 echo "7. Set up environment variables for each service in Coolify UI"

@@ -2,13 +2,15 @@ import { env } from "@cogito-app/env/web";
 
 import { resolveServerUrl } from "./resolve-server-url";
 
-// VITE_SERVER_URL is optional at build time (the Docker build sets /rpc, CI
-// and plain `bun run dev` set nothing). Defaults: dev -> API on localhost:3001
-// (matching apps/web/.env.example), otherwise -> same-origin /rpc (Caddy routes
-// app.cogitoacademy.id/rpc/* to the server container).
+// VITE_SERVER_URL is optional at build time. Defaults: dev -> API on
+// localhost:3001 (matching apps/web/.env.example), otherwise -> the
+// production API subdomain. The Docker build and CI pass the same absolute
+// production URL explicitly.
 const configuredUrl =
   env.VITE_SERVER_URL ??
-  (import.meta.env.DEV ? "http://localhost:3001" : "/rpc");
+  (import.meta.env.DEV
+    ? "http://localhost:3001"
+    : "https://api.cogitoacademy.id");
 
 export const serverUrl = resolveServerUrl(
   configuredUrl,

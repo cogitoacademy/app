@@ -39,9 +39,13 @@ jobs:
             .
           docker push ghcr.io/${{ github.repository }}/web:staging
 
-      - name: Trigger Coolify deploy
+      - name: Trigger Coolify server deploy
         # Fail loudly when the webhook secret is unset or the request fails —
         # a silent no-op deploy is worse than a red build.
+        run: |
+          curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_STAGING_SERVER_WEBHOOK }}
+
+      - name: Trigger Coolify web deploy
         run: |
           curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_STAGING_WEBHOOK }}
 

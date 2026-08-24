@@ -55,7 +55,7 @@ Deploy as a Coolify service:
 
 ### Monitor Configuration
 
-- Monitor `https://cogitoacademy.id/health` every 60s
+- Monitor `https://api.cogitoacademy.id/health` every 60s
 - Monitor `https://staging.cogitoacademy.id/health` every 60s
 - Monitor `https://app.cogitoacademy.id` (frontend) every 60s
 - Alert on downtime (configure webhook/email notifications)

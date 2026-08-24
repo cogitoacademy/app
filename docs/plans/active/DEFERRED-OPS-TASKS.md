@@ -9,6 +9,15 @@
 
 Tasks deferred from production-readiness (#18) and infrastructure (#19) that could not be completed without a live production environment or were identified as gaps during the post-merge audit.
 
+## 0. Production domain split
+
+- [x] Keep the Hostinger company profile on the apex `cogitoacademy.id`.
+- [x] Route `api.cogitoacademy.id` to the API/Auth/health/webhook service.
+- [x] Route `app.cogitoacademy.id` to the frontend and bake the API subdomain
+  into the production Vite image.
+- [ ] Configure the two Coolify resource domains and add the API + web deploy
+  webhook secrets in GitHub Actions.
+
 ---
 
 ## 1. Code Gaps (can be done now)
@@ -90,7 +99,7 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 - Add GHCR as Docker registry in Coolify
 - Create PostgreSQL, Redis, server, web services in Coolify
 - Configure domains + auto-HTTPS in Coolify
-- Configure DNS (cogitoacademy.id, app.cogitoacademy.id → VPS IP)
+- Configure DNS (api.cogitoacademy.id, app.cogitoacademy.id → VPS IP)
 - Verify Coolify auto-deploys on new image push
 - Verify both domains serve with HTTPS
 
