@@ -201,7 +201,7 @@ export function StudentResourcesPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredItems.map((resource) => (
               <Card key={resource.id} className="flex flex-col">
-                <CardHeader>
+                <CardHeader className="items-start!">
                   <div className="flex items-start justify-between gap-3">
                     <CardTitle className="line-clamp-2">
                       {resource.title}
