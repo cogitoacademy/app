@@ -12,6 +12,7 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { useQuery } from "@tanstack/react-query";
@@ -370,7 +371,7 @@ function RecommendedTutorsCard({
   isLoading: boolean;
 }) {
   return (
-    <Card>
+    <Card className="[&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md">
       <CardHeader>
         <IconBox variant="primary-subtle">
           <IconSchool />
@@ -402,8 +403,18 @@ function RecommendedTutorsCard({
           </Stack>
         ) : tutors.length ? (
           <Stack direction="column" spacing="sm" className="m-0!">
-            {tutors.map((tutor) => (
-              <RecommendedTutor key={tutor.id} tutor={tutor} />
+            {tutors.map((tutor, index) => (
+              <Stack
+                key={tutor.id}
+                direction="column"
+                spacing="sm"
+                className="m-0!"
+              >
+                <RecommendedTutor tutor={tutor} />
+                {index < tutors.length - 1 ? (
+                  <Separator className="my-2!" />
+                ) : null}
+              </Stack>
             ))}
           </Stack>
         ) : (

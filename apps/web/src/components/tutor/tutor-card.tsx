@@ -90,7 +90,7 @@ export function TutorSummary({
   return (
     <Item className="items-center border-0 bg-transparent p-0!" size="lg">
       <ItemMedia>
-        <Avatar size="md">
+        <Avatar size="md" className="size-[67px]!">
           <AvatarImage src={tutor.user?.image ?? undefined} alt={tutorName} />
           <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
         </Avatar>
@@ -122,7 +122,19 @@ export function TutorSummary({
             </Badge>
           )}
           {startingPrice !== null && (
-            <span className="ml-1 self-center">From {startingPrice} Marks</span>
+            <span
+              className="ml-1 inline-flex items-center gap-1 self-center whitespace-nowrap"
+              aria-label={`From ${startingPrice} Marks`}
+            >
+              From
+              <img
+                src="/cogito-mark.png"
+                alt=""
+                aria-hidden="true"
+                className="size-3 shrink-0 object-contain"
+              />
+              <span>{startingPrice}</span>
+            </span>
           )}
         </ItemMeta>
       </ItemContent>
@@ -136,7 +148,7 @@ export function TutorSummary({
 export function TutorCard({ tutor, onClick }: TutorCardProps) {
   return (
     <Card
-      className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+      className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md"
       onClick={onClick}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
