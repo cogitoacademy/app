@@ -15,3 +15,8 @@ export const listInput = z
 export const idInput = z.object({
   id: z.string().min(1).max(100),
 });
+
+export const updateReadStatusInput = z.object({
+  ids: z.array(z.string().min(1).max(100)).min(1).max(100),
+  isRead: z.boolean(),
+});

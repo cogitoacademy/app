@@ -136,6 +136,72 @@ describe("Notification list & read flow", () => {
     expect(updated!.readAt).not.toBeNull();
   });
 
+  test("updateReadStatus marks selected notifications read or unread", async () => {
+    const first = await insertNotification(studentId, { isRead: false });
+    const second = await insertNotification(studentId, {
+      isRead: true,
+      readAt: new Date(),
+    });
+
+    await studentClient.notification.updateReadStatus({
+      ids: [first.id, second.id],
+      isRead: false,
+    });
+
+    const updated = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.userId, studentId));
+    const selected = updated.filter((row) =>
+      [first.id, second.id].includes(row.id),
+    );
+
+    expect(selected.every((row) => row.isRead === false)).toBe(true);
+    expect(selected.every((row) => row.readAt === null)).toBe(true);
+
+    await studentClient.notification.updateReadStatus({
+      ids: [first.id, second.id],
+      isRead: true,
+    });
+
+    const readRows = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.userId, studentId));
+    const selectedReadRows = readRows.filter((row) =>
+      [first.id, second.id].includes(row.id),
+    );
+
+    expect(selectedReadRows.every((row) => row.isRead === true)).toBe(true);
+    expect(selectedReadRows.every((row) => row.readAt !== null)).toBe(true);
+  });
+
+  test("updateReadStatus never changes another user's notification", async () => {
+    const otherId = crypto.randomUUID();
+    await db.insert(user).values({
+      id: otherId,
+      email: `other3.${ts}@cogito.test`,
+      name: "Other 3",
+    });
+    const otherNotif = await insertNotification(otherId, { isRead: false });
+
+    await studentClient.notification.updateReadStatus({
+      ids: [otherNotif.id],
+      isRead: true,
+    });
+
+    const [stillUnread] = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.id, otherNotif.id))
+      .limit(1);
+    expect(stillUnread!.isRead).toBe(false);
+    await db
+      .delete(user)
+      .where(eq(user.id, otherId))
+      .catch(() => {});
+  });
+
   test("markAsRead only affects own notifications", async () => {
     const otherId = crypto.randomUUID();
     await db.insert(user).values({

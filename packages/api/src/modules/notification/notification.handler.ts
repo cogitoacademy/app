@@ -2,11 +2,16 @@ import type { Context } from "../../context";
 import { z } from "zod";
 import { withDomainMap } from "../../lib/handler-utils";
 import { mapNotificationError } from "./notification.errors";
-import type { listInput, idInput } from "./notification.types";
+import type {
+  listInput,
+  idInput,
+  updateReadStatusInput,
+} from "./notification.types";
 import type { NotificationService } from "./notification.service";
 
 type ListInput = z.infer<typeof listInput>;
 type IdInput = z.infer<typeof idInput>;
+type UpdateReadStatusInput = z.infer<typeof updateReadStatusInput>;
 
 export function createNotificationHandler(deps: {
   notificationService: NotificationService;
@@ -48,6 +53,23 @@ export function createNotificationHandler(deps: {
     );
   }
 
+  async function updateReadStatus({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: UpdateReadStatusInput;
+  }) {
+    return withDomainMap(async () => {
+      await notificationService.updateReadStatus(
+        context.session!.user.id,
+        input.ids,
+        input.isRead,
+      );
+      return { success: true as const };
+    }, mapNotificationError);
+  }
+
   async function markAllAsRead({ context }: { context: Context }) {
     return withDomainMap(
       () => notificationService.markAllAsRead(context.session!.user.id),
@@ -55,7 +77,13 @@ export function createNotificationHandler(deps: {
     );
   }
 
-  return { list, getUnreadCount, markAsRead, markAllAsRead };
+  return {
+    list,
+    getUnreadCount,
+    markAsRead,
+    updateReadStatus,
+    markAllAsRead,
+  };
 }
 
 export type NotificationHandler = ReturnType<typeof createNotificationHandler>;

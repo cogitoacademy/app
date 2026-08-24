@@ -87,6 +87,11 @@ export interface InAppNotificationPort {
   ): Promise<NotificationListResult>;
   getUnreadCount(userId: string): Promise<number>;
   markAsRead(userId: string, id: string): Promise<void>;
+  updateReadStatus(
+    userId: string,
+    ids: string[],
+    isRead: boolean,
+  ): Promise<void>;
   markAllAsRead(userId: string): Promise<void>;
 }
 
@@ -329,6 +334,21 @@ export function createNotificationService(
   }
 
   /**
+   * Updates the read status for selected notifications owned by a user.
+   *
+   * @param userId - the owning user
+   * @param ids - selected notification ids
+   * @param isRead - the target read status
+   */
+  async function updateReadStatus(
+    userId: string,
+    ids: string[],
+    isRead: boolean,
+  ): Promise<void> {
+    await repo.updateReadStatusForUser(ids, userId, isRead);
+  }
+
+  /**
    * Marks all of a user's notifications as read.
    *
    * @param userId - the user to update
@@ -343,6 +363,7 @@ export function createNotificationService(
     list,
     getUnreadCount,
     markAsRead,
+    updateReadStatus,
     markAllAsRead,
     dispatchQueuedEmails,
   };

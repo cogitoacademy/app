@@ -43,6 +43,10 @@ Guide copy is maintained in `apps/web/src/components/guide/guide-content.ts`. Wh
 
 The shared route pending state uses the Selia spinner from `apps/web/src/components/loader.tsx`. If a navigation smoke test catches a loading state, verify the spinner remains visible in both light and dark themes and stops animating under reduced-motion preferences.
 
+### Notification inbox smoke check
+
+As a signed-in student or tutor, open `/notifications` and confirm the list shows the notification title/body, a human-readable category badge, an exact date/time, relative age, unread emphasis, and a booking link when the notification has a booking. Select one row and verify **Mark as read** and **Mark as unread** both update the row and the shell bell count. Select multiple rows, use **Select all**, and verify both bulk actions update only the selected rows. Loading older notifications must keep the current selection model usable; changing read status must clear the selection after success. As another user, confirm a selected ID cannot change a notification owned by someone else.
+
 ### Economy rate-control smoke check
 
 As an admin, open `/admin-economy`, confirm the Marks value, tutor minimum/increments,

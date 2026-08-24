@@ -424,8 +424,8 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - `notification.types.ts` — Zod schemas for notification input
 - `notification.errors.ts` — `NotificationNotFoundError`
-- `notification.repo.ts` — `insert`, `listByUserId`, `updateReadStatus`, `markAllRead`, `countUnread`
-- `notification.service.ts` — `write(params)`, `writeBestEffort(params)`, `list(userId, opts)`, `getUnreadCount(userId)`, `markAsRead(id, userId)`, `markAllAsRead(userId)`
+- `notification.repo.ts` — `insert`, `listByUserId`, `updateReadStatus`, `updateReadStatusForUser`, `markAllRead`, `countUnread`
+- `notification.service.ts` — `write(params)`, `writeBestEffort(params)`, `list(userId, opts)`, `getUnreadCount(userId)`, `markAsRead(id, userId)`, `updateReadStatus(userId, ids, isRead)`, `markAllAsRead(userId)`
 - `notification.handler.ts` — Maps handler context/input
 - `notification.router.ts` — Protected routes
 
@@ -437,6 +437,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `list(userId, opts)` — Paginated list with `unreadOnly` filter
 - `getUnreadCount(userId)` — Returns the number of unread notifications
 - `markAsRead(id, userId)` — Marks single notification as read
+- `updateReadStatus(userId, ids, isRead)` — Marks up to 100 selected notifications as read or unread, scoped to the owning user
 - `markAllAsRead(userId)` — Marks all unread notifications as read
 
 **Dependencies:** `NotificationRepo`, `EmailPort` (+ `db` for the outbox consumer)
@@ -444,6 +445,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 **Business Rules:**
 
 - Every notification has a unique `eventKey` for idempotency
+- Selected read-status updates only affect notification IDs owned by the authenticated user
 - `write` throws — used for critical notifications
 - `writeBestEffort` swallows errors — used for non-critical notifications
 - Email dispatch is outbox-based: rows are queued inside the DB transaction and sent by the scheduler job; no email I/O inside open transactions (#46)

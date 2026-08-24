@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, lt, count, or, sql } from "drizzle-orm";
+import { eq, and, asc, desc, lt, count, inArray, or, sql } from "drizzle-orm";
 import {
   notification,
   notificationDispatch,
@@ -315,6 +315,26 @@ export async function updateReadStatus(
 }
 
 /**
+ * Sets the read status for a selected set of a user's notifications.
+ *
+ * @param conn - the database connection or active transaction
+ * @param ids - notification ids selected by the user
+ * @param userId - the owning user
+ * @param read - whether the notifications should be read
+ */
+export async function updateReadStatusForUser(
+  conn: DbOrTx,
+  ids: string[],
+  userId: string,
+  read: boolean,
+) {
+  await conn
+    .update(notification)
+    .set({ isRead: read, readAt: read ? new Date() : null })
+    .where(and(eq(notification.userId, userId), inArray(notification.id, ids)));
+}
+
+/**
  * Marks all of a user's notifications as read.
  *
  * @param conn - the database connection or active transaction
@@ -349,6 +369,8 @@ export function createNotificationRepo(db: DbType) {
     countUnread: (userId: string) => countUnread(db, userId),
     updateReadStatus: (id: string, userId: string, read: boolean) =>
       updateReadStatus(db, id, userId, read),
+    updateReadStatusForUser: (ids: string[], userId: string, read: boolean) =>
+      updateReadStatusForUser(db, ids, userId, read),
     markAllRead: (userId: string) => markAllRead(db, userId),
   };
 }

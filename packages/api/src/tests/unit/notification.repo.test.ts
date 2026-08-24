@@ -13,6 +13,7 @@ import {
   listNotifications,
   countUnread,
   updateReadStatus,
+  updateReadStatusForUser,
   markAllRead,
   createNotificationRepo,
 } from "../../modules/notification/notification.repo";
@@ -313,6 +314,21 @@ describe("updateReadStatus", () => {
   });
 });
 
+describe("updateReadStatusForUser", () => {
+  test("updates selected notifications for the owning user", async () => {
+    const where = mock(async () => {});
+    const set = mock(() => ({ where }));
+    const updateFn = mock(() => ({ set }));
+    const conn = { update: updateFn } as any;
+
+    await updateReadStatusForUser(conn, ["n1", "n2"], "u1", false);
+
+    expect(updateFn).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith({ isRead: false, readAt: null });
+    expect(where).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("markAllRead", () => {
   test("marks all unread notifications as read", async () => {
     const where = mock(async () => {});
@@ -337,6 +353,7 @@ describe("createNotificationRepo", () => {
     expect(typeof repo.listNotifications).toBe("function");
     expect(typeof repo.countUnread).toBe("function");
     expect(typeof repo.updateReadStatus).toBe("function");
+    expect(typeof repo.updateReadStatusForUser).toBe("function");
     expect(typeof repo.markAllRead).toBe("function");
     expect(typeof repo.findNotificationByIdForUser).toBe("function");
   });
@@ -397,6 +414,18 @@ describe("createNotificationRepo", () => {
 
     const repo = createNotificationRepo(db);
     await repo.markAllRead("u1");
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  test("updateReadStatusForUser delegates to standalone function", async () => {
+    const where = mock(async () => {});
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const db = { update } as any;
+
+    const repo = createNotificationRepo(db);
+    await repo.updateReadStatusForUser(["n1"], "u1", true);
+
     expect(update).toHaveBeenCalledTimes(1);
   });
 });

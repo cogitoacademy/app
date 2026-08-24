@@ -14,6 +14,8 @@ Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Spec
 
 The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, next lesson, upcoming sessions, availability, profile status, and payout totals. The tutor dashboard prioritizes a two-row action-first layout: welcome and teaching setup share the first row, while requests to review and next lesson share the second row before metrics and payout details. Student and tutor dashboards share the same `DashboardWelcomeCard` visual, including its SVG illustration, minimum height, spacing, and CTA structure, while keeping role-specific copy and destinations. Both student and tutor next-lesson sections reuse the same `BookingListCard` composition as the shared booking list, including its date tile, participant metadata, Marks treatment, status tooltip, and detail action. Admins see escalated booking operations plus pending tutor-profile and achievement review queues. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. The authenticated shell uses the profile image in the sidebar user avatar when available and falls back to initials. Booking rows use the Cogito mark icon as the Marks prefix, keep time/location/tutor in the booking metadata column, show student participants (not the tutor) in the avatar stack, use the per-student amount for a single-session group's `You pay` value, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These are frontend compositions of existing oRPC procedures; there is no dashboard-specific backend endpoint.
 
+The authenticated `/notifications` route is a focused inbox for durable in-app notifications. It uses cursor pagination, a category label badge, an exact date/time plus relative age, visible unread treatment, row selection, select-all for the currently loaded rows, and batch read/unread updates. Selected IDs are sent through the protected `notification.updateReadStatus` procedure, which scopes the database update to the authenticated user. The existing mark-all-read action and notification-bell unread count remain available.
+
 ## Authenticated editorial content
 
 Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only.
@@ -341,7 +343,7 @@ After submission, the tutor or booking proposer can propose a replacement time f
 
 ### Notification Module (protected)
 
-- `list`, `getUnreadCount`, `markAsRead`, `markAllAsRead`
+- `list`, `getUnreadCount`, `markAsRead`, `updateReadStatus`, `markAllAsRead`
 
 ### AdminBooking Module (admin)
 

@@ -1,5 +1,9 @@
 import { protectedProcedure } from "../../procedures";
-import { listInput, idInput } from "./notification.types";
+import {
+  listInput,
+  idInput,
+  updateReadStatusInput,
+} from "./notification.types";
 import type { NotificationHandler } from "./notification.handler";
 
 export function createNotificationRouter(handler: NotificationHandler) {
@@ -36,6 +40,18 @@ export function createNotificationRouter(handler: NotificationHandler) {
       })
       .input(idInput)
       .handler(handler.markAsRead),
+
+    updateReadStatus: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/notification/update-read-status",
+        tags: ["Notifications"],
+        summary: "Update notification read status",
+        description:
+          "Marks selected notifications as read or unread for the current user",
+      })
+      .input(updateReadStatusInput)
+      .handler(handler.updateReadStatus),
 
     markAllAsRead: protectedProcedure
       .route({

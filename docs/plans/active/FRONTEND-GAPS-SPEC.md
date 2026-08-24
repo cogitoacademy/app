@@ -379,21 +379,22 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-17
 
-**Current state:** **CLOSED (2026-08-14).** Full `/_app/notifications` page exists at `apps/web/src/routes/_app.notifications.tsx`: cursor pagination, read/unread states, mark-all-read, and unread count in the sidebar bell. Only the optional category filter remains unimplemented (nice-to-have, not a PRD blocker).
+**Current state:** **CLOSED (2026-08-14; triage refinement 2026-08-24).** Full `/_app/notifications` page provides cursor pagination, category badges, exact timestamps, visible read/unread states, row selection, select-all for loaded rows, batch read/unread actions, mark-all-read, booking links, and the unread count in the sidebar bell. Category filtering remains optional and unimplemented (nice-to-have, not a PRD blocker).
 
 **Required:**
 
 1. New route `/_app/notifications` — full notification list
 2. Calls `notification.list` with cursor pagination
 3. Show: title, body, category badge, read/unread state, timestamp, booking link
-4. "Mark as read" per notification + "Mark all as read"
+4. "Mark as read"/"Mark as unread" per notification and for selected rows + "Mark all as read"
 5. Unread count badge in sidebar (already has `notification-bell.tsx`)
 6. Filter by category (optional)
 
 **Acceptance:**
 
 - Notifications page lists all notifications
-- Mark as read works
+- Mark as read/unread works for a row and selected rows
+- Select all controls the currently loaded notification rows
 - Unread badge updates
 
 ---
@@ -637,6 +638,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.21 (2026-08-24): Refined the notifications inbox with row selection, select-all for loaded rows, batch read/unread actions, human-readable category badges, exact date/time display, and a protected `notification.updateReadStatus` procedure scoped to the authenticated user. No notification schema change.
 
 - v1.20 (2026-08-24): Moved eligible `Propose new time` and `Complete session` buttons into the booking-detail header action group beneath the state badge; removed their card-footer duplicates. Documented that the booking proposer may reschedule in `confirmed`/`scheduled` before H-2, while force-majeure exceptions require support/admin handling and an auditable override. No RPC, schema, or persistence contract changed.
 - v1.19 (2026-08-24): Replaced the outer booking-detail overview flex-wrap with a responsive two-column grid for the merged `Date & time` and `Format & access` fields; the grid stacks on narrow screens while inner status/CTA content can still wrap. No RPC, schema, or persistence contract changed.

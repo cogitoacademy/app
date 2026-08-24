@@ -764,6 +764,13 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ id }`
 - **Output:** `{ notification }`
 
+### `notification.updateReadStatus`
+
+- **Auth:** Protected
+- **Input:** `{ ids: string[], isRead: boolean }` — `ids` contains 1–100 notification IDs
+- **Output:** `{ success: true }`
+- **Description:** Updates the read state for selected notifications owned by the authenticated user; `isRead: false` marks them unread
+
 ### `notification.markAllAsRead`
 
 - **Auth:** Protected

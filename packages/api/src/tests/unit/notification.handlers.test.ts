@@ -5,12 +5,14 @@ describe("notificationHandler", () => {
   const list = mock(async () => [{ id: "n1" }]);
   const getUnreadCount = mock(async () => 5);
   const markAsRead = mock(async () => {});
+  const updateReadStatus = mock(async () => {});
   const markAllAsRead = mock(async () => {});
   const handler = createNotificationHandler({
     notificationService: {
       list,
       getUnreadCount,
       markAsRead,
+      updateReadStatus,
       markAllAsRead,
     } as any,
   });
@@ -85,6 +87,21 @@ describe("notificationHandler", () => {
       await handler.markAllAsRead({ context });
 
       expect(markAllAsRead).toHaveBeenCalledWith("u1");
+    });
+  });
+
+  describe("updateReadStatus", () => {
+    test("calls notificationService.updateReadStatus with userId, ids, and status", async () => {
+      const context = {
+        session: { user: { id: "u1" } },
+      } as any;
+
+      await handler.updateReadStatus({
+        context,
+        input: { ids: ["n1", "n2"], isRead: false },
+      });
+
+      expect(updateReadStatus).toHaveBeenCalledWith("u1", ["n1", "n2"], false);
     });
   });
 });

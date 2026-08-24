@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -7,22 +8,23 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { format } from "date-fns";
 import {
   IconBell,
-  IconCheck,
-  IconClock,
   IconExternalLink,
+  IconMail,
+  IconMailOpened,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import {
@@ -30,21 +32,49 @@ import {
   ItemAction,
   ItemContent,
   ItemDescription,
-  ItemMedia,
   ItemMeta,
   ItemTitle,
 } from "@cogito-app/ui/components/selia/item";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { cn } from "@cogito-app/ui/lib/utils";
 
 import { EmptyStateCard } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 const PAGE_SIZE = 20;
 
+type NotificationItemData = {
+  id: string;
+  bookingId: string | null;
+  category: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: Date | string;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  achievement: "Achievement",
+  booking: "Booking",
+  override: "Admin update",
+  payment: "Payment",
+  refund: "Refund",
+  schedule: "Schedule",
+  system: "System",
+};
+
+function toDate(value: Date | string) {
+  return typeof value === "string" ? new Date(value) : value;
+}
+
+function formatNotificationDate(date: Date | string) {
+  return format(toDate(date), "d MMM yyyy 'at' h:mm a");
+}
+
 function formatRelativeTime(date: Date | string) {
-  const value = typeof date === "string" ? new Date(date) : date;
+  const value = toDate(date);
   const diff = Date.now() - value.getTime();
   const minutes = Math.floor(diff / 60_000);
   const hours = Math.floor(minutes / 60);
@@ -54,25 +84,31 @@ function formatRelativeTime(date: Date | string) {
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
+  return "Older update";
+}
 
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(value);
+function getCategoryLabel(category: string) {
+  return CATEGORY_LABELS[category] ?? category.replaceAll("_", " ");
 }
 
 function getCategoryVariant(category: string) {
-  if (category === "payment" || category === "refund")
+  if (category === "payment" || category === "refund") {
     return "success" as const;
-  if (category === "override" || category === "system")
+  }
+  if (category === "override" || category === "system") {
     return "warning" as const;
-  if (category === "booking" || category === "schedule") return "info" as const;
+  }
+  if (category === "booking" || category === "schedule") {
+    return "info" as const;
+  }
   return "secondary" as const;
 }
 
 export function NotificationsPage() {
   const queryClient = useQueryClient();
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
   const notificationsQuery = useInfiniteQuery(
     orpc.notification.list.infiniteOptions({
       initialPageParam: null as string | null,
@@ -87,14 +123,21 @@ export function NotificationsPage() {
     orpc.notification.getUnreadCount.queryOptions({}),
   );
 
-  const markAsRead = useMutation(
-    orpc.notification.markAsRead.mutationOptions({
-      onSuccess: () => {
+  const updateReadStatus = useMutation(
+    orpc.notification.updateReadStatus.mutationOptions({
+      onSuccess: (_result, variables) => {
+        setSelectedIds(new Set());
         void invalidateNotificationQueries(queryClient);
+        toastManager.add({
+          title: variables.isRead
+            ? "Notifications marked as read"
+            : "Notifications marked as unread",
+          type: "success",
+        });
       },
       onError: (error: Error) =>
         toastManager.add({
-          title: "Notification could not be marked as read",
+          title: "Notification status could not be updated",
           description: error.message,
           type: "error",
         }),
@@ -104,6 +147,7 @@ export function NotificationsPage() {
   const markAllAsRead = useMutation(
     orpc.notification.markAllAsRead.mutationOptions({
       onSuccess: () => {
+        setSelectedIds(new Set());
         void invalidateNotificationQueries(queryClient);
         toastManager.add({
           title: "All notifications marked as read",
@@ -120,9 +164,38 @@ export function NotificationsPage() {
   );
 
   const items =
-    notificationsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+    (notificationsQuery.data?.pages.flatMap(
+      (page) => page.items,
+    ) as NotificationItemData[]) ?? [];
   const unreadCount =
     unreadQuery.data?.count ?? items.filter((item) => !item.isRead).length;
+  const selectedCount = selectedIds.size;
+  const allSelected =
+    items.length > 0 && items.every((item) => selectedIds.has(item.id));
+  const someSelected = selectedCount > 0 && !allSelected;
+
+  function toggleAll() {
+    setSelectedIds(
+      allSelected ? new Set() : new Set(items.map((item) => item.id)),
+    );
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function updateSelected(isRead: boolean) {
+    if (selectedIds.size === 0) return;
+    updateReadStatus.mutate({
+      ids: Array.from(selectedIds),
+      isRead,
+    });
+  }
 
   return (
     <Stack direction="column" spacing="lg">
@@ -137,7 +210,7 @@ export function NotificationsPage() {
             ) : null}
           </div>
           <Text className="text-muted">
-            Stay up to date with your bookings, payments, and account activity.
+            Review updates from your bookings, payments, and account.
           </Text>
         </div>
         {unreadCount > 0 ? (
@@ -147,7 +220,7 @@ export function NotificationsPage() {
             progress={markAllAsRead.isPending}
             disabled={markAllAsRead.isPending}
           >
-            <IconCheck /> Mark all as read
+            <IconMailOpened /> Mark all as read
           </Button>
         ) : null}
       </div>
@@ -184,24 +257,86 @@ export function NotificationsPage() {
         />
       ) : (
         <Card>
-          <CardHeader>
+          <CardHeader className="p-5 sm:p-6">
             <CardTitle>All activity</CardTitle>
-            <CardDescription>
-              Newest updates appear first. Select a booking to see its details.
-            </CardDescription>
+            <Text className="text-muted">
+              Newest updates appear first. Select rows to change their read
+              status.
+            </Text>
           </CardHeader>
-          <CardBody className="space-y-2">
-            {items.map((notification) => (
-              <NotificationItem
-                key={notification.id}
-                notification={notification}
-                isPending={
-                  markAsRead.isPending &&
-                  markAsRead.variables?.id === notification.id
+
+          <div className="flex flex-col gap-3 border-b border-card-separator px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onCheckedChange={toggleAll}
+                aria-label={
+                  allSelected ? "Clear selection" : "Select all notifications"
                 }
-                onMarkAsRead={() => markAsRead.mutate({ id: notification.id })}
               />
-            ))}
+              <span className="text-sm font-medium">
+                {selectedCount > 0 ? `${selectedCount} selected` : "Select all"}
+              </span>
+            </div>
+
+            {selectedCount > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateSelected(true)}
+                  progress={
+                    updateReadStatus.isPending &&
+                    updateReadStatus.variables?.isRead === true
+                  }
+                  disabled={updateReadStatus.isPending}
+                >
+                  <IconMailOpened /> Mark as read
+                </Button>
+                <Button
+                  variant="plain"
+                  size="sm"
+                  onClick={() => updateSelected(false)}
+                  progress={
+                    updateReadStatus.isPending &&
+                    updateReadStatus.variables?.isRead === false
+                  }
+                  disabled={updateReadStatus.isPending}
+                >
+                  <IconMail /> Mark as unread
+                </Button>
+              </div>
+            ) : (
+              <span className="text-sm text-dimmed">
+                Select any row to manage its read status.
+              </span>
+            )}
+          </div>
+
+          <CardBody className="p-0!">
+            <div aria-label="Notification list" role="list">
+              {items.map((notification) => (
+                <NotificationItem
+                  key={notification.id}
+                  notification={notification}
+                  selected={selectedIds.has(notification.id)}
+                  isPending={
+                    updateReadStatus.isPending &&
+                    updateReadStatus.variables?.ids.includes(
+                      notification.id,
+                    ) === true
+                  }
+                  onToggleSelected={() => toggleSelected(notification.id)}
+                  onUpdateReadStatus={(isRead) =>
+                    updateReadStatus.mutate({
+                      ids: [notification.id],
+                      isRead,
+                    })
+                  }
+                />
+              ))}
+            </div>
           </CardBody>
           {notificationsQuery.hasNextPage ? (
             <CardFooter className="justify-center">
@@ -223,60 +358,94 @@ export function NotificationsPage() {
 
 function NotificationItem({
   notification,
+  selected,
   isPending,
-  onMarkAsRead,
+  onToggleSelected,
+  onUpdateReadStatus,
 }: {
-  notification: {
-    id: string;
-    bookingId: string | null;
-    category: string;
-    title: string;
-    body: string;
-    isRead: boolean;
-    createdAt: Date | string;
-  };
+  notification: NotificationItemData;
+  selected: boolean;
   isPending: boolean;
-  onMarkAsRead: () => void;
+  onToggleSelected: () => void;
+  onUpdateReadStatus: (isRead: boolean) => void;
 }) {
+  const date = toDate(notification.createdAt);
+  const dateTime = date.toISOString();
+
   return (
     <Item
-      variant={notification.isRead ? "plain" : "info"}
+      variant="plain"
       size="md"
-      className={notification.isRead ? "opacity-80" : undefined}
+      role="listitem"
+      className={cn(
+        "items-start rounded-none border-b border-separator px-5 py-4 last:border-b-0 sm:px-6",
+        !notification.isRead && "bg-info/5",
+        selected && "bg-accent",
+      )}
     >
-      <ItemMedia>
-        <IconBox
-          variant={notification.isRead ? "secondary-subtle" : "info-subtle"}
-        >
-          {notification.isRead ? <IconClock /> : <IconBell />}
-        </IconBox>
-      </ItemMedia>
-      <ItemContent>
-        <div className="flex flex-wrap items-center gap-2">
-          <ItemTitle>{notification.title}</ItemTitle>
+      <div className="pt-0.5">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onToggleSelected}
+          aria-label={`Select ${notification.title}`}
+        />
+      </div>
+      <ItemContent className="min-w-0 gap-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <ItemTitle
+            className={cn("min-w-0", !notification.isRead && "font-semibold")}
+          >
+            {notification.title}
+          </ItemTitle>
+          {!notification.isRead ? (
+            <span
+              className="size-1.5 rounded-full bg-info"
+              aria-label="Unread"
+              title="Unread"
+            />
+          ) : null}
+        </div>
+        <ItemDescription className="max-w-3xl text-sm">
+          {notification.body}
+        </ItemDescription>
+        <ItemMeta className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <time
+            dateTime={dateTime}
+            className="inline-flex items-center gap-1"
+            title={formatNotificationDate(notification.createdAt)}
+          >
+            {formatNotificationDate(notification.createdAt)}
+          </time>
+          <span aria-hidden="true">·</span>
+          <span>{formatRelativeTime(notification.createdAt)}</span>
           <Badge
             variant={getCategoryVariant(notification.category)}
             size="sm"
             pill
           >
-            {notification.category}
+            {getCategoryLabel(notification.category)}
           </Badge>
-        </div>
-        <ItemDescription>{notification.body}</ItemDescription>
-        <ItemMeta>{formatRelativeTime(notification.createdAt)}</ItemMeta>
+        </ItemMeta>
       </ItemContent>
-      <ItemAction>
-        {!notification.isRead ? (
-          <Button
-            variant="plain"
-            size="sm"
-            onClick={onMarkAsRead}
-            progress={isPending}
-            disabled={isPending}
-          >
-            Mark read
-          </Button>
-        ) : null}
+      <ItemAction className="self-start">
+        <Button
+          variant="plain"
+          size="sm"
+          className="shrink-0 px-2 sm:px-3"
+          onClick={() => onUpdateReadStatus(!notification.isRead)}
+          progress={isPending}
+          disabled={isPending}
+          aria-label={
+            notification.isRead
+              ? "Mark notification unread"
+              : "Mark notification read"
+          }
+        >
+          {notification.isRead ? <IconMail /> : <IconMailOpened />}
+          <span className="hidden sm:inline">
+            {notification.isRead ? "Mark unread" : "Mark read"}
+          </span>
+        </Button>
         {notification.bookingId ? (
           <Button
             variant="plain"

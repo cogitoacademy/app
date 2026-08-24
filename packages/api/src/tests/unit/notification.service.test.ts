@@ -54,6 +54,7 @@ function makeRepo(overrides: Partial<NotificationRepo> = {}): NotificationRepo {
     listNotifications: mock(async () => []),
     countUnread: mock(async () => 0),
     updateReadStatus: mock(async () => {}),
+    updateReadStatusForUser: mock(async () => {}),
     markAllRead: mock(async () => {}),
     findDispatch: mock(async () => null),
     ...overrides,
@@ -389,6 +390,7 @@ describe("NotificationService (unit)", () => {
     expect(typeof service.list).toBe("function");
     expect(typeof service.getUnreadCount).toBe("function");
     expect(typeof service.markAsRead).toBe("function");
+    expect(typeof service.updateReadStatus).toBe("function");
     expect(typeof service.markAllAsRead).toBe("function");
   });
 
@@ -585,6 +587,19 @@ describe("NotificationService (unit)", () => {
     }
 
     expect(repo.updateReadStatus).not.toHaveBeenCalled();
+  });
+
+  test("updateReadStatus delegates selected ids and target status to repo", async () => {
+    const repo = makeRepo();
+
+    const service = createNotificationService(repo);
+    await service.updateReadStatus("user1", ["n1", "n2"], false);
+
+    expect(repo.updateReadStatusForUser).toHaveBeenCalledWith(
+      ["n1", "n2"],
+      "user1",
+      false,
+    );
   });
 
   test("markAllAsRead delegates to repo", async () => {
