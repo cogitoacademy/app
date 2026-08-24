@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
@@ -36,6 +38,7 @@ export default function SignInForm({
     from: "/",
   });
   const { isPending } = authClient.useSession();
+  const [isAuthTransitioning, setIsAuthTransitioning] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm({
@@ -44,39 +47,62 @@ export default function SignInForm({
       password: "",
     },
     onSubmit: async ({ value }) => {
-      await authClient.signIn.email(
-        {
-          email: value.email,
-          password: value.password,
-        },
-        {
-          onSuccess: () => {
-            authClient
-              .getSession({ query: { disableCookieCache: true } })
-              .then((session) => {
-                const role = (
-                  session.data?.user as { role?: string } | undefined
-                )?.role;
-                if (redirectPath) {
-                  navigate({ to: redirectPath });
-                } else if (role === "tutor") {
-                  navigate({ to: "/onboarding" });
-                } else if (role === "admin") {
-                  navigate({ to: "/admin-tutors" });
-                } else {
-                  navigate({ to: "/dashboard" });
-                }
-              });
-            toastManager.add({ title: "Sign in successful", type: "success" });
+      setIsAuthTransitioning(true);
+      try {
+        const result = await authClient.signIn.email(
+          {
+            email: value.email,
+            password: value.password,
           },
-          onError: (error) => {
-            toastManager.add({
-              title: error.error.message || error.error.statusText,
-              type: "error",
-            });
-          },
-        },
-      );
+          // The route transition below performs the authoritative session
+          // read. Avoid starting Better Auth's background session refetch in
+          // parallel with it, which can briefly put this form back into the
+          // global loading state.
+          { disableSignal: true },
+        );
+
+        if (result.error) {
+          toastManager.add({
+            title: result.error.message || result.error.statusText,
+            type: "error",
+          });
+          return;
+        }
+
+        const session = await authClient.getSession({
+          query: { disableCookieCache: true },
+        });
+        if (!session.data) {
+          toastManager.add({
+            title: "Sign in succeeded, but no session was found.",
+            type: "error",
+          });
+          return;
+        }
+
+        const role = (session.data.user as { role?: string } | undefined)?.role;
+        toastManager.add({ title: "Sign in successful", type: "success" });
+
+        if (redirectPath) {
+          await navigate({ to: redirectPath });
+        } else if (role === "tutor") {
+          await navigate({ to: "/onboarding" });
+        } else if (role === "admin") {
+          await navigate({ to: "/admin-tutors" });
+        } else {
+          await navigate({ to: "/dashboard" });
+        }
+      } catch (error) {
+        toastManager.add({
+          title:
+            error instanceof Error
+              ? error.message
+              : "Unable to sign in. Please try again.",
+          type: "error",
+        });
+      } finally {
+        setIsAuthTransitioning(false);
+      }
     },
     validators: {
       onSubmit: z.object({
@@ -86,7 +112,7 @@ export default function SignInForm({
     },
   });
 
-  if (isPending) {
+  if (isPending && !isAuthTransitioning) {
     return <Loader />;
   }
 

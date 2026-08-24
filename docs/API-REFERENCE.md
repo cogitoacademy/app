@@ -6,6 +6,8 @@ Last updated: 2026-08-23
 
 All oRPC endpoints use **POST** method. Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`. The protected Knowledge Bank file proxy is the documented exception and uses `GET`.
 
+Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The web client waits for the successful auth response and a fresh session read before entering an authenticated route; the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. This changes no request or response shape.
+
 The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures.
 
 The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract. Portal-based date and select popups render above dialog layers so modal forms remain interactive.

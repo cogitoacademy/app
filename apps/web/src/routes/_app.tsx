@@ -34,7 +34,11 @@ const routeTitles: Record<string, string> = {
 export const Route = createFileRoute("/_app")({
   component: RouteComponent,
   beforeLoad: async () => {
-    const session = await authClient.getSession();
+    // Role is a custom user field, so authorize from the database-backed
+    // session response instead of a potentially stale cookie-cache snapshot.
+    const session = await authClient.getSession({
+      query: { disableCookieCache: true },
+    });
     if (!session.data) {
       redirect({
         to: "/login",

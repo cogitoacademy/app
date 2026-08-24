@@ -9,10 +9,17 @@ const ADMIN_PASSWORD = "AdminPassword123!";
 
 async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
+  const pathsAfterLoginPage: string[] = [];
+  page.on("framenavigated", (frame) => {
+    if (frame === page.mainFrame()) {
+      pathsAfterLoginPage.push(new URL(frame.url()).pathname);
+    }
+  });
   await page.locator("input#email").fill(email);
   await page.locator("input#password").fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await page.waitForURL(/\/(dashboard|onboarding|admin-tutors)(?:$|\/)/);
+  expect(pathsAfterLoginPage).not.toContain("/login");
 }
 
 test("student sees closed-loop Marks pricing and cannot open admin economy", async ({

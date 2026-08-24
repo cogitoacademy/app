@@ -10,6 +10,10 @@ Tutor invitation delivery should be smoke-tested in both desktop and mobile emai
 
 ## Starting the Server
 
+### Login/auth smoke check
+
+Open `/login` in a clean browser and sign in as a student, tutor, and admin. The email button may show progress while the auth request and fresh session read complete; it must then go directly to `/dashboard`, `/onboarding`, or `/admin-tutors` without an intermediate `/login` navigation. Verify a wrong password returns the form with an error and the button is usable again. For a return link such as `/login?redirect=/bookings`, verify it lands on the validated target after the same handoff.
+
 ### Dashboard smoke check
 
 After a web deployment, sign in once as each supported role and open `/dashboard`. Verify the sidebar user menu shows the authenticated profile image when one is configured and uses initials when it is not:

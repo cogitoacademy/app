@@ -5,10 +5,17 @@ const SEED_PASSWORD = "Student123!";
 
 async function login(page: Page) {
   await page.goto("/login");
+  const pathsAfterLoginPage: string[] = [];
+  page.on("framenavigated", (frame) => {
+    if (frame === page.mainFrame()) {
+      pathsAfterLoginPage.push(new URL(frame.url()).pathname);
+    }
+  });
   await page.getByLabel("Email").fill(SEED_EMAIL);
   await page.locator("input#password").fill(SEED_PASSWORD);
-  await page.getByRole("button", { name: "Sign In" }).click();
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await page.waitForURL("/dashboard");
+  expect(pathsAfterLoginPage).not.toContain("/login");
 }
 
 test("student can log in and see starting balance", async ({ page }) => {
