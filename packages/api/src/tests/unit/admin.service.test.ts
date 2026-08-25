@@ -338,6 +338,54 @@ describe("Admin Service", () => {
       // each failure is caught and logged — the write is still attempted.
       expect(notification.write).toHaveBeenCalledTimes(2);
     });
+
+    test("fan-out helper failures are caught and logged without breaking the update", async () => {
+      const economy = {
+        getConfig: mock(async () => ({
+          id: "default",
+          version: 1,
+          onlineCogitoBaseIdr: 50_000,
+          onlineCogitoIncrementIdr: 20_000,
+          offlineCogitoBaseIdr: 90_000,
+          offlineCogitoIncrementIdr: 40_000,
+        })),
+        updateConfig: mock(async () => ({
+          id: "default",
+          version: 2,
+          onlineCogitoBaseIdr: 55_000,
+          onlineCogitoIncrementIdr: 20_000,
+          offlineCogitoBaseIdr: 90_000,
+          offlineCogitoIncrementIdr: 40_000,
+        })),
+      };
+      const adminRepo = {
+        listUserIdsByRole: mock(async () => {
+          throw new Error("db down during fan-out");
+        }),
+      };
+      const db = { transaction: mock(async (fn: any) => fn({})) };
+      const auditPort = { record: mock(async () => {}) };
+      const notification = { write: mock(async () => {}) };
+      const service = createAdminService({
+        adminRepo: adminRepo as any,
+        auditPort,
+        db: db as any,
+        wallet: {} as any,
+        payout: {} as any,
+        economy: economy as any,
+        notification: notification as any,
+      });
+
+      const updated = await service.updateEconomySettings("admin1", {
+        expectedVersion: 1,
+        onlineCogitoBaseIdr: 55_000,
+        onlineCogitoIncrementIdr: 20_000,
+        offlineCogitoBaseIdr: 90_000,
+        offlineCogitoIncrementIdr: 40_000,
+      });
+      expect(updated.version).toBe(2);
+      expect(notification.write).not.toHaveBeenCalled();
+    });
   });
 
   describe("setRole", () => {

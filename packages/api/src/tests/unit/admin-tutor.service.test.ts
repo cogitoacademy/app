@@ -134,15 +134,15 @@ describe("AdminTutor Service", () => {
     }
 
     test("F25: rejects unpublish from pending_review (only published profiles unpublish)", () => {
-      expect(() =>
-        validateReviewAction("unpublish", makeProfile()),
-      ).toThrow(InvalidInviteActionError);
+      expect(() => validateReviewAction("unpublish", makeProfile())).toThrow(
+        InvalidInviteActionError,
+      );
     });
 
     test("F25: rejects suspend from pending_review (only published profiles suspend)", () => {
-      expect(() =>
-        validateReviewAction("suspend", makeProfile()),
-      ).toThrow(InvalidInviteActionError);
+      expect(() => validateReviewAction("suspend", makeProfile())).toThrow(
+        InvalidInviteActionError,
+      );
     });
 
     test("F25: rejects publish from suspended (a suspended profile needs explicit review, not a blind publish)", () => {
@@ -514,7 +514,14 @@ describe("AdminTutor Service", () => {
     });
 
     test("rejects approving edits when there are no pending changes", async () => {
-      const deps = makeDeps();
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ onboardingStatus: "published" }),
+          ),
+        },
+      });
       const service = createAdminTutorService(deps as any);
 
       await expect(
@@ -526,7 +533,14 @@ describe("AdminTutor Service", () => {
     });
 
     test("rejects requesting edit changes when there are no pending changes", async () => {
-      const deps = makeDeps();
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ onboardingStatus: "published" }),
+          ),
+        },
+      });
       const service = createAdminTutorService(deps as any);
 
       await expect(
@@ -542,7 +556,10 @@ describe("AdminTutor Service", () => {
         adminTutorRepo: {
           ...makeDeps().adminTutorRepo,
           getTutorProfileById: mock(async () =>
-            makeProfile({ pendingProfileChanges: { subjectIds: ["s1", 3] } }),
+            makeProfile({
+              onboardingStatus: "published",
+              pendingProfileChanges: { subjectIds: ["s1", 3] },
+            }),
           ),
         },
       });
