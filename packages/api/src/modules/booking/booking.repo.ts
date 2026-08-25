@@ -222,6 +222,10 @@ async function findParticipant(
 /**
  * Lists confirmed participants for a booking, optionally excluding one user.
  *
+ * F8: the tutor attendance row (role='tutor') is never included — the tutor
+ * marks attendance via a participant row with confirmationState=CONFIRMED,
+ * which must not inflate group repricing headcounts or hold math.
+ *
  * @param conn - the database connection or active transaction
  * @param bookingId - the booking id
  * @param excludeUserId - optional user to exclude
@@ -234,6 +238,7 @@ async function findConfirmedParticipants(
 ) {
   const conditions = [
     eq(bookingParticipant.bookingId, bookingId),
+    ne(bookingParticipant.role, "tutor"),
     inArray(bookingParticipant.confirmationState, [
       CONFIRMATION_STATE.CONFIRMED,
       CONFIRMATION_STATE.RECONFIRMED,

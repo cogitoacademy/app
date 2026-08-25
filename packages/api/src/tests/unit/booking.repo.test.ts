@@ -264,6 +264,32 @@ describe("createBookingRepo", () => {
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
     });
+
+    test("F8: never includes the tutor attendance row (role = 'tutor') in the headcount", async () => {
+      const conn: any = { ...makeSelectConn([]) };
+      const repo = makeBookingRepo();
+
+      await repo.findConfirmedParticipants(conn, "b1");
+
+      const conditions = conn.where.mock.calls[0]![0] as any;
+      const renderChunk = (c: unknown): string => {
+        if (typeof c === "string") return c;
+        if (Array.isArray(c)) return c.map(renderChunk).join("");
+        const chunk = c as {
+          queryChunks?: unknown[];
+          value?: unknown;
+          name?: string;
+        };
+        if (chunk.value !== undefined) return String(chunk.value);
+        if (chunk.name !== undefined) return chunk.name;
+        if (chunk.queryChunks) return chunk.queryChunks.map(renderChunk).join("");
+        return "";
+      };
+      const sqlText = renderChunk(conditions).replace(/\s+/g, " ");
+
+      expect(sqlText).toContain("role");
+      expect(sqlText).toContain("tutor");
+    });
   });
 
   describe("findReconfirmedParticipants", () => {
