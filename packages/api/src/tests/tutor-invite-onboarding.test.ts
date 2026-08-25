@@ -179,7 +179,7 @@ describe("Tutor Invite & Onboarding", () => {
         shortBio: "Passionate math educator",
         credentialsSummary: "PhD Mathematics, 10 years teaching",
         expertise: ["Mathematics", "Physics"],
-        subjectIds: ["20000000-0000-4000-8000-000000000001"],
+        subjectIds: ["40000000-0000-4000-8000-000000000001"],
         modality: "online",
         prices: { "1": 50, "2": 40, "3": 32, "4": 28, "5": 25, "6": 22 },
         availabilitySummary: "Weekdays 3-6 PM",

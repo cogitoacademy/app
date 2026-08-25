@@ -107,7 +107,7 @@ From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, v
 
 ### Tutor subject taxonomy smoke check
 
-Open `/onboarding` as a tutor and verify the subject selector loads active mother categories and their child subjects from `tutors.listSubjects`. After choosing a mother category, the selector trigger must show its human-readable name rather than the category UUID. Select at least one child subject, save a draft, and confirm the selected subjects reload with the profile. A submission with no child subject must be blocked; published tutor discovery should expose the selected subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm the category and child-subject controls support selecting multiple values, show `+N more` when needed, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs.
+Open `/onboarding` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs.
 
 ### Profile UX smoke check
 
@@ -154,7 +154,7 @@ bun run db:generate      # Generate new migration from schema changes
 
 If tutor discovery returns `500` with a missing `subject_category` or
 `tutor_profile_subject` relation, the local database is behind migration
-`0027_subject_taxonomy.sql`. Apply that migration (or the equivalent reviewed
+`0029_competition_taxonomy.sql`. Apply that migration (or the equivalent reviewed
 pending migration) and restart the server. `bun run db:push` can detect broad
 schema drift and ask ambiguous rename questions; review those prompts instead
 of accepting unrelated changes blindly.

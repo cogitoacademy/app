@@ -204,6 +204,13 @@
       "when": 1787400000000,
       "tag": "0028_economy_config",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1787652186506,
+      "tag": "0029_competition_taxonomy",
+      "breakpoints": true
     }
   ]
 }

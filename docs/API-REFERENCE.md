@@ -265,9 +265,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Tutor
 - **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, expertise?, subjectIds?, modality?, prices?, availabilitySummary?, proofUrls? }`
-- **Output:** `{ profile, subjects: [{ id, slug, name, description?, parent: { id, slug, name } }] }`
-- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. For published profiles, trust-sensitive subject changes wait in `pendingProfileChanges` for admin approval.
+- **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
+- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
+- **Description:** Updates the tutor profile with optimistic locking. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. For published profiles, trust-sensitive subject changes wait in `pendingProfileChanges` for admin approval. Archived legacy subjects remain readable but cannot be submitted as new selections.
 
 ### `tutor.submitForReview`
 
@@ -332,13 +332,13 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ items: [{ id, slug, name, description?, children: [{ id, slug, name, description? }] }] }`
-- **Description:** Returns the active mother categories and selectable child subjects used by tutor onboarding and student filters. The UIs submit child/category IDs for persistence or filtering but display category and subject names to users.
+- **Description:** Returns the seven active competition categories and their 33 selectable child subjects used by tutor onboarding and student filters. The UIs submit child/category IDs for persistence or filtering but display category and subject names to users.
 
 ### `tutors.listPublished`
 
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
-- **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, parent }]` and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
+- **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, isSelectable, parent }]` and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
 - **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response.
 
 ### `tutors.getProfile`

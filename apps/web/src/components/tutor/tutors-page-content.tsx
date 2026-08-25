@@ -82,6 +82,7 @@ export function TutorsPageContent() {
       for (const subject of category.children) {
         subjects.set(subject.id, {
           ...subject,
+          isSelectable: true,
           parent: {
             id: category.id,
             slug: category.slug,

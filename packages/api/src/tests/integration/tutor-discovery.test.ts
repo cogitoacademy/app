@@ -6,6 +6,7 @@ import {
   tutorProfile,
   tutorProfileSubject,
   availabilitySlot,
+  subjectCategory,
 } from "@cogito-app/db/schema";
 
 import {
@@ -29,6 +30,15 @@ async function signInAndGetCookie(email: string, password: string) {
     .find((c: string) => c.includes("better-auth.session_token"))
     ?.split(";")[0];
 }
+
+const TAXONOMY = {
+  modelUnitedNations: "30000000-0000-4000-8000-000000000001",
+  worldScholarsCup: "30000000-0000-4000-8000-000000000002",
+  research: "40000000-0000-4000-8000-000000000001",
+  writing: "40000000-0000-4000-8000-000000000002",
+  speech: "40000000-0000-4000-8000-000000000003",
+  legacySubject: "20000000-0000-4000-8000-000000000001",
+};
 
 describe("Tutor discovery", () => {
   beforeAll(async () => {
@@ -96,7 +106,11 @@ describe("Tutor discovery", () => {
 
     await db.insert(tutorProfileSubject).values({
       tutorProfileId: profileId,
-      subjectId: "20000000-0000-4000-8000-000000000001",
+      subjectId: TAXONOMY.research,
+    });
+    await db.insert(tutorProfileSubject).values({
+      tutorProfileId: profileId,
+      subjectId: TAXONOMY.legacySubject,
     });
 
     await db.insert(availabilitySlot).values({
@@ -105,6 +119,77 @@ describe("Tutor discovery", () => {
       endDate: new Date(Date.now() + 7200_000),
       modality: "online",
     });
+  });
+
+  test("listSubjects returns the current competition taxonomy", async () => {
+    const categories = await studentClient.tutors.listSubjects({});
+
+    expect(
+      categories.map((category) => ({
+        name: category.name,
+        children: category.children.map((child) => child.name),
+      })),
+    ).toEqual([
+      {
+        name: "Model United Nations",
+        children: ["Research", "Writing", "Speech", "Negotiation"],
+      },
+      {
+        name: "World Scholar’s Cup",
+        children: ["Writing", "Debate", "Subjects"],
+      },
+      {
+        name: "Essay & Writing",
+        children: [
+          "Academic Essay",
+          "Creative Writing",
+          "Scientific Research",
+          "College Application Essay",
+          "Journalistic Writing",
+        ],
+      },
+      {
+        name: "Debate",
+        children: [
+          "British Parliamentary",
+          "Asian Parliamentary",
+          "World Schools (WSDC)",
+          "Bahasa Indonesia (LDBI)",
+        ],
+      },
+      {
+        name: "Business",
+        children: ["Business Model Canvas", "Business Plan", "Business Case"],
+      },
+      {
+        name: "Olympiad",
+        children: [
+          "Mathematics (SMP)",
+          "Natural Sciences (SMP)",
+          "Social Sciences (SMP)",
+          "Mathematics",
+          "Physics",
+          "Chemistry",
+          "Biology",
+          "Informatics",
+          "Astronomy",
+          "Earth Sciences",
+          "Economics",
+          "Geography",
+        ],
+      },
+      {
+        name: "Public Speaking",
+        children: ["Persuasive Speech", "Storytelling"],
+      },
+    ]);
+    expect(categories).toHaveLength(7);
+    expect(
+      categories.reduce(
+        (total, category) => total + category.children.length,
+        0,
+      ),
+    ).toBe(33);
   });
 
   test("TC-07: list published tutors shows required fields", async () => {
@@ -124,18 +209,32 @@ describe("Tutor discovery", () => {
     const profile = await studentClient.tutors.getProfile({
       tutorId: profileId,
     });
+    const [legacyCatalogRow] = await db
+      .select({ isActive: subjectCategory.isActive })
+      .from(subjectCategory)
+      .where(eq(subjectCategory.id, TAXONOMY.legacySubject));
+
     expect(profile.displayName).toBe("Prof Discovery");
     expect(profile.user).toBeDefined();
+    expect(legacyCatalogRow).toEqual({ isActive: false });
+    expect(
+      profile.subjects.find((subject) => subject.id === TAXONOMY.legacySubject),
+    ).toEqual(
+      expect.objectContaining({
+        name: "MUN Debate",
+        isSelectable: false,
+      }),
+    );
   });
 
   test("listPublished filters by mother category", async () => {
     const matchingTutors = await studentClient.tutors.listPublished({
-      categoryId: "10000000-0000-4000-8000-000000000001",
+      categoryId: TAXONOMY.modelUnitedNations,
     });
     expect(matchingTutors.some((tutor) => tutor.id === profileId)).toBe(true);
 
     const nonMatchingTutors = await studentClient.tutors.listPublished({
-      categoryId: "10000000-0000-4000-8000-000000000002",
+      categoryId: TAXONOMY.worldScholarsCup,
     });
     expect(nonMatchingTutors.some((tutor) => tutor.id === profileId)).toBe(
       false,
@@ -144,23 +243,17 @@ describe("Tutor discovery", () => {
 
   test("listPublished accepts multiple category and subject filters", async () => {
     const categoryMatches = await studentClient.tutors.listPublished({
-      categoryIds: [
-        "10000000-0000-4000-8000-000000000002",
-        "10000000-0000-4000-8000-000000000001",
-      ],
+      categoryIds: [TAXONOMY.worldScholarsCup, TAXONOMY.modelUnitedNations],
     });
     expect(categoryMatches.some((tutor) => tutor.id === profileId)).toBe(true);
 
     const subjectMatches = await studentClient.tutors.listPublished({
-      subjectIds: [
-        "20000000-0000-4000-8000-000000000002",
-        "20000000-0000-4000-8000-000000000001",
-      ],
+      subjectIds: [TAXONOMY.writing, TAXONOMY.research],
     });
     expect(subjectMatches.some((tutor) => tutor.id === profileId)).toBe(true);
 
     const nonMatchingSubjects = await studentClient.tutors.listPublished({
-      subjectIds: ["20000000-0000-4000-8000-000000000004"],
+      subjectIds: [TAXONOMY.speech],
     });
     expect(nonMatchingSubjects.some((tutor) => tutor.id === profileId)).toBe(
       false,

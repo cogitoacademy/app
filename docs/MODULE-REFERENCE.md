@@ -732,14 +732,16 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - `tutor-subject.ts` (database schema) — `subject_category` hierarchy and `tutor_profile_subject` join table
 - `tutor-subjects/subject-selection.ts` — selection limits, active-child validation, and public projection helpers
-- `0027_subject_taxonomy.sql` — schema migration and source-informed initial catalog
+- `0027_subject_taxonomy.sql` — schema migration and initial catalog schema
+- `0029_competition_taxonomy.sql` — current competition catalog and legacy-row archival
 
 **Business Rules:**
 
-- Mother categories are the seven competition areas currently presented by Cogito Academy: Model United Nations, Public Speaking, Olympiad, World Scholar's Cup, Essay & Scientific Writing, Debate, and Business Plan
-- Only active child rows are selectable by tutors; each selection belongs to exactly one mother category
+- Mother categories are the seven competition areas: Model United Nations, World Scholar’s Cup, Essay & Writing, Debate, Business, Olympiad, and Public Speaking
+- The current catalog contains 33 selectable child subjects in the exact order defined by `0029_competition_taxonomy.sql`
+- Only active child rows are selectable by tutors; archived legacy rows remain readable for existing profiles and are not offered for new selection
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
-- The onboarding and student tutor-list selectors keep normalized IDs for persistence/filtering while rendering human-readable labels; raw UUIDs are an implementation detail and must not appear in user-facing triggers
+- The onboarding selector renders every current category with keyboard-accessible checkboxes, keeps normalized IDs for persistence/filtering, and shows archived profile subjects as read-only labels; raw UUIDs are an implementation detail and must not appear in user-facing controls
 
 ---
 
@@ -758,7 +760,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Service Methods:**
 
-- `listSubjects()` — Returns active mother categories grouped with active child subjects
+- `listSubjects()` — Returns the active competition mother categories grouped with their active child subjects; archived legacy rows are excluded
 - `listPublished(filters)` — Paginated list of published tutor profiles with category, child-subject, legacy expertise, and modality filters; `categoryIds` and `subjectIds` are ORed within each facet, combined as an AND across facets, and enforced through one correlated normalized subject-existence check that returns no rows when there is no match
 - `getProfile(userId)` — Returns full tutor profile and future availability
 - IDR profiles receive `pricesByModality` Marks maps computed from the active economy config; legacy profiles keep their stored Marks map and no student discovery response exposes the tutor's IDR base honorarium

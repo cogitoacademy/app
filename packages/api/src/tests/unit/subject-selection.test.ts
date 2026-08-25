@@ -14,8 +14,14 @@ describe("tutor subject selection", () => {
       validateTutorSubjectIds(["child-1"], [child("child-1")]),
     ).not.toThrow();
     expect(() => validateTutorSubjectIds(["mother-1"], [])).toThrow(
-      "active child subjects",
+      "active selectable child subjects",
     );
+  });
+
+  test("rejects archived legacy child ids from new selections", () => {
+    expect(() =>
+      validateTutorSubjectIds(["legacy-child"], [child("current-child")]),
+    ).toThrow("active selectable child subjects");
   });
 
   test("rejects empty, duplicate, and oversized selections", () => {
@@ -64,6 +70,7 @@ describe("tutor subject selection", () => {
         slug: "mun-debate",
         name: "MUN Debate",
         description: null,
+        isSelectable: true,
         parent: {
           id: "mother-1",
           slug: "mun",
@@ -106,6 +113,38 @@ describe("tutor subject selection", () => {
     expect(
       toSubjectCategoryGroup({ ...category, children: undefined }),
     ).toEqual(expect.objectContaining({ children: [] }));
+  });
+
+  test("marks archived child subjects as non-selectable for profile reads", () => {
+    const [subject] = toNormalizedTutorSubjects([
+      {
+        subjectId: "legacy-child",
+        subject: {
+          id: "legacy-child",
+          parentId: "legacy-mother",
+          slug: "legacy-subject",
+          name: "Legacy subject",
+          description: null,
+          isActive: false,
+          sortOrder: 10,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          parent: {
+            id: "legacy-mother",
+            parentId: null,
+            slug: "legacy",
+            name: "Legacy",
+            description: null,
+            isActive: false,
+            sortOrder: 10,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        },
+      },
+    ]);
+
+    expect(subject?.isSelectable).toBe(false);
   });
 
   test("compares selections without depending on input order", () => {
