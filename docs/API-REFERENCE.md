@@ -249,8 +249,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `adminTutor.reviewTutorProfile`
 
 - **Auth:** Admin
-- **Input:** `{ tutorProfileId, action, adminNote? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend)
+- **Input:** `{ tutorProfileId, action, adminNote? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend/approve_edits/request_edit_changes)
 - **Output:** `{ profile }`
+- **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `INVALID_INVITE_ACTION` (400) when the action is not allowed from the profile's current onboarding status (F25 state machine: publish only from `pending_review`/`changes_requested`/`approved_unpublished`; unpublish/suspend/approve_edits/request_edit_changes only from `published`; request_changes only from `pending_review`/`changes_requested`)
 
 ---
 

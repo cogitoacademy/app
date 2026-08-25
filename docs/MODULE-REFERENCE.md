@@ -207,7 +207,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `revokeInvite(inviteId, adminId, reason?)` — Marks invite as revoked
 - `listInvites(opts)` — Paginated invite list
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
-- `reviewTutorProfile(profileId, status, adminNote?)` — Approve/reject tutor profile
+- `reviewTutorProfile(profileId, status, adminNote?)` — Approve/reject tutor profile. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`. Anything else throws `InvalidInviteActionError` (e.g. `publish` from `suspended`, `request_changes` from `published`)
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
