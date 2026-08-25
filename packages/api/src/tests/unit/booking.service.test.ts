@@ -6424,6 +6424,7 @@ describe("BookingService additional coverage paths", () => {
           {
             currentState: "completed",
             priceSnapshot: {
+              baseline: 90,
               actualMarksPooled: 90,
               cogitoTake: 18,
               tutorShare: 72,
@@ -6472,6 +6473,64 @@ describe("BookingService additional coverage paths", () => {
       tutorPayout: 80,
       tutorPayoutIdr: 81_000,
     });
+  });
+
+  test("reports totalMarks from the split basis (baseline), not actualMarksPooled", async () => {
+    const solo = makeBooking({
+      id: "solo-ledger",
+      type: "solo",
+      priceSnapshot: {
+        baseline: 100,
+        actualMarksPooled: 102,
+        cogitoTake: 20,
+        tutorShare: 80,
+        tutorHonorariumIdr: 400_000,
+      },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [solo]),
+        listSessionsBySeriesId: mock(async () => []),
+      },
+    });
+
+    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
+    // The ledger columns reconcile: totalMarks = cogitoTake + tutorPayout
+    // (both are derived from the same `baseline` split basis).
+    expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
+    expect(result.totalMarks).toBe(100);
+    // IDR honorarium is authoritative when present.
+    expect(result.tutorPayoutIdr).toBe(400_000);
+  });
+
+  test("reconciles series session payouts the same way (baseline basis, not pooled)", async () => {
+    const series = makeBooking({
+      id: "series-ledger",
+      type: "series",
+      priceSnapshot: { baseline: 100, cogitoTake: 20, tutorShare: 80 },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [series]),
+        listSessionsBySeriesId: mock(async () => [
+          {
+            currentState: "completed",
+            priceSnapshot: {
+              baseline: 60,
+              actualMarksPooled: 62,
+              cogitoTake: 14,
+              tutorShare: 46,
+              tutorHonorariumIdr: 230_000,
+            },
+          },
+        ]),
+      },
+    });
+
+    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
+    expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
+    expect(result.totalMarks).toBe(60);
+    expect(result.tutorPayoutIdr).toBe(230_000);
   });
 
   test("cancels sessions for an expiring series booking", async () => {

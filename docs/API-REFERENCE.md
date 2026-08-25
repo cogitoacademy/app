@@ -179,7 +179,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ tutorId, dateFrom?, dateTo? }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` is summed from IDR tutor-honorarium snapshots; legacy pre-economy bookings use the compatibility path)
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
-- **Description:** Tutor payout summary from completed bookings in a date range
+- **Description:** Tutor payout summary from completed bookings in a date range. `totalMarks` reports the split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
 
 ### `admin.getEconomySettings`
 

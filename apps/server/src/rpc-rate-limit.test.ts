@@ -42,9 +42,9 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
   });
 
   test("content file proxy matches /content/student-resources/*", () => {
-    expect(
-      matchRateLimitPath("/content/student-resources/abc123/file"),
-    ).toBe("content");
+    expect(matchRateLimitPath("/content/student-resources/abc123/file")).toBe(
+      "content",
+    );
     expect(
       matchRateLimitPath("/content/student-resources/abc123/file?x=1"),
     ).toBe("content");

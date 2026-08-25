@@ -3342,7 +3342,7 @@ export function createBookingService(deps: {
           for (const s of completed) {
             completedSessions++;
             const snap = s.priceSnapshot ?? b.priceSnapshot;
-            totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
+            totalMarks += snap?.baseline ?? 0;
             cogitoTake += snap?.cogitoTake ?? 0;
             tutorPayout += snap?.tutorShare ?? 0;
             tutorPayoutIdr +=
@@ -3352,7 +3352,7 @@ export function createBookingService(deps: {
         } else {
           completedSessions++;
           const snap = b.priceSnapshot;
-          totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
+          totalMarks += snap?.baseline ?? 0;
           cogitoTake += snap?.cogitoTake ?? 0;
           tutorPayout += snap?.tutorShare ?? 0;
           tutorPayoutIdr +=
@@ -3362,7 +3362,7 @@ export function createBookingService(deps: {
       } else {
         completedSessions++;
         const snap = b.priceSnapshot;
-        totalMarks += snap?.actualMarksPooled ?? snap?.baseline ?? 0;
+        totalMarks += snap?.baseline ?? 0;
         cogitoTake += snap?.cogitoTake ?? 0;
         tutorPayout += snap?.tutorShare ?? 0;
         tutorPayoutIdr +=
