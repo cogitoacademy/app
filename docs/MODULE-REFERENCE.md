@@ -270,7 +270,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Wallet is lazily created on first `me` call
 - Better Auth handles session management, password hashing, and session cookies
 - The web email sign-in/sign-up handoff awaits the Better Auth result, performs a fresh session read before choosing `/dashboard`, `/onboarding`, `/admin-tutors`, or a validated return path, and suppresses the overlapping client signal refresh so the login form does not flash back into the loader. The authenticated shell uses the same fresh session source for its parent route guard.
-- The `/login` email forms run field-level validation on change/blur after a field is touched, show inline errors and a form-level warning after an invalid submit, and mirror the sign-up password requirements enforced by the server. These checks are client-only and do not add an auth endpoint or persistence rule.
+- The `/login` email forms run field-level validation on change/blur after a field is touched, show Selia inline errors for invalid fields, and mirror the sign-up password requirements enforced by the server. These checks are client-only and do not add an auth endpoint or persistence rule.
 - Email verification (G2, REVIEW-FIXES-4 P4.4): the `emailOTP` plugin sends a 6-digit OTP on sign-up (`sendVerificationOnSignUp`, 5 min expiry) via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); `POST /api/auth/email-otp/verify-email` marks the user verified; the web `/verify-email` route collects the code
 
 ---
