@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -40,6 +40,12 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 As an authenticated user, open `/calendar` and confirm published Sanity competitions render in the month grid. Verify today, outside-month days, multi-day spans, and the `+N more` overflow popup; select an event from either the grid or popup and confirm the responsive details modal shows categories, level, scale, organizer, location, timeline, registration deadline, description, and the available external-link actions. Switch to **Agenda**, confirm the 30-day grouped list and rich event cards, use `M`/`A` to switch views, and verify previous/next period plus **Today** navigation. The calendar remains read-only and the browser console should remain free of runtime errors.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
+
+### Empty-state consistency smoke check
+
+With signed-in student, tutor, and admin sessions, exercise empty data and no-match states in the calendar, tutor discovery, Knowledge Bank, bookings, notifications, achievements, balance history, availability preview, booking detail, and admin operations surfaces. Confirm each state has the shared Selia icon/title/description treatment, uses the right density for its context, distinguishes an empty collection from an active filter with no matches, and keeps its action usable when one exists. Check the notification menu, calendar popup, dialog sections, field-level subject/proof-link states, and table/list sections for blank areas or orphaned headers. Repeat in light and dark themes and at narrow width; no horizontal overflow or duplicate empty copy should appear. This is frontend-only and must not change request payloads.
+
+For local verification, run `bun run lint` and `bun run check-types` from the repository root. The latter runs the web production build before TypeScript checking, so a missing empty-state import or invalid Selia variant is caught before review.
 
 ### How Cogito Works guide smoke check
 

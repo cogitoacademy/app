@@ -46,6 +46,7 @@ import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { EmptyState } from "@/components/empty-state";
 import { formatBookingDate, formatBookingTimeRange } from "./booking-ui";
 import { SessionNoteEditor } from "./session-note-editor";
 import { sanitizeSessionNoteHtml } from "./session-note-sanitizer";
@@ -515,7 +516,13 @@ export function BookingLifecycleActions({
                 </div>
               ))
             ) : (
-              <Text className="text-muted">No session notes yet.</Text>
+              <EmptyState
+                icon={<IconNotes />}
+                title="No session notes yet"
+                description="Add a note to keep useful context for the next session."
+                size="inline"
+                className="rounded-lg border border-item-border"
+              />
             )}
             <Field>
               <FieldLabel htmlFor="session-note">Add a note</FieldLabel>

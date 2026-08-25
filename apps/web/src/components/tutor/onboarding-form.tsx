@@ -43,6 +43,7 @@ import {
 
 import { authClient } from "@/lib/auth-client";
 import { AccountIdentityCard } from "@/components/profile/account-identity-card";
+import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
 import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
@@ -752,9 +753,14 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     ))}
                   </ul>
                 ) : (
-                  <Text className="mt-2 text-sm text-muted">
-                    No proof links added yet.
-                  </Text>
+                  <EmptyState
+                    icon={<IconShieldCheck />}
+                    title="No proof links yet"
+                    description="Add a public proof link when you have one, such as a certificate or portfolio."
+                    tone="secondary"
+                    size="inline"
+                    className="mt-2 rounded-lg border border-item-border"
+                  />
                 )}
               </Field>
             </CardBody>

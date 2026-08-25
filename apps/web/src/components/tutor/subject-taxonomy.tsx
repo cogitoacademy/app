@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { IconBook2 } from "@tabler/icons-react";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import {
   getSelectItemValue,
@@ -13,6 +14,7 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 export type SubjectOption = {
@@ -208,6 +210,16 @@ export function SubjectSelector({
         </Text>
       )}
 
+      {!isPending && !isError && categories.length === 0 && (
+        <EmptyState
+          icon={<IconBook2 />}
+          title="No subject categories yet"
+          description="Subject categories will appear here when they are available."
+          size="inline"
+          className="rounded-lg border border-item-border"
+        />
+      )}
+
       {activeCategory && (
         <div
           className="flex flex-wrap gap-2"
@@ -236,9 +248,13 @@ export function SubjectSelector({
             );
           })}
           {activeCategory.children.length === 0 && (
-            <Text className="text-muted">
-              No child subjects are available in this category yet.
-            </Text>
+            <EmptyState
+              icon={<IconBook2 />}
+              title="No child subjects yet"
+              description="Child subjects will appear here when they are added to this category."
+              size="inline"
+              className="w-full rounded-lg border border-item-border"
+            />
           )}
         </div>
       )}

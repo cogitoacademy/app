@@ -246,98 +246,6 @@ function BookingQueue() {
             </CardDescription>
           </CardHeader>
           <CardBody>
-            <TableContainer>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Booking</TableHead>
-                    <TableHead>Schedule</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Override</TableHead>
-                    <TableHead>Affected users</TableHead>
-                    <TableHead>SLA</TableHead>
-                    <TableHead>Marks</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {queueQuery.data.items.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <Text className="font-mono text-xs">{item.id}</Text>
-                        <Text className="text-xs text-muted">
-                          {item.type} · {item.modality}
-                        </Text>
-                      </TableCell>
-                      <TableCell>
-                        {formatBookingDate(
-                          item.scheduledStartAt,
-                          item.timezone,
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          <Badge
-                            variant={getBookingStateVariant(item.currentState)}
-                          >
-                            {getBookingStateLabel(item.currentState)}
-                          </Badge>
-                          {item.escalated ? (
-                            <Badge variant="danger">Escalated</Badge>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getOverrideCategory(item.overrideMeta) ? (
-                          <Badge variant="secondary">
-                            {humanize(getOverrideCategory(item.overrideMeta)!)}
-                          </Badge>
-                        ) : (
-                          <Text className="text-xs text-muted">
-                            Standard review
-                          </Text>
-                        )}
-                        <Text className="mt-1 max-w-48 text-xs text-muted">
-                          {getOverrideReason(item.overrideMeta) ??
-                            "No reported reason"}
-                        </Text>
-                        <Text className="text-xs text-dimmed">
-                          Source: admin override
-                        </Text>
-                      </TableCell>
-                      <TableCell>
-                        {getStringArray(
-                          getOverrideMetadata(item.overrideMeta)
-                            ?.affectedParticipants,
-                        ).length || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <SlaStatus item={item} timezone={item.timezone} />
-                      </TableCell>
-                      <TableCell>{item.holdAmount} held</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => setDetails(item)}
-                          >
-                            <IconEye /> Details
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="plain"
-                            onClick={() => setSelected(item)}
-                          >
-                            Override
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
             {queueQuery.data.items.length === 0 ? (
               <EmptyState
                 icon={<IconSearch />}
@@ -346,7 +254,104 @@ function BookingQueue() {
                 tone="secondary"
                 size="compact"
               />
-            ) : null}
+            ) : (
+              <TableContainer>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Booking</TableHead>
+                      <TableHead>Schedule</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Override</TableHead>
+                      <TableHead>Affected users</TableHead>
+                      <TableHead>SLA</TableHead>
+                      <TableHead>Marks</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {queueQuery.data.items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <Text className="font-mono text-xs">{item.id}</Text>
+                          <Text className="text-xs text-muted">
+                            {item.type} · {item.modality}
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          {formatBookingDate(
+                            item.scheduledStartAt,
+                            item.timezone,
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge
+                              variant={getBookingStateVariant(
+                                item.currentState,
+                              )}
+                            >
+                              {getBookingStateLabel(item.currentState)}
+                            </Badge>
+                            {item.escalated ? (
+                              <Badge variant="danger">Escalated</Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {getOverrideCategory(item.overrideMeta) ? (
+                            <Badge variant="secondary">
+                              {humanize(
+                                getOverrideCategory(item.overrideMeta)!,
+                              )}
+                            </Badge>
+                          ) : (
+                            <Text className="text-xs text-muted">
+                              Standard review
+                            </Text>
+                          )}
+                          <Text className="mt-1 max-w-48 text-xs text-muted">
+                            {getOverrideReason(item.overrideMeta) ??
+                              "No reported reason"}
+                          </Text>
+                          <Text className="text-xs text-dimmed">
+                            Source: admin override
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          {getStringArray(
+                            getOverrideMetadata(item.overrideMeta)
+                              ?.affectedParticipants,
+                          ).length || "—"}
+                        </TableCell>
+                        <TableCell>
+                          <SlaStatus item={item} timezone={item.timezone} />
+                        </TableCell>
+                        <TableCell>{item.holdAmount} held</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setDetails(item)}
+                            >
+                              <IconEye /> Details
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="plain"
+                              onClick={() => setSelected(item)}
+                            >
+                              Override
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </CardBody>
         </Card>
       )}
@@ -546,9 +551,12 @@ function AdminBookingDetailDialog({
                       />
                     ))
                   ) : (
-                    <Text className="text-muted">
-                      No participant records were returned.
-                    </Text>
+                    <EmptyState
+                      icon={<IconUsers />}
+                      title="No participant records"
+                      description="Participant details will appear here when the booking has a roster."
+                      size="inline"
+                    />
                   )}
                 </CardBody>
               </Card>
@@ -630,9 +638,12 @@ function AdminBookingDetailDialog({
                     ))}
                   </div>
                 ) : (
-                  <Text className="py-4 text-muted">
-                    No state transitions recorded yet.
-                  </Text>
+                  <EmptyState
+                    icon={<IconClock />}
+                    title="No state transitions yet"
+                    description="Recorded booking changes will appear here."
+                    size="inline"
+                  />
                 )}
               </CardBody>
             </Card>
@@ -744,9 +755,13 @@ function AdminParticipantWalletCard({
             ))}
           </div>
         ) : (
-          <Text className="mt-1 text-xs text-muted">
-            No ledger entry references this booking.
-          </Text>
+          <EmptyState
+            icon={<IconCoins />}
+            title="No ledger entries"
+            description="No Marks activity references this booking."
+            size="inline"
+            className="px-0 py-3"
+          />
         )}
       </div>
     </div>
@@ -1069,34 +1084,44 @@ function WalletLookup() {
             <CardDescription>Latest wallet entries</CardDescription>
           </CardHeader>
           <CardBody>
-            <TableContainer>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Booking</TableHead>
-                    <TableHead>Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ledgerQuery.data.items.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {humanize(entry.entryType)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{entry.amount} Marks</TableCell>
-                      <TableCell>{entry.bookingId ?? "—"}</TableCell>
-                      <TableCell>
-                        {formatBookingDate(entry.createdAt)}
-                      </TableCell>
+            {ledgerQuery.data.items.length === 0 ? (
+              <EmptyState
+                icon={<IconCoins />}
+                title="No ledger entries"
+                description="This wallet has no Marks activity yet."
+                tone="secondary"
+                size="compact"
+              />
+            ) : (
+              <TableContainer>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Booking</TableHead>
+                      <TableHead>Date</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHeader>
+                  <TableBody>
+                    {ledgerQuery.data.items.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {humanize(entry.entryType)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{entry.amount} Marks</TableCell>
+                        <TableCell>{entry.bookingId ?? "—"}</TableCell>
+                        <TableCell>
+                          {formatBookingDate(entry.createdAt)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </CardBody>
         </Card>
       ) : null}
@@ -1259,6 +1284,15 @@ function RoomOperations() {
                 </SelectList>
               </SelectPopup>
             </Select>
+            <FieldDescription>
+              {roomsQuery.isPending
+                ? "Loading rooms…"
+                : roomsQuery.isError
+                  ? "Rooms could not be loaded."
+                  : roomsQuery.data?.length === 0
+                    ? "No rooms are available yet. Add a room before assigning an offline booking."
+                    : "Choose the room for this offline booking."}
+            </FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="room-start-date">Start</FieldLabel>
