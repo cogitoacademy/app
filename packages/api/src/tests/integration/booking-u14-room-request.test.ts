@@ -191,9 +191,7 @@ describe("U14: room availability integrated into offline booking creation (FR-22
       `tutor.u14.${ts}@cogito.test`,
       "Test1234!",
     ))!;
-    const tutorClient = createTestClient(
-      await createTestContext(tutorCookie),
-    );
+    const tutorClient = createTestClient(await createTestContext(tutorCookie));
     await tutorClient.tutorActions.acceptBooking({
       bookingId: firstBooking.id,
     });

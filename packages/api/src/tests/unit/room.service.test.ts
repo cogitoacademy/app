@@ -158,7 +158,7 @@ describe("createRoomService", () => {
       ).rejects.toThrow("Room is already booked");
     });
 
-      test("assigns room when available", async () => {
+    test("assigns room when available", async () => {
       const roomBookingRow = {
         id: "rb1",
         roomId: "room1",

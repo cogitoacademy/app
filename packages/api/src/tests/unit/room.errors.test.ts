@@ -70,7 +70,10 @@ describe("room.errors", () => {
       expect(err.message).toBe(
         "Room assignment requires the booking to be awaiting admin room approval",
       );
-      expect(err.details).toEqual({ bookingId: "b_1", currentState: "confirmed" });
+      expect(err.details).toEqual({
+        bookingId: "b_1",
+        currentState: "confirmed",
+      });
       expect(err.name).toBe("RoomBookingStateError");
     });
   });
@@ -86,7 +89,9 @@ describe("room.errors", () => {
       expect(result.status).toBe(409);
     });
     it("should map RoomBookingStateError to CONFLICT", () => {
-      const result = mapRoomError(new RoomBookingStateError("b_1", "confirmed"));
+      const result = mapRoomError(
+        new RoomBookingStateError("b_1", "confirmed"),
+      );
       expect(result.status).toBe(409);
     });
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {

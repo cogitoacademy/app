@@ -46,7 +46,6 @@ export function mapRoomError(err: DomainError): ORPCError<string, undefined> {
     return conflict(err.message, err);
   if (err instanceof RoomBookingNotFoundError)
     return notFound(err.message, err);
-  if (err instanceof RoomBookingStateError)
-    return conflict(err.message, err);
+  if (err instanceof RoomBookingStateError) return conflict(err.message, err);
   return internalServerError(err.message, err);
 }
