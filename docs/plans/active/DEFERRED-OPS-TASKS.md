@@ -14,9 +14,9 @@ Tasks deferred from production-readiness (#18) and infrastructure (#19) that cou
 - [x] Keep the Hostinger company profile on the apex `cogitoacademy.id`.
 - [x] Route `api.cogitoacademy.id` to the API/Auth/health/webhook service.
 - [x] Route `app.cogitoacademy.id` to the Cloudflare Pages frontend and set the
-      production Pages variable `VITE_SERVER_URL=https://api.cogitoacademy.id`.
+  production Pages variable `VITE_SERVER_URL=https://api.cogitoacademy.id`.
 - [ ] Configure the Coolify API domain and add the API deploy webhook secrets
-      in GitHub Actions; configure the Pages custom domain/build variables.
+  in GitHub Actions; configure the Pages custom domain/build variables.
 
 ---
 

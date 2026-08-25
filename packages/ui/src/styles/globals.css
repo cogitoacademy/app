@@ -336,9 +336,7 @@
 @layer base {
   .font-mono {
     font-variant-ligatures: common-ligatures contextual;
-    font-feature-settings:
-      "liga" 1,
-      "calt" 1;
+    font-feature-settings: "liga" 1, "calt" 1;
   }
 }
 
