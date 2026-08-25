@@ -10,6 +10,7 @@ function makeInviteRepo(overrides: Record<string, unknown> = {}) {
     findInviteByToken: mock(async () => null),
     updateInviteStatus: mock(async () => []),
     findTutorProfileByUserId: mock(async () => null),
+    getUserRoleById: mock(async () => "student"),
     insertTutorProfile: mock(async () => ({ id: "tp1" })),
     updateUserRole: mock(async () => {}),
     ...overrides,

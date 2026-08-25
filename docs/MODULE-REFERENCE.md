@@ -380,8 +380,8 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 **Files:**
 
 - `invite.types.ts` — Zod schemas
-- `invite.errors.ts` — `InviteNotFoundError`, `InviteEmailMismatchError`, `ProfileAlreadyExistsError`
-- `invite.repo.ts` — `findByToken`, `markUsed`
+- `invite.errors.ts` — `InviteNotFoundError`, `InviteEmailMismatchError`, `ProfileAlreadyExistsError`, `InvalidRoleForClaimError`
+- `invite.repo.ts` — `findInviteByToken`, `findTutorProfileByUserId`, `getUserRoleById`, `updateInviteStatus`, `insertTutorProfile`, `updateUserRole`
 - `invite.service.ts` — `verify(token)`, `claim(userId, userEmail, token)`
 - `invite.handler.ts` — Maps to service calls
 - `invite.router.ts` — `verify` is public, `claim` is protected
@@ -397,6 +397,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Tokens are single-use; claimed tokens are marked `used`
 - Email must match the invited email exactly
+- Claim is blocked for **admin-role accounts** — `validateClaim` fetches the user's role (`getUserRoleById`) and throws `InvalidRoleForClaimError` (409 CONFLICT) when `role === "admin"`, so an admin can never be silently demoted to tutor via invite claim. Only student/tutor accounts may claim (F2).
 
 ---
 

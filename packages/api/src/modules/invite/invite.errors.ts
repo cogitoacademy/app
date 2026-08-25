@@ -33,11 +33,23 @@ export class ProfileAlreadyExistsError extends DomainError {
   }
 }
 
+export class InvalidRoleForClaimError extends DomainError {
+  readonly domain = "invite";
+  constructor() {
+    super(
+      "INVALID_ROLE_FOR_CLAIM",
+      "Tutor invites cannot be claimed by an admin account",
+    );
+  }
+}
+
 export function mapInviteError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof InviteNotFoundError) return notFound(err.message, err);
   if (err instanceof InviteEmailMismatchError)
     return badRequest(err.message, err);
   if (err instanceof ProfileAlreadyExistsError)
+    return conflict(err.message, err);
+  if (err instanceof InvalidRoleForClaimError)
     return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

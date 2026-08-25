@@ -72,6 +72,22 @@ export async function findTutorProfileByUserId(conn: DbOrTx, userId: string) {
 }
 
 /**
+ * Returns a user's role.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the user id
+ * @returns the role string, or null when the user does not exist
+ */
+export async function getUserRoleById(conn: DbOrTx, userId: string) {
+  const [row] = await conn
+    .select({ role: user.role })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+  return row?.role ?? null;
+}
+
+/**
  * Creates a draft tutor profile for an accepted invitee.
  *
  * @param conn - the database connection or active transaction
@@ -116,6 +132,7 @@ export function createInviteRepo() {
     findInviteByToken,
     updateInviteStatus,
     findTutorProfileByUserId,
+    getUserRoleById,
     insertTutorProfile,
     updateUserRole,
   };
