@@ -6,6 +6,7 @@ import {
   InvalidRefundStateError,
   BookingOverrideConflictError,
   OverrideMarksParticipantsRequiredError,
+  OverrideParticipantNotInBookingError,
   mapAdminBookingError,
 } from "../../modules/admin-booking/admin-booking.errors";
 
@@ -76,6 +77,20 @@ describe("admin-booking.errors", () => {
       expect(err.name).toBe("OverrideMarksParticipantsRequiredError");
     });
   });
+  describe("OverrideParticipantNotInBookingError", () => {
+    it("should be instance of DomainError", () => {
+      const err = new OverrideParticipantNotInBookingError("bk_1", ["u9"]);
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err).toBeInstanceOf(Error);
+    });
+    it("should have correct properties", () => {
+      const err = new OverrideParticipantNotInBookingError("bk_1", ["u9"]);
+      expect(err.code).toBe("OVERRIDE_PARTICIPANT_NOT_IN_BOOKING");
+      expect(err.domain).toBe("admin-booking");
+      expect(err.details).toEqual({ id: "bk_1", participantIds: ["u9"] });
+      expect(err.name).toBe("OverrideParticipantNotInBookingError");
+    });
+  });
   describe("BookingOverrideConflictError", () => {
     it("should expose the concurrent-update details", () => {
       const err = new BookingOverrideConflictError("bk_1");
@@ -106,6 +121,12 @@ describe("admin-booking.errors", () => {
     it("should map OverrideMarksParticipantsRequiredError to BAD_REQUEST", () => {
       const result = mapAdminBookingError(
         new OverrideMarksParticipantsRequiredError("bk_1"),
+      );
+      expect(result.status).toBe(400);
+    });
+    it("should map OverrideParticipantNotInBookingError to BAD_REQUEST", () => {
+      const result = mapAdminBookingError(
+        new OverrideParticipantNotInBookingError("bk_1", ["u9"]),
       );
       expect(result.status).toBe(400);
     });

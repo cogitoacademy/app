@@ -4,6 +4,7 @@ import {
   RoomNotFoundError,
   RoomBookingConflictError,
   RoomBookingNotFoundError,
+  RoomBookingStateError,
 } from "./room.errors";
 import type { RoomRepo } from "./room.repo";
 import type { CreateRoomInput } from "./room.types";
@@ -12,6 +13,7 @@ import {
   NOTIFICATION_SEVERITY,
   ROOM_BOOKING_STATUS,
 } from "../../shared/constants";
+import { BOOKING_STATE } from "../booking/booking-state.types";
 import type { RoomBookingPort, RoomNotificationPort } from "./index";
 
 export type RoomService = ReturnType<typeof createRoomService>;
@@ -136,6 +138,20 @@ export function createRoomService(
       const roomRow = await repo.findRoomById(tx, roomId);
       if (!roomRow) throw new RoomNotFoundError(roomId);
 
+      // F22: only offline bookings awaiting admin room approval may be
+      // assigned a room. `reschedule_proposed` is the H3 carve-out — an admin
+      // can pre-assign while the reschedule proposal is pending; the
+      // transition applies when the proposal settles. Any other state (e.g. a
+      // CONFIRMED online booking) must not receive a CONFIRMED roomBooking
+      // row — the old code no-op'd the transition and left an orphan row.
+      const currentState = await repo.findBookingStateById(tx, bookingId);
+      if (
+        currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL &&
+        currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED
+      ) {
+        throw new RoomBookingStateError(bookingId, currentState ?? "unknown");
+      }
+
       const conflicting = await repo.findRoomBookingsForUpdate(
         tx,
         roomId,
@@ -190,6 +206,18 @@ export function createRoomService(
         bookingId,
       );
       if (!current) throw new RoomBookingNotFoundError(bookingId);
+
+      // F22: relocate only applies to offline bookings that are awaiting room
+      // approval or already scheduled (relocating a scheduled room is the H3
+      // no-op path). Anything else must not receive a new CONFIRMED row.
+      const currentState = await repo.findBookingStateById(tx, bookingId);
+      if (
+        currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL &&
+        currentState !== BOOKING_STATE.SCHEDULED &&
+        currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED
+      ) {
+        throw new RoomBookingStateError(bookingId, currentState ?? "unknown");
+      }
 
       const conflicting = await repo.findRoomBookingsForUpdate(
         tx,

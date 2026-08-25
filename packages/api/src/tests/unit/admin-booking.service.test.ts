@@ -4,6 +4,7 @@ import {
   BookingNotFoundError,
   InvalidRefundStateError,
   OverrideMarksParticipantsRequiredError,
+  OverrideParticipantNotInBookingError,
   TerminalStateOverrideError,
   RefundSpendExhaustedError,
 } from "../../modules/admin-booking/admin-booking.errors";
@@ -781,6 +782,37 @@ describe("AdminBookingService", () => {
   });
 
   describe("applyOverride notifications", () => {
+    test("F24: planOverride rejects an affectedParticipant that is not a booking participant", async () => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+          holdAmount: 100,
+        })),
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
+      });
+
+      await expect(
+        service.applyOverride("admin1", {
+          bookingId: "b1",
+          category: "tutor_no_show",
+          reason: "Bad participant",
+          marksAction: "release_holds",
+          affectedParticipants: ["u1", "u999"],
+        }),
+      ).rejects.toThrow(OverrideParticipantNotInBookingError);
+    });
+
     test("writes best-effort notification to affected participants", async () => {
       const notification = makeNotificationPort();
       const repo = mockRepo({

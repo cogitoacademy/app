@@ -29,11 +29,24 @@ export class RoomBookingNotFoundError extends DomainError {
   }
 }
 
+export class RoomBookingStateError extends DomainError {
+  readonly domain = "room";
+  constructor(bookingId: string, currentState: string) {
+    super(
+      "ROOM_BOOKING_STATE",
+      "Room assignment requires the booking to be awaiting admin room approval",
+      { bookingId, currentState },
+    );
+  }
+}
+
 export function mapRoomError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof RoomNotFoundError) return notFound(err.message, err);
   if (err instanceof RoomBookingConflictError)
     return conflict(err.message, err);
   if (err instanceof RoomBookingNotFoundError)
     return notFound(err.message, err);
+  if (err instanceof RoomBookingStateError)
+    return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

@@ -4,6 +4,7 @@ import {
   BookingOverrideConflictError,
   InvalidRefundStateError,
   OverrideMarksParticipantsRequiredError,
+  OverrideParticipantNotInBookingError,
   RefundSpendExhaustedError,
   TerminalStateOverrideError,
 } from "./admin-booking.errors";
@@ -233,6 +234,22 @@ export function createAdminBookingService(deps: {
       conn,
       input.bookingId,
     );
+    // F24: every affectedParticipant must be a real participant of this
+    // booking. A typo'd or stale user id would otherwise be silently filtered
+    // out — for a marksAction that silently skips the money movement for that
+    // user (stranded holds); reject loudly instead.
+    if (input.affectedParticipants && input.affectedParticipants.length > 0) {
+      const participantIds = new Set(participants.map((p) => p.userId));
+      const unknown = input.affectedParticipants.filter(
+        (id) => !participantIds.has(id),
+      );
+      if (unknown.length > 0) {
+        throw new OverrideParticipantNotInBookingError(
+          input.bookingId,
+          unknown,
+        );
+      }
+    }
     const affectedParts =
       input.affectedParticipants && input.affectedParticipants.length > 0
         ? participants.filter((p) =>

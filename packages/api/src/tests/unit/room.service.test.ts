@@ -28,6 +28,9 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
     findActiveRoomBookingByBookingId: mock(async (_conn: any) => null),
     findRequestedRoomBookingByBookingId: mock(async (_conn: any) => null),
     findCancellableRoomBookingByBookingId: mock(async (_conn: any) => null),
+    findBookingStateById: mock(
+      async (_conn: any) => "awaiting_admin_room_approval",
+    ),
     updateRoomBookingStatus: mock(
       async (_conn: any, _id: string, status: string) => ({
         id: "rb1",
@@ -155,7 +158,7 @@ describe("createRoomService", () => {
       ).rejects.toThrow("Room is already booked");
     });
 
-    test("assigns room when available", async () => {
+      test("assigns room when available", async () => {
       const roomBookingRow = {
         id: "rb1",
         roomId: "room1",
@@ -168,6 +171,7 @@ describe("createRoomService", () => {
       const repo = makeRepo({
         findRoomById: mock(async () => makeRoom()),
         findRoomBookingsForUpdate: mock(async () => []),
+        findBookingStateById: mock(async () => "awaiting_admin_room_approval"),
         insertRoomBooking: mock(async () => roomBookingRow),
       });
 
@@ -179,6 +183,26 @@ describe("createRoomService", () => {
         new Date("2024-01-01T11:00:00Z"),
       );
       expect(result).toEqual(roomBookingRow);
+    });
+
+    test("F22: assignRoom rejects a booking that is not awaiting room approval", async () => {
+      const repo = makeRepo({
+        findRoomById: mock(async () => makeRoom()),
+        findRoomBookingsForUpdate: mock(async () => []),
+        findBookingStateById: mock(async () => "confirmed"),
+        insertRoomBooking: mock(async () => ({ id: "rb1" })),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(
+        service.assignRoom(
+          "b1",
+          "room1",
+          new Date("2024-01-01T10:00:00Z"),
+          new Date("2024-01-01T11:00:00Z"),
+        ),
+      ).rejects.toThrow("room approval");
+      expect(repo.insertRoomBooking).not.toHaveBeenCalled();
     });
   });
 
@@ -283,6 +307,32 @@ describe("createRoomService", () => {
         }),
       );
       expect(result).toEqual(newRow);
+    });
+
+    test("F22: relocateRoom rejects a booking in an unrelated state", async () => {
+      const repo = makeRepo({
+        findRoomById: mock(async () => makeRoom()),
+        findActiveRoomBookingByBookingId: mock(async () => ({
+          id: "rb_old",
+          roomId: "room_old",
+          status: "confirmed",
+        })),
+        findBookingStateById: mock(async () => "confirmed"),
+        findRoomBookingsForUpdate: mock(async () => []),
+        insertRoomBooking: mock(async () => ({ id: "rb_new" })),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(
+        service.relocateRoom(
+          "b1",
+          "room1",
+          new Date("2024-01-01T10:00:00Z"),
+          new Date("2024-01-01T11:00:00Z"),
+        ),
+      ).rejects.toThrow("awaiting admin room approval");
+      expect(repo.insertRoomBooking).not.toHaveBeenCalled();
+      expect(repo.updateRoomBookingStatus).not.toHaveBeenCalled();
     });
   });
 

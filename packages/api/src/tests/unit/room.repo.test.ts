@@ -7,6 +7,7 @@ import {
   findRoomBookings,
   insertRoomBooking,
   findRequestedRoomBookingByBookingId,
+  findBookingStateById,
 } from "../../modules/room/room.repo";
 
 function makeSelectConn(rows: any[] = [], hasLimit = false) {
@@ -159,6 +160,30 @@ describe("findRequestedRoomBookingByBookingId", () => {
   });
 });
 
+describe("findBookingStateById", () => {
+  test("returns the booking's current state", async () => {
+    const limit = mock(async () => [{ currentState: "scheduled" }]);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select, from, where, limit } as any;
+
+    const result = await findBookingStateById(conn, "b1");
+    expect(result).toBe("scheduled");
+  });
+
+  test("returns null when the booking does not exist", async () => {
+    const limit = mock(async () => []);
+    const where = mock(() => ({ limit }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const conn = { select, from, where, limit } as any;
+
+    const result = await findBookingStateById(conn, "missing");
+    expect(result).toBeNull();
+  });
+});
+
 describe("createRoomRepo", () => {
   test("returns object with all repo methods", () => {
     const r = createRoomRepo();
@@ -166,6 +191,7 @@ describe("createRoomRepo", () => {
     expect(r).toHaveProperty("findActiveRooms");
     expect(r).toHaveProperty("findPendingRoomApprovals");
     expect(r).toHaveProperty("findPendingApprovalBookingById");
+    expect(r).toHaveProperty("findBookingStateById");
     expect(r).toHaveProperty("insertRoom");
     expect(r).toHaveProperty("findRoomById");
     expect(r).toHaveProperty("findRoomBookings");
