@@ -18,12 +18,7 @@ import {
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import {
-  IconAlertCircle,
-  IconBrandGoogle,
-  IconEye,
-  IconEyeOff,
-} from "@tabler/icons-react";
+import { IconBrandGoogle, IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -180,12 +175,19 @@ export default function SignUpForm({
             <form.Field
               name="name"
               validators={{
+                onMount: signUpNameSchema,
                 onChange: signUpNameSchema,
                 onBlur: signUpNameSchema,
               }}
             >
               {(field) => (
-                <Field>
+                <Field
+                  invalid={
+                    (field.state.meta.isBlurred ||
+                      field.form.state.submissionAttempts > 0) &&
+                    field.state.meta.errors.length > 0
+                  }
+                >
                   <FieldLabel htmlFor={field.name}>Name</FieldLabel>
                   <Input
                     id={field.name}
@@ -207,7 +209,9 @@ export default function SignUpForm({
                     ? getFieldErrorMessages(field.state.meta.errors)
                     : []
                   ).map((error) => (
-                    <FieldError key={error}>{error}</FieldError>
+                    <FieldError key={error} match={true}>
+                      {error}
+                    </FieldError>
                   ))}
                 </Field>
               )}
@@ -216,12 +220,19 @@ export default function SignUpForm({
             <form.Field
               name="email"
               validators={{
+                onMount: signInEmailSchema,
                 onChange: signInEmailSchema,
                 onBlur: signInEmailSchema,
               }}
             >
               {(field) => (
-                <Field>
+                <Field
+                  invalid={
+                    (field.state.meta.isBlurred ||
+                      field.form.state.submissionAttempts > 0) &&
+                    field.state.meta.errors.length > 0
+                  }
+                >
                   <FieldLabel htmlFor={field.name}>Email</FieldLabel>
                   <Input
                     id={field.name}
@@ -244,7 +255,9 @@ export default function SignUpForm({
                     ? getFieldErrorMessages(field.state.meta.errors)
                     : []
                   ).map((error) => (
-                    <FieldError key={error}>{error}</FieldError>
+                    <FieldError key={error} match={true}>
+                      {error}
+                    </FieldError>
                   ))}
                 </Field>
               )}
@@ -253,12 +266,19 @@ export default function SignUpForm({
             <form.Field
               name="password"
               validators={{
+                onMount: signUpPasswordPolicySchema,
                 onChange: signUpPasswordPolicySchema,
                 onBlur: signUpPasswordPolicySchema,
               }}
             >
               {(field) => (
-                <Field>
+                <Field
+                  invalid={
+                    (field.state.meta.isBlurred ||
+                      field.form.state.submissionAttempts > 0) &&
+                    field.state.meta.errors.length > 0
+                  }
+                >
                   <FieldLabel htmlFor={field.name}>Password</FieldLabel>
                   <div className="relative">
                     <Input
@@ -305,47 +325,26 @@ export default function SignUpForm({
                     ? getFieldErrorMessages(field.state.meta.errors)
                     : []
                   ).map((error) => (
-                    <FieldError key={error}>{error}</FieldError>
+                    <FieldError key={error} match={true}>
+                      {error}
+                    </FieldError>
                   ))}
                 </Field>
               )}
             </form.Field>
 
             <form.Subscribe
-              selector={(state) => ({
-                canSubmit: state.canSubmit,
-                isSubmitting: state.isSubmitting,
-                submissionAttempts: state.submissionAttempts,
-              })}
+              selector={(state) => ({ isSubmitting: state.isSubmitting })}
             >
-              {({ canSubmit, isSubmitting, submissionAttempts }) => (
-                <>
-                  {submissionAttempts > 0 && !canSubmit ? (
-                    <div
-                      className="flex items-start gap-2 rounded-sm border border-danger/20 bg-danger/10 p-3 text-sm text-danger"
-                      role="alert"
-                      aria-live="polite"
-                    >
-                      <IconAlertCircle
-                        size={18}
-                        className="mt-0.5 shrink-0"
-                        aria-hidden="true"
-                      />
-                      <span>
-                        Please fix the highlighted fields before creating your
-                        account.
-                      </span>
-                    </div>
-                  ) : null}
-                  <Button
-                    type="submit"
-                    block
-                    disabled={isSubmitting || isAuthTransitioning}
-                    progress={isSubmitting || isAuthTransitioning}
-                  >
-                    Sign Up
-                  </Button>
-                </>
+              {({ isSubmitting }) => (
+                <Button
+                  type="submit"
+                  block
+                  disabled={isSubmitting || isAuthTransitioning}
+                  progress={isSubmitting || isAuthTransitioning}
+                >
+                  Sign Up
+                </Button>
               )}
             </form.Subscribe>
           </form>

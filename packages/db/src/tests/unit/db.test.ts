@@ -5,6 +5,9 @@ const mockEnv = {
   NODE_ENV: "test",
   DB_SSL_ENABLED: false,
   DB_SSL_REJECT_UNAUTHORIZED: false,
+  SANITY_PROJECT_ID: "skfmwuke",
+  SANITY_DATASET: "development",
+  SANITY_API_VERSION: "2024-03-01",
 };
 
 mock.module("@cogito-app/env/server", () => ({

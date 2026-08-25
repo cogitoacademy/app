@@ -30,8 +30,8 @@ The student profile and tutor onboarding surfaces now share a responsive account
 ### Auth form validation follow-up (2026-08-25)
 
 The `/login` sign-in and sign-up forms now validate each touched field on
-change and blur, show deduplicated inline errors, and display a form-level
-warning when a submission is blocked by invalid data. Sign-up keeps the
+change and blur, show deduplicated Selia inline errors with danger outlines,
+and keep blocked submissions at the field level. Sign-up keeps the
 server-aligned 8-character uppercase/lowercase/digit password policy visible
 as helper copy, while name and email whitespace is normalized before the
 Better Auth request. No auth endpoint, request/response shape, or persistence
@@ -661,8 +661,9 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.24 (2026-08-25): Added the shared Selia `aria-invalid` danger outline to auth inputs and ensured empty submit attempts reveal every invalid auth field without changing the auth API or persistence contract.
 - v1.23 (2026-08-25): Standardized collection empty states through the shared Selia presentation component with `default`, `compact`, and `inline` densities. Covered calendar periods, discovery filters, booking/detail sections, notifications, ledgers, subject/proof-link fields, availability previews, and admin tables. No RPC, schema, or persistence contract changed.
-- v1.22 (2026-08-25): Added field-level login/sign-up validation on change and blur, visible password requirements, accessible invalid-submit warnings, and client-side name/email normalization. No auth API or persistence contract changed.
+- v1.22 (2026-08-25): Added field-level login/sign-up validation on change and blur, visible password requirements, accessible Selia inline field errors, and client-side name/email normalization. No auth API or persistence contract changed.
 - v1.21 (2026-08-24): Refined the notifications inbox with row selection, select-all for loaded rows, batch read/unread actions, human-readable category badges, exact date/time display, and a protected `notification.updateReadStatus` procedure scoped to the authenticated user. No notification schema change.
 
 - v1.20 (2026-08-24): Moved eligible `Propose new time` and `Complete session` buttons into the booking-detail header action group beneath the state badge; removed their card-footer duplicates. Documented that the booking proposer may reschedule in `confirmed`/`scheduled` before H-2, while force-majeure exceptions require support/admin handling and an auditable override. No RPC, schema, or persistence contract changed.

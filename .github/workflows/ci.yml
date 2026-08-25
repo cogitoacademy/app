@@ -126,6 +126,7 @@ jobs:
       BETTER_AUTH_URL: http://localhost:3001
       CORS_ORIGIN: http://localhost:3000
       PAYMENT_WEBHOOK_SECRET: ci-payment-webhook-secret-at-least-32-characters-long
+      SANITY_PROJECT_ID: skfmwuke
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
@@ -146,6 +147,7 @@ jobs:
           echo "BETTER_AUTH_URL=${{ env.BETTER_AUTH_URL }}" >> apps/server/.env
           echo "CORS_ORIGIN=${{ env.CORS_ORIGIN }}" >> apps/server/.env
           echo "PAYMENT_WEBHOOK_SECRET=${{ env.PAYMENT_WEBHOOK_SECRET }}" >> apps/server/.env
+          echo "SANITY_PROJECT_ID=${{ env.SANITY_PROJECT_ID }}" >> apps/server/.env
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
       - run: bun test --timeout 30000 packages/api/src/tests/ apps/server/src/openapi.test.ts
