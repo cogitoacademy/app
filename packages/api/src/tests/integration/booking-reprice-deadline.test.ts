@@ -373,4 +373,74 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     expect(w!.heldBalance).toBe(0);
     expect(w!.availableBalance).toBe(100);
   });
+
+  test("F3: headcount change during reconfirmation re-issues reconfirmation instead of finalizing at a stale price", async () => {
+    const a = await createTestUser(`student.f3.a.${ts}@cogito.test`);
+    await createTestWallet(a.id, 300);
+    const b2 = await createTestUser(`student.f3.b.${ts}@cogito.test`);
+    await createTestWallet(b2.id, 300);
+    const c = await createTestUser(`student.f3.c.${ts}@cogito.test`);
+    await createTestWallet(c.id, 300);
+
+    // 3-of-5 group already repriced at the size-3 rate (40/student), sitting
+    // in its reconfirmation window.
+    const seeded = await seedPartialGroup({
+      tutorId,
+      confirmedUserIds: [a.id, b2.id, c.id],
+      targetGroupSize: 5,
+      perStudent: 40,
+      state: BOOKING_STATE.AWAITING_RECONFIRMATION,
+    });
+
+    // Two of three reconfirm at the 40/student rate.
+    await services.booking.reconfirm(a.id, seeded.id, true);
+    await services.booking.reconfirm(b2.id, seeded.id, true);
+
+    // The third withdraws mid-cycle: headcount drops to 2, but the pricing
+    // snapshot is still the size-3 one (withdraw from awaiting_reconfirmation
+    // does not reprice).
+    await services.booking.withdraw(c.id, seeded.id, "schedule conflict");
+
+    // The last survivor's accept must NOT finalize to tutor review on the
+    // stale size-3 price — it re-enters a fresh reconfirmation cycle repriced
+    // for the new headcount.
+    const result = await services.booking.reconfirm(b2.id, seeded.id, true);
+    expect(result.reconfirmed).toBe(true);
+
+    const [row] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, seeded.id));
+    expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_RECONFIRMATION);
+    // Repriced to the size-2 rate: 2 × 45.
+    expect(row!.priceSnapshot?.perStudent).toBe(45);
+    expect(row!.holdAmount).toBe(90);
+    const deadlineMs = new Date(row!.deadlineAt!).getTime();
+    expect(deadlineMs).toBeGreaterThan(Date.now() + RESPONSE_WINDOW_MS - 5000);
+
+    // Every survivor must reconfirm again at the new rate — no one stays
+    // RECONFIRMED from the stale-price round.
+    const participants = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, seeded.id));
+    const survivors = participants.filter((p) =>
+      [a.id, b2.id].includes(p.userId),
+    );
+    expect(survivors.length).toBe(2);
+    for (const p of survivors) {
+      expect(p.confirmationState).toBe("confirmed");
+      expect(p.heldAmount).toBe(45);
+    }
+
+    // After the re-issued cycle, reconfirming both finalizes at the new price.
+    await services.booking.reconfirm(a.id, seeded.id, true);
+    await services.booking.reconfirm(b2.id, seeded.id, true);
+    const [finalRow] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, seeded.id));
+    expect(finalRow!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
+    expect(finalRow!.holdAmount).toBe(90);
+  });
 });

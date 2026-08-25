@@ -64,6 +64,7 @@ describe("createBookingRepo", () => {
     expect(repo).toHaveProperty("findParticipant");
     expect(repo).toHaveProperty("findConfirmedParticipants");
     expect(repo).toHaveProperty("findReconfirmedParticipants");
+    expect(repo).toHaveProperty("resetReconfirmedParticipants");
     expect(repo).toHaveProperty("insertBooking");
     expect(repo).toHaveProperty("updateBookingCancellationReason");
     expect(repo).toHaveProperty("updateBookingHoldAmount");
@@ -278,6 +279,24 @@ describe("createBookingRepo", () => {
       expect(result[0]).toHaveProperty("confirmationState", "reconfirmed");
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("resetReconfirmedParticipants", () => {
+    test("resets reconfirmed participants to confirmed and clears timestamps", async () => {
+      const updateConn = makeUpdateConn();
+      updateConn.where.mockReturnValue(Promise.resolve(undefined));
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      await repo.resetReconfirmedParticipants(conn, "b1");
+
+      expect(updateConn.update).toHaveBeenCalledTimes(1);
+      expect(updateConn.set).toHaveBeenCalledWith({
+        confirmationState: "confirmed",
+        reconfirmedAt: null,
+      });
+      expect(updateConn.where).toHaveBeenCalledTimes(1);
     });
   });
 

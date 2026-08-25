@@ -2590,19 +2590,68 @@ export function createBookingService(deps: {
           tx,
           bookingId,
         );
-        const confirmedCount = await repo.findConfirmedParticipants(
+        const confirmed = await repo.findConfirmedParticipants(
           tx,
           bookingId,
         );
 
-        if (reconfirmed.length === confirmedCount.length) {
+        // F3: if the confirmed headcount changed during the reconfirmation
+        // window (a participant declined or withdrew after the last reprice),
+        // the pricing snapshot is stale. PRD: "If any confirmation changes the
+        // headcount again, the system recalculates and reissues the
+        // reconfirmation request" — re-enter a fresh reconfirmation cycle with
+        // a fresh 12h window instead of finalizing at a price computed for a
+        // headcount that no longer exists.
+        const perStudent = b.priceSnapshot?.perStudent;
+        const snapshotHeadcount =
+          b.type === BOOKING_TYPE.GROUP &&
+          perStudent &&
+          perStudent > 0
+            ? Math.round(b.holdAmount / perStudent)
+            : null;
+        if (
+          snapshotHeadcount !== null &&
+          confirmed.length !== snapshotHeadcount
+        ) {
+          // Everyone — including this accept — goes back to plain CONFIRMED
+          // and must reconfirm again at the recalculated rate.
+          await repo.resetReconfirmedParticipants(tx, bookingId);
+          await repriceGroupForHeadcount(
+            tx,
+            b,
+            confirmed,
+            ACTOR_TYPE.STUDENT,
+          );
+          await repo.updateBookingDeadline(
+            tx,
+            bookingId,
+            new Date(Date.now() + RESPONSE_WINDOW_MS),
+          );
+
+          for (const p of confirmed) {
+            // eslint-disable-next-line no-await-in-loop
+            await notification.writeBestEffort({
+              db: tx,
+              userId: p.userId,
+              bookingId,
+              category: NOTIFICATION_CATEGORY.BOOKING,
+              severity: NOTIFICATION_SEVERITY.ACTION,
+              title: "Reconfirmation reissued",
+              body: "The group headcount changed — the per-student price was recalculated. Please reconfirm within 12 hours.",
+              eventKey: `booking.${bookingId}.reissue_reconfirm.${p.userId}`,
+              emailRequired: true,
+            });
+          }
+          return { reconfirmed: true };
+        }
+
+        if (reconfirmed.length === confirmed.length) {
           await transition(tx, bookingId, BOOKING_STATE.AWAITING_TUTOR_REVIEW, {
             actorId: userId,
             actorType: ACTOR_TYPE.STUDENT,
             reason: "All reconfirmed",
           });
 
-          const confirmed = await repo.findConfirmedParticipants(tx, bookingId);
           await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.STUDENT);
         }
         return { reconfirmed: true };

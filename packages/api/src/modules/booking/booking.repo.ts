@@ -297,6 +297,32 @@ async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
 }
 
 /**
+ * Resets RECONFIRMED participants back to CONFIRMED and clears their
+ * reconfirmation timestamp. Used when a headcount change during the
+ * reconfirmation window forces a re-issued reconfirmation round (F3).
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ */
+async function resetReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
+  await conn
+    .update(bookingParticipant)
+    .set({
+      confirmationState: CONFIRMATION_STATE.CONFIRMED,
+      reconfirmedAt: null,
+    })
+    .where(
+      and(
+        eq(bookingParticipant.bookingId, bookingId),
+        eq(
+          bookingParticipant.confirmationState,
+          CONFIRMATION_STATE.RECONFIRMED,
+        ),
+      ),
+    );
+}
+
+/**
  * Inserts a booking row.
  *
  * @param conn - the database connection or active transaction
@@ -1079,6 +1105,7 @@ export function createBookingRepo(db: DbType) {
     findUserEmails,
     findUsersByIds,
     findReconfirmedParticipants,
+    resetReconfirmedParticipants,
     insertBooking,
     updateBookingCancellationReason,
     updateBookingHoldAmount,
