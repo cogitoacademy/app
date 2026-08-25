@@ -33,3 +33,9 @@ INSERT INTO "economy_config" (
 	"offline_cogito_increment_idr"
 ) VALUES ('default', 5000, 50000, 30000, 40000, 50000, 20000, 90000, 40000)
 ON CONFLICT ("id") DO NOTHING;
+
+-- down
+-- Reverts the IDR economy config migration: drop the singleton config table
+-- and the tutor base-rates column. Manual rollback only (docs/RUNBOOK.md).
+DROP TABLE IF EXISTS "economy_config";
+ALTER TABLE "tutor_profile" DROP COLUMN IF EXISTS "base_rates_idr";

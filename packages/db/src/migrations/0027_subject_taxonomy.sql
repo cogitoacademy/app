@@ -84,3 +84,10 @@ ON CONFLICT ("slug") DO UPDATE SET
 	"sort_order" = EXCLUDED."sort_order",
 	"is_active" = true,
 	"updated_at" = now();
+
+-- down
+-- Reverts the subject taxonomy introduced by this migration. Children before
+-- parents; join rows first (FKs), then the category table. Only for manual
+-- rollback on a scratch/dev database — see docs/RUNBOOK.md "Migration rollback".
+DROP TABLE IF EXISTS "tutor_profile_subject";
+DROP TABLE IF EXISTS "subject_category";
