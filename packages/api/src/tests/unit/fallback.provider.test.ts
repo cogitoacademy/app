@@ -225,7 +225,11 @@ describe("createFallbackMeetingProvider", () => {
     const tx = { select, insert } as any;
 
     const provider = createFallbackMeetingProvider(db);
-    const result = await provider.setManualLink("b5", createdRow.meetingUrl, tx);
+    const result = await provider.setManualLink(
+      "b5",
+      createdRow.meetingUrl,
+      tx,
+    );
 
     expect(result).toEqual(createdRow);
     expect(insert).toHaveBeenCalledTimes(1);

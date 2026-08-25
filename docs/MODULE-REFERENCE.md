@@ -255,7 +255,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `auth.repo.ts` — `findUserWithProfile`, `updateProfile`, `searchStudents`
 - `auth.service.ts` — `me`, `getProfile`, `updateProfile`, `searchStudents` (lazy-creates wallet)
 - `auth.handler.ts` — Maps session context to service calls
-- `auth.router.ts` — Protected routes for `me`, `getProfile`, `updateProfile`, `searchStudents`
+- `auth.router.ts` — Protected routes for `me`, `getProfile`, `updateProfile`; `searchStudents` is **student-only** (`studentProcedure`, F16)
 
 **Service Methods:**
 
@@ -263,7 +263,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `getProfile(userId)` — Returns user with profile and tutor profile
 - `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts)
 - Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`.
-- `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 results
+- `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 results; exposed via `studentProcedure` so tutors/admins get FORBIDDEN (F16 — the lookup exists for the group-booking invite UI)
 
 **Dependencies:** `AuthRepo`, `WalletPort` (for lazy wallet creation)
 

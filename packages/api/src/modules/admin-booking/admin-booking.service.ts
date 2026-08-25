@@ -637,8 +637,10 @@ export function createAdminBookingService(deps: {
         0,
         creditedMarks - participantWallet.totalBalance,
       );
-      const creditStatePayments =
-        await repo.listCreditStatePaymentsForUser(tx, payment.userId);
+      const creditStatePayments = await repo.listCreditStatePaymentsForUser(
+        tx,
+        payment.userId,
+      );
       let remainingSpend = spentTotal;
       let attributedToTarget = 0;
       for (const prior of creditStatePayments) {

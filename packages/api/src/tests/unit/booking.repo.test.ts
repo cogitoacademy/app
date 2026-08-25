@@ -667,7 +667,8 @@ describe("createBookingRepo", () => {
         };
         if (chunk.value !== undefined) return String(chunk.value);
         if (chunk.name !== undefined) return chunk.name;
-        if (chunk.queryChunks) return chunk.queryChunks.map(renderChunk).join("");
+        if (chunk.queryChunks)
+          return chunk.queryChunks.map(renderChunk).join("");
         return "";
       };
       const sqlText = renderChunk(predicate).replace(/\s+/g, " ");

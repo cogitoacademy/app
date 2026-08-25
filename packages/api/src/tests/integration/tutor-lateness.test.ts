@@ -382,7 +382,9 @@ describe("Tutor lateness flagging flow", () => {
     const adminCtx = await createTestContext(adminRes.cookie);
     if (!adminCtx.session?.user) throw new Error("Admin session missing");
     await setUserRole(adminCtx.session.user.id, "admin");
-    const adminClient = createTestClient(await createTestContext(adminRes.cookie));
+    const adminClient = createTestClient(
+      await createTestContext(adminRes.cookie),
+    );
     const room = await adminClient.room.create({
       name: "Ruang F9",
       location: "Lantai 1",

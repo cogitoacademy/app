@@ -104,10 +104,10 @@ CI runs the API integration/unit suite together with the env, auth, and database
 
 ### `auth.searchStudents`
 
-- **Auth:** Protected
+- **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F16)
 - **Input:** `{ query, limit? }` (`query` 2–100 chars, `limit` 1–10 default 5)
 - **Output:** `[{ id, name, email }]` — up to 10 students matching a name or email, excluding the requester
-- **Description:** Debounced student lookup used by the group-booking invite UI
+- **Description:** Student-only debounced student lookup used by the group-booking invite UI
 
 ---
 
@@ -389,21 +389,21 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `achievement.create`
 
-- **Auth:** Protected
+- **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17; FR-18 is student-facing)
 - **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? }`
 - **Output:** `{ achievement }`
 - **Description:** Submits a new achievement in `pending` status
 
 ### `achievement.update`
 
-- **Auth:** Protected
+- **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17)
 - **Input:** `{ id, version, data: { ...achievementFields } }`
 - **Output:** `{ achievement }`
 - **Description:** Updates a pending achievement; optimistic locking via `version`
 
 ### `achievement.delete`
 
-- **Auth:** Protected
+- **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17)
 - **Input:** `{ id, version }`
 - **Output:** `{ deleted }`
 - **Description:** Deletes a pending achievement; optimistic locking via `version`
@@ -906,7 +906,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `upload.createUploadUrl`
 
-- **Auth:** Protected
+- **Auth:** Protected (F19 — intentionally NOT student-only: any authenticated role may mint a bounded upload URL; the tutor proof-file path needs it)
 - **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
 - **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
