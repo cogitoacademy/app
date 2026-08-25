@@ -178,6 +178,7 @@ export default function SignInForm({
             <form.Field
               name="email"
               validators={{
+                onMount: signInEmailSchema,
                 onChange: signInEmailSchema,
                 onBlur: signInEmailSchema,
               }}
@@ -223,6 +224,7 @@ export default function SignInForm({
             <form.Field
               name="password"
               validators={{
+                onMount: signInPasswordSchema,
                 onChange: signInPasswordSchema,
                 onBlur: signInPasswordSchema,
               }}

@@ -17,7 +17,8 @@ import { tutorProfile } from "./tutor-profile";
 
 /**
  * Editable subject catalog. A row with a null parentId is a mother category;
- * rows with a parentId are selectable child subjects.
+ * rows with a parentId are selectable child subjects. Inactive rows are kept
+ * for legacy tutor profile reads and foreign-key preservation.
  */
 export const subjectCategory = pgTable(
   "subject_category",

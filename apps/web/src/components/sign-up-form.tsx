@@ -175,6 +175,7 @@ export default function SignUpForm({
             <form.Field
               name="name"
               validators={{
+                onMount: signUpNameSchema,
                 onChange: signUpNameSchema,
                 onBlur: signUpNameSchema,
               }}
@@ -219,6 +220,7 @@ export default function SignUpForm({
             <form.Field
               name="email"
               validators={{
+                onMount: signInEmailSchema,
                 onChange: signInEmailSchema,
                 onBlur: signInEmailSchema,
               }}
@@ -264,6 +266,7 @@ export default function SignUpForm({
             <form.Field
               name="password"
               validators={{
+                onMount: signUpPasswordPolicySchema,
                 onChange: signUpPasswordPolicySchema,
                 onBlur: signUpPasswordPolicySchema,
               }}

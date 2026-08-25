@@ -144,7 +144,13 @@ export function validateSubmitForReview(
 
   const selectedSubjects = (profile as TutorProfileWithSubjectRelations)
     .subjects;
-  if (!selectedSubjects || selectedSubjects.length === 0) {
+  const hasSelectableSubject = selectedSubjects?.some(
+    (relation) =>
+      relation.subject?.parentId != null &&
+      relation.subject.isActive &&
+      relation.subject.parent != null,
+  );
+  if (!hasSelectableSubject) {
     throw new TutorProfileIncompleteError(profile.id, ["subjectIds"]);
   }
 

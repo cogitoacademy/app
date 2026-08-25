@@ -1,23 +1,23 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                              |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-23; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed) |
-| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                 |
-| Created    | 2026-07-29                                                                                                                                         |
-| Audited    | 2026-08-22                                                                                                                                         |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                      |
-| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                             |
+| Field      | Value                                                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Living gap inventory (updated 2026-08-25; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy follow-up implemented) |
+| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                      |
+| Created    | 2026-07-29                                                                                                                                                                                     |
+| Audited    | 2026-08-25                                                                                                                                                                                     |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                  |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                         |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
-### Subject taxonomy follow-up (2026-08-22)
+### Subject taxonomy follow-up (2026-08-25)
 
-Tutor onboarding now uses the normalized mother-category/child-subject selector exposed by `tutors.listSubjects`. Tutors must select at least one child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
+Tutor onboarding now uses the normalized competition category/child-subject catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 child subjects. Tutors must select at least one current child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. Archived legacy subjects remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding and tutor-list selectors store normalized IDs/values for submission or filtering but render human-readable labels in their triggers, so backend UUIDs remain hidden from users. The tutor list now supports selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
+The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Selected subjects appear as chips, while archived profile subjects are shown read-only. The tutor list continues to support selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
 
 ### Competition Calendar parity follow-up (2026-08-23)
 
@@ -30,8 +30,8 @@ The student profile and tutor onboarding surfaces now share a responsive account
 ### Auth form validation follow-up (2026-08-25)
 
 The `/login` sign-in and sign-up forms now validate each touched field on
-change and blur, show deduplicated Selia inline errors, and keep blocked
-submissions at the field level. Sign-up keeps the
+change and blur, show deduplicated Selia inline errors with danger outlines,
+and keep blocked submissions at the field level. Sign-up keeps the
 server-aligned 8-character uppercase/lowercase/digit password policy visible
 as helper copy, while name and email whitespace is normalized before the
 Better Auth request. No auth endpoint, request/response shape, or persistence
@@ -661,6 +661,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.24 (2026-08-25): Added the shared Selia `aria-invalid` danger outline to auth inputs and ensured empty submit attempts reveal every invalid auth field without changing the auth API or persistence contract.
 - v1.23 (2026-08-25): Standardized collection empty states through the shared Selia presentation component with `default`, `compact`, and `inline` densities. Covered calendar periods, discovery filters, booking/detail sections, notifications, ledgers, subject/proof-link fields, availability previews, and admin tables. No RPC, schema, or persistence contract changed.
 - v1.22 (2026-08-25): Added field-level login/sign-up validation on change and blur, visible password requirements, accessible Selia inline field errors, and client-side name/email normalization. No auth API or persistence contract changed.
 - v1.21 (2026-08-24): Refined the notifications inbox with row selection, select-all for loaded rows, batch read/unread actions, human-readable category badges, exact date/time display, and a protected `notification.updateReadStatus` procedure scoped to the authenticated user. No notification schema change.
