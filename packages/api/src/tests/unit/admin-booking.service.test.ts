@@ -5,6 +5,7 @@ import {
   InvalidRefundStateError,
   OverrideMarksParticipantsRequiredError,
   TerminalStateOverrideError,
+  RefundSpendExhaustedError,
 } from "../../modules/admin-booking/admin-booking.errors";
 import { BookingStateTransitionError } from "../../modules/booking/booking.errors";
 
@@ -43,6 +44,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
       id: "pay1",
       status: "REFUNDED",
     })),
+    listCreditStatePaymentsForUser: mock(async () => []),
     listBookingsByState: mock(async () => []),
     getStateHistory: mock(async () => []),
     updateBookingHoldAmount: mock(async () => {}),
@@ -1527,6 +1529,73 @@ describe("AdminBookingService", () => {
         expect(e).toBeInstanceOf(BookingNotFoundError);
         expect(e.code).toBe("ADMIN_BOOKING_NOT_FOUND");
       }
+    });
+
+    test("F11: rejects the spent payment and refunds the unspent one (per-payment FIFO attribution)", async () => {
+      // P1(100) and P2(100) were both credited; 100 Marks were spent and the
+      // wallet holds 100 (P2's credit). FIFO attributes the spend to P1, so:
+      //   - refunding P1 must reject (P1's own Marks are gone)
+      //   - refunding P2 must succeed (P2's Marks were never spent)
+      const payments = [
+        { id: "pay1", userId: "u1", status: "PAID", marks: 100 },
+        { id: "pay2", userId: "u1", status: "PAID", marks: 100 },
+      ];
+      const wallet = makeWalletPort({
+        getByUserId: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 0,
+          availableBalance: 100,
+        })),
+        sumCreditedMarks: mock(async () => 200),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 150,
+          heldBalance: 0,
+          availableBalance: 150,
+        })),
+      });
+      const repo = mockRepo({
+        listCreditStatePaymentsForUser: mock(async () => payments),
+      });
+
+      const serviceFor = (paymentId: string) =>
+        createAdminBookingService({
+          db: makeDb(),
+          repo: {
+            ...repo,
+            findPaymentById: mock(async () =>
+              payments.find((p) => p.id === paymentId),
+            ),
+          },
+          auditPort: makeAuditPort(),
+          wallet: wallet as any,
+          refund: makeRefundPort(),
+        });
+
+      // P1 (earliest) was fully spent — rejected.
+      await expect(
+        serviceFor("pay1").adminRefund("admin1", {
+          paymentId: "pay1",
+          reason: "F11 spent",
+        }),
+      ).rejects.toThrow(RefundSpendExhaustedError);
+
+      // P2 (unspent) refunds its full 100.
+      const result = await serviceFor("pay2").adminRefund("admin1", {
+        paymentId: "pay2",
+        reason: "F11 unspent",
+      });
+      expect(result).toEqual({ paymentId: "pay2", status: "refunded" });
+      expect(wallet.compensate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          walletId: "w1",
+          amount: 100,
+          eventKey: "refund.pay2",
+          sourceReference: "pay2",
+        }),
+      );
     });
   });
 });

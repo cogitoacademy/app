@@ -623,17 +623,39 @@ export function createAdminBookingService(deps: {
       const participantWallet = await wallet.getByUserId(tx, payment.userId);
       if (!participantWallet) throw new BookingNotFoundError(payment.userId);
 
-      // U8/B9 (TC-39 / Refund Policy prd.tex:687-688): refunds exist for
-      // payment errors, never a blind full refund of already-spent Marks.
-      // Spend = total purchase credits - current total balance; the
-      // refundable amount is this payment's unspent remainder (FIFO). A fully
-      // spent payment is rejected with a clean error.
+      // F11 (U8/B9, TC-39, Refund Policy prd.tex:687-688): spend is attributed
+      // per payment in FIFO order, never pooled across all payments. Credits
+      // are consumed oldest-first, so the refundable amount of THIS payment is
+      // its own credited Marks minus the spend attributed to it — refunding
+      // one payment can never credit Marks that belonged to a different,
+      // already-spent payment.
       const creditedMarks = await wallet.sumCreditedMarks(
         tx,
         participantWallet.id,
       );
-      const spent = Math.max(0, creditedMarks - participantWallet.totalBalance);
-      const refundableMarks = Math.max(0, payment.marks - spent);
+      const spentTotal = Math.max(
+        0,
+        creditedMarks - participantWallet.totalBalance,
+      );
+      const creditStatePayments =
+        await repo.listCreditStatePaymentsForUser(tx, payment.userId);
+      let remainingSpend = spentTotal;
+      let attributedToTarget = 0;
+      for (const prior of creditStatePayments) {
+        if (prior.id === payment.id) {
+          attributedToTarget = Math.min(prior.marks, remainingSpend);
+          break;
+        }
+        // This older payment's credit absorbs spend first (FIFO).
+        remainingSpend = Math.max(0, remainingSpend - prior.marks);
+      }
+      // Never refund more than the user's currently available Marks
+      // (available = total − held), and never more than this payment's
+      // unspent remainder.
+      const refundableMarks = Math.min(
+        payment.marks - attributedToTarget,
+        participantWallet.availableBalance,
+      );
       if (refundableMarks <= 0) {
         throw new RefundSpendExhaustedError(input.paymentId);
       }
