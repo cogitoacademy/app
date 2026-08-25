@@ -545,7 +545,9 @@ export function createAdminBookingService(deps: {
     // bounded keyset windows (at most MAX_ESCALATED_WINDOWS fetches) until the
     // page fills with escalated rows, the rows run out, or the budget is
     // exhausted. An empty page never carries a nextCursor.
-    type Row = Awaited<ReturnType<AdminBookingRepo["listBookingsByState"]>>[number];
+    type Row = Awaited<
+      ReturnType<AdminBookingRepo["listBookingsByState"]>
+    >[number];
     const collected: (Row & {
       escalated: boolean;
       reportedAt: Date | null;
