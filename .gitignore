@@ -50,7 +50,6 @@ artifacts/
 .playwright-mcp
 playwright-report
 test-results
-packages/e2e/.auth
 
 # Misc
 *.tgz
@@ -61,9 +60,11 @@ temp
 # Git worktrees
 .worktrees
 
-# Terraform local state and secrets
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-!*.tfvars.example
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/*.tfvars
+!infra/terraform/terraform.tfvars.example
+infra/terraform/crash.log
+infra/terraform/crash.*.log

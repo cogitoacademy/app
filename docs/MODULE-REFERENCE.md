@@ -14,10 +14,9 @@ The `packages/api` package implements business logic using a 4-layer architectur
 
 Production runtime URL configuration is intentionally separate from module
 contracts: API modules are served from `api.cogitoacademy.id`, frontend links
-and CORS use `app.cogitoacademy.id` (served by Cloudflare Pages), and the apex
-`cogitoacademy.id` remains the external company profile. Services that generate
-user-facing links use `CORS_ORIGIN`, so they point to the frontend host rather
-than the API host.
+and CORS use `app.cogitoacademy.id`, and the apex `cogitoacademy.id` remains
+the external company profile. Services that generate user-facing links use
+`CORS_ORIGIN`, so they point to the frontend host rather than the API host.
 
 Database bootstrap uses `SELECT 1` before the API starts serving traffic. The
 Coolify private PostgreSQL service is non-TLS, so that deployment sets
