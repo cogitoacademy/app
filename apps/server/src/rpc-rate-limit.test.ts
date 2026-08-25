@@ -41,6 +41,16 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchRateLimitPath("/rpc/upload/createUploadUrl")).toBe("upload");
   });
 
+  test("content file proxy matches /content/student-resources/*", () => {
+    expect(
+      matchRateLimitPath("/content/student-resources/abc123/file"),
+    ).toBe("content");
+    expect(
+      matchRateLimitPath("/content/student-resources/abc123/file?x=1"),
+    ).toBe("content");
+    expect(matchRateLimitPath("/content/competitions")).toBeNull();
+  });
+
   test("email-otp / forget-password / change-email paths are auth-limited (M3)", () => {
     expect(matchAuthPath("/api/auth/email-otp/verify-email")).toBe(true);
     expect(matchAuthPath("/api/auth/email-otp/send-otp")).toBe(true);

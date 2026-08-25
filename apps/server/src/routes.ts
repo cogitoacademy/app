@@ -11,6 +11,7 @@ import { auth, assertPasswordPolicy } from "@cogito-app/auth";
 import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 import { matchAuthPath, matchRateLimitPath } from "./rate-limit-paths";
+import { fetchProxyFile } from "./content-proxy";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
@@ -85,6 +86,13 @@ const uploadRateLimit = rateLimit({
   windowMs: 60_000,
   maxRequests: 30,
   keyPrefix: "upload",
+  redis,
+});
+// Content proxy: the Sanity file route streams real bytes (bandwidth) — 30/min.
+const contentRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "content",
   redis,
 });
 
@@ -238,6 +246,7 @@ export function createServer() {
       else if (rateLimitKind === "support") limiter = supportRateLimit;
       else if (rateLimitKind === "achievement") limiter = achievementRateLimit;
       else if (rateLimitKind === "upload") limiter = uploadRateLimit;
+      else if (rateLimitKind === "content") limiter = contentRateLimit;
 
       if (limiter) {
         const { allowed, retryAfterMs } = await limiter(ip);
@@ -384,16 +393,11 @@ export function createServer() {
           return { error: "Not found" };
         }
 
-        let upstream: Response;
-        try {
-          upstream = await fetch(file.fileUrl);
-        } catch {
-          set.status = 502;
-          return { error: "Unable to retrieve resource" };
-        }
-
-        if (!upstream.ok || !upstream.body) {
-          set.status = 502;
+        // Hardened proxy: host allowlist (cdn.sanity.io / *.sanity.io), 10s
+        // timeout, 5MB cap (content-length pre-check + streamed byte counter).
+        const proxy = await fetchProxyFile(file.fileUrl);
+        if (!proxy.ok) {
+          set.status = proxy.reason;
           return { error: "Unable to retrieve resource" };
         }
 
@@ -404,7 +408,7 @@ export function createServer() {
             .replace(/^\.+/, "")
             .slice(0, 120) || "knowledge-bank-resource.pdf";
 
-        return new Response(upstream.body, {
+        return new Response(proxy.body, {
           headers: {
             "Content-Type": file.mimeType ?? "application/pdf",
             "Content-Disposition": `inline; filename="${filename}"`,

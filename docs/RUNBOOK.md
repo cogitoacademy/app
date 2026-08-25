@@ -184,6 +184,30 @@ database migration problem, not an empty ticket list.
 For isolated local test runs, the test runner migrates `cogito-test` automatically
 using `apps/server/.env.test` or `apps/server/.env.test.example`.
 
+#### Migration rollback
+
+Up migrations are the only automatic path; down paths exist for migrations
+`0027_subject_taxonomy.sql` and `0028_economy_config.sql` (appended `-- down`
+sections) so the 2026 taxonomy and IDR-economy changes can be reverted on a
+scratch or dev database. Rollback is a manual `psql` operation against the
+target database:
+
+```sql
+-- 0028 economy config down
+DROP TABLE IF EXISTS "economy_config";
+ALTER TABLE "tutor_profile" DROP COLUMN IF EXISTS "base_rates_idr";
+
+-- 0027 subject taxonomy down
+DROP TABLE IF EXISTS "tutor_profile_subject";
+DROP TABLE IF EXISTS "subject_category";
+```
+
+Order matters (0028 before 0027 is fine either way; children before parents for
+0027). There is **no** automatic CD rollback — revert the code first, then run
+the down SQL, then re-run `bun run db:migrate` to restore the journal state
+consistently. `drizzle-kit` does not execute `-- down` sections; they exist for
+manual recovery only.
+
 ### Seed the Database
 
 ```bash
