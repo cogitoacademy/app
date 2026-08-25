@@ -9,6 +9,8 @@ mock.module("@cogito-app/env/server", () => ({
 const { SECURITY_HEADERS, buildCSP } =
   await import("../../lib/security-headers");
 
+mock.restore();
+
 describe("SECURITY_HEADERS", () => {
   test("contains X-Content-Type-Options", () => {
     expect(SECURITY_HEADERS["X-Content-Type-Options"]).toBe("nosniff");
