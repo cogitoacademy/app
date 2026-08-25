@@ -369,7 +369,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Circuit breaker on Resend: 3 failures → open for 120s
 - 30-second timeout per email send request
-- Emails are dispatched via the **outbox**: `notification.write` only queues `notificationDispatch` rows (`status='queued'`) inside the DB transaction; the `send-notification-email` scheduler job (60s) calls `notification.dispatchQueuedEmails()` to send and mark rows `sent`/`failed`/`suppressed` (landed #46)
+- Emails are dispatched via the **outbox**: `notification.write` only queues `notificationDispatch` rows (`status='queued'`) inside the DB transaction; the `send-notification-email` scheduler job (60s) calls `notification.dispatchQueuedEmails()` to send and mark rows `sent`/`failed`/`suppressed` (landed #46). `claimPendingDispatches` parenthesizes the reclaim disjunct (F7): the stale-`sending` reclaim (`created_at < now() - 10 min`) is `OR`-joined with an explicit grouping `(status IN ('queued','failed') AND attempts < 3) OR (status = 'sending' AND attempts < 3 AND ...)` so a `sending` row past the 3-attempt budget is never claimed (regression-tested)
 
 ---
 
