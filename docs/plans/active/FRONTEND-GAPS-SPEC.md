@@ -27,6 +27,16 @@ The authenticated calendar now carries the full read-only interaction model from
 
 The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
 
+### Auth form validation follow-up (2026-08-25)
+
+The `/login` sign-in and sign-up forms now validate each touched field on
+change and blur, show deduplicated inline errors, and display a form-level
+warning when a submission is blocked by invalid data. Sign-up keeps the
+server-aligned 8-character uppercase/lowercase/digit password policy visible
+as helper copy, while name and email whitespace is normalized before the
+Better Auth request. No auth endpoint, request/response shape, or persistence
+contract changed.
+
 ### Shared booking list follow-up (2026-08-22)
 
 The booking list is now one role-aware surface at `/_app/bookings`. Students,
@@ -639,6 +649,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.22 (2026-08-25): Added field-level login/sign-up validation on change and blur, visible password requirements, accessible invalid-submit warnings, and client-side name/email normalization. No auth API or persistence contract changed.
 - v1.21 (2026-08-24): Refined the notifications inbox with row selection, select-all for loaded rows, batch read/unread actions, human-readable category badges, exact date/time display, and a protected `notification.updateReadStatus` procedure scoped to the authenticated user. No notification schema change.
 
 - v1.20 (2026-08-24): Moved eligible `Propose new time` and `Complete session` buttons into the booking-detail header action group beneath the state badge; removed their card-footer duplicates. Documented that the booking proposer may reschedule in `confirmed`/`scheduled` before H-2, while force-majeure exceptions require support/admin handling and an auditable override. No RPC, schema, or persistence contract changed.

@@ -11,20 +11,32 @@ import {
 import { Divider } from "@cogito-app/ui/components/selia/divider";
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconBrandGoogle, IconEye, IconEyeOff } from "@tabler/icons-react";
+import {
+  IconAlertCircle,
+  IconBrandGoogle,
+  IconEye,
+  IconEyeOff,
+} from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
 
+import {
+  getFieldErrorMessages,
+  signInEmailSchema,
+  signUpNameSchema,
+  signUpPasswordPolicySchema,
+  signUpSchema,
+} from "./auth-form-validation";
 import Loader from "./loader";
 
 export default function SignUpForm({
@@ -52,9 +64,9 @@ export default function SignUpForm({
       try {
         const result = await authClient.signUp.email(
           {
-            email: value.email,
+            email: value.email.trim(),
             password: value.password,
-            name: value.name,
+            name: value.name.trim(),
           },
           { disableSignal: true },
         );
@@ -103,16 +115,7 @@ export default function SignUpForm({
       }
     },
     validators: {
-      onSubmit: z.object({
-        name: z.string().min(2, "Name must be at least 2 characters"),
-        email: z.email("Invalid email address"),
-        password: z
-          .string()
-          .min(8, "Password must be at least 8 characters")
-          .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-          .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-          .regex(/[0-9]/, "Password must contain at least one digit"),
-      }),
+      onSubmit: signUpSchema,
     },
   });
 
@@ -166,6 +169,7 @@ export default function SignUpForm({
             Or sign up with email
           </Divider>
           <form
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -173,7 +177,13 @@ export default function SignUpForm({
             }}
             className="flex flex-col gap-5"
           >
-            <form.Field name="name">
+            <form.Field
+              name="name"
+              validators={{
+                onChange: signUpNameSchema,
+                onBlur: signUpNameSchema,
+              }}
+            >
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Name</FieldLabel>
@@ -181,20 +191,35 @@ export default function SignUpForm({
                     id={field.name}
                     name={field.name}
                     placeholder="Enter your name"
+                    autoComplete="name"
+                    aria-required="true"
+                    aria-invalid={
+                      (field.state.meta.isBlurred ||
+                        field.form.state.submissionAttempts > 0) &&
+                      field.state.meta.errors.length > 0
+                    }
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
-                  {field.state.meta.errors.map((error) => (
-                    <FieldError key={error?.message}>
-                      {error?.message}
-                    </FieldError>
+                  {(field.state.meta.isBlurred ||
+                  field.form.state.submissionAttempts > 0
+                    ? getFieldErrorMessages(field.state.meta.errors)
+                    : []
+                  ).map((error) => (
+                    <FieldError key={error}>{error}</FieldError>
                   ))}
                 </Field>
               )}
             </form.Field>
 
-            <form.Field name="email">
+            <form.Field
+              name="email"
+              validators={{
+                onChange: signInEmailSchema,
+                onBlur: signInEmailSchema,
+              }}
+            >
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Email</FieldLabel>
@@ -203,20 +228,35 @@ export default function SignUpForm({
                     name={field.name}
                     type="email"
                     placeholder="Enter your email"
+                    autoComplete="email"
+                    aria-required="true"
+                    aria-invalid={
+                      (field.state.meta.isBlurred ||
+                        field.form.state.submissionAttempts > 0) &&
+                      field.state.meta.errors.length > 0
+                    }
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
-                  {field.state.meta.errors.map((error) => (
-                    <FieldError key={error?.message}>
-                      {error?.message}
-                    </FieldError>
+                  {(field.state.meta.isBlurred ||
+                  field.form.state.submissionAttempts > 0
+                    ? getFieldErrorMessages(field.state.meta.errors)
+                    : []
+                  ).map((error) => (
+                    <FieldError key={error}>{error}</FieldError>
                   ))}
                 </Field>
               )}
             </form.Field>
 
-            <form.Field name="password">
+            <form.Field
+              name="password"
+              validators={{
+                onChange: signUpPasswordPolicySchema,
+                onBlur: signUpPasswordPolicySchema,
+              }}
+            >
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Password</FieldLabel>
@@ -226,6 +266,13 @@ export default function SignUpForm({
                       name={field.name}
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
+                      autoComplete="new-password"
+                      aria-required="true"
+                      aria-invalid={
+                        (field.state.meta.isBlurred ||
+                          field.form.state.submissionAttempts > 0) &&
+                        field.state.meta.errors.length > 0
+                      }
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
@@ -249,10 +296,16 @@ export default function SignUpForm({
                       )}
                     </Button>
                   </div>
-                  {field.state.meta.errors.map((error) => (
-                    <FieldError key={error?.message}>
-                      {error?.message}
-                    </FieldError>
+                  <FieldDescription>
+                    At least 8 characters with uppercase, lowercase, and a
+                    number.
+                  </FieldDescription>
+                  {(field.state.meta.isBlurred ||
+                  field.form.state.submissionAttempts > 0
+                    ? getFieldErrorMessages(field.state.meta.errors)
+                    : []
+                  ).map((error) => (
+                    <FieldError key={error}>{error}</FieldError>
                   ))}
                 </Field>
               )}
@@ -262,17 +315,37 @@ export default function SignUpForm({
               selector={(state) => ({
                 canSubmit: state.canSubmit,
                 isSubmitting: state.isSubmitting,
+                submissionAttempts: state.submissionAttempts,
               })}
             >
-              {({ canSubmit, isSubmitting }) => (
-                <Button
-                  type="submit"
-                  block
-                  disabled={!canSubmit || isSubmitting}
-                  progress={isSubmitting}
-                >
-                  Sign Up
-                </Button>
+              {({ canSubmit, isSubmitting, submissionAttempts }) => (
+                <>
+                  {submissionAttempts > 0 && !canSubmit ? (
+                    <div
+                      className="flex items-start gap-2 rounded-sm border border-danger/20 bg-danger/10 p-3 text-sm text-danger"
+                      role="alert"
+                      aria-live="polite"
+                    >
+                      <IconAlertCircle
+                        size={18}
+                        className="mt-0.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>
+                        Please fix the highlighted fields before creating your
+                        account.
+                      </span>
+                    </div>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    block
+                    disabled={isSubmitting || isAuthTransitioning}
+                    progress={isSubmitting || isAuthTransitioning}
+                  >
+                    Sign Up
+                  </Button>
+                </>
               )}
             </form.Subscribe>
           </form>

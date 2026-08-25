@@ -11,20 +11,31 @@ import {
 import { Divider } from "@cogito-app/ui/components/selia/divider";
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconBrandGoogle, IconEye, IconEyeOff } from "@tabler/icons-react";
+import {
+  IconAlertCircle,
+  IconBrandGoogle,
+  IconEye,
+  IconEyeOff,
+} from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
 
+import {
+  getFieldErrorMessages,
+  signInEmailSchema,
+  signInPasswordSchema,
+  signInSchema,
+} from "./auth-form-validation";
 import Loader from "./loader";
 
 export default function SignInForm({
@@ -51,7 +62,7 @@ export default function SignInForm({
       try {
         const result = await authClient.signIn.email(
           {
-            email: value.email,
+            email: value.email.trim(),
             password: value.password,
           },
           // The route transition below performs the authoritative session
@@ -105,10 +116,7 @@ export default function SignInForm({
       }
     },
     validators: {
-      onSubmit: z.object({
-        email: z.email("Invalid email address"),
-        password: z.string().min(8, "Password must be at least 8 characters"),
-      }),
+      onSubmit: signInSchema,
     },
   });
 
@@ -164,6 +172,7 @@ export default function SignInForm({
             Or continue with email
           </Divider>
           <form
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -171,7 +180,13 @@ export default function SignInForm({
             }}
             className="flex flex-col gap-5"
           >
-            <form.Field name="email">
+            <form.Field
+              name="email"
+              validators={{
+                onChange: signInEmailSchema,
+                onBlur: signInEmailSchema,
+              }}
+            >
               {(field) => (
                 <Field>
                   <FieldLabel htmlFor={field.name}>Email</FieldLabel>
@@ -180,20 +195,35 @@ export default function SignInForm({
                     name={field.name}
                     type="email"
                     placeholder="Enter your email"
+                    autoComplete="email"
+                    aria-required="true"
+                    aria-invalid={
+                      (field.state.meta.isBlurred ||
+                        field.form.state.submissionAttempts > 0) &&
+                      field.state.meta.errors.length > 0
+                    }
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
-                  {field.state.meta.errors.map((error) => (
-                    <FieldError key={error?.message}>
-                      {error?.message}
-                    </FieldError>
+                  {(field.state.meta.isBlurred ||
+                  field.form.state.submissionAttempts > 0
+                    ? getFieldErrorMessages(field.state.meta.errors)
+                    : []
+                  ).map((error) => (
+                    <FieldError key={error}>{error}</FieldError>
                   ))}
                 </Field>
               )}
             </form.Field>
 
-            <form.Field name="password">
+            <form.Field
+              name="password"
+              validators={{
+                onChange: signInPasswordSchema,
+                onBlur: signInPasswordSchema,
+              }}
+            >
               {(field) => (
                 <Field>
                   <div className="flex items-center">
@@ -208,6 +238,13 @@ export default function SignInForm({
                       name={field.name}
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
+                      autoComplete="current-password"
+                      aria-required="true"
+                      aria-invalid={
+                        (field.state.meta.isBlurred ||
+                          field.form.state.submissionAttempts > 0) &&
+                        field.state.meta.errors.length > 0
+                      }
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
@@ -231,10 +268,15 @@ export default function SignInForm({
                       )}
                     </Button>
                   </div>
-                  {field.state.meta.errors.map((error) => (
-                    <FieldError key={error?.message}>
-                      {error?.message}
-                    </FieldError>
+                  <FieldDescription>
+                    Use at least 8 characters.
+                  </FieldDescription>
+                  {(field.state.meta.isBlurred ||
+                  field.form.state.submissionAttempts > 0
+                    ? getFieldErrorMessages(field.state.meta.errors)
+                    : []
+                  ).map((error) => (
+                    <FieldError key={error}>{error}</FieldError>
                   ))}
                 </Field>
               )}
@@ -244,17 +286,36 @@ export default function SignInForm({
               selector={(state) => ({
                 canSubmit: state.canSubmit,
                 isSubmitting: state.isSubmitting,
+                submissionAttempts: state.submissionAttempts,
               })}
             >
-              {({ canSubmit, isSubmitting }) => (
-                <Button
-                  type="submit"
-                  block
-                  disabled={!canSubmit || isSubmitting}
-                  progress={isSubmitting}
-                >
-                  Sign In
-                </Button>
+              {({ canSubmit, isSubmitting, submissionAttempts }) => (
+                <>
+                  {submissionAttempts > 0 && !canSubmit ? (
+                    <div
+                      className="flex items-start gap-2 rounded-sm border border-danger/20 bg-danger/10 p-3 text-sm text-danger"
+                      role="alert"
+                      aria-live="polite"
+                    >
+                      <IconAlertCircle
+                        size={18}
+                        className="mt-0.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>
+                        Please fix the highlighted fields before signing in.
+                      </span>
+                    </div>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    block
+                    disabled={isSubmitting || isAuthTransitioning}
+                    progress={isSubmitting || isAuthTransitioning}
+                  >
+                    Sign In
+                  </Button>
+                </>
               )}
             </form.Subscribe>
           </form>
