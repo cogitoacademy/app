@@ -563,9 +563,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                     </Button>
                   ))}
                   {availableStudents.length === 0 ? (
-                    <Text className="text-sm text-muted">
-                      No matching students found.
-                    </Text>
+                    <EmptyState
+                      icon={<IconUsersGroup />}
+                      title="No matching students"
+                      description="Try a different name or email address."
+                      size="inline"
+                      className="px-0 py-3"
+                    />
                   ) : null}
                 </div>
               ) : null}

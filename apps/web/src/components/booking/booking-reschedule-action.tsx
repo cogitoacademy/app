@@ -31,6 +31,7 @@ import {
 } from "@cogito-app/ui/components/selia/select";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 
+import { EmptyState } from "@/components/empty-state";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 import {
@@ -234,16 +235,33 @@ export function BookingRescheduleAction({
                       );
                     })}
                   </div>
-                ) : null}
-                <FieldDescription>
-                  {availabilityQuery.isError
-                    ? "Tutor availability could not be loaded."
-                    : !availabilityQuery.isPending && slots.length === 0
-                      ? isTutor
-                        ? "No matching windows. You can choose a custom time instead."
-                        : "This tutor has no matching availability right now."
+                ) : (
+                  <EmptyState
+                    icon={<IconCalendarEvent />}
+                    title={
+                      availabilityQuery.isError
+                        ? "Availability unavailable"
+                        : "No matching availability"
+                    }
+                    description={
+                      availabilityQuery.isError
+                        ? "Tutor availability could not be loaded. Choose a custom time or try again."
+                        : isTutor
+                          ? "No matching windows. You can choose a custom time instead."
+                          : "This tutor has no matching availability right now."
+                    }
+                    tone={availabilityQuery.isError ? "danger" : "secondary"}
+                    size="inline"
+                    className="rounded-lg border border-item-border"
+                  />
+                )}
+                {slots.length > 0 ? (
+                  <FieldDescription>
+                    {availabilityQuery.isError
+                      ? "Tutor availability could not be loaded."
                       : "Pick any minute within a window; the session lasts 90 minutes."}
-                </FieldDescription>
+                  </FieldDescription>
+                ) : null}
               </Field>
             ) : (
               <Field>

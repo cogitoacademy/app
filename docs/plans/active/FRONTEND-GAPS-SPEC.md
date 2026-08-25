@@ -37,6 +37,18 @@ as helper copy, while name and email whitespace is normalized before the
 Better Auth request. No auth endpoint, request/response shape, or persistence
 contract changed.
 
+### Empty-state consistency follow-up (2026-08-25)
+
+The frontend now routes collection empty states through the shared
+`apps/web/src/components/empty-state.tsx` presentation module. Page/card states
+use `EmptyStateCard`; embedded states use the `default`, `compact`, or `inline`
+densities. Calendar periods, filtered resource/tutor results, booking detail
+sections, notifications, Marks ledgers, subject/proof-link fields,
+availability previews, and admin tables now have intentional no-data copy
+instead of blank panels or one-off text. Month and agenda views also explain
+when the selected period has no events. No API, schema, or persistence contract
+changed.
+
 ### Shared booking list follow-up (2026-08-22)
 
 The booking list is now one role-aware surface at `/_app/bookings`. Students,
@@ -649,6 +661,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.23 (2026-08-25): Standardized collection empty states through the shared Selia presentation component with `default`, `compact`, and `inline` densities. Covered calendar periods, discovery filters, booking/detail sections, notifications, ledgers, subject/proof-link fields, availability previews, and admin tables. No RPC, schema, or persistence contract changed.
 - v1.22 (2026-08-25): Added field-level login/sign-up validation on change and blur, visible password requirements, accessible Selia inline field errors, and client-side name/email normalization. No auth API or persistence contract changed.
 - v1.21 (2026-08-24): Refined the notifications inbox with row selection, select-all for loaded rows, batch read/unread actions, human-readable category badges, exact date/time display, and a protected `notification.updateReadStatus` procedure scoped to the authenticated user. No notification schema change.
 

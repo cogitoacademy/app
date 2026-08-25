@@ -4,9 +4,7 @@ import { addDays, format, isToday } from "date-fns";
 import { IconCalendarEvent } from "@tabler/icons-react";
 import { useMemo, type MouseEvent } from "react";
 
-import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { Text } from "@cogito-app/ui/components/selia/text";
-
+import { EmptyState } from "@/components/empty-state";
 import { CalendarEventItem } from "./calendar-event-item";
 import { AGENDA_DAYS_TO_SHOW, getAgendaEventsForDay } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
@@ -36,13 +34,12 @@ export function CalendarAgendaView({
   return (
     <div className="border-t border-border/70 px-4">
       {!hasEvents ? (
-        <div className="flex min-h-[70svh] flex-col items-center justify-center py-16 text-center">
-          <IconCalendarEvent className="mb-2 size-8 text-dimmed" />
-          <Heading size="sm">No events found</Heading>
-          <Text className="mt-1 text-muted">
-            There are no events scheduled for this time period.
-          </Text>
-        </div>
+        <EmptyState
+          icon={<IconCalendarEvent />}
+          title="No events in this period"
+          description="Events scheduled for these dates will appear here."
+          className="min-h-[70svh]"
+        />
       ) : (
         days.map((day) => {
           const dayEvents = getAgendaEventsForDay(events, day);

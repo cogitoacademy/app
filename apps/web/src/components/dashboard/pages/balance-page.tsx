@@ -244,6 +244,15 @@ export function BalancePage() {
           </div>
           {packagesLoading ? (
             <Text className="text-muted">Loading packages...</Text>
+          ) : packages.length === 0 ? (
+            <EmptyState
+              icon={<IconShoppingCart />}
+              title="No Marks packages available"
+              description="Top-up packages will appear here when they are available."
+              tone="secondary"
+              size="compact"
+              className="rounded-lg border border-border"
+            />
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
               {packages.toReversed().map((pkg) => (

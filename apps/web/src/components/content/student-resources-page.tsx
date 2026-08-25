@@ -91,6 +91,7 @@ export function StudentResourcesPage() {
       return matchesCategory && matchesSearch;
     });
   }, [category, items, search]);
+  const hasFilters = category !== "all" || search.trim().length > 0;
 
   if (resources.isPending) {
     return (
@@ -192,9 +193,14 @@ export function StudentResourcesPage() {
 
         {filteredItems.length === 0 ? (
           <EmptyStateCard
-            icon={<IconSearch />}
-            title="No resources found"
-            description="Try a different search term or category."
+            icon={hasFilters ? <IconSearch /> : <IconBook2 />}
+            title={hasFilters ? "No matching resources" : "No resources yet"}
+            description={
+              hasFilters
+                ? "Try a different search term or category."
+                : "Learning materials will appear here when they are published."
+            }
+            tone="secondary"
             size="compact"
           />
         ) : (
