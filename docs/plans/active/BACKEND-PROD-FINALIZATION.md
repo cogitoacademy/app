@@ -2,9 +2,9 @@
 
 | Field      | Value |
 | ---------- | ----- |
-| Status     | Active (implementation) |
+| Status     | Active (implementation) — **Part A tasks 2–7 (email gate, withdraw escape, content proxy, payout reconciliation, escalated pagination, economy fan-out, migration down paths, scheduler fail-loud) implemented on `impl/backend-core` (2026-08-26)** |
 | Created    | 2026-08-25 |
-| Branch     | `finalize/backend-prod-readiness` |
+| Branch     | `finalize/backend-prod-readiness` (implementation worktree: `impl/backend-core`) |
 | Depends on | PRD v1.7 (`docs/prd.tex`), PRD-AUDIT gap list (10 documented gaps), audit wave (2 review workers, 44 findings), PRODUCTION-READINESS spec (Phases 0/1) |
 | Scope      | Backend code fixes + docs alignment only. No frontend feature work. |
 
@@ -42,13 +42,13 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Consumes: `context.session.user` — better-auth session user carries `emailVerified` (verified: `packages/auth/src/index.ts:17`, better-auth session contract). `CogitoUser` type is exported from `@cogito-app/auth`.
 - Produces: `requireVerifiedStudent` middleware — same contract as `requireStudent` but additionally throws `ORPCError("FORBIDDEN", { message: "Email verification required" })` when `context.session.user.emailVerified !== true`; `verifiedStudentProcedure = publicProcedure.use(requireVerifiedStudent)`.
 
-- [ ] **Step 1: Write the failing test** — `packages/api/src/tests/unit/verification-gate.test.ts`: (a) unverified student `createSolo` → rejects `ORPCError` FORBIDDEN; (b) verified student `createSolo` → passes gate (tutor-not-found domain error, not FORBIDDEN). Use `signUpAndSignIn` + `db.update(user).set({ emailVerified: true })` from `tests/helpers/test-client.ts` (existing pattern at `email-verification-g2.test.ts:63`).
-- [ ] **Step 2: Run test — expect FAIL** (no gate exists).
-- [ ] **Step 3: Implement** the middleware in `procedures.ts` (after `requireStudent`, ~line 60).
-- [ ] **Step 4: Apply** to the 4 booking-create procedures (`booking.router.ts` lines ~36/150/162/173 — `createSolo`, `createGroup`, `createSeries`, `createGroupSeries`) and `payment.createPurchase` (`payment.router.ts:7`). Check for existing tests that create bookings with unverified users; mark them verified in setup.
-- [ ] **Step 5: Run full `packages/api` test suite — PASS**; fix any test that relies on unverified paid access.
-- [ ] **Step 6: Update docs** (CONTEXT G2 section, MODULE-REFERENCE booking/payment, API-REFERENCE procedure rows).
-- [ ] **Step 7: Commit** `fix(auth): gate paid actions on email verification`
+- [x] **Step 1: Write the failing test** — `packages/api/src/tests/unit/verification-gate.test.ts`: (a) unverified student `createSolo` → rejects `ORPCError` FORBIDDEN; (b) verified student `createSolo` → passes gate (tutor-not-found domain error, not FORBIDDEN). Use `signUpAndSignIn` + `db.update(user).set({ emailVerified: true })` from `tests/helpers/test-client.ts` (existing pattern at `email-verification-g2.test.ts:63`).
+- [x] **Step 2: Run test — expect FAIL** (no gate exists).
+- [x] **Step 3: Implement** the middleware in `procedures.ts` (after `requireStudent`, ~line 60).
+- [x] **Step 4: Apply** to the 4 booking-create procedures (`booking.router.ts` lines ~36/150/162/173 — `createSolo`, `createGroup`, `createSeries`, `createGroupSeries`) and `payment.createPurchase` (`payment.router.ts:7`). Check for existing tests that create bookings with unverified users; mark them verified in setup.
+- [x] **Step 5: Run full `packages/api` test suite — PASS**; fix any test that relies on unverified paid access.
+- [x] **Step 6: Update docs** (CONTEXT G2 section, MODULE-REFERENCE booking/payment, API-REFERENCE procedure rows).
+- [x] **Step 7: Commit** `fix(auth): gate paid actions on email verification`
 
 ### Task 3: Escape user-supplied reason in `withdrawInvite` email body
 
@@ -57,11 +57,11 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: extend `packages/api/src/tests/unit/booking.service.test.ts` (or the `booking-reprice-deadline.test.ts` neighbor — follow the file's existing notification-port spy pattern)
 - Docs: `docs/MODULE-REFERENCE.md` (booking module — note the escaping convention)
 
-- [ ] **Step 1: Write failing test** — call service `withdrawInvite` with `reason: "<script>alert(1)</script>"`, assert notification body contains `&lt;script&gt;` and not raw `<script>`.
-- [ ] **Step 2: Run — FAIL** (raw interpolation, verified `booking.service.ts:2558-2560`).
-- [ ] **Step 3: Fix** — wrap `reason` in `escapeHtml(reason)` (already imported at `booking.service.ts:51` from `../../lib/sanitize`).
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Commit** `fix(booking): escape withdraw reason in notification email`
+- [x] **Step 1: Write failing test** — call service `withdrawInvite` with `reason: "<script>alert(1)</script>"`, assert notification body contains `&lt;script&gt;` and not raw `<script>`.
+- [x] **Step 2: Run — FAIL** (raw interpolation, verified `booking.service.ts:2558-2560`).
+- [x] **Step 3: Fix** — wrap `reason` in `escapeHtml(reason)` (already imported at `booking.service.ts:51` from `../../lib/sanitize`).
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Commit** `fix(booking): escape withdraw reason in notification email`
 
 ### Task 3: Harden the Sanity content file proxy
 
@@ -71,13 +71,13 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: `apps/server/src/` — extend the existing routes test (find the harness that mocks `content.getStudentResourceFile`; see `apps/server/src/` test files)
 - Docs: `docs/CONTEXT.md` (content section), `docs/RUNBOOK.md`
 
-- [ ] **Step 1: Write failing tests** — (a) `fileUrl` host not on `cdn.sanity.io`/`*.sanity.io` → 502, no upstream fetch; (b) upstream fetch exceeding 10s timeout → 502; (c) response with `content-length` > 5MB → 502; (d) streamed body exceeding 5MB → 502. Follow the existing routes-test harness.
-- [ ] **Step 2: Run — FAIL** (bare `fetch(file.fileUrl)` at `routes.ts:389`).
-- [ ] **Step 3: Implement** — allowlist check, `AbortController` + 10s timeout, `MAX_PROXY_BYTES = 5 * 1024 * 1024` pre-check via `content-length` AND streaming counter via `ReadableStream` wrapper.
-- [ ] **Step 4: Add rate limit** — `"content"` kind in `rate-limit-paths.ts` (`urlPath.startsWith("/content/student-resources/")`); wire `contentRateLimit` (30/min window 60s, keyPrefix `content`) mirroring the `authRateLimit` pattern in `routes.ts:39`.
-- [ ] **Step 5: Run tests + `bun run typecheck` — PASS**.
-- [ ] **Step 6: Docs** (CONTEXT content section, RUNBOOK behavior note).
-- [ ] **Step 7: Commit** `fix(content): harden Sanity file proxy (allowlist, timeout, size cap, rate limit)`
+- [x] **Step 1: Write failing tests** — (a) `fileUrl` host not on `cdn.sanity.io`/`*.sanity.io` → 502, no upstream fetch; (b) upstream fetch exceeding 10s timeout → 502; (c) response with `content-length` > 5MB → 502; (d) streamed body exceeding 5MB → 502. Follow the existing routes-test harness.
+- [x] **Step 2: Run — FAIL** (bare `fetch(file.fileUrl)` at `routes.ts:389`).
+- [x] **Step 3: Implement** — allowlist check, `AbortController` + 10s timeout, `MAX_PROXY_BYTES = 5 * 1024 * 1024` pre-check via `content-length` AND streaming counter via `ReadableStream` wrapper.
+- [x] **Step 4: Add rate limit** — `"content"` kind in `rate-limit-paths.ts` (`urlPath.startsWith("/content/student-resources/")`); wire `contentRateLimit` (30/min window 60s, keyPrefix `content`) mirroring the `authRateLimit` pattern in `routes.ts:39`.
+- [x] **Step 5: Run tests + `bun run typecheck` — PASS**.
+- [x] **Step 6: Docs** (CONTEXT content section, RUNBOOK behavior note).
+- [x] **Step 7: Commit** `fix(content): harden Sanity file proxy (allowlist, timeout, size cap, rate limit)`
 
 ### Task 4: Reconcile `getTutorPayouts` ledger columns
 
@@ -86,12 +86,12 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: extend `packages/api/src/tests/unit/booking.service.test.ts` (payouts test)
 - Docs: `docs/MODULE-REFERENCE.md` (payouts section), `docs/API-REFERENCE.md` (payouts output semantics)
 
-- [ ] **Step 1: Write failing test** — new-economy snapshot `baseline: 100, actualMarksPooled: 102`; assert returned `totalMarks === cogitoTake + tutorPayout` (currently `102 !== 100`). Also assert `tutorPayoutIdr === tutorHonorariumIdr` sum (F4).
-- [ ] **Step 2: Run — FAIL** (known gap #4 confirmed + F4).
-- [ ] **Step 3: Fix** — accumulate `totalMarks` from `baseline` (not `actualMarksPooled`) in all three branches; keep `tutorPayout`/`tutorPayoutIdr` semantics, document them.
-- [ ] **Step 4: Document the rounding surplus** in MODULE-REFERENCE: "`totalMarks` reports the split basis (`baseline`); students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25)."
-- [ ] **Step 5: Run tests — PASS**.
-- [ ] **Step 6: Commit** `fix(admin): reconcile tutor payout ledger columns`
+- [x] **Step 1: Write failing test** — new-economy snapshot `baseline: 100, actualMarksPooled: 102`; assert returned `totalMarks === cogitoTake + tutorPayout` (currently `102 !== 100`). Also assert `tutorPayoutIdr === tutorHonorariumIdr` sum (F4).
+- [x] **Step 2: Run — FAIL** (known gap #4 confirmed + F4).
+- [x] **Step 3: Fix** — accumulate `totalMarks` from `baseline` (not `actualMarksPooled`) in all three branches; keep `tutorPayout`/`tutorPayoutIdr` semantics, document them.
+- [x] **Step 4: Document the rounding surplus** in MODULE-REFERENCE: "`totalMarks` reports the split basis (`baseline`); students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25)."
+- [x] **Step 5: Run tests — PASS**.
+- [x] **Step 6: Commit** `fix(admin): reconcile tutor payout ledger columns`
 
 ### Task 5: Fix escalated admin-queue pagination
 
@@ -100,11 +100,11 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: extend `packages/api/src/tests/unit/admin-booking.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (admin-booking)
 
-- [ ] **Step 1: Write failing test** — seed > MAX_PAGE_LIMIT bookings where few are escalated and sit beyond the first window; call `listBookings({ escalated: true, limit: 10 })`; assert 10 items (or all escalated) and **never** `items.length === 0` with non-null `nextCursor`.
-- [ ] **Step 2: Run — FAIL**.
-- [ ] **Step 3: Implement** — replace the single-fetch in-memory filter with the bounded window loop (from the superpowers plan Task 6): `MAX_ESCALATED_WINDOWS = 5`, loop fetch → filter → advance cursor until `items.length >= limit || !hasMoreRows`; return `{ items, nextCursor }` with `nextCursor = null` when `items` is empty.
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Commit** `fix(admin): fill escalated queue pages and never return cursor with empty page`
+- [x] **Step 1: Write failing test** — seed > MAX_PAGE_LIMIT bookings where few are escalated and sit beyond the first window; call `listBookings({ escalated: true, limit: 10 })`; assert 10 items (or all escalated) and **never** `items.length === 0` with non-null `nextCursor`.
+- [x] **Step 2: Run — FAIL**.
+- [x] **Step 3: Implement** — replace the single-fetch in-memory filter with the bounded window loop (from the superpowers plan Task 6): `MAX_ESCALATED_WINDOWS = 5`, loop fetch → filter → advance cursor until `items.length >= limit || !hasMoreRows`; return `{ items, nextCursor }` with `nextCursor = null` when `items` is empty.
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Commit** `fix(admin): fill escalated queue pages and never return cursor with empty page`
 
 ### Task 5: Decouple economy-config tutor notifications from the config transaction
 
@@ -113,11 +113,11 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: extend `packages/api/src/tests/unit/admin.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (admin module economy rules)
 
-- [ ] **Step 1: Write failing test** — mock `notificationPort.write` rejects; assert economy config WAS updated and audit row exists (transaction committed).
-- [ ] **Step 2: Run — FAIL** (rollback).
-- [ ] **Step 3: Implement** — move the `Promise.all(notification.write(...))` block out of the `db.transaction`, after commit, with `writeBestEffort`-style per-tutor `.catch(log)` (import `log` from `@cogito-app/api/lib/logger`; event key `economy_config_updated:${version}:${tutorId}` stays idempotent).
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Commit** `fix(admin): decouple economy-config notifications from config transaction`
+- [x] **Step 1: Write failing test** — mock `notificationPort.write` rejects; assert economy config WAS updated and audit row exists (transaction committed).
+- [x] **Step 2: Run — FAIL** (rollback).
+- [x] **Step 3: Implement** — move the `Promise.all(notification.write(...))` block out of the `db.transaction`, after commit, with `writeBestEffort`-style per-tutor `.catch(log)` (import `log` from `@cogito-app/api/lib/logger`; event key `economy_config_updated:${version}:${tutorId}` stays idempotent).
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Commit** `fix(admin): decouple economy-config notifications from config transaction`
 
 ### Task 6: Add down paths for migrations 0027 and 0028
 
@@ -125,10 +125,10 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Modify: `packages/db/src/migrations/0027_subject_taxonomy.sql`, `packages/db/src/migrations/0028_economy_config.sql`
 - Docs: `docs/RUNBOOK.md` (rollback procedure section)
 
-- [ ] **Step 1: Append down SQL** — `-- down` + `DROP TABLE IF EXISTS ...` for the tables each migration creates (0027: `tutor_profile_subject`, `subject_category`; 0028: `economy_config`, `ALTER TABLE tutor_profile DROP COLUMN IF EXISTS base_rates_idr`).
-- [ ] **Step 2: Verify** up-migrations unchanged — `bun run db:migrate` on a scratch DB (or dev DB if safe) reports no changes.
-- [ ] **Step 3: Docs** — RUNBOOK "Migration rollback" section (manual psql + CD auto-rollback).
-- [ ] **Step 4: Commit** `chore(db): add down paths for migrations 0027 and 0028`
+- [x] **Step 1: Append down SQL** — `-- down` + `DROP TABLE IF EXISTS ...` for the tables each migration creates (0027: `tutor_profile_subject`, `subject_category`; 0028: `economy_config`, `ALTER TABLE tutor_profile DROP COLUMN IF EXISTS base_rates_idr`).
+- [x] **Step 2: Verify** up-migrations unchanged — `bun run db:migrate` on a scratch DB (or dev DB if safe) reports no changes.
+- [x] **Step 3: Docs** — RUNBOOK "Migration rollback" section (manual psql + CD auto-rollback).
+- [x] **Step 4: Commit** `chore(db): add down paths for migrations 0027 and 0028`
 
 ### Task 7: Scheduler fail-loud boot check + health surface
 
@@ -138,13 +138,13 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: `packages/api/src/tests/unit/` or `apps/server/src/` — new exported helper test
 - Docs: `docs/RUNBOOK.md`, `docs/CONTEXT.md` (scheduler section)
 
-- [ ] **Step 1: Write failing test** — new exported `checkSchedulerHealth(redis)` helper: mocked Redis ping OK → `"ok"`; throws → `"error"`; no redis → `"degraded"`.
-- [ ] **Step 2: Run — FAIL** (helper missing).
-- [ ] **Step 3: Implement helper + wire** into `healthCheck` (`checks.scheduler`).
-- [ ] **Step 4: Fail-loud boot** — in `initScheduler`, when `SCHEDULER_ENABLED=true`, ping Redis and throw (boot aborts) instead of logging `scheduler_skip`; when disabled, keep the skip log (that's an ops decision, not a defect). Wire the helper's degraded/error states into `/health`.
-- [ ] **Step 5: Run tests — PASS**; update the existing `env-xendit`/scheduler tests that assert the old log behavior if needed.
-- [ ] **Step 6: Docs** — CONTEXT scheduler section, RUNBOOK boot-failure mode.
-- [ ] **Step 7: Commit** `fix(ops): fail loud when scheduler enabled but Redis unreachable; add health check`
+- [x] **Step 1: Write failing test** — new exported `checkSchedulerHealth(redis)` helper: mocked Redis ping OK → `"ok"`; throws → `"error"`; no redis → `"degraded"`.
+- [x] **Step 2: Run — FAIL** (helper missing).
+- [x] **Step 3: Implement helper + wire** into `healthCheck` (`checks.scheduler`).
+- [x] **Step 4: Fail-loud boot** — in `initScheduler`, when `SCHEDULER_ENABLED=true`, ping Redis and throw (boot aborts) instead of logging `scheduler_skip`; when disabled, keep the skip log (that's an ops decision, not a defect). Wire the helper's degraded/error states into `/health`.
+- [x] **Step 5: Run tests — PASS**; update the existing `env-xendit`/scheduler tests that assert the old log behavior if needed.
+- [x] **Step 6: Docs** — CONTEXT scheduler section, RUNBOOK boot-failure mode.
+- [x] **Step 7: Commit** `fix(ops): fail loud when scheduler enabled but Redis unreachable; add health check`
 
 ### Task 8: Google Meet OAuth helper + RUNBOOK docs
 
@@ -152,10 +152,10 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Create: `scripts/google-meet-auth.ts` (repo-root `scripts/` — exists with `run-test-suite.mjs`)
 - Docs: `docs/RUNBOOK.md` (Google Cloud console section), `docs/CONTEXT.md` (auth section)
 
-- [ ] **Step 1: Write the helper script** (from the superpowers plan Task 10 verbatim — OAuth device/loopback flow printing `GOOGLE_MEET_REFRESH_TOKEN`).
-- [ ] **Step 2: `bun run type-check` — PASS**.
-- [ ] **Step 3: Docs** — RUNBOOK Google Cloud console steps + env annotations.
-- [ ] **Step 4: Commit** `feat(ops): add Google Meet OAuth refresh-token helper and docs`
+- [x] **Step 1: Write the helper script** (from the superpowers plan Task 10 verbatim — OAuth device/loopback flow printing `GOOGLE_MEET_REFRESH_TOKEN`).
+- [x] **Step 2: `bun run type-check` — PASS**.
+- [x] **Step 3: Docs** — RUNBOOK Google Cloud console steps + env annotations.
+- [x] **Step 4: Commit** `feat(ops): add Google Meet OAuth refresh-token helper and docs`
 
 ### Task 11: Xendit production switch prep (env + docs only)
 
