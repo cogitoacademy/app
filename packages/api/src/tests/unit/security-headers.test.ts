@@ -1,15 +1,16 @@
 import { describe, test, expect, mock } from "bun:test";
 
+const { env: serverEnv } = await import("@cogito-app/env/server");
+
 mock.module("@cogito-app/env/server", () => ({
   env: {
+    ...serverEnv,
     CORS_ORIGIN: "https://app.example.com",
   },
 }));
 
 const { SECURITY_HEADERS, buildCSP } =
   await import("../../lib/security-headers");
-
-mock.restore();
 
 describe("SECURITY_HEADERS", () => {
   test("contains X-Content-Type-Options", () => {
