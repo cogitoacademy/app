@@ -2,6 +2,7 @@ import {
   protectedProcedure,
   studentProcedure,
   tutorProcedure,
+  verifiedStudentProcedure,
 } from "../../procedures";
 import {
   createSoloInput,
@@ -33,13 +34,14 @@ import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
 export function createBookingRouter(handler: BookingHandler) {
   return {
-    createSolo: studentProcedure
+    createSolo: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/solo/create",
         tags: ["Bookings"],
         summary: "Create a solo booking",
-        description: "Creates a solo booking request and holds Marks",
+        description:
+          "Creates a solo booking request and holds Marks (requires a verified email)",
       })
       .input(createSoloInput)
       .handler(handler.createSolo),
@@ -147,37 +149,38 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(getSessionNotesInput)
       .handler(handler.getSessionNotes),
 
-    createGroup: studentProcedure
+    createGroup: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/group/create",
         tags: ["Bookings"],
         summary: "Create a group booking",
         description:
-          "Creates a group booking, holds proposer Marks, invites participants",
+          "Creates a group booking, holds proposer Marks, invites participants (requires a verified email)",
       })
       .input(createGroupInput)
       .handler(handler.createGroup),
 
-    createSeries: studentProcedure
+    createSeries: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/series/create",
         tags: ["Bookings"],
         summary: "Create a series booking",
-        description: "Creates a multi-session series booking (2-4 sessions)",
+        description:
+          "Creates a multi-session series booking (2-4 sessions, requires a verified email)",
       })
       .input(createSeriesInput)
       .handler(handler.createSeries),
 
-    createGroupSeries: studentProcedure
+    createGroupSeries: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/group-series/create",
         tags: ["Bookings"],
         summary: "Create a group series booking",
         description:
-          "Creates a multi-session group series (FR-20): the proposer holds the full package up front and invitees accept the whole series",
+          "Creates a multi-session group series (FR-20): the proposer holds the full package up front and invitees accept the whole series (requires a verified email)",
       })
       .input(createGroupSeriesInput)
       .handler(handler.createGroupSeries),

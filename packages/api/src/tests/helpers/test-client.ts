@@ -61,6 +61,23 @@ export async function signUpAndSignIn(
   password: string,
   name: string,
 ) {
+  const res = await signUpAndSignInUnverified(email, password, name);
+  // The email-verification gate (verifiedStudentProcedure) requires
+  // emailVerified=true for paid actions; most integration tests sign up and
+  // immediately use paid procedures, so the default helper marks users
+  // verified. Tests exercising the gate itself use signUpAndSignInUnverified.
+  await db
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.email, email));
+  return res;
+}
+
+export async function signUpAndSignInUnverified(
+  email: string,
+  password: string,
+  name: string,
+) {
   await auth.api.signUpEmail({
     body: { email, password, name },
     headers: new Headers(),

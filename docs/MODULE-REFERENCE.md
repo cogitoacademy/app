@@ -290,7 +290,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
-- `booking.router.ts` — Student-owned booking mutations use `studentProcedure`; shared booking/detail/session reads stay protected; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
+- `booking.router.ts` — Student-owned booking mutations use `studentProcedure` (the four **create** procedures use `verifiedStudentProcedure`, which additionally requires `emailVerified: true` — PRD paid actions); shared booking/detail/session reads stay protected; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
 
 **Service Methods:**
 
@@ -478,7 +478,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
 - `payment.handler.ts` — `createPurchase`, `getPurchase`
-- `payment.router.ts` — Protected routes for `createPurchase`/`getPurchase`
+- `payment.router.ts` — `createPurchase` uses `verifiedStudentProcedure` (student role + verified email — paid actions require a verified email; `getPurchase` stays protected)
 - `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; `verifyWebhook`
 - `stub-payment.provider.ts` — Development stub
 - Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)

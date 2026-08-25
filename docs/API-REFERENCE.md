@@ -459,7 +459,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `payment.createPurchase`
 
-- **Auth:** Protected
+- **Auth:** Verified Student (`verifiedStudentProcedure` — student role **and** `emailVerified: true`; unverified students get `FORBIDDEN` "Email verification required")
 - **Input:** `{ packageCode }`
 - **Output:** `{ paymentId, providerReference, checkoutUrl }`
 - **Errors:** `PACKAGE_NOT_FOUND` (404), `PACKAGE_ALREADY_PURCHASED` (409), `PAYMENT_PROVIDER_ERROR` (502)
@@ -491,7 +491,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `booking.createSolo`
 
-- **Auth:** Student
+- **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
 - **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`scheduledStartAt` must leave room for the server-fixed 90-minute session inside the availability window; `timezone` default `Asia/Jakarta`)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
@@ -574,22 +574,22 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `booking.createGroup`
 
-- **Auth:** Student
+- **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
 - **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is server-fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Description:** Creates a group booking, holds proposer Marks, invites participants; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
-- **Auth:** Student
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (2–4 sessions; each session is fixed to 90 minutes)
+- **Auth:** Verified Student (`verifiedStudentProcedure`; unverified → `FORBIDDEN`)
+- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoals }` (2–4 sessions; each session is fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
 
 ### `booking.createGroupSeries`
 
-- **Auth:** Student
+- **Auth:** Verified Student (`verifiedStudentProcedure` — unverified → `FORBIDDEN`)
 - **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
