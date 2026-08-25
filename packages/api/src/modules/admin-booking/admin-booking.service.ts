@@ -55,6 +55,9 @@ export const OVERRIDE_LIST_CATEGORIES = [
 
 export type OverrideListCategory = (typeof OVERRIDE_LIST_CATEGORIES)[number];
 
+/** Max keyset windows walked when filling an escalated-only page (Task 6). */
+export const MAX_ESCALATED_WINDOWS = 5;
+
 export const MARKS_ACTIONS = [
   "release_holds",
   "compensate_credit",
@@ -474,6 +477,12 @@ export function createAdminBookingService(deps: {
   /**
    * Lists bookings for the admin, by bookingId or with cursor pagination.
    *
+   * The `escalated` filter is applied in memory (the OQ-04 SLA deadline is a
+   * business-hours calculation), so the service walks bounded windows of the
+   * underlying keyset until it fills `limit` escalated items, the rows run
+   * out, or the window budget is exhausted — a single 100-row fetch could
+   * otherwise return an empty page while more escalated rows sit behind it.
+   *
    * @param opts - list options (bookingId, limit, cursor)
    * @returns the booking items and a nextCursor when more pages exist
    */
@@ -506,24 +515,55 @@ export function createAdminBookingService(deps: {
       filters.category !== undefined ||
       filters.urgency !== undefined ||
       filters.escalated !== undefined;
-    const rows = hasFilters
-      ? await repo.listBookingsByState(db, [], repoLimit, opts?.cursor, filters)
-      : await repo.listBookingsByState(db, [], repoLimit, opts?.cursor);
-    const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
-    const matchingItems =
-      opts?.escalated === true
-        ? rawItems.filter((item) => item.escalated)
-        : rawItems;
-    const items = matchingItems.slice(0, limit);
-    const hasMoreMatchingItems = matchingItems.length > limit;
-    const hasMoreRows = rows.length > repoLimit;
-    const cursorItem = hasMoreMatchingItems
-      ? items[items.length - 1]
-      : hasMoreRows
-        ? rawItems[rawItems.length - 1]
-        : undefined;
-    const nextCursor = cursorItem ? toOverrideCursor(cursorItem) : null;
-    return { items, nextCursor };
+
+    if (opts?.escalated !== true) {
+      const rows = hasFilters
+        ? await repo.listBookingsByState(db, [], repoLimit, opts?.cursor, filters)
+        : await repo.listBookingsByState(db, [], repoLimit, opts?.cursor);
+      const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
+      const items = rawItems.slice(0, limit);
+      const hasMoreRows = rows.length > repoLimit;
+      const cursorItem =
+        rawItems.length > limit
+          ? items[items.length - 1]
+          : hasMoreRows
+            ? rawItems[rawItems.length - 1]
+            : undefined;
+      return { items, nextCursor: cursorItem ? toOverrideCursor(cursorItem) : null };
+    }
+
+    // Escalated-only queue: the SLA filter is applied in memory, so walk
+    // bounded keyset windows (at most MAX_ESCALATED_WINDOWS fetches) until the
+    // page fills with escalated rows, the rows run out, or the budget is
+    // exhausted. An empty page never carries a nextCursor.
+    const collected: ReturnType<typeof toOverrideQueueItem>[] = [];
+    let cursor = opts?.cursor;
+    for (let window = 0; window < MAX_ESCALATED_WINDOWS; window++) {
+      const rows = await repo.listBookingsByState(
+        db,
+        [],
+        repoLimit,
+        cursor,
+        filters,
+      );
+      const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
+      const hasMoreRows = rows.length > repoLimit;
+      for (const item of rawItems) {
+        if (item.escalated) collected.push(item);
+      }
+      const items = collected.slice(0, limit);
+      if (collected.length >= limit) {
+        return {
+          items,
+          nextCursor: toOverrideCursor(items[items.length - 1]!),
+        };
+      }
+      if (!hasMoreRows || rawItems.length === 0) {
+        return { items, nextCursor: null };
+      }
+      cursor = toOverrideCursor(rawItems[rawItems.length - 1]!);
+    }
+    return { items: collected.slice(0, limit), nextCursor: null };
   }
 
   /**
