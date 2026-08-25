@@ -33,8 +33,34 @@ export interface UpdateAchievementInput {
 
 export interface AdminReviewInput {
   achievementId: string;
-  status: "approved" | "rejected";
+  status: "approved" | "rejected" | "archived";
   adminNote?: string;
+}
+
+/**
+ * F12: moderation transition table. `approved`/`rejected` achievements can be
+ * archived (hidden from public surfacing); archived ones can be restored to
+ * `approved`/`rejected`. Anything else is not an admin review action.
+ */
+export const ALLOWED_REVIEW_TRANSITIONS: Record<string, string[]> = {
+  [ACHIEVEMENT_STATUS.PENDING]: ["approved", "rejected", "archived"],
+  [ACHIEVEMENT_STATUS.PENDING_REVIEW]: ["approved", "rejected", "archived"],
+  [ACHIEVEMENT_STATUS.APPROVED]: ["archived"],
+  [ACHIEVEMENT_STATUS.REJECTED]: ["archived"],
+  [ACHIEVEMENT_STATUS.ARCHIVED]: ["approved", "rejected"],
+};
+
+export function validateReviewTransition(
+  existing: AchievementRow | undefined,
+  targetStatus: string,
+): void {
+  if (!existing) {
+    throw new AchievementNotFoundError("unknown");
+  }
+  const allowed = ALLOWED_REVIEW_TRANSITIONS[existing.status];
+  if (!allowed || !allowed.includes(targetStatus)) {
+    throw new AchievementNotEditableError(existing.id);
+  }
 }
 
 export function validateUpdate(existing: AchievementRow | undefined): void {
@@ -129,13 +155,7 @@ export function createAchievementService(deps: {
 
   async function adminReview(adminId: string, input: AdminReviewInput) {
     const existing = await achievementRepo.getById(db, input.achievementId);
-    if (!existing) throw new AchievementNotFoundError(input.achievementId);
-    if (
-      existing.status !== ACHIEVEMENT_STATUS.PENDING &&
-      existing.status !== ACHIEVEMENT_STATUS.PENDING_REVIEW
-    ) {
-      throw new AchievementNotEditableError(input.achievementId);
-    }
+    validateReviewTransition(existing, input.status);
 
     return db.transaction(async (tx) => {
       const updated = await achievementRepo.updateStatus(
@@ -145,21 +165,31 @@ export function createAchievementService(deps: {
         input.adminNote,
       );
 
+      const reviewCopy: Record<string, { title: string; body: string }> = {
+        approved: {
+          title: "Achievement approved",
+          body: `Your achievement "${escapeHtml(existing!.eventName)}" was approved.`,
+        },
+        rejected: {
+          title: "Achievement rejected",
+          body: `Your achievement "${escapeHtml(existing!.eventName)}" was rejected.${
+            input.adminNote ? ` ${escapeHtml(input.adminNote)}` : ""
+          }`,
+        },
+        archived: {
+          title: "Achievement archived",
+          body: `Your achievement "${escapeHtml(existing!.eventName)}" was archived by an admin.`,
+        },
+      };
+      const copy = reviewCopy[input.status]!;
+
       await notificationPort.writeBestEffort({
         db: tx,
-        userId: existing.userId,
+        userId: existing!.userId,
         category: NOTIFICATION_CATEGORY.ACHIEVEMENT,
         severity: NOTIFICATION_SEVERITY.INFO,
-        title:
-          input.status === "approved"
-            ? "Achievement approved"
-            : "Achievement rejected",
-        body:
-          input.status === "approved"
-            ? `Your achievement "${escapeHtml(existing.eventName)}" was approved.`
-            : `Your achievement "${escapeHtml(existing.eventName)}" was rejected.${
-                input.adminNote ? ` ${escapeHtml(input.adminNote)}` : ""
-              }`,
+        title: copy.title,
+        body: copy.body,
         eventKey: `achievement.${input.achievementId}.reviewed`,
       });
 
@@ -172,7 +202,7 @@ export function createAchievementService(deps: {
         targetType: "achievement",
         details: {
           adminNote: input.adminNote,
-          previousStatus: existing.status,
+          previousStatus: existing!.status,
         },
       });
 

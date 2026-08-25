@@ -417,8 +417,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `achievement.adminReview`
 
 - **Auth:** Admin
-- **Input:** `{ achievementId, status, adminNote? }` (`status` one of `approved`/`rejected`)
+- **Input:** `{ achievementId, status, adminNote? }` (`status` one of `approved`/`rejected`/`archived`)
 - **Output:** `{ achievement }`
+- **Description:** Moderation action per the transition table (F12): `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived` (hide from public surfacing); `archived` → `approved`/`rejected` (restore). Other transitions throw `ACHIEVEMENT_NOT_EDITABLE`. Owner is notified and an `achievement_{status}` audit record is written.
 
 ---
 

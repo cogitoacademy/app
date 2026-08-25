@@ -100,7 +100,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
 - `adminList(input)` — Paginated list with optional status filter
-- `adminReview(id, status, adminNote?)` — Approve/reject achievement
+- `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Notifies the owner and writes an `achievement_{status}` audit record
 
 **Dependencies:** `AchievementRepo`
 
