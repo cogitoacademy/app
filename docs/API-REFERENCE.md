@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 ## Overview
 
@@ -21,6 +21,8 @@ The web dashboard has no aggregate endpoint. Its role-specific views compose exi
 The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The centered `max-w-6xl` shell, Selia-composed chapter rail, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules. The development-only anti-slop Tweaks Bar is a static browser asset and does not change the production API surface.
 
 The global route pending loader is also presentation-only. It adds no RPC procedure, request input, response output, or persistence contract.
+
+The shared empty-state presentation is also frontend-only. Empty collections, filtered no-match results, and embedded no-data sections are rendered by `apps/web/src/components/empty-state.tsx` with density and tone variants; this changes no RPC procedure, request input, response output, or persistence contract.
 
 The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract. The availability range separator is visual only; time suggestions may render wider than their compact input, and modality triggers preserve their icon-label row without changing the weekly range payload. Portal-based date and select popups render above dialog layers so modal forms remain interactive.
 

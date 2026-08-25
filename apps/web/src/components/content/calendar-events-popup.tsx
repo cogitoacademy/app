@@ -1,12 +1,13 @@
 "use client";
 
 import { format, isSameDay } from "date-fns";
-import { IconX } from "@tabler/icons-react";
+import { IconCalendarEvent, IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 
+import { EmptyState } from "@/components/empty-state";
 import { CalendarEventItem } from "./calendar-event-item";
 import type { CalendarCompetition } from "./calendar-types";
 
@@ -93,7 +94,13 @@ export function CalendarEventsPopup({
       </div>
       <div className="space-y-2 p-3">
         {events.length === 0 ? (
-          <p className="py-2 text-sm text-muted">No events</p>
+          <EmptyState
+            icon={<IconCalendarEvent />}
+            title="No events scheduled"
+            description="Nothing is scheduled for this date."
+            size="inline"
+            className="px-0 py-4"
+          />
         ) : (
           events.map((event) => {
             const eventStart = new Date(event.start);

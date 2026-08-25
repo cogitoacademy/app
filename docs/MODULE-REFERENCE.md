@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
@@ -31,6 +31,8 @@ Frontend dashboard integration is intentionally read-only and role-scoped: stude
 The authenticated frontend guide is a read-only, code-managed journey map at `/guide`. Its content lives in `apps/web/src/components/guide/guide-content.ts`, while `guide-page.tsx` renders the responsive Scandinavian timeline inside a centered `max-w-6xl` shell, a standalone top-level role switcher, a restrained sticky desktop chapter rail with a progress index, a semantic `ItemMedia` tint for the numbered chapter markers, and Selia `Item` rows, stacked mobile chapter navigation, default-open step details with a global collapse/expand control, status badges, expandable exception branches, and feature CTAs. Visibility is role-scoped: student → Student; tutor → Tutor + Student; admin → Admin + Tutor + Student. Important timing rules are rendered as bold copy from the typed content, including 7-day tutor invites, 12-hour response and room windows, H-2 (2 hours before start) self-service cutoffs, 24-hour reschedule proposals, 15-minute lateness, 5-minute meeting retries with 3 attempts, and the 30-minute / 4-hour support SLA. In development, the page mounts the anti-slop Tweaks Bar from `apps/web/public/tweaks-bar.js` for live visual tuning; it is not part of the production product surface. The guide is documentation of existing behavior and does not create a service module or API contract.
 
 The shared frontend pending state is rendered by `apps/web/src/components/loader.tsx` using the Selia `bg-spinner` and `bg-spinner-dark` utilities; it is reused by the router rather than introducing a separate service module.
+
+The shared frontend empty-state presentation is rendered by `apps/web/src/components/empty-state.tsx`. `EmptyStateCard` wraps page/card collection states, and `EmptyState` provides `default`, `compact`, and `inline` densities for embedded contexts such as menus, dialogs, fields, calendars, and detail sections. This module owns visual hierarchy and copy treatment only; it has no service, repository, event-key, or API contract.
 
 The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. Admin review and override actions remain in the dedicated admin operations surface. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 Editorial content integration is also read-only: Sanity remains the source of truth, while the app's API enforces session/role/Marks access before returning content or streaming Knowledge Bank files. The academy's bilingual presentation is resolved to English in the server projection; the authenticated app does not carry a locale selector for these surfaces.

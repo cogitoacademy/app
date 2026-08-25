@@ -14,6 +14,7 @@ import {
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 function formatRelativeTime(date: Date | string) {
@@ -135,9 +136,13 @@ export function NotificationBell() {
             Failed to load
           </div>
         ) : listQuery.data?.items.length === 0 ? (
-          <div className="px-3 py-8 text-center text-sm text-muted">
-            No notifications yet.
-          </div>
+          <EmptyState
+            icon={<IconBell />}
+            title="No notifications"
+            description="New updates will appear here."
+            size="inline"
+            className="px-3"
+          />
         ) : (
           <div className="flex max-h-80 flex-col gap-0.5 overflow-y-auto py-1">
             {listQuery.data?.items.map((n) => (

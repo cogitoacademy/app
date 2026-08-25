@@ -71,6 +71,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { EmptyState } from "@/components/empty-state";
 import {
   canCancelBooking,
   formatBookingDate,
@@ -597,41 +598,52 @@ export function BookingDetailPage({
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {booking.participants.map((participant) => (
-                    <Item
-                      key={participant.id}
-                      variant="plain"
-                      size="sm"
-                      className="min-w-0 items-center rounded-lg border border-item-border bg-item p-3!"
-                    >
-                      <ItemMedia>
-                        <Avatar size="sm">
-                          {participant.user?.image ? (
-                            <AvatarImage
-                              src={participant.user.image}
-                              alt={
-                                (participant.user?.name ?? "Participant") +
-                                " avatar"
-                              }
-                            />
-                          ) : null}
-                          <AvatarFallback>
-                            {participant.user?.name.slice(0, 2).toUpperCase() ??
-                              "CG"}
-                          </AvatarFallback>
-                        </Avatar>
-                      </ItemMedia>
-                      <ItemContent className="min-w-0 flex-1">
-                        <ItemTitle className="truncate text-sm">
-                          {participant.user?.name ?? "Participant"}
-                        </ItemTitle>
-                        <ItemDescription className="truncate text-xs capitalize">
-                          {participant.role} ·{" "}
-                          {participant.confirmationState.replaceAll("_", " ")}
-                        </ItemDescription>
-                      </ItemContent>
-                    </Item>
-                  ))}
+                  {booking.participants.length > 0 ? (
+                    booking.participants.map((participant) => (
+                      <Item
+                        key={participant.id}
+                        variant="plain"
+                        size="sm"
+                        className="min-w-0 items-center rounded-lg border border-item-border bg-item p-3!"
+                      >
+                        <ItemMedia>
+                          <Avatar size="sm">
+                            {participant.user?.image ? (
+                              <AvatarImage
+                                src={participant.user.image}
+                                alt={
+                                  (participant.user?.name ?? "Participant") +
+                                  " avatar"
+                                }
+                              />
+                            ) : null}
+                            <AvatarFallback>
+                              {participant.user?.name
+                                .slice(0, 2)
+                                .toUpperCase() ?? "CG"}
+                            </AvatarFallback>
+                          </Avatar>
+                        </ItemMedia>
+                        <ItemContent className="min-w-0 flex-1">
+                          <ItemTitle className="truncate text-sm">
+                            {participant.user?.name ?? "Participant"}
+                          </ItemTitle>
+                          <ItemDescription className="truncate text-xs capitalize">
+                            {participant.role} ·{" "}
+                            {participant.confirmationState.replaceAll("_", " ")}
+                          </ItemDescription>
+                        </ItemContent>
+                      </Item>
+                    ))
+                  ) : (
+                    <EmptyState
+                      icon={<IconUsers />}
+                      title="No participants yet"
+                      description="The booking roster will appear here when participants are added."
+                      size="inline"
+                      className="sm:col-span-2 rounded-lg border border-item-border"
+                    />
+                  )}
                 </div>
               </section>
             </CardBody>
@@ -647,53 +659,81 @@ export function BookingDetailPage({
                 </CardDescription>
               </CardHeader>
               <CardBody className="grid gap-3">
-                {sessionsQuery.data?.map((session) => {
-                  const sessionEnded =
-                    new Date(session.scheduledEndAt).getTime() <= Date.now();
-                  const completed =
-                    session.currentState === "completed" ||
-                    session.currentState === "cancelled";
-                  return (
-                    <div
-                      key={session.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-item-border bg-item p-3"
-                    >
-                      <div className="min-w-0">
-                        <Text className="font-medium">
-                          {formatBookingDate(
-                            session.scheduledStartAt,
-                            booking.timezone,
-                          )}
-                        </Text>
-                        <Text className="text-sm text-muted">
-                          {formatBookingTimeRange(
-                            session.scheduledStartAt,
-                            session.scheduledEndAt,
-                            booking.timezone,
-                          )}
-                        </Text>
+                {sessionsQuery.isPending ? (
+                  <Text className="text-muted">Loading series sessions…</Text>
+                ) : sessionsQuery.isError ? (
+                  <EmptyState
+                    icon={<IconCalendarEvent />}
+                    title="Series sessions unavailable"
+                    description="The session list could not be loaded. Please try again."
+                    tone="danger"
+                    size="inline"
+                    action={
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void sessionsQuery.refetch()}
+                      >
+                        Try again
+                      </Button>
+                    }
+                  />
+                ) : sessionsQuery.data && sessionsQuery.data.length > 0 ? (
+                  sessionsQuery.data.map((session) => {
+                    const sessionEnded =
+                      new Date(session.scheduledEndAt).getTime() <= Date.now();
+                    const completed =
+                      session.currentState === "completed" ||
+                      session.currentState === "cancelled";
+                    return (
+                      <div
+                        key={session.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-item-border bg-item p-3"
+                      >
+                        <div className="min-w-0">
+                          <Text className="font-medium">
+                            {formatBookingDate(
+                              session.scheduledStartAt,
+                              booking.timezone,
+                            )}
+                          </Text>
+                          <Text className="text-sm text-muted">
+                            {formatBookingTimeRange(
+                              session.scheduledStartAt,
+                              session.scheduledEndAt,
+                              booking.timezone,
+                            )}
+                          </Text>
+                        </div>
+                        {completed ? (
+                          <Badge variant="tertiary" pill>
+                            {session.currentState}
+                          </Badge>
+                        ) : isTutor &&
+                          session.currentState === "scheduled" &&
+                          sessionEnded ? (
+                          <Button
+                            size="sm"
+                            onClick={() => completeSessionById(session.id)}
+                            progress={complete.isPending}
+                            disabled={tutorActionPending}
+                          >
+                            Complete session
+                          </Button>
+                        ) : (
+                          <Badge pill>{session.currentState}</Badge>
+                        )}
                       </div>
-                      {completed ? (
-                        <Badge variant="tertiary" pill>
-                          {session.currentState}
-                        </Badge>
-                      ) : isTutor &&
-                        session.currentState === "scheduled" &&
-                        sessionEnded ? (
-                        <Button
-                          size="sm"
-                          onClick={() => completeSessionById(session.id)}
-                          progress={complete.isPending}
-                          disabled={tutorActionPending}
-                        >
-                          Complete session
-                        </Button>
-                      ) : (
-                        <Badge pill>{session.currentState}</Badge>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <EmptyState
+                    icon={<IconCalendarEvent />}
+                    title="No series sessions yet"
+                    description="Sessions will appear here once this booking is scheduled."
+                    size="inline"
+                  />
+                )}
               </CardBody>
             </Card>
           ) : null}
@@ -767,9 +807,12 @@ export function BookingDetailPage({
                   ))}
                 </ol>
               ) : (
-                <Text className="py-4 text-muted">
-                  No activity recorded yet.
-                </Text>
+                <EmptyState
+                  icon={<IconClock />}
+                  title="No activity yet"
+                  description="Booking updates will appear here."
+                  size="inline"
+                />
               )}
             </CardBody>
           </Card>

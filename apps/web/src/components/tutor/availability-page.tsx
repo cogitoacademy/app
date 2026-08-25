@@ -51,6 +51,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { formatBookingTimeRange } from "@/components/booking/booking-ui";
 import { MinuteTimeInput } from "@/components/booking/minute-time-input";
+import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 const TIMEZONE = "Asia/Jakarta";
@@ -247,6 +248,9 @@ export function AvailabilityPage() {
     }
     return result;
   }, [slots]);
+  const hasPreviewSlots = previewDays.some(
+    (date) => (slotsByDay.get(date) ?? []).length > 0,
+  );
 
   function updateDay(day: number, fn: (value: WeeklyDay) => WeeklyDay) {
     setSchedule((current) => ({ ...current, [day]: fn(current[day]!) }));
@@ -591,50 +595,60 @@ export function AvailabilityPage() {
               <IconChevronRight />
             </Button>
           </div>
-          <div className="grid gap-2 md:grid-cols-7">
-            {previewDays.map((date, index) => (
-              <div
-                key={date}
-                className="min-h-40 rounded-lg border border-item-border bg-item p-2"
-              >
-                <Text className="text-xs font-medium">
-                  {DAYS[index]![2]} · {date.slice(8)}
-                </Text>
-                <div className="mt-2 space-y-2">
-                  {(slotsByDay.get(date) ?? []).map((slot) => (
-                    <div
-                      key={slot.id}
-                      className="rounded border border-item-border bg-background p-2"
-                    >
-                      <Text className="text-xs font-medium">
-                        {formatBookingTimeRange(
-                          slot.startDate,
-                          slot.endDate,
-                          TIMEZONE,
-                        )}
-                      </Text>
-                      <div className="mt-1 flex items-center justify-between gap-1">
-                        <Badge
-                          variant={slot.isRecurring ? "info" : "warning"}
-                          pill
-                        >
-                          {slot.isRecurring ? "Weekly" : "Override"}
-                        </Badge>
-                        <Button
-                          variant="plain"
-                          size="xs-icon"
-                          aria-label="Remove availability"
-                          onClick={() => removeSlot.mutate({ id: slot.id })}
-                        >
-                          <IconTrash />
-                        </Button>
+          {hasPreviewSlots ? (
+            <div className="grid gap-2 md:grid-cols-7">
+              {previewDays.map((date, index) => (
+                <div
+                  key={date}
+                  className="min-h-40 rounded-lg border border-item-border bg-item p-2"
+                >
+                  <Text className="text-xs font-medium">
+                    {DAYS[index]![2]} · {date.slice(8)}
+                  </Text>
+                  <div className="mt-2 space-y-2">
+                    {(slotsByDay.get(date) ?? []).map((slot) => (
+                      <div
+                        key={slot.id}
+                        className="rounded border border-item-border bg-background p-2"
+                      >
+                        <Text className="text-xs font-medium">
+                          {formatBookingTimeRange(
+                            slot.startDate,
+                            slot.endDate,
+                            TIMEZONE,
+                          )}
+                        </Text>
+                        <div className="mt-1 flex items-center justify-between gap-1">
+                          <Badge
+                            variant={slot.isRecurring ? "info" : "warning"}
+                            pill
+                          >
+                            {slot.isRecurring ? "Weekly" : "Override"}
+                          </Badge>
+                          <Button
+                            variant="plain"
+                            size="xs-icon"
+                            aria-label="Remove availability"
+                            onClick={() => removeSlot.mutate({ id: slot.id })}
+                          >
+                            <IconTrash />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<IconCalendarEvent />}
+              title="No availability this week"
+              description="Save weekly hours or add a date override to show booking windows here."
+              tone="secondary"
+              size="compact"
+            />
+          )}
         </CardBody>
       </Card>
     </Stack>
