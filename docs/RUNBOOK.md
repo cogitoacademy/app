@@ -412,8 +412,8 @@ Key environment variables (see `.env.example` for full list):
 | --------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                 |
 | `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                                                                                              |
-| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                 |
-| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                        |
+| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                   |
+| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                         |
 | `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                                                                                              |
 | `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                                                                                          |
 | `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                                                                                 |
@@ -429,7 +429,7 @@ Key environment variables (see `.env.example` for full list):
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                               |
 | `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated)                                                                                                                |
 | `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs |
-| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                   |
+| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                  |
 | `DB_SSL_REJECT_UNAUTHORIZED`                                                                  | No       | Reject unauthorized TLS certificates on the DB connection (default true)                                                                                     |
 | `METRICS_TOKEN`                                                                               | No       | Bearer token for the metrics endpoint                                                                                                                        |
 | `UPLOAD_DIR`                                                                                  | No       | Local upload directory when R2 is not configured (default `./uploads`)                                                                                       |
@@ -568,5 +568,8 @@ If a push fails with `denied: installation not allowed to Create organization pa
    docker pull oven/bun:1.3.14
    docker tag oven/bun:1.3.14 ghcr.io/cogitoacademy/app/server:init
    docker push ghcr.io/cogitoacademy/app/server:init
-  ```
-   After the packages exist, the workflows push without org changes.
+   ```
+
+```
+ After the packages exist, the workflows push without org changes.
+```
