@@ -2,7 +2,7 @@
 
 | Field      | Value |
 | ---------- | ----- |
-| Status     | Active (implementation) — **Part A tasks 2–7 (email gate, withdraw escape, content proxy, payout reconciliation, escalated pagination, economy fan-out, migration down paths, scheduler fail-loud) implemented on `impl/backend-core` (2026-08-26)** |
+| Status     | Active (implementation) — **Part A tasks 2–7 implemented on `impl/backend-core` (2026-08-26); Part B tasks B1/9–19 (F1/F2/F3/F6/F7/F8/F9/F10/F11/F12/F16–F19/F22/F24/F25) + Part C matrix implemented on `impl/backend-fixes` (2026-08-26)** |
 | Created    | 2026-08-25 |
 | Branch     | `finalize/backend-prod-readiness` (implementation worktree: `impl/backend-core`) |
 | Depends on | PRD v1.7 (`docs/prd.tex`), PRD-AUDIT gap list (10 documented gaps), audit wave (2 review workers, 44 findings), PRODUCTION-READINESS spec (Phases 0/1) |
@@ -178,12 +178,12 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: `apps/server/src/seed.test.ts` (assert package table matches PRD values)
 - Docs: `docs/API-REFERENCE.md` (packages list), `docs/RUNBOOK.md` (seed section)
 
-- [ ] **Step 1: Write failing test** — assert `markPackage` rows match PRD OQ-01: Starter 50 / 312,500; Learner 120 / 690,000; Explorer 200 / 1,070,000; Pioneer **400** / 2,000,000.
-- [ ] **Step 2: Run — FAIL** (current: 430,000/990,000/1,570,000/2,180,000 and Pioneer **300**).
-- [ ] **Step 3: Fix all three PACKAGES tables** to the PRD values. Verify no code depends on the old numbers (search `1570000`, `2180000`, `marks: 300`).
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Docs** — API-REFERENCE package table, RUNBOOK seed note ("re-run `bun run seed` on prod once — onConflictDoNothing keeps existing rows; correct values are required before any real payment").
-- [ ] **Step 6: Commit** `fix(seed): align mark package prices with PRD OQ-01`
+- [x] **Step 1: Write failing test** — assert `markPackage` rows matching PRD F6: Starter 50 / 312,500; Learner 120 / 690,000; Explorer 200 / 1,070,000; Pioneer **400** / 2,000,000.
+- [x] **Step 2: Run — FAIL** (current: 430,000/990,000/1,570,000/2,180,000 and Pioneer **300**).
+- [x] **Step 3: Fix all three PACKAGES tables** to the PRD values. Verify no code depends on the old numbers (search `1570000`, `2180000`, `marks: 300`).
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Docs** — API-REFERENCE package table, RUNBOOK seed note ("re-run `bun run seed` on prod once — onConflictDoNothing keeps existing rows; correct values are required before any real payment").
+- [x] **Step 6: Commit** `fix(seed): align mark package prices with PRD OQ-01`
 
 ### Task 9: Prevent admin demotion via tutor invite claim (HIGH, F2)
 
@@ -192,12 +192,12 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: extend `packages/api/src/tests/unit/invite.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (invite module), `docs/CONTEXT.md` (tutor invite flow — code now matches the documented claim)
 
-- [ ] **Step 1: Write failing test** — an admin-role user calls `claim` with a valid invite token → currently succeeds (demotes); assert it must throw `InviteEmailMismatchError`-class `InvalidRoleForClaimError` (new error, mapped in `invite.errors.ts`) — admin cannot be demoted via invite.
-- [ ] **Step 2: Run — FAIL** (no guard; `validateClaim` only checks token/email/profile; `updateUserRole` at `invite.service.ts:96` sets tutor unconditionally).
-- [ ] **Step 3: Implement** — in `validateClaim`, fetch the user's role (repo `getUserRoleById` or reuse `auth.me`); throw when `role === "admin"`.
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Docs** — MODULE-REFERENCE + CONTEXT.
-- [ ] **Step 6: Commit** `fix(invite): block tutor claim on admin accounts (no silent demotion)`
+- [x] **Step 1: Write failing test** — an admin-role user calls `claim` with a valid invite token → currently succeeds (demotes); assert it must throw `InvalidRoleForClaimError` (new error, mapped in `invite.errors.ts`) — admin cannot be demoted via invite.
+- [x] **Step 2: Run — FAIL** (no guard; `validateClaim` only checks token/email/profile; `updateUserRole` at `invite.service.ts:96` sets tutor unconditionally).
+- [x] **Step 3: Implement** — in `validateClaim`, fetch the user's role (`getUserRoleById`); throw when `role === "admin"`.
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Docs** — MODULE-REFERENCE + CONTEXT.
+- [x] **Step 6: Commit** `fix(invite): block tutor claim on admin accounts (no silent demotion)`
 
 ### Task 10: Reconfirm headcount-change reprice (HIGH, F3)
 
@@ -206,12 +206,12 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: `packages/api/src/tests/unit/booking.service.test.ts` or new `booking-reconfirm-reprice.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (booking module reconfirm rule)
 
-- [ ] **Step 1: Write failing test** — group in `AWAITING_RECONFIRMATION` with 2 of 3 reconfirmed; third participant's decline (or withdraw) changes confirmed headcount to 2; then the last reconfirm accept → assert the booking does NOT go to `AWAITING_TUTOR_REVIEW` with stale pricing; it re-enters `AWAITING_RECONFIRMATION` with a fresh 12h window and repriced per-student (PRD: "If any confirmation changes the headcount again, the system recalculates and reissues the reconfirmation request").
-- [ ] **Step 2: Run — FAIL** (current code transitions to tutor review whenever `reconfirmed.length === confirmedCount.length`).
-- [ ] **Step 3: Implement** — after each accept, recompute confirmed headcount; compare to the headcount the last reprice used (`b.priceSnapshot` context); if changed, transition to `AWAITING_RECONFIRMATION` + fresh `updateBookingDeadline(now + RESPONSE_WINDOW_MS)` + reprice, instead of `AWAITING_TUTOR_REVIEW`.
-- [ ] **Step 4: Run tests — PASS** (watch for existing tests asserting the current behavior — adjust the new contract deliberately).
-- [ ] **Step 5: Docs** — MODULE-REFERENCE booking rule.
-- [ ] **Step 6: Commit** `fix(booking): reprice and reissue reconfirmation when headcount changes mid-cycle`
+- [x] **Step 1: Write a failing test** — group in `AWAITING_RECONFIRMATION` with 2 of 3 reconfirmed; third participant's decline (or withdraw) changes confirmed headcount to 2; then the last reconfirm accept → assert the booking does NOT go to `AWAITING_TUTOR_REVIEW` with stale pricing; it re-enters `AWAITING_RECONFIRMATION` with a fresh 12h window and repriced per-student (PRD: "If any confirmation changes the headcount again, the system recalculates and reissues the reconfirmation request").
+- [x] **Step 2: Run — FAIL** (current code transitions to tutor review whenever `reconfirmed.length === confirmedCount.length`).
+- [x] **Step 3: Implement** — after each accept, recompute confirmed headcount; compare it against the headcount the last reprice used (derived from `holdAmount / priceSnapshot.perStudent`); if changed, reset RECONFIRMED→CONFIRMED (`resetReconfirmedParticipants`), transition to `AWAITING_RECONFIRMATION` + fresh `updateBookingDeadline(now + RESPONSE_WINDOW_MS)` + reprice + reissue notifications, instead of `AWAITING_TUTOR_REVIEW`.
+- [x] **Step 4: Run tests — PASS** (existing tests asserting the finalization contract still pass — finalization only occurs when all confirmed participants reconfirmed against the current snapshot).
+- [x] **Step 5: Docs** — MODULE-REFERENCE booking rule.
+- [x] **Step 6: Commit** `fix(booking): reprice and reissue reconfirmation when headcount changes mid-cycle`
 
 ### Task 11: Bump deadline when tutorAccept meeting fails (MEDIUM, F6)
 
@@ -220,12 +220,12 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Test: `packages/api/src/tests/unit/booking.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (booking rule)
 
-- [ ] **Step 1: Write failing test** — tutor accepts online booking; meeting.createEvent fails; assert `deadlineAt` bumped to `scheduledEndAt + 24h` (not left at the old `now+12h`).
-- [ ] **Step 2: Run — FAIL** (deadline untouched).
-- [ ] **Step 3: Implement** — in the catch block after `finalizeMeetingSchedule` failure, `repo.updateBookingDeadline(tx, bookingId, new Date(b.scheduledEndAt.getTime() + 24h))`. Note: `finalizeMeetingSchedule`'s `meetingResult.status === "failed"` branch returns `{scheduled:false}` — bump the deadline there too (same call, single place).
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Docs** — MODULE-REFERENCE booking rule (retry window respected).
-- [ ] **Step 6: Commit** `fix(booking): refresh deadline when meeting creation fails so retry window is respected`
+- [x] **Step 1: Write a failing test** — tutor accepts online booking; meeting.createEvent fails; assert `deadlineAt` bumped to `scheduledEndAt + 24h` (not left at the old `now+12h`).
+- [x] **Step 2: Run — FAIL** (deadline untouched).
+- [x] **Step 3: Implement** — in the catch block after `finalizeMeetingSchedule` failure, `repo.updateBookingDeadline(tx, bookingId, new Date(b.scheduledEndAt.getTime() + 24h))`. Note: `finalizeMeetingSchedule`'s `meetingResult.status === "failed"` branch also returns `{scheduled:false}` — bump the deadline there too (same call, single place).
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Docs** — MODULE-REFERENCE booking rule (retry window respected).
+- [x] **Step 6: Commit** `fix(booking): refresh deadline when meeting creation fails so retry window is respected`
 
 ### Task 12: Fix outbox claim SQL precedence (MEDIUM, F7 → verified harmless; do NOT parenthesize blindly)
 
@@ -235,10 +235,10 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 
 Lead verification result: both OR branches carry `attempts < 3`; the precedence issue is real (sending rows with attempts=3 could be claimed) but the 10-minute age + attempts<3 guard makes the actual risk narrow. **Decision: add the parentheses as defense-in-depth; add a regression test asserting `sending` rows with `attempts=3` are never claimed.**
 
-- [ ] **Step 1: Write test** — mock query; assert the SQL predicate excludes `sending` + `attempts >= 3`.
-- [ ] **Step 2: Implement** — `WHERE status IN ('queued','failed') AND attempts < 3 OR (status = 'sending' AND attempts < 3 AND created_at < now() - interval '10 minutes')` → parenthesize the whole disjunct.
-- [ ] **Step 3: Run tests — PASS**.
-- [ ] **Step 4: Commit** `fix(notification): parenthesize outbox reclaim predicate`
+- [x] **Step 1: Write test** — render the drizzle predicate chunks; assert the SQL text excludes `sending` + `attempts >= 3` (the whole `sending` disjunct is parenthesized).
+- [x] **Step 2: Implement** — `WHERE status IN ('queued','failed') AND attempts < 3 OR (status = 'sending' AND attempts < 3 AND created_at < now() - interval '10 minutes')` → parenthesize the whole disjunct.
+- [x] **Step 3: Run tests — PASS**.
+- [x] **Step 4: Commit** `fix(notification): parenthesize outbox reclaim predicate`
 
 ### Task 13: Tutor attendance row must not inflate group headcount (MEDIUM, F8)
 
@@ -247,11 +247,11 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 - Test: `packages/api/src/tests/unit/booking.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md`
 
-- [ ] **Step 1: Write failing test** — group booking SCHEDULED; tutor marks attendance (inserts tutor participant row `role:'tutor', confirmationState:CONFIRMED`); `repriceGroupForHeadcount` / `holdAmount` recomputation → assert headcount excludes the tutor row.
-- [ ] **Step 2: Run — FAIL** (repro: `findConfirmedParticipants` at `booking.repo.ts:230` does not filter `role`).
-- [ ] **Step 3: Implement** — add `ne(bookingParticipant.role, "tutor")` to `findConfirmedParticipants` conditions (keep the existing `excludeUserId` semantics).
-- [ ] **Step 4: Run tests — PASS** (verify existing attendance tests unaffected — they don't reprice after attendance).
-- [ ] **Step 5: Commit** `fix(booking): exclude tutor row from confirmed-participant headcount`
+- [x] **Step 1: Write a failing test** — group booking SCHEDULED; tutor marks attendance (inserts tutor participant row `role:'tutor', confirmationState:CONFIRMED`); `repriceGroupForHeadcount` / `holdAmount` recomputation → assert headcount excludes the tutor row.
+- [x] **Step 2: Run — FAIL** (repro: `findConfirmedParticipants` at `booking.repo.ts:230` does not filter `role`).
+- [x] **Step 3: Implement** — add `ne(bookingParticipant.role, "tutor")` to `findConfirmedParticipants` conditions (keep the existing `excludeUserId` semantics).
+- [x] **Step 4: Run tests — PASS** (existing attendance tests unaffected — they don't reprice after attendance).
+- [x] **Step 5: Commit** `fix(booking): exclude tutor row from confirmed-participant headcount`
 
 ### Task 14: Flag offline tutor lateness too (MEDIUM, F9)
 
@@ -260,11 +260,11 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 - Test: `packages/api/src/tests/unit/booking.service.test.ts` or a repo test
 - Docs: `docs/MODULE-REFERENCE.md` (booking module)
 
-- [ ] **Step 1: Write failing test** — offline SCHEDULED booking past start+15min without tutor attendance row → `checkTutorLateness()` flags it (admin queue `tutor_lateness_pending`).
-- [ ] **Step 2: Run — FAIL** (modality filter).
-- [ ] **Step 3: Implement** — drop the online-only filter (keep the rest: `scheduled`, `startAt < cutoff`, not-flagged, `notExists(tutorAttended)`).
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Commit** `fix(booking): flag offline no-show tutors in lateness sweep`
+- [x] **Step 1: Write a failing test** — offline SCHEDULED booking past start+15min without tutor attendance row → `checkTutorLateness()` flags it (admin queue `tutor_lateness_pending`).
+- [x] **Step 2: Run — FAIL** (modality filter).
+- [x] **Step 3: Implement** — drop the online-only filter (keep the rest: `scheduled`, `startAt < cutoff`, not-flagged, `notExists(tutorAttended)`).
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Commit** `fix(booking): flag offline no-show tutors in lateness sweep`
 
 ### Task 14: Pass tx to `setManualLink` (MEDIUM, F10)
 
@@ -273,11 +273,11 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 - Test: `packages/api/src/tests/unit/` meeting fallback tests (existing)
 - Docs: `docs/MODULE-REFERENCE.md` (meeting module)
 
-- [ ] **Step 1: Write failing test** — `setManualLink` inside a tx that rolls back → assert no orphan row.
-- [ ] **Step 2: Run — FAIL** (writes on global `db`).
-- [ ] **Step 3: Implement** — add `conn: DbOrTx` param (mirror `createEvent`'s `conn`), use it for the select/insert/update; update `index.ts` + `admin-booking.service.ts:686` to pass `tx`.
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Commit** `fix(meeting): write manual-link rows inside the booking transaction`
+- [x] **Step 1: Write a failing test** — `setManualLink` with a passed `conn` must write through it (global db never touched) so a tx rollback leaves no orphan row.
+- [x] **Step 2: Run — FAIL** (writes on global `db`).
+- [x] **Step 3: Implement** — add `conn: DbOrTx` param (mirror `createEvent`'s `conn`), use it for the select/insert/update; update `meeting.types.ts` + `admin-booking.service.ts` to pass `tx`.
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Commit** `fix(meeting): write manual-link rows inside the booking transaction`
 
 ### Task 15: `adminRefund` per-payment attribution (MEDIUM, F11)
 
@@ -286,12 +286,12 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 - Test: extend `packages/api/src/tests/unit/admin-booking.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (admin-booking)
 
-- [ ] **Step 1: Write failing test** — two payments P1(100) P2(100); 150 spent (from P1's wallet); refund P1 → current code computes `creditedMarks(200) - totalBalance(50) = 150 spent` → `refundable = 100 - 150 = 0` → throws (wrong; P1's own Marks were fully spent but P2's were not). Assert refund `min(payment.marks, availableBalance)` per-payment instead.
-- [ ] **Step 2: Run — FAIL** (FIFO across all payments).
-- [ ] **Step 3: Implement** — refund `min(payment.marks, availableBalance)` (available = total − held) with a clear reason; keep the "reject when fully spent" guard per-payment (a payment is fully spent when its event key's credited Marks are gone — the ledger `source_reference` gives per-payment attribution: `sumCompensatedForPayment(paymentId)`).
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Docs** — MODULE-REFERENCE + API-REFERENCE refunds section.
-- [ ] **Step 6: Commit** `fix(admin): per-payment refund attribution`
+- [x] **Step 1: Write a failing test** — two payments P1(50) P2(120); 120 spent (all of P1 + 70 of P2); refund P1 → `REFUND_SPEND_EXHAUSTED` (P1's Marks were spent); refund P2 → credits the remaining 100 (its own unspent remainder, capped at available balance).
+- [x] **Step 2: Run — FAIL** (FIFO across all payments).
+- [x] **Step 3: Implement** — per-payment FIFO attribution via `listCreditStatePaymentsForUser` (oldest-first credits absorb spend before the target payment); refundable = `min(payment.marks - attributedSpend, availableBalance)`.
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Docs** — MODULE-REFERENCE + API-REFERENCE refunds section.
+- [x] **Step 6: Commit** `fix(admin): per-payment refund attribution`
 
 ### Task 16: Achievement archive action (MEDIUM, F12)
 
@@ -300,11 +300,11 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 - Test: extend `packages/api/src/tests/unit/achievement.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (achievement), `docs/API-REFERENCE.md` (adminReview input)
 
-- [ ] **Step 1: Write failing test** — `adminReview({status: "archived"})` → success + notification; `archived` → `approved` (restore) → success; PRD moderation states include `archived`.
-- [ ] **Step 2: Run — FAIL** (input enum only `approved`/`rejected`).
-- [ ] **Step 3: Implement** — widen the enum, allow transitions `approved/rejected → archived` and `archived → approved/rejected` (keep audit + notification), adjust the `AchievementNotEditableError` guard.
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Commit** `feat(achievement): support archive and restore moderation states`
+- [x] **Step 1: Write failing tests** — `adminReview({status: "archived"})` → success + notification; `archived` → `approved` (restore) → success; `draft → archived` → rejected.
+- [x] **Step 2: Run — FAIL** (input type only `approved`/`rejected`).
+- [x] **Step 3: Implement** — widen the enum, add the `ALLOWED_REVIEW_TRANSITIONS` table (approved/rejected → archived, archived → approved/rejected), keep audit + notification, adjust the `AchievementNotEditableError` guard.
+- [x] **Step 4: Run tests — PASS**.
+- [x] **Step 5: Commit** `feat(achievement): support archive and restore moderation states`
 
 ### Task 17: Role-scope drifts (LOW, F16–F19)
 
@@ -315,10 +315,10 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 - Modify: `packages/api/src/modules/upload/upload.router.ts:6-16` (`createUploadUrl` → keep protected but document)
 - Docs: `docs/API-REFERENCE.md`, `docs/MODULE-REFERENCE.md`
 
-- [ ] **Step 1: Write tests per router** — tutor/admin calling `auth.searchStudents`/`achievement.create`/`payment.createPurchase` → FORBIDDEN.
-- [ ] **Step 2: Implement** the role guards (except upload — leave `protectedProcedure`, add doc note that any role may mint a bounded upload URL; the tutor proof-file path needs it).
-- [ ] **Step 3: Run tests — PASS** (watch `payment.createPurchase` — tutor/admin purchase now blocked; verify the web purchase UI is student-only).
-- [ ] **Step 4: Commit** `fix(api): tighten role guards on search, achievements, and purchases`
+- [x] **Step 1: Write tests per router** — `auth.searchStudents`/`achievement.create` called by a tutor → FORBIDDEN (role-scope-drift test); `payment.createPurchase` already on `verifiedStudentProcedure` (Part A) — verify.
+- [x] **Step 2: Implement** the role guards (except `upload.createUploadUrl` — keep `protectedProcedure`, doc note that any role may mint a bounded upload URL; the tutor proof-file path needs it).
+- [x] **Step 3: Run tests — PASS**.
+- [x] **Step 4: Commit** `fix(api): tighten role guards on search, achievements, and purchases`
 
 ### Task 18: Apply-override participant validation (LOW, F24) + room state guard (L-22)
 
@@ -328,10 +328,10 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 - Test: extend the respective service tests
 - Docs: `docs/MODULE-REFERENCE.md`
 
-- [ ] **Step 1: Tests** — (a) override with a non-participant id → error, not silent filter; (b) `assignRoom` on non-awaiting booking → no roomBooking row.
-- [ ] **Step 2: Implement** both guards.
-- [ ] **Step 3: Run tests — PASS**.
-- [ ] **Step 4: Commit** `fix(admin): validate override participants and room-assign state`
+- [x] **Step 1: Tests** — (a) override with a non-participant id → error (`OverrideParticipantNotInBookingError`), not silent filter; (b) `assignRoom`/`relocateRoom` on a non-awaiting booking → `RoomBookingStateError`, no roomBooking row.
+- [x] **Step 2: Implement** both guards.
+- [x] **Step 3: Run tests — PASS** (U14 test adjusted: the admin-assign flow now moves the booking to `AWAITING_ADMIN_ROOM_APPROVAL` first).
+- [x] **Step 4: Commit** `fix(admin): validate override participants and room-assign state`
 
 ---
 
@@ -382,11 +382,11 @@ This matrix was produced by the audit (workers A/B) and lead re-verification. It
 - Test: extend `packages/api/src/tests/unit/admin-tutor.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (admin-tutor rules)
 
-- [ ] **Step 1: Write failing test** — `publish` from `suspended` → error; `request_changes` from `published` → error.
-- [ ] **Step 2: Run — FAIL** (currently no state-machine guard).
-- [ ] **Step 3: Implement** the transition table (`draft/pending_review/changes_requested/approved_unpublished → published`; `published → request_edit_changes`; etc.) — reuse `validateReviewAction`'s shape.
-- [ ] **Step 4: Run tests — PASS**.
-- [ ] **Step 5: Commit** `fix(admin-tutor): enforce review-action state machine`
+- [x] **Step 1: Write failing tests** — `publish` from `suspended` → error; `request_changes` from `published` → error; `unpublish`/`suspend` from `pending_review` → error.
+- [x] **Step 2: Run — FAIL** (no state-machine guard).
+- [x] **Step 3: Implement** — `REVIEW_ACTION_TABLE` per-status allowed actions in `validateReviewAction` (publish from pending_review/changes_requested/approved_unpublished; unpublish/suspend/approve_edits/request_edit_changes from published; request_changes from pending_review/changes_requested).
+- [x] **Step 4: Run tests — PASS** (existing edit-review unit tests updated to the published-state contract).
+- [x] **Step 5: Commit** `fix(admin-tutor): enforce review-action state machine`
 
 ---
 
