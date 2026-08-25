@@ -136,7 +136,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
 - `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
 - `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
-- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; fan-outs one durable in-app rate-change notification to every current tutor, while identical values return the current config without a write
+- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; identical values return the current config without a write. The tutor rate-change notification fan-out runs **after the config transaction commits** (best-effort, per-tutor catch+log): a notification failure never rolls back the config update or the audit row. The event key `economy_config_updated:{version}:{tutorId}` keeps retries idempotent per version
 
 **Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`, `NotificationPort`
 

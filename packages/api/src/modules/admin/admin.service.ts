@@ -16,6 +16,7 @@ import {
   EconomyConfigConflictError,
 } from "./admin.errors";
 import type { EconomyService } from "../economy";
+import { log } from "../../lib/logger";
 
 export interface ListUsersInput {
   limit?: number;
@@ -240,7 +241,7 @@ export function createAdminService(deps: {
   ) {
     if (!economy) throw new Error("Economy service is not configured");
 
-    return db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       const before = await economy.getConfig(tx);
       if (before.version !== input.expectedVersion) {
         throw new EconomyConfigConflictError(input.expectedVersion);
@@ -258,12 +259,12 @@ export function createAdminService(deps: {
       );
       if (!hasChanges) return before;
 
-      const updated = await economy.updateConfig(tx, {
+      const result = await economy.updateConfig(tx, {
         expectedVersion: input.expectedVersion,
         updatedBy: adminId,
         values: nextValues,
       });
-      if (!updated) {
+      if (!result) {
         throw new EconomyConfigConflictError(input.expectedVersion);
       }
 
@@ -272,7 +273,7 @@ export function createAdminService(deps: {
         actorId: adminId,
         actorType: USER_ROLE.ADMIN,
         action: "economy_config_updated",
-        targetId: updated.id,
+        targetId: result.id,
         targetType: "economy_config",
         beforeState: {
           onlineCogitoBaseIdr: before.onlineCogitoBaseIdr,
@@ -282,16 +283,25 @@ export function createAdminService(deps: {
           version: before.version,
         },
         afterState: {
-          onlineCogitoBaseIdr: updated.onlineCogitoBaseIdr,
-          onlineCogitoIncrementIdr: updated.onlineCogitoIncrementIdr,
-          offlineCogitoBaseIdr: updated.offlineCogitoBaseIdr,
-          offlineCogitoIncrementIdr: updated.offlineCogitoIncrementIdr,
-          version: updated.version,
+          onlineCogitoBaseIdr: result.onlineCogitoBaseIdr,
+          onlineCogitoIncrementIdr: result.onlineCogitoIncrementIdr,
+          offlineCogitoBaseIdr: result.offlineCogitoBaseIdr,
+          offlineCogitoIncrementIdr: result.offlineCogitoIncrementIdr,
+          version: result.version,
         },
       });
 
-      if (notification) {
-        const tutorIds = await adminRepo.listUserIdsByRole(tx, USER_ROLE.TUTOR);
+      return result;
+    });
+
+    // Fan-out the tutor notifications AFTER the config transaction commits.
+    // A notification failure must never roll back the config update (or the
+    // audit row): each tutor write is best-effort with its own catch+log. The
+    // event key stays `economy_config_updated:{version}:{tutorId}`, so retries
+    // remain idempotent per version.
+    if (notification) {
+      try {
+        const tutorIds = await adminRepo.listUserIdsByRole(db, USER_ROLE.TUTOR);
         const notificationBody =
           `Online: ${formatIdr(updated.onlineCogitoBaseIdr)} base + ` +
           `${formatIdr(updated.onlineCogitoIncrementIdr)} per student. ` +
@@ -302,7 +312,7 @@ export function createAdminService(deps: {
         await Promise.all(
           tutorIds.map((tutorId) =>
             notification.write({
-              db: tx,
+              db,
               userId: tutorId,
               category: "system",
               title: "Cogito rate updated",
@@ -315,13 +325,28 @@ export function createAdminService(deps: {
                 offlineCogitoBaseIdr: updated.offlineCogitoBaseIdr,
                 offlineCogitoIncrementIdr: updated.offlineCogitoIncrementIdr,
               },
+            }).catch((error: unknown) => {
+              log({
+                level: "warn",
+                action: "economy_notify_tutor_failed",
+                tutorId,
+                economyVersion: updated.version,
+                error: { message: String(error) },
+              });
             }),
           ),
         );
+      } catch (error) {
+        log({
+          level: "error",
+          action: "economy_notify_fanout_failed",
+          economyVersion: updated.version,
+          error: { message: String(error) },
+        });
       }
+    }
 
-      return updated;
-    });
+    return updated;
   }
 
   return {

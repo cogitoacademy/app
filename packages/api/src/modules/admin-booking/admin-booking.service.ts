@@ -518,7 +518,13 @@ export function createAdminBookingService(deps: {
 
     if (opts?.escalated !== true) {
       const rows = hasFilters
-        ? await repo.listBookingsByState(db, [], repoLimit, opts?.cursor, filters)
+        ? await repo.listBookingsByState(
+            db,
+            [],
+            repoLimit,
+            opts?.cursor,
+            filters,
+          )
         : await repo.listBookingsByState(db, [], repoLimit, opts?.cursor);
       const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
       const items = rawItems.slice(0, limit);
@@ -529,7 +535,10 @@ export function createAdminBookingService(deps: {
           : hasMoreRows
             ? rawItems[rawItems.length - 1]
             : undefined;
-      return { items, nextCursor: cursorItem ? toOverrideCursor(cursorItem) : null };
+      return {
+        items,
+        nextCursor: cursorItem ? toOverrideCursor(cursorItem) : null,
+      };
     }
 
     // Escalated-only queue: the SLA filter is applied in memory, so walk

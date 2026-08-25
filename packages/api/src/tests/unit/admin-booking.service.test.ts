@@ -1126,10 +1126,12 @@ describe("AdminBookingService", () => {
       }));
 
       const repo = mockRepo({
-        listBookingsByState: mock(async (_db: any, _states: any, _limit: any, cursor?: string) => {
-          if (cursor === undefined) return windowOne;
-          return windowTwo;
-        }),
+        listBookingsByState: mock(
+          async (_db: any, _states: any, _limit: any, cursor?: string) => {
+            if (cursor === undefined) return windowOne;
+            return windowTwo;
+          },
+        ),
       });
       const service = createAdminBookingService({
         db: makeDb(),
