@@ -216,6 +216,8 @@ bun run seed-packages          # Seeds mark packages and test data
 
 Production guard: `NODE_ENV=production bun run seed-packages` will exit with error.
 
+Seed values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000. Re-run `bun run seed` on prod once before any real payment: the insert is `onConflictDoNothing`, so existing rows keep stale values — correct package prices are required before the payment provider goes live (delete stale `mark_package` rows first if an older seed already ran).
+
 ### Reset the Database
 
 ```bash

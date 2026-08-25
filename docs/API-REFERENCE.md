@@ -442,7 +442,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ packages: MarkPackage[] }`
-- **Description:** Returns active purchasable mark packages
+- **Description:** Returns active purchasable mark packages. Seeded values (PRD OQ-01): Starter Pack 50 Marks / Rp 312,500; Learner Pack 120 Marks / Rp 690,000; Explorer Pack 200 Marks / Rp 1,070,000; Pioneer Pack 400 Marks / Rp 2,000,000.
 
 ### `wallet.knowledgeBankEligible`
 
