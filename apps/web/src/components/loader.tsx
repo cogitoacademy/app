@@ -8,11 +8,8 @@ export default function Loader() {
       aria-label="Loading"
     >
       <span className="relative size-10" aria-hidden="true">
-        <span className="absolute inset-0 rounded-full border-4 border-border" />
-        <Spinner className="absolute inset-0 size-10 text-primary" />
-        <span className="absolute inset-2 rounded-full bg-primary/10" />
+        <Spinner className="absolute inset-0 size-8 text-primary" />
       </span>
-      <span className="text-sm font-medium text-muted">Loading</span>
     </div>
   );
 }
