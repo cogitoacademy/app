@@ -3,9 +3,6 @@ import { describe, test, expect, mock } from "bun:test";
 mock.module("@cogito-app/env/server", () => ({
   env: {
     CORS_ORIGIN: "https://app.example.com",
-    SANITY_PROJECT_ID: "skfmwuke",
-    SANITY_DATASET: "development",
-    SANITY_API_VERSION: "2024-03-01",
   },
 }));
 
