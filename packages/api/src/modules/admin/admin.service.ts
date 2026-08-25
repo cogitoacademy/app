@@ -311,29 +311,31 @@ export function createAdminService(deps: {
 
         await Promise.all(
           tutorIds.map((tutorId) =>
-            notification.write({
-              db,
-              userId: tutorId,
-              category: "system",
-              title: "Cogito rate updated",
-              body: notificationBody,
-              eventKey: `economy_config_updated:${updated.version}:${tutorId}`,
-              metadata: {
-                economyVersion: updated.version,
-                onlineCogitoBaseIdr: updated.onlineCogitoBaseIdr,
-                onlineCogitoIncrementIdr: updated.onlineCogitoIncrementIdr,
-                offlineCogitoBaseIdr: updated.offlineCogitoBaseIdr,
-                offlineCogitoIncrementIdr: updated.offlineCogitoIncrementIdr,
-              },
-            }).catch((error: unknown) => {
-              log({
-                level: "warn",
-                action: "economy_notify_tutor_failed",
-                tutorId,
-                economyVersion: updated.version,
-                error: { message: String(error) },
-              });
-            }),
+            notification
+              .write({
+                db,
+                userId: tutorId,
+                category: "system",
+                title: "Cogito rate updated",
+                body: notificationBody,
+                eventKey: `economy_config_updated:${updated.version}:${tutorId}`,
+                metadata: {
+                  economyVersion: updated.version,
+                  onlineCogitoBaseIdr: updated.onlineCogitoBaseIdr,
+                  onlineCogitoIncrementIdr: updated.onlineCogitoIncrementIdr,
+                  offlineCogitoBaseIdr: updated.offlineCogitoBaseIdr,
+                  offlineCogitoIncrementIdr: updated.offlineCogitoIncrementIdr,
+                },
+              })
+              .catch((error: unknown) => {
+                log({
+                  level: "warn",
+                  action: "economy_notify_tutor_failed",
+                  tutorId,
+                  economyVersion: updated.version,
+                  error: { message: String(error) },
+                });
+              }),
           ),
         );
       } catch (error) {
