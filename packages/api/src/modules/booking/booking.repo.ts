@@ -752,7 +752,6 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
     .where(
       and(
         eq(booking.currentState, "scheduled"),
-        eq(booking.modality, MODALITY.ONLINE),
         lt(booking.scheduledStartAt, cutoff),
         // Already-flagged bookings stay SCHEDULED with holds intact (admin
         // queue), so exclude them here to keep flagging idempotent — otherwise

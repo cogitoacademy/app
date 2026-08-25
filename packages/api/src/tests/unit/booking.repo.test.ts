@@ -282,7 +282,8 @@ describe("createBookingRepo", () => {
         };
         if (chunk.value !== undefined) return String(chunk.value);
         if (chunk.name !== undefined) return chunk.name;
-        if (chunk.queryChunks) return chunk.queryChunks.map(renderChunk).join("");
+        if (chunk.queryChunks)
+          return chunk.queryChunks.map(renderChunk).join("");
         return "";
       };
       const sqlText = renderChunk(conditions).replace(/\s+/g, " ");
@@ -642,6 +643,38 @@ describe("createBookingRepo", () => {
       ]);
 
       expect(conn.limit).toHaveBeenCalledWith(100);
+    });
+  });
+
+  describe("findBookingsWithTutorLateness", () => {
+    test("F9: candidate query has no modality filter (offline bookings are flagged too)", async () => {
+      const conn: any = { ...makeSelectConn([]) };
+      const repo = makeBookingRepo();
+
+      await repo.findBookingsWithTutorLateness(conn);
+
+      const calls = conn.where.mock.calls;
+      // The tutor-attendance subquery calls where() first; the main booking
+      // predicate is the last call.
+      const predicate = calls[calls.length - 1]![0] as any;
+      const renderChunk = (c: unknown): string => {
+        if (typeof c === "string") return c;
+        if (Array.isArray(c)) return c.map(renderChunk).join("");
+        const chunk = c as {
+          queryChunks?: unknown[];
+          value?: unknown;
+          name?: string;
+        };
+        if (chunk.value !== undefined) return String(chunk.value);
+        if (chunk.name !== undefined) return chunk.name;
+        if (chunk.queryChunks) return chunk.queryChunks.map(renderChunk).join("");
+        return "";
+      };
+      const sqlText = renderChunk(predicate).replace(/\s+/g, " ");
+
+      expect(sqlText).toContain("current_state");
+      expect(sqlText).toContain("scheduled");
+      expect(sqlText).not.toContain("modality");
     });
   });
 
