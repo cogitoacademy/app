@@ -1,11 +1,11 @@
 import { describe, test, expect, mock } from "bun:test";
 
+const { env: serverEnv } = await import("@cogito-app/env/server");
+
 mock.module("@cogito-app/env/server", () => ({
   env: {
+    ...serverEnv,
     CORS_ORIGIN: "https://app.example.com",
-    SANITY_PROJECT_ID: "skfmwuke",
-    SANITY_DATASET: "development",
-    SANITY_API_VERSION: "2024-03-01",
   },
 }));
 
