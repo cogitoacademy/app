@@ -6935,6 +6935,39 @@ describe("BookingService coverage paths", () => {
     ).rejects.toThrow(BookingParticipantAlreadyConfirmedError);
   });
 
+  test("withdrawInvite escapes the reason interpolated into the notification body", async () => {
+    const { service, notification } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "awaiting_participant_confirmation",
+            type: "group",
+          }),
+        ),
+        findParticipant: mock(async () =>
+          makeParticipant({
+            role: "invitee",
+            userId: "student2",
+            confirmationState: "pending",
+          }),
+        ),
+      },
+    });
+
+    await service.withdrawInvite(
+      "student1",
+      "b1",
+      "student2",
+      "<script>alert(1)</script>",
+    );
+
+    const calls = notification.writeBestEffort.mock.calls;
+    expect(calls.length).toBe(1);
+    const body = calls[0]![0].body as string;
+    expect(body).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(body).not.toContain("<script>");
+  });
+
   test("cancels an unknown booking type defensively during withdraw", async () => {
     const booking = makeBooking({
       type: "future_booking_type",

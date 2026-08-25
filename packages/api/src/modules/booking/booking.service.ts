@@ -2556,7 +2556,7 @@ export function createBookingService(deps: {
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Group invitation withdrawn",
         body: reason
-          ? `The booking proposer withdrew your invitation. Reason: ${reason}`
+          ? `The booking proposer withdrew your invitation. Reason: ${escapeHtml(reason)}`
           : "The booking proposer withdrew your invitation.",
         eventKey: `booking.${bookingId}.invite_withdrawn.${inviteeUserId}`,
         emailRequired: true,

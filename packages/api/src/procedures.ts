@@ -66,27 +66,29 @@ export const studentProcedure = publicProcedure.use(requireStudent);
  * actions). Paid actions (booking creation, package purchase) must not be
  * reachable with an unverified email.
  */
-export const requireVerifiedStudent = o.middleware(async ({ context, next }) => {
-  if (!context.session?.user) {
-    throw new ORPCError("UNAUTHORIZED");
-  }
-  const user = context.session.user as CogitoUser;
-  if (user.role !== USER_ROLE.STUDENT) {
-    throw new ORPCError("FORBIDDEN", { message: "Student access required" });
-  }
-  if (user.emailVerified !== true) {
-    throw new ORPCError("FORBIDDEN", {
-      message: "Email verification required",
+export const requireVerifiedStudent = o.middleware(
+  async ({ context, next }) => {
+    if (!context.session?.user) {
+      throw new ORPCError("UNAUTHORIZED");
+    }
+    const user = context.session.user as CogitoUser;
+    if (user.role !== USER_ROLE.STUDENT) {
+      throw new ORPCError("FORBIDDEN", { message: "Student access required" });
+    }
+    if (user.emailVerified !== true) {
+      throw new ORPCError("FORBIDDEN", {
+        message: "Email verification required",
+      });
+    }
+    return next({
+      context: {
+        session: context.session,
+        services: context.services,
+        headers: context.headers,
+      },
     });
-  }
-  return next({
-    context: {
-      session: context.session,
-      services: context.services,
-      headers: context.headers,
-    },
-  });
-});
+  },
+);
 
 export const verifiedStudentProcedure = publicProcedure.use(
   requireVerifiedStudent,
