@@ -2590,10 +2590,7 @@ export function createBookingService(deps: {
           tx,
           bookingId,
         );
-        const confirmed = await repo.findConfirmedParticipants(
-          tx,
-          bookingId,
-        );
+        const confirmed = await repo.findConfirmedParticipants(tx, bookingId);
 
         // F3: if the confirmed headcount changed during the reconfirmation
         // window (a participant declined or withdrew after the last reprice),
@@ -2604,9 +2601,7 @@ export function createBookingService(deps: {
         // headcount that no longer exists.
         const perStudent = b.priceSnapshot?.perStudent;
         const snapshotHeadcount =
-          b.type === BOOKING_TYPE.GROUP &&
-          perStudent &&
-          perStudent > 0
+          b.type === BOOKING_TYPE.GROUP && perStudent && perStudent > 0
             ? Math.round(b.holdAmount / perStudent)
             : null;
         if (
@@ -2616,12 +2611,7 @@ export function createBookingService(deps: {
           // Everyone — including this accept — goes back to plain CONFIRMED
           // and must reconfirm again at the recalculated rate.
           await repo.resetReconfirmedParticipants(tx, bookingId);
-          await repriceGroupForHeadcount(
-            tx,
-            b,
-            confirmed,
-            ACTOR_TYPE.STUDENT,
-          );
+          await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.STUDENT);
           await repo.updateBookingDeadline(
             tx,
             bookingId,
@@ -3559,6 +3549,16 @@ export function createBookingService(deps: {
       );
 
       if (meetingResult.status === "failed") {
+        // F6: a failed meeting attempt leaves the booking CONFIRMED for the
+        // 5-minute retry job — the old tutor-review deadline must not expire
+        // (release holds) or no-show the session while the retry window is
+        // still open. Bump to the same post-session deadline the success path
+        // uses so the retry is respected.
+        await repo.updateBookingDeadline(
+          tx,
+          bookingId,
+          new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+        );
         return {
           scheduled: false,
           booking: (await repo.findBookingById(tx, bookingId)) ?? b,
@@ -3648,6 +3648,13 @@ export function createBookingService(deps: {
           error: { message: String(cancelError) },
         });
       }
+      // F6: same as the status==="failed" branch — keep the retry window
+      // alive by pushing the deadline past the session.
+      await repo.updateBookingDeadline(
+        tx,
+        bookingId,
+        new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+      );
       return {
         scheduled: false,
         booking: (await repo.findBookingById(tx, bookingId)) ?? b,

@@ -1772,6 +1772,48 @@ describe("BookingService", () => {
       expect(meeting.createEvent).toHaveBeenCalled();
       expect(findCallCount).toBeGreaterThanOrEqual(2);
     });
+
+    test("F6: meeting failure bumps the deadline to scheduledEndAt + 24h so the retry window is respected", async () => {
+      const scheduledEndAt = new Date(Date.now() + 48 * 3600_000);
+      const booking = makeBooking({
+        modality: "online",
+        scheduledEndAt,
+        deadlineAt: new Date(Date.now() + 12 * 3600_000),
+      });
+      let findCallCount = 0;
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => {
+            findCallCount++;
+            if (findCallCount <= 2)
+              return {
+                ...booking,
+                currentState: "awaiting_tutor_review",
+                version: 1,
+              };
+            return { ...booking, currentState: "confirmed", version: 2 };
+          }),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        meeting: {
+          createEvent: mock(async () => {
+            throw new Error("Meeting API down");
+          }),
+        },
+      });
+
+      await service.tutorAccept("b1", "tutor1");
+
+      expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+      const deadlineArg = repo.updateBookingDeadline.mock.calls[0][2] as Date;
+      const expected = scheduledEndAt.getTime() + 24 * 3600_000;
+      expect(deadlineArg.getTime()).toBe(expected);
+    });
   });
 
   describe("tutorDecline", () => {
