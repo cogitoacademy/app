@@ -9,7 +9,7 @@ UI library: [Selia](https://selia.earth/) — opinionated, built on TailwindCSS 
 @cogito-app/ui/lib/utils           # cn() utility
 ```
 
-## Components (22)
+## Components (23)
 
 | Component  | File              | Sub-parts                                                                                                                                                                                                                                                                           |
 | ---------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -32,6 +32,7 @@ UI library: [Selia](https://selia.earth/) — opinionated, built on TailwindCSS 
 | Separator  | `separator.tsx`   | —                                                                                                                                                                                                                                                                                   |
 | Sidebar    | `sidebar.tsx`     | SidebarHeader, SidebarContent, SidebarLogo, SidebarFooter, SidebarMenu, SidebarList, SidebarItem, SidebarItemButton, SidebarItemAction, SidebarGroup, SidebarGroupTitle, SidebarGroupAction, SidebarSubmenu, SidebarCollapsible, SidebarCollapsibleTrigger, SidebarCollapsiblePanel |
 | Stack      | `stack.tsx`       | — (direction: row/column, spacing: sm/md/lg)                                                                                                                                                                                                                                        |
+| Spinner    | `spinner.tsx`     | —                                                                                                                                                                                                                                                                                   |
 | Table      | `table.tsx`       | TableContainer, TableHeader, TableHead, TableBody, TableRow, TableCell                                                                                                                                                                                                              |
 | Text       | `text.tsx`        | TextLink                                                                                                                                                                                                                                                                            |
 | Toast      | `toast.tsx`       | toastManager                                                                                                                                                                                                                                                                        |

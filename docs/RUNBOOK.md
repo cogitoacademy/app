@@ -59,7 +59,7 @@ Select each available role view from the standalone control at the top and confi
 
 Guide copy is maintained in `apps/web/src/components/guide/guide-content.ts`. When a booking state, role responsibility, or linked route changes, update the corresponding typed step/branch and the guide content test in the same change. The guide is intentionally code-managed in v1; no admin editor, CMS publish step, or API migration is required. During local visual refinement, toggle the development-only Tweaks Bar with `Ctrl/Cmd+Shift+.`; treat its values as exploration until the chosen change is copied deliberately into the guide styles.
 
-The shared route pending state uses the Selia spinner from `apps/web/src/components/loader.tsx`. If a navigation smoke test catches a loading state, verify the spinner remains visible in both light and dark themes and stops animating under reduced-motion preferences.
+The shared route pending state uses the token-based loading ring from `apps/web/src/components/loader.tsx` and the local Selia `Spinner` from `packages/ui/components/selia/spinner.tsx`. If a navigation smoke test catches a loading state, verify the ring track, primary progress arc, and `Loading` label remain visible in both light and dark themes, and that the ring remains understandable without animation under reduced-motion preferences.
 
 ### Notification inbox smoke check
 

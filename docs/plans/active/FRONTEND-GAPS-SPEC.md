@@ -49,6 +49,14 @@ instead of blank panels or one-off text. Month and agenda views also explain
 when the selected period has no events. No API, schema, or persistence contract
 changed.
 
+### Loading-state follow-up (2026-08-25)
+
+The shared route, onboarding, and auth loading state now renders a visible
+token-based ring with a contrasting track, the local Selia `Spinner` as its
+primary progress arc, and a `Loading` label instead of a small arc that could
+read as a stray line. Reduced-motion users still receive a clear static
+loading indicator. No API, schema, or persistence contract changed.
+
 ### Shared booking list follow-up (2026-08-22)
 
 The booking list is now one role-aware surface at `/_app/bookings`. Students,
@@ -655,12 +663,13 @@ Follow existing frontend conventions:
 
 ### Selia Components Available
 
-Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Popover, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Toast. See AGENTS.md for full list + import paths.
+Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Popover, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Spinner, Toast. See AGENTS.md for full list + import paths.
 
 ---
 
 ### Version Notes
 
+- v1.25 (2026-08-25): Added the Selia `Spinner` component to the local UI package and composed it inside a token-based loading ring with a visible label and reduced-motion-safe static fallback across router, onboarding, and auth loading states. No API or persistence contract changed.
 - v1.24 (2026-08-25): Added the shared Selia `aria-invalid` danger outline to auth inputs and ensured empty submit attempts reveal every invalid auth field without changing the auth API or persistence contract.
 - v1.23 (2026-08-25): Standardized collection empty states through the shared Selia presentation component with `default`, `compact`, and `inline` densities. Covered calendar periods, discovery filters, booking/detail sections, notifications, ledgers, subject/proof-link fields, availability previews, and admin tables. No RPC, schema, or persistence contract changed.
 - v1.22 (2026-08-25): Added field-level login/sign-up validation on change and blur, visible password requirements, accessible Selia inline field errors, and client-side name/email normalization. No auth API or persistence contract changed.
