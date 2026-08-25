@@ -50,8 +50,16 @@ export interface MeetingPort {
    * Records an admin-pasted manual meeting URL on the booking (U1 / FR-21).
    * Updates the existing meetingEvent row (or creates one) as an active
    * manual link — this also stops `retry-failed-meetings` from retrying.
+   *
+   * When called inside a booking transaction, pass `conn` so the local row
+   * commits/rolls back with the booking — otherwise a later tx failure would
+   * leave an orphan manual-link row (F10, mirrors createEvent's `conn`).
    */
-  setManualLink(bookingId: string, url: string): Promise<MeetingEvent>;
+  setManualLink(
+    bookingId: string,
+    url: string,
+    conn?: DbOrTx,
+  ): Promise<MeetingEvent>;
   /**
    * Boot-time connectivity probe (P4.2/X3): verifies the configured Google
    * credentials can reach the Calendar API (e.g. via `calendarList.get`).

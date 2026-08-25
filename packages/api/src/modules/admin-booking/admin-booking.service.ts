@@ -742,6 +742,7 @@ export function createAdminBookingService(deps: {
       const meetingEventRow = await meeting.setManualLink(
         input.bookingId,
         input.url,
+        tx,
       );
 
       const allParticipants = await repo.findParticipantsByBookingId(

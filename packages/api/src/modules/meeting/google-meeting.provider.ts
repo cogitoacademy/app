@@ -497,8 +497,12 @@ export function createGoogleMeetingProvider(
   async function setManualLink(
     bookingId: string,
     url: string,
+    conn?: DbOrTx,
   ): Promise<MeetingEvent> {
-    const [existing] = await db
+    // F10: when called inside a booking transaction, the local row must join
+    // that transaction so it rolls back with the booking.
+    const write = conn ?? db;
+    const [existing] = await write
       .select()
       .from(meetingEvent)
       .where(eq(meetingEvent.bookingId, bookingId))
@@ -513,7 +517,7 @@ export function createGoogleMeetingProvider(
     } as const;
 
     if (existing) {
-      const [updated] = await db
+      const [updated] = await write
         .update(meetingEvent)
         .set(values)
         .where(eq(meetingEvent.id, existing.id))
@@ -521,7 +525,7 @@ export function createGoogleMeetingProvider(
       return updated as typeof meetingEvent.$inferSelect;
     }
 
-    const [created] = await db
+    const [created] = await write
       .insert(meetingEvent)
       .values({
         bookingId,

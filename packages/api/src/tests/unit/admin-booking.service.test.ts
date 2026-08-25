@@ -1554,6 +1554,47 @@ describe("AdminBookingService additional guards", () => {
     ).rejects.toThrow("Meeting port not configured");
   });
 
+  test("F10: setMeetingLink passes the booking transaction to the meeting port", async () => {
+    const setManualLink = mock(async () => ({
+      id: "me1",
+      bookingId: "b1",
+      provider: "manual",
+      status: "created",
+      meetingUrl: "https://meet.example.com/manual",
+      externalEventId: null,
+      errorReason: null,
+    }));
+    const meeting = { setManualLink };
+    const db = makeDb();
+    const service = createAdminBookingService({
+      db,
+      repo: mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+        })),
+      }),
+      auditPort: makeAuditPort(),
+      wallet: makeWalletPort() as any,
+      refund: makeRefundPort(),
+      notification: makeNotificationPort(),
+      meeting,
+    });
+
+    await service.setMeetingLink("admin1", {
+      bookingId: "b1",
+      url: "https://meet.example.com/manual",
+    });
+
+    expect(setManualLink).toHaveBeenCalledTimes(1);
+    // The tx object is passed as the third arg — the row commits/rolls back
+    // with the booking transaction (F10, no orphan row on rollback).
+    const args = setManualLink.mock.calls[0] as unknown[];
+    expect(args[0]).toBe("b1");
+    expect(args[1]).toBe("https://meet.example.com/manual");
+    expect(args[2]).toBeDefined();
+  });
+
   test("cancelSeriesSession rejects a session that is no longer scheduled", async () => {
     const service = createAdminBookingService({
       db: makeDb(),

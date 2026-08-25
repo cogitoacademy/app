@@ -173,7 +173,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
 - `adminRefund(adminId, { paymentId, reason })` — Creates a compensating ledger entry for a payment error. **In-app Marks credit only (N1, PRD §677):** no provider call, `refundRecord.amountIdr = 0`, no `providerEventId` — purchased Marks are never convertible back to rupiah.
-- `setMeetingLink(adminId, { bookingId, url })` — Records a manual meeting URL on a `SCHEDULED`/`CONFIRMED` booking (U1/FR-21); notifies confirmed participants and records an `admin_set_meeting_link` audit record
+- `setMeetingLink(adminId, { bookingId, url })` — Records a manual meeting URL on a `SCHEDULED`/`CONFIRMED` booking (U1/FR-21); notifies confirmed participants and records an `admin_set_meeting_link` audit record. **F10:** the manual-link row is written inside the booking transaction (`setManualLink(bookingId, url, tx)`) so a tx rollback leaves no orphan meetingEvent row
 - `cancelSeriesSession(adminId, { sessionId, marksAction, amount? })` — Cancels one `scheduled` series session; the per-participant session hold is released, forfeited, or partially returned per `marksAction` (U6/TC-31); records audit + participant notifications
 
 **Dependencies:** `AdminBookingRepo`, `AuditPort`, wallet port
