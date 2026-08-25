@@ -1,21 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { IconBook2 } from "@tabler/icons-react";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
-import {
-  getSelectItemValue,
-  Select,
-  SelectItem,
-  SelectList,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@cogito-app/ui/components/selia/select";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
+
+const MAX_TUTOR_SUBJECTS = 20;
 
 export type SubjectOption = {
   id: string;
@@ -28,6 +20,7 @@ export type SubjectCategory = SubjectOption & {
 };
 
 export type TutorSubject = SubjectOption & {
+  isSelectable: boolean;
   parent: SubjectOption;
 };
 
@@ -96,7 +89,6 @@ export function SubjectSelector({
   triggerId,
 }: SubjectSelectorProps) {
   const { data: categories, isPending, isError } = useSubjectTaxonomy();
-  const [categoryId, setCategoryId] = useState("");
 
   const selectedSubjectLabels = useMemo(() => {
     const labels = new Map<string, string>();
@@ -118,35 +110,24 @@ export function SubjectSelector({
     return labels;
   }, [categories, selectedSubjects]);
 
-  const activeCategoryId = useMemo(() => {
-    if (categoryId) return categoryId;
-
-    return (
-      categories.find((category) =>
-        category.children.some((child) => selectedIds.includes(child.id)),
-      )?.id ?? ""
-    );
-  }, [categories, categoryId, selectedIds]);
-  const activeCategory = categories.find(
-    (category) => category.id === activeCategoryId,
-  );
-  const categoryValues = useMemo(
+  const legacySelectedSubjects = useMemo(
     () =>
-      new Map(
-        categories.map((category) => [
-          category.id,
-          { value: category.id, label: category.name },
-        ]),
+      (selectedSubjects ?? []).filter(
+        (subject) => subject.isSelectable === false,
       ),
-    [categories],
+    [selectedSubjects],
   );
-  const selectedCategoryValue = activeCategory
-    ? (categoryValues.get(activeCategory.id) ?? null)
-    : null;
 
-  function toggleSubject(subjectId: string) {
-    if (selectedIds.includes(subjectId)) {
+  function toggleSubject(subjectId: string, checked: boolean) {
+    if (!checked) {
       onChange(selectedIds.filter((id) => id !== subjectId));
+      return;
+    }
+
+    if (
+      selectedIds.includes(subjectId) ||
+      selectedIds.length >= MAX_TUTOR_SUBJECTS
+    ) {
       return;
     }
 
@@ -154,11 +135,25 @@ export function SubjectSelector({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {selectedIds.length > 0 && (
+    <div
+      id={triggerId}
+      tabIndex={-1}
+      className="flex flex-col gap-4 outline-none"
+      aria-label="Competition subjects"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Text className="text-sm text-muted">
+          Select up to {MAX_TUTOR_SUBJECTS} competition subcategories.
+        </Text>
+        <Text className="text-xs text-dimmed">
+          {selectedIds.length} of {MAX_TUTOR_SUBJECTS} selected
+        </Text>
+      </div>
+
+      {selectedIds.length > 0 ? (
         <div
           className="flex flex-wrap gap-2"
-          aria-label="Selected child subjects"
+          aria-label="Selected competition subcategories"
         >
           {selectedIds.map((subjectId) => (
             <Chip key={subjectId} variant="primary" pill>
@@ -166,100 +161,99 @@ export function SubjectSelector({
               <ChipButton
                 type="button"
                 aria-label={`Remove ${selectedSubjectLabels.get(subjectId) ?? "selected subject"}`}
-                onClick={() => toggleSubject(subjectId)}
+                onClick={() => toggleSubject(subjectId, false)}
               >
                 ×
               </ChipButton>
             </Chip>
           ))}
         </div>
-      )}
+      ) : null}
 
-      <Select
-        value={selectedCategoryValue}
-        onValueChange={(value) =>
-          setCategoryId(getSelectItemValue(value) ?? "")
-        }
-      >
-        <SelectTrigger id={triggerId} aria-label="Subject category">
-          <SelectValue placeholder="Choose a mother category" />
-        </SelectTrigger>
-        <SelectPopup>
-          <SelectList>
-            {categories.map((category) => (
-              <SelectItem
-                key={category.id}
-                value={categoryValues.get(category.id)}
-              >
-                {category.name}
-              </SelectItem>
-            ))}
-          </SelectList>
-        </SelectPopup>
-      </Select>
-
-      {isPending && (
-        <Text className="text-muted" role="status">
-          Loading subject categories…
-        </Text>
-      )}
-      {isError && (
-        <Text className="text-muted" role="status">
-          Subject categories are temporarily unavailable. Your selected subjects
-          are preserved.
-        </Text>
-      )}
-
-      {!isPending && !isError && categories.length === 0 && (
-        <EmptyState
-          icon={<IconBook2 />}
-          title="No subject categories yet"
-          description="Subject categories will appear here when they are available."
-          size="inline"
-          className="rounded-lg border border-item-border"
-        />
-      )}
-
-      {activeCategory && (
-        <div
-          className="flex flex-wrap gap-2"
-          aria-label={`Child subjects in ${activeCategory.name}`}
-        >
-          {activeCategory.children.map((child) => {
-            const selected = selectedIds.includes(child.id);
-
-            return (
-              <Chip
-                key={child.id}
-                variant={selected ? "primary" : "outline"}
-                pill
-                className="cursor-pointer focus-within:ring-2 focus-within:ring-primary"
-                render={
-                  <button
-                    type="button"
-                    aria-pressed={selected}
-                    aria-label={`${selected ? "Remove" : "Add"} ${child.name}`}
-                  />
-                }
-                onClick={() => toggleSubject(child.id)}
-              >
-                {child.name}
+      {legacySelectedSubjects.length > 0 ? (
+        <div className="rounded-lg border border-item-border bg-item p-3">
+          <Text className="text-sm font-medium">Previously selected</Text>
+          <Text className="mt-1 text-xs text-muted">
+            These legacy subjects remain on your profile but are no longer
+            available for new selection.
+          </Text>
+          <div
+            className="mt-3 flex flex-wrap gap-2"
+            aria-label="Previously selected legacy subjects"
+          >
+            {legacySelectedSubjects.map((subject) => (
+              <Chip key={subject.id} variant="outline" pill>
+                {subject.parent
+                  ? `${subject.parent.name} · ${subject.name}`
+                  : subject.name}
               </Chip>
-            );
-          })}
-          {activeCategory.children.length === 0 && (
-            <EmptyState
-              icon={<IconBook2 />}
-              title="No child subjects yet"
-              description="Child subjects will appear here when they are added to this category."
-              size="inline"
-              className="w-full rounded-lg border border-item-border"
-            />
-          )}
+            ))}
+          </div>
         </div>
-      )}
+      ) : null}
 
-      {error && <Text className="text-danger">{error}</Text>}
+      {isPending ? (
+        <Text className="text-muted" role="status">
+          Loading competition categories…
+        </Text>
+      ) : null}
+      {isError ? (
+        <Text className="text-muted" role="status">
+          Competition categories are temporarily unavailable. Your current
+          selections are preserved.
+        </Text>
+      ) : null}
+
+      {categories.length > 0 ? (
+        <div
+          className="grid gap-3 md:grid-cols-2"
+          aria-label="Competition categories"
+        >
+          {categories.map((category) => (
+            <fieldset
+              key={category.id}
+              className="min-w-0 rounded-lg border border-item-border bg-item p-3"
+            >
+              <legend className="px-1 text-sm font-semibold">
+                {category.name}
+              </legend>
+              <div className="mt-2 flex flex-col gap-2">
+                {category.children.map((child) => {
+                  const checked = selectedIds.includes(child.id);
+                  const limitReached =
+                    !checked && selectedIds.length >= MAX_TUTOR_SUBJECTS;
+                  const inputId = `${triggerId ?? "tutor-subject"}-${child.id}`;
+
+                  return (
+                    <label
+                      key={child.id}
+                      htmlFor={inputId}
+                      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                        limitReached
+                          ? "cursor-not-allowed text-dimmed opacity-60"
+                          : "cursor-pointer hover:bg-background"
+                      }`}
+                    >
+                      <Checkbox
+                        id={inputId}
+                        checked={checked}
+                        disabled={limitReached}
+                        aria-label={child.name}
+                        onCheckedChange={(nextChecked) =>
+                          toggleSubject(child.id, Boolean(nextChecked))
+                        }
+                      />
+                      <span className="min-w-0">{child.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
+        </div>
+      ) : null}
+
+      {error ? <Text className="text-danger">{error}</Text> : null}
     </div>
   );
 }

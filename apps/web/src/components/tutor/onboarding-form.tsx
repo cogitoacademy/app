@@ -100,6 +100,12 @@ interface OnboardingFormProps {
   };
 }
 
+function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((subjectId) => rightSet.has(subjectId));
+}
+
 export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -109,16 +115,26 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     image: accountUser.image ?? "",
   });
   const pending = profile.pendingProfileChanges ?? {};
+  const legacySubjectIds = new Set(
+    profile.subjects
+      ?.filter((subject) => subject.isSelectable === false)
+      .map((subject) => subject.id) ?? [],
+  );
+  const initialSubjectIds =
+    pending.subjectIds?.filter(
+      (subjectId) => !legacySubjectIds.has(subjectId),
+    ) ??
+    profile.subjects
+      ?.filter((subject) => subject.isSelectable !== false)
+      .map((subject) => subject.id) ??
+    [];
   const [form, setForm] = useState({
     displayName: pending.displayName ?? profile.displayName ?? "",
     shortBio: profile.shortBio ?? "",
     credentialsSummary:
       pending.credentialsSummary ?? profile.credentialsSummary ?? "",
     expertise: pending.expertise ?? profile.expertise ?? [],
-    subjectIds:
-      pending.subjectIds ??
-      profile.subjects?.map((subject) => subject.id) ??
-      [],
+    subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
     baseRatesIdr: pending.baseRatesIdr ??
       profile.baseRatesIdr ?? {
@@ -247,7 +263,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (shortBio) payload.shortBio = shortBio;
     if (credentialsSummary) payload.credentialsSummary = credentialsSummary;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
-    if (form.subjectIds.length > 0) payload.subjectIds = form.subjectIds;
+    if (
+      form.subjectIds.length > 0 &&
+      !haveSameSubjectIds(form.subjectIds, initialSubjectIds)
+    ) {
+      payload.subjectIds = form.subjectIds;
+    }
     if (form.modality) payload.modality = form.modality;
     if (form.baseRatesIdr && Object.keys(form.baseRatesIdr).length > 0) {
       const cleanBaseRates = Object.fromEntries(
@@ -567,8 +588,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     Subjects and competition tracks *
                   </FieldLabel>
                   <FieldDescription>
-                    Choose one or more child subjects so students can find your
-                    profile in the right category.
+                    Select the competition subcategories you teach. Students
+                    will see these on your tutor profile.
                   </FieldDescription>
                   <SubjectSelector
                     triggerId="tutor-subject-category"

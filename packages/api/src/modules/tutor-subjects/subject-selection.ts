@@ -18,6 +18,7 @@ export interface NormalizedTutorSubject {
   slug: string;
   name: string;
   description: string | null;
+  isSelectable: boolean;
   parent: {
     id: string;
     slug: string;
@@ -47,7 +48,7 @@ export class InvalidTutorSubjectSelectionError extends DomainError {
   }) {
     super(
       "INVALID_TUTOR_SUBJECT_SELECTION",
-      "Tutor subjects must be active child subjects",
+      "Tutor subjects must be active selectable child subjects",
       details,
     );
   }
@@ -64,6 +65,7 @@ export function toNormalizedTutorSubject(
     slug: subject.slug,
     name: subject.name,
     description: subject.description,
+    isSelectable: subject.isActive,
     parent: {
       id: subject.parent.id,
       slug: subject.parent.slug,

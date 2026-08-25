@@ -113,7 +113,7 @@ From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, v
 
 ### Tutor subject taxonomy smoke check
 
-Open `/onboarding` as a tutor and verify the subject selector loads active mother categories and their child subjects from `tutors.listSubjects`. After choosing a mother category, the selector trigger must show its human-readable name rather than the category UUID. Select at least one child subject, save a draft, and confirm the selected subjects reload with the profile. A submission with no child subject must be blocked; published tutor discovery should expose the selected subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm the category and child-subject controls support selecting multiple values, show `+N more` when needed, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs.
+Open `/onboarding` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs.
 
 ### Profile UX smoke check
 
@@ -160,7 +160,7 @@ bun run db:generate      # Generate new migration from schema changes
 
 If tutor discovery returns `500` with a missing `subject_category` or
 `tutor_profile_subject` relation, the local database is behind migration
-`0027_subject_taxonomy.sql`. Apply that migration (or the equivalent reviewed
+`0029_competition_taxonomy.sql`. Apply that migration (or the equivalent reviewed
 pending migration) and restart the server. `bun run db:push` can detect broad
 schema drift and ask ambiguous rename questions; review those prompts instead
 of accepting unrelated changes blindly.
@@ -418,8 +418,8 @@ Key environment variables (see `.env.example` for full list):
 | --------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                 |
 | `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                                                                                              |
-| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                 |
-| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                        |
+| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                   |
+| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                         |
 | `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                                                                                              |
 | `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                                                                                          |
 | `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                                                                                 |
@@ -435,7 +435,7 @@ Key environment variables (see `.env.example` for full list):
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                               |
 | `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated)                                                                                                                |
 | `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs |
-| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                   |
+| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                  |
 | `DB_SSL_REJECT_UNAUTHORIZED`                                                                  | No       | Reject unauthorized TLS certificates on the DB connection (default true)                                                                                     |
 | `METRICS_TOKEN`                                                                               | No       | Bearer token for the metrics endpoint                                                                                                                        |
 | `UPLOAD_DIR`                                                                                  | No       | Local upload directory when R2 is not configured (default `./uploads`)                                                                                       |
@@ -574,5 +574,8 @@ If a push fails with `denied: installation not allowed to Create organization pa
    docker pull oven/bun:1.3.14
    docker tag oven/bun:1.3.14 ghcr.io/cogitoacademy/app/server:init
    docker push ghcr.io/cogitoacademy/app/server:init
-  ```
-   After the packages exist, the workflows push without org changes.
+   ```
+
+```
+ After the packages exist, the workflows push without org changes.
+```

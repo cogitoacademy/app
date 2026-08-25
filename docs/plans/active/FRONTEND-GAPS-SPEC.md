@@ -1,23 +1,23 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                              |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-23; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed) |
-| Branch     | `f/frontend-prd-gaps` (merged #55)                                                                                                                 |
-| Created    | 2026-07-29                                                                                                                                         |
-| Audited    | 2026-08-22                                                                                                                                         |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                      |
-| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                             |
+| Field      | Value                                                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Living gap inventory (updated 2026-08-25; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy follow-up implemented) |
+| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                      |
+| Created    | 2026-07-29                                                                                                                                                                                     |
+| Audited    | 2026-08-25                                                                                                                                                                                     |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                  |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                         |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
-### Subject taxonomy follow-up (2026-08-22)
+### Subject taxonomy follow-up (2026-08-25)
 
-Tutor onboarding now uses the normalized mother-category/child-subject selector exposed by `tutors.listSubjects`. Tutors must select at least one child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
+Tutor onboarding now uses the normalized competition category/child-subject catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 child subjects. Tutors must select at least one current child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. Archived legacy subjects remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding and tutor-list selectors store normalized IDs/values for submission or filtering but render human-readable labels in their triggers, so backend UUIDs remain hidden from users. The tutor list now supports selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
+The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Selected subjects appear as chips, while archived profile subjects are shown read-only. The tutor list continues to support selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
 
 ### Competition Calendar parity follow-up (2026-08-23)
 

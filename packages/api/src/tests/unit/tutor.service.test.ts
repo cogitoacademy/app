@@ -31,6 +31,7 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
           slug: "math-olympiad",
           name: "Mathematics Olympiad",
           description: null,
+          isActive: true,
           parentId: "mother-1",
           parent: {
             id: "mother-1",
@@ -187,6 +188,25 @@ describe("Tutor Service", () => {
     test("throws TutorProfileIncompleteError for empty subjects", () => {
       expect(() =>
         validateSubmitForReview(makeProfile({ subjects: [] }), mockPricingPort),
+      ).toThrow(TutorProfileIncompleteError);
+    });
+
+    test("rejects profiles that only retain archived subjects", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({
+            subjects: [
+              {
+                subjectId: "legacy-child",
+                subject: {
+                  ...makeProfile().subjects[0].subject,
+                  isActive: false,
+                },
+              },
+            ],
+          }),
+          mockPricingPort,
+        ),
       ).toThrow(TutorProfileIncompleteError);
     });
 
