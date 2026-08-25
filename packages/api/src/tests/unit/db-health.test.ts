@@ -1,6 +1,10 @@
 import { describe, test, expect } from "bun:test";
 import { InMemoryRedis } from "../../lib/redis";
-import { healthCheck, healthStatus } from "../../lib/db-health";
+import {
+  checkSchedulerHealth,
+  healthCheck,
+  healthStatus,
+} from "../../lib/db-health";
 
 function makeDb(behavior: { ok?: boolean; ms?: number } = {}) {
   const { ok = true, ms = 5 } = behavior;
@@ -69,5 +73,45 @@ describe("healthStatus (N3)", () => {
 
   test("error maps to 503", () => {
     expect(healthStatus("error")).toBe(503);
+  });
+});
+
+describe("checkSchedulerHealth", () => {
+  test("returns ok when redis pings", async () => {
+    const redis = new InMemoryRedis();
+    await expect(checkSchedulerHealth(redis)).resolves.toBe("ok");
+  });
+
+  test("returns error when redis ping throws", async () => {
+    const failingRedis = {
+      ...new InMemoryRedis(),
+      ping: async () => {
+        throw new Error("connection refused");
+      },
+    };
+    await expect(checkSchedulerHealth(failingRedis as any)).resolves.toBe(
+      "error",
+    );
+  });
+
+  test("returns degraded when no redis is provided", async () => {
+    await expect(checkSchedulerHealth(undefined)).resolves.toBe("degraded");
+  });
+
+  test("is wired into healthCheck as checks.scheduler", async () => {
+    const result = await healthCheck(new InMemoryRedis(), makeDb({ ms: 5 }));
+    expect(result.checks.scheduler).toBe("ok");
+
+    const failing = await healthCheck(
+      {
+        ...new InMemoryRedis(),
+        ping: async () => {
+          throw new Error("down");
+        },
+      } as any,
+      makeDb({ ms: 5 }),
+    );
+    expect(failing.checks.scheduler).toBe("error");
+    expect(failing.status).toBe("error");
   });
 });

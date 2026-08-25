@@ -17,6 +17,26 @@ export function healthStatus(status: HealthOverall): number {
   return status === "ok" ? 200 : 503;
 }
 
+/**
+ * Reports scheduler readiness from the shared Redis connection.
+ *
+ * `ok` when Redis answers `PING`; `error` when it throws (the scheduler's
+ * BullMQ queues and workers depend on Redis, so an unreachable Redis means the
+ * booking-expiry/hold-release/email/SLA jobs are not running); `degraded` when
+ * no Redis client is available at all (defensive in-memory fallback path).
+ */
+export async function checkSchedulerHealth(
+  redis?: RedisClient,
+): Promise<"ok" | "degraded" | "error"> {
+  if (!redis) return "degraded";
+  try {
+    await redis.ping();
+    return "ok";
+  } catch {
+    return "error";
+  }
+}
+
 export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
   const checks: Record<string, "ok" | "degraded" | "error"> = {};
 
@@ -38,6 +58,13 @@ export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
     } catch {
       checks.redis = "error";
     }
+  }
+
+  // The scheduler runs on the same shared Redis; surface its health so a
+  // dead scheduler (no expiry/hold-release/email jobs) trips the LB check.
+  // Omitted when no Redis client is available (defensive fallback path).
+  if (redis) {
+    checks.scheduler = await checkSchedulerHealth(redis);
   }
 
   const overall: HealthOverall = Object.values(checks).every((v) => v === "ok")
