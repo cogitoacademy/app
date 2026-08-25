@@ -20,9 +20,9 @@ environment-specific items below still require confirmation in GitHub/Coolify.
 - [x] Keep the Hostinger company profile on the apex `cogitoacademy.id`.
 - [x] Route `api.cogitoacademy.id` to the API/Auth/health/webhook service.
 - [x] Route `app.cogitoacademy.id` to the frontend and bake the API subdomain
-  into the production Vite image.
+      into the production Vite image.
 - [ ] Configure the two Coolify resource domains and add the API + web deploy
-  webhook secrets in GitHub Actions.
+      webhook secrets in GitHub Actions.
 
 ---
 

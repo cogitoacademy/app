@@ -11,15 +11,15 @@ manual GHCR fallback when GitHub Actions has no runner quota.
 The first production rollout of the auth form validation used this path on
 2026-08-25:
 
-| Item | Result |
-| --- | --- |
-| Source commit | `c00445d` — `fix(web): add auth form validation feedback` |
-| Changed runtime image | `ghcr.io/cogitoacademy/app/web` |
-| Tags pushed | `latest`, `vc00445d767413c41d629484b046d937a6cab4aa1` |
-| API image | Not rebuilt; the release changed only the frontend |
-| CI result | GitHub Actions could not start because the account billing/spending limit was blocked |
-| Fallback | Built the web image locally with `VITE_SERVER_URL=https://api.cogitoacademy.id`, then pushed both tags to GHCR |
-| Verification | `app.cogitoacademy.id/login` returned `200`; `/health` returned `200` with database and Redis `ok` |
+| Item                  | Result                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Source commit         | `c00445d` — `fix(web): add auth form validation feedback`                                                      |
+| Changed runtime image | `ghcr.io/cogitoacademy/app/web`                                                                                |
+| Tags pushed           | `latest`, `vc00445d767413c41d629484b046d937a6cab4aa1`                                                          |
+| API image             | Not rebuilt; the release changed only the frontend                                                             |
+| CI result             | GitHub Actions could not start because the account billing/spending limit was blocked                          |
+| Fallback              | Built the web image locally with `VITE_SERVER_URL=https://api.cogitoacademy.id`, then pushed both tags to GHCR |
+| Verification          | `app.cogitoacademy.id/login` returned `200`; `/health` returned `200` with database and Redis `ok`             |
 
 The live login bundle contained the new validation feedback after Coolify
 pulled the changed `latest` image. Keep the immutable `v<full-sha>` tag for
@@ -30,12 +30,12 @@ rollback even when the Coolify resource tracks `latest`.
 The apex domain stays on Hostinger for the company profile. Only the
 application subdomains point to the Coolify VPS:
 
-| Component | Public URL | Runtime |
-| --- | --- | --- |
+| Component                          | Public URL                     | Runtime                        |
+| ---------------------------------- | ------------------------------ | ------------------------------ |
 | API, Better Auth, health, webhooks | `https://api.cogitoacademy.id` | Coolify API image, port `3001` |
-| Frontend | `https://app.cogitoacademy.id` | Coolify nginx image, port `80` |
-| PostgreSQL | private Coolify network only | `postgres:16-alpine` |
-| Redis | private Coolify network only | Redis 7 |
+| Frontend                           | `https://app.cogitoacademy.id` | Coolify nginx image, port `80` |
+| PostgreSQL                         | private Coolify network only   | `postgres:16-alpine`           |
+| Redis                              | private Coolify network only   | Redis 7                        |
 
 Production images are published to:
 
@@ -480,17 +480,17 @@ forward fix.
 
 ## Troubleshooting quick reference
 
-| Symptom | Check |
-| --- | --- |
-| Actions fails before any job starts | GitHub billing/spending limit or runner quota; use the manual path or resolve the account limit. |
-| GHCR push returns `403` | Token has `write:packages`, the Docker login was refreshed, and the org allows package creation. |
-| API exits with SSL/handshake error | `DB_SSL_ENABLED` matches the database; bundled Coolify PostgreSQL requires `false`. |
-| Coolify says healthy but app calls the wrong host | The web image was built without `--build-arg VITE_SERVER_URL=https://api.cogitoacademy.id`; rebuild and redeploy web. |
-| Web resource is `unhealthy` / domain returns `No Available Server` | Check the web container health output and use an IPv4 loopback healthcheck (`127.0.0.1`) when nginx listens only on IPv4; rebuild and redeploy the web image. |
+| Symptom                                                                          | Check                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Actions fails before any job starts                                              | GitHub billing/spending limit or runner quota; use the manual path or resolve the account limit.                                                                                                                                                                                                                                                                               |
+| GHCR push returns `403`                                                          | Token has `write:packages`, the Docker login was refreshed, and the org allows package creation.                                                                                                                                                                                                                                                                               |
+| API exits with SSL/handshake error                                               | `DB_SSL_ENABLED` matches the database; bundled Coolify PostgreSQL requires `false`.                                                                                                                                                                                                                                                                                            |
+| Coolify says healthy but app calls the wrong host                                | The web image was built without `--build-arg VITE_SERVER_URL=https://api.cogitoacademy.id`; rebuild and redeploy web.                                                                                                                                                                                                                                                          |
+| Web resource is `unhealthy` / domain returns `No Available Server`               | Check the web container health output and use an IPv4 loopback healthcheck (`127.0.0.1`) when nginx listens only on IPv4; rebuild and redeploy the web image.                                                                                                                                                                                                                  |
 | Coolify **Servers → localhost** shows `Unavailable` while containers are healthy | This is the Coolify control-plane SSH check, not proof that the app is down. Confirm host `host.docker.internal`, port `22`, user `root`, and Coolify's generated `localhost's key`; then click **Check connection**. If it says `Permission denied`, install the copied Coolify public key in `/root/.ssh/authorized_keys`. If it says `Connection refused`, verify `ss -ltnp | grep ':22'` on the VPS and retry after SSH/Coolify restarts. |
-| New `latest` image is not running | Check auto-deploy/webhook logs, then force a pull/redeploy without cache. |
-| API health is 503 immediately after deploy | Wait for the bounded rollout/healthcheck, then inspect API logs and the Coolify domain/port mapping. |
-| Health says Redis is down | Check `REDIS_URL`, private network membership, and Redis resource health. |
+| New `latest` image is not running                                                | Check auto-deploy/webhook logs, then force a pull/redeploy without cache.                                                                                                                                                                                                                                                                                                      |
+| API health is 503 immediately after deploy                                       | Wait for the bounded rollout/healthcheck, then inspect API logs and the Coolify domain/port mapping.                                                                                                                                                                                                                                                                           |
+| Health says Redis is down                                                        | Check `REDIS_URL`, private network membership, and Redis resource health.                                                                                                                                                                                                                                                                                                      |
 
 Related references:
 
