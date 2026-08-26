@@ -10,8 +10,12 @@ const faviconPlugin = () => ({
     handler(html: string, ctx: { server?: { config?: { mode?: string } } }) {
       const mode =
         ctx.server?.config?.mode ?? process.env.NODE_ENV ?? "production";
-      const href = mode === "development" ? "/favicon-dev.svg" : "/favicon.svg";
-      return html.replace("%FAVICON_HREF%", href);
+      const isDevelopment = mode === "development";
+      const href = isDevelopment ? "/favicon-dev.svg" : "/c%20of%20cogito.png";
+      const type = isDevelopment ? "image/svg+xml" : "image/png";
+      return html
+        .replace("%FAVICON_TYPE%", type)
+        .replace("%FAVICON_HREF%", href);
     },
   },
 });
