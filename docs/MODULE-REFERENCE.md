@@ -315,7 +315,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
 - `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason?)` — Shared service used by the student-proposer and tutor RPC routes; proposes a fixed 90-minute replacement for one session
-- `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state.
+- `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state. **N3 (room resync):** when a rejected (or expired — see `expireBookings`) proposal returns an offline booking to its original schedule, any CONFIRMED roomBooking row pre-assigned at the proposal time (F22 `RESCHEDULE_PROPOSED` carve-out) is resynced to the original schedule via `roomPort.resyncRoomBookingToSchedule`, so the room never stays blocked for the wrong window
 - `addSessionNote(userId, bookingId, content)` — Adds a server-sanitized HTML note to a completed session; the web editor emits only the supported paragraph/heading/emphasis/list/link markup
 - `getSessionNotes(userId, bookingId)` — Lists every party's notes for a completed session; the web client applies a DOMPurify allow-list before rendering
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled. **F8:** the attendance row is inserted with `role='tutor'` and `confirmationState=confirmed`; `findConfirmedParticipants` excludes `role='tutor'` so the tutor row never inflates group repricing headcounts, hold recomputation, or no-show forfeit math
@@ -596,7 +596,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `room.types.ts` — Zod schemas for list/pending-approval/create/assign/check-availability/relocate/cancel inputs
 - `room.errors.ts` — `RoomNotFoundError`, `RoomBookingConflictError`
 - `room.repo.ts` — room queries, pending approval lookup, room-booking insert/update/find
-- `room.service.ts` — `listActive`, `listPendingApprovals`, `createRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`
+- `room.service.ts` — `listActive`, `listPendingApprovals`, `createRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`, `resyncRoomBookingToSchedule`
 - `room.handler.ts` — `list`, `listPendingApprovals`, `create`, `assign`, `checkAvailability`, `relocate`, `cancelBooking`
 - `room.router.ts` — `list`/`checkAvailability` protected; `listPendingApprovals`/`create`/`assign`/`relocate`/`cancelBooking` admin-only
 
@@ -609,6 +609,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
 - `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise) and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
 - `cancelRoomBooking(bookingId, actorId?)` — Cancels the booking's room assignment; while awaiting approval it also delegates the booking cancellation/hold release/audit through `RoomBookingPort`, including the no-requested-room conflict case; notifies tutor + confirmed students (#46)
+- `resyncRoomBookingToSchedule(conn, bookingId, { startAt, endAt })` — **N3:** moves a booking's confirmed roomBooking row back to a schedule (no-op when the times already match or no confirmed row exists). Called by the booking module when a reschedule proposal is rejected or expires — the F22/H3 `RESCHEDULE_PROPOSED` carve-out lets an admin pre-assign a room at the proposal time, and without this resync the confirmed row would keep the (now cancelled) proposal window while the session runs at the original time
 
 **Dependencies:** `RoomRepo`, `RoomNotificationPort`, `RoomBookingPort` (transition to scheduled)
 

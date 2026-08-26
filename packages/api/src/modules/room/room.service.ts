@@ -350,6 +350,35 @@ export function createRoomService(
     );
   }
 
+  /**
+   * N3: resyncs a booking's confirmed roomBooking row back to a given
+   * schedule. The RESCHEDULE_PROPOSED carve-out lets an admin pre-assign a
+   * room at the proposal time before the proposal settles; when the proposal
+   * is later REJECTED or EXPIRES the booking keeps its original schedule, so
+   * the confirmed row must be moved back — otherwise the room stays blocked
+   * for the wrong window while the session happens at the original time.
+   * No-op when the booking has no confirmed room row (online bookings,
+   * not-yet-assigned offline bookings).
+   */
+  async function resyncRoomBookingToSchedule(
+    conn: DbOrTx,
+    bookingId: string,
+    schedule: { startAt: Date; endAt: Date },
+  ): Promise<void> {
+    const current = await repo.findActiveRoomBookingByBookingId(
+      conn,
+      bookingId,
+    );
+    if (!current) return;
+    if (
+      current.startAt.getTime() === schedule.startAt.getTime() &&
+      current.endAt.getTime() === schedule.endAt.getTime()
+    ) {
+      return;
+    }
+    await repo.updateRoomBookingTimes(conn, current.id, schedule);
+  }
+
   return {
     listActive,
     listPendingApprovals,
@@ -360,5 +389,6 @@ export function createRoomService(
     relocateRoom,
     cancelRoomBooking,
     cancelRequestedRoomForBooking,
+    resyncRoomBookingToSchedule,
   };
 }

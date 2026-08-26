@@ -337,6 +337,7 @@ function makeRoomPort(overrides: Record<string, unknown> = {}) {
       roomBookingId: "rb1",
     })),
     cancelRequestedRoomForBooking: mock(async () => {}),
+    resyncRoomBookingToSchedule: mock(async () => {}),
     ...overrides,
   };
 }
@@ -5182,6 +5183,53 @@ describe("BookingService", () => {
         expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
         expect(meeting.cancelEvent).not.toHaveBeenCalled();
       });
+
+      test("N3: proposal expiry resyncs a pre-assigned confirmed room back to the original schedule", async () => {
+        // N3: same drift as rejection — an admin pre-assigned a room at the
+        // proposal time; when the proposal EXPIRES the booking keeps its
+        // original schedule, so the confirmed roomBooking row must be
+        // resynced to it.
+        const originalStart = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        const originalEnd = new Date(originalStart.getTime() + 90 * 60 * 1000);
+        const expiringBooking = makeBooking({
+          currentState: "reschedule_proposed",
+          modality: "offline",
+          previousState: "scheduled",
+          scheduledStartAt: originalStart,
+          scheduledEndAt: originalEnd,
+          holdAmount: 42,
+          proposerId: "student1",
+        });
+        const proposal = { id: "r1", bookingId: "b1", status: "pending" };
+
+        const { service, roomPort } = createService({
+          repo: {
+            findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
+            findBookingById: mock(async () => ({
+              ...expiringBooking,
+              currentState: "reschedule_proposed",
+              version: 1,
+            })),
+            findPendingRescheduleProposal: mock(async () => proposal),
+            updateBookingVersioned: mock(async () => ({
+              updated: { ...expiringBooking, currentState: "scheduled" },
+              newVersion: 2,
+            })),
+          },
+        });
+
+        const result = await service.expireBookings();
+
+        expect(result).toEqual({ expired: 1, failed: 0 });
+        expect(roomPort.resyncRoomBookingToSchedule).toHaveBeenCalledWith(
+          expect.anything(),
+          "b1",
+          expect.objectContaining({
+            startAt: originalStart,
+            endAt: originalEnd,
+          }),
+        );
+      });
     });
 
     describe("SCHEDULED expiry → NO_SHOW", () => {
@@ -6133,6 +6181,53 @@ describe("BookingService", () => {
       expect(transitionCall).toMatchObject({
         currentState: "awaiting_admin_room_approval",
       });
+    });
+
+    test("N3: rejectReschedule resyncs a pre-assigned confirmed room back to the original schedule", async () => {
+      // N3: the RESCHEDULE_PROPOSED carve-out lets an admin assign a room at
+      // the proposal time before the proposal settles. When the proposal is
+      // REJECTED the booking returns to its original schedule, so the
+      // confirmed roomBooking row must be resynced to that original schedule
+      // — otherwise the room stays blocked for the wrong window.
+      const originalStart = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      const originalEnd = new Date(originalStart.getTime() + 90 * 60 * 1000);
+      const booking = makeRescheduleBooking({
+        modality: "offline",
+        previousState: "awaiting_admin_room_approval",
+        scheduledStartAt: originalStart,
+        scheduledEndAt: originalEnd,
+      });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, roomPort } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      await service.rejectReschedule("student1", "b1");
+
+      expect(roomPort.resyncRoomBookingToSchedule).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        expect.objectContaining({
+          startAt: originalStart,
+          endAt: originalEnd,
+        }),
+      );
     });
   });
 

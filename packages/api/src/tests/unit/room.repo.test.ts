@@ -160,6 +160,36 @@ describe("findRequestedRoomBookingByBookingId", () => {
   });
 });
 
+describe("updateRoomBookingTimes", () => {
+  test("moves a room booking row to the given schedule (N3)", async () => {
+    const startAt = new Date("2024-01-02T10:00:00Z");
+    const endAt = new Date("2024-01-02T11:30:00Z");
+    const updated = {
+      id: "rb1",
+      roomId: "room1",
+      bookingId: "b1",
+      startAt,
+      endAt,
+      status: "confirmed",
+    };
+    const returning = mock(async () => [updated]);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const conn = { update, set, where, returning } as any;
+
+    const { updateRoomBookingTimes } =
+      await import("../../modules/room/room.repo");
+    const result = await updateRoomBookingTimes(conn, "rb1", {
+      startAt,
+      endAt,
+    });
+
+    expect(result).toEqual(updated);
+    expect(where).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("findBookingStateById", () => {
   test("returns the booking's current state", async () => {
     const limit = mock(async () => [{ currentState: "scheduled" }]);

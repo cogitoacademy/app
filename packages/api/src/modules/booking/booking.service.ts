@@ -2169,6 +2169,17 @@ export function createBookingService(deps: {
         reason: "A required party rejected the reschedule proposal",
       });
 
+      // N3: the RESCHEDULE_PROPOSED carve-out lets an admin pre-assign a
+      // room at the proposal time. On rejection the booking keeps its
+      // original schedule — resync the confirmed roomBooking row so the room
+      // is not left blocked for the (now cancelled) proposal window.
+      if (roomPort && b.modality === MODALITY.OFFLINE) {
+        await roomPort.resyncRoomBookingToSchedule(tx, bookingId, {
+          startAt: b.scheduledStartAt,
+          endAt: b.scheduledEndAt,
+        });
+      }
+
       for (const recipientId of Object.keys(currentDecisions).filter(
         (id) => id !== userId,
       )) {
@@ -3769,6 +3780,15 @@ export function createBookingService(deps: {
                 ? new Date(Date.now() + RESPONSE_WINDOW_MS)
                 : new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
             );
+            // N3: same room-resync as rejection — the proposal expired, the
+            // booking keeps its original schedule, so a pre-assigned
+            // confirmed roomBooking row must move back to it.
+            if (roomPort && b.modality === MODALITY.OFFLINE) {
+              await roomPort.resyncRoomBookingToSchedule(tx, b.id, {
+                startAt: b.scheduledStartAt,
+                endAt: b.scheduledEndAt,
+              });
+            }
             return;
           }
           // FR-16/TC-18: when a group deadline passes with a partial headcount

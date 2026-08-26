@@ -37,6 +37,9 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
         status,
       }),
     ),
+    updateRoomBookingTimes: mock(async (_conn: any, _id: string) => ({
+      id: "rb1",
+    })),
     ...overrides,
   } as RoomRepo;
 }
@@ -499,6 +502,69 @@ describe("createRoomService", () => {
       await service.cancelRequestedRoomForBooking({}, "b1");
 
       expect(repo.updateRoomBookingStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("resyncRoomBookingToSchedule (N3)", () => {
+    test("moves the confirmed room row back to the given schedule when it drifted", async () => {
+      const originalStart = new Date("2024-01-02T10:00:00Z");
+      const originalEnd = new Date("2024-01-02T11:30:00Z");
+      const repo = makeRepo({
+        findActiveRoomBookingByBookingId: mock(async () => ({
+          id: "rb1",
+          roomId: "room1",
+          bookingId: "b1",
+          startAt: new Date("2024-01-03T10:00:00Z"),
+          endAt: new Date("2024-01-03T11:30:00Z"),
+          status: "confirmed",
+        })),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await service.resyncRoomBookingToSchedule({}, "b1", {
+        startAt: originalStart,
+        endAt: originalEnd,
+      });
+
+      expect(repo.updateRoomBookingTimes).toHaveBeenCalledWith(
+        expect.anything(),
+        "rb1",
+        { startAt: originalStart, endAt: originalEnd },
+      );
+    });
+
+    test("is a no-op when the confirmed row already matches the schedule", async () => {
+      const startAt = new Date("2024-01-02T10:00:00Z");
+      const endAt = new Date("2024-01-02T11:30:00Z");
+      const repo = makeRepo({
+        findActiveRoomBookingByBookingId: mock(async () => ({
+          id: "rb1",
+          roomId: "room1",
+          bookingId: "b1",
+          startAt,
+          endAt,
+          status: "confirmed",
+        })),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await service.resyncRoomBookingToSchedule({}, "b1", { startAt, endAt });
+
+      expect(repo.updateRoomBookingTimes).not.toHaveBeenCalled();
+    });
+
+    test("is a no-op when the booking has no confirmed room row", async () => {
+      const repo = makeRepo({
+        findActiveRoomBookingByBookingId: mock(async () => null),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await service.resyncRoomBookingToSchedule({}, "b1", {
+        startAt: new Date("2024-01-02T10:00:00Z"),
+        endAt: new Date("2024-01-02T11:30:00Z"),
+      });
+
+      expect(repo.updateRoomBookingTimes).not.toHaveBeenCalled();
     });
   });
 });
