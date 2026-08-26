@@ -45,18 +45,7 @@ export async function createContext(
     deps.getSession ?? ((headers) => auth.api.getSession({ headers }));
   const session = await getSession(context.request.headers);
   if (session?.user) {
-<<<<<<< HEAD
-    const currentUser = await db.query.user.findFirst({
-      columns: { role: true, emailVerified: true },
-      where: eq(user.id, session.user.id),
-    });
-    if (currentUser) {
-      session.user.role = currentUser.role;
-      session.user.emailVerified = currentUser.emailVerified;
-    }
-=======
     await refreshSessionUser(deps.conn ?? db, session.user);
->>>>>>> a84ac29 (fix(auth): refresh emailVerified per request)
   }
   return {
     session,
