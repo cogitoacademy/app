@@ -492,6 +492,18 @@ The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet f
 
 > **P3 status (2026-08-17):** the Xendit provider was rewritten for `api-version: 2024-11-11` — `request_amount`/`channel_code`/`channel_properties`, top-level response with `actions[].value` (REDIRECT_CUSTOMER → PRESENT_TO_CUSTOMER), statuses SUCCEEDED/REQUIRES_ACTION/AUTHORIZED/CANCELED, webhook idempotency keys from `data.payment_id`/`payment_request_id` (fixes the `xendit:no-event-id` collision), and a provider `refund()` port (migration 0025 adds `payment_record.provider_request_id`). Timestamp validation is provider-conditional (skipped for xendit — L4). `XENDIT_SUCCESS/FAILURE_REDIRECT_URL` are required by the env schema when `PAYMENT_PROVIDER=xendit` (P3.7). **N1 (2026-08-19):** the provider `refund()` port is **no longer wired into `adminRefund`** — admin refunds are in-app Marks credits only (`refund_record.amount_idr = 0`, `provider_event_id` NULL); no Xendit cash refund is ever issued from `adminRefund` (PRD §677: Marks not convertible to rupiah).
 
+### Xendit go-live checklist (production switch)
+
+The switch from `PAYMENT_PROVIDER=stub` to `PAYMENT_PROVIDER=xendit` is mechanical but must be verified with a real small transaction before launch:
+
+1. **Pre-flight:** run the sandbox checklist above against the sandbox keys. Confirm `XENDIT_DEFAULT_PAYMENT_METHOD` matches the launch channel (default `ewallet_ovo`).
+2. **Webhook wiring:** set the Xendit dashboard webhook URL to `https://api.cogitoacademy.id/webhooks/payments/xendit` and confirm the dashboard sends the `api-version: 2024-11-11` payload shape (`data.payment_id` / `data.payment_request_id`). The webhook idempotency key derives from the verified payload id — no `x-callback-token` guessing.
+3. **Env:** swap sandbox keys for live keys in the SOPS-encrypted prod env; keep `XENDIT_SUCCESS_REDIRECT_URL`/`XENDIT_FAILURE_REDIRECT_URL` (required by the env schema). Set `WEBHOOK_ALLOWED_IPS` to Xendit's live egress IPs (from the Xendit dashboard/docs). The env schema fails boot if `PAYMENT_PROVIDER=xendit` without the credential set, so a half-swapped config cannot silently run the stub.
+4. **Live smoke:** run one real small purchase (Pioneer 400 / Rp 2,000,000 or the smallest approved package) end-to-end: create purchase → Xendit checkout → webhook → wallet credit once. Verify the redirect return works and the balance page reflects the credit.
+5. **Negative tests:** deliver a webhook with a wrong token (rejected), from a non-allowlisted IP (rejected), and a duplicate delivery (idempotent — single credit).
+6. **Refund path:** confirm an `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL — no Xendit cash refund is ever issued (PRD §677).
+7. **Rollback:** keep the stub keys in the SOPS vault under a separate entry; switching back is a two-line env change + redeploy. Document the switch timestamp and the transaction reference in the ops log.
+
 ### Xendit sandbox verification checklist (L4)
 
 Steps to validate the Xendit integration against the sandbox before enabling `PAYMENT_PROVIDER=xendit` in production:

@@ -376,7 +376,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `achievement.listApproved`
 
-- **RPC path:** `/rpc/achievements/listApproved`
+- **RPC path:** `/rpc/achievement/listApproved`
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ items: Achievement[] }` — approved + visible achievements with the owner's `displayName` attached (public procedure retained for a future/public academy surface)
@@ -644,7 +644,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.listBookings`
 
-- **RPC path:** `/rpc/tutor/booking/list`
+- **RPC path:** `/rpc/tutorActions/listBookings`
 - **Auth:** Tutor
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
@@ -652,7 +652,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.proposeReschedule`
 
-- **RPC path:** `/rpc/tutor/booking/reschedule/propose`
+- **RPC path:** `/rpc/tutorActions/proposeReschedule`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
 - **Output:** `{ booking }`
@@ -660,7 +660,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.acceptBooking`
 
-- **RPC path:** `/rpc/tutor/booking/accept`
+- **RPC path:** `/rpc/tutorActions/acceptBooking`
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
@@ -669,7 +669,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.declineBooking`
 
-- **RPC path:** `/rpc/tutor/booking/decline`
+- **RPC path:** `/rpc/tutorActions/declineBooking`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ booking }`
@@ -677,7 +677,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.completeSession`
 
-- **RPC path:** `/rpc/tutor/booking/complete`
+- **RPC path:** `/rpc/tutorActions/completeSession`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ booking }`
@@ -686,7 +686,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.markAttendance`
 
-- **RPC path:** `/rpc/tutor/booking/mark-attendance`
+- **RPC path:** `/rpc/tutorActions/markAttendance`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, attendance }` (`attendance` one of `present`/`late`)
 - **Output:** `{ bookingId, attendanceState }`
@@ -694,7 +694,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.markParticipantNoShow`
 
-- **RPC path:** `/rpc/tutor/booking/mark-participant-no-show`
+- **RPC path:** `/rpc/tutorActions/markParticipantNoShow`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, participantUserId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ bookingId, participantUserId, sessionId, forfeitedMarks }`
@@ -831,7 +831,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `adminBooking.setMeetingLink`
 
-- **RPC path:** `/rpc/admin/booking/setMeetingLink`
+- **RPC path:** `/rpc/adminBooking/setMeetingLink`
 - **Auth:** Admin
 - **Input:** `{ bookingId, url }` (`url` must be a valid URL, max 2048 chars)
 - **Output:** `{ bookingId, meetingUrl, status }`
@@ -840,7 +840,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `adminBooking.cancelSeriesSession`
 
-- **RPC path:** `/rpc/admin/booking/cancel-series-session`
+- **RPC path:** `/rpc/adminBooking/cancelSeriesSession`
 - **Auth:** Admin
 - **Input:** `{ sessionId, marksAction, amount? }` (`marksAction` one of `release`/`forfeit`/`partial`; `amount` required when `partial`, max 1000)
 - **Output:** `{ sessionId, currentState: "cancelled", marksAction, affectedParticipants }`
