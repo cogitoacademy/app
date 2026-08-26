@@ -51,7 +51,11 @@ describe("server env schema", () => {
   });
 
   test("P4.1: NODE_ENV=production requires RESEND_API_KEY and a non-default EMAIL_FROM", () => {
-    const prod = { ...validEnv, NODE_ENV: "production" };
+    const prod = {
+      ...validEnv,
+      NODE_ENV: "production",
+      SCHEDULER_ENABLED: true,
+    };
     const missingKey = serverEnvSchema.safeParse(prod);
     expect(missingKey.success).toBe(false);
     const paths = (missingKey.error?.issues ?? []).map((i) => i.path.join("."));
@@ -80,7 +84,11 @@ describe("server env schema", () => {
 
   test("NODE_ENV=staging is accepted and behaves like production (P4.1/P4.3)", () => {
     // Staging without the Resend key is rejected (fail-loud, like production).
-    const staging = { ...validEnv, NODE_ENV: "staging" };
+    const staging = {
+      ...validEnv,
+      NODE_ENV: "staging",
+      SCHEDULER_ENABLED: true,
+    };
     const missingKey = serverEnvSchema.safeParse(staging);
     expect(missingKey.success).toBe(false);
     const paths = (missingKey.error?.issues ?? []).map((i) => i.path.join("."));
@@ -159,6 +167,7 @@ describe("server env schema", () => {
     const prod = {
       ...validEnv,
       NODE_ENV: "production",
+      SCHEDULER_ENABLED: true,
       RESEND_API_KEY: "re",
       EMAIL_FROM: "no-reply@cogitoacademy.id",
     };
@@ -175,6 +184,7 @@ describe("server env schema", () => {
     const prod = {
       ...validEnv,
       NODE_ENV: "production",
+      SCHEDULER_ENABLED: true,
       RESEND_API_KEY: "re",
       EMAIL_FROM: "no-reply@cogitoacademy.id",
     };
@@ -194,6 +204,7 @@ describe("server env schema", () => {
     const prod = {
       ...validEnv,
       NODE_ENV: "production",
+      SCHEDULER_ENABLED: true,
       RESEND_API_KEY: "re",
       EMAIL_FROM: "no-reply@cogitoacademy.id",
     };
@@ -220,5 +231,78 @@ describe("server env schema", () => {
     if (parsed.success) {
       expect(parsed.data.GOOGLE_MEET_ENABLED).toBe(false);
     }
+  });
+
+  test("D2: xendit in production requires WEBHOOK_ALLOWED_IPS (empty allowlist = all IPs allowed)", () => {
+    const prodXendit = {
+      ...validEnv,
+      NODE_ENV: "production",
+      RESEND_API_KEY: "re",
+      EMAIL_FROM: "no-reply@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+    };
+
+    // No WEBHOOK_ALLOWED_IPS → rejected.
+    const missing = serverEnvSchema.safeParse(prodXendit);
+    expect(missing.success).toBe(false);
+    const paths = (missing.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("WEBHOOK_ALLOWED_IPS");
+
+    // With the allowlist set → ok.
+    expect(() =>
+      serverEnvSchema.parse({
+        ...prodXendit,
+        WEBHOOK_ALLOWED_IPS: "103.10.65.0/24, 114.4.17.0/24",
+      }),
+    ).not.toThrow();
+  });
+
+  test("D2: xendit in development does not require WEBHOOK_ALLOWED_IPS", () => {
+    const devXendit = {
+      ...validEnv,
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+    };
+    expect(() => serverEnvSchema.parse(devXendit)).not.toThrow();
+  });
+
+  test("D3: production requires SCHEDULER_ENABLED=true (silently skipping all jobs is a prod outage)", () => {
+    const prod = {
+      ...validEnv,
+      NODE_ENV: "production",
+      RESEND_API_KEY: "re",
+      EMAIL_FROM: "no-reply@cogitoacademy.id",
+      PAYMENT_PROVIDER: "stub",
+    };
+    const disabled = serverEnvSchema.safeParse(prod);
+    expect(disabled.success).toBe(false);
+    const paths = (disabled.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("SCHEDULER_ENABLED");
+
+    expect(() =>
+      serverEnvSchema.parse({ ...prod, SCHEDULER_ENABLED: true }),
+    ).not.toThrow();
+  });
+
+  test("D3: staging behaves like production for SCHEDULER_ENABLED", () => {
+    const staging = {
+      ...validEnv,
+      NODE_ENV: "staging",
+      RESEND_API_KEY: "re_staging_key",
+      EMAIL_FROM: "no-reply@staging.cogitoacademy.id",
+      PAYMENT_PROVIDER: "stub",
+    };
+    expect(staging && serverEnvSchema.safeParse(staging).success).toBe(false);
+    expect(() =>
+      serverEnvSchema.parse({ ...staging, SCHEDULER_ENABLED: true }),
+    ).not.toThrow();
   });
 });
