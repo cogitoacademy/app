@@ -86,14 +86,6 @@ export async function signUpAndSignInUnverified(
     headers: new Headers(),
   });
 
-  // Existing integration tests exercise downstream booking/payment behavior,
-  // not the email delivery flow. Keep those fixtures verified explicitly;
-  // the dedicated email-verification tests cover the unverified state.
-  await db
-    .update(user)
-    .set({ emailVerified: true })
-    .where(eq(user.email, email));
-
   const response = await auth.api.signInEmail({
     body: { email, password },
     headers: new Headers(),

@@ -154,10 +154,13 @@ jobs:
       - name: "Server unit tests (separate process: webhook test uses mock.module)"
         run: bun test --timeout 30000 apps/server/src/
       - name: Test with coverage
+        id: coverage
         run: bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
         continue-on-error: true
       - name: Post coverage comment + enforce gate
-        if: always()
+        # Keep a failed test suite as the primary failure. The coverage command
+        # itself still runs the gate below when it was actually attempted.
+        if: ${{ always() && steps.coverage.outcome != 'skipped' }}
         run: bun .github/scripts/coverage-comment.ts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
