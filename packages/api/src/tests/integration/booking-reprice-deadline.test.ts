@@ -28,7 +28,19 @@ import { BOOKING_STATE } from "../../modules/booking/booking-state.types";
 
 const repo = createBookingRepo(db);
 
-async function createPublishedTutor(email: string, ts: number) {
+async function createPublishedTutor(
+  email: string,
+  ts: number,
+  prices: Record<string, number> = {
+    "1": 50,
+    "2": 45,
+    "3": 40,
+    "4": 35,
+    "5": 30,
+    "6": 28,
+  },
+  tokenSuffix = ts,
+) {
   const tutor = await createTestUser(email, "tutor");
 
   const [invite] = await db
@@ -36,7 +48,7 @@ async function createPublishedTutor(email: string, ts: number) {
     .values({
       email,
       displayName: "Prof Deadline",
-      token: `token-deadline-${ts}`,
+      token: `token-deadline-${tokenSuffix}`,
       status: "accepted",
       invitedBy: tutor.id,
       expiresAt: new Date(Date.now() + 86400000),
@@ -53,7 +65,7 @@ async function createPublishedTutor(email: string, ts: number) {
     credentialsSummary: "Creds",
     expertise: ["Mathematics"],
     modality: "both",
-    prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
+    prices,
     availabilitySummary: "Flexible",
     onboardingStatus: "published",
     publishedAt: new Date(),
@@ -442,6 +454,78 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       .where(eq(booking.id, seeded.id));
     expect(finalRow!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
     expect(finalRow!.holdAmount).toBe(90);
+  });
+
+  test("N1: flat legacy price map (equal per-student at sizes 2 and 3) does not loop the F3 reissue", async () => {
+    // Flat legacy price map: per-student is 40 at every group size. When the
+    // headcount drops 3 → 2, repriceGroupForHeadcount early-returns because
+    // the per-student price is unchanged — without the holdAmount sync the
+    // F3 branch would re-fire on every reconfirm accept, looping the booking
+    // forever without ever reaching AWAITING_TUTOR_REVIEW.
+    const flatTutor = await createPublishedTutor(
+      `tutor.n1.${ts}@cogito.test`,
+      ts,
+      { "1": 50, "2": 40, "3": 40, "4": 40, "5": 40, "6": 40 },
+      `${ts}-n1`,
+    );
+
+    const a = await createTestUser(`student.n1.a.${ts}@cogito.test`);
+    await createTestWallet(a.id, 300);
+    const b2 = await createTestUser(`student.n1.b.${ts}@cogito.test`);
+    await createTestWallet(b2.id, 300);
+    const c = await createTestUser(`student.n1.c.${ts}@cogito.test`);
+    await createTestWallet(c.id, 300);
+
+    // 3-of-3 group at the size-3 rate (40/student) sitting in its
+    // reconfirmation window.
+    const seeded = await seedPartialGroup({
+      tutorId: flatTutor.tutorId,
+      confirmedUserIds: [a.id, b2.id, c.id],
+      targetGroupSize: 3,
+      perStudent: 40,
+      state: BOOKING_STATE.AWAITING_RECONFIRMATION,
+    });
+
+    // Push the session beyond the H-2 cutoff so the mid-cycle withdrawal is
+    // pre-H2 (regression to reconfirmation, not late-cancel).
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() + 6 * 3600_000),
+        scheduledEndAt: new Date(Date.now() + 7 * 3600_000),
+      })
+      .where(eq(booking.id, seeded.id));
+
+    // One participant withdraws mid-cycle: headcount 3 → 2. The flat map
+    // keeps the per-student price at 40, so the reprice early-returns — the
+    // pre-fix bug left holdAmount at the stale 3 × 40 = 120.
+    await services.booking.withdraw(c.id, seeded.id, "schedule conflict");
+
+    // Every subsequent accept must converge: the first re-issues (F3), the
+    // reprice syncs holdAmount to the actual participant-held total (80),
+    // and the final round of accepts finalizes the booking.
+    await services.booking.reconfirm(a.id, seeded.id, true);
+    await services.booking.reconfirm(b2.id, seeded.id, true);
+    const result = await services.booking.reconfirm(a.id, seeded.id, true);
+    expect(result.reconfirmed).toBe(true);
+
+    const [row] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, seeded.id));
+    expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
+    expect(row!.holdAmount).toBe(80);
+
+    const participants = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, seeded.id));
+    const survivors = participants.filter((p) => [a.id, b2.id].includes(p.userId));
+    expect(survivors.length).toBe(2);
+    for (const p of survivors) {
+      expect(p.confirmationState).toBe("reconfirmed");
+      expect(p.heldAmount).toBe(40);
+    }
   });
 
   test("F8: the tutor attendance row does not inflate the repricing headcount", async () => {

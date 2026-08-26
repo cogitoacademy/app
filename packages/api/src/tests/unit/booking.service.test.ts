@@ -2915,6 +2915,114 @@ describe("BookingService", () => {
       expect(diff).toBeLessThanOrEqual(RESPONSE_WINDOW_MS + 1000);
     });
 
+    test("N1: equal per-student price at the old and new headcounts does not loop the F3 reissue forever", async () => {
+      // Legacy flat price map: the per-student price is the same at sizes 2
+      // and 3, so repriceGroupForHeadcount early-returns without updating
+      // holdAmount — the F3 derivation (holdAmount/perStudent) then reports a
+      // stale size-3 headcount for a booking that now has 2 confirmed
+      // participants, re-firing the reissue branch on every accept.
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 3,
+        // Stale: priced at the size-3 total (3 × 42) after one participant
+        // left mid-cycle.
+        holdAmount: 126,
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 126,
+          tutorShare: 100.8,
+          cogitoTake: 25.2,
+        },
+      });
+      const p2 = makeParticipant({
+        id: "p2",
+        userId: "student2",
+        heldAmount: 42,
+      });
+      const p3 = makeParticipant({
+        id: "p3",
+        userId: "student3",
+        heldAmount: 42,
+      });
+      const participants = [p2, p3];
+      // Stateful booking row so the mock reflects holdAmount syncs the way
+      // the real DB row would after updateBookingHoldAmount.
+      const liveBooking = { ...booking, holdAmount: 126 };
+
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...liveBooking, version: 1 })),
+          findParticipant: mock(
+            async (_conn: unknown, _bookingId: string, userId: string) =>
+              userId === "student2" ? p2 : p3,
+          ),
+          updateParticipantState: mock(
+            async (_tx: unknown, _id: string, updates: any) => {
+              if (updates.confirmationState) {
+                const target = participants.find((p) => p.id === _id);
+                if (target) {
+                  target.confirmationState = updates.confirmationState;
+                }
+              }
+            },
+          ),
+          updateBookingHoldAmount: mock(
+            async (_tx: unknown, _id: string, amount: number) => {
+              liveBooking.holdAmount = amount;
+            },
+          ),
+          findReconfirmedParticipants: mock(async () =>
+            participants.filter(
+              (p) => p.confirmationState === "reconfirmed",
+            ),
+          ),
+          findConfirmedParticipants: mock(async () => participants),
+          resetReconfirmedParticipants: mock(async () => {
+            for (const p of participants) {
+              p.confirmationState = "confirmed";
+            }
+          }),
+          findTutorProfile: mock(async () =>
+            // FLAT legacy price map: sizes 2 and 3 price identically.
+            makeTutorProfile({ prices: { "2": 42, "3": 42 } }),
+          ),
+          updateBookingVersioned: mock(
+            async (_tx: unknown, _id: string, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        pricing: { computeSplit: mock(realComputeSplit) },
+      });
+
+      // First accept: headcount dropped 3 → 2 while holdAmount still says 3,
+      // so the F3 branch re-issues reconfirmation (and must sync holdAmount
+      // to the actual participant-held total even though the price is equal).
+      await service.reconfirm("student2", "b1", true);
+      expect(repo.resetReconfirmedParticipants).toHaveBeenCalledTimes(1);
+
+      // After the sync, further accepts must converge: each remaining
+      // participant reconfirms against the size-2 snapshot and the booking
+      // finalizes to AWAITING_TUTOR_REVIEW instead of looping.
+      await service.reconfirm("student3", "b1", true);
+      await service.reconfirm("student2", "b1", true);
+
+      expect(repo.resetReconfirmedParticipants).toHaveBeenCalledTimes(1);
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        84,
+      );
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "awaiting_tutor_review" }),
+      );
+    });
+
     test("M5: decline that drops the group below minimum does not refresh the deadline", async () => {
       const booking = makeBooking({
         type: "group",

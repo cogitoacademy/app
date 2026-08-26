@@ -351,6 +351,7 @@ export function createBookingService(deps: {
       id: string;
       type: string;
       tutorId: string;
+      holdAmount: number;
 
       modality: string;
       priceSnapshot: { perStudent: number } | null;
@@ -383,7 +384,24 @@ export function createBookingService(deps: {
     const newPerStudent = newSnapshot.perStudent;
     const oldPerStudent = b.priceSnapshot?.perStudent ?? newPerStudent;
 
-    if (newPerStudent === oldPerStudent) return;
+    if (newPerStudent === oldPerStudent) {
+      // N1: with flat legacy price maps (or rounding coincidences) the
+      // per-student price can be equal at the old and new headcounts. The
+      // early return must still sync holdAmount to the participant-held
+      // total — otherwise the reconfirm F3 derivation
+      // (participant-held total / perStudent) keeps comparing against a
+      // stale holdAmount and re-fires the reissue branch on every accept,
+      // looping the booking forever without ever reaching
+      // AWAITING_TUTOR_REVIEW.
+      const participantHeldTotal = remaining.reduce(
+        (sum, p) => sum + p.heldAmount,
+        0,
+      );
+      if (participantHeldTotal !== b.holdAmount) {
+        await repo.updateBookingHoldAmount(tx, b.id, participantHeldTotal);
+      }
+      return;
+    }
 
     for (const p of remaining) {
       if (p.heldAmount === newPerStudent) continue;
@@ -2599,6 +2617,14 @@ export function createBookingService(deps: {
         // reconfirmation request" — re-enter a fresh reconfirmation cycle with
         // a fresh 12h window instead of finalizing at a price computed for a
         // headcount that no longer exists.
+        // The headcount the current snapshot was priced for. Derived from
+        // b.holdAmount: participants' held amounts only reflect what they
+        // currently hold, so a price change between headcounts is only
+        // visible in the stale holdAmount. N1: when repriceGroupForHeadcount
+        // early-returns because the per-student price is unchanged (flat
+        // legacy price maps, rounding coincidences) it NOW syncs holdAmount
+        // to the participant-held total — without that sync the mismatch
+        // below would re-fire on every reconfirm accept forever.
         const perStudent = b.priceSnapshot?.perStudent;
         const snapshotHeadcount =
           b.type === BOOKING_TYPE.GROUP && perStudent && perStudent > 0
