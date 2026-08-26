@@ -86,6 +86,10 @@ export async function signUpAndSignInUnverified(
     headers: new Headers(),
   });
 
+  // Deliberately NO emailVerified update here — this helper exists for the
+  // email-verification gate tests, which must exercise genuinely unverified
+  // users. (A merged commit accidentally added the verified-marking inside
+  // this helper, silently disabling the gate tests on main.)
   const response = await auth.api.signInEmail({
     body: { email, password },
     headers: new Headers(),
