@@ -23,7 +23,6 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { IconMail, IconPhoto, IconUser } from "@tabler/icons-react";
 
 function getInitials(name: string) {
   return (
@@ -88,7 +87,7 @@ export function AccountIdentityCard({
       <CardBody className="grid gap-5 md:grid-cols-2">
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-name`}>
-            <IconUser aria-hidden="true" /> Account name
+            Account name
           </FieldLabel>
           <Input
             id={`${idPrefix}-name`}
@@ -101,7 +100,7 @@ export function AccountIdentityCard({
         </Field>
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-image`}>
-            <IconPhoto aria-hidden="true" /> Profile image URL
+            Profile image URL
           </FieldLabel>
           <Input
             id={`${idPrefix}-image`}
@@ -118,7 +117,7 @@ export function AccountIdentityCard({
         </Field>
         <Field className="md:col-span-2">
           <FieldLabel htmlFor={`${idPrefix}-email`}>
-            <IconMail aria-hidden="true" /> Sign-in email
+            Sign-in email
           </FieldLabel>
           <Input
             id={`${idPrefix}-email`}
@@ -127,6 +126,7 @@ export function AccountIdentityCard({
             autoComplete="email"
             value={email}
             readOnly
+            disabled
           />
           <FieldDescription>
             Your sign-in email cannot be changed from this page.
