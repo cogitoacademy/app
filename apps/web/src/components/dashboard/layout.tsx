@@ -19,11 +19,13 @@ export function Layout({
   sidebar,
   title = "Dashboard",
   sessionExpiresAt,
+  contentScrollMode = "page",
 }: {
   children: React.ReactNode;
   sidebar: React.ReactNode;
   title?: string;
   sessionExpiresAt?: Date | string | null;
+  contentScrollMode?: "page" | "contained";
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth >= 1280,
@@ -60,13 +62,13 @@ export function Layout({
       </div>
       <main
         className={cn(
-          "min-w-0 max-w-full overflow-x-hidden transition-all",
+          "flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden transition-all",
           sidebarOpen ? "xl:ml-72" : "xl:ml-0",
         )}
       >
         <nav
           className={cn(
-            "flex h-16 min-w-0 max-w-full items-center gap-2.5 overflow-x-hidden max-xl:px-4",
+            "flex h-16 min-w-0 max-w-full shrink-0 items-center gap-2.5 overflow-x-hidden max-xl:px-4",
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >
@@ -97,8 +99,11 @@ export function Layout({
         </nav>
         <div
           className={cn(
-            "flex min-h-[calc(100vh-4rem)] min-w-0 max-w-full flex-col gap-6 overflow-x-hidden pb-6 max-xl:px-4",
-            sidebarOpen ? "xl:pr-4" : "xl:px-4",
+            "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-6 overflow-x-hidden pb-6 pt-1 max-xl:px-4",
+            contentScrollMode === "contained"
+              ? "overflow-hidden"
+              : "overflow-y-auto",
+            "xl:px-4",
           )}
         >
           <SessionExpiryNotice expiresAt={sessionExpiresAt} />

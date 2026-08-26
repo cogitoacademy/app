@@ -52,7 +52,11 @@ export function CompetitionCalendarPage() {
 
   if (competitions.isPending) {
     return (
-      <Stack direction="column" spacing="lg">
+      <Stack
+        direction="column"
+        spacing="lg"
+        className="min-h-0 flex-1 flex-nowrap"
+      >
         <div>
           <Heading>Your Gateway to the World Stage</Heading>
           <Text className="mt-1 text-muted">
@@ -80,11 +84,17 @@ export function CompetitionCalendarPage() {
   }
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="min-h-0 flex-1 flex-nowrap"
+    >
       <div>
         <Heading>Your Gateway to the World Stage</Heading>
         <Text className="mt-1 max-w-3xl text-muted">
-          From national challenges to global arenas, access a curated list of opportunities tailored for your next big win. Keep track of upcoming competitions, registration deadlines, and event details in one place.
+          From national challenges to global arenas, access a curated list of
+          opportunities tailored for your next big win. Keep track of upcoming
+          competitions, registration deadlines, and event details in one place.
         </Text>
       </div>
       {events.length > 0 ? (

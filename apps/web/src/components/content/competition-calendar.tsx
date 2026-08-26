@@ -129,8 +129,14 @@ export function CompetitionCalendar({
 
   return (
     <>
-      <Card className={cn("overflow-hidden", className)} style={calendarStyle}>
-        <CardHeader className="flex-wrap gap-3 bg-[#F0BCD0] dark:bg-accent/40 p-3 sm:p-4">
+      <Card
+        className={cn(
+          "flex min-h-0 flex-1 flex-col overflow-hidden",
+          className,
+        )}
+        style={calendarStyle}
+      >
+        <CardHeader className="shrink-0 flex-wrap gap-3 bg-[#F0BCD0] p-3 dark:bg-accent/40 sm:p-4">
           <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <Button
               variant="secondary"
@@ -196,7 +202,7 @@ export function CompetitionCalendar({
           </div>
         </CardHeader>
 
-        <CardBody className="p-0!">
+        <CardBody className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-0!">
           {view === "month" ? (
             <CalendarMonthView
               currentDate={startOfMonth(currentDate)}

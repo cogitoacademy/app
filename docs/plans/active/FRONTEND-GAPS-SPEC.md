@@ -23,6 +23,10 @@ The onboarding selector stores normalized IDs for persistence and renders all cu
 
 The authenticated calendar now carries the full read-only interaction model from `cogito-acad`: a responsive month grid with multi-day spans and overflow popup, a 30-day agenda view with rich event cards, period navigation, `M`/`A` keyboard shortcuts, and a responsive details modal with metadata and external actions. The app intentionally keeps its own Selia components, design tokens, Tabler icon set, and English-only copy; Sanity remains the source of truth and the API contract is unchanged.
 
+### Competition Calendar scroll containment follow-up (2026-08-26)
+
+The calendar route now uses a viewport-contained app shell. The page heading and calendar toolbar remain stationary, the calendar card body owns vertical scrolling, and the month grid owns horizontal scrolling on narrow screens. This is presentation-only; the read-only `content.listCompetitions` contract and event interactions are unchanged.
+
 ### Theme shortcut follow-up (2026-08-26)
 
 The authenticated shell's existing Light/Dark/System menu now also responds to `D`. Outside editable fields, the shortcut toggles between the currently rendered light and dark modes, including when the saved preference is System; repeated keydown events and modifier-key combinations are ignored. `next-themes` continues to own preference persistence. This is frontend-only and adds no API, schema, or persistence contract.

@@ -69,6 +69,7 @@ function RouteComponent() {
 
   return (
     <Layout
+      contentScrollMode={pathname === "/calendar" ? "contained" : "page"}
       title={title}
       sidebar={
         <AppSidebar
