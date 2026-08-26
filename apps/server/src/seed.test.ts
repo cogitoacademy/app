@@ -49,12 +49,11 @@ describe("seed guards", () => {
     expect(blocked.status).not.toBe(0);
     expect(blocked.stderr).toContain("SEED_ALLOWED_IN_PROD");
 
-    const allowed = spawnSync("bun", ["src/seed-packages.ts"], {
-      cwd: new URL("..", import.meta.url).pathname,
-      env: { ...process.env, ...prodEnv, SEED_ALLOWED_IN_PROD: "true" },
-      encoding: "utf8",
-    });
-    expect(allowed.status).toBe(0);
+    // The allowed path must not depend on a live DB (CI has no Postgres at
+    // 6767) — assert the guard decision directly instead of spawning.
+    expect(seedAllowed("production", "true")).toBe(true);
+    expect(seedAllowed("production", undefined)).toBe(false);
+    expect(seedAllowed("development", undefined)).toBe(true);
   });
 });
 
