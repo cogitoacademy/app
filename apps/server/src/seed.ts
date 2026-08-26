@@ -18,6 +18,10 @@ import {
 } from "@cogito-app/api/shared/constants";
 import { DEFAULT_ECONOMY_CONFIG } from "@cogito-app/api/modules/economy/economy.types";
 import { hashInviteToken } from "@cogito-app/api/lib/tokens";
+import {
+  DEFAULT_PRODUCTION_ADMIN_EMAIL,
+  parseConfiguredAdminEmails,
+} from "@cogito-app/env/admin";
 
 const SEED_SUFFIX = "seed";
 const SEED_DISPLAY_TAG = "[seed]";
@@ -33,6 +37,18 @@ export function seedAllowed(
 export function seedAdminPassword(value: string | undefined): string | null {
   if (!value || value.length < 12) return null;
   return value;
+}
+
+export function resolveSeedAdminEmail(
+  nodeEnv: string,
+  configuredEmails?: string,
+): string {
+  if (!isProductionLike(nodeEnv)) return "admin@cogitoacademy.id";
+
+  return (
+    parseConfiguredAdminEmails(configuredEmails)[0] ??
+    DEFAULT_PRODUCTION_ADMIN_EMAIL
+  );
 }
 
 function demoPassword(envValue: string | undefined, fallback: string): string {
@@ -205,7 +221,7 @@ async function seed() {
   await resetTestEconomy();
   await seedPackages();
 
-  const adminEmail = "admin@cogitoacademy.id";
+  const adminEmail = resolveSeedAdminEmail(env.NODE_ENV, env.ADMIN_EMAILS);
 
   const admin = await ensureUser(adminEmail, adminPassword, "Admin User");
   await db

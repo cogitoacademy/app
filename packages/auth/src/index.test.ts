@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 
+import { db } from "@cogito-app/db";
+import { user as userRow } from "@cogito-app/db/schema";
+import { DEFAULT_PRODUCTION_ADMIN_EMAIL } from "@cogito-app/env/admin";
 import { env } from "@cogito-app/env/server";
 
 import {
@@ -34,6 +38,60 @@ afterEach(() => {
 });
 
 describe("auth email hooks", () => {
+  test("production signup promotes a configured operator account", async () => {
+    const originalNodeEnv = env.NODE_ENV;
+    const operatorId = crypto.randomUUID();
+    const operator = {
+      ...user,
+      id: operatorId,
+      email: DEFAULT_PRODUCTION_ADMIN_EMAIL,
+    };
+
+    await db.insert(userRow).values({
+      id: operatorId,
+      name: operator.name,
+      email: operator.email,
+      role: "student",
+    });
+
+    try {
+      (env as { NODE_ENV: string }).NODE_ENV = "production";
+      await sendWelcome(operator);
+
+      const [promoted] = await db
+        .select({ role: userRow.role })
+        .from(userRow)
+        .where(eq(userRow.id, operatorId));
+      expect(promoted?.role).toBe("admin");
+    } finally {
+      await db.delete(userRow).where(eq(userRow.id, operatorId));
+      (env as { NODE_ENV: string }).NODE_ENV = originalNodeEnv;
+    }
+  });
+
+  test("production signup swallows operator promotion failures", async () => {
+    const originalNodeEnv = env.NODE_ENV;
+    const originalUpdate = (db as any).update;
+
+    try {
+      (env as { NODE_ENV: string }).NODE_ENV = "production";
+      (db as any).update = () => {
+        throw new Error("db unavailable");
+      };
+
+      await expect(
+        sendWelcome({
+          ...user,
+          id: crypto.randomUUID(),
+          email: DEFAULT_PRODUCTION_ADMIN_EMAIL,
+        }),
+      ).resolves.toBeUndefined();
+    } finally {
+      (db as any).update = originalUpdate;
+      (env as { NODE_ENV: string }).NODE_ENV = originalNodeEnv;
+    }
+  });
+
   test("reset-password hook is a no-op when no sender is configured", async () => {
     await expect(
       resetPassword({ user, url: "https://app.test/reset", token: "token" }),
