@@ -7,15 +7,10 @@ type AuthErrorShape = {
 };
 
 function readError(error: unknown): AuthErrorShape {
-  return error && typeof error === "object"
-    ? (error as AuthErrorShape)
-    : {};
+  return error && typeof error === "object" ? (error as AuthErrorShape) : {};
 }
 
-export function getAuthErrorMessage(
-  error: unknown,
-  context: AuthErrorContext,
-) {
+export function getAuthErrorMessage(error: unknown, context: AuthErrorContext) {
   const candidate = readError(error);
   const code = typeof candidate.code === "string" ? candidate.code : "";
   const status =
