@@ -428,7 +428,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
 - Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
 - Offline bookings skip meeting creation entirely (go to `awaiting_admin_room_approval`)
-- The booking detail surface maps unavailable online-link states to a compact Selia info/warning popover; failed attempts expose the retry status and manual-provider rows expose the admin setup status without changing meeting data or RPC contracts
+- The booking detail surface maps online-link states to compact Selia `IconInfoSquareRounded` info/warning popovers; failed attempts expose the retry status and manual-provider rows expose the admin setup status, while an available URL exposes the meeting-room action inside the same popover instead of a `Ready` badge or standalone CTA. Missing offline-room details and tutor completion timing use the same hover/focus/click/touch disclosure pattern without changing meeting data or RPC contracts
 - The booking detail overview merges the date and session hours into one `Date & time` field and places Format & access beside it in a responsive two-column grid that stacks on narrow screens
 
 ---

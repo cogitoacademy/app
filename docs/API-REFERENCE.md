@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 ## Overview
 
@@ -508,7 +508,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or an admin fallback link, and `failed` when automatic Google Meet creation needs another retry.
 - **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places role-appropriate primary actions (including reschedule and completion when eligible) directly below the status badge, keeps contextual actions above Marks or in the main flow, and keeps the API contract unchanged.
 
-**UI behavior note:** The booking detail surface uses a compact accessible Selia info/warning icon popover for unavailable online-link explanations and retry/admin setup status. Its overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and does not change the `booking.get` response contract.
+**UI behavior note:** The booking detail surface uses compact accessible Selia `IconInfoSquareRounded` popover triggers for online-link explanations, retry/admin setup status, available meeting-room access, missing offline-room details, and tutor completion timing. Available links no longer render a `Ready` badge or standalone CTA; the popover contains the meeting-room action. The trigger supports hover, keyboard focus, click, and touch; the overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and does not change the `booking.get` response contract.
 
 ### `booking.listMine`
 
