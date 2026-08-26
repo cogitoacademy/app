@@ -63,6 +63,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findUserEmails: mock(async () => []),
     findUsersByIds: mock(async () => []),
     findReconfirmedParticipants: mock(async () => []),
+    resetReconfirmedParticipants: mock(async () => {}),
     insertRescheduleProposal: mock(async () => {}),
     findPendingRescheduleProposal: mock(async () => null),
     updateRescheduleProposal: mock(async () => {}),
@@ -168,6 +169,15 @@ function makeMeeting() {
     })),
     updateEvent: mock(async () => {}),
     cancelEvent: mock(async () => {}),
+    setManualLink: mock(async (_bookingId: string, url: string) => ({
+      id: "m1",
+      bookingId: "b1",
+      provider: "manual",
+      externalEventId: null,
+      meetingUrl: url,
+      status: "created",
+      errorReason: null,
+    })),
   };
 }
 
@@ -338,6 +348,7 @@ function makeRoomPort(overrides: Record<string, unknown> = {}) {
     })),
     cancelRequestedRoomForBooking: mock(async () => {}),
     resyncRoomBookingToSchedule: mock(async () => {}),
+    syncRoomBookingScheduleForBooking: mock(async () => "updated" as const),
     ...overrides,
   };
 }
@@ -1740,7 +1751,7 @@ describe("BookingService", () => {
     test("leaves booking in CONFIRMED when meeting creation fails for online booking", async () => {
       const booking = makeBooking({ modality: "online" });
       let findCallCount = 0;
-      const { service, meeting } = createService({
+      const { service, meeting, notification } = createService({
         repo: {
           findBookingById: mock(async () => {
             findCallCount++;
@@ -1772,6 +1783,12 @@ describe("BookingService", () => {
 
       expect(meeting.createEvent).toHaveBeenCalled();
       expect(findCallCount).toBeGreaterThanOrEqual(2);
+      expect(notification.write).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Booking accepted",
+          body: "Tutor accepted. The booking is confirmed, but meeting link setup still needs attention.",
+        }),
+      );
     });
 
     test("F6: meeting failure bumps the deadline to scheduledEndAt + 24h so the retry window is respected", async () => {
@@ -1933,6 +1950,98 @@ describe("BookingService", () => {
       await service.tutorDecline("b1", "tutor1", "schedule conflict");
 
       expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
+    });
+  });
+
+  describe("tutorSetMeetingLink", () => {
+    test("sets a manual link inside the booking transaction and notifies the student", async () => {
+      const booking = makeBooking({ currentState: "confirmed" });
+      const { service, meeting, notification, audit } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ userId: "student1" }),
+          ]),
+        },
+      });
+
+      const result = await service.tutorSetMeetingLink(
+        "b1",
+        "tutor1",
+        "https://meet.example.com/tutor-fallback",
+      );
+
+      expect(result).toMatchObject({
+        bookingId: "b1",
+        meetingUrl: "https://meet.example.com/tutor-fallback",
+        status: "created",
+      });
+      expect(meeting.setManualLink).toHaveBeenCalledWith(
+        "b1",
+        "https://meet.example.com/tutor-fallback",
+        expect.anything(),
+      );
+      expect(notification.writeBestEffort).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "student1",
+          bookingId: "b1",
+          title: "Meeting link ready",
+        }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: "tutor1",
+          actorType: "tutor",
+          action: "tutor_set_meeting_link",
+        }),
+      );
+    });
+
+    test("rejects a tutor who is not assigned to the booking", async () => {
+      const { service, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "scheduled", tutorId: "other-tutor" }),
+          ),
+        },
+      });
+
+      await expect(
+        service.tutorSetMeetingLink("b1", "tutor1", "https://example.com"),
+      ).rejects.toThrow(BookingNotOwnedError);
+      expect(meeting.setManualLink).not.toHaveBeenCalled();
+    });
+
+    test("rejects offline bookings and bookings outside confirmed/scheduled states", async () => {
+      const { service: offlineService } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "scheduled", modality: "offline" }),
+          ),
+        },
+      });
+      await expect(
+        offlineService.tutorSetMeetingLink(
+          "b1",
+          "tutor1",
+          "https://example.com/offline",
+        ),
+      ).rejects.toThrow(BookingNotEditableError);
+
+      const { service: pendingService } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "awaiting_tutor_review" }),
+          ),
+        },
+      });
+      await expect(
+        pendingService.tutorSetMeetingLink(
+          "b1",
+          "tutor1",
+          "https://example.com/pending",
+        ),
+      ).rejects.toThrow(BookingNotEditableError);
     });
   });
 
@@ -2785,6 +2894,94 @@ describe("BookingService", () => {
         expect.anything(),
         "p1",
         expect.objectContaining({ confirmationState: "reconfirmed" }),
+      );
+    });
+
+    test("syncs the booking hold when a flat group price map keeps the same rate", async () => {
+      let booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_reconfirmation",
+        targetGroupSize: 3,
+        holdAmount: 126,
+        priceSnapshot: {
+          perStudent: 42,
+          baseline: 42,
+          tutorShare: 33.6,
+          cogitoTake: 8.4,
+          baselineCogitoTake: 12,
+          baselineTutorShare: 30,
+          extraTotal: 0,
+          cogitoExtraTake: 0,
+          tutorExtraShare: 0,
+        },
+      });
+      let reconfirmedCount = 0;
+      const participant = makeParticipant({
+        confirmationState: "confirmed",
+        heldAmount: 42,
+      });
+      const confirmed = [
+        participant,
+        makeParticipant({ id: "p2", userId: "student2", heldAmount: 42 }),
+      ];
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => participant),
+          findReconfirmedParticipants: mock(async () =>
+            confirmed.slice(0, reconfirmedCount),
+          ),
+          findConfirmedParticipants: mock(async () => confirmed),
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ prices: { "2": 42, "3": 42 } }),
+          ),
+          updateParticipantState: mock(
+            async (_tx: any, _id: string, updates: any) => {
+              if (updates.confirmationState === "reconfirmed") {
+                reconfirmedCount += 1;
+              }
+            },
+          ),
+          resetReconfirmedParticipants: mock(async () => {
+            reconfirmedCount = 0;
+          }),
+          updateBookingPriceSnapshot: mock(
+            async (_tx: any, _id: string, updates: any) => {
+              booking = { ...booking, ...updates };
+            },
+          ),
+          updateBookingHoldAmount: mock(
+            async (_tx: any, _id: string, amount: number) => {
+              booking = { ...booking, holdAmount: amount };
+            },
+          ),
+          updateBookingVersioned: mock(
+            async (_tx: any, _id: string, version: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: version + 1 },
+              newVersion: version + 1,
+            }),
+          ),
+        },
+      });
+
+      await service.reconfirm("student1", "b1", true);
+
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        84,
+      );
+      expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+
+      reconfirmedCount = 1;
+      const result = await service.reconfirm("student1", "b1", true);
+
+      expect(result).toEqual({ reconfirmed: true });
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({ currentState: "awaiting_tutor_review" }),
       );
     });
 
@@ -5200,9 +5397,15 @@ describe("BookingService", () => {
           holdAmount: 42,
           proposerId: "student1",
         });
-        const proposal = { id: "r1", bookingId: "b1", status: "pending" };
+        const proposal = {
+          id: "r1",
+          bookingId: "b1",
+          status: "pending",
+          proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+          proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        };
 
-        const { service, roomPort } = createService({
+        const { service, roomPort, repo } = createService({
           repo: {
             findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
             findBookingById: mock(async () => ({
@@ -5228,6 +5431,79 @@ describe("BookingService", () => {
             startAt: originalStart,
             endAt: originalEnd,
           }),
+        );
+        expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalledWith(
+          expect.anything(),
+          "b1",
+          expiringBooking.scheduledStartAt,
+          expiringBooking.scheduledEndAt,
+        );
+        expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+          expect.anything(),
+          "b1",
+          1,
+          expect.objectContaining({ currentState: "scheduled" }),
+        );
+      });
+
+      test("N3: proposal expiry routes an offline room conflict to admin approval", async () => {
+        const originalStart = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        const originalEnd = new Date(originalStart.getTime() + 90 * 60 * 1000);
+        const expiringBooking = makeBooking({
+          currentState: "reschedule_proposed",
+          modality: "offline",
+          previousState: "scheduled",
+          scheduledStartAt: originalStart,
+          scheduledEndAt: originalEnd,
+        });
+        const proposal = {
+          id: "r1",
+          bookingId: "b1",
+          status: "pending",
+          proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+          proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        };
+
+        const { service, roomPort, repo } = createService({
+          repo: {
+            findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
+            findBookingById: mock(async () => ({
+              ...expiringBooking,
+              currentState: "reschedule_proposed",
+              version: 1,
+            })),
+            findPendingRescheduleProposal: mock(async () => proposal),
+            updateBookingVersioned: mock(async () => ({
+              updated: {
+                ...expiringBooking,
+                currentState: "awaiting_admin_room_approval",
+              },
+              newVersion: 2,
+            })),
+          },
+          roomPort: {
+            syncRoomBookingScheduleForBooking: mock(
+              async () => "conflict" as const,
+            ),
+          },
+        });
+
+        const result = await service.expireBookings();
+
+        expect(result).toEqual({ expired: 1, failed: 0 });
+        expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+          expect.anything(),
+          "b1",
+          1,
+          expect.objectContaining({
+            currentState: "awaiting_admin_room_approval",
+          }),
+        );
+        expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalledWith(
+          expect.anything(),
+          "b1",
+          originalStart,
+          originalEnd,
         );
       });
     });
@@ -5957,6 +6233,81 @@ describe("BookingService", () => {
       });
     });
 
+    test("acceptReschedule syncs an offline room assignment to the proposed time", async () => {
+      const booking = makeRescheduleBooking({
+        modality: "offline",
+        previousState: "scheduled",
+      });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, roomPort, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      const result = await service.acceptReschedule("student1", "b1");
+
+      expect(result.currentState).toBe("scheduled");
+      expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        proposal.proposedStartAt,
+        proposal.proposedEndAt,
+      );
+      expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+    });
+
+    test("acceptReschedule returns an offline room conflict to admin approval", async () => {
+      const booking = makeRescheduleBooking({
+        modality: "offline",
+        previousState: "scheduled",
+      });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, roomPort } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        roomPort: {
+          syncRoomBookingScheduleForBooking: mock(
+            async () => "conflict" as const,
+          ),
+        },
+      });
+
+      const result = await service.acceptReschedule("student1", "b1");
+
+      expect(result.currentState).toBe("awaiting_admin_room_approval");
+      expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalled();
+    });
+
     test("acceptReschedule moves the provider-side meeting event to the new time (OQ-05)", async () => {
       const booking = makeRescheduleBooking();
       const proposal = {
@@ -6227,6 +6578,97 @@ describe("BookingService", () => {
           startAt: originalStart,
           endAt: originalEnd,
         }),
+      );
+    });
+
+    test("rejectReschedule restores the original offline room schedule", async () => {
+      const booking = makeRescheduleBooking({
+        modality: "offline",
+        previousState: "scheduled",
+      });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, roomPort } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+      });
+
+      const result = await service.rejectReschedule("student1", "b1");
+
+      expect(result.currentState).toBe("scheduled");
+      expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        booking.scheduledStartAt,
+        booking.scheduledEndAt,
+      );
+    });
+
+    test("rejectReschedule routes an offline room conflict to admin approval", async () => {
+      const booking = makeRescheduleBooking({
+        modality: "offline",
+        previousState: "scheduled",
+      });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, roomPort, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: {
+                ...booking,
+                ...updates,
+                version: ver + 1,
+              },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        roomPort: {
+          syncRoomBookingScheduleForBooking: mock(
+            async () => "conflict" as const,
+          ),
+        },
+      });
+
+      const result = await service.rejectReschedule("student1", "b1");
+
+      expect(result.currentState).toBe("awaiting_admin_room_approval");
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({
+          currentState: "awaiting_admin_room_approval",
+        }),
+      );
+      expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        booking.scheduledStartAt,
+        booking.scheduledEndAt,
       );
     });
   });

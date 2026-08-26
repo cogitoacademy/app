@@ -71,6 +71,11 @@ export interface BookingMeetingPort {
     changes: { startAt?: Date; endAt?: Date },
   ): Promise<void>;
   cancelEvent(bookingId: string): Promise<void>;
+  setManualLink(
+    bookingId: string,
+    url: string,
+    conn?: DbOrTx,
+  ): Promise<MeetingEvent>;
 }
 
 export interface BookingRoomPort {
@@ -98,6 +103,17 @@ export interface BookingRoomPort {
     bookingId: string,
     schedule: { startAt: Date; endAt: Date },
   ): Promise<void>;
+  /**
+   * Keeps a confirmed offline room assignment aligned with a booking-level
+   * reschedule. Returns `missing` when no active assignment exists and
+   * `conflict` when the room cannot be used at the requested time.
+   */
+  syncRoomBookingScheduleForBooking(
+    conn: DbOrTx,
+    bookingId: string,
+    startAt: Date,
+    endAt: Date,
+  ): Promise<"updated" | "missing" | "conflict">;
 }
 
 export interface BookingPayoutPort {

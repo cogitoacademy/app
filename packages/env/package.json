@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./origins": "./src/origins.ts",
+    "./admin": "./src/admin.ts",
     "./node-env": "./src/node-env.ts",
     "./server": "./src/server.ts",
     "./web": "./src/web.ts"

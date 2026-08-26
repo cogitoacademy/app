@@ -3,6 +3,13 @@ import { markPackage } from "@cogito-app/db/schema";
 import { env } from "@cogito-app/env/server";
 import { seedAllowed } from "./seed";
 
+export function seedPackagesAllowed(
+  nodeEnv: string,
+  allowFlag: string | undefined,
+): boolean {
+  return seedAllowed(nodeEnv, allowFlag);
+}
+
 export const PACKAGES = [
   { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 312500 },
   { code: "learner", name: "Learner Pack", marks: 120, priceIdr: 690000 },
@@ -26,7 +33,7 @@ if (import.meta.main) {
   // runnable against a prod-like database unless the operator explicitly
   // opted in with SEED_ALLOWED_IN_PROD=true (RUNBOOK promises this exits
   // with an error in production).
-  if (!seedAllowed(env.NODE_ENV, process.env.SEED_ALLOWED_IN_PROD)) {
+  if (!seedPackagesAllowed(env.NODE_ENV, process.env.SEED_ALLOWED_IN_PROD)) {
     console.error(
       "Refusing to seed packages in production/staging unless SEED_ALLOWED_IN_PROD=true",
     );

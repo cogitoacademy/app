@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { db } from "@cogito-app/db";
 import { markPackage } from "@cogito-app/db/schema";
-import { seedAllowed, seedAdminPassword } from "./seed";
-import { PACKAGES, seedPackages } from "./seed-packages";
+import { resolveSeedAdminEmail, seedAllowed, seedAdminPassword } from "./seed";
+import { PACKAGES, seedPackages, seedPackagesAllowed } from "./seed-packages";
 
 describe("seed guards", () => {
   test("seedAllowed is false in production without explicit flag", () => {
@@ -17,12 +18,33 @@ describe("seed guards", () => {
     expect(seedAllowed("staging", "true")).toBe(true);
   });
 
+  test("seedPackagesAllowed protects the standalone package seed", () => {
+    expect(seedPackagesAllowed("production", undefined)).toBe(false);
+    expect(seedPackagesAllowed("staging", undefined)).toBe(false);
+    expect(seedPackagesAllowed("production", "true")).toBe(true);
+    expect(seedPackagesAllowed("development", undefined)).toBe(true);
+  });
+
   test("seedAdminPassword rejects short or missing passwords", () => {
     expect(seedAdminPassword(undefined)).toBeNull();
     expect(seedAdminPassword("short")).toBeNull();
     expect(seedAdminPassword("a-strong-12-char-pw")).toBe(
       "a-strong-12-char-pw",
     );
+  });
+
+  test("uses the local demo admin outside production and the configured operator in production", () => {
+    expect(resolveSeedAdminEmail("development")).toBe("admin@cogitoacademy.id");
+    expect(resolveSeedAdminEmail("test")).toBe("admin@cogitoacademy.id");
+    expect(resolveSeedAdminEmail("production")).toBe(
+      "itcogitoacademy01@gmail.com",
+    );
+    expect(
+      resolveSeedAdminEmail(
+        "staging",
+        " Operator@Example.com, other@example.com ",
+      ),
+    ).toBe("operator@example.com");
   });
 
   test("W2: seed-packages exits non-zero in production without SEED_ALLOWED_IN_PROD", () => {
@@ -42,7 +64,7 @@ describe("seed guards", () => {
     };
 
     const blocked = spawnSync("bun", ["src/seed-packages.ts"], {
-      cwd: new URL("..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: { ...process.env, ...prodEnv },
       encoding: "utf8",
     });

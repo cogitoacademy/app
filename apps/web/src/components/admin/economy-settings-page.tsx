@@ -21,7 +21,6 @@ import {
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -52,7 +51,9 @@ function formatIdr(value: number) {
 }
 
 function parseAmount(value: string) {
-  const parsed = Number.parseInt(value, 10);
+  const normalized = value.replace(/[^\d-]/g, "");
+  if (!normalized || normalized === "-") return null;
+  const parsed = Number.parseInt(normalized, 10);
   return Number.isInteger(parsed) ? parsed : null;
 }
 
@@ -178,7 +179,10 @@ export function EconomySettingsPage() {
 
       <Card className="border-info-border bg-info/10">
         <CardBody className="flex gap-3">
-          <IconInfoCircle className="mt-0.5 size-5 shrink-0 text-info-foreground" />
+          <IconInfoCircle
+            className="mt-0.5 size-5 shrink-0 text-info-foreground"
+            aria-hidden="true"
+          />
           <div>
             <Text className="font-medium">Safe change policy</Text>
             <Text className="mt-1 text-sm text-muted">
@@ -211,8 +215,13 @@ export function EconomySettingsPage() {
                   </FieldLabel>
                   <NumberField
                     id="online-cogito-base"
+                    inputProps={{
+                      name: "onlineCogitoBaseIdr",
+                      inputMode: "numeric",
+                    }}
                     min={5_000}
                     step={5_000}
+                    allowOutOfRange
                     value={parseAmount(form.onlineCogitoBaseIdr)}
                     onValueChange={(value) =>
                       updateField(
@@ -234,8 +243,13 @@ export function EconomySettingsPage() {
                   </FieldLabel>
                   <NumberField
                     id="online-cogito-increment"
+                    inputProps={{
+                      name: "onlineCogitoIncrementIdr",
+                      inputMode: "numeric",
+                    }}
                     min={0}
                     step={5_000}
+                    allowOutOfRange
                     value={parseAmount(form.onlineCogitoIncrementIdr)}
                     onValueChange={(value) =>
                       updateField(
@@ -258,8 +272,13 @@ export function EconomySettingsPage() {
                   </FieldLabel>
                   <NumberField
                     id="offline-cogito-base"
+                    inputProps={{
+                      name: "offlineCogitoBaseIdr",
+                      inputMode: "numeric",
+                    }}
                     min={5_000}
                     step={5_000}
+                    allowOutOfRange
                     value={parseAmount(form.offlineCogitoBaseIdr)}
                     onValueChange={(value) =>
                       updateField(
@@ -281,8 +300,13 @@ export function EconomySettingsPage() {
                   </FieldLabel>
                   <NumberField
                     id="offline-cogito-increment"
+                    inputProps={{
+                      name: "offlineCogitoIncrementIdr",
+                      inputMode: "numeric",
+                    }}
                     min={0}
                     step={5_000}
+                    allowOutOfRange
                     value={parseAmount(form.offlineCogitoIncrementIdr)}
                     onValueChange={(value) =>
                       updateField(
@@ -298,13 +322,17 @@ export function EconomySettingsPage() {
               </div>
             </div>
 
-            {error ? <FieldError>{error}</FieldError> : null}
+            {error ? (
+              <Text className="text-sm text-danger" role="alert">
+                {error}
+              </Text>
+            ) : null}
             <Button
               onClick={save}
               disabled={settings.isPending || mutation.isPending}
             >
               <IconDeviceFloppy />
-              {mutation.isPending ? "Saving..." : "Save take schedule"}
+              {mutation.isPending ? "Saving…" : "Save take schedule"}
             </Button>
           </CardBody>
         </Card>

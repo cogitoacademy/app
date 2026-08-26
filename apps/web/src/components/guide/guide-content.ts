@@ -221,7 +221,7 @@ const sharedSessionBranches: GuideBranch[] = [
     title: "The online meeting needs a retry",
     trigger: "Google Meet creation fails after the booking is confirmed.",
     outcome:
-      "The booking remains confirmed while the scheduler retries every **5 minutes**, for up to **3 attempts**. An admin can add a manual link when needed.",
+      "The booking remains confirmed while the scheduler retries every **5 minutes**, for up to **3 attempts**. The assigned tutor or an admin can add a manual link when needed.",
     variant: "warning",
     cta: { label: "Check booking status", to: "/bookings" },
   },
@@ -862,7 +862,7 @@ const adminContent: GuideContent = {
           details: [
             "A failed Google Meet attempt leaves the booking confirmed for scheduled retry.",
             "The scheduler retries failed meetings every **5 minutes**, for up to **3 attempts**.",
-            "An admin manual link is the fallback when a participant needs access before provider recovery.",
+            "A tutor or admin manual link is the fallback when a participant needs access before provider recovery.",
           ],
           statuses: [
             { label: "Confirmed, retrying", variant: "warning" },

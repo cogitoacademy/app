@@ -22,6 +22,7 @@ import {
   withdrawInput,
   proposeRescheduleInput,
   completeSessionInput,
+  setMeetingLinkInput,
   markAttendanceInput,
   markParticipantNoShowInput,
   cancelSessionInput,
@@ -323,6 +324,18 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
       })
       .input(completeSessionInput)
       .handler(handler.completeSession),
+
+    setMeetingLink: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/booking/set-meeting-link",
+        tags: ["Tutor", "Bookings"],
+        summary: "Set a manual meeting link",
+        description:
+          "Tutor adds a valid meeting URL when automatic meeting setup is unavailable",
+      })
+      .input(setMeetingLinkInput)
+      .handler(handler.setMeetingLink),
 
     markAttendance: tutorProcedure
       .route({

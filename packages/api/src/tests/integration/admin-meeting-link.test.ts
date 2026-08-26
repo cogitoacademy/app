@@ -98,7 +98,7 @@ async function createPublishedTutor(
   return { tutorId, slotId: slot!.id };
 }
 
-describe("U1: admin manual meeting-link entry (FR-21/TC-36)", () => {
+describe("U1: manual meeting-link entry (FR-21/TC-36)", () => {
   beforeAll(async () => {
     await resetDatabase();
   });
@@ -208,7 +208,62 @@ describe("U1: admin manual meeting-link entry (FR-21/TC-36)", () => {
         bookingId: bookedId,
         url: "not-a-url",
       }),
-    ).rejects.toThrow(/validation/i);
+    ).rejects.toThrow(/URL|invalid|validation/i);
+  });
+
+  test("U1: non-web URL schemes are rejected by zod", async () => {
+    await expect(
+      adminClient.adminBooking.setMeetingLink({
+        bookingId: bookedId,
+        url: "ftp://files.example.com/meeting",
+      }),
+    ).rejects.toThrow(/validation|http/i);
+  });
+
+  test("U1: assigned tutor can paste a fallback link", async () => {
+    const tutorUrl = "https://zoom.example.com/tutor-fallback";
+    const result = await tutorClient.tutorActions.setMeetingLink({
+      bookingId: bookedId,
+      url: tutorUrl,
+    });
+
+    expect(result).toMatchObject({
+      bookingId: bookedId,
+      meetingUrl: tutorUrl,
+      status: "created",
+    });
+    const fetched = await studentClient.booking.get({ bookingId: bookedId });
+    expect(fetched.meetingStatus).toBe("ready");
+    expect(fetched.meetingUrl).toBe(tutorUrl);
+  });
+
+  test("U1: a student cannot call the tutor fallback action", async () => {
+    await expect(
+      studentClient.tutorActions.setMeetingLink({
+        bookingId: bookedId,
+        url: "https://meet.example.com/student-must-not-edit",
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("U1: manual links are rejected for offline bookings", async () => {
+    const start = new Date(Date.now() + 96 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 97 * 3600_000).toISOString();
+    const b = await studentClient.booking.createSolo({
+      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      availabilitySlotId: slotId,
+      modality: "offline",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+
+    await expect(
+      adminClient.adminBooking.setMeetingLink({
+        bookingId: b.id,
+        url: "https://meet.example.com/offline-must-not-have-link",
+      }),
+    ).rejects.toThrow(/online bookings/i);
   });
 
   test("U1: link cannot be set before the booking is scheduled", async () => {

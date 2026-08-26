@@ -35,7 +35,7 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
       level: "warn",
       action: "meeting_manual_created",
       message:
-        "Meeting created with manual provider — admin needs to assign a meeting link",
+        "Meeting created with manual provider — tutor or admin needs to assign a meeting link",
       bookingId,
     });
 

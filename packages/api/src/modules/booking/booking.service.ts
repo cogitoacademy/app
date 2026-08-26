@@ -475,6 +475,36 @@ export function createBookingService(deps: {
     return null;
   }
 
+  async function refreshDeadlineForState(
+    tx: DbOrTx,
+    bookingId: string,
+    state: BookingState,
+    modality: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+  ): Promise<void> {
+    const now = Date.now();
+    const deadlineAt =
+      state === BOOKING_STATE.AWAITING_TUTOR_REVIEW
+        ? new Date(now + RESPONSE_WINDOW_MS)
+        : state === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
+          ? new Date(
+              Math.min(now + RESPONSE_WINDOW_MS, scheduledStartAt.getTime()),
+            )
+          : state === BOOKING_STATE.SCHEDULED
+            ? new Date(
+                scheduledEndAt.getTime() +
+                  (modality === MODALITY.OFFLINE
+                    ? OFFLINE_SCHEDULED_GRACE_MS
+                    : 24 * 60 * 60 * 1000),
+              )
+            : null;
+
+    if (deadlineAt) {
+      await repo.updateBookingDeadline(tx, bookingId, deadlineAt);
+    }
+  }
+
   /**
    * Builds the deep-link CTA used by the group/group-series invitee email so
    * an invited student can view and accept the invite directly in-platform.
@@ -1113,7 +1143,9 @@ export function createBookingService(deps: {
         title: "Booking accepted",
         body: isOffline
           ? "Tutor accepted. Waiting for admin room approval."
-          : "Tutor accepted. Session scheduled.",
+          : updated?.currentState === BOOKING_STATE.SCHEDULED
+            ? "Tutor accepted. Session scheduled."
+            : "Tutor accepted. The booking is confirmed, but meeting link setup still needs attention.",
         eventKey: `booking.${bookingId}.accepted`,
         emailRequired: true,
       });
@@ -1173,6 +1205,74 @@ export function createBookingService(deps: {
     await meeting.cancelEvent(bookingId);
 
     return result;
+  }
+
+  /**
+   * Adds a manual meeting URL when automatic Google Meet setup is unavailable.
+   * Tutors may only edit their own confirmed/scheduled online bookings; admins
+   * have the separate admin-booking action for the same fallback.
+   */
+  async function tutorSetMeetingLink(
+    bookingId: string,
+    tutorId: string,
+    url: string,
+  ) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.tutorId !== tutorId) {
+        throw new BookingNotOwnedError(bookingId, tutorId);
+      }
+      if (b.modality !== MODALITY.ONLINE) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "Manual meeting links are only available for online bookings",
+        );
+      }
+      if (
+        b.currentState !== BOOKING_STATE.CONFIRMED &&
+        b.currentState !== BOOKING_STATE.SCHEDULED
+      ) {
+        throw new BookingNotEditableError(
+          bookingId,
+          `This booking is not editable for a meeting link yet. A link can only be set on a confirmed or scheduled booking (current: ${b.currentState}).`,
+        );
+      }
+
+      const meetingEventRow = await meeting.setManualLink(bookingId, url, tx);
+      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      for (const participant of participants) {
+        // eslint-disable-next-line no-await-in-loop
+        await notification.writeBestEffort({
+          db: tx,
+          userId: participant.userId,
+          bookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Meeting link ready",
+          body: "The meeting link for the session is ready.",
+          eventKey: `booking.${bookingId}.meeting_link.${participant.userId}`,
+          emailRequired: true,
+        });
+      }
+
+      await audit.record({
+        db: tx,
+        actorId: tutorId,
+        actorType: ACTOR_TYPE.TUTOR,
+        action: "tutor_set_meeting_link",
+        targetId: bookingId,
+        targetType: "booking",
+        beforeState: { meetingStatus: "failed-or-manual" },
+        afterState: { provider: "manual", meetingUrl: url },
+      });
+
+      return {
+        bookingId,
+        meetingUrl: meetingEventRow.meetingUrl,
+        status: meetingEventRow.status,
+      };
+    });
   }
 
   async function completeSession(
@@ -2031,9 +2131,25 @@ export function createBookingService(deps: {
           });
         }
 
-        const targetState =
+        let targetState =
           (b.previousState as BookingState | null) ??
           BOOKING_STATE.AWAITING_TUTOR_REVIEW;
+
+        if (b.modality === MODALITY.OFFLINE && !pending.sessionId && roomPort) {
+          const roomSync = await roomPort.syncRoomBookingScheduleForBooking(
+            tx,
+            bookingId,
+            pending.proposedStartAt,
+            pending.proposedEndAt,
+          );
+          if (
+            targetState === BOOKING_STATE.SCHEDULED &&
+            roomSync !== "updated"
+          ) {
+            targetState = BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL;
+          }
+        }
+
         const transitioned = await transition(tx, bookingId, targetState, {
           actorId: userId,
           actorType:
@@ -2045,41 +2161,16 @@ export function createBookingService(deps: {
           },
         });
 
-        if (targetState === BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
-          await repo.updateBookingDeadline(
-            tx,
-            bookingId,
-            new Date(Date.now() + RESPONSE_WINDOW_MS),
-          );
-        } else if (targetState === BOOKING_STATE.SCHEDULED) {
-          // H1: an accepted reschedule moves the session to the proposal's new
-          // times — refresh the deadline from the NEW session end (mirror
-          // finalizeMeetingSchedule / transitionBookingToScheduled) so the
-          // booking is not auto-expired at the proposal's now+24h.
-          await repo.updateBookingDeadline(
-            tx,
-            bookingId,
-            new Date(
-              pending.proposedEndAt.getTime() +
-                (b.modality === MODALITY.OFFLINE
-                  ? OFFLINE_SCHEDULED_GRACE_MS
-                  : 24 * 60 * 60 * 1000),
-            ),
-          );
-        } else if (targetState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) {
-          // Mirror the offline room-approval window (DL-25/U12): 12h, capped at
-          // the (new) session start.
-          await repo.updateBookingDeadline(
-            tx,
-            bookingId,
-            new Date(
-              Math.min(
-                Date.now() + RESPONSE_WINDOW_MS,
-                pending.proposedStartAt.getTime(),
-              ),
-            ),
-          );
-        }
+        // H1: refresh the deadline from the new session/state so a reschedule
+        // cannot retain the proposal-era deadline.
+        await refreshDeadlineForState(
+          tx,
+          bookingId,
+          targetState,
+          b.modality,
+          pending.proposedStartAt,
+          pending.proposedEndAt,
+        );
 
         for (const recipientId of Object.keys(decisions).filter(
           (id) => id !== userId,
@@ -2155,7 +2246,7 @@ export function createBookingService(deps: {
         .filter(([, t]) => t.to.includes(BOOKING_STATE.RESCHEDULE_PROPOSED))
         .map(([state]) => state);
       const previous = b.previousState as BookingState | null;
-      const revertTarget =
+      let revertTarget =
         previous && rescheduleSources.includes(previous)
           ? previous
           : // Unreachable given the current transitions table; kept as a
@@ -2163,11 +2254,35 @@ export function createBookingService(deps: {
             // matching revert target.
             BOOKING_STATE.AWAITING_RECONFIRMATION;
 
+      if (b.modality === MODALITY.OFFLINE && !proposal.sessionId && roomPort) {
+        const roomSync = await roomPort.syncRoomBookingScheduleForBooking(
+          tx,
+          bookingId,
+          b.scheduledStartAt,
+          b.scheduledEndAt,
+        );
+        if (
+          revertTarget === BOOKING_STATE.SCHEDULED &&
+          roomSync !== "updated"
+        ) {
+          revertTarget = BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL;
+        }
+      }
+
       const updated = await transition(tx, bookingId, revertTarget, {
         actorId: userId,
         actorType: userId === b.tutorId ? ACTOR_TYPE.TUTOR : ACTOR_TYPE.STUDENT,
         reason: "A required party rejected the reschedule proposal",
       });
+
+      await refreshDeadlineForState(
+        tx,
+        bookingId,
+        revertTarget,
+        b.modality,
+        b.scheduledStartAt,
+        b.scheduledEndAt,
+      );
 
       // N3: the RESCHEDULE_PROPOSED carve-out lets an admin pre-assign a
       // room at the proposal time. On rejection the booking keeps its
@@ -3553,7 +3668,7 @@ export function createBookingService(deps: {
    * On failure the booking stays CONFIRMED and the failure is surfaced through
    * the meetingEvent row (status `failed`) so the `retry-failed-meetings`
    * scheduler job can retry it. The transaction is not aborted — the booking
-   * remains recoverable either by retry or by the admin manual-link flow.
+   * remains recoverable either by retry or by the tutor/admin manual-link flow.
    *
    * @param tx - the active transaction
    * @param b - the booking row (must be CONFIRMED and online modality)
@@ -3623,13 +3738,13 @@ export function createBookingService(deps: {
         : "Meeting link pending";
       const tutorBody = linkReady
         ? "The meeting link for the session is ready."
-        : "The meeting link for the session is pending — an admin will add it before the session.";
+        : "The meeting link for the session is pending — a tutor or admin will add it before the session.";
       const participantTitle = linkReady
         ? "Meeting link ready"
         : "Meeting link pending";
       const participantBody = linkReady
         ? "The meeting link for your group session is ready."
-        : "The meeting link for your group session is pending — an admin will add it before the session.";
+        : "The meeting link for your group session is pending — a tutor or admin will add it before the session.";
 
       await notification.writeBestEffort({
         db: tx,
@@ -3704,8 +3819,8 @@ export function createBookingService(deps: {
    * attempt failed. Runs from the `retry-failed-meetings` scheduler job (5 min).
    *
    * Each booking is retried at most 3 times (counted via failed `meetingEvent`
-   * rows); afterwards it stays CONFIRMED for manual intervention (admin
-   * meeting-link entry, PRD-GAPS-PHASE3 U1).
+   * rows); afterwards it stays CONFIRMED for manual intervention (tutor or
+   * admin meeting-link entry, PRD-GAPS-PHASE3 U1).
    *
    * @returns the number of bookings scheduled and the number still failing
    */
@@ -3765,20 +3880,42 @@ export function createBookingService(deps: {
                 decidedAt: new Date(),
               });
             }
-            const targetState =
+            let targetState =
               (b.previousState as BookingState | null) ??
               BOOKING_STATE.AWAITING_TUTOR_REVIEW;
+
+            if (
+              b.modality === MODALITY.OFFLINE &&
+              proposal &&
+              !proposal.sessionId &&
+              roomPort
+            ) {
+              const roomSync = await roomPort.syncRoomBookingScheduleForBooking(
+                tx,
+                b.id,
+                b.scheduledStartAt,
+                b.scheduledEndAt,
+              );
+              if (
+                targetState === BOOKING_STATE.SCHEDULED &&
+                roomSync !== "updated"
+              ) {
+                targetState = BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL;
+              }
+            }
+
             await transition(tx, b.id, targetState, {
               actorId: "system",
               actorType: ACTOR_TYPE.SYSTEM,
               reason: "Reschedule proposal expired; original time retained",
             });
-            await repo.updateBookingDeadline(
+            await refreshDeadlineForState(
               tx,
               b.id,
-              targetState === BOOKING_STATE.AWAITING_TUTOR_REVIEW
-                ? new Date(Date.now() + RESPONSE_WINDOW_MS)
-                : new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+              targetState,
+              b.modality,
+              b.scheduledStartAt,
+              b.scheduledEndAt,
             );
             // N3: same room-resync as rejection — the proposal expired, the
             // booking keeps its original schedule, so a pre-assigned
@@ -4192,6 +4329,7 @@ export function createBookingService(deps: {
     cancel,
     tutorAccept,
     tutorDecline,
+    tutorSetMeetingLink,
     completeSession,
     markTutorAttendance,
     markParticipantNoShow,

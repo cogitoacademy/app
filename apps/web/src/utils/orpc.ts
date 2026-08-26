@@ -12,6 +12,13 @@ import {
 import { serverUrl } from "@/lib/server-url";
 import { getUserFacingError } from "@/lib/error-message";
 
+const NON_RETRYABLE_QUERY_ERROR_CODES = new Set([
+  "BAD_REQUEST",
+  "FORBIDDEN",
+  "NOT_FOUND",
+  "UNAUTHORIZED",
+]);
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -19,6 +26,15 @@ export const queryClient = new QueryClient({
       gcTime: 30 * 60_000,
       refetchOnMount: "always",
       refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (
+          error instanceof ORPCError &&
+          NON_RETRYABLE_QUERY_ERROR_CODES.has(error.code)
+        ) {
+          return false;
+        }
+        return failureCount < 3;
+      },
     },
   },
   queryCache: new QueryCache({

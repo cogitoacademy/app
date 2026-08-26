@@ -95,9 +95,23 @@ Verify the role-aware default tab: students open on Upcoming, tutors open on Pen
 
 ### Booking detail smoke check
 
-Open an online booking detail and verify the overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above Marks in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. Confirm that a manual admin URL becomes visible after `adminBooking.setMeetingLink`, including after multiple failed provider rows. For an offline booking, verify the same overview section shows the room name and location instead of a meeting CTA.
+Open an online booking detail and verify the overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above Marks in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. If no link is available, the assigned tutor can use **Add meeting link** and an admin can use **Add/Replace link** in operations; verify the shared Selia dialog accepts a trusted `http`/`https` URL and that the student read becomes ready without a reload. Repeat after multiple failed provider rows to confirm the newest meeting-attempt row is updated. For an offline booking, verify the same overview section shows the room name and location instead of a meeting CTA.
 
-The overview row must show one `Date & time` field with the date and session hours merged beside `Format & access` in a two-column desktop grid; on narrow screens the two fields stack without horizontal overflow. The online `Format & access` section now shows only the compact info trigger; activate it with mouse, keyboard, and touch to verify the Selia popover exposes the pending/failed explanation plus retry or admin setup status, or the `Open meeting room` action when a URL is available. Available links must not render a `Ready` badge or standalone meeting CTA. Offline bookings without an assigned room should expose the same trigger beside `Offline`; tutors with an eligible `Complete session` action should find its completion-timing explanation beside the button. Confirm the Participants heading uses the matching Selia `IconBox`, and on desktop all eligible booking actions, including propose and complete, sit at the bottom of the right header column beneath the state badge.
+The overview row must show one `Date & time` field with the date and session hours merged beside `Format & access` in a two-column desktop grid; on narrow screens the two fields stack without horizontal overflow. The online `Format & access` section now shows only the compact info trigger; activate it with mouse, keyboard, and touch to verify the Selia popover exposes the pending/failed explanation plus retry or manual setup status, or the `Open meeting room` action when a URL is available. Available links must not render a `Ready` badge or standalone meeting CTA. Offline bookings without an assigned room should expose the same trigger beside `Offline`; tutors with an eligible `Complete session` action should find its completion-timing explanation beside the button. Confirm the Participants heading uses the matching Selia `IconBox`, and on desktop all eligible booking actions, including propose and complete, sit at the bottom of the right header column beneath the state badge.
+
+### Meeting fallback and exception smoke check
+
+Force the Google provider into an unavailable state or use the fallback test provider. After tutor acceptance, verify an online booking stays `confirmed` while retries remain, then use the tutor's **Add meeting link** action. The tutor action must succeed only for that tutor's own online `confirmed`/`scheduled` booking; offline, terminal, pre-confirmation, and another tutor's booking must be rejected. A student must not be able to call the tutor action. In `/admin`, verify an admin can add or replace the link for an eligible online booking, while offline bookings are rejected. The API-level regression command is:
+
+```bash
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/admin-meeting-link.test.ts
+```
+
+For a force-majeure or other exceptional case, use the admin override flow with an auditable reason and the appropriate affected participants/Marks action. For `force_cancel` + `release_holds`, verify the booking becomes `cancelled`, participant holds and booking `holdAmount` become zero, a ledger entry and state-history/audit records exist, and provider meeting cleanup is best-effort. A second override on the terminal booking must be rejected. Do not use the normal student reschedule route to bypass H-2; after H-2 the case goes through support/admin handling. The force-cancel regression command is:
+
+```bash
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/admin-override.test.ts
+```
 
 ### Contact-sharing privacy smoke check
 
@@ -129,11 +143,13 @@ As a student, open `/achievements`, choose **Add Achievement**, and verify the C
 
 On a completed booking, verify the Session notes card is visible to both tutor and student. Select text and exercise bold, italic, heading, paragraph, bullet, numbered-list, and safe-link actions; confirm the live preview matches the persisted note after reload, the author label distinguishes your note from the other participant's note, and an attempted `<script>` or `javascript:` link is removed by the render sanitizer.
 
-For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount and Marks holds unchanged, and creates a notification for that invitee. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply.
+For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount and Marks holds unchanged, and creates a notification for that invitee. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply. For a one-session group, verify the booking form shows both the per-student price and the full temporary target-headcount hold, and blocks submit when the wallet cannot cover that hold.
+
+For booking deadline coverage, inspect a new online request, an offline request awaiting room approval, a group invite, and an `awaiting_reconfirmation` booking. Each detail page should show a timezone-aware **Respond by** notice with a live remaining window; an expired or near-expiry deadline should use the danger treatment. Confirm an invite, decline an invite, and accept/reject a reschedule from separate participant sessions. For an offline booking with a confirmed room, accept a new booking-level time and verify the room window moves with it; reject or let the proposal expire and verify the room returns to the original window. A conflicting room window must return the booking to admin room approval rather than leaving a stale room reservation. After H-2, confirm student self-service cancellation/reschedule is blocked and the late-cancellation/no-show path is surfaced with the expected warning and hold outcome. Tutor lateness reporting must be available for both online and offline scheduled bookings after the 15-minute tolerance.
 
 ### Reschedule proposal smoke check
 
-From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, verify that a student booking proposer submits through `/rpc/booking/proposeReschedule` and a tutor submits through `/rpc/tutorActions/proposeReschedule`. Both should show the success toast and move the booking to `reschedule_proposed`; a tutor may choose a custom time outside the published availability window. A student proposal in `confirmed` or `scheduled` remains valid before H-2, while a proposal at or after H-2 must be rejected as not editable. A tutor receiving `403 Student access required` indicates the frontend is using the wrong procedure. Group bookings still in `awaiting_participant_confirmation` intentionally wait for invitees before rescheduling is enabled. Force-majeure requests after H-2 follow support/admin exception handling and require an auditable override decision rather than the normal reschedule mutation.
+From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, verify that a student booking proposer submits through `/rpc/booking/proposeReschedule` and a tutor submits through `/rpc/tutorActions/proposeReschedule`. Both should show the success toast and move the booking to `reschedule_proposed`; a tutor may choose a custom time outside the published availability window. A student proposal in `confirmed` or `scheduled` remains valid before H-2, while a proposal at or after H-2 must be rejected as not editable. A tutor receiving `403 Student access required` indicates the frontend is using the wrong procedure. Group bookings still in `awaiting_participant_confirmation` intentionally wait for invitees before rescheduling is enabled. For offline bookings, accept/reject/expiry must keep the confirmed room row aligned with the active schedule; a conflict should return the booking to admin room approval. Force-majeure requests after H-2 follow support/admin exception handling and require an auditable override decision rather than the normal reschedule mutation.
 
 ### Tutor subject taxonomy smoke check
 
@@ -241,12 +257,21 @@ manual recovery only.
 ### Seed the Database
 
 ```bash
-bun run seed-packages          # Seeds mark packages and test data
+bun run seed-packages          # Seeds mark packages only
 ```
 
-Production guard: `NODE_ENV=production bun run seed-packages` (and `bun run seed`) will exit with error unless `SEED_ALLOWED_IN_PROD=true` is set.
+Production guard: `NODE_ENV=production bun run seed-packages` will exit with an error unless `SEED_ALLOWED_IN_PROD=true` is explicitly set. The full `bun run seed` command uses the same guard and additionally requires `SEED_ADMIN_PASSWORD`.
 
-Seed values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000. Re-run `bun run seed` on prod once before any real payment: the insert is `onConflictDoNothing`, so existing rows keep stale values — correct package prices are required before the payment provider goes live (delete stale `mark_package` rows first if an older seed already ran).
+The full production/staging seed creates or reuses the first address in
+`ADMIN_EMAILS` and sets its role to `admin`; when `ADMIN_EMAILS` is unset it
+defaults to `itcogitoacademy01@gmail.com`. On every production-like server
+boot, the same allowlist promotes matching existing accounts
+case-insensitively without demoting other admins. A matching account created
+after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
+comma-separated list when more than one trusted account should be bootstrapped.
+Other admin accounts may still be granted through the existing admin role UI/API.
+
+Seed values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. Re-run `bun run seed` on prod once before any real payment: the insert is `onConflictDoNothing`, so existing rows keep stale values — correct package prices are required before the payment provider goes live (delete stale `mark_package` rows first if an older seed already ran).
 
 ### Reset the Database
 
@@ -509,6 +534,7 @@ Key environment variables (see `.env.example` for full list):
 | `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                                                                                                                                                                                                           |
 | `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                                                                                                                                           |
 | `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                                                                                                                                            |
+| `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                            |
 | `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                                                                                                                                                                                                                  |
 | `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                |
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                   |
@@ -533,12 +559,12 @@ Key environment variables (see `.env.example` for full list):
 
 The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet fallback, local-disk uploads). Before a production launch these must be swapped for real providers. What fails **loud** vs **silent**, and what each swap requires:
 
-| Provider    | Dev default          | Silent-failure mode if misconfigured                                                                                                  | Prod requirement (fail-loud guard PR)                                                                                     |
-| ----------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Resend      | Stub (no-op email)   | **Silent** — `RESEND_API_KEY` optional, no `NODE_ENV` check; critical emails suppressed with no alert                                 | `RESEND_API_KEY` required when `NODE_ENV` is production/staging + verified `EMAIL_FROM` domain (P4.1)                     |
-| Xendit      | Stub provider        | Webhook 408/500 loops if OTP-paths or status mapping mismatch                                                                         | `XENDIT_SECRET_KEY`+`XENDIT_WEBHOOK_TOKEN`+redirect URLs when `PAYMENT_PROVIDER=xendit`; sandbox E2E before enabling (P3) |
-| Google Meet | Manual link fallback | **Silent** — `GOOGLE_MEET_ENABLED=true` with broken creds falls back to manual links, events land on the wrong calendar               | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + boot probe (P4.2)                                        |
-| R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable | All `R2_*` + `R2_PUBLIC_URL` required in production/staging (P4.3)                                                        |
+| Provider    | Dev default          | Silent-failure mode if misconfigured                                                                                                      | Prod requirement (fail-loud guard PR)                                                                                     |
+| ----------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Resend      | Stub (no-op email)   | **Silent** — `RESEND_API_KEY` optional, no `NODE_ENV` check; critical emails suppressed with no alert                                     | `RESEND_API_KEY` required when `NODE_ENV` is production/staging + verified `EMAIL_FROM` domain (P4.1)                     |
+| Xendit      | Stub provider        | Webhook 408/500 loops if OTP-paths or status mapping mismatch                                                                             | `XENDIT_SECRET_KEY`+`XENDIT_WEBHOOK_TOKEN`+redirect URLs when `PAYMENT_PROVIDER=xendit`; sandbox E2E before enabling (P3) |
+| Google Meet | Manual link fallback | **Boot warning + fallback** — a failed probe is logged and online bookings fall back to manual/retry handling until credentials are fixed | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + successful boot probe (P4.2)                             |
+| R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable     | All `R2_*` + `R2_PUBLIC_URL` required in production/staging (P4.3)                                                        |
 
 > **P3 status (2026-08-17):** the Xendit provider was rewritten for `api-version: 2024-11-11` — `request_amount`/`channel_code`/`channel_properties`, top-level response with `actions[].value` (REDIRECT_CUSTOMER → PRESENT_TO_CUSTOMER), statuses SUCCEEDED/REQUIRES_ACTION/AUTHORIZED/CANCELED, webhook idempotency keys from `data.payment_id`/`payment_request_id` (fixes the `xendit:no-event-id` collision), and a provider `refund()` port (migration 0025 adds `payment_record.provider_request_id`). Timestamp validation is provider-conditional (skipped for xendit — L4). `XENDIT_SUCCESS/FAILURE_REDIRECT_URL` are required by the env schema when `PAYMENT_PROVIDER=xendit` (P3.7). **N1 (2026-08-19):** the provider `refund()` port is **no longer wired into `adminRefund`** — admin refunds are in-app Marks credits only (`refund_record.amount_idr = 0`, `provider_event_id` NULL); no Xendit cash refund is ever issued from `adminRefund` (PRD §677: Marks not convertible to rupiah).
 
@@ -568,22 +594,18 @@ Steps to validate the Xendit integration against the sandbox before enabling `PA
 
 ### Google Meet refresh-token acquisition (X3)
 
-For the OAuth path (`GOOGLE_MEET_CLIENT_ID` + `GOOGLE_MEET_CLIENT_SECRET` + `GOOGLE_MEET_REFRESH_TOKEN`):
+The repeatable setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md). Use the OAuth refresh-token path for a normal Gmail account; use the service-account path only with Workspace domain-wide delegation.
 
-1. Google Cloud Console → credentials for the workspace user → create an OAuth Client (Web).
-2. Use the out-of-band flow to get a one-time code for the scopes: `https://www.googleapis.com/auth/calendar`, `https://www.googleapis.com/auth/calendar.events`.
-3. Exchange the code for tokens (returns `refresh_token`):
-   ```bash
-   curl -X POST https://oauth2.googleapis.com/token \
-     -d client_id=$GOOGLE_MEET_CLIENT_ID \
-     -d client_secret=$GOOGLE_MEET_CLIENT_SECRET \
-     -d code=$CODE \
-     -d grant_type=authorization_code \
-     -d redirect_uri=urn:ietf:wg:oauth:2.0:oob
-   ```
-4. The `refresh_token` (not the access token) goes into `GOOGLE_MEET_REFRESH_TOKEN`; the token cache refreshes access tokens automatically at runtime.
-5. Alternative: service-account mode with domain-wide delegation — set `GOOGLE_CLIENT_EMAIL` (SA), `GOOGLE_PRIVATE_KEY`, `GOOGLE_IMPERSONATED_USER` (delegated attendee), `GOOGLE_MEET_ENABLED=true`. Without `GOOGLE_IMPERSONATED_USER` events land on the SA's own calendar and never produce a Meet URL (P4.2 guard).
-6. Verify the boot probe logs a successful `calendarList.get` before enabling in prod.
+The short version for OAuth is:
+
+1. Enable **Google Calendar API** in the Google Cloud project.
+2. Add the calendar-owner account as an OAuth consent-screen **Test user**.
+3. Create a **Web application** OAuth client and add exactly `https://developers.google.com/oauthplayground` as an authorized redirect URI. Do not use the deprecated OOB URI.
+4. In OAuth Playground, enable **Use your own OAuth credentials**, authorize `https://www.googleapis.com/auth/calendar`, and exchange the code for tokens.
+5. Put the returned `refresh_token` (not `access_token`) in `GOOGLE_MEET_REFRESH_TOKEN`, set the client credentials and `GOOGLE_MEET_ENABLED=true`, then restart the API.
+6. Verify the startup log contains `google_meet_probe_ok` and accept a future online booking as the tutor. The booking should become `scheduled` with a `meet.google.com` URL.
+
+The provider's OAuth probe calls the Calendar API calendar-list endpoint, so a token created with only `https://www.googleapis.com/auth/calendar.events` may create events but still fail the startup probe. Re-authorize with `https://www.googleapis.com/auth/calendar` if the log reports insufficient scopes. A failed probe is logged loudly and the app keeps the manual/fallback provider available; it is not a successful production configuration.
 
 ### Resend domain verification (X2 / P4.1)
 
@@ -651,6 +673,22 @@ bun scripts/run-test-suite.mjs e2e --grep economy --reporter=line
 The role suite covers student, tutor, and admin authorization plus the
 admin-update → future-booking snapshot path. The E2E runner starts the isolated
 web/server ports above and seeds deterministic role credentials.
+Its setup resolves `student.seed@cogitoacademy.id` before clearing test bookings
+and resets the test economy row to defaults, so repeated runs do not depend on
+stale seeded state or a hard-coded user ID. Economy inputs are displayed with
+locale grouping separators; the browser check edits them through the visible
+control and verifies the numeric value after saving.
+
+The 2026-08-26 browser regression completed 10 tests across the six E2E specs,
+including online group invite confirmation, tutor accept/decline, unauthorized
+booking access, the future-booking economy snapshot, and invalid negative IDR
+input. The student auth state is saved under `packages/e2e/.auth/` for the run
+and is ignored by git; this avoids exceeding the production auth sign-in rate
+limit during a multi-role suite. The local run also showed the expected Google
+Meet boot-probe failure for an expired/revoked credential. Before a marketing
+recording, refresh the provider credential and rerun the browser suite; with a
+broken provider the app deliberately keeps an online booking `confirmed` and
+surfaces manual/retry setup attention.
 
 ## GHCR / Docker Deploy (CD)
 

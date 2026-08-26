@@ -275,6 +275,20 @@ export async function updateRoomBookingTimes(
 }
 
 /**
+ * Updates the active room assignment's schedule after a booking-level
+ * reschedule. The caller is responsible for deciding the booking state when
+ * the room is unavailable at the requested time.
+ */
+export async function updateRoomBookingSchedule(
+  conn: DbOrTx,
+  roomBookingId: string,
+  startAt: Date,
+  endAt: Date,
+) {
+  return updateRoomBookingTimes(conn, roomBookingId, { startAt, endAt });
+}
+
+/**
  * Returns the most recent `requested` room booking for a booking — the
  * pending room request created at booking-creation time (U14) that has not
  * been confirmed or cancelled yet.
@@ -330,5 +344,6 @@ export function createRoomRepo() {
     findCancellableRoomBookingByBookingId,
     updateRoomBookingStatus,
     updateRoomBookingTimes,
+    updateRoomBookingSchedule,
   };
 }

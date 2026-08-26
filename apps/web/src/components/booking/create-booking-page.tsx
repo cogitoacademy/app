@@ -52,6 +52,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { EmptyState } from "@/components/empty-state";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
+import { getBookingPriceSummary } from "./booking-pricing";
 import {
   addMinutesToTime,
   isTimeWithinRange,
@@ -317,9 +318,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         pricesForModality?.[String(invitees.length + 1)] ?? perSessionPrice,
       )
     : perSessionPrice;
-  const price = baseSessionPrice * Math.max(selectedSlots.length, 1);
+  const { displayPrice: price, requiredHold } = getBookingPriceSummary({
+    perStudentPrice: baseSessionPrice,
+    sessionCount: selectedSlots.length,
+    isGroupBooking,
+    groupSize: invitees.length + 1,
+    isGroupSeries: isGroupBooking && selectedSlots.length > 1,
+  });
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
-  const hasEnoughMarks = availableBalance >= price;
+  const hasEnoughMarks = availableBalance >= requiredHold;
   const tutorName = profile.displayName ?? profile.user?.name ?? "Cogito tutor";
   const hasInvalidStartTime = selectedSlots.some((slot) => {
     const value = startTimes[slot.id] ?? formatTimeValue(slot.startDate);
@@ -455,7 +462,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   maxLength={2_000}
                   required
                   onChange={(event) => setLearningGoal(event.target.value)}
-                  placeholder="Topics, current level, questions, or an outcome you want from the session."
+                  placeholder="Topics, current level, questions, or an outcome you want from the session…"
                 />
                 <FieldDescription>
                   {learningGoal.length}/2,000 characters
@@ -515,9 +522,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <FieldLabel htmlFor="student-search">Find a student</FieldLabel>
                 <Input
                   id="student-search"
+                  name="student-search"
+                  autoComplete="off"
                   value={studentSearch}
                   onChange={(event) => setStudentSearch(event.target.value)}
-                  placeholder="Type a name or email"
+                  placeholder="Type a name or email…"
                   disabled={invitees.length >= 5}
                 />
                 <FieldDescription>
@@ -526,9 +535,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 </FieldDescription>
               </Field>
               {studentSearchQuery.isFetching ? (
-                <Text className="text-sm text-muted">
-                  Searching students...
-                </Text>
+                <Text className="text-sm text-muted">Searching students…</Text>
               ) : studentSearchQuery.isError ? (
                 <div className="flex items-center justify-between gap-3 rounded border border-danger-border bg-danger-subtle p-3">
                   <Text className="text-sm">
@@ -557,7 +564,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                         setDebouncedStudentSearch("");
                       }}
                     >
-                      <IconUserPlus />
+                      <IconUserPlus aria-hidden="true" />
                       <span className="min-w-0 text-left">
                         <span className="block font-medium">
                           {student.name}
@@ -593,7 +600,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             </CardHeader>
             <CardBody>
               <Field>
-                <FieldLabel>Modality</FieldLabel>
+                <FieldLabel htmlFor="booking-modality">Modality</FieldLabel>
                 <Select
                   value={effectiveModality}
                   onValueChange={(value) => {
@@ -607,7 +614,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   }}
                   disabled={modalityOptions.length === 1}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="booking-modality">
                     <SelectValue placeholder="Choose modality" />
                   </SelectTrigger>
                   <SelectPopup>
@@ -678,11 +685,16 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                               {formatSlotDate(slot.startDate)}
                             </span>
                             <span className="flex items-center gap-1.5 text-sm opacity-80">
-                              <IconClock className="size-4" />
+                              <IconClock
+                                className="size-4"
+                                aria-hidden="true"
+                              />
                               {formatSlotTime(slot.startDate, slot.endDate)}
                             </span>
                           </span>
-                          {selected ? <IconCheck className="ml-auto" /> : null}
+                          {selected ? (
+                            <IconCheck className="ml-auto" aria-hidden="true" />
+                          ) : null}
                         </Button>
                         {selected ? (
                           <div className="rounded-lg border border-item-border bg-item p-3 sm:col-span-2">
@@ -796,22 +808,34 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               <Text className="mt-3 text-sm text-muted">
                 Held now and only deducted according to the booking lifecycle.
               </Text>
+              {isGroupBooking && selectedSlots.length === 1 ? (
+                <Text className="mt-2 text-xs text-muted">
+                  A temporary hold covers {invitees.length + 1} target
+                  participants. Excess Marks are released as invitees confirm.
+                </Text>
+              ) : null}
             </div>
+            {isGroupBooking && selectedSlots.length === 1 ? (
+              <SummaryRow
+                label="Temporary hold"
+                value={`${requiredHold} Marks`}
+              />
+            ) : null}
             <div className="flex items-center justify-between gap-4">
               <span className="flex items-center gap-2 text-muted">
-                <IconWallet className="size-4" /> Available
+                <IconWallet className="size-4" aria-hidden="true" /> Available
               </span>
               <Text className="font-medium">
                 {walletQuery.isPending
-                  ? "Loading..."
+                  ? "Loading…"
                   : `${availableBalance} Marks`}
               </Text>
             </div>
             {!walletQuery.isPending && !hasEnoughMarks ? (
               <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="text-sm text-danger">
-                  You need {price - availableBalance} more Marks to book this
-                  session.
+                  You need {requiredHold - availableBalance} more Marks for the
+                  temporary hold.
                 </Text>
               </div>
             ) : null}
@@ -819,7 +843,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           <CardFooter className="flex-col">
             {walletQuery.isPending ? (
               <Button block size="lg" disabled progress>
-                Checking balance
+                Checking balance…
               </Button>
             ) : hasEnoughMarks ? (
               <Button

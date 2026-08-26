@@ -63,6 +63,11 @@ async function waitForDb(maxAttempts = 10, delayMs = 2000): Promise<void> {
 
 await waitForDb();
 
+// Reconcile configured operator accounts before accepting requests. This
+// promotes an existing production account without demoting other admins.
+const { ensureConfiguredProductionAdmins } = await import("./admin-bootstrap");
+await ensureConfiguredProductionAdmins();
+
 // IMPORTANT: @cogito-app/db (the drizzle schema graph) must be imported BEFORE
 // ./routes, which loads evlog's Elysia plugin. Evaluating the schema modules
 // while evlog/elysia is already loaded segfaults Bun 1.3.14 (engine bug —

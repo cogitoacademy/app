@@ -50,6 +50,7 @@ artifacts/
 .playwright-mcp
 playwright-report
 test-results
+packages/e2e/.auth
 
 # Misc
 *.tgz

@@ -3,6 +3,7 @@ import "dotenv/config";
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+import { DEFAULT_PRODUCTION_ADMIN_EMAIL } from "./admin";
 import { isProductionLike } from "./node-env";
 
 // H1: z.coerce.boolean() treats the string "false" (and "0", "FALSE") as
@@ -40,6 +41,11 @@ const serverShape = {
   NODE_ENV: z
     .enum(["development", "production", "test", "staging"])
     .default("development"),
+  // Comma-separated emails that may be bootstrapped as admins in
+  // production-like environments. The default keeps the initial operator
+  // account deterministic while additional admins remain possible through
+  // the normal admin role-management flow.
+  ADMIN_EMAILS: z.string().default(DEFAULT_PRODUCTION_ADMIN_EMAIL),
   PAYMENT_PROVIDER: z.enum(["stub", "xendit"]).default("stub"),
   STUB_WEBHOOK_ALLOWED: boolSchema(false),
   PAYMENT_WEBHOOK_SECRET: z.string().min(32),

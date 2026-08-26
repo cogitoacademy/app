@@ -58,6 +58,7 @@ export function TutorPricingFields({
                 name={"base-rate-" + key}
                 min={MIN_BASE_RATE_IDR}
                 step={5_000}
+                allowOutOfRange
                 value={value ?? null}
                 onValueChange={(nextValue) => {
                   if (nextValue === null) {

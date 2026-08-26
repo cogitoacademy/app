@@ -129,6 +129,19 @@ export const completeSessionInput = z.object({
   sessionId: z.string().max(100).optional(),
 });
 
+const manualMeetingUrl = z
+  .string()
+  .url()
+  .max(2048)
+  .refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  }, "Meeting links must start with http:// or https://");
+
+export const setMeetingLinkInput = bookingActionInput.extend({
+  url: manualMeetingUrl,
+});
+
 export const cancelSessionInput = z.object({
   sessionId: z.string().max(100),
 });
@@ -184,4 +197,5 @@ export type ReconfirmInput = z.infer<typeof reconfirmInput>;
 export type WithdrawInput = z.infer<typeof withdrawInput>;
 export type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
 export type CompleteSessionInput = z.infer<typeof completeSessionInput>;
+export type SetMeetingLinkInput = z.infer<typeof setMeetingLinkInput>;
 export type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;

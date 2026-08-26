@@ -12,6 +12,9 @@ coveragePathIgnorePatterns = [
   "packages/ui/",
   "packages/config/",
   "packages/env/",
+  # Drizzle schema files are declarative table definitions; Bun reports
+  # synthetic function counters for them rather than executable behavior.
+  "packages/db/src/schema/**",
   "packages/e2e/",
   "**/*.test.ts",
   "**/routeTree.gen.ts",

@@ -2,8 +2,10 @@ import { createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins/email-otp";
+import { eq } from "drizzle-orm";
 
 import { db } from "@cogito-app/db";
+import { isConfiguredAdminEmail } from "@cogito-app/env/admin";
 import { isProductionLike } from "@cogito-app/env/node-env";
 import { getAuthTrustedOrigins } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
@@ -235,6 +237,31 @@ export function createAuth() {
           // platform intro. Fires only on a genuine new signup — an existing
           // user signing in never re-creates the user row, so it does not re-send.
           after: async (user) => {
+            // Keep the configured production operator usable when the account
+            // is created after the server has booted. Boot reconciliation
+            // covers pre-existing accounts; this hook covers first-time
+            // signup without changing local/test defaults.
+            if (
+              isProductionLike(env.NODE_ENV) &&
+              isConfiguredAdminEmail(user.email, env.ADMIN_EMAILS)
+            ) {
+              try {
+                await db
+                  .update(schema.user)
+                  .set({ role: "admin" })
+                  .where(eq(schema.user.id, user.id));
+              } catch (error) {
+                console.error(
+                  JSON.stringify({
+                    level: "error",
+                    action: "production_admin_signup_bootstrap_failed",
+                    userId: user.id,
+                    error: { message: String(error) },
+                  }),
+                );
+              }
+            }
+
             const sender = welcomeEmailSender;
             if (!sender) {
               console.warn(
