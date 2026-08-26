@@ -351,6 +351,7 @@ export function createBookingService(deps: {
       id: string;
       type: string;
       tutorId: string;
+      holdAmount: number;
 
       modality: string;
       priceSnapshot: { perStudent: number } | null;
@@ -383,7 +384,24 @@ export function createBookingService(deps: {
     const newPerStudent = newSnapshot.perStudent;
     const oldPerStudent = b.priceSnapshot?.perStudent ?? newPerStudent;
 
-    if (newPerStudent === oldPerStudent) return;
+    if (newPerStudent === oldPerStudent) {
+      // N1: with flat legacy price maps (or rounding coincidences) the
+      // per-student price can be equal at the old and new headcounts. The
+      // early return must still sync holdAmount to the participant-held
+      // total — otherwise the reconfirm F3 derivation
+      // (participant-held total / perStudent) keeps comparing against a
+      // stale holdAmount and re-fires the reissue branch on every accept,
+      // looping the booking forever without ever reaching
+      // AWAITING_TUTOR_REVIEW.
+      const participantHeldTotal = remaining.reduce(
+        (sum, p) => sum + p.heldAmount,
+        0,
+      );
+      if (participantHeldTotal !== b.holdAmount) {
+        await repo.updateBookingHoldAmount(tx, b.id, participantHeldTotal);
+      }
+      return;
+    }
 
     for (const p of remaining) {
       if (p.heldAmount === newPerStudent) continue;
@@ -2151,6 +2169,17 @@ export function createBookingService(deps: {
         reason: "A required party rejected the reschedule proposal",
       });
 
+      // N3: the RESCHEDULE_PROPOSED carve-out lets an admin pre-assign a
+      // room at the proposal time. On rejection the booking keeps its
+      // original schedule — resync the confirmed roomBooking row so the room
+      // is not left blocked for the (now cancelled) proposal window.
+      if (roomPort && b.modality === MODALITY.OFFLINE) {
+        await roomPort.resyncRoomBookingToSchedule(tx, bookingId, {
+          startAt: b.scheduledStartAt,
+          endAt: b.scheduledEndAt,
+        });
+      }
+
       for (const recipientId of Object.keys(currentDecisions).filter(
         (id) => id !== userId,
       )) {
@@ -2599,6 +2628,14 @@ export function createBookingService(deps: {
         // reconfirmation request" — re-enter a fresh reconfirmation cycle with
         // a fresh 12h window instead of finalizing at a price computed for a
         // headcount that no longer exists.
+        // The headcount the current snapshot was priced for. Derived from
+        // b.holdAmount: participants' held amounts only reflect what they
+        // currently hold, so a price change between headcounts is only
+        // visible in the stale holdAmount. N1: when repriceGroupForHeadcount
+        // early-returns because the per-student price is unchanged (flat
+        // legacy price maps, rounding coincidences) it NOW syncs holdAmount
+        // to the participant-held total — without that sync the mismatch
+        // below would re-fire on every reconfirm accept forever.
         const perStudent = b.priceSnapshot?.perStudent;
         const snapshotHeadcount =
           b.type === BOOKING_TYPE.GROUP && perStudent && perStudent > 0
@@ -3743,6 +3780,15 @@ export function createBookingService(deps: {
                 ? new Date(Date.now() + RESPONSE_WINDOW_MS)
                 : new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
             );
+            // N3: same room-resync as rejection — the proposal expired, the
+            // booking keeps its original schedule, so a pre-assigned
+            // confirmed roomBooking row must move back to it.
+            if (roomPort && b.modality === MODALITY.OFFLINE) {
+              await roomPort.resyncRoomBookingToSchedule(tx, b.id, {
+                startAt: b.scheduledStartAt,
+                endAt: b.scheduledEndAt,
+              });
+            }
             return;
           }
           // FR-16/TC-18: when a group deadline passes with a partial headcount

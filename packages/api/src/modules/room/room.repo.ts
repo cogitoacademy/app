@@ -257,6 +257,24 @@ export async function updateRoomBookingStatus(
 }
 
 /**
+ * N3: moves an existing room booking row to a new schedule (start/end).
+ * Used to resync a pre-assigned confirmed room back to the booking's
+ * original schedule when a reschedule proposal is rejected or expires.
+ */
+export async function updateRoomBookingTimes(
+  conn: DbOrTx,
+  roomBookingId: string,
+  values: { startAt: Date; endAt: Date },
+) {
+  const [row] = await conn
+    .update(roomBooking)
+    .set(values)
+    .where(eq(roomBooking.id, roomBookingId))
+    .returning();
+  return row!;
+}
+
+/**
  * Returns the most recent `requested` room booking for a booking — the
  * pending room request created at booking-creation time (U14) that has not
  * been confirmed or cancelled yet.
@@ -311,5 +329,6 @@ export function createRoomRepo() {
     findRequestedRoomBookingByBookingId,
     findCancellableRoomBookingByBookingId,
     updateRoomBookingStatus,
+    updateRoomBookingTimes,
   };
 }

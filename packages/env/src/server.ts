@@ -208,6 +208,35 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
       });
     }
   }
+
+  // D3: in production-like environments the scheduler must be enabled —
+  // a prod server started with SCHEDULER_ENABLED=false silently skips every
+  // booking-expiry / hold-release / email / SLA job while /health stays ok.
+  if (isProductionLike(val.NODE_ENV) && val.SCHEDULER_ENABLED !== true) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["SCHEDULER_ENABLED"],
+      message:
+        "must be true when NODE_ENV is production/staging — a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation",
+    });
+  }
+
+  // D2: with PAYMENT_PROVIDER=xendit in production-like environments the
+  // webhook IP allowlist is mandatory — an empty WEBHOOK_ALLOWED_IPS means
+  // every IP can reach the webhook endpoint (signature still gates, but the
+  // allowlist is the second defense layer; RUNBOOK requires it at deploy).
+  if (
+    isProductionLike(val.NODE_ENV) &&
+    val.PAYMENT_PROVIDER === "xendit" &&
+    !val.WEBHOOK_ALLOWED_IPS
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["WEBHOOK_ALLOWED_IPS"],
+      message:
+        "required when PAYMENT_PROVIDER=xendit in production/staging — an empty allowlist leaves the webhook endpoint open to every IP",
+    });
+  }
 });
 
 export const env = createEnv({

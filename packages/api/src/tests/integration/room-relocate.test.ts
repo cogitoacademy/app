@@ -361,4 +361,59 @@ describe("H3: relocateRoom transitions AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULE
     expect(row.holdAmount).toBeGreaterThan(0);
     expect(row.deadlineAt!.getTime()).toBeGreaterThan(Date.now());
   });
+
+  test("N3: proposal rejection resyncs a pre-assigned confirmed room back to the original schedule", async () => {
+    // Sessions are fixed at 90 minutes — the booking's real end is
+    // start + SESSION_DURATION_MS (createSolo normalizes the end).
+    const originalStart = new Date(Date.now() + 60 * 3600_000);
+    const originalEnd = new Date(originalStart.getTime() + 90 * 60_000);
+    const proposedStartISO = new Date(Date.now() + 84 * 3600_000).toISOString();
+    const proposedEndISO = new Date(Date.now() + 85 * 3600_000).toISOString();
+
+    const created = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "offline",
+      scheduledStartAt: originalStart.toISOString(),
+      scheduledEndAt: originalEnd.toISOString(),
+      timezone: "Asia/Jakarta",
+    });
+    await tutorClient.tutorActions.acceptBooking({ bookingId: created.id });
+
+    // Proposal pending → admin pre-assigns the room at the PROPOSAL time
+    // (F22 RESCHEDULE_PROPOSED carve-out).
+    await studentClient.booking.proposeReschedule({
+      bookingId: created.id,
+      proposedStartAt: proposedStartISO,
+      proposedEndAt: proposedEndISO,
+      reason: "Coba jadwal baru",
+      availabilitySlotId: slotId,
+    });
+    await adminClient.room.assign({
+      bookingId: created.id,
+      roomId: roomAId,
+      startAt: proposedStartISO,
+      endAt: proposedEndISO,
+    });
+
+    let rows = await listRoomBookings(created.id);
+    expect(rows.filter((r) => r.status === "confirmed").length).toBe(1);
+    const confirmedBefore = rows.find((r) => r.status === "confirmed")!;
+    expect(confirmedBefore.startAt.toISOString()).toBe(proposedStartISO);
+
+    // The student rejects the proposal → booking keeps the original
+    // schedule; the confirmed roomBooking must move back to it.
+    await studentClient.booking.rejectReschedule({ bookingId: created.id });
+
+    const row = await getBookingRow(created.id);
+    expect(row.currentState).toBe(BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL);
+    expect(row.scheduledStartAt.getTime()).toBe(originalStart.getTime());
+    expect(row.scheduledEndAt.getTime()).toBe(originalEnd.getTime());
+
+    rows = await listRoomBookings(created.id);
+    const confirmedAfter = rows.find((r) => r.status === "confirmed")!;
+    expect(confirmedAfter.id).toBe(confirmedBefore.id);
+    expect(confirmedAfter.startAt.getTime()).toBe(originalStart.getTime());
+    expect(confirmedAfter.endAt.getTime()).toBe(originalEnd.getTime());
+  });
 });

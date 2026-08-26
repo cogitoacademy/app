@@ -88,6 +88,16 @@ export interface BookingRoomPort {
    * the request was already confirmed/cancelled.
    */
   cancelRequestedRoomForBooking(conn: DbOrTx, bookingId: string): Promise<void>;
+  /**
+   * N3: resyncs the booking's confirmed roomBooking row back to a schedule
+   * (used when a reschedule proposal is rejected/expires and the booking
+   * keeps its original time). No-op when the booking has no confirmed row.
+   */
+  resyncRoomBookingToSchedule(
+    conn: DbOrTx,
+    bookingId: string,
+    schedule: { startAt: Date; endAt: Date },
+  ): Promise<void>;
 }
 
 export interface BookingPayoutPort {

@@ -77,6 +77,21 @@ describe("procedures", () => {
     });
   });
 
+  test("requireEmailVerified throws UNAUTHORIZED when session is null", async () => {
+    const { requireEmailVerified } = await import("../../procedures");
+
+    try {
+      await (requireEmailVerified as any)({
+        context: { session: null, services: {} },
+        next: async () => "should not reach",
+      });
+      expect.unreachable("Should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ORPCError);
+      expect((e as ORPCError).code).toBe("UNAUTHORIZED");
+    }
+  });
+
   test("requireEmailVerified calls next for a verified user", async () => {
     const { requireEmailVerified } = await import("../../procedures");
 
