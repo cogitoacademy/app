@@ -41,7 +41,7 @@ export function CalendarEventItem({
         type="button"
         aria-label={`View details for ${event.title}`}
         className={cn(
-          "relative mt-(--event-gap) flex h-(--event-height) w-full select-none items-center overflow-hidden px-2 text-left text-[10px] font-medium outline-none backdrop-blur-sm transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary sm:text-xs",
+          "relative mt-(--event-gap) flex h-(--event-height) w-full select-none items-center overflow-hidden px-2 text-left text-[10px] font-medium outline-none backdrop-blur-sm transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary sm:text-xs text-foreground!",
           eventClass,
           getBorderRadiusClass(isFirstDay, isLastDay),
           isFirstDay && "border-l-4",

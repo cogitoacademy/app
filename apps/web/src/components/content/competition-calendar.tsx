@@ -130,10 +130,10 @@ export function CompetitionCalendar({
   return (
     <>
       <Card className={cn("overflow-hidden", className)} style={calendarStyle}>
-        <CardHeader className="flex-wrap gap-3 bg-accent/40 p-3 sm:p-4">
+        <CardHeader className="flex-wrap gap-3 bg-[#F0BCD0] dark:bg-accent/40 p-3 sm:p-4">
           <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={handleToday}
               aria-label="Go to today"
@@ -166,31 +166,34 @@ export function CompetitionCalendar({
             </CardTitle>
           </div>
 
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label="Change calendar view"
-                />
-              }
-            >
-              <span className="max-[479px]:sr-only">
-                {view === "month" ? "Month" : "Agenda"}
-              </span>
-              <span className="hidden max-[479px]:inline" aria-hidden="true">
-                {view === "month" ? "M" : "A"}
-              </span>
-              <IconChevronDown />
-            </MenuTrigger>
-            <MenuPopup align="end" size="compact">
-              <MenuRadioGroup value={view} onValueChange={handleViewChange}>
-                <MenuRadioItem value="month">Month</MenuRadioItem>
-                <MenuRadioItem value="agenda">Agenda</MenuRadioItem>
-              </MenuRadioGroup>
-            </MenuPopup>
-          </Menu>
+          <div className="ml-auto">
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    aria-label="Change calendar view"
+                    className="w-fit"
+                  />
+                }
+              >
+                <span className="max-[479px]:sr-only">
+                  {view === "month" ? "Month" : "Agenda"}
+                </span>
+                <span className="hidden max-[479px]:inline" aria-hidden="true">
+                  {view === "month" ? "M" : "A"}
+                </span>
+                <IconChevronDown />
+              </MenuTrigger>
+              <MenuPopup align="end" size="compact">
+                <MenuRadioGroup value={view} onValueChange={handleViewChange}>
+                  <MenuRadioItem value="month">Month</MenuRadioItem>
+                  <MenuRadioItem value="agenda">Agenda</MenuRadioItem>
+                </MenuRadioGroup>
+              </MenuPopup>
+            </Menu>
+          </div>
         </CardHeader>
 
         <CardBody className="p-0!">

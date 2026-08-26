@@ -3,9 +3,11 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 export function useEventVisibility({
   eventHeight,
   eventGap,
+  measurementKey,
 }: {
   eventHeight: number;
   eventGap: number;
+  measurementKey: number;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | null>(null);
@@ -20,7 +22,7 @@ export function useEventVisibility({
     const observer = new ResizeObserver(updateHeight);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [measurementKey]);
 
   const getVisibleEventCount = useMemo(
     () => (totalEvents: number) => {

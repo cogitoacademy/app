@@ -54,7 +54,7 @@ export function CompetitionCalendarPage() {
     return (
       <Stack direction="column" spacing="lg">
         <div>
-          <Heading>Competition Calendar</Heading>
+          <Heading>Your Gateway to the World Stage</Heading>
           <Text className="mt-1 text-muted">
             Loading published competitions…
           </Text>
@@ -82,13 +82,9 @@ export function CompetitionCalendarPage() {
   return (
     <Stack direction="column" spacing="lg">
       <div>
-        <div className="flex items-center gap-2">
-          <IconCalendarEvent className="size-6 text-primary" />
-          <Heading>Competition Calendar</Heading>
-        </div>
-        <Text className="mt-1 max-w-2xl text-muted">
-          Keep track of upcoming competitions, registration deadlines, and event
-          details in one place.
+        <Heading>Your Gateway to the World Stage</Heading>
+        <Text className="mt-1 max-w-3xl text-muted">
+          From national challenges to global arenas, access a curated list of opportunities tailored for your next big win. Keep track of upcoming competitions, registration deadlines, and event details in one place.
         </Text>
       </div>
       {events.length > 0 ? (

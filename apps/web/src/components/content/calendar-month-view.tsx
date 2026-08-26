@@ -23,10 +23,10 @@ import { CalendarEventsPopup } from "./calendar-events-popup";
 import {
   EVENT_GAP,
   EVENT_HEIGHT,
+  getEventLanesForWeek,
   getAllEventsForDay,
   getEventsForDay,
   getSpanningEventsForDay,
-  sortEvents,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
 import { useEventVisibility } from "./use-event-visibility";
@@ -49,6 +49,7 @@ export function CalendarMonthView({
   const { contentRef, getVisibleEventCount } = useEventVisibility({
     eventGap: EVENT_GAP,
     eventHeight: EVENT_HEIGHT,
+    measurementKey: currentDate.getTime(),
   });
 
   useEffect(() => setIsMounted(true), []);
@@ -123,84 +124,111 @@ export function CalendarMonthView({
           ))}
         </div>
         <div className="grid auto-rows-fr">
-          {weeks.map((week) => (
-            <div
-              key={week[0].toISOString()}
-              className="grid grid-cols-7 [&:last-child>*]:border-b-0"
-            >
-              {week.map((day, dayIndex) => {
-                const dayEvents = getEventsForDay(events, day);
-                const spanningEvents = getSpanningEventsForDay(events, day);
-                const allDayEvents = [...spanningEvents, ...dayEvents];
-                const allEvents = getAllEventsForDay(events, day);
-                const isReferenceCell = week[0] === day && dayIndex === 0;
-                const visibleCount = isMounted
-                  ? getVisibleEventCount(allDayEvents.length)
-                  : Math.min(allDayEvents.length, 3);
-                const hasMore = allDayEvents.length > visibleCount;
+          {weeks.map((week) => {
+            const eventLanes = getEventLanesForWeek(events, week);
+            const laneCount = eventLanes.size
+              ? Math.max(...eventLanes.values()) + 1
+              : 0;
+            const visibleLaneCount = isMounted
+              ? getVisibleEventCount(laneCount)
+              : Math.min(laneCount, 3);
 
-                return (
-                  <div
-                    key={day.toISOString()}
-                    className="group min-h-28 border-r border-b border-border bg-card p-1.5 last:border-r-0 sm:min-h-32"
-                    data-outside-cell={
-                      !isSameMonth(day, currentDate) || undefined
-                    }
-                    data-today={isToday(day) || undefined}
-                  >
+            return (
+              <div
+                key={week[0].toISOString()}
+                className="grid grid-cols-7 [&:last-child>*]:border-b-0"
+              >
+                {week.map((day, dayIndex) => {
+                  const dayEvents = getEventsForDay(events, day);
+                  const spanningEvents = getSpanningEventsForDay(events, day);
+                  const allDayEvents = [...spanningEvents, ...dayEvents];
+                  const allEvents = getAllEventsForDay(events, day);
+                  const eventsByLane = new Map(
+                    allDayEvents.map((event) => [
+                      eventLanes.get(event.id),
+                      event,
+                    ]),
+                  );
+                  const hiddenEvents = allDayEvents.filter((event) => {
+                    const lane = eventLanes.get(event.id);
+                    return lane === undefined || lane >= visibleLaneCount;
+                  });
+                  const isReferenceCell = week[0] === day && dayIndex === 0;
+                  const hasMore = hiddenEvents.length > 0;
+
+                  return (
                     <div
-                      className="mb-1 flex size-6 items-center justify-center rounded-full text-xs text-muted group-data-[outside-cell=true]:text-dimmed group-data-[today=true]:bg-primary group-data-[today=true]:font-semibold group-data-[today=true]:text-primary-foreground"
-                      aria-label={format(day, "d MMMM yyyy")}
+                      key={day.toISOString()}
+                      className="group min-h-28 border-r border-b border-border bg-card p-1.5 last:border-r-0 sm:min-h-32"
+                      data-outside-cell={
+                        !isSameMonth(day, currentDate) || undefined
+                      }
+                      data-today={isToday(day) || undefined}
                     >
-                      {format(day, "d")}
-                    </div>
-                    <div
-                      ref={isReferenceCell ? contentRef : undefined}
-                      className="min-h-[calc((var(--event-height)+var(--event-gap))*3)] lg:min-h-[calc((var(--event-height)+var(--event-gap))*4)]"
-                    >
-                      {sortEvents(allDayEvents).map((calendarEvent, index) => {
-                        if (index >= visibleCount) return null;
+                      <div
+                        className="mb-1 flex size-6 items-center justify-center rounded-full text-xs text-muted group-data-[outside-cell=true]:text-dimmed group-data-[today=true]:bg-cogito-orange group-data-[today=true]:font-semibold group-data-[today=true]:text-primary-foreground"
+                        aria-label={format(day, "d MMMM yyyy")}
+                      >
+                        {format(day, "d")}
+                      </div>
+                      <div
+                        ref={isReferenceCell ? contentRef : undefined}
+                        className="min-h-[calc((var(--event-height)+var(--event-gap))*3)] lg:min-h-[calc((var(--event-height)+var(--event-gap))*4)]"
+                      >
+                        {Array.from({ length: visibleLaneCount }, (_, lane) => {
+                          const calendarEvent = eventsByLane.get(lane);
 
-                        const eventStart = new Date(calendarEvent.start);
-                        const eventEnd = new Date(calendarEvent.end);
-                        const isFirstDay = isSameDay(day, eventStart);
-                        const isLastDay = isSameDay(day, eventEnd);
-
-                        return (
-                          <CalendarEventItem
-                            key={`${calendarEvent.id}-${day.toISOString()}`}
-                            event={calendarEvent}
-                            view="month"
-                            isFirstDay={isFirstDay}
-                            isLastDay={isLastDay}
-                            onClick={(clickEvent) => {
-                              clickEvent.stopPropagation();
-                              onEventSelect(calendarEvent);
-                            }}
-                            isContinuation={!isFirstDay}
-                          />
-                        );
-                      })}
-                      {hasMore ? (
-                        <Button
-                          type="button"
-                          variant="plain"
-                          size="xs"
-                          className="mt-(--event-gap) w-full justify-start px-1 text-[10px] text-muted sm:px-2 sm:text-xs"
-                          aria-label={`Show ${allEvents.length - visibleCount} more events on ${format(day, "d MMMM yyyy")}`}
-                          onClick={(clickEvent) =>
-                            handleMoreClick(day, allEvents, clickEvent)
+                          if (!calendarEvent) {
+                            return (
+                              <div
+                                key={`${day.toISOString()}-lane-${lane}`}
+                                aria-hidden="true"
+                                className="mt-(--event-gap) h-(--event-height)"
+                              />
+                            );
                           }
-                        >
-                          + {allEvents.length - visibleCount} more
-                        </Button>
-                      ) : null}
+
+                          const eventStart = new Date(calendarEvent.start);
+                          const eventEnd = new Date(calendarEvent.end);
+                          const isFirstDay = isSameDay(day, eventStart);
+                          const isLastDay = isSameDay(day, eventEnd);
+
+                          return (
+                            <CalendarEventItem
+                              key={`${calendarEvent.id}-${day.toISOString()}`}
+                              event={calendarEvent}
+                              view="month"
+                              isFirstDay={isFirstDay}
+                              isLastDay={isLastDay}
+                              onClick={(clickEvent) => {
+                                clickEvent.stopPropagation();
+                                onEventSelect(calendarEvent);
+                              }}
+                              isContinuation={!isFirstDay}
+                            />
+                          );
+                        })}
+                        {hasMore ? (
+                          <Button
+                            type="button"
+                            variant="plain"
+                            size="xs"
+                            className="mt-(--event-gap) w-full justify-start px-1 text-[10px] text-muted sm:px-2 sm:text-xs"
+                            aria-label={`Show ${hiddenEvents.length} more events on ${format(day, "d MMMM yyyy")}`}
+                            onClick={(clickEvent) =>
+                              handleMoreClick(day, allEvents, clickEvent)
+                            }
+                          >
+                            + {hiddenEvents.length} more
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
       {overflow ? (
