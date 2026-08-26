@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { db } from "@cogito-app/db";
 import { markPackage } from "@cogito-app/db/schema";
 import { seedAllowed, seedAdminPassword } from "./seed";
-import { PACKAGES, seedPackages } from "./seed-packages";
+import { PACKAGES, seedPackages, seedPackagesAllowed } from "./seed-packages";
 
 describe("seed guards", () => {
   test("seedAllowed is false in production without explicit flag", () => {
@@ -15,6 +15,13 @@ describe("seed guards", () => {
   test("seedAllowed treats staging like production", () => {
     expect(seedAllowed("staging", undefined)).toBe(false);
     expect(seedAllowed("staging", "true")).toBe(true);
+  });
+
+  test("seedPackagesAllowed protects the standalone package seed", () => {
+    expect(seedPackagesAllowed("production", undefined)).toBe(false);
+    expect(seedPackagesAllowed("staging", undefined)).toBe(false);
+    expect(seedPackagesAllowed("production", "true")).toBe(true);
+    expect(seedPackagesAllowed("development", undefined)).toBe(true);
   });
 
   test("seedAdminPassword rejects short or missing passwords", () => {

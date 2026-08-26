@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { request } from "@playwright/test";
 import dotenv from "dotenv";
 
 async function globalSetup() {
@@ -39,6 +40,25 @@ async function globalSetup() {
     env: testSeedEnv,
     stdio: "inherit",
   });
+
+  // Reuse one authenticated student session across specs. The server's auth
+  // limiter intentionally allows only 10 sign-in attempts per IP/minute;
+  // logging the same seeded user in for every test would make the suite hit
+  // that production safeguard before the economy specs begin.
+  const authDir = path.resolve(process.cwd(), ".auth");
+  mkdirSync(authDir, { recursive: true });
+  const authContext = await request.newContext({ baseURL: "http://localhost:3101" });
+  const signIn = await authContext.post("/api/auth/sign-in/email", {
+    data: {
+      email: "student.seed@cogitoacademy.id",
+      password: testSeedEnv.SEED_STUDENT_PASSWORD,
+    },
+  });
+  if (!signIn.ok()) {
+    throw new Error(`Failed to create E2E student storage state (${signIn.status()})`);
+  }
+  await authContext.storageState({ path: path.join(authDir, "student.json") });
+  await authContext.dispose();
   console.log("Seed complete.");
 }
 

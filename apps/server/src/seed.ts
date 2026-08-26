@@ -10,11 +10,13 @@ import {
   tutorProfile,
   availabilitySlot,
   markPackage,
+  economyConfig,
 } from "@cogito-app/db/schema";
 import {
   INVITE_EXPIRY_DAYS,
   USER_ROLE,
 } from "@cogito-app/api/shared/constants";
+import { DEFAULT_ECONOMY_CONFIG } from "@cogito-app/api/modules/economy/economy.types";
 import { hashInviteToken } from "@cogito-app/api/lib/tokens";
 
 const SEED_SUFFIX = "seed";
@@ -83,7 +85,7 @@ async function seedDemoStudent(email: string, password: string, name: string) {
   const student = await ensureUser(email, password, name);
   await db
     .update(user)
-    .set({ role: USER_ROLE.STUDENT })
+    .set({ role: USER_ROLE.STUDENT, emailVerified: true })
     .where(eq(user.id, student.id));
 
   const { services } = await import("@cogito-app/api/services");
@@ -118,6 +120,75 @@ async function seedDemoStudent(email: string, password: string, name: string) {
   return student;
 }
 
+async function ensureSeedAvailability(tutorId: string) {
+  const slots = await db
+    .select({
+      id: availabilitySlot.id,
+      startDate: availabilitySlot.startDate,
+      endDate: availabilitySlot.endDate,
+    })
+    .from(availabilitySlot)
+    .where(eq(availabilitySlot.tutorId, tutorId));
+
+  if (slots.length === 0) {
+    const base = new Date();
+    base.setHours(10, 0, 0, 0);
+    for (let i = 1; i <= 5; i++) {
+      const start = new Date(base.getTime() + i * 24 * 60 * 60 * 1000);
+      const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+      // eslint-disable-next-line no-await-in-loop
+      await db.insert(availabilitySlot).values({
+        tutorId,
+        startDate: start,
+        endDate: end,
+        modality: "both",
+      });
+    }
+    return;
+  }
+
+  // The booking flow uses a fixed 90-minute session. Repair legacy seed rows
+  // that were created with one-hour windows so the deterministic demo account
+  // always has at least one valid start time.
+  for (const slot of slots) {
+    if (slot.endDate.getTime() - slot.startDate.getTime() < 90 * 60_000) {
+      // eslint-disable-next-line no-await-in-loop
+      await db
+        .update(availabilitySlot)
+        .set({
+          endDate: new Date(slot.startDate.getTime() + 2 * 60 * 60 * 1000),
+        })
+        .where(eq(availabilitySlot.id, slot.id));
+    }
+  }
+}
+
+async function resetTestEconomy() {
+  if (env.NODE_ENV !== "test") return;
+
+  await db
+    .insert(economyConfig)
+    .values(DEFAULT_ECONOMY_CONFIG)
+    .onConflictDoUpdate({
+      target: economyConfig.id,
+      set: {
+        markValueIdr: DEFAULT_ECONOMY_CONFIG.markValueIdr,
+        minTutorBaseRateIdr: DEFAULT_ECONOMY_CONFIG.minTutorBaseRateIdr,
+        onlineTutorIncrementIdr: DEFAULT_ECONOMY_CONFIG.onlineTutorIncrementIdr,
+        offlineTutorIncrementIdr:
+          DEFAULT_ECONOMY_CONFIG.offlineTutorIncrementIdr,
+        onlineCogitoBaseIdr: DEFAULT_ECONOMY_CONFIG.onlineCogitoBaseIdr,
+        onlineCogitoIncrementIdr:
+          DEFAULT_ECONOMY_CONFIG.onlineCogitoIncrementIdr,
+        offlineCogitoBaseIdr: DEFAULT_ECONOMY_CONFIG.offlineCogitoBaseIdr,
+        offlineCogitoIncrementIdr:
+          DEFAULT_ECONOMY_CONFIG.offlineCogitoIncrementIdr,
+        version: DEFAULT_ECONOMY_CONFIG.version,
+        updatedBy: null,
+      },
+    });
+}
+
 async function seed() {
   if (!seedAllowed(env.NODE_ENV, process.env.SEED_ALLOWED_IN_PROD)) {
     throw new Error(
@@ -131,6 +202,7 @@ async function seed() {
     );
   }
 
+  await resetTestEconomy();
   await seedPackages();
 
   const adminEmail = "admin@cogitoacademy.id";
@@ -198,20 +270,6 @@ async function seed() {
       })
       .returning();
 
-    const base = new Date();
-    base.setHours(10, 0, 0, 0);
-    for (let i = 1; i <= 5; i++) {
-      const start = new Date(base.getTime() + i * 24 * 60 * 60 * 1000);
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
-      // eslint-disable-next-line no-await-in-loop
-      await db.insert(availabilitySlot).values({
-        tutorId: tutorUser.id,
-        startDate: start,
-        endDate: end,
-        modality: "both",
-      });
-    }
-
     console.log("Seed tutor profile ready:", profile!.id);
   } else {
     await db
@@ -220,6 +278,8 @@ async function seed() {
       .where(eq(tutorProfile.userId, tutorUser.id));
     console.log("Seed tutor profile already exists:", existingProfile[0].id);
   }
+
+  await ensureSeedAvailability(tutorUser.id);
 
   await seedDemoStudent(
     `student.${SEED_SUFFIX}@cogitoacademy.id`,

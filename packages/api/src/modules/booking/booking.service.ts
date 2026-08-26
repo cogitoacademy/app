@@ -475,6 +475,36 @@ export function createBookingService(deps: {
     return null;
   }
 
+  async function refreshDeadlineForState(
+    tx: DbOrTx,
+    bookingId: string,
+    state: BookingState,
+    modality: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+  ): Promise<void> {
+    const now = Date.now();
+    const deadlineAt =
+      state === BOOKING_STATE.AWAITING_TUTOR_REVIEW
+        ? new Date(now + RESPONSE_WINDOW_MS)
+        : state === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL
+          ? new Date(
+              Math.min(now + RESPONSE_WINDOW_MS, scheduledStartAt.getTime()),
+            )
+          : state === BOOKING_STATE.SCHEDULED
+            ? new Date(
+                scheduledEndAt.getTime() +
+                  (modality === MODALITY.OFFLINE
+                    ? OFFLINE_SCHEDULED_GRACE_MS
+                    : 24 * 60 * 60 * 1000),
+              )
+            : null;
+
+    if (deadlineAt) {
+      await repo.updateBookingDeadline(tx, bookingId, deadlineAt);
+    }
+  }
+
   /**
    * Builds the deep-link CTA used by the group/group-series invitee email so
    * an invited student can view and accept the invite directly in-platform.
@@ -1113,7 +1143,9 @@ export function createBookingService(deps: {
         title: "Booking accepted",
         body: isOffline
           ? "Tutor accepted. Waiting for admin room approval."
-          : "Tutor accepted. Session scheduled.",
+          : updated?.currentState === BOOKING_STATE.SCHEDULED
+            ? "Tutor accepted. Session scheduled."
+            : "Tutor accepted. The booking is confirmed, but meeting link setup still needs attention.",
         eventKey: `booking.${bookingId}.accepted`,
         emailRequired: true,
       });
@@ -2031,9 +2063,25 @@ export function createBookingService(deps: {
           });
         }
 
-        const targetState =
+        let targetState =
           (b.previousState as BookingState | null) ??
           BOOKING_STATE.AWAITING_TUTOR_REVIEW;
+
+        if (b.modality === MODALITY.OFFLINE && !pending.sessionId && roomPort) {
+          const roomSync = await roomPort.syncRoomBookingScheduleForBooking(
+            tx,
+            bookingId,
+            pending.proposedStartAt,
+            pending.proposedEndAt,
+          );
+          if (
+            targetState === BOOKING_STATE.SCHEDULED &&
+            roomSync !== "updated"
+          ) {
+            targetState = BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL;
+          }
+        }
+
         const transitioned = await transition(tx, bookingId, targetState, {
           actorId: userId,
           actorType:
@@ -2045,41 +2093,16 @@ export function createBookingService(deps: {
           },
         });
 
-        if (targetState === BOOKING_STATE.AWAITING_TUTOR_REVIEW) {
-          await repo.updateBookingDeadline(
-            tx,
-            bookingId,
-            new Date(Date.now() + RESPONSE_WINDOW_MS),
-          );
-        } else if (targetState === BOOKING_STATE.SCHEDULED) {
-          // H1: an accepted reschedule moves the session to the proposal's new
-          // times — refresh the deadline from the NEW session end (mirror
-          // finalizeMeetingSchedule / transitionBookingToScheduled) so the
-          // booking is not auto-expired at the proposal's now+24h.
-          await repo.updateBookingDeadline(
-            tx,
-            bookingId,
-            new Date(
-              pending.proposedEndAt.getTime() +
-                (b.modality === MODALITY.OFFLINE
-                  ? OFFLINE_SCHEDULED_GRACE_MS
-                  : 24 * 60 * 60 * 1000),
-            ),
-          );
-        } else if (targetState === BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL) {
-          // Mirror the offline room-approval window (DL-25/U12): 12h, capped at
-          // the (new) session start.
-          await repo.updateBookingDeadline(
-            tx,
-            bookingId,
-            new Date(
-              Math.min(
-                Date.now() + RESPONSE_WINDOW_MS,
-                pending.proposedStartAt.getTime(),
-              ),
-            ),
-          );
-        }
+        // H1: refresh the deadline from the new session/state so a reschedule
+        // cannot retain the proposal-era deadline.
+        await refreshDeadlineForState(
+          tx,
+          bookingId,
+          targetState,
+          b.modality,
+          pending.proposedStartAt,
+          pending.proposedEndAt,
+        );
 
         for (const recipientId of Object.keys(decisions).filter(
           (id) => id !== userId,
@@ -2155,7 +2178,7 @@ export function createBookingService(deps: {
         .filter(([, t]) => t.to.includes(BOOKING_STATE.RESCHEDULE_PROPOSED))
         .map(([state]) => state);
       const previous = b.previousState as BookingState | null;
-      const revertTarget =
+      let revertTarget =
         previous && rescheduleSources.includes(previous)
           ? previous
           : // Unreachable given the current transitions table; kept as a
@@ -2163,11 +2186,35 @@ export function createBookingService(deps: {
             // matching revert target.
             BOOKING_STATE.AWAITING_RECONFIRMATION;
 
+      if (b.modality === MODALITY.OFFLINE && !proposal.sessionId && roomPort) {
+        const roomSync = await roomPort.syncRoomBookingScheduleForBooking(
+          tx,
+          bookingId,
+          b.scheduledStartAt,
+          b.scheduledEndAt,
+        );
+        if (
+          revertTarget === BOOKING_STATE.SCHEDULED &&
+          roomSync !== "updated"
+        ) {
+          revertTarget = BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL;
+        }
+      }
+
       const updated = await transition(tx, bookingId, revertTarget, {
         actorId: userId,
         actorType: userId === b.tutorId ? ACTOR_TYPE.TUTOR : ACTOR_TYPE.STUDENT,
         reason: "A required party rejected the reschedule proposal",
       });
+
+      await refreshDeadlineForState(
+        tx,
+        bookingId,
+        revertTarget,
+        b.modality,
+        b.scheduledStartAt,
+        b.scheduledEndAt,
+      );
 
       // N3: the RESCHEDULE_PROPOSED carve-out lets an admin pre-assign a
       // room at the proposal time. On rejection the booking keeps its
@@ -3765,20 +3812,42 @@ export function createBookingService(deps: {
                 decidedAt: new Date(),
               });
             }
-            const targetState =
+            let targetState =
               (b.previousState as BookingState | null) ??
               BOOKING_STATE.AWAITING_TUTOR_REVIEW;
+
+            if (
+              b.modality === MODALITY.OFFLINE &&
+              proposal &&
+              !proposal.sessionId &&
+              roomPort
+            ) {
+              const roomSync = await roomPort.syncRoomBookingScheduleForBooking(
+                tx,
+                b.id,
+                b.scheduledStartAt,
+                b.scheduledEndAt,
+              );
+              if (
+                targetState === BOOKING_STATE.SCHEDULED &&
+                roomSync !== "updated"
+              ) {
+                targetState = BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL;
+              }
+            }
+
             await transition(tx, b.id, targetState, {
               actorId: "system",
               actorType: ACTOR_TYPE.SYSTEM,
               reason: "Reschedule proposal expired; original time retained",
             });
-            await repo.updateBookingDeadline(
+            await refreshDeadlineForState(
               tx,
               b.id,
-              targetState === BOOKING_STATE.AWAITING_TUTOR_REVIEW
-                ? new Date(Date.now() + RESPONSE_WINDOW_MS)
-                : new Date(b.scheduledEndAt.getTime() + 24 * 60 * 60 * 1000),
+              targetState,
+              b.modality,
+              b.scheduledStartAt,
+              b.scheduledEndAt,
             );
             // N3: same room-resync as rejection — the proposal expired, the
             // booking keeps its original schedule, so a pre-assigned

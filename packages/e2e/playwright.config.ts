@@ -24,6 +24,7 @@ const envFile =
 const resolvedEnvFile = path.resolve(process.cwd(), envFile);
 const serverCwd = path.resolve(process.cwd(), "../../apps/server");
 const webCwd = path.resolve(process.cwd(), "../../apps/web");
+const studentStorageState = path.resolve(process.cwd(), ".auth/student.json");
 
 export default defineConfig({
   testDir: "./src/specs",
@@ -34,6 +35,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { outputFolder: "playwright-report" }]],
   use: {
     baseURL: webUrl,
+    storageState: studentStorageState,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },

@@ -379,6 +379,44 @@ export function createRoomService(
     await repo.updateRoomBookingTimes(conn, current.id, schedule);
   }
 
+  /**
+   * Keeps a confirmed room assignment aligned with a booking-level
+   * reschedule. A conflicting target window cancels the active assignment so
+   * the booking can return to the room-approval queue without leaving a room
+   * reserved at the wrong time.
+   */
+  async function syncRoomBookingScheduleForBooking(
+    conn: DbOrTx,
+    bookingId: string,
+    startAt: Date,
+    endAt: Date,
+  ): Promise<"updated" | "missing" | "conflict"> {
+    const current = await repo.findActiveRoomBookingByBookingId(
+      conn,
+      bookingId,
+    );
+    if (!current) return "missing";
+
+    const conflicting = await repo.findRoomBookingsForUpdate(
+      conn,
+      current.roomId,
+      startAt,
+      endAt,
+      bookingId,
+    );
+    if (conflicting.length > 0) {
+      await repo.updateRoomBookingStatus(
+        conn,
+        current.id,
+        ROOM_BOOKING_STATUS.CANCELLED,
+      );
+      return "conflict";
+    }
+
+    await repo.updateRoomBookingSchedule(conn, current.id, startAt, endAt);
+    return "updated";
+  }
+
   return {
     listActive,
     listPendingApprovals,
@@ -390,5 +428,6 @@ export function createRoomService(
     cancelRoomBooking,
     cancelRequestedRoomForBooking,
     resyncRoomBookingToSchedule,
+    syncRoomBookingScheduleForBooking,
   };
 }

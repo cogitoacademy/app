@@ -1,15 +1,27 @@
 import { db } from "@cogito-app/db";
 import { sql } from "drizzle-orm";
-import { wallet } from "@cogito-app/db/schema";
+import { user, wallet } from "@cogito-app/db/schema";
 import { eq } from "drizzle-orm";
 
-const SEED_STUDENT_ID = "jFo1KOr9PsnbUiPTFkcdciDSqtXPDgfd";
+const SEED_STUDENT_EMAIL = "student.seed@cogitoacademy.id";
 
 async function reset() {
+  const [seedStudent] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.email, SEED_STUDENT_EMAIL))
+    .limit(1);
+
+  if (!seedStudent) {
+    console.log("Seed student does not exist yet; nothing to reset");
+    return;
+  }
+
+  const seedStudentId = seedStudent.id;
   const [seedWallet] = await db
     .select({ id: wallet.id })
     .from(wallet)
-    .where(eq(wallet.userId, SEED_STUDENT_ID))
+    .where(eq(wallet.userId, seedStudentId))
     .limit(1);
   const walletId = seedWallet?.id;
 
@@ -20,10 +32,10 @@ async function reset() {
   }
 
   await db.execute(
-    sql`delete from booking_participant where user_id = ${SEED_STUDENT_ID}`,
+    sql`delete from booking_participant where user_id = ${seedStudentId}`,
   );
   await db.execute(
-    sql`delete from booking where proposer_id = ${SEED_STUDENT_ID}`,
+    sql`delete from booking where proposer_id = ${seedStudentId}`,
   );
 
   if (walletId) {

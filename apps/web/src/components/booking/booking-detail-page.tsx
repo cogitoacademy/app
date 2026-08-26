@@ -78,6 +78,10 @@ import {
 } from "./booking-ui";
 import { BookingLifecycleActions } from "./booking-lifecycle-actions";
 import {
+  BOOKING_DEADLINE_STATES,
+  BookingDeadlineNotice,
+} from "./booking-deadline-notice";
+import {
   BookingRescheduleAction,
   canProposeBookingReschedule,
 } from "./booking-reschedule-action";
@@ -116,6 +120,13 @@ export function BookingDetailPage({
     ...orpc.booking.get.queryOptions({ input: { bookingId } }),
     refetchInterval: (query) => {
       const data = query.state.data;
+      if (
+        data &&
+        BOOKING_DEADLINE_STATES.has(data.currentState) &&
+        data.deadlineAt
+      ) {
+        return 30_000;
+      }
       if (data?.modality !== "online" || data.meetingStatus === "ready") {
         return false;
       }
@@ -385,6 +396,11 @@ export function BookingDetailPage({
                 {booking.disclaimer}
               </div>
             ) : null}
+            <BookingDeadlineNotice
+              currentState={booking.currentState}
+              deadlineAt={booking.deadlineAt}
+              timezone={booking.timezone}
+            />
           </div>
           <div className="flex flex-col items-start gap-3 sm:items-end sm:justify-between">
             <Badge variant={getBookingStateVariant(booking.currentState)} pill>
@@ -1338,6 +1354,8 @@ function MarkAmount({ value }: { value: number }) {
         src={COGITO_MARK_SRC}
         alt=""
         aria-hidden="true"
+        width={16}
+        height={16}
         className="size-4 shrink-0 object-contain"
       />
       <span>{value}</span>
