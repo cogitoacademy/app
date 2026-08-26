@@ -2950,6 +2950,11 @@ describe("BookingService", () => {
               booking = { ...booking, ...updates };
             },
           ),
+          updateBookingHoldAmount: mock(
+            async (_tx: any, _id: string, amount: number) => {
+              booking = { ...booking, holdAmount: amount };
+            },
+          ),
           updateBookingVersioned: mock(
             async (_tx: any, _id: string, version: number, updates: any) => ({
               updated: { ...booking, ...updates, version: version + 1 },
@@ -2961,10 +2966,10 @@ describe("BookingService", () => {
 
       await service.reconfirm("student1", "b1", true);
 
-      expect(repo.updateBookingPriceSnapshot).toHaveBeenCalledWith(
+      expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
         expect.anything(),
         "b1",
-        expect.objectContaining({ holdAmount: 84 }),
+        84,
       );
       expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
 
