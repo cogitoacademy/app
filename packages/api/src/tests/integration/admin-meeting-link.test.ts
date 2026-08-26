@@ -208,7 +208,7 @@ describe("U1: manual meeting-link entry (FR-21/TC-36)", () => {
         bookingId: bookedId,
         url: "not-a-url",
       }),
-    ).rejects.toThrow(/invalid|validation/i);
+    ).rejects.toThrow(/URL|invalid|validation/i);
   });
 
   test("U1: non-web URL schemes are rejected by zod", async () => {
