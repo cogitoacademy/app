@@ -1207,6 +1207,74 @@ export function createBookingService(deps: {
     return result;
   }
 
+  /**
+   * Adds a manual meeting URL when automatic Google Meet setup is unavailable.
+   * Tutors may only edit their own confirmed/scheduled online bookings; admins
+   * have the separate admin-booking action for the same fallback.
+   */
+  async function tutorSetMeetingLink(
+    bookingId: string,
+    tutorId: string,
+    url: string,
+  ) {
+    return db.transaction(async (tx) => {
+      const b = await repo.findBookingById(tx, bookingId);
+      if (!b) throw new BookingNotFoundError(bookingId);
+      if (b.tutorId !== tutorId) {
+        throw new BookingNotOwnedError(bookingId, tutorId);
+      }
+      if (b.modality !== MODALITY.ONLINE) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "Manual meeting links are only available for online bookings",
+        );
+      }
+      if (
+        b.currentState !== BOOKING_STATE.CONFIRMED &&
+        b.currentState !== BOOKING_STATE.SCHEDULED
+      ) {
+        throw new BookingNotEditableError(
+          bookingId,
+          `This booking is not editable for a meeting link yet. A link can only be set on a confirmed or scheduled booking (current: ${b.currentState}).`,
+        );
+      }
+
+      const meetingEventRow = await meeting.setManualLink(bookingId, url, tx);
+      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      for (const participant of participants) {
+        // eslint-disable-next-line no-await-in-loop
+        await notification.writeBestEffort({
+          db: tx,
+          userId: participant.userId,
+          bookingId,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Meeting link ready",
+          body: "The meeting link for the session is ready.",
+          eventKey: `booking.${bookingId}.meeting_link.${participant.userId}`,
+          emailRequired: true,
+        });
+      }
+
+      await audit.record({
+        db: tx,
+        actorId: tutorId,
+        actorType: ACTOR_TYPE.TUTOR,
+        action: "tutor_set_meeting_link",
+        targetId: bookingId,
+        targetType: "booking",
+        beforeState: { meetingStatus: "failed-or-manual" },
+        afterState: { provider: "manual", meetingUrl: url },
+      });
+
+      return {
+        bookingId,
+        meetingUrl: meetingEventRow.meetingUrl,
+        status: meetingEventRow.status,
+      };
+    });
+  }
+
   async function completeSession(
     bookingId: string,
     tutorId: string,
@@ -3600,7 +3668,7 @@ export function createBookingService(deps: {
    * On failure the booking stays CONFIRMED and the failure is surfaced through
    * the meetingEvent row (status `failed`) so the `retry-failed-meetings`
    * scheduler job can retry it. The transaction is not aborted — the booking
-   * remains recoverable either by retry or by the admin manual-link flow.
+   * remains recoverable either by retry or by the tutor/admin manual-link flow.
    *
    * @param tx - the active transaction
    * @param b - the booking row (must be CONFIRMED and online modality)
@@ -3670,13 +3738,13 @@ export function createBookingService(deps: {
         : "Meeting link pending";
       const tutorBody = linkReady
         ? "The meeting link for the session is ready."
-        : "The meeting link for the session is pending — an admin will add it before the session.";
+        : "The meeting link for the session is pending — a tutor or admin will add it before the session.";
       const participantTitle = linkReady
         ? "Meeting link ready"
         : "Meeting link pending";
       const participantBody = linkReady
         ? "The meeting link for your group session is ready."
-        : "The meeting link for your group session is pending — an admin will add it before the session.";
+        : "The meeting link for your group session is pending — a tutor or admin will add it before the session.";
 
       await notification.writeBestEffort({
         db: tx,
@@ -3751,8 +3819,8 @@ export function createBookingService(deps: {
    * attempt failed. Runs from the `retry-failed-meetings` scheduler job (5 min).
    *
    * Each booking is retried at most 3 times (counted via failed `meetingEvent`
-   * rows); afterwards it stays CONFIRMED for manual intervention (admin
-   * meeting-link entry, PRD-GAPS-PHASE3 U1).
+   * rows); afterwards it stays CONFIRMED for manual intervention (tutor or
+   * admin meeting-link entry, PRD-GAPS-PHASE3 U1).
    *
    * @returns the number of bookings scheduled and the number still failing
    */
@@ -4261,6 +4329,7 @@ export function createBookingService(deps: {
     cancel,
     tutorAccept,
     tutorDecline,
+    tutorSetMeetingLink,
     completeSession,
     markTutorAttendance,
     markParticipantNoShow,

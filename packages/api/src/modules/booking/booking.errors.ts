@@ -17,8 +17,8 @@ export class BookingNotFoundError extends DomainError {
 
 export class BookingNotEditableError extends DomainError {
   readonly domain = "booking";
-  constructor(id: string) {
-    super("BOOKING_NOT_EDITABLE", "Booking is not editable", { id });
+  constructor(id: string, message = "Booking is not editable") {
+    super("BOOKING_NOT_EDITABLE", message, { id });
   }
 }
 

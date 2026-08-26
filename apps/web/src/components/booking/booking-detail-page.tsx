@@ -14,6 +14,7 @@ import {
   IconCoins,
   IconDeviceLaptop,
   IconInfoCircle,
+  IconLink,
   IconMapPin,
   IconSend,
   IconUserCheck,
@@ -87,6 +88,7 @@ import {
 } from "./booking-reschedule-action";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { orpc } from "@/utils/orpc";
+import { ManualMeetingLinkDialog } from "./manual-meeting-link-dialog";
 
 const COGITO_MARK_SRC = "/cogito-mark.png";
 
@@ -112,6 +114,7 @@ export function BookingDetailPage({
   const [confirmationDialog, setConfirmationDialog] =
     useState<BookingConfirmation>(null);
   const [declineReason, setDeclineReason] = useState("");
+  const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
   const isTutor = viewerRole === "tutor";
   const isAdmin = viewerRole === "admin";
   const bookingsPath = "/bookings";
@@ -205,6 +208,25 @@ export function BookingDetailPage({
         toastManager.add({ title: error.message, type: "error" }),
     }),
   );
+  const setMeetingLink = useMutation(
+    orpc.tutorActions.setMeetingLink.mutationOptions({
+      onSuccess: () => {
+        setManualLinkDialogOpen(false);
+        toastManager.add({
+          title: "Meeting link saved",
+          description: "The student can now open the session link.",
+          type: "success",
+        });
+        refreshBookingQueries();
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Meeting link could not be saved",
+          description: error.message,
+          type: "error",
+        }),
+    }),
+  );
 
   const sessionsQuery = useQuery(
     orpc.booking.listSessions.queryOptions({
@@ -270,10 +292,19 @@ export function BookingDetailPage({
   const canComplete = isTutor && booking.currentState === "scheduled";
   const canCancel =
     !isTutor && !isAdmin && canCancelBooking(booking.currentState);
+  const canSetManualLink =
+    isTutor &&
+    booking.modality === "online" &&
+    (booking.currentState === "confirmed" ||
+      booking.currentState === "scheduled") &&
+    (!booking.meetingUrl || booking.meeting?.provider === "manual");
   const sessionHasEnded =
     new Date(booking.scheduledEndAt).getTime() <= Date.now();
   const tutorActionPending =
-    accept.isPending || decline.isPending || complete.isPending;
+    accept.isPending ||
+    decline.isPending ||
+    complete.isPending ||
+    setMeetingLink.isPending;
   const confirmationPending = cancel.isPending || complete.isPending;
   const canProposeReschedule = canProposeBookingReschedule({
     viewerRole,
@@ -536,6 +567,9 @@ export function BookingDetailPage({
                           meetingStatus={booking.meetingStatus}
                           providerStatus={booking.meeting?.status}
                           meetingUrl={meetingUrl}
+                          canSetManualLink={canSetManualLink}
+                          onSetManualLink={() => setManualLinkDialogOpen(true)}
+                          manualLinkPending={setMeetingLink.isPending}
                         />
                       ) : !activeRoomBooking ? (
                         <InfoPreview
@@ -985,6 +1019,14 @@ export function BookingDetailPage({
         pending={confirmationPending}
         onConfirm={confirmBookingAction}
       />
+      <ManualMeetingLinkDialog
+        open={manualLinkDialogOpen}
+        onOpenChange={setManualLinkDialogOpen}
+        onSubmit={(url) => setMeetingLink.mutate({ bookingId, url })}
+        pending={setMeetingLink.isPending}
+        initialUrl={meetingUrl}
+        actor="tutor"
+      />
     </Stack>
   );
 }
@@ -1178,11 +1220,17 @@ function MeetingStatusPopover({
   meetingStatus,
   providerStatus,
   meetingUrl,
+  canSetManualLink = false,
+  onSetManualLink,
+  manualLinkPending = false,
 }: {
   bookingState: string;
   meetingStatus: string;
   providerStatus?: string | null;
   meetingUrl?: string | null;
+  canSetManualLink?: boolean;
+  onSetManualLink?: () => void;
+  manualLinkPending?: boolean;
 }) {
   const requiresAttention =
     !meetingUrl && (meetingStatus === "failed" || providerStatus === "manual");
@@ -1199,40 +1247,54 @@ function MeetingStatusPopover({
     meetingUrl,
   });
   return (
-    <InfoPreview
-      title={title}
-      description={description}
-      tone={meetingUrl ? "success" : requiresAttention ? "warning" : "info"}
-      label={`About meeting status: ${title}`}
-    >
-      {meetingUrl ? (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <InfoPreview
+        title={title}
+        description={description}
+        tone={meetingUrl ? "success" : requiresAttention ? "warning" : "info"}
+        label={`About meeting status: ${title}`}
+      >
+        {meetingUrl ? (
+          <Button
+            render={
+              <a
+                href={meetingUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open meeting room"
+              />
+            }
+            nativeButton={false}
+            variant="plain"
+            size="xs"
+            block
+          >
+            <IconDeviceLaptop aria-hidden="true" />
+            Open meeting room
+          </Button>
+        ) : meetingStatus === "failed" ? (
+          <Badge variant="warning" size="sm" pill>
+            Retrying automatically
+          </Badge>
+        ) : providerStatus === "manual" ? (
+          <Badge variant="warning" size="sm" pill>
+            Manual link needed
+          </Badge>
+        ) : null}
+      </InfoPreview>
+      {canSetManualLink && onSetManualLink ? (
         <Button
-          render={
-            <a
-              href={meetingUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open meeting room"
-            />
-          }
-          nativeButton={false}
-          variant="plain"
+          variant="outline"
           size="xs"
-          block
+          onClick={onSetManualLink}
+          progress={manualLinkPending}
+          disabled={manualLinkPending}
         >
-          <IconDeviceLaptop aria-hidden="true" />
-          Open meeting room
+          <IconLink aria-hidden="true" />
+          {meetingUrl ? "Replace link" : "Add meeting link"}
         </Button>
-      ) : meetingStatus === "failed" ? (
-        <Badge variant="warning" size="sm" pill>
-          Retrying automatically
-        </Badge>
-      ) : providerStatus === "manual" ? (
-        <Badge variant="warning" size="sm" pill>
-          Admin setup needed
-        </Badge>
       ) : null}
-    </InfoPreview>
+    </div>
   );
 }
 
@@ -1251,7 +1313,7 @@ function getMeetingStatusTitle({
   if (meetingStatus === "failed") {
     return "Meeting link creation needs attention";
   }
-  if (providerStatus === "manual") return "Meeting link pending admin setup";
+  if (providerStatus === "manual") return "Meeting link pending manual setup";
   if (bookingState === "confirmed") return "Preparing your meeting link";
   return "Meeting link will appear here";
 }
@@ -1271,10 +1333,10 @@ function getMeetingStatusDescription({
     return "The meeting room is available for this session.";
   }
   if (meetingStatus === "failed") {
-    return "Google Meet creation failed. The system will retry automatically every 5 minutes, then leave the booking for an admin to add a manual link if needed.";
+    return "Google Meet creation failed. The system will retry automatically every 5 minutes, then let the tutor or an admin add a manual link if needed.";
   }
   if (providerStatus === "manual") {
-    return "An admin needs to add a meeting URL before the session. This can happen when the automatic meeting provider is unavailable.";
+    return "A tutor or admin needs to add a meeting URL before the session. This can happen when the automatic meeting provider is unavailable.";
   }
   if (bookingState === "confirmed") {
     return "The booking is confirmed and the link is being generated. This page refreshes automatically while it is being prepared.";

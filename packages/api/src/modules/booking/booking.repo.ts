@@ -773,8 +773,8 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
  * `retry-failed-meetings` scheduler job. Each failed create attempt inserts a
  * `meetingEvent` row with status `failed`, so the retry budget is derived from
  * the count of failed rows — bookings stop being retried after
- * `MAX_MEETING_RETRY_ATTEMPTS` failures and are left for manual intervention
- * (admin meeting-link entry, see PRD-GAPS-PHASE3 U1).
+ * `MAX_MEETING_RETRY_ATTEMPTS` failures and are left for authorized manual
+ * intervention (tutor or admin meeting-link entry, see PRD-GAPS-PHASE3 U1).
  *
  * @param conn - the database connection or active transaction
  * @param limit - the maximum number of bookings to return

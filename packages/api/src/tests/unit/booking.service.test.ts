@@ -169,6 +169,15 @@ function makeMeeting() {
     })),
     updateEvent: mock(async () => {}),
     cancelEvent: mock(async () => {}),
+    setManualLink: mock(async (_bookingId: string, url: string) => ({
+      id: "m1",
+      bookingId: "b1",
+      provider: "manual",
+      externalEventId: null,
+      meetingUrl: url,
+      status: "created",
+      errorReason: null,
+    })),
   };
 }
 
@@ -1941,6 +1950,98 @@ describe("BookingService", () => {
       await service.tutorDecline("b1", "tutor1", "schedule conflict");
 
       expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
+    });
+  });
+
+  describe("tutorSetMeetingLink", () => {
+    test("sets a manual link inside the booking transaction and notifies the student", async () => {
+      const booking = makeBooking({ currentState: "confirmed" });
+      const { service, meeting, notification, audit } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findConfirmedParticipants: mock(async () => [
+            makeParticipant({ userId: "student1" }),
+          ]),
+        },
+      });
+
+      const result = await service.tutorSetMeetingLink(
+        "b1",
+        "tutor1",
+        "https://meet.example.com/tutor-fallback",
+      );
+
+      expect(result).toMatchObject({
+        bookingId: "b1",
+        meetingUrl: "https://meet.example.com/tutor-fallback",
+        status: "created",
+      });
+      expect(meeting.setManualLink).toHaveBeenCalledWith(
+        "b1",
+        "https://meet.example.com/tutor-fallback",
+        expect.anything(),
+      );
+      expect(notification.writeBestEffort).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "student1",
+          bookingId: "b1",
+          title: "Meeting link ready",
+        }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: "tutor1",
+          actorType: "tutor",
+          action: "tutor_set_meeting_link",
+        }),
+      );
+    });
+
+    test("rejects a tutor who is not assigned to the booking", async () => {
+      const { service, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "scheduled", tutorId: "other-tutor" }),
+          ),
+        },
+      });
+
+      await expect(
+        service.tutorSetMeetingLink("b1", "tutor1", "https://example.com"),
+      ).rejects.toThrow(BookingNotOwnedError);
+      expect(meeting.setManualLink).not.toHaveBeenCalled();
+    });
+
+    test("rejects offline bookings and bookings outside confirmed/scheduled states", async () => {
+      const { service: offlineService } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "scheduled", modality: "offline" }),
+          ),
+        },
+      });
+      await expect(
+        offlineService.tutorSetMeetingLink(
+          "b1",
+          "tutor1",
+          "https://example.com/offline",
+        ),
+      ).rejects.toThrow(BookingNotEditableError);
+
+      const { service: pendingService } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "awaiting_tutor_review" }),
+          ),
+        },
+      });
+      await expect(
+        pendingService.tutorSetMeetingLink(
+          "b1",
+          "tutor1",
+          "https://example.com/pending",
+        ),
+      ).rejects.toThrow(BookingNotEditableError);
     });
   });
 

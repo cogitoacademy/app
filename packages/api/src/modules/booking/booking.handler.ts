@@ -22,6 +22,7 @@ import type {
   withdrawInput,
   proposeRescheduleInput,
   completeSessionInput,
+  setMeetingLinkInput,
   markAttendanceInput,
   markParticipantNoShowInput,
   cancelSessionInput,
@@ -45,6 +46,7 @@ type ReconfirmInput = z.infer<typeof reconfirmInput>;
 type WithdrawInput = z.infer<typeof withdrawInput>;
 type ProposeRescheduleInput = z.infer<typeof proposeRescheduleInput>;
 type CompleteSessionInput = z.infer<typeof completeSessionInput>;
+type SetMeetingLinkInput = z.infer<typeof setMeetingLinkInput>;
 type MarkAttendanceInput = z.infer<typeof markAttendanceInput>;
 type MarkParticipantNoShowInput = z.infer<typeof markParticipantNoShowInput>;
 type CancelSessionInput = z.infer<typeof cancelSessionInput>;
@@ -534,6 +536,24 @@ export function createTutorActionsHandler(booking: BookingService) {
             input.bookingId,
             context.session!.user.id,
             input.sessionId,
+          ),
+        mapBookingError,
+      );
+    },
+
+    setMeetingLink: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: SetMeetingLinkInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          booking.tutorSetMeetingLink(
+            input.bookingId,
+            context.session!.user.id,
+            input.url,
           ),
         mapBookingError,
       );
