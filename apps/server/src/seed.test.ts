@@ -28,8 +28,7 @@ describe("seed guards", () => {
   test("W2: seed-packages exits non-zero in production without SEED_ALLOWED_IN_PROD", () => {
     const prodEnv: Record<string, string> = {
       NODE_ENV: "production",
-      DATABASE_URL:
-        "postgresql://postgres:password@localhost:6767/cogito-test",
+      DATABASE_URL: "postgresql://postgres:password@localhost:6767/cogito-test",
       REDIS_URL: "redis://localhost:6379",
       BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long-1234",
       BETTER_AUTH_URL: "http://localhost:3101",
@@ -42,27 +41,19 @@ describe("seed guards", () => {
       DB_SSL_ENABLED: "false",
     };
 
-    const blocked = spawnSync(
-      "bun",
-      ["src/seed-packages.ts"],
-      {
-        cwd: new URL("..", import.meta.url).pathname,
-        env: { ...process.env, ...prodEnv },
-        encoding: "utf8",
-      },
-    );
+    const blocked = spawnSync("bun", ["src/seed-packages.ts"], {
+      cwd: new URL("..", import.meta.url).pathname,
+      env: { ...process.env, ...prodEnv },
+      encoding: "utf8",
+    });
     expect(blocked.status).not.toBe(0);
     expect(blocked.stderr).toContain("SEED_ALLOWED_IN_PROD");
 
-    const allowed = spawnSync(
-      "bun",
-      ["src/seed-packages.ts"],
-      {
-        cwd: new URL("..", import.meta.url).pathname,
-        env: { ...process.env, ...prodEnv, SEED_ALLOWED_IN_PROD: "true" },
-        encoding: "utf8",
-      },
-    );
+    const allowed = spawnSync("bun", ["src/seed-packages.ts"], {
+      cwd: new URL("..", import.meta.url).pathname,
+      env: { ...process.env, ...prodEnv, SEED_ALLOWED_IN_PROD: "true" },
+      encoding: "utf8",
+    });
     expect(allowed.status).toBe(0);
   });
 });
