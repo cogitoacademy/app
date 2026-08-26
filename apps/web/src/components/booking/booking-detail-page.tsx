@@ -554,7 +554,6 @@ export function BookingDetailPage({
                   </div>
                   {booking.modality === "online" && meetingUrl ? (
                     <Button
-                      className="shrink-0"
                       render={
                         <a
                           href={meetingUrl}
@@ -564,8 +563,105 @@ export function BookingDetailPage({
                         />
                       }
                       nativeButton={false}
+                      variant="plain"
+                      size="icon"
+                      pill
+                      aria-label="Open meeting room"
                     >
-                      <IconDeviceLaptop /> Open meeting room
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        id="google-meet"
+                      >
+                        <path
+                          fill="url(#paint0_linear_1_187)"
+                          fill-rule="evenodd"
+                          d="M15 4C16.1046 4 17 4.89543 17 6V18C17 19.1046 16.1046 20 15 20H4.75C3.36929 20 2.25 18.8807 2.25 17.5V9C2.25 6.23858 4.48858 4 7.25 4H15Z"
+                          clip-rule="evenodd"
+                        ></path>
+                        <g clip-path="url(#paint1_diamond_1_187_clip_path)">
+                          <g transform="matrix(0 .0115 -.0093 0 17 12)">
+                            <rect
+                              width="707.162"
+                              height="1601.61"
+                              fill="url(#paint1_diamond_1_187)"
+                              shape-rendering="crispEdges"
+                            ></rect>
+                            <rect
+                              width="707.162"
+                              height="1601.61"
+                              fill="url(#paint1_diamond_1_187)"
+                              shape-rendering="crispEdges"
+                              transform="scale(1 -1)"
+                            ></rect>
+                            <rect
+                              width="707.162"
+                              height="1601.61"
+                              fill="url(#paint1_diamond_1_187)"
+                              shape-rendering="crispEdges"
+                              transform="scale(-1 1)"
+                            ></rect>
+                            <rect
+                              width="707.162"
+                              height="1601.61"
+                              fill="url(#paint1_diamond_1_187)"
+                              shape-rendering="crispEdges"
+                              transform="scale(-1)"
+                            ></rect>
+                          </g>
+                        </g>
+                        <path
+                          fill-rule="evenodd"
+                          d="M15 4C16.1046 4 17 4.89543 17 6V18C17 19.1046 16.1046 20 15 20H4.75C3.36929 20 2.25 18.8807 2.25 17.5V9C2.25 6.23858 4.48858 4 7.25 4H15Z"
+                          clip-rule="evenodd"
+                          fill="none"
+                        ></path>
+                        <path
+                          fill="#fff"
+                          d="M4.25 16.5C4.25021 15.6167 4.96626 14.9006 5.84961 14.9004C6.73313 14.9004 7.44998 15.6165 7.4502 16.5C7.4502 17.3837 6.73326 18.1006 5.84961 18.1006C4.96613 18.1004 4.25 17.3835 4.25 16.5Z"
+                        ></path>
+                        <path
+                          fill="#F9AC02"
+                          d="M17 15.5V9L20.9631 6.47801C21.6288 6.05437 22.5 6.53258 22.5 7.32167V17.1783C22.5 17.9674 21.6288 18.4456 20.9631 18.022L17 15.5Z"
+                        ></path>
+                        <defs>
+                          <linearGradient
+                            id="paint0_linear_1_187"
+                            x1="17"
+                            x2="1.977"
+                            y1="9.5"
+                            y2="14.429"
+                            gradientUnits="userSpaceOnUse"
+                          >
+                            <stop stop-color="#FADE13"></stop>
+                            <stop offset=".4" stop-color="#FADE13"></stop>
+                            <stop offset="1" stop-color="#FCCA03"></stop>
+                          </linearGradient>
+                          <linearGradient
+                            id="paint1_diamond_1_187"
+                            x1="0"
+                            x2="500"
+                            y1="0"
+                            y2="500"
+                            gradientUnits="userSpaceOnUse"
+                          >
+                            <stop offset=".142" stop-color="#FDBAD9"></stop>
+                            <stop
+                              offset="1"
+                              stop-color="#FFE66C"
+                              stop-opacity="0"
+                            ></stop>
+                          </linearGradient>
+                          <clipPath id="paint1_diamond_1_187_clip_path">
+                            <path
+                              fill-rule="evenodd"
+                              d="M15 4C16.1046 4 17 4.89543 17 6V18C17 19.1046 16.1046 20 15 20H4.75C3.36929 20 2.25 18.8807 2.25 17.5V9C2.25 6.23858 4.48858 4 7.25 4H15Z"
+                              clip-rule="evenodd"
+                              fill="none"
+                            ></path>
+                          </clipPath>
+                        </defs>
+                      </svg>
                     </Button>
                   ) : null}
                 </div>

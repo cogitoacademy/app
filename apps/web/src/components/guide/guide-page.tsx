@@ -202,7 +202,7 @@ export function GuidePage({
         className="gap-8"
       >
         <TabsPanel value={view} className="flex flex-col gap-8">
-          <div className="grid min-w-0 gap-8 lg:grid-cols-[16rem_auto_minmax(0,1fr)] lg:gap-16">
+          <div className="grid min-w-0 gap-8 lg:grid-cols-[16rem_auto_minmax(0,1fr)]">
             <div className="space-y-5">
               <GuideViewSwitcher allowedViews={allowedViews} />
               <Separator />
@@ -213,7 +213,7 @@ export function GuidePage({
               />
             </div>
             <Separator orientation="vertical" />
-            <div className="order-first flex min-w-0 flex-col gap-8 lg:order-last lg:pr-16">
+            <div className="order-first flex min-w-0 flex-col gap-8 lg:order-last">
               <GuideHero content={content} />
               <div className="flex min-w-0 flex-col gap-4">
                 <div className="flex justify-end">
@@ -267,16 +267,9 @@ function GuideViewSwitcher({
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         Guide view
       </div>
-      <TabsList
-        aria-label="Guide view"
-        className="w-full rounded-md! bg-accent! shadow-none! inset-shadow-none! sm:w-auto [&_[data-slot=tabs-indicator]]:rounded-sm! [&_[data-slot=tabs-indicator]]:shadow-none! [&_[data-slot=tabs-indicator]]:ring-1! [&_[data-slot=tabs-indicator]]:ring-foreground/15!"
-      >
+      <TabsList aria-label="Guide view">
         {allowedViews.map((allowedView) => (
-          <TabsItem
-            key={allowedView}
-            value={allowedView}
-            className="rounded-sm!"
-          >
+          <TabsItem key={allowedView} value={allowedView}>
             {GUIDE_VIEW_META[allowedView].shortLabel}
           </TabsItem>
         ))}
@@ -413,11 +406,11 @@ function GuideChapterNav({
                 >
                   <ItemMedia
                     className={cn(
-                      "mt-0.5 flex size-6 items-center justify-center rounded-sm bg-info/15 font-mono text-[0.6875rem] text-info ring-1 ring-info/25 transition-colors",
+                      "mt-0.5 flex size-6 items-center justify-center rounded-sm bg-info/15 font-mono text-[0.6875rem] text-info ring-1 ring-info/25 transition-colors tabular-nums flex-items-center justify-center",
                       isActive && "bg-info text-info-foreground ring-info",
                     )}
                   >
-                    {String(index + 1).padStart(2, "0")}
+                    {String(index + 1)}
                   </ItemMedia>
                   <ItemContent className="min-w-0 gap-0.5">
                     <ItemTitle
@@ -511,8 +504,8 @@ function GuideStepRow({
   return (
     <div
       className={cn(
-        "grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] gap-3 py-2 transition-colors duration-200 sm:grid-cols-[2.75rem_minmax(0,1fr)] sm:gap-4 pl-1 pr-4",
-        isExpanded && "rounded-lg bg-accent/50",
+        "grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] gap-3 py-2 transition-colors duration-200 sm:grid-cols-[2.75rem_minmax(0,1fr)] sm:gap-4 pl-1 pr-4 rounded-lg ",
+        isExpanded && "bg-accent/50",
         "motion-reduce:transition-none",
       )}
     >
@@ -534,7 +527,7 @@ function GuideStepRow({
           aria-controls={detailsId}
           onClick={onToggle}
         >
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 flex-1 mt-1">
             <div className="flex items-center gap-2 font-medium text-foreground">
               {step.title}
               <Badge variant="info" size="sm">
@@ -566,7 +559,7 @@ function GuideStepRow({
               "min-h-0 overflow-hidden transition-[opacity,transform,visibility] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none",
               isExpanded
                 ? "visible translate-y-0 opacity-100"
-                : "invisible pointer-events-none -translate-y-1 opacity-0",
+                : "invisible pointer-events-none opacity-0",
             )}
           >
             <div className="px-2 pb-3 pt-3 sm:px-2">

@@ -153,7 +153,7 @@ export function BookingListCard({
         </div>
 
         <Button
-          variant={attention ? "primary" : "secondary"}
+          variant={attention ? "primary" : "tertiary"}
           size="sm"
           className="w-full md:w-auto md:justify-self-end"
           render={

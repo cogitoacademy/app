@@ -11,6 +11,8 @@
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.2036 0.0029 247.97);
+  --cogito-purple: oklch(0.5671 0.1757 310.86);
+  --cogito-orange: oklch(0.6984 0.2026 44.07);
   --accent: oklch(0.9616 0.0011 247.83);
   --muted: oklch(0.5076 0.0103 248.03);
   --dimmed: oklch(0.6971 0.009 247.96);
@@ -192,6 +194,8 @@
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-cogito-purple: var(--cogito-purple);
+  --color-cogito-orange: var(--cogito-orange);
   --color-primary: var(--primary);
   --color-primary-border: var(--primary-border);
   --color-primary-foreground: var(--primary-foreground);

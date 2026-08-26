@@ -8,7 +8,7 @@ export default function Loader() {
       aria-label="Loading"
     >
       <span className="relative size-10" aria-hidden="true">
-        <Spinner className="absolute inset-0 size-8 text-primary" />
+        <Spinner className="absolute inset-0 size-8 text-cogito-orange!" />
       </span>
     </div>
   );
