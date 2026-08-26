@@ -10,6 +10,7 @@ Before non-trivial coding, review/load the relevant skills:
 - `git-pr-workflow` for commits and pull requests.
 - `parallel-worktrees` whenever dispatching concurrent write-capable agents/subagents.
 - `production-reliability` for production, infrastructure, persistence, deployment, or reliability work.
+- `wave-finalization` when finishing a herd wave — closing worker panes, removing worker worktrees/branches, and syncing the plans/docs after merged PRs.
 
 ## Mandatory workflow
 
