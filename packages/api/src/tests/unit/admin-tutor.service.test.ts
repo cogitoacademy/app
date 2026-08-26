@@ -154,6 +154,38 @@ describe("AdminTutor Service", () => {
       ).toThrow(InvalidInviteActionError);
     });
 
+    // N2: a suspended profile must be restorable. The restore is admin-only
+    // (approve_unpublished / request_changes) — the tutor cannot self-restore
+    // via submitForReview, and publish stays blocked.
+    const restoreActionsFromSuspended: ReviewAction[] = [
+      "approve_unpublished",
+      "request_changes",
+    ];
+    for (const action of restoreActionsFromSuspended) {
+      test(`N2: allows ${action} from suspended (admin restore path)`, () => {
+        const result = validateReviewAction(
+          action,
+          makeProfile({ onboardingStatus: "suspended" }),
+        );
+        expect(result.profile.onboardingStatus).toBe("suspended");
+      });
+    }
+
+    test("N2: rejects unpublish and suspend from suspended (no-op states)", () => {
+      expect(() =>
+        validateReviewAction(
+          "unpublish",
+          makeProfile({ onboardingStatus: "suspended" }),
+        ),
+      ).toThrow(InvalidInviteActionError);
+      expect(() =>
+        validateReviewAction(
+          "suspend",
+          makeProfile({ onboardingStatus: "suspended" }),
+        ),
+      ).toThrow(InvalidInviteActionError);
+    });
+
     test("F25: rejects request_changes from published (a published profile uses request_edit_changes)", () => {
       expect(() =>
         validateReviewAction(
@@ -511,6 +543,73 @@ describe("AdminTutor Service", () => {
         adminNote: "Please update bio",
       });
       expect(result.id).toBe("p1");
+    });
+
+    test("N2: approve_unpublished restores a suspended profile", async () => {
+      const updateTutorProfile = mock(async () =>
+        makeProfile({ onboardingStatus: "approved_unpublished" }),
+      );
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ onboardingStatus: "suspended" }),
+          ),
+          updateTutorProfile,
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      const result = await service.reviewTutorProfile("admin1", {
+        tutorProfileId: "p1",
+        action: "approve_unpublished",
+      });
+      expect(result.onboardingStatus).toBe("approved_unpublished");
+      expect(updateTutorProfile).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        expect.objectContaining({
+          onboardingStatus: "approved_unpublished",
+        }),
+      );
+    });
+
+    test("N2: request_changes also restores a suspended profile for re-editing", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ onboardingStatus: "suspended" }),
+          ),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      const result = await service.reviewTutorProfile("admin1", {
+        tutorProfileId: "p1",
+        action: "request_changes",
+        adminNote: "Fix the bio before re-review",
+      });
+      expect(result.id).toBe("p1");
+    });
+
+    test("N2: publish stays blocked from suspended (restore is never a blind publish)", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ onboardingStatus: "suspended" }),
+          ),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.reviewTutorProfile("admin1", {
+          tutorProfileId: "p1",
+          action: "publish",
+        }),
+      ).rejects.toThrow(InvalidInviteActionError);
     });
 
     test("rejects approving edits when there are no pending changes", async () => {

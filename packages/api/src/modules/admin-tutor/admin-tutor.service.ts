@@ -153,16 +153,23 @@ const STATUS_MAP: Record<ReviewAction, string> = {
  * edits reviewed; `publish` is only reachable from the pre-publication
  * states — never from `suspended` (a suspended tutor must be explicitly
  * re-approved, not silently published).
+ *
+ * N2: a suspended profile (PRD FR-24) is restorable admin-only via
+ * `approve_unpublished` or `request_changes` — otherwise a suspended tutor
+ * could never be reinstated. `publish` remains blocked so restoring never
+ * re-publishes without an explicit publish step.
  */
 const REVIEW_ACTION_TABLE: Record<ReviewAction, string[]> = {
   request_changes: [
     ONBOARDING_STATUS.PENDING_REVIEW,
     ONBOARDING_STATUS.CHANGES_REQUESTED,
+    ONBOARDING_STATUS.SUSPENDED,
   ],
   approve_unpublished: [
     ONBOARDING_STATUS.PENDING_REVIEW,
     ONBOARDING_STATUS.CHANGES_REQUESTED,
     ONBOARDING_STATUS.APPROVED_UNPUBLISHED,
+    ONBOARDING_STATUS.SUSPENDED,
   ],
   publish: [
     ONBOARDING_STATUS.PENDING_REVIEW,
