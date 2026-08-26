@@ -64,6 +64,7 @@ describe("createBookingRepo", () => {
     expect(repo).toHaveProperty("findParticipant");
     expect(repo).toHaveProperty("findConfirmedParticipants");
     expect(repo).toHaveProperty("findReconfirmedParticipants");
+    expect(repo).toHaveProperty("resetReconfirmedParticipants");
     expect(repo).toHaveProperty("insertBooking");
     expect(repo).toHaveProperty("updateBookingCancellationReason");
     expect(repo).toHaveProperty("updateBookingHoldAmount");
@@ -263,6 +264,33 @@ describe("createBookingRepo", () => {
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
     });
+
+    test("F8: never includes the tutor attendance row (role = 'tutor') in the headcount", async () => {
+      const conn: any = { ...makeSelectConn([]) };
+      const repo = makeBookingRepo();
+
+      await repo.findConfirmedParticipants(conn, "b1");
+
+      const conditions = conn.where.mock.calls[0]![0] as any;
+      const renderChunk = (c: unknown): string => {
+        if (typeof c === "string") return c;
+        if (Array.isArray(c)) return c.map(renderChunk).join("");
+        const chunk = c as {
+          queryChunks?: unknown[];
+          value?: unknown;
+          name?: string;
+        };
+        if (chunk.value !== undefined) return String(chunk.value);
+        if (chunk.name !== undefined) return chunk.name;
+        if (chunk.queryChunks)
+          return chunk.queryChunks.map(renderChunk).join("");
+        return "";
+      };
+      const sqlText = renderChunk(conditions).replace(/\s+/g, " ");
+
+      expect(sqlText).toContain("role");
+      expect(sqlText).toContain("tutor");
+    });
   });
 
   describe("findReconfirmedParticipants", () => {
@@ -278,6 +306,24 @@ describe("createBookingRepo", () => {
       expect(result[0]).toHaveProperty("confirmationState", "reconfirmed");
       expect(conn.from).toHaveBeenCalledTimes(1);
       expect(conn.where).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("resetReconfirmedParticipants", () => {
+    test("resets reconfirmed participants to confirmed and clears timestamps", async () => {
+      const updateConn = makeUpdateConn();
+      updateConn.where.mockReturnValue(Promise.resolve(undefined));
+      const conn: any = { ...updateConn };
+      const repo = makeBookingRepo();
+
+      await repo.resetReconfirmedParticipants(conn, "b1");
+
+      expect(updateConn.update).toHaveBeenCalledTimes(1);
+      expect(updateConn.set).toHaveBeenCalledWith({
+        confirmationState: "confirmed",
+        reconfirmedAt: null,
+      });
+      expect(updateConn.where).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -597,6 +643,39 @@ describe("createBookingRepo", () => {
       ]);
 
       expect(conn.limit).toHaveBeenCalledWith(100);
+    });
+  });
+
+  describe("findBookingsWithTutorLateness", () => {
+    test("F9: candidate query has no modality filter (offline bookings are flagged too)", async () => {
+      const conn: any = { ...makeSelectConn([]) };
+      const repo = makeBookingRepo();
+
+      await repo.findBookingsWithTutorLateness(conn);
+
+      const calls = conn.where.mock.calls;
+      // The tutor-attendance subquery calls where() first; the main booking
+      // predicate is the last call.
+      const predicate = calls[calls.length - 1]![0] as any;
+      const renderChunk = (c: unknown): string => {
+        if (typeof c === "string") return c;
+        if (Array.isArray(c)) return c.map(renderChunk).join("");
+        const chunk = c as {
+          queryChunks?: unknown[];
+          value?: unknown;
+          name?: string;
+        };
+        if (chunk.value !== undefined) return String(chunk.value);
+        if (chunk.name !== undefined) return chunk.name;
+        if (chunk.queryChunks)
+          return chunk.queryChunks.map(renderChunk).join("");
+        return "";
+      };
+      const sqlText = renderChunk(predicate).replace(/\s+/g, " ");
+
+      expect(sqlText).toContain("current_state");
+      expect(sqlText).toContain("scheduled");
+      expect(sqlText).not.toContain("modality");
     });
   });
 

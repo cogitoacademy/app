@@ -193,4 +193,48 @@ describe("createFallbackMeetingProvider", () => {
       externalEventId: null,
     });
   });
+
+  test("F10: setManualLink writes through the passed conn (tx) so a rollback leaves no orphan row", async () => {
+    const createdRow = {
+      id: "me_tx",
+      bookingId: "b5",
+      provider: "manual",
+      status: "created",
+      meetingUrl: "https://meet.example.com/b5",
+      externalEventId: null,
+    };
+    // The global db is instrumented and must NOT be touched when conn is
+    // provided — a tx write that later rolls back would otherwise orphan a row
+    // written on the global connection.
+    const globalSelect = mock(() => {
+      throw new Error("global db must not be used when conn is passed");
+    });
+    const globalInsert = mock(() => {
+      throw new Error("global db must not be used when conn is passed");
+    });
+    const db = { select: globalSelect, insert: globalInsert } as any;
+
+    const limit = mock(async () => []);
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const returning = mock(async () => [createdRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const tx = { select, insert } as any;
+
+    const provider = createFallbackMeetingProvider(db);
+    const result = await provider.setManualLink(
+      "b5",
+      createdRow.meetingUrl,
+      tx,
+    );
+
+    expect(result).toEqual(createdRow);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(globalSelect).not.toHaveBeenCalled();
+    expect(globalInsert).not.toHaveBeenCalled();
+  });
 });

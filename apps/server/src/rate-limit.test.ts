@@ -40,9 +40,14 @@ describe("L3: email-OTP verify is throttled by the app-level auth limiter (defen
       "utf-8",
     );
 
-    // /api/auth/email-otp/* must be in AUTH_PATHS so the app-level limiter
-    // (10/min/IP, Redis-backed) applies — the plan's L3 acceptance criterion.
-    expect(paths).toContain('"/api/auth/email-otp/"');
+    // /api/auth/* must be matched by the app-level auth limiter (10/min/IP,
+    // Redis-backed) — the plan's L3 acceptance criterion. The matcher uses
+    // segment-boundary prefixes (S4) so exact better-auth endpoints without
+    // trailing slashes are also covered.
+    expect(paths).toContain('"/api/auth/email-otp"');
+    expect(paths).toContain('"/api/auth/request-password-reset"');
+    expect(paths).toContain('"/api/auth/reset-password"');
+    expect(paths).toContain("urlPath === p || urlPath.startsWith(`${p}/`)");
 
     // routes.ts must apply authRateLimit to matched auth paths.
     expect(routes).toContain("authRateLimit");

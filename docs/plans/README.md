@@ -2,10 +2,12 @@
 
 ## Active
 
-| Plan                                                  | Branch            | PR  | Status                                                                                                 |
-| ----------------------------------------------------- | ----------------- | --- | ------------------------------------------------------------------------------------------------------ |
-| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | main (merged #55) | —   | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface |
-| [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge) | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending     |
+| Plan                                                                | Branch                            | PR  | Status                                                                                                                          |
+| ------------------------------------------------------------------- | --------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md)               | main (merged #55)                 | —   | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface                          |
+| [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md)               | main (post-merge)                 | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                              |
+| [BACKEND-PROD-FINALIZATION.md](active/BACKEND-PROD-FINALIZATION.md) | `finalize/backend-prod-readiness` | —   | **Active (2026-08-25)** — PRD v1.7 alignment + production-readiness fixes (documented gaps 1–10 + audit findings F1–F25/S1–S14) |
+| [PRD-AUDIT.md](active/PRD-AUDIT.md)                                 | `finalize/backend-prod-readiness` | —   | PRD + wiring audit gap list (Phase 0 deliverable; supersedes the archived superpowers plan)                                     |
 
 ## Completed (merged to main)
 

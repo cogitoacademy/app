@@ -146,6 +146,35 @@ const STATUS_MAP: Record<ReviewAction, string> = {
   request_edit_changes: ONBOARDING_STATUS.PUBLISHED,
 };
 
+/**
+ * F25: per-status allowed review actions (state machine). A profile in
+ * `pending_review`/`changes_requested` can be approved or sent back; only a
+ * `published` profile can be unpublished, suspended, or have its pending
+ * edits reviewed; `publish` is only reachable from the pre-publication
+ * states — never from `suspended` (a suspended tutor must be explicitly
+ * re-approved, not silently published).
+ */
+const REVIEW_ACTION_TABLE: Record<ReviewAction, string[]> = {
+  request_changes: [
+    ONBOARDING_STATUS.PENDING_REVIEW,
+    ONBOARDING_STATUS.CHANGES_REQUESTED,
+  ],
+  approve_unpublished: [
+    ONBOARDING_STATUS.PENDING_REVIEW,
+    ONBOARDING_STATUS.CHANGES_REQUESTED,
+    ONBOARDING_STATUS.APPROVED_UNPUBLISHED,
+  ],
+  publish: [
+    ONBOARDING_STATUS.PENDING_REVIEW,
+    ONBOARDING_STATUS.CHANGES_REQUESTED,
+    ONBOARDING_STATUS.APPROVED_UNPUBLISHED,
+  ],
+  unpublish: [ONBOARDING_STATUS.PUBLISHED],
+  suspend: [ONBOARDING_STATUS.PUBLISHED],
+  approve_edits: [ONBOARDING_STATUS.PUBLISHED],
+  request_edit_changes: [ONBOARDING_STATUS.PUBLISHED],
+};
+
 export function validateReviewAction(
   action: ReviewAction,
   profile: TutorProfileSnapshot | null,
@@ -155,6 +184,10 @@ export function validateReviewAction(
   }
   if (!STATUS_MAP[action]) {
     throw new InvalidInviteActionError("", action);
+  }
+  const allowedFrom = REVIEW_ACTION_TABLE[action];
+  if (!allowedFrom.includes(profile.onboardingStatus)) {
+    throw new InvalidInviteActionError(profile.id, action);
   }
   return { profile };
 }

@@ -59,7 +59,11 @@ export interface AdminBookingNotificationPort {
 }
 
 export interface AdminBookingMeetingPort {
-  setManualLink(bookingId: string, url: string): Promise<MeetingEvent>;
+  setManualLink(
+    bookingId: string,
+    url: string,
+    conn?: DbOrTx,
+  ): Promise<MeetingEvent>;
   cancelEvent(bookingId: string): Promise<void>;
 }
 

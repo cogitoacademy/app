@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { protectedProcedure } from "../../procedures";
+import { protectedProcedure, studentProcedure } from "../../procedures";
 import { updateProfileInput, searchStudentsInput } from "./auth.types";
 import type { AuthHandler } from "./auth.handler";
 
@@ -41,13 +41,14 @@ export function createAuthRouter(handler: AuthHandler) {
       .input(updateProfileInput)
       .handler(handler.updateProfile),
 
-    searchStudents: protectedProcedure
+    searchStudents: studentProcedure
       .route({
         method: "POST",
         path: "/auth/students/search",
         tags: ["Auth"],
         summary: "Search students",
-        description: "Returns up to ten students matching a name or email",
+        description:
+          "Student-only: returns up to ten students matching a name or email (F16 — tutors/admins get FORBIDDEN; the lookup exists for the group-booking invite UI)",
       })
       .input(searchStudentsInput)
       .handler(handler.searchStudents),

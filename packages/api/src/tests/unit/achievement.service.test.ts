@@ -127,5 +127,111 @@ describe("Achievement Service", () => {
       expect(body).toContain("&lt;img");
       expect(body).not.toContain("<img");
     });
+
+    test("F12: archives an approved achievement and notifies the owner", async () => {
+      const notificationPort = {
+        writeBestEffort: mock(async () => {}),
+      };
+      const auditPort = { record: mock(async () => {}) };
+      const achievementRepo = {
+        getById: mock(async () => ({
+          id: "a1",
+          userId: "u1",
+          eventName: "Regional Olympiad",
+          status: "approved",
+        })),
+        updateStatus: mock(async () => ({ id: "a1", status: "archived" })),
+      };
+      const service = createAchievementService({
+        achievementRepo: achievementRepo as any,
+        auditPort: auditPort as any,
+        notificationPort: notificationPort as any,
+        db: makeDb() as any,
+      });
+
+      const result = await service.adminReview("admin1", {
+        achievementId: "a1",
+        status: "archived",
+      });
+
+      expect(result).toEqual({ id: "a1", status: "archived" });
+      expect(achievementRepo.updateStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "a1",
+        "archived",
+        undefined,
+      );
+      const notif = notificationPort.writeBestEffort.mock.calls[0][0];
+      expect(notif.title).toBe("Achievement archived");
+      expect(notif.body).toContain("Regional Olympiad");
+      expect(auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "achievement_archived",
+          targetId: "a1",
+        }),
+      );
+    });
+
+    test("F12: restores an archived achievement back to approved", async () => {
+      const notificationPort = {
+        writeBestEffort: mock(async () => {}),
+      };
+      const auditPort = { record: mock(async () => {}) };
+      const achievementRepo = {
+        getById: mock(async () => ({
+          id: "a1",
+          userId: "u1",
+          eventName: "Regional Olympiad",
+          status: "archived",
+        })),
+        updateStatus: mock(async () => ({ id: "a1", status: "approved" })),
+      };
+      const service = createAchievementService({
+        achievementRepo: achievementRepo as any,
+        auditPort: auditPort as any,
+        notificationPort: notificationPort as any,
+        db: makeDb() as any,
+      });
+
+      const result = await service.adminReview("admin1", {
+        achievementId: "a1",
+        status: "approved",
+      });
+
+      expect(result).toEqual({ id: "a1", status: "approved" });
+      expect(achievementRepo.updateStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "a1",
+        "approved",
+        undefined,
+      );
+      const notif = notificationPort.writeBestEffort.mock.calls[0][0];
+      expect(notif.title).toBe("Achievement approved");
+    });
+
+    test("F12: rejects review transitions from unrelated states (e.g. rejected → archived is allowed, draft → archived is not)", async () => {
+      const achievementRepo = {
+        getById: mock(async () => ({
+          id: "a1",
+          userId: "u1",
+          eventName: "Draft",
+          status: "draft",
+        })),
+        updateStatus: mock(async () => ({ id: "a1", status: "archived" })),
+      };
+      const service = createAchievementService({
+        achievementRepo: achievementRepo as any,
+        auditPort: { record: mock(async () => {}) } as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: makeDb() as any,
+      });
+
+      await expect(
+        service.adminReview("admin1", {
+          achievementId: "a1",
+          status: "archived",
+        }),
+      ).rejects.toThrow(AchievementNotEditableError);
+    });
   });
 });

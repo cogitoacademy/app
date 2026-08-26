@@ -6,6 +6,7 @@ import {
   InviteNotFoundError,
   InviteEmailMismatchError,
   ProfileAlreadyExistsError,
+  InvalidRoleForClaimError,
 } from "../../modules/invite/invite.errors";
 
 type InviteRow = typeof tutorInvite.$inferSelect;
@@ -35,10 +36,12 @@ function makeService(
   invite: InviteRow | undefined,
   existingProfile: TutorProfileRow | undefined,
   overrides: Partial<InviteRepo> = {},
+  userRole: string = "student",
 ) {
   const inviteRepo: Partial<InviteRepo> = {
     findInviteByToken: async () => invite,
     findTutorProfileByUserId: async () => existingProfile,
+    getUserRoleById: async () => userRole,
     updateInviteStatus: async () => [makeInvite({ status: "accepted" })],
     insertTutorProfile: async () => ({ id: "tp1" }) as any,
     updateUserRole: async () => {},
@@ -113,6 +116,13 @@ describe("Invite Service", () => {
       const result = await service.claim("u1", "tutor@example.com", "tok1");
       expect(result.invite.id).toBe("inv1");
       expect(result.profile).toEqual({ id: "tp1" });
+    });
+
+    test("throws InvalidRoleForClaimError when claiming with an admin account", async () => {
+      const service = makeService(makeInvite(), undefined, {}, "admin");
+      await expect(
+        service.claim("u1", "tutor@example.com", "tok1"),
+      ).rejects.toThrow(InvalidRoleForClaimError);
     });
   });
 });

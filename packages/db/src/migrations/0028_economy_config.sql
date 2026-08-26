@@ -33,3 +33,4 @@ INSERT INTO "economy_config" (
 	"offline_cogito_increment_idr"
 ) VALUES ('default', 5000, 50000, 30000, 40000, 50000, 20000, 90000, 40000)
 ON CONFLICT ("id") DO NOTHING;
+

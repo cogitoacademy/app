@@ -1772,6 +1772,48 @@ describe("BookingService", () => {
       expect(meeting.createEvent).toHaveBeenCalled();
       expect(findCallCount).toBeGreaterThanOrEqual(2);
     });
+
+    test("F6: meeting failure bumps the deadline to scheduledEndAt + 24h so the retry window is respected", async () => {
+      const scheduledEndAt = new Date(Date.now() + 48 * 3600_000);
+      const booking = makeBooking({
+        modality: "online",
+        scheduledEndAt,
+        deadlineAt: new Date(Date.now() + 12 * 3600_000),
+      });
+      let findCallCount = 0;
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => {
+            findCallCount++;
+            if (findCallCount <= 2)
+              return {
+                ...booking,
+                currentState: "awaiting_tutor_review",
+                version: 1,
+              };
+            return { ...booking, currentState: "confirmed", version: 2 };
+          }),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: { ...booking, ...updates, version: ver + 1 },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        meeting: {
+          createEvent: mock(async () => {
+            throw new Error("Meeting API down");
+          }),
+        },
+      });
+
+      await service.tutorAccept("b1", "tutor1");
+
+      expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+      const deadlineArg = repo.updateBookingDeadline.mock.calls[0][2] as Date;
+      const expected = scheduledEndAt.getTime() + 24 * 3600_000;
+      expect(deadlineArg.getTime()).toBe(expected);
+    });
   });
 
   describe("tutorDecline", () => {
@@ -6424,6 +6466,7 @@ describe("BookingService additional coverage paths", () => {
           {
             currentState: "completed",
             priceSnapshot: {
+              baseline: 90,
               actualMarksPooled: 90,
               cogitoTake: 18,
               tutorShare: 72,
@@ -6472,6 +6515,64 @@ describe("BookingService additional coverage paths", () => {
       tutorPayout: 80,
       tutorPayoutIdr: 81_000,
     });
+  });
+
+  test("reports totalMarks from the split basis (baseline), not actualMarksPooled", async () => {
+    const solo = makeBooking({
+      id: "solo-ledger",
+      type: "solo",
+      priceSnapshot: {
+        baseline: 100,
+        actualMarksPooled: 102,
+        cogitoTake: 20,
+        tutorShare: 80,
+        tutorHonorariumIdr: 400_000,
+      },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [solo]),
+        listSessionsBySeriesId: mock(async () => []),
+      },
+    });
+
+    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
+    // The ledger columns reconcile: totalMarks = cogitoTake + tutorPayout
+    // (both are derived from the same `baseline` split basis).
+    expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
+    expect(result.totalMarks).toBe(100);
+    // IDR honorarium is authoritative when present.
+    expect(result.tutorPayoutIdr).toBe(400_000);
+  });
+
+  test("reconciles series session payouts the same way (baseline basis, not pooled)", async () => {
+    const series = makeBooking({
+      id: "series-ledger",
+      type: "series",
+      priceSnapshot: { baseline: 100, cogitoTake: 20, tutorShare: 80 },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [series]),
+        listSessionsBySeriesId: mock(async () => [
+          {
+            currentState: "completed",
+            priceSnapshot: {
+              baseline: 60,
+              actualMarksPooled: 62,
+              cogitoTake: 14,
+              tutorShare: 46,
+              tutorHonorariumIdr: 230_000,
+            },
+          },
+        ]),
+      },
+    });
+
+    const result = await service.getTutorPayouts({ tutorId: "tutor1" });
+    expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
+    expect(result.totalMarks).toBe(60);
+    expect(result.tutorPayoutIdr).toBe(230_000);
   });
 
   test("cancels sessions for an expiring series booking", async () => {
@@ -6933,6 +7034,39 @@ describe("BookingService coverage paths", () => {
         }),
       ),
     ).rejects.toThrow(BookingParticipantAlreadyConfirmedError);
+  });
+
+  test("withdrawInvite escapes the reason interpolated into the notification body", async () => {
+    const { service, notification } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "awaiting_participant_confirmation",
+            type: "group",
+          }),
+        ),
+        findParticipant: mock(async () =>
+          makeParticipant({
+            role: "invitee",
+            userId: "student2",
+            confirmationState: "pending",
+          }),
+        ),
+      },
+    });
+
+    await service.withdrawInvite(
+      "student1",
+      "b1",
+      "student2",
+      "<script>alert(1)</script>",
+    );
+
+    const calls = notification.writeBestEffort.mock.calls;
+    expect(calls.length).toBe(1);
+    const body = calls[0]![0].body as string;
+    expect(body).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(body).not.toContain("<script>");
   });
 
   test("cancels an unknown booking type defensively during withdraw", async () => {

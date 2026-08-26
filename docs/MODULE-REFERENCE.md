@@ -100,7 +100,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
 - `adminList(input)` — Paginated list with optional status filter
-- `adminReview(id, status, adminNote?)` — Approve/reject achievement
+- `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Notifies the owner and writes an `achievement_{status}` audit record
 
 **Dependencies:** `AchievementRepo`
 
@@ -136,7 +136,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
 - `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
 - `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
-- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; fan-outs one durable in-app rate-change notification to every current tutor, while identical values return the current config without a write
+- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; identical values return the current config without a write. The tutor rate-change notification fan-out runs **after the config transaction commits** (best-effort, per-tutor catch+log): a notification failure never rolls back the config update or the audit row. The event key `economy_config_updated:{version}:{tutorId}` keeps retries idempotent per version
 
 **Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`, `NotificationPort`
 
@@ -168,12 +168,12 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Service Methods:**
 
-- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`
+- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`. `escalated=true` walks bounded keyset windows (at most `MAX_ESCALATED_WINDOWS = 5` fetches of `MAX_PAGE_LIMIT` rows) until the page fills with escalated rows — it never returns an empty page with a non-null `nextCursor`, so the admin queue cannot infinite-loop on a sparse escalated set
 - `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
-- `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything
+- `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything. **F24:** every `affectedParticipants` id must be a participant of the booking — unknown ids throw `OVERRIDE_PARTICIPANT_NOT_IN_BOOKING` instead of being silently filtered (a money action would otherwise skip a user's holds)
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
-- `adminRefund(adminId, { paymentId, reason })` — Creates a compensating ledger entry for a payment error. **In-app Marks credit only (N1, PRD §677):** no provider call, `refundRecord.amountIdr = 0`, no `providerEventId` — purchased Marks are never convertible back to rupiah.
-- `setMeetingLink(adminId, { bookingId, url })` — Records a manual meeting URL on a `SCHEDULED`/`CONFIRMED` booking (U1/FR-21); notifies confirmed participants and records an `admin_set_meeting_link` audit record
+- `adminRefund(adminId, { paymentId, reason })` — Creates a compensating ledger entry for a payment error. **In-app Marks credit only (N1, PRD §677):** no provider call, `refundRecord.amountIdr = 0`, no `providerEventId` — purchased Marks are never convertible back to rupiah. **Per-payment FIFO attribution (F11):** spend is attributed to the user's credit-state payments oldest-first, so a fully-spent payment rejects (`REFUND_SPEND_EXHAUSTED`) while an unspent one refunds its remaining Marks (capped at current available balance) — refunding one payment can never credit Marks that belonged to another payment.
+- `setMeetingLink(adminId, { bookingId, url })` — Records a manual meeting URL on a `SCHEDULED`/`CONFIRMED` booking (U1/FR-21); notifies confirmed participants and records an `admin_set_meeting_link` audit record. **F10:** the manual-link row is written inside the booking transaction (`setManualLink(bookingId, url, tx)`) so a tx rollback leaves no orphan meetingEvent row
 - `cancelSeriesSession(adminId, { sessionId, marksAction, amount? })` — Cancels one `scheduled` series session; the per-participant session hold is released, forfeited, or partially returned per `marksAction` (U6/TC-31); records audit + participant notifications
 
 **Dependencies:** `AdminBookingRepo`, `AuditPort`, wallet port
@@ -207,7 +207,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `revokeInvite(inviteId, adminId, reason?)` — Marks invite as revoked
 - `listInvites(opts)` — Paginated invite list
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
-- `reviewTutorProfile(profileId, status, adminNote?)` — Approve/reject tutor profile
+- `reviewTutorProfile(profileId, status, adminNote?)` — Approve/reject tutor profile. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`. Anything else throws `InvalidInviteActionError` (e.g. `publish` from `suspended`, `request_changes` from `published`)
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
@@ -255,7 +255,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `auth.repo.ts` — `findUserWithProfile`, `updateProfile`, `searchStudents`
 - `auth.service.ts` — `me`, `getProfile`, `updateProfile`, `searchStudents` (lazy-creates wallet)
 - `auth.handler.ts` — Maps session context to service calls
-- `auth.router.ts` — Protected routes for `me`, `getProfile`, `updateProfile`, `searchStudents`
+- `auth.router.ts` — Protected routes for `me`, `getProfile`, `updateProfile`; `searchStudents` is **student-only** (`studentProcedure`, F16)
 
 **Service Methods:**
 
@@ -263,7 +263,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `getProfile(userId)` — Returns user with profile and tutor profile
 - `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts)
 - Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`.
-- `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 results
+- `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 results; exposed via `studentProcedure` so tutors/admins get FORBIDDEN (F16 — the lookup exists for the group-booking invite UI)
 
 **Dependencies:** `AuthRepo`, `WalletPort` (for lazy wallet creation)
 
@@ -290,7 +290,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
-- `booking.router.ts` — Student-owned booking mutations use `studentProcedure`; shared booking/detail/session reads stay protected; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
+- `booking.router.ts` — Student-owned booking mutations use `studentProcedure` (the four **create** procedures use `verifiedStudentProcedure`, which additionally requires `emailVerified: true` — PRD paid actions); shared booking/detail/session reads stay protected; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
 
 **Service Methods:**
 
@@ -304,11 +304,11 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `createGroupSeries(proposerId, input)` — Creates a group series (targetGroupSize 2-6, inviteeUserIds) with upfront per-participant holds for all sessions (FR-20, landed #46)
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
 - `declineInvite(userId, bookingId, reason?)` — Invitee declines
-- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Proposer withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves headcount/holds unchanged, and notifies the invitee
-- `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing
+- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Proposer withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves headcount/holds unchanged, and notifies the invitee. The user-supplied `reason` is HTML-escaped (`escapeHtml`) before interpolation into the notification/email body (F5 convention — user-supplied text must not inject markup)
+- `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing. **F3 (headcount-change reprice):** when an accept lands and the confirmed headcount no longer matches the headcount the current snapshot was priced for (a participant declined or withdrew mid-cycle, e.g. withdrawing from `awaiting_reconfirmation` decrements the headcount without repricing), the booking does **not** finalize — all reconfirmed participants are reset to plain `confirmed` (`resetReconfirmedParticipants`), the group is repriced for the current headcount, every survivor gets a fresh 12h window, and a `reissue_reconfirm` notification is sent. The booking only moves to `AWAITING_TUTOR_REVIEW` when all confirmed participants reconfirmed against the current snapshot (PRD: "If any confirmation changes the headcount again, the system recalculates and reissues the reconfirmation request")
 - `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum; group-series (`type === "series" && targetGroupSize > 1`) is rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule)
 - `cancel(userId, bookingId, reason?)` — Cancels booking; releases all holds; late cancel becomes `late_cancelled`
-- `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
+- `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. **F6:** whenever meeting creation fails (provider throw or `status === "failed"`), `finalizeMeetingSchedule` bumps `deadlineAt` to `scheduledEndAt + 24h` so the 5-minute retry window is respected — the old tutor-review `now+12h` deadline can never expire the booking (release holds) or no-show the session while a meeting retry is pending. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
 - `tutorDecline(bookingId, tutorId, reason?)` — Tutor declines; releases all holds
 - `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
@@ -316,13 +316,13 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state.
 - `addSessionNote(userId, bookingId, content)` — Adds a server-sanitized HTML note to a completed session; the web editor emits only the supported paragraph/heading/emphasis/list/link markup
 - `getSessionNotes(userId, bookingId)` — Lists every party's notes for a completed session; the web client applies a DOMPurify allow-list before rendering
-- `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled
+- `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled. **F8:** the attendance row is inserted with `role='tutor'` and `confirmationState=confirmed`; `findConfirmedParticipants` excludes `role='tutor'` so the tutor row never inflates group repricing headcounts, hold recomputation, or no-show forfeit math
 - `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
-- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback. `totalMarks` reports the **split basis** (`priceSnapshot.baseline`) so the ledger columns reconcile: `totalMarks = cogitoTake + tutorPayout`. Students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25)
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Transition-or-skip (M4): transitions past-deadline bookings to their terminal target (shared `EXPIRY_TARGET` with `expireBookings`) FIRST, then releases holds (or forfeits for NO_SHOW); version conflicts / terminal / RESCHEDULE_PROPOSED bookings are skipped without touching the wallet
-- `checkTutorLateness()` — Flags scheduled bookings where the tutor never marked attendance past the 15-min lateness tolerance: keeps the booking SCHEDULED with holds intact, sets `overrideMeta.category = "tutor_lateness_pending"` (admin-queue surface), writes a `tutor_lateness_pending_review` audit record, and notifies proposer + tutor; returns `{ flagged, failed }` (no auto-cancel, no hold release)
+- `checkTutorLateness()` — Flags scheduled bookings where the tutor never marked attendance past the 15-min lateness tolerance: keeps the booking SCHEDULED with holds intact, sets `overrideMeta.category = "tutor_lateness_pending"` (admin-queue surface), writes a `tutor_lateness_pending_review` audit record, and notifies proposer + tutor; returns `{ flagged, failed }` (no auto-cancel, no hold release). **F9:** applies to **offline and online** bookings alike — `findBookingsWithTutorLateness` has no modality filter, so an absent offline tutor is flagged too
 - `retryFailedMeetings()` — Re-creates Google Meet for CONFIRMED online bookings with a failed meetingEvent (up to 3 attempts, driven by the `retry-failed-meetings` job); successful retry moves the booking to `SCHEDULED`, while exhausted attempts remain available for `adminBooking.setMeetingLink`
 
 **Dependencies:** `BookingRepo`, `BookingWalletPort`, `BookingPricingPort`, `BookingAuditPort`, `BookingNotificationPort`, `BookingMeetingPort`
@@ -369,7 +369,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Circuit breaker on Resend: 3 failures → open for 120s
 - 30-second timeout per email send request
-- Emails are dispatched via the **outbox**: `notification.write` only queues `notificationDispatch` rows (`status='queued'`) inside the DB transaction; the `send-notification-email` scheduler job (60s) calls `notification.dispatchQueuedEmails()` to send and mark rows `sent`/`failed`/`suppressed` (landed #46)
+- Emails are dispatched via the **outbox**: `notification.write` only queues `notificationDispatch` rows (`status='queued'`) inside the DB transaction; the `send-notification-email` scheduler job (60s) calls `notification.dispatchQueuedEmails()` to send and mark rows `sent`/`failed`/`suppressed` (landed #46). `claimPendingDispatches` parenthesizes the reclaim disjunct (F7): the stale-`sending` reclaim (`created_at < now() - 10 min`) is `OR`-joined with an explicit grouping `(status IN ('queued','failed') AND attempts < 3) OR (status = 'sending' AND attempts < 3 AND ...)` so a `sending` row past the 3-attempt budget is never claimed (regression-tested)
 
 ---
 
@@ -380,8 +380,8 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 **Files:**
 
 - `invite.types.ts` — Zod schemas
-- `invite.errors.ts` — `InviteNotFoundError`, `InviteEmailMismatchError`, `ProfileAlreadyExistsError`
-- `invite.repo.ts` — `findByToken`, `markUsed`
+- `invite.errors.ts` — `InviteNotFoundError`, `InviteEmailMismatchError`, `ProfileAlreadyExistsError`, `InvalidRoleForClaimError`
+- `invite.repo.ts` — `findInviteByToken`, `findTutorProfileByUserId`, `getUserRoleById`, `updateInviteStatus`, `insertTutorProfile`, `updateUserRole`
 - `invite.service.ts` — `verify(token)`, `claim(userId, userEmail, token)`
 - `invite.handler.ts` — Maps to service calls
 - `invite.router.ts` — `verify` is public, `claim` is protected
@@ -397,6 +397,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Tokens are single-use; claimed tokens are marked `used`
 - Email must match the invited email exactly
+- Claim is blocked for **admin-role accounts** — `validateClaim` fetches the user's role (`getUserRoleById`) and throws `InvalidRoleForClaimError` (409 CONFLICT) when `role === "admin"`, so an admin can never be silently demoted to tutor via invite claim. Only student/tutor accounts may claim (F2).
 
 ---
 
@@ -478,7 +479,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
 - `payment.handler.ts` — `createPurchase`, `getPurchase`
-- `payment.router.ts` — Protected routes for `createPurchase`/`getPurchase`
+- `payment.router.ts` — `createPurchase` uses `verifiedStudentProcedure` (student role + verified email — paid actions require a verified email; `getPurchase` stays protected)
 - `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; `verifyWebhook`
 - `stub-payment.provider.ts` — Development stub
 - Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)
@@ -602,9 +603,9 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `listActive()` — Returns active rooms
 - `listPendingApprovals(limit?)` — Returns offline bookings in `AWAITING_ADMIN_ROOM_APPROVAL`, including bookings with no requested room row after a requested-room conflict
 - `createRoom({ name, location, capacity })` — Creates a room
-- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` and notifies tutor + confirmed students (#46, G14)
+- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
-- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise) and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6)
+- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise) and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
 - `cancelRoomBooking(bookingId, actorId?)` — Cancels the booking's room assignment; while awaiting approval it also delegates the booking cancellation/hold release/audit through `RoomBookingPort`, including the no-requested-room conflict case; notifies tutor + confirmed students (#46)
 
 **Dependencies:** `RoomRepo`, `RoomNotificationPort`, `RoomBookingPort` (transition to scheduled)

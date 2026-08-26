@@ -373,4 +373,124 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
     expect(w!.heldBalance).toBe(0);
     expect(w!.availableBalance).toBe(100);
   });
+
+  test("F3: headcount change during reconfirmation re-issues reconfirmation instead of finalizing at a stale price", async () => {
+    const a = await createTestUser(`student.f3.a.${ts}@cogito.test`);
+    await createTestWallet(a.id, 300);
+    const b2 = await createTestUser(`student.f3.b.${ts}@cogito.test`);
+    await createTestWallet(b2.id, 300);
+    const c = await createTestUser(`student.f3.c.${ts}@cogito.test`);
+    await createTestWallet(c.id, 300);
+
+    // 3-of-5 group already repriced at the size-3 rate (40/student), sitting
+    // in its reconfirmation window.
+    const seeded = await seedPartialGroup({
+      tutorId,
+      confirmedUserIds: [a.id, b2.id, c.id],
+      targetGroupSize: 5,
+      perStudent: 40,
+      state: BOOKING_STATE.AWAITING_RECONFIRMATION,
+    });
+
+    // Two of three reconfirm at the 40/student rate.
+    await services.booking.reconfirm(a.id, seeded.id, true);
+    await services.booking.reconfirm(b2.id, seeded.id, true);
+
+    // The third withdraws mid-cycle: headcount drops to 2, but the pricing
+    // snapshot is still the size-3 one (withdraw from awaiting_reconfirmation
+    // does not reprice).
+    await services.booking.withdraw(c.id, seeded.id, "schedule conflict");
+
+    // The last survivor's accept must NOT finalize to tutor review on the
+    // stale size-3 price — it re-enters a fresh reconfirmation cycle repriced
+    // for the new headcount.
+    const result = await services.booking.reconfirm(b2.id, seeded.id, true);
+    expect(result.reconfirmed).toBe(true);
+
+    const [row] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, seeded.id));
+    expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_RECONFIRMATION);
+    // Repriced to the size-2 rate: 2 × 45.
+    expect(row!.priceSnapshot?.perStudent).toBe(45);
+    expect(row!.holdAmount).toBe(90);
+    const deadlineMs = new Date(row!.deadlineAt!).getTime();
+    expect(deadlineMs).toBeGreaterThan(Date.now() + RESPONSE_WINDOW_MS - 5000);
+
+    // Every survivor must reconfirm again at the new rate — no one stays
+    // RECONFIRMED from the stale-price round.
+    const participants = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, seeded.id));
+    const survivors = participants.filter((p) =>
+      [a.id, b2.id].includes(p.userId),
+    );
+    expect(survivors.length).toBe(2);
+    for (const p of survivors) {
+      expect(p.confirmationState).toBe("confirmed");
+      expect(p.heldAmount).toBe(45);
+    }
+
+    // After the re-issued cycle, reconfirming both finalizes at the new price.
+    await services.booking.reconfirm(a.id, seeded.id, true);
+    await services.booking.reconfirm(b2.id, seeded.id, true);
+    const [finalRow] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, seeded.id));
+    expect(finalRow!.currentState).toBe(BOOKING_STATE.AWAITING_TUTOR_REVIEW);
+    expect(finalRow!.holdAmount).toBe(90);
+  });
+
+  test("F8: the tutor attendance row does not inflate the repricing headcount", async () => {
+    const a = await createTestUser(`student.f8.a.${ts}@cogito.test`);
+    await createTestWallet(a.id, 300);
+    const b2 = await createTestUser(`student.f8.b.${ts}@cogito.test`);
+    await createTestWallet(b2.id, 300);
+    const c = await createTestUser(`student.f8.c.${ts}@cogito.test`);
+    await createTestWallet(c.id, 300);
+
+    // 3-of-5 group repriced at the size-3 rate (40/student).
+    const seeded = await seedPartialGroup({
+      tutorId,
+      confirmedUserIds: [a.id, b2.id, c.id],
+      targetGroupSize: 5,
+      perStudent: 40,
+    });
+
+    // Tutor marks attendance: inserts a CONFIRMED participant row with
+    // role='tutor' — it must not count as a fourth student in the headcount.
+    await repo.insertParticipant(db, {
+      bookingId: seeded.id,
+      userId: tutorId,
+      role: "tutor",
+      confirmationState: "confirmed",
+      heldAmount: 0,
+      attendanceState: "present",
+    });
+
+    // Student A withdraws pre-H2 (the seeded session starts 1h out, which
+    // would count as a late withdrawal — push it beyond the 2h cutoff first):
+    // the group reprices to 2 students (not 3 — the tutor row must be
+    // excluded).
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() + 6 * 3600_000),
+        scheduledEndAt: new Date(Date.now() + 7 * 3600_000),
+      })
+      .where(eq(booking.id, seeded.id));
+    await services.booking.withdraw(a.id, seeded.id, "schedule conflict");
+
+    const [row] = await db
+      .select()
+      .from(booking)
+      .where(eq(booking.id, seeded.id));
+    expect(row!.currentState).toBe(BOOKING_STATE.AWAITING_RECONFIRMATION);
+    // Repriced for 2 students at the size-2 rate (45), not 3 students (40).
+    expect(row!.priceSnapshot?.perStudent).toBe(45);
+    expect(row!.holdAmount).toBe(90);
+  });
 });

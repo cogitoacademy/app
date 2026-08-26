@@ -1,6 +1,7 @@
 import {
   publicProcedure,
   protectedProcedure,
+  studentProcedure,
   adminProcedure,
 } from "../../procedures";
 import {
@@ -35,7 +36,7 @@ export function createAchievementRouter(handler: AchievementHandler) {
       })
       .handler(handler.list),
 
-    create: protectedProcedure
+    create: studentProcedure
       .route({
         method: "POST",
         path: "/achievements/create",
@@ -46,7 +47,7 @@ export function createAchievementRouter(handler: AchievementHandler) {
       .input(achievementInput)
       .handler(handler.create),
 
-    update: protectedProcedure
+    update: studentProcedure
       .route({
         method: "POST",
         path: "/achievements/update",
@@ -57,7 +58,7 @@ export function createAchievementRouter(handler: AchievementHandler) {
       .input(updateAchievementInput)
       .handler(handler.update),
 
-    delete: protectedProcedure
+    delete: studentProcedure
       .route({
         method: "POST",
         path: "/achievements/delete",

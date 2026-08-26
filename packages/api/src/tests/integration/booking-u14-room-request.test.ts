@@ -187,6 +187,14 @@ describe("U14: room availability integrated into offline booking creation (FR-22
       scheduledEndAt: t2End,
       timezone: "Asia/Jakarta",
     });
+    const tutorCookie = (await signInAndGetCookie(
+      `tutor.u14.${ts}@cogito.test`,
+      "Test1234!",
+    ))!;
+    const tutorClient = createTestClient(await createTestContext(tutorCookie));
+    await tutorClient.tutorActions.acceptBooking({
+      bookingId: firstBooking.id,
+    });
     // Occupy room A for the t3 window (assign accepts arbitrary times).
     await adminClient.room.assign({
       bookingId: firstBooking.id,
