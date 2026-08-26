@@ -20,6 +20,7 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
+  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -259,13 +260,13 @@ export function NotificationsPage() {
         <Card>
           <CardHeader className="p-5 sm:p-6">
             <CardTitle>All activity</CardTitle>
-            <Text className="text-muted">
+            <CardDescription>
               Newest updates appear first. Select rows to change their read
               status.
-            </Text>
+            </CardDescription>
           </CardHeader>
 
-          <div className="flex flex-col gap-3 border-b border-card-separator px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex flex-col gap-3 border-b border-card-separator px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 md:min-h-[53px]">
             <div className="flex items-center gap-2.5">
               <Checkbox
                 checked={allSelected}
@@ -284,7 +285,7 @@ export function NotificationsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   onClick={() => updateSelected(true)}
                   progress={
                     updateReadStatus.isPending &&
@@ -296,7 +297,7 @@ export function NotificationsPage() {
                 </Button>
                 <Button
                   variant="plain"
-                  size="sm"
+                  size="xs"
                   onClick={() => updateSelected(false)}
                   progress={
                     updateReadStatus.isPending &&
@@ -397,6 +398,9 @@ function NotificationItem({
           >
             {notification.title}
           </ItemTitle>
+          <ItemDescription className="max-w-3xl text-sm">
+            {notification.body}
+          </ItemDescription>
           {!notification.isRead ? (
             <span
               className="size-1.5 rounded-full bg-info"
@@ -405,9 +409,7 @@ function NotificationItem({
             />
           ) : null}
         </div>
-        <ItemDescription className="max-w-3xl text-sm">
-          {notification.body}
-        </ItemDescription>
+
         <ItemMeta className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <time
             dateTime={dateTime}
@@ -418,20 +420,15 @@ function NotificationItem({
           </time>
           <span aria-hidden="true">·</span>
           <span>{formatRelativeTime(notification.createdAt)}</span>
-          <Badge
-            variant={getCategoryVariant(notification.category)}
-            size="sm"
-            pill
-          >
-            {getCategoryLabel(notification.category)}
-          </Badge>
         </ItemMeta>
       </ItemContent>
       <ItemAction className="self-start">
+        <Badge variant={getCategoryVariant(notification.category)} size="sm">
+          {getCategoryLabel(notification.category)}
+        </Badge>
         <Button
           variant="plain"
-          size="sm"
-          className="shrink-0 px-2 sm:px-3"
+          size="xs-icon"
           onClick={() => onUpdateReadStatus(!notification.isRead)}
           progress={isPending}
           disabled={isPending}
@@ -442,14 +439,11 @@ function NotificationItem({
           }
         >
           {notification.isRead ? <IconMail /> : <IconMailOpened />}
-          <span className="hidden sm:inline">
-            {notification.isRead ? "Mark unread" : "Mark read"}
-          </span>
         </Button>
         {notification.bookingId ? (
           <Button
             variant="plain"
-            size="sm-icon"
+            size="xs-icon"
             aria-label="View booking details"
             render={
               <Link
