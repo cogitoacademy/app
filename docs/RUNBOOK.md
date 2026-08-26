@@ -186,11 +186,11 @@ using `apps/server/.env.test` or `apps/server/.env.test.example`.
 
 #### Migration rollback
 
-Up migrations are the only automatic path; down paths exist for migrations
-`0027_subject_taxonomy.sql` and `0028_economy_config.sql` (appended `-- down`
-sections) so the 2026 taxonomy and IDR-economy changes can be reverted on a
-scratch or dev database. Rollback is a manual `psql` operation against the
-target database:
+Up migrations are the only automatic path; rollback SQL for the 2026 taxonomy
+and IDR-economy migrations lives here (NOT inside the migration files —
+drizzle-kit executes each file as one batch, so embedded down-DDL would run
+immediately after the up-DDL). Rollback is a manual `psql` operation against
+the target database, ordered newest-first:
 
 ```sql
 -- 0028 economy config down
