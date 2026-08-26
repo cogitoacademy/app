@@ -9,6 +9,7 @@ describe("procedures", () => {
     expect(mod.adminProcedure).toBeDefined();
     expect(mod.o).toBeDefined();
     expect(mod.requireAuth).toBeDefined();
+    expect(mod.requireEmailVerified).toBeDefined();
     expect(mod.requireAdmin).toBeDefined();
   });
 
@@ -57,6 +58,37 @@ describe("procedures", () => {
     });
 
     expect(nextCalled).toBe(true);
+  });
+
+  test("requireEmailVerified rejects an unverified user", async () => {
+    const { requireEmailVerified } = await import("../../procedures");
+
+    await expect(
+      (requireEmailVerified as any)({
+        context: {
+          session: { user: { id: "u1", emailVerified: false } },
+          services: {},
+        },
+        next: async () => "should not reach",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "EMAIL_NOT_VERIFIED",
+    });
+  });
+
+  test("requireEmailVerified calls next for a verified user", async () => {
+    const { requireEmailVerified } = await import("../../procedures");
+
+    await expect(
+      (requireEmailVerified as any)({
+        context: {
+          session: { user: { id: "u1", emailVerified: true } },
+          services: {},
+        },
+        next: async () => "ok",
+      }),
+    ).resolves.toBe("ok");
   });
 
   test("requireAdmin throws UNAUTHORIZED when session is null", async () => {

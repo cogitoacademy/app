@@ -50,6 +50,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 import {
   addMinutesToTime,
@@ -69,7 +70,10 @@ function getBookingErrorMessage(error: Error) {
     return "Some booking details are no longer valid. Choose the session format and time again, then retry.";
   }
 
-  return error.message;
+  return getUserFacingError(
+    error,
+    "Your booking could not be created. Please try again.",
+  );
 }
 
 function formatSlotDate(value: Date | string) {

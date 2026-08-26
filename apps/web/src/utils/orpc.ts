@@ -2,9 +2,13 @@ import type { AppRouterClient } from "@cogito-app/api/routers";
 import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { QueryCache, QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import {
+  isEmailVerificationRequired,
+  redirectToEmailVerification,
+} from "@/lib/email-verification";
 import { serverUrl } from "@/lib/server-url";
 import { getUserFacingError } from "@/lib/error-message";
 
@@ -32,6 +36,13 @@ export const queryClient = new QueryClient({
           onClick: query.invalidate,
         },
       });
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      if (isEmailVerificationRequired(error)) {
+        redirectToEmailVerification();
+      }
     },
   }),
 });

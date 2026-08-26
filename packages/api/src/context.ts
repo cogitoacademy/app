@@ -16,10 +16,13 @@ export async function createContext({ context }: CreateContextOptions) {
   });
   if (session?.user) {
     const currentUser = await db.query.user.findFirst({
-      columns: { role: true },
+      columns: { role: true, emailVerified: true },
       where: eq(user.id, session.user.id),
     });
-    if (currentUser) session.user.role = currentUser.role;
+    if (currentUser) {
+      session.user.role = currentUser.role;
+      session.user.emailVerified = currentUser.emailVerified;
+    }
   }
   return {
     session,

@@ -15,6 +15,12 @@ export function getUserFacingError(
   if (normalized.includes("unauthorized")) {
     return "Your session has expired. Sign in again to continue.";
   }
+  if (
+    normalized.includes("email_not_verified") ||
+    normalized.includes("email not verified")
+  ) {
+    return "Verify your email before making a purchase or booking.";
+  }
   if (normalized.includes("forbidden")) {
     return "You do not have permission to perform this action.";
   }

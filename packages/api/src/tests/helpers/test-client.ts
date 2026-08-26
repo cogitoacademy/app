@@ -42,10 +42,13 @@ export async function createTestContext(sessionCookie?: string) {
   const session = await auth.api.getSession({ headers });
   if (session?.user) {
     const currentUser = await db.query.user.findFirst({
-      columns: { role: true },
+      columns: { role: true, emailVerified: true },
       where: eq(user.id, session.user.id),
     });
-    if (currentUser) session.user.role = currentUser.role;
+    if (currentUser) {
+      session.user.role = currentUser.role;
+      session.user.emailVerified = currentUser.emailVerified;
+    }
   }
   return { session, services, headers };
 }
@@ -65,6 +68,14 @@ export async function signUpAndSignIn(
     body: { email, password, name },
     headers: new Headers(),
   });
+
+  // Existing integration tests exercise downstream booking/payment behavior,
+  // not the email delivery flow. Keep those fixtures verified explicitly;
+  // the dedicated email-verification tests cover the unverified state.
+  await db
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.email, email));
 
   const response = await auth.api.signInEmail({
     body: { email, password },

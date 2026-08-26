@@ -22,6 +22,25 @@ export const requireAuth = o.middleware(async ({ context, next }) => {
   });
 });
 
+export const requireEmailVerified = o.middleware(async ({ context, next }) => {
+  if (!context.session?.user) {
+    throw new ORPCError("UNAUTHORIZED");
+  }
+
+  const user = context.session.user as CogitoUser;
+  if (!user.emailVerified) {
+    throw new ORPCError("FORBIDDEN", { message: "EMAIL_NOT_VERIFIED" });
+  }
+
+  return next({
+    context: {
+      session: context.session,
+      services: context.services,
+      headers: context.headers,
+    },
+  });
+});
+
 export const requireAdmin = o.middleware(async ({ context, next }) => {
   if (!context.session?.user) {
     throw new ORPCError("UNAUTHORIZED");
@@ -40,6 +59,7 @@ export const requireAdmin = o.middleware(async ({ context, next }) => {
 });
 
 export const protectedProcedure = publicProcedure.use(requireAuth);
+export const verifiedProcedure = protectedProcedure.use(requireEmailVerified);
 export const adminProcedure = publicProcedure.use(requireAdmin);
 
 export const requireStudent = o.middleware(async ({ context, next }) => {
@@ -60,6 +80,8 @@ export const requireStudent = o.middleware(async ({ context, next }) => {
 });
 
 export const studentProcedure = publicProcedure.use(requireStudent);
+export const verifiedStudentProcedure =
+  studentProcedure.use(requireEmailVerified);
 
 export const requireTutor = o.middleware(async ({ context, next }) => {
   if (!context.session?.user) {

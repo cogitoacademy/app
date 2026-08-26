@@ -1,10 +1,10 @@
-import { protectedProcedure } from "../../procedures";
+import { protectedProcedure, verifiedProcedure } from "../../procedures";
 import { createPurchaseInput, getPurchaseInput } from "./payment.types";
 import type { PaymentHandler } from "./payment.handler";
 
 export function createPaymentRouter(handler: PaymentHandler) {
   return {
-    createPurchase: protectedProcedure
+    createPurchase: verifiedProcedure
       .route({
         method: "POST",
         path: "/payment/purchase",

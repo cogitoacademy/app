@@ -18,13 +18,14 @@ import {
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconBrandGoogle, IconEye, IconEyeOff } from "@tabler/icons-react";
+import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
 
+import { getAuthErrorMessage } from "./auth-error-message";
 import {
   getFieldErrorMessages,
   signInEmailSchema,
@@ -54,6 +55,7 @@ export default function SignUpForm({
       password: "",
       name: "",
     },
+    canSubmitWhenInvalid: true,
     onSubmit: async ({ value }) => {
       setIsAuthTransitioning(true);
       try {
@@ -68,7 +70,7 @@ export default function SignUpForm({
 
         if (result.error) {
           toastManager.add({
-            title: result.error.message || result.error.statusText,
+            title: getAuthErrorMessage(result.error, "sign-up"),
             type: "error",
           });
           return;
@@ -85,8 +87,22 @@ export default function SignUpForm({
           return;
         }
 
-        const role = (session.data.user as { role?: string } | undefined)?.role;
+        const sessionUser = session.data.user as
+          | { emailVerified?: boolean; role?: string }
+          | undefined;
+        const role = sessionUser?.role;
         toastManager.add({ title: "Sign up successful", type: "success" });
+
+        if (sessionUser && !sessionUser.emailVerified) {
+          await navigate({
+            to: "/verify-email",
+            search: {
+              email: value.email.trim(),
+              ...(redirectPath ? { redirect: redirectPath } : {}),
+            },
+          });
+          return;
+        }
 
         if (redirectPath) {
           await navigate({ to: redirectPath });
@@ -148,7 +164,7 @@ export default function SignUpForm({
                   {
                     onError: (error) => {
                       toastManager.add({
-                        title: error.error.message || error.error.statusText,
+                        title: getAuthErrorMessage(error.error, "sign-up"),
                         type: "error",
                       });
                     },
@@ -156,7 +172,12 @@ export default function SignUpForm({
                 );
               }}
             >
-              <IconBrandGoogle size={18} />
+              <img
+                src="/google-logo.svg"
+                alt=""
+                aria-hidden="true"
+                className="size-4.5 object-contain"
+              />
               Sign up with Google
             </Button>
           </div>
@@ -178,13 +199,13 @@ export default function SignUpForm({
                 onMount: signUpNameSchema,
                 onChange: signUpNameSchema,
                 onBlur: signUpNameSchema,
+                onSubmit: signUpNameSchema,
               }}
             >
               {(field) => (
                 <Field
                   invalid={
-                    (field.state.meta.isBlurred ||
-                      field.form.state.submissionAttempts > 0) &&
+                    field.form.state.submissionAttempts > 0 &&
                     field.state.meta.errors.length > 0
                   }
                 >
@@ -196,20 +217,22 @@ export default function SignUpForm({
                     autoComplete="name"
                     aria-required="true"
                     aria-invalid={
-                      (field.state.meta.isBlurred ||
-                        field.form.state.submissionAttempts > 0) &&
+                      field.form.state.submissionAttempts > 0 &&
                       field.state.meta.errors.length > 0
                     }
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
-                  {(field.state.meta.isBlurred ||
-                  field.form.state.submissionAttempts > 0
+                  {(field.form.state.submissionAttempts > 0
                     ? getFieldErrorMessages(field.state.meta.errors)
                     : []
                   ).map((error) => (
-                    <FieldError key={error} match={true}>
+                    <FieldError
+                      key={error}
+                      match={true}
+                      className="text-sm leading-relaxed"
+                    >
                       {error}
                     </FieldError>
                   ))}
@@ -223,13 +246,13 @@ export default function SignUpForm({
                 onMount: signInEmailSchema,
                 onChange: signInEmailSchema,
                 onBlur: signInEmailSchema,
+                onSubmit: signInEmailSchema,
               }}
             >
               {(field) => (
                 <Field
                   invalid={
-                    (field.state.meta.isBlurred ||
-                      field.form.state.submissionAttempts > 0) &&
+                    field.form.state.submissionAttempts > 0 &&
                     field.state.meta.errors.length > 0
                   }
                 >
@@ -242,20 +265,22 @@ export default function SignUpForm({
                     autoComplete="email"
                     aria-required="true"
                     aria-invalid={
-                      (field.state.meta.isBlurred ||
-                        field.form.state.submissionAttempts > 0) &&
+                      field.form.state.submissionAttempts > 0 &&
                       field.state.meta.errors.length > 0
                     }
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
-                  {(field.state.meta.isBlurred ||
-                  field.form.state.submissionAttempts > 0
+                  {(field.form.state.submissionAttempts > 0
                     ? getFieldErrorMessages(field.state.meta.errors)
                     : []
                   ).map((error) => (
-                    <FieldError key={error} match={true}>
+                    <FieldError
+                      key={error}
+                      match={true}
+                      className="text-sm leading-relaxed"
+                    >
                       {error}
                     </FieldError>
                   ))}
@@ -269,13 +294,13 @@ export default function SignUpForm({
                 onMount: signUpPasswordPolicySchema,
                 onChange: signUpPasswordPolicySchema,
                 onBlur: signUpPasswordPolicySchema,
+                onSubmit: signUpPasswordPolicySchema,
               }}
             >
               {(field) => (
                 <Field
                   invalid={
-                    (field.state.meta.isBlurred ||
-                      field.form.state.submissionAttempts > 0) &&
+                    field.form.state.submissionAttempts > 0 &&
                     field.state.meta.errors.length > 0
                   }
                 >
@@ -289,8 +314,7 @@ export default function SignUpForm({
                       autoComplete="new-password"
                       aria-required="true"
                       aria-invalid={
-                        (field.state.meta.isBlurred ||
-                          field.form.state.submissionAttempts > 0) &&
+                        field.form.state.submissionAttempts > 0 &&
                         field.state.meta.errors.length > 0
                       }
                       value={field.state.value}
@@ -316,19 +340,24 @@ export default function SignUpForm({
                       )}
                     </Button>
                   </div>
-                  <FieldDescription>
-                    At least 8 characters with uppercase, lowercase, and a
-                    number.
-                  </FieldDescription>
-                  {(field.state.meta.isBlurred ||
-                  field.form.state.submissionAttempts > 0
-                    ? getFieldErrorMessages(field.state.meta.errors)
-                    : []
-                  ).map((error) => (
-                    <FieldError key={error} match={true}>
-                      {error}
-                    </FieldError>
-                  ))}
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <FieldDescription>
+                      At least 8 characters with uppercase, lowercase, and a
+                      number.
+                    </FieldDescription>
+                    {field.form.state.submissionAttempts > 0 &&
+                      getFieldErrorMessages(field.state.meta.errors).map(
+                        (error) => (
+                          <FieldError
+                            key={error}
+                            match={true}
+                            className="text-sm leading-relaxed"
+                          >
+                            {error}
+                          </FieldError>
+                        ),
+                      )}
+                  </div>
                 </Field>
               )}
             </form.Field>

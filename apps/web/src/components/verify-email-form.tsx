@@ -17,17 +17,25 @@ import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { useForm } from "@tanstack/react-form";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
 
-export function VerifyEmailForm() {
+export function VerifyEmailForm({
+  email,
+  redirectPath,
+}: {
+  email?: string;
+  redirectPath?: string;
+}) {
   const [verified, setVerified] = useState(false);
+  const [resending, setResending] = useState(false);
+  const { data: session } = authClient.useSession();
 
   const form = useForm({
     defaultValues: {
-      email: "",
+      email: email ?? "",
       otp: "",
     },
     onSubmit: async ({ value }) => {
@@ -61,6 +69,48 @@ export function VerifyEmailForm() {
     },
   });
 
+  useEffect(() => {
+    const sessionEmail = session?.user.email;
+    const nextEmail = email ?? sessionEmail;
+    if (!form.getFieldValue("email") && nextEmail) {
+      form.setFieldValue("email", nextEmail);
+    }
+  }, [email, form, session?.user.email]);
+
+  async function resendCode() {
+    const emailValue = form.getFieldValue("email").trim();
+    const result = z.email().safeParse(emailValue);
+    if (!result.success) {
+      toastManager.add({
+        title: "Enter your email before requesting a new code.",
+        type: "error",
+      });
+      return;
+    }
+
+    setResending(true);
+    try {
+      const response = await authClient.emailOtp.sendVerificationOtp({
+        email: emailValue,
+        type: "email-verification",
+      });
+      if (response.error) {
+        toastManager.add({
+          title: response.error.message || response.error.statusText,
+          type: "error",
+        });
+        return;
+      }
+      toastManager.add({
+        title: "Verification code sent",
+        description: "Check your inbox for the new 6-digit code.",
+        type: "success",
+      });
+    } finally {
+      setResending(false);
+    }
+  }
+
   if (verified) {
     return (
       <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
@@ -68,13 +118,24 @@ export function VerifyEmailForm() {
           <CardHeader align="center">
             <CardTitle>Email verified</CardTitle>
             <CardDescription>
-              Your email is verified. You can now sign in.
+              {redirectPath
+                ? "Your email is verified. Continue where you left off."
+                : "Your email is verified. You can now sign in."}
             </CardDescription>
           </CardHeader>
           <CardBody className="flex flex-col gap-5">
-            <Text className="text-center">
-              <TextLink href="/login">Back to sign in</TextLink>
-            </Text>
+            {redirectPath ? (
+              <Button
+                block
+                onClick={() => window.location.assign(redirectPath)}
+              >
+                Continue
+              </Button>
+            ) : (
+              <Text className="text-center">
+                <TextLink href="/login">Back to sign in</TextLink>
+              </Text>
+            )}
           </CardBody>
         </Card>
       </div>
@@ -165,10 +226,24 @@ export function VerifyEmailForm() {
             </form.Subscribe>
           </form>
 
-          <Text className="text-center">
-            Didn&apos;t get a code?{" "}
-            <TextLink href="/login">Back to sign in</TextLink>
-          </Text>
+          <div className="flex flex-col items-center gap-1">
+            <Text className="text-center">
+              Didn&apos;t get a code?{" "}
+              <Button
+                type="button"
+                variant="plain"
+                size="sm"
+                className="h-auto p-0! align-baseline text-sm text-primary"
+                disabled={resending}
+                onClick={() => void resendCode()}
+              >
+                {resending ? "Sending…" : "Resend code"}
+              </Button>
+            </Text>
+            <Text className="text-center text-sm">
+              <TextLink href="/login">Back to sign in</TextLink>
+            </Text>
+          </div>
         </CardBody>
       </Card>
     </div>

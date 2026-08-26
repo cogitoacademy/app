@@ -18,13 +18,14 @@ import {
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconBrandGoogle, IconEye, IconEyeOff } from "@tabler/icons-react";
+import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
 
+import { getAuthErrorMessage } from "./auth-error-message";
 import {
   getFieldErrorMessages,
   signInEmailSchema,
@@ -52,6 +53,7 @@ export default function SignInForm({
       email: "",
       password: "",
     },
+    canSubmitWhenInvalid: true,
     onSubmit: async ({ value }) => {
       setIsAuthTransitioning(true);
       try {
@@ -69,7 +71,7 @@ export default function SignInForm({
 
         if (result.error) {
           toastManager.add({
-            title: result.error.message || result.error.statusText,
+            title: getAuthErrorMessage(result.error, "sign-in"),
             type: "error",
           });
           return;
@@ -151,7 +153,7 @@ export default function SignInForm({
                   {
                     onError: (error) => {
                       toastManager.add({
-                        title: error.error.message || error.error.statusText,
+                        title: getAuthErrorMessage(error.error, "sign-in"),
                         type: "error",
                       });
                     },
@@ -159,7 +161,12 @@ export default function SignInForm({
                 );
               }}
             >
-              <IconBrandGoogle size={18} />
+              <img
+                src="/google-logo.svg"
+                alt=""
+                aria-hidden="true"
+                className="size-4.5 object-contain"
+              />
               Sign in with Google
             </Button>
           </div>
@@ -181,13 +188,13 @@ export default function SignInForm({
                 onMount: signInEmailSchema,
                 onChange: signInEmailSchema,
                 onBlur: signInEmailSchema,
+                onSubmit: signInEmailSchema,
               }}
             >
               {(field) => (
                 <Field
                   invalid={
-                    (field.state.meta.isBlurred ||
-                      field.form.state.submissionAttempts > 0) &&
+                    field.form.state.submissionAttempts > 0 &&
                     field.state.meta.errors.length > 0
                   }
                 >
@@ -200,20 +207,22 @@ export default function SignInForm({
                     autoComplete="email"
                     aria-required="true"
                     aria-invalid={
-                      (field.state.meta.isBlurred ||
-                        field.form.state.submissionAttempts > 0) &&
+                      field.form.state.submissionAttempts > 0 &&
                       field.state.meta.errors.length > 0
                     }
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                   />
-                  {(field.state.meta.isBlurred ||
-                  field.form.state.submissionAttempts > 0
+                  {(field.form.state.submissionAttempts > 0
                     ? getFieldErrorMessages(field.state.meta.errors)
                     : []
                   ).map((error) => (
-                    <FieldError key={error} match={true}>
+                    <FieldError
+                      key={error}
+                      match={true}
+                      className="text-sm leading-relaxed"
+                    >
                       {error}
                     </FieldError>
                   ))}
@@ -227,13 +236,13 @@ export default function SignInForm({
                 onMount: signInPasswordSchema,
                 onChange: signInPasswordSchema,
                 onBlur: signInPasswordSchema,
+                onSubmit: signInPasswordSchema,
               }}
             >
               {(field) => (
                 <Field
                   invalid={
-                    (field.state.meta.isBlurred ||
-                      field.form.state.submissionAttempts > 0) &&
+                    field.form.state.submissionAttempts > 0 &&
                     field.state.meta.errors.length > 0
                   }
                 >
@@ -252,8 +261,7 @@ export default function SignInForm({
                       autoComplete="current-password"
                       aria-required="true"
                       aria-invalid={
-                        (field.state.meta.isBlurred ||
-                          field.form.state.submissionAttempts > 0) &&
+                        field.form.state.submissionAttempts > 0 &&
                         field.state.meta.errors.length > 0
                       }
                       value={field.state.value}
@@ -279,18 +287,23 @@ export default function SignInForm({
                       )}
                     </Button>
                   </div>
-                  <FieldDescription>
-                    Use at least 8 characters.
-                  </FieldDescription>
-                  {(field.state.meta.isBlurred ||
-                  field.form.state.submissionAttempts > 0
-                    ? getFieldErrorMessages(field.state.meta.errors)
-                    : []
-                  ).map((error) => (
-                    <FieldError key={error} match={true}>
-                      {error}
-                    </FieldError>
-                  ))}
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <FieldDescription>
+                      Use at least 8 characters.
+                    </FieldDescription>
+                    {field.form.state.submissionAttempts > 0 &&
+                      getFieldErrorMessages(field.state.meta.errors).map(
+                        (error) => (
+                          <FieldError
+                            key={error}
+                            match={true}
+                            className="text-sm leading-relaxed"
+                          >
+                            {error}
+                          </FieldError>
+                        ),
+                      )}
+                  </div>
                 </Field>
               )}
             </form.Field>

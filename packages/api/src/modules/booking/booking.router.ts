@@ -2,6 +2,7 @@ import {
   protectedProcedure,
   studentProcedure,
   tutorProcedure,
+  verifiedStudentProcedure,
 } from "../../procedures";
 import {
   createSoloInput,
@@ -33,7 +34,7 @@ import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 
 export function createBookingRouter(handler: BookingHandler) {
   return {
-    createSolo: studentProcedure
+    createSolo: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/solo/create",
@@ -147,7 +148,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(getSessionNotesInput)
       .handler(handler.getSessionNotes),
 
-    createGroup: studentProcedure
+    createGroup: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/group/create",
@@ -159,7 +160,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(createGroupInput)
       .handler(handler.createGroup),
 
-    createSeries: studentProcedure
+    createSeries: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/series/create",
@@ -170,7 +171,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(createSeriesInput)
       .handler(handler.createSeries),
 
-    createGroupSeries: studentProcedure
+    createGroupSeries: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/group-series/create",
@@ -182,7 +183,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(createGroupSeriesInput)
       .handler(handler.createGroupSeries),
 
-    confirmInvite: studentProcedure
+    confirmInvite: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/invite/confirm",
@@ -216,7 +217,7 @@ export function createBookingRouter(handler: BookingHandler) {
       .input(withdrawInviteInput)
       .handler(handler.withdrawInvite),
 
-    reconfirm: studentProcedure
+    reconfirm: verifiedStudentProcedure
       .route({
         method: "POST",
         path: "/booking/reconfirm",
