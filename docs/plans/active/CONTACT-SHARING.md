@@ -1,7 +1,6 @@
 # Consent-based contact sharing
 
-Status: implementation complete on `f/contact-sharing-flow`; PR to `main`
-pending.
+Status: implementation complete on `f/contact-sharing-flow`; PR #108 to `main`.
 
 ## Product decision
 
