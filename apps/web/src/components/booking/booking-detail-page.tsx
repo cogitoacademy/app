@@ -44,13 +44,6 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import {
-  Popover,
-  PopoverDescription,
-  PopoverPopup,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@cogito-app/ui/components/selia/popover";
-import {
   Dialog,
   DialogBody,
   DialogDescription,
@@ -72,6 +65,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
+import { InfoPreview } from "@/components/info-preview";
 import {
   canCancelBooking,
   formatBookingDate,
@@ -438,20 +432,26 @@ export function BookingDetailPage({
                   </Button>
                 ) : null}
                 {canComplete ? (
-                  <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
-                    <Text className="max-w-60 text-xs text-muted sm:text-right">
-                      {sessionHasEnded
-                        ? "Confirm completion to settle the held Marks."
-                        : "Completion becomes available after the scheduled end time."}
-                    </Text>
-                    <Button
-                      size="sm"
-                      onClick={completeSession}
-                      progress={complete.isPending}
-                      disabled={!sessionHasEnded || tutorActionPending}
-                    >
-                      Complete session
-                    </Button>
+                  <div className="flex min-w-0 flex-col items-start gap-2 sm:items-end">
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        onClick={completeSession}
+                        progress={complete.isPending}
+                        disabled={!sessionHasEnded || tutorActionPending}
+                      >
+                        Complete session
+                      </Button>
+                      <InfoPreview
+                        title="Completion timing"
+                        description={
+                          sessionHasEnded
+                            ? "Confirm completion to settle the held Marks."
+                            : "Completion becomes available after the scheduled end time."
+                        }
+                        label="About completing this session"
+                      />
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -518,26 +518,21 @@ export function BookingDetailPage({
                         {booking.modality === "online" ? "Online" : "Offline"}
                       </Text>
                       {booking.modality === "online" ? (
-                        meetingUrl ? (
-                          <Badge variant="success" size="sm" pill>
-                            Ready
-                          </Badge>
-                        ) : (
-                          <MeetingStatusPopover
-                            bookingState={booking.currentState}
-                            meetingStatus={booking.meetingStatus}
-                            providerStatus={booking.meeting?.status}
-                          />
-                        )
+                        <MeetingStatusPopover
+                          bookingState={booking.currentState}
+                          meetingStatus={booking.meetingStatus}
+                          providerStatus={booking.meeting?.status}
+                          meetingUrl={meetingUrl}
+                        />
+                      ) : !activeRoomBooking ? (
+                        <InfoPreview
+                          title="Room details"
+                          description="Room details are not available yet."
+                          label="About room details"
+                        />
                       ) : null}
                     </div>
-                    {booking.modality === "online" ? (
-                      meetingUrl ? (
-                        <Text className="mt-1 text-sm text-muted">
-                          The meeting room is ready for this session.
-                        </Text>
-                      ) : null
-                    ) : activeRoomBooking ? (
+                    {booking.modality === "offline" && activeRoomBooking ? (
                       <>
                         <Text className="mt-1 font-medium">
                           {activeRoomBooking.room.name}
@@ -546,124 +541,8 @@ export function BookingDetailPage({
                           {activeRoomBooking.room.location}
                         </Text>
                       </>
-                    ) : (
-                      <Text className="mt-1 text-sm text-muted">
-                        Room details are not available yet.
-                      </Text>
-                    )}
+                    ) : null}
                   </div>
-                  {booking.modality === "online" && meetingUrl ? (
-                    <Button
-                      render={
-                        <a
-                          href={meetingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label="Open meeting room"
-                        />
-                      }
-                      nativeButton={false}
-                      variant="plain"
-                      size="icon"
-                      pill
-                      aria-label="Open meeting room"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        id="google-meet"
-                      >
-                        <path
-                          fill="url(#paint0_linear_1_187)"
-                          fill-rule="evenodd"
-                          d="M15 4C16.1046 4 17 4.89543 17 6V18C17 19.1046 16.1046 20 15 20H4.75C3.36929 20 2.25 18.8807 2.25 17.5V9C2.25 6.23858 4.48858 4 7.25 4H15Z"
-                          clip-rule="evenodd"
-                        ></path>
-                        <g clip-path="url(#paint1_diamond_1_187_clip_path)">
-                          <g transform="matrix(0 .0115 -.0093 0 17 12)">
-                            <rect
-                              width="707.162"
-                              height="1601.61"
-                              fill="url(#paint1_diamond_1_187)"
-                              shape-rendering="crispEdges"
-                            ></rect>
-                            <rect
-                              width="707.162"
-                              height="1601.61"
-                              fill="url(#paint1_diamond_1_187)"
-                              shape-rendering="crispEdges"
-                              transform="scale(1 -1)"
-                            ></rect>
-                            <rect
-                              width="707.162"
-                              height="1601.61"
-                              fill="url(#paint1_diamond_1_187)"
-                              shape-rendering="crispEdges"
-                              transform="scale(-1 1)"
-                            ></rect>
-                            <rect
-                              width="707.162"
-                              height="1601.61"
-                              fill="url(#paint1_diamond_1_187)"
-                              shape-rendering="crispEdges"
-                              transform="scale(-1)"
-                            ></rect>
-                          </g>
-                        </g>
-                        <path
-                          fill-rule="evenodd"
-                          d="M15 4C16.1046 4 17 4.89543 17 6V18C17 19.1046 16.1046 20 15 20H4.75C3.36929 20 2.25 18.8807 2.25 17.5V9C2.25 6.23858 4.48858 4 7.25 4H15Z"
-                          clip-rule="evenodd"
-                          fill="none"
-                        ></path>
-                        <path
-                          fill="#fff"
-                          d="M4.25 16.5C4.25021 15.6167 4.96626 14.9006 5.84961 14.9004C6.73313 14.9004 7.44998 15.6165 7.4502 16.5C7.4502 17.3837 6.73326 18.1006 5.84961 18.1006C4.96613 18.1004 4.25 17.3835 4.25 16.5Z"
-                        ></path>
-                        <path
-                          fill="#F9AC02"
-                          d="M17 15.5V9L20.9631 6.47801C21.6288 6.05437 22.5 6.53258 22.5 7.32167V17.1783C22.5 17.9674 21.6288 18.4456 20.9631 18.022L17 15.5Z"
-                        ></path>
-                        <defs>
-                          <linearGradient
-                            id="paint0_linear_1_187"
-                            x1="17"
-                            x2="1.977"
-                            y1="9.5"
-                            y2="14.429"
-                            gradientUnits="userSpaceOnUse"
-                          >
-                            <stop stop-color="#FADE13"></stop>
-                            <stop offset=".4" stop-color="#FADE13"></stop>
-                            <stop offset="1" stop-color="#FCCA03"></stop>
-                          </linearGradient>
-                          <linearGradient
-                            id="paint1_diamond_1_187"
-                            x1="0"
-                            x2="500"
-                            y1="0"
-                            y2="500"
-                            gradientUnits="userSpaceOnUse"
-                          >
-                            <stop offset=".142" stop-color="#FDBAD9"></stop>
-                            <stop
-                              offset="1"
-                              stop-color="#FFE66C"
-                              stop-opacity="0"
-                            ></stop>
-                          </linearGradient>
-                          <clipPath id="paint1_diamond_1_187_clip_path">
-                            <path
-                              fill-rule="evenodd"
-                              d="M15 4C16.1046 4 17 4.89543 17 6V18C17 19.1046 16.1046 20 15 20H4.75C3.36929 20 2.25 18.8807 2.25 17.5V9C2.25 6.23858 4.48858 4 7.25 4H15Z"
-                              clip-rule="evenodd"
-                              fill="none"
-                            ></path>
-                          </clipPath>
-                        </defs>
-                      </svg>
-                    </Button>
-                  ) : null}
                 </div>
                 <span id="session-when-title" className="sr-only">
                   When
@@ -1285,44 +1164,62 @@ function MeetingStatusPopover({
   bookingState,
   meetingStatus,
   providerStatus,
+  meetingUrl,
 }: {
   bookingState: string;
   meetingStatus: string;
   providerStatus?: string | null;
+  meetingUrl?: string | null;
 }) {
   const requiresAttention =
-    meetingStatus === "failed" || providerStatus === "manual";
+    !meetingUrl && (meetingStatus === "failed" || providerStatus === "manual");
   const title = getMeetingStatusTitle({
     bookingState,
     meetingStatus,
     providerStatus,
+    meetingUrl,
   });
   const description = getMeetingStatusDescription({
     bookingState,
     meetingStatus,
     providerStatus,
+    meetingUrl,
   });
-  const StatusIcon = requiresAttention ? IconAlertTriangle : IconInfoCircle;
-
   return (
-    <Popover>
-      <PopoverTrigger render={<Badge variant="warning" size="sm" />}>
-        <StatusIcon aria-hidden="true" />
-      </PopoverTrigger>
-      <PopoverPopup align="center" className="space-y-2">
-        <PopoverTitle>{title}</PopoverTitle>
-        <PopoverDescription>{description}</PopoverDescription>
-        {meetingStatus === "failed" ? (
-          <Badge variant="warning" size="sm" pill>
-            Retrying automatically
-          </Badge>
-        ) : providerStatus === "manual" ? (
-          <Badge variant="warning" size="sm" pill>
-            Admin setup needed
-          </Badge>
-        ) : null}
-      </PopoverPopup>
-    </Popover>
+    <InfoPreview
+      title={title}
+      description={description}
+      tone={meetingUrl ? "success" : requiresAttention ? "warning" : "info"}
+      label={`About meeting status: ${title}`}
+    >
+      {meetingUrl ? (
+        <Button
+          render={
+            <a
+              href={meetingUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open meeting room"
+            />
+          }
+          nativeButton={false}
+          variant="plain"
+          size="xs"
+          block
+        >
+          <IconDeviceLaptop aria-hidden="true" />
+          Open meeting room
+        </Button>
+      ) : meetingStatus === "failed" ? (
+        <Badge variant="warning" size="sm" pill>
+          Retrying automatically
+        </Badge>
+      ) : providerStatus === "manual" ? (
+        <Badge variant="warning" size="sm" pill>
+          Admin setup needed
+        </Badge>
+      ) : null}
+    </InfoPreview>
   );
 }
 
@@ -1330,11 +1227,14 @@ function getMeetingStatusTitle({
   bookingState,
   meetingStatus,
   providerStatus,
+  meetingUrl,
 }: {
   bookingState: string;
   meetingStatus: string;
   providerStatus?: string | null;
+  meetingUrl?: string | null;
 }) {
+  if (meetingUrl) return "Meeting room available";
   if (meetingStatus === "failed") {
     return "Meeting link creation needs attention";
   }
@@ -1347,11 +1247,16 @@ function getMeetingStatusDescription({
   bookingState,
   meetingStatus,
   providerStatus,
+  meetingUrl,
 }: {
   bookingState: string;
   meetingStatus: string;
   providerStatus?: string | null;
+  meetingUrl?: string | null;
 }) {
+  if (meetingUrl) {
+    return "The meeting room is available for this session.";
+  }
   if (meetingStatus === "failed") {
     return "Google Meet creation failed. The system will retry automatically every 5 minutes, then leave the booking for an admin to add a manual link if needed.";
   }
