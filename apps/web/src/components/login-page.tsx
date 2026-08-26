@@ -22,7 +22,7 @@ export function LoginPage() {
           }}
         >
           <img
-            src="/cogito-academy-logo.webp"
+            src="/logo extended.png"
             alt="Cogito Academy"
             className="relative z-10 h-auto w-52 max-w-full object-contain sm:w-64 lg:w-72"
           />
