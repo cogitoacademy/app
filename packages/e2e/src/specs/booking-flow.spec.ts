@@ -6,11 +6,7 @@ const FRIEND_EMAIL = "student.friend1.seed@cogitoacademy.id";
 const TUTOR_EMAIL = "tutor.seed@cogitoacademy.id";
 const TUTOR_PASSWORD = "Tutor123!";
 
-async function login(
-  page: Page,
-  email = SEED_EMAIL,
-  password = SEED_PASSWORD,
-) {
+async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
   if (email === SEED_EMAIL) {
     await page.goto("/dashboard");
     if (/\/dashboard(?:$|\/)/.test(new URL(page.url()).pathname)) return;
@@ -131,7 +127,9 @@ async function tutorAcceptsBooking(page: Page, bookingId: string) {
   await dialog
     .getByRole("button", { name: "Accept booking", exact: true })
     .click();
-  await expect(page.getByText("Booking accepted", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Booking accepted", { exact: true }),
+  ).toBeVisible();
   await expectAcceptedBooking(page);
   expect(bookingId).toMatch(/^[^/]+$/);
 }
@@ -254,7 +252,10 @@ test("group invitee can accept and tutor can accept the full online booking", as
     await login(inviteePage, FRIEND_EMAIL, SEED_PASSWORD);
     await inviteePage.goto(`/bookings/${bookingId}`);
     await expect(
-      inviteePage.getByRole("button", { name: "Accept invitation", exact: true }),
+      inviteePage.getByRole("button", {
+        name: "Accept invitation",
+        exact: true,
+      }),
     ).toBeVisible();
     await inviteePage
       .getByRole("button", { name: "Accept invitation", exact: true })
@@ -316,7 +317,9 @@ test("tutor can decline a request and the student sees the terminal state", asyn
   }
 
   await page.reload();
-  await expect(page.getByText("Declined", { exact: true }).last()).toBeVisible();
+  await expect(
+    page.getByText("Declined", { exact: true }).last(),
+  ).toBeVisible();
 });
 
 test("another student cannot open the seed student's booking", async ({

@@ -86,9 +86,7 @@ export function AccountIdentityCard({
       </CardHeader>
       <CardBody className="grid gap-5 md:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-name`}>
-            Account name
-          </FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-name`}>Account name</FieldLabel>
           <Input
             id={`${idPrefix}-name`}
             name={`${idPrefix}-name`}
@@ -116,9 +114,7 @@ export function AccountIdentityCard({
           </FieldDescription>
         </Field>
         <Field className="md:col-span-2">
-          <FieldLabel htmlFor={`${idPrefix}-email`}>
-            Sign-in email
-          </FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-email`}>Sign-in email</FieldLabel>
           <Input
             id={`${idPrefix}-email`}
             name={`${idPrefix}-email`}

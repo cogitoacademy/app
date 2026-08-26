@@ -47,7 +47,9 @@ async function globalSetup() {
   // that production safeguard before the economy specs begin.
   const authDir = path.resolve(process.cwd(), ".auth");
   mkdirSync(authDir, { recursive: true });
-  const authContext = await request.newContext({ baseURL: "http://localhost:3101" });
+  const authContext = await request.newContext({
+    baseURL: "http://localhost:3101",
+  });
   const signIn = await authContext.post("/api/auth/sign-in/email", {
     data: {
       email: "student.seed@cogitoacademy.id",
@@ -55,7 +57,9 @@ async function globalSetup() {
     },
   });
   if (!signIn.ok()) {
-    throw new Error(`Failed to create E2E student storage state (${signIn.status()})`);
+    throw new Error(
+      `Failed to create E2E student storage state (${signIn.status()})`,
+    );
   }
   await authContext.storageState({ path: path.join(authDir, "student.json") });
   await authContext.dispose();

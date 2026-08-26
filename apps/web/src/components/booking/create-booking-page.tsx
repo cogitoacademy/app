@@ -534,9 +534,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 </FieldDescription>
               </Field>
               {studentSearchQuery.isFetching ? (
-                <Text className="text-sm text-muted">
-                  Searching students…
-                </Text>
+                <Text className="text-sm text-muted">Searching students…</Text>
               ) : studentSearchQuery.isError ? (
                 <div className="flex items-center justify-between gap-3 rounded border border-danger-border bg-danger-subtle p-3">
                   <Text className="text-sm">
@@ -685,7 +683,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                               {formatSlotDate(slot.startDate)}
                             </span>
                             <span className="flex items-center gap-1.5 text-sm opacity-80">
-                              <IconClock className="size-4" aria-hidden="true" />
+                              <IconClock
+                                className="size-4"
+                                aria-hidden="true"
+                              />
                               {formatSlotTime(slot.startDate, slot.endDate)}
                             </span>
                           </span>

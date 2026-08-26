@@ -215,7 +215,10 @@ export function EconomySettingsPage() {
                   </FieldLabel>
                   <NumberField
                     id="online-cogito-base"
-                    inputProps={{ name: "onlineCogitoBaseIdr", inputMode: "numeric" }}
+                    inputProps={{
+                      name: "onlineCogitoBaseIdr",
+                      inputMode: "numeric",
+                    }}
                     min={5_000}
                     step={5_000}
                     allowOutOfRange
@@ -269,7 +272,10 @@ export function EconomySettingsPage() {
                   </FieldLabel>
                   <NumberField
                     id="offline-cogito-base"
-                    inputProps={{ name: "offlineCogitoBaseIdr", inputMode: "numeric" }}
+                    inputProps={{
+                      name: "offlineCogitoBaseIdr",
+                      inputMode: "numeric",
+                    }}
                     min={5_000}
                     step={5_000}
                     allowOutOfRange
