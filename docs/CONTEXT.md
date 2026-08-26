@@ -18,6 +18,15 @@ container and does not serve TLS. Production-like API deployments therefore set
 verification when TLS is enabled, and should remain `true` for a managed or
 external PostgreSQL endpoint that requires TLS.
 
+Production-like server boot reconciles the comma-separated `ADMIN_EMAILS`
+allowlist before serving traffic. It defaults to
+`itcogitoacademy01@gmail.com`, matches case-insensitively, promotes matching
+existing accounts, and never demotes other admins. The Better Auth signup hook
+covers a matching account created after boot; the production seed uses the
+first configured address while local/test seed keeps `admin@cogitoacademy.id`.
+Additional admins can still be granted through the existing admin role
+management flow.
+
 The authenticated `/guide` route is the product-facing **How Cogito Works** guide. It is a frontend-only, code-managed journey map rather than a developer setup document. Students can see only the Student journey; tutors can switch between Tutor and Student; admins can switch between Admin, Tutor, and Student. The role selector sits on its own at the top of the page, while the introduction and journey sit in a centered `max-w-6xl` guide shell. Step details open by default so the full flow can be read without one-by-one interaction; a single global control can collapse or restore all details, while each step remains individually keyboard-accessible. Each view combines a detailed tutoring lifecycle timeline with expandable exception branches and links to the existing feature routes; desktop uses a sticky secondary chapter rail on the right with one restrained progress header and Selia `Item` rows with a semantic media tint for chapter wayfinding, while mobile stacks the same navigation above the content. Its Scandinavian treatment uses a neutral, sans-serif hierarchy, restrained borders, purposeful whitespace, and smooth reduced-motion-aware details so the guide works for learners from ages 5–18 as well as tutors and admins. Timing-sensitive copy is explicit and bolded in the rendered guide: invite links last 7 days; booking response, participant confirmation, reconfirmation, and room approval use 12-hour windows unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals last 24 hours; lateness is measured at 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and the admin support SLA is 30 minutes in business hours or 4 hours outside. The static content source is `apps/web/src/components/guide/guide-content.ts`; no API or database contract is involved.
 
 The app-wide TanStack Router pending state is rendered by `apps/web/src/components/loader.tsx` as a visible token-based loading ring with a contrasting track, the local Selia `Spinner` component as its primary progress arc, a loading label, and reduced-motion behavior. It is presentation-only and keeps the same router/onboarding/auth loading entry points.
@@ -395,6 +404,7 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 ## Auth Config
 
 - Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening).
+- Production/staging admin bootstrap uses `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com`) to promote matching existing or newly-created accounts case-insensitively; existing admins are preserved and the normal admin role-management flow remains available for other addresses.
 - Password reset flow: Better Auth built-in endpoints (`/api/auth/request-password-reset`, `/api/auth/reset-password`). Email via existing EmailService (category `auth`), wired through `setAuthEmailSender()` from the composition root (`apps/server/src/index.ts`). Unknown emails get the same success response (no enumeration). `revokeSessionsOnPasswordReset: true` — all existing sessions die on reset. Reset token valid 1 hour.
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
 - Cookies: sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. Same-site subdomain requests work because `app.cogitoacademy.id` and `api.cogitoacademy.id` share the `cogitoacademy.id` site.

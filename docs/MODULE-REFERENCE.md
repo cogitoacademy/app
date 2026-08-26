@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-26
+Last updated: 2026-08-27
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
@@ -23,6 +23,13 @@ Database bootstrap uses `SELECT 1` before the API starts serving traffic. The
 Coolify private PostgreSQL service is non-TLS, so that deployment sets
 `DB_SSL_ENABLED=false`; `DB_SSL_REJECT_UNAUTHORIZED` applies only to TLS-backed
 managed or external PostgreSQL services.
+
+The server then runs `apps/server/src/admin-bootstrap.ts` in production-like
+environments. It reads the comma-separated `ADMIN_EMAILS` allowlist (default
+`itcogitoacademy01@gmail.com`), matches email addresses case-insensitively, and
+promotes matching existing users without demoting other admins. Better Auth
+applies the same rule to a matching signup after boot; seed uses the first
+configured address only for the production/staging seed account.
 
 The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
 
@@ -273,6 +280,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Wallet is lazily created on first `me` call
 - Better Auth handles session management, password hashing, and session cookies
+- Production/staging startup and signup bootstrap matching `ADMIN_EMAILS` to the `admin` role is case-insensitive and additive: it never demotes existing admins; other admin addresses remain supported by the existing role-management procedures.
 - The web email sign-in/sign-up handoff awaits the Better Auth result, performs a fresh session read before choosing `/dashboard`, `/onboarding`, `/admin-tutors`, or a validated return path, and suppresses the overlapping client signal refresh so the login form does not flash back into the loader. The authenticated shell uses the same fresh session source for its parent route guard.
 - The `/login` email forms run field-level validation on change/blur after a field is touched, show Selia inline errors and danger outlines for invalid fields, and mirror the sign-up password requirements enforced by the server. These checks are client-only and do not add an auth endpoint or persistence rule.
 - Email verification (G2, REVIEW-FIXES-4 P4.4): the `emailOTP` plugin sends a 6-digit OTP on sign-up (`sendVerificationOnSignUp`, 5 min expiry) via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); `POST /api/auth/email-otp/verify-email` marks the user verified; the web `/verify-email` route collects the code

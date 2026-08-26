@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-26
+Last updated: 2026-08-27
 
 ## Overview
 
@@ -15,6 +15,14 @@ serve TLS. `DB_SSL_REJECT_UNAUTHORIZED` is only relevant when database TLS is
 enabled.
 
 Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. This changes no request or response shape.
+
+Production and staging server bootstrap also reconcile `ADMIN_EMAILS` before
+serving traffic (default: `itcogitoacademy01@gmail.com`). Matching addresses
+are compared case-insensitively and promoted to `admin`; existing admins are
+never demoted. A matching account created after boot is promoted by the Better
+Auth signup hook. This is operational role initialization, not a new RPC or
+auth request/response field; other admins can still be managed through the
+existing admin role-management flow.
 
 The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region. This adds no RPC endpoint or input/output change.
 

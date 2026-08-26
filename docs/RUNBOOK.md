@@ -236,6 +236,15 @@ bun run seed-packages          # Seeds mark packages only
 
 Production guard: `NODE_ENV=production bun run seed-packages` will exit with an error unless `SEED_ALLOWED_IN_PROD=true` is explicitly set. The full `bun run seed` command uses the same guard and additionally requires `SEED_ADMIN_PASSWORD`.
 
+The full production/staging seed creates or reuses the first address in
+`ADMIN_EMAILS` and sets its role to `admin`; when `ADMIN_EMAILS` is unset it
+defaults to `itcogitoacademy01@gmail.com`. On every production-like server
+boot, the same allowlist promotes matching existing accounts
+case-insensitively without demoting other admins. A matching account created
+after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
+comma-separated list when more than one trusted account should be bootstrapped.
+Other admin accounts may still be granted through the existing admin role UI/API.
+
 Seed values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. Re-run `bun run seed` on prod once before any real payment: the insert is `onConflictDoNothing`, so existing rows keep stale values — correct package prices are required before the payment provider goes live (delete stale `mark_package` rows first if an older seed already ran).
 
 ### Reset the Database
@@ -480,6 +489,7 @@ Key environment variables (see `.env.example` for full list):
 | `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                                                                                                                                                                                                           |
 | `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                                                                                                                                           |
 | `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                                                                                                                                            |
+| `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                            |
 | `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                                                                                                                                                                                                                  |
 | `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                |
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                   |
