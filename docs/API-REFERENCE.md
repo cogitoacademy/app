@@ -22,6 +22,8 @@ The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its type
 
 The global route pending loader is also presentation-only. It composes the local Selia `Spinner` with a token-based loading ring and label for route, onboarding, and auth loading states, adding no RPC procedure, request input, response output, or persistence contract.
 
+The authenticated shell's Light/Dark/System theme menu and its `D` keyboard shortcut are frontend-only. Pressing `D` outside editable fields toggles the rendered light/dark mode through `next-themes`; it adds no RPC procedure, request input, response output, or persistence contract.
+
 The shared empty-state presentation is also frontend-only. Empty collections, filtered no-match results, and embedded no-data sections are rendered by `apps/web/src/components/empty-state.tsx` with density and tone variants; this changes no RPC procedure, request input, response output, or persistence contract.
 
 The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract. The availability range separator is visual only; time suggestions may render wider than their compact input, and modality triggers preserve their icon-label row without changing the weekly range payload. Portal-based date and select popups render above dialog layers so modal forms remain interactive.

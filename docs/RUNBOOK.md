@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -34,6 +34,10 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/onboarding`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial onboarding form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the submission form.
 - Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
+
+### Theme shortcut smoke check
+
+From any authenticated shell page, press `D` once and verify the UI switches between the rendered light and dark themes; press it again to switch back. Confirm the theme menu still supports Light, Dark, and System, and that the explicit selection survives a page reload. While focused in an input, textarea, or editable field, press `D` and confirm the field receives the character without changing the theme. Modifier-key combinations and holding the key should not cause extra toggles.
 
 ### Competition Calendar smoke check
 

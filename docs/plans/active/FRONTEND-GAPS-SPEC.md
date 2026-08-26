@@ -23,6 +23,10 @@ The onboarding selector stores normalized IDs for persistence and renders all cu
 
 The authenticated calendar now carries the full read-only interaction model from `cogito-acad`: a responsive month grid with multi-day spans and overflow popup, a 30-day agenda view with rich event cards, period navigation, `M`/`A` keyboard shortcuts, and a responsive details modal with metadata and external actions. The app intentionally keeps its own Selia components, design tokens, Tabler icon set, and English-only copy; Sanity remains the source of truth and the API contract is unchanged.
 
+### Theme shortcut follow-up (2026-08-26)
+
+The authenticated shell's existing Light/Dark/System menu now also responds to `D`. Outside editable fields, the shortcut toggles between the currently rendered light and dark modes, including when the saved preference is System; repeated keydown events and modifier-key combinations are ignored. `next-themes` continues to own preference persistence. This is frontend-only and adds no API, schema, or persistence contract.
+
 ### Profile UX follow-up (2026-08-22)
 
 The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
@@ -669,6 +673,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.28 (2026-08-26): Added the authenticated shell's `D` keyboard shortcut for toggling the rendered light/dark theme outside editable fields, while retaining the Light/Dark/System menu and `next-themes` persistence. No API, schema, or persistence contract changed.
 - v1.25 (2026-08-25): Added the Selia `Spinner` component to the local UI package and composed it inside a token-based loading ring with a visible label and reduced-motion-safe static fallback across router, onboarding, and auth loading states. No API or persistence contract changed.
 - v1.24 (2026-08-25): Added the shared Selia `aria-invalid` danger outline to auth inputs and ensured empty submit attempts reveal every invalid auth field without changing the auth API or persistence contract.
 - v1.23 (2026-08-25): Standardized collection empty states through the shared Selia presentation component with `default`, `compact`, and `inline` densities. Covered calendar periods, discovery filters, booking/detail sections, notifications, ledgers, subject/proof-link fields, availability previews, and admin tables. No RPC, schema, or persistence contract changed.

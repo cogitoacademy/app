@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
@@ -33,6 +33,8 @@ The authenticated frontend guide is a read-only, code-managed journey map at `/g
 The shared frontend pending state is rendered by `apps/web/src/components/loader.tsx` as a token-based loading ring with a contrasting track, the local Selia `Spinner` component as its primary progress arc, a visible loading label, and reduced-motion support. The reusable `Spinner` source lives at `packages/ui/components/selia/spinner.tsx`. The loader is reused by the router, onboarding, and auth forms rather than introducing a separate service module.
 
 The shared frontend empty-state presentation is rendered by `apps/web/src/components/empty-state.tsx`. `EmptyStateCard` wraps page/card collection states, and `EmptyState` provides `default`, `compact`, and `inline` densities for embedded contexts such as menus, dialogs, fields, calendars, and detail sections. This module owns visual hierarchy and copy treatment only; it has no service, repository, event-key, or API contract.
+
+Theme selection is also frontend-only. `apps/web/src/components/mode-toggle.tsx` composes the `next-themes` provider with Light/Dark/System menu items and a `D` keydown handler that toggles the currently rendered light/dark mode outside editable fields. Theme preference persistence stays in `next-themes`; there is no service module, repository, event key, or API contract.
 
 The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. Admin review and override actions remain in the dedicated admin operations surface. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 Editorial content integration is also read-only: Sanity remains the source of truth, while the app's API enforces session/role/Marks access before returning content or streaming Knowledge Bank files. The academy's bilingual presentation is resolved to English in the server projection; the authenticated app does not carry a locale selector for these surfaces.
