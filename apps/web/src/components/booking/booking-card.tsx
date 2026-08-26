@@ -118,7 +118,7 @@ export function BookingListCard({
     <Card
       data-slot="booking-row"
       className={cn(
-        "overflow-visible transition-shadow hover:shadow-card",
+        "w-full min-w-0 max-w-full overflow-visible transition-shadow hover:shadow-card",
         attention && "border-warning-border",
         className,
       )}
@@ -155,7 +155,7 @@ export function BookingListCard({
         <Button
           variant={attention ? "primary" : "tertiary"}
           size="sm"
-          className="w-full md:w-auto md:justify-self-end"
+          className="w-full min-w-0 max-w-full md:w-auto md:justify-self-end"
           render={
             <Link
               to="/bookings/$bookingId"

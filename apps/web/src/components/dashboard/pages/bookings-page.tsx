@@ -92,9 +92,13 @@ export function BookingsPage() {
   const isLoading = bookingsQuery.isPending || isRoleLoading;
 
   return (
-    <Stack direction="column" spacing="lg" className="min-w-0">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="w-full min-w-0 max-w-full overflow-x-hidden"
+    >
+      <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2">
             <Heading size="md">Bookings</Heading>
             {bookingsQuery.isFetching && !bookingsQuery.isPending ? (
@@ -103,13 +107,13 @@ export function BookingsPage() {
               </Badge>
             ) : null}
           </div>
-          <Text className="text-muted">{pageDescription}</Text>
+          <Text className="max-w-full text-muted">{pageDescription}</Text>
         </div>
         {role === "student" ? (
           <Button
             render={<Link to="/tutors" aria-label="Find a tutor" />}
             nativeButton={false}
-            className="sm:self-auto"
+            className="w-full min-w-0 max-w-full sm:w-auto sm:shrink-0 sm:self-auto"
           >
             <IconSearch /> Find a tutor
           </Button>
@@ -207,36 +211,40 @@ function BookingTabBar({
   onChange: (tab: BookingTab) => void;
 }) {
   return (
-    <div
-      className="-mx-1 overflow-x-auto px-1 pb-1"
-      role="tablist"
-      aria-label="Booking status"
-    >
-      <div className="inline-flex min-w-max rounded-xl bg-accent/60 p-1">
-        {BOOKING_TABS.map((tab) => {
-          const selected = activeTab === tab.value;
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              className={cn(
-                "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-                selected
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted hover:bg-background/70 hover:text-foreground",
-              )}
-              onClick={() => onChange(tab.value)}
-            >
-              {tab.label}
-              <span className="ml-1.5 text-xs text-dimmed">
-                {counts[tab.value]}
-              </span>
-            </button>
-          );
-        })}
+    <div className="w-full min-w-0 max-w-full pb-1">
+      <div className="w-full min-w-0 max-w-full rounded-xl bg-accent/60 p-1 sm:w-fit">
+        <div
+          className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain scrollbar-hidden sm:w-fit"
+          role="tablist"
+          aria-label="Booking status"
+        >
+          <div className="flex min-w-max whitespace-nowrap">
+            {BOOKING_TABS.map((tab) => {
+              const selected = activeTab === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                    selected
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted hover:bg-background/70 hover:text-foreground",
+                  )}
+                  onClick={() => onChange(tab.value)}
+                >
+                  {tab.label}
+                  <span className="ml-1.5 text-xs text-dimmed">
+                    {counts[tab.value]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

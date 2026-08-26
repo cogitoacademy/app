@@ -81,6 +81,13 @@ while keeping past/cancelled history newest-first. Defaults are role-aware:
 students see Upcoming, tutors see Pending when requests exist (or Upcoming
 otherwise), and admins see All; an explicit `tab` query parameter wins.
 
+### Booking-list tab overflow follow-up (2026-08-26)
+
+The rounded booking status-tab strip fills the available width on narrow
+screens. Only its inner tab list remains horizontally swipeable, while the
+native scrollbar is hidden so the page itself does not overflow. This is a
+presentation-only change with no RPC, schema, or persistence contract change.
+
 ### Dashboard next-lesson and onboarding follow-up (2026-08-24)
 
 Student and tutor dashboards now derive the nearest future non-terminal,
@@ -674,6 +681,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ### Version Notes
 
 - v1.28 (2026-08-26): Added the authenticated shell's `D` keyboard shortcut for toggling the rendered light/dark theme outside editable fields, while retaining the Light/Dark/System menu and `next-themes` persistence. No API, schema, or persistence contract changed.
+- v1.30 (2026-08-26): Constrained the shared booking status-tab strip to the available mobile width and kept horizontal tab scrolling inside a scrollbar-hidden region. No RPC, schema, or persistence contract changed.
 - v1.25 (2026-08-25): Added the Selia `Spinner` component to the local UI package and composed it inside a token-based loading ring with a visible label and reduced-motion-safe static fallback across router, onboarding, and auth loading states. No API or persistence contract changed.
 - v1.26 (2026-08-26): Added a reusable compact `IconInfoSquareRounded` preview trigger for booking-detail helper copy. Meeting-room readiness, missing offline-room details, unavailable meeting-link explanations, retry/admin setup status, and completion timing now disclose through the accessible Selia popover on hover, focus, click, or touch. No RPC, schema, or persistence contract changed.
 - v1.29 (2026-08-26): Moved the available online meeting action into the meeting-status popover and removed the standalone `Ready` badge/Google Meet CTA. Online meeting status now uses the same compact info trigger whether the URL is pending or available. No RPC, schema, or persistence contract changed.

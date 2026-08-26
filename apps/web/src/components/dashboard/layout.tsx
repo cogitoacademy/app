@@ -59,15 +59,23 @@ export function Layout({
         {sidebar}
       </div>
       <main
-        className={cn("transition-all", sidebarOpen ? "xl:ml-72" : "xl:ml-0")}
+        className={cn(
+          "min-w-0 max-w-full overflow-x-hidden transition-all",
+          sidebarOpen ? "xl:ml-72" : "xl:ml-0",
+        )}
       >
         <nav
           className={cn(
-            "flex h-16 items-center gap-2.5 max-xl:px-4",
+            "flex h-16 min-w-0 max-w-full items-center gap-2.5 overflow-x-hidden max-xl:px-4",
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >
-          <Button variant="plain" size="sm-icon" onClick={toggleSidebar}>
+          <Button
+            variant="plain"
+            size="sm-icon"
+            className="shrink-0"
+            onClick={toggleSidebar}
+          >
             <span className="sr-only">
               {sidebarOpen ? "Close sidebar" : "Open sidebar"}
             </span>
@@ -77,8 +85,10 @@ export function Layout({
               <IconLayoutSidebarLeftExpand />
             )}
           </Button>
-          <Heading size="sm">{title}</Heading>
-          <div className="ml-auto mr-0 flex items-center gap-2">
+          <Heading size="sm" className="min-w-0 truncate">
+            {title}
+          </Heading>
+          <div className="ml-auto mr-0 flex shrink-0 items-center gap-2">
             <BalanceBadge />
             <Separator orientation="vertical" className="mr-2" />
             <NotificationBell />
@@ -87,7 +97,7 @@ export function Layout({
         </nav>
         <div
           className={cn(
-            "flex min-h-[calc(100vh-4rem)] flex-col gap-6 pb-6 max-xl:px-4",
+            "flex min-h-[calc(100vh-4rem)] min-w-0 max-w-full flex-col gap-6 overflow-x-hidden pb-6 max-xl:px-4",
             sidebarOpen ? "xl:pr-4" : "xl:px-4",
           )}
         >
