@@ -2,7 +2,7 @@
 
 > **Source:** Task 1 of `docs/superpowers/plans/2026-08-25-backend-production-readiness.md`.
 > **Method:** Cross-checked every module in `packages/api/src/modules/` against `docs/prd.tex` (v1.7), `docs/API-REFERENCE.md`, `docs/MODULE-REFERENCE.md`, and `docs/CONTEXT.md`; verified every documented RPC exists in the routers with matching input/output; verified business rules against service code; ran the "can it boot with all moving parts" dependency-wiring check against `packages/env/src/server.ts`.
-> **Status:** Phase 0 audit complete. Gaps below are the approved list that Tasks 2+ reference. All gaps map to an existing fix task in the plan; none require a new task.
+> **Status:** Phase 0 audit complete — all 10 gaps fixed and merged via #106 (2026-08-26). See `docs/plans/completed/BACKEND-PROD-FINALIZATION.md` for the implementation record.
 
 ## Gap Table
 
