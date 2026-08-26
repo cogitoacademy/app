@@ -112,4 +112,66 @@ describe("server environment schema", () => {
     });
     expect(oauth.success).toBe(true);
   });
+
+  test("D3: production-like envs require SCHEDULER_ENABLED=true", () => {
+    const prod = {
+      ...baseEnv(),
+      NODE_ENV: "production",
+      RESEND_API_KEY: "resend-key",
+      EMAIL_FROM: "verified@cogitoacademy.id",
+    };
+    const disabled = serverEnvSchema.safeParse(prod);
+    expect(disabled.success).toBe(false);
+    if (!disabled.success) {
+      expect(
+        disabled.error.issues.map((issue) => issue.path.join(".")),
+      ).toContain("SCHEDULER_ENABLED");
+    }
+
+    const enabled = serverEnvSchema.safeParse({
+      ...prod,
+      SCHEDULER_ENABLED: true,
+    });
+    expect(enabled.success).toBe(true);
+  });
+
+  test("D2: production xendit requires WEBHOOK_ALLOWED_IPS", () => {
+    const prodXendit = {
+      ...baseEnv(),
+      NODE_ENV: "production",
+      RESEND_API_KEY: "resend-key",
+      EMAIL_FROM: "verified@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+    };
+    const missing = serverEnvSchema.safeParse(prodXendit);
+    expect(missing.success).toBe(false);
+    if (!missing.success) {
+      expect(
+        missing.error.issues.map((issue) => issue.path.join(".")),
+      ).toContain("WEBHOOK_ALLOWED_IPS");
+    }
+
+    const withAllowlist = serverEnvSchema.safeParse({
+      ...prodXendit,
+      WEBHOOK_ALLOWED_IPS: "103.10.65.0/24",
+    });
+    expect(withAllowlist.success).toBe(true);
+
+    // Dev/test envs are exempt: same xendit set with NODE_ENV=test parses
+    // without WEBHOOK_ALLOWED_IPS (the stub/sandbox webhooks are not gated).
+    const devXendit = serverEnvSchema.safeParse({
+      ...baseEnv(),
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+    });
+    expect(devXendit.success).toBe(true);
+  });
 });
