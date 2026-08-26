@@ -792,7 +792,7 @@ function AdminParticipantWalletCard({
             {affected ? <Badge variant="warning">Affected</Badge> : null}
           </div>
           <Text className="truncate text-xs text-muted">
-            {participant.user?.email ?? participant.userId}
+            User ID: {participant.userId}
           </Text>
           <Text className="break-all font-mono text-[0.65rem] text-dimmed">
             {participant.userId} · {humanize(participant.confirmationState)}

@@ -149,8 +149,8 @@ describe("createProfile", () => {
 describe("searchStudents", () => {
   test("returns matching rows and passes query, exclusion and limit", async () => {
     const rows = [
-      { id: "s1", name: "Alice", email: "alice@x.com" },
-      { id: "s2", name: "Bob", email: "bob@x.com" },
+      { id: "s1", name: "Alice", image: null },
+      { id: "s2", name: "Bob", image: "https://example.com/bob.png" },
     ];
     const conn = makeSearchConn(rows) as any;
 
@@ -180,9 +180,7 @@ describe("searchStudents", () => {
   });
 
   test("passes a wildcard-heavy query through without escaping it away", async () => {
-    const conn = makeSearchConn([
-      { id: "s1", name: "A", email: "a@x.com" },
-    ]) as any;
+    const conn = makeSearchConn([{ id: "s1", name: "A", image: null }]) as any;
 
     const result = await repo.searchStudents(conn, "%", "u1", 10);
 

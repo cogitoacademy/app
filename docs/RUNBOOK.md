@@ -113,6 +113,26 @@ For a force-majeure or other exceptional case, use the admin override flow with 
 bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/admin-override.test.ts
 ```
 
+### Contact-sharing privacy smoke check
+
+Use two student accounts that were confirmed participants in the same completed
+group booking. On the booking detail, verify **Stay in touch** shows only the
+other student's name/photo and a **Request contact** action; no email or phone
+number should appear in the page, booking response, or network response. Send a
+request with a short note and confirm the recipient sees the note plus
+**Share email**, **Accept privately**, and **Decline**, with no full-chat control.
+
+Accept privately first and verify the requester sees an accepted state but no
+email. Repeat with **Share email** and verify only the requester receives the
+recipient's email and that it is rendered as a `mailto:` link; the recipient's
+incoming response must still contain no email value. Toggle **Allow contact
+requests** off in Profile and confirm new requests are blocked. Also verify an
+outsider, a tutor/admin, an absent participant, and a booking that is not yet
+`completed` cannot list or create contact requests. Inspect the raw
+`/rpc/contact/*`, `/rpc/auth/students/search`, `/rpc/tutors/list`, and booking
+responses during the check: account emails must not appear before explicit
+consent, in notifications, or in audit records.
+
 ### Form-control smoke check
 
 On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. On `/availability`, confirm both weekly time fields stay compact and equal in width with a centered dash between them, while focusing a time field allows its suggestions to extend beyond the field when needed; confirm the modality trigger keeps its icon and label on one row. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
@@ -177,6 +197,12 @@ bun run db:test          # Starts isolated test PostgreSQL + Redis (docker-compo
 bun run db:migrate       # Apply pending migrations
 bun run db:generate      # Generate new migration from schema changes
 ```
+
+Contact sharing uses migration `0030_bouncy_madrox.sql`, which adds
+`student_profile.allow_contact_requests` and the `contact_request` table. Apply
+the migration before starting an API build that includes the Contact Module;
+the reviewed migration is intentionally limited to those contact-sharing
+changes.
 
 If tutor discovery returns `500` with a missing `subject_category` or
 `tutor_profile_subject` relation, the local database is behind migration
@@ -326,6 +352,15 @@ Run the CI-equivalent coverage suite from the repository root after starting the
 bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
 ```
 
+For the contact-sharing regression path, run the database-preparing wrapper
+with the focused integration test, then the Playwright privacy spec against the
+local web/API stack:
+
+```bash
+bun scripts/run-test-suite.mjs api packages/api/src/tests/integration/contact-sharing.test.ts
+bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
+```
+
 The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% line coverage for `packages/api` and 100% line coverage overall from `coverage/lcov.info`; the Bun command's own function/statement threshold is a separate diagnostic and is not the CI gate.
 
 ## Common Errors
@@ -349,6 +384,16 @@ When a 24-hour reschedule proposal deadline passes, expire only the proposal. Ke
 ### `BOOKING_NOT_EDITABLE` while creating a booking (400)
 
 Confirm the chosen start is inside the selected tutor availability window and leaves the full server-fixed 90 minutes before the window ends. The web form shows the valid start range and blocks invalid submissions. Also verify the availability is active and that no non-terminal booking overlaps the requested session; declined, cancelled, and expired bookings should not keep the time blocked.
+
+### Contact request errors
+
+- `NOT_FOUND` — the viewer is not a participant in the booking, or the request
+  does not exist.
+- `BAD_REQUEST` — the booking is not `completed`, the peer is not an eligible
+  student participant, or the peer has disabled new contact requests.
+- `FORBIDDEN` — someone other than the request recipient attempted to respond.
+- `CONFLICT` — the request was already created or has already been answered;
+  refresh the booking detail before retrying.
 
 ### `LAST_ADMIN` (409)
 

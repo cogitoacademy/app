@@ -12,13 +12,14 @@ import {
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 type UserRow = typeof user.$inferSelect;
+type PublicTutorUser = Pick<UserRow, "id" | "name" | "image" | "role">;
 type SupportedModality = "online" | "offline";
 type PricesByModality = Partial<
   Record<SupportedModality, Record<string, number>>
 >;
 
 export interface ProfileWithUser extends TutorProfileRow {
-  user: UserRow | null;
+  user: PublicTutorUser | null;
   subjects?: Array<TutorSubjectRelation & { subjectId: string }>;
 }
 

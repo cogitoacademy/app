@@ -61,11 +61,19 @@ export function createAuthHandler(authService: AuthService) {
         if (role !== USER_ROLE.STUDENT) {
           throw new StudentSearchForbiddenError(context.session!.user.id);
         }
-        return authService.searchStudents(
+        const students = await authService.searchStudents(
           context.session!.user.id,
           input.query,
           input.limit,
         );
+        // Keep the lookup useful for group invites without turning it into a
+        // directory of student email addresses. Email matching happens inside
+        // the repository; only the safe identity projection leaves the API.
+        return students.map((student) => ({
+          id: student.id,
+          name: student.name,
+          image: student.image,
+        }));
       }, mapAuthError);
     },
   };

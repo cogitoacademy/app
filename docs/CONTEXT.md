@@ -43,6 +43,25 @@ The authenticated `/dashboard` route is role-specific. Students retain the learn
 
 The authenticated `/notifications` route is a focused inbox for durable in-app notifications. It uses cursor pagination, a category label badge, an exact date/time plus relative age, visible unread treatment, row selection, select-all for the currently loaded rows, and batch read/unread updates. Selected IDs are sent through the protected `notification.updateReadStatus` procedure, which scopes the database update to the authenticated user. The existing mark-all-read action and notification-bell unread count remain available.
 
+## Student contact privacy
+
+Contact exchange is available only after a shared group booking reaches
+`completed`. Eligible confirmed/reconfirmed student participants who were not
+marked absent can see one another's name and profile image on the booking
+detail, then send a lightweight in-app request with an optional note. This is
+not a general directory or chat feature. Email and phone fields stay private;
+the original requester sees the recipient's account email only after that
+recipient explicitly chooses **Share email**. **Accept privately** records
+consent to the connection without disclosing email, and **Decline** closes the
+request. Incoming request projections never return the recipient's own email.
+
+Each student can disable new requests from the profile's **Contact privacy**
+setting. The API enforces the completed-booking, participant, attendance,
+recipient-setting, and recipient-consent checks independently of the UI. Search
+by email remains available for the existing group-invite workflow, but all
+student-search, tutor-discovery, and booking participant responses return only
+safe display identity; meeting attendee email arrays remain server-only.
+
 ## Authenticated editorial content
 
 Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only.
@@ -197,6 +216,7 @@ export interface ServiceRegistry {
   admin: AdminHandler;
   wallet: WalletHandler; // Handler type (was WalletPort before)
   booking: BookingHandler; // Handler type (was BookingService before)
+  contact: ContactService; // Service type for consent-based contact exchange
   pricing: PricingService; // Service type (no HTTP endpoints)
   audit: AuditService; // Service type (no HTTP endpoints)
   // ...
@@ -238,7 +258,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Deployment:** API on Coolify on the VPS; frontend on Cloudflare Pages (after the infrastructure branch)
 - **Database TLS:** Controlled by `DB_SSL_ENABLED`; Coolify's bundled PostgreSQL is non-TLS, while external managed databases may require it
 
-## DB Schema (30 tables)
+## DB Schema (31 tables)
 
 ### `user` (auth.ts) — CHECK(role IN ('student','tutor','admin'))
 
@@ -249,6 +269,11 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 ### `ledgerEntry` (wallet.ts) — UNIQUE(wallet_id,event_key,source_reference), CHECK entry types
 
 ### `studentProfile` (student-profile.ts) — uuid PK
+
+`allow_contact_requests` defaults to true and blocks only new contact requests
+when set to false.
+
+### `contactRequest` (contact-request.ts) — completed-session request state, explicit email consent, and booking/user foreign keys
 
 ### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status + profile_edit_status; keeps approved public values separate from pending reviewed edits; stores IDR base honoraria in `base_rates_idr`
 
@@ -294,13 +319,14 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 
 ### `supportTicket` (support-ticket.ts) — lateness/no-show + issue reports; status + sla_deadline
 
-## API Modules (18 routers + internal modules)
+## API Modules (19 routers + internal modules)
 
 All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Auth Module (protected)
 
 - `me`, `getProfile`, `updateProfile`, `searchStudents`
+- `searchStudents` accepts a name/email lookup but returns only `id`, `name`, and `image`.
 
 ### Admin Module (admin)
 
@@ -357,11 +383,22 @@ Tutor availability is modeled as free-time windows rather than pre-sized session
 
 Tutor discovery and every student-owned booking mutation are guarded by `studentProcedure`. The protected booking list/detail/session reads are shared by authenticated parties: students see proposer/participant bookings, tutors see assigned bookings, and admins see all bookings. Tutor/admin accounts still cannot browse the student tutor catalog or create/cancel/confirm/reconfirm/withdraw bookings; tutor fulfillment remains under `tutorActions.*`.
 
+Booking read relations expose only safe user identity (`id`, `name`, `image`,
+`role`). Internal meeting attendee email arrays are selected only by
+server-side meeting/notification code.
+
 After submission, the tutor or booking proposer can propose a replacement time from the booking-detail action panel. The frontend dispatches student proposals to `booking.proposeReschedule` and tutor proposals to `tutorActions.proposeReschedule`; both routes use the shared service. Rescheduling is session-scoped; each proposal requires tutor and all active-student approval, and the original schedule remains active until unanimous acceptance.
 
 ### TutorActions Module (tutor)
 
 - `listBookings`, `proposeReschedule`, `acceptBooking`, `declineBooking`, `setMeetingLink`, `completeSession`, `markAttendance`, `markParticipantNoShow`
+
+### Contact Module (student)
+
+- `listForBooking`, `request`, `respond`
+- Available only to eligible students who shared a completed group booking.
+  Requests are in-app only; the recipient chooses whether to share email, and
+  the requester is the only viewer who receives a shared email value.
 
 ### Payment Module (protected + public webhook)
 
@@ -440,6 +477,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/ECONOMY-RATE-CONTROL.md`                    | main                                                                                | Completed 2026-08-22 — admin-managed Cogito take schedule, IDR tutor honoraria, immutable booking snapshots, and all-role economy E2E                                                                                                                                                                                                                                                                                                                                                   |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                                                                   | Active — code gaps 1.1–1.8 done (1.4 now 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                                                                                                                                                                                                                                                                                                                                                                          |
 | `docs/plans/completed/BACKEND-PROD-FINALIZATION.md`               | `finalize/backend-prod-readiness-v2` (merged #106)                                  | **Completed (2026-08-26)** — PRD v1.7 alignment + production-readiness fixes (documented gaps 1–10 + audit findings F1–F25/S1–S14)                                                                                                                                                                                                                                                                                                                                                      |
+| `docs/plans/active/CONTACT-SHARING.md`                            | `f/contact-sharing-flow` (PR #108)                                                  | **Implementation complete (2026-08-27)** — consent-based post-session contact requests, explicit email sharing, and privacy leak regression coverage                                                                                                                                                                                                                                                                                                                                    |
 | `docs/plans/completed/PRD-AUDIT.md`                               | `finalize/backend-prod-readiness-v2` (merged #106)                                  | **Completed (2026-08-26)** — PRD + wiring audit gap list (Phase 0 deliverable)                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `docs/plans/completed/REVIEW-FIXES-3.md`                          | main (merged)                                                                       | Merged to main (#59–#65) — all wave-3 PRs landed; G2 (email verification) was deferred and is now **implemented** by REVIEW-FIXES-4 P4.4 (#76)                                                                                                                                                                                                                                                                                                                                          |
 | `docs/plans/completed/CONSOLIDATION-PLAN.md`                      | `improvement/consolidation`                                                         | Merged to main (#16)                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |

@@ -107,7 +107,7 @@ CI runs the API integration/unit suite together with the env, auth, and database
 ### `auth.updateProfile`
 
 - **Auth:** Protected
-- **Input:** `{ phoneNumber?, schoolName?, gradeLevel?, parentName?, parentPhone?, parentEmail? }`
+- **Input:** `{ phoneNumber?, schoolName?, gradeLevel?, parentName?, parentPhone?, parentEmail?, allowContactRequests? }`
 - **Output:** `{ user, profile }`
 - **Description:** Creates or updates the authenticated user's student profile fields
 - **Account identity:** The student profile page also uses Better Auth `updateUser` to update the signed-in user's `name` and optional `image`; email remains read-only on this surface.
@@ -116,8 +116,40 @@ CI runs the API integration/unit suite together with the env, auth, and database
 
 - **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F16)
 - **Input:** `{ query, limit? }` (`query` 2–100 chars, `limit` 1–10 default 5)
-- **Output:** `[{ id, name, email }]` — up to 10 students matching a name or email, excluding the requester
-- **Description:** Student-only debounced student lookup used by the group-booking invite UI
+- **Output:** `[{ id, name, image }]` — up to 10 students matching a name or email, excluding the requester
+- **Description:** Student-only debounced lookup used by the group-booking invite UI. Email is accepted as a server-side search key but is never included in the result; the UI shows only the student's name and photo.
+
+---
+
+## Contact (`contact.*`)
+
+Contact exchange is deliberately a one-way, consent-based flow. It is available
+only between eligible student participants of the same completed group booking;
+tutors, admins, outsiders, absent participants, and incomplete bookings cannot
+use these procedures. There is no direct-chat surface in this flow.
+
+### `contact.listForBooking`
+
+- **Auth:** Student
+- **Input:** `{ bookingId }`
+- **Output:** `{ bookingId, items: [{ userId, name, image, canRequest, request }] }`
+- **Description:** Lists the other eligible student participants with a safe identity projection. `request` is `null` until a request exists; its projection contains `{ id, direction, status, message, emailShared, email, createdAt, respondedAt }`. `email` is always `null` for incoming requests and pending/declined requests. It is populated only for the requester after the recipient explicitly chooses `accept_share_email`. Phone numbers and chat messages are not exposed.
+
+### `contact.request`
+
+- **Auth:** Student
+- **Input:** `{ bookingId, recipientId, message? }` (`message` max 200 characters)
+- **Output:** `{ bookingId, userId, request }`
+- **Description:** Creates one request to an eligible peer from a completed shared booking. The recipient's `allowContactRequests` profile setting is checked server-side. The recipient receives an in-app notification containing only the requester's name, optional note, and request/booking IDs; no email is copied to notification metadata, notification bodies, or email dispatch.
+- **Errors:** `NOT_FOUND` when the booking or viewer is not available, `BAD_REQUEST` when the booking is incomplete, the peer is not eligible, or the recipient has opted out, `CONFLICT` when a request already exists
+
+### `contact.respond`
+
+- **Auth:** Student (the request recipient only)
+- **Input:** `{ requestId, decision }`, where `decision` is `accept_share_email`, `accept_without_email`, or `decline`
+- **Output:** `{ bookingId, userId, request }`
+- **Description:** Applies the recipient's explicit decision. `accept_share_email` reveals the recipient's account email only to the original requester on a later contact read; `accept_without_email` records acceptance without disclosure; `decline` rejects the request. The recipient's response never returns their email through the incoming request projection.
+- **Errors:** `FORBIDDEN` when a non-recipient responds, `NOT_FOUND` for an unknown/unavailable request, `BAD_REQUEST` when the booking is no longer completed or a participant is no longer eligible, `CONFLICT` for an already-answered request
 
 ---
 
@@ -513,7 +545,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Protected
 - **Input:** `{ bookingId }`
-- **Output:** `{ booking, participants, history, meetingStatus, meetingUrl }` — access-checked for the proposer, tutor, participants, or admin; participant user objects include the optional profile `image`, and history entries include `fromState`, `toState`, `actorType`, `reason`, and `createdAt`
+- **Output:** `{ booking, participants, history, meetingStatus, meetingUrl }` — access-checked for the proposer, tutor, participants, or admin; participant/tutor/proposer user objects are limited to `id`, `name`, `image`, and `role` (never account email), and history entries include `fromState`, `toState`, `actorType`, `reason`, and `createdAt`
 - **Errors:** `BOOKING_NOT_FOUND` (404)
 - **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or a tutor/admin fallback link, and `failed` when automatic Google Meet creation needs another retry. If tutor acceptance encounters a provider failure, the booking remains `confirmed` until retry or manual-link recovery; clients must not treat that state as `scheduled`.
 - **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places role-appropriate primary actions (including reschedule and completion when eligible) directly below the status badge, keeps contextual actions above Marks or in the main flow, and shows a live response-window notice for deadline-bound states. The API contract is unchanged.
@@ -525,7 +557,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Recurring/All by nearest scheduled start, while Past/Cancelled remain newest-first. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. On narrow screens, the rounded status-tab strip stays within the available page width while only its inner tab list scrolls horizontally without showing a native scrollbar. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Recurring/All by nearest scheduled start, while Past/Cancelled remain newest-first. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. On narrow screens, the rounded status-tab strip stays within the available page width while only its inner tab list scrolls horizontally without showing a native scrollbar. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 
@@ -781,6 +813,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected
 - **Input:** `{ unreadOnly?, limit?, cursor? }`
 - **Output:** `{ items: Notification[], nextCursor }`
+- **Description:** Includes in-app contact-request notifications when applicable. These notifications contain request metadata and human-readable names only; contact email is never stored in the notification body or metadata.
 
 ### `notification.getUnreadCount`
 

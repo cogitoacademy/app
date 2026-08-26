@@ -42,6 +42,16 @@ import {
 } from "../../shared/constants";
 import { BOOKING_STATE } from "./booking-state.types";
 
+// Booking participants can see one another's display identity, but not the
+// private account fields on the auth user row. Email is resolved separately by
+// server-side notification/meeting code when it is genuinely required.
+const SAFE_USER_COLUMNS = {
+  id: true,
+  name: true,
+  image: true,
+  role: true,
+} as const;
+
 type BookingRow = typeof bookingTable.$inferSelect;
 
 /**
@@ -955,7 +965,16 @@ export function createBookingRepo(db: DbType) {
     // multiple meeting_event rows (e.g. a pre-fix google-failed row plus the
     // manual fallback). Fetch the newest explicitly so G11 status is stable.
     const [meetingRow] = await db
-      .select({ ...getTableColumns(meetingEvent) })
+      .select({
+        id: meetingEvent.id,
+        bookingId: meetingEvent.bookingId,
+        provider: meetingEvent.provider,
+        meetingUrl: meetingEvent.meetingUrl,
+        status: meetingEvent.status,
+        errorReason: meetingEvent.errorReason,
+        createdAt: meetingEvent.createdAt,
+        updatedAt: meetingEvent.updatedAt,
+      })
       .from(meetingEvent)
       .where(eq(meetingEvent.bookingId, bookingId))
       .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
@@ -964,9 +983,11 @@ export function createBookingRepo(db: DbType) {
     const b = await db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
       with: {
-        tutor: true,
-        proposer: true,
-        participants: { with: { user: true } },
+        tutor: { columns: SAFE_USER_COLUMNS },
+        proposer: { columns: SAFE_USER_COLUMNS },
+        participants: {
+          with: { user: { columns: SAFE_USER_COLUMNS } },
+        },
         stateHistory: {
           orderBy: [
             desc(bookingStateHistory.createdAt),
@@ -1008,9 +1029,11 @@ export function createBookingRepo(db: DbType) {
       orderBy: [desc(booking.scheduledStartAt), desc(booking.id)],
       limit: opts.limit + 1,
       with: {
-        tutor: true,
-        proposer: true,
-        participants: { with: { user: true } },
+        tutor: { columns: SAFE_USER_COLUMNS },
+        proposer: { columns: SAFE_USER_COLUMNS },
+        participants: {
+          with: { user: { columns: SAFE_USER_COLUMNS } },
+        },
         roomBookings: { with: { room: true } },
       },
     });
@@ -1032,9 +1055,11 @@ export function createBookingRepo(db: DbType) {
       orderBy: [desc(booking.scheduledStartAt), desc(booking.id)],
       limit: opts.limit + 1,
       with: {
-        tutor: true,
-        proposer: true,
-        participants: { with: { user: true } },
+        tutor: { columns: SAFE_USER_COLUMNS },
+        proposer: { columns: SAFE_USER_COLUMNS },
+        participants: {
+          with: { user: { columns: SAFE_USER_COLUMNS } },
+        },
         roomBookings: { with: { room: true } },
       },
     });
@@ -1086,9 +1111,11 @@ export function createBookingRepo(db: DbType) {
       orderBy: [desc(booking.scheduledStartAt), desc(booking.id)],
       limit: opts.limit + 1,
       with: {
-        tutor: true,
-        proposer: true,
-        participants: { with: { user: true } },
+        tutor: { columns: SAFE_USER_COLUMNS },
+        proposer: { columns: SAFE_USER_COLUMNS },
+        participants: {
+          with: { user: { columns: SAFE_USER_COLUMNS } },
+        },
         roomBookings: { with: { room: true } },
       },
     });

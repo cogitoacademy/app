@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, index, boolean } from "drizzle-orm/pg-core";
 
 import { uuidPrimaryKey, user } from "./auth";
 
@@ -17,6 +17,9 @@ export const studentProfile = pgTable(
     parentName: text("parent_name"),
     parentPhone: text("parent_phone"),
     parentEmail: text("parent_email"),
+    allowContactRequests: boolean("allow_contact_requests")
+      .notNull()
+      .default(true),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

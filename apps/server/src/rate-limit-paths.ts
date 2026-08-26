@@ -46,7 +46,12 @@ export function matchRateLimitPath(path: string): RateLimitKind | null {
   if (urlPath === "/rpc/payment/createPurchase") return "payment";
   if (urlPath.startsWith("/rpc/invite/verify")) return "invite";
   if (urlPath.startsWith("/rpc/booking/")) return "booking";
-  if (urlPath.startsWith("/rpc/auth/searchStudents")) return "search";
+  if (
+    urlPath === "/rpc/auth/students/search" ||
+    urlPath === "/rpc/auth/searchStudents"
+  ) {
+    return "search";
+  }
   // M3: support tickets are user-reported abuse/lateness claims (SLA-driven);
   // achievement submissions and upload URL creations are cheap to spam and
   // mint real external resources (R2 presigned URLs, moderation queue rows).

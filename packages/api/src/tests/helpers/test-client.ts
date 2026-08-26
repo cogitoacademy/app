@@ -109,6 +109,7 @@ export async function setUserRole(userId: string, role: string) {
 
 const TRUNCATE_TABLES = [
   "booking_state_history",
+  "contact_request",
   "booking_participant",
   "booking_reschedule_proposal",
   "booking_session",

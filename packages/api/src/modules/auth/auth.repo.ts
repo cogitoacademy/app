@@ -9,6 +9,7 @@ export interface ProfileInput {
   parentName?: string;
   parentPhone?: string;
   parentEmail?: string;
+  allowContactRequests?: boolean;
 }
 
 export type StudentProfileRow = typeof studentProfile.$inferSelect;
@@ -97,17 +98,21 @@ async function searchStudents(
   excludeUserId: string,
   limit: number,
 ) {
-  return conn
-    .select({ id: user.id, name: user.name, email: user.email })
-    .from(user)
-    .where(
-      and(
-        or(ilike(user.name, `%${query}%`), ilike(user.email, `%${query}%`)),
-        eq(user.role, "student"),
-        ne(user.id, excludeUserId),
-      ),
-    )
-    .limit(limit);
+  return (
+    conn
+      // Email remains a server-side lookup key for group invites, but is not a
+      // public search result. Contact exchange has a separate consent flow.
+      .select({ id: user.id, name: user.name, image: user.image })
+      .from(user)
+      .where(
+        and(
+          or(ilike(user.name, `%${query}%`), ilike(user.email, `%${query}%`)),
+          eq(user.role, "student"),
+          ne(user.id, excludeUserId),
+        ),
+      )
+      .limit(limit)
+  );
 }
 
 export function createAuthRepo() {

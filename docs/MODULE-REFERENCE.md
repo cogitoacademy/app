@@ -270,9 +270,9 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - `me(userId)` — Returns user + profile + tutorProfile + wallet (creates wallet if missing)
 - `getProfile(userId)` — Returns user with profile and tutor profile
-- `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts)
+- `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts, and `allowContactRequests`)
 - Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`.
-- `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 results; exposed via `studentProcedure` so tutors/admins get FORBIDDEN (F16 — the lookup exists for the group-booking invite UI)
+- `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 safe identity results (`id`, `name`, `image`); email is a repository-only lookup key. Exposed via `studentProcedure` so tutors/admins get FORBIDDEN (F16 — the lookup exists for the group-booking invite UI)
 
 **Dependencies:** `AuthRepo`, `WalletPort` (for lazy wallet creation)
 
@@ -284,6 +284,11 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - The web email sign-in/sign-up handoff awaits the Better Auth result, performs a fresh session read before choosing `/dashboard`, `/onboarding`, `/admin-tutors`, or a validated return path, and suppresses the overlapping client signal refresh so the login form does not flash back into the loader. The authenticated shell uses the same fresh session source for its parent route guard.
 - The `/login` email forms run field-level validation on change/blur after a field is touched, show Selia inline errors and danger outlines for invalid fields, and mirror the sign-up password requirements enforced by the server. These checks are client-only and do not add an auth endpoint or persistence rule.
 - Email verification (G2, REVIEW-FIXES-4 P4.4): the `emailOTP` plugin sends a 6-digit OTP on sign-up (`sendVerificationOnSignUp`, 5 min expiry) via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); `POST /api/auth/email-otp/verify-email` marks the user verified; the web `/verify-email` route collects the code
+
+**Privacy boundary:** `auth.searchStudents` accepts an email query for an
+existing group-invite workflow but returns only display identity. Account email
+is not a public profile field and is released only by the Contact Module after
+recipient consent.
 
 ---
 
@@ -356,9 +361,44 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Optimistic locking via `version` field prevents concurrent state changes
 - New IDR booking snapshots copy the active economy version, tutor base/increment, tutor honorarium, Cogito take, total IDR, total Marks, and rounded pooled Marks. Later economy updates do not mutate those snapshots.
 - Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run. The protected booking list/detail/session reads are available to authenticated parties, while admins can inspect the full booking set; tutor fulfillment remains under `tutorActions.*`.
+- Booking list/detail relations use a safe user projection (`id`, `name`, `image`, `role`). Meeting attendee email arrays remain server-only for calendar/notification work and are not returned through booking reads.
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
 - Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) are **implemented** — U3/U5–U7 closed by REVIEW-FIXES-3 P3.8/P5 (see `docs/plans/active/PRD-GAPS-PHASE3.md`, all U-items closed); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)
+
+---
+
+## Contact Module
+
+**Purpose:** Provide a lightweight, consent-based way for students to exchange
+contact details after a completed shared session without introducing a general
+chat directory.
+
+**Files:**
+
+- `contact.types.ts` — booking/request/response Zod inputs; optional request note is capped at 200 characters
+- `contact.errors.ts` — domain errors for booking eligibility, opt-out, duplicate, recipient, and response-state failures
+- `contact.repo.ts` — completed-booking participant and contact-request persistence; email is an internal repository field
+- `contact.service.ts` — eligibility, safe projections, consent transition, notification, and audit orchestration
+- `contact.handler.ts` — maps session identity and domain errors
+- `contact.router.ts` — student-only routes for list/request/respond
+- `index.ts` — `createContactModule({ db, notification, audit })`
+
+**Service Methods:**
+
+- `listForBooking(userId, bookingId)` — lists other eligible student participants by name/photo and current request state
+- `requestContact(userId, input)` — creates one pending request and an in-app notification without copying an email
+- `respondToRequest(userId, input)` — recipient chooses `accept_share_email`, `accept_without_email`, or `decline`
+
+**Business Rules:**
+
+- Eligibility requires the same booking to be `completed`, a confirmed/reconfirmed student participant, and attendance not marked `absent`; tutors and non-participants are excluded.
+- The recipient's `studentProfile.allowContactRequests` defaults to `true`; `false` blocks new requests server-side.
+- The requester sees the recipient's account email only when the recipient explicitly selects `accept_share_email`. Pending, declined, and incoming projections return `email: null`; the recipient never receives a second copy of their own email through this API.
+- Contact request notifications and audit records contain IDs, names, decisions, and notes only. They never include account email and never opt into notification email dispatch.
+- One request per booking and direction is enforced by a unique database index; the UI offers no full-chat channel.
+
+**Dependencies:** `ContactRepo`, `ContactNotificationPort`, `ContactAuditPort`
 
 ---
 

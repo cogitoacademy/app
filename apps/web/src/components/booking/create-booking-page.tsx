@@ -64,7 +64,7 @@ const BOOKING_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_SOLO_PRICE = 42;
 
 type Modality = "online" | "offline";
-type StudentMatch = { id: string; name: string; email: string };
+type StudentMatch = { id: string; name: string; image: string | null };
 
 function getBookingErrorMessage(error: Error) {
   if (error.message.toLowerCase().includes("input validation failed")) {
@@ -530,7 +530,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   disabled={invitees.length >= 5}
                 />
                 <FieldDescription>
-                  Search updates after you pause typing.
+                  Search by name or email. Only the student&apos;s name and
+                  photo are shown.
                 </FieldDescription>
               </Field>
               {studentSearchQuery.isFetching ? (
@@ -569,7 +570,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                           {student.name}
                         </span>
                         <span className="block truncate text-xs opacity-70">
-                          {student.email}
+                          Email stays private until the student chooses to share
+                          it.
                         </span>
                       </span>
                     </Button>

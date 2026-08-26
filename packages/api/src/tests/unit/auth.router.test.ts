@@ -36,6 +36,7 @@ describe("authRouter", () => {
         parentName: "Parent",
         parentPhone: "0813",
         parentEmail: "p@example.com",
+        allowContactRequests: false,
       });
       expect(result.success).toBe(true);
     });
@@ -113,7 +114,7 @@ describe("authHandler", () => {
   describe("searchStudents", () => {
     test("allows students and calls authService.searchStudents", async () => {
       const searchStudents = mock(async () => [
-        { id: "s1", name: "A", email: "a@x.com" },
+        { id: "s1", name: "A", image: null, email: "a@x.com" },
       ]);
       const handler = createAuthHandler({ searchStudents } as any);
       const context = {
@@ -126,7 +127,7 @@ describe("authHandler", () => {
       } as any);
 
       expect(searchStudents).toHaveBeenCalledWith("u1", "alex", 5);
-      expect(result).toEqual([{ id: "s1", name: "A", email: "a@x.com" }]);
+      expect(result).toEqual([{ id: "s1", name: "A", image: null }]);
     });
 
     test("rejects tutors with a FORBIDDEN error", async () => {
