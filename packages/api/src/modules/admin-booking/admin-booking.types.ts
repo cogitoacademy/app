@@ -33,9 +33,18 @@ export const adminRefundInput = z.object({
   reason: z.string().min(1).max(2000),
 });
 
+const manualMeetingUrl = z
+  .string()
+  .url()
+  .max(2048)
+  .refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  }, "Meeting links must start with http:// or https://");
+
 export const setMeetingLinkInput = z.object({
   bookingId: z.string().max(100),
-  url: z.string().url().max(2048),
+  url: manualMeetingUrl,
 });
 
 export const cancelSeriesSessionInput = z

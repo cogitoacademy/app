@@ -1640,6 +1640,7 @@ describe("AdminBookingService additional guards", () => {
         findBookingById: mock(async () => ({
           id: "b1",
           currentState: "confirmed",
+          modality: "online",
         })),
       }),
       auditPort: makeAuditPort(),
@@ -1673,6 +1674,7 @@ describe("AdminBookingService additional guards", () => {
         findBookingById: mock(async () => ({
           id: "b1",
           currentState: "confirmed",
+          modality: "online",
         })),
       }),
       auditPort: makeAuditPort(),
@@ -1694,6 +1696,32 @@ describe("AdminBookingService additional guards", () => {
     expect(args[0]).toBe("b1");
     expect(args[1]).toBe("https://meet.example.com/manual");
     expect(args[2]).toBeDefined();
+  });
+
+  test("setMeetingLink rejects offline bookings", async () => {
+    const setManualLink = mock(async () => ({}) as any);
+    const service = createAdminBookingService({
+      db: makeDb(),
+      repo: mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "scheduled",
+          modality: "offline",
+        })),
+      }),
+      auditPort: makeAuditPort(),
+      wallet: makeWalletPort() as any,
+      refund: makeRefundPort(),
+      meeting: { setManualLink, cancelEvent: mock(async () => {}) },
+    });
+
+    await expect(
+      service.setMeetingLink("admin1", {
+        bookingId: "b1",
+        url: "https://meet.example.com/offline",
+      }),
+    ).rejects.toThrow("online bookings");
+    expect(setManualLink).not.toHaveBeenCalled();
   });
 
   test("cancelSeriesSession rejects a session that is no longer scheduled", async () => {

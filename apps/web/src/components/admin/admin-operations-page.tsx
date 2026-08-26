@@ -81,6 +81,7 @@ import {
   getBookingStateLabel,
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
+import { ManualMeetingLinkDialog } from "@/components/booking/manual-meeting-link-dialog";
 import { client, orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
@@ -401,6 +402,8 @@ function AdminBookingDetailDialog({
   onClose: () => void;
   onOpenOverride: (booking: QueueItem) => void;
 }) {
+  const queryClient = useQueryClient();
+  const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
   const historyQuery = useQuery({
     ...orpc.adminBooking.getBookingStateHistory.queryOptions({
       input: { bookingId: booking?.id ?? "" },
@@ -436,6 +439,35 @@ function AdminBookingDetailDialog({
   });
   const metadata = getOverrideMetadata(booking?.overrideMeta);
   const affectedParticipants = getStringArray(metadata?.affectedParticipants);
+  const canSetManualLink =
+    bookingQuery.isSuccess &&
+    booking?.modality === "online" &&
+    (booking.currentState === "confirmed" ||
+      booking.currentState === "scheduled") &&
+    (!bookingQuery.data.meetingUrl ||
+      bookingQuery.data.meeting?.provider === "manual");
+  const setMeetingLink = useMutation(
+    orpc.adminBooking.setMeetingLink.mutationOptions({
+      onSuccess: () => {
+        setManualLinkDialogOpen(false);
+        toastManager.add({
+          title: "Meeting link saved",
+          description: "The booking now has a manual session link.",
+          type: "success",
+        });
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orpc.adminBooking.listBookings.key(),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orpc.booking.get.key(),
+          }),
+        ]);
+      },
+      onError: (error: Error) =>
+        showError("Meeting link could not be saved", error),
+    }),
+  );
 
   return (
     <Dialog open={booking !== null} onOpenChange={(open) => !open && onClose()}>
@@ -482,6 +514,41 @@ function AdminBookingDetailDialog({
                 value={formatSlaDeadline(booking.slaDeadline, booking.timezone)}
               />
             </div>
+
+            {booking.modality === "online" ? (
+              <Card>
+                <CardHeader>
+                  <IconBox variant="info-subtle" size="sm">
+                    <IconCalendarEvent />
+                  </IconBox>
+                  <CardTitle>Meeting access</CardTitle>
+                  <CardDescription>
+                    Add a trusted meeting URL when automatic Google Meet setup
+                    is unavailable.
+                  </CardDescription>
+                </CardHeader>
+                <CardBody className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Text className="text-sm text-muted">Current link</Text>
+                    <Text className="break-all font-medium">
+                      {bookingQuery.data?.meetingUrl ??
+                        "No meeting link is available yet."}
+                    </Text>
+                  </div>
+                  {canSetManualLink ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setManualLinkDialogOpen(true)}
+                    >
+                      {bookingQuery.data?.meetingUrl
+                        ? "Replace link"
+                        : "Add meeting link"}
+                    </Button>
+                  ) : null}
+                </CardBody>
+              </Card>
+            ) : null}
 
             <Card>
               <CardHeader>
@@ -660,6 +727,18 @@ function AdminBookingDetailDialog({
           ) : null}
         </DialogFooter>
       </DialogPopup>
+      <ManualMeetingLinkDialog
+        open={manualLinkDialogOpen}
+        onOpenChange={setManualLinkDialogOpen}
+        onSubmit={(url) =>
+          booking
+            ? setMeetingLink.mutate({ bookingId: booking.id, url })
+            : undefined
+        }
+        pending={setMeetingLink.isPending}
+        initialUrl={bookingQuery.data?.meetingUrl}
+        actor="admin"
+      />
     </Dialog>
   );
 }

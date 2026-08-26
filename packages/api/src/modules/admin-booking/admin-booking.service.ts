@@ -13,6 +13,7 @@ import { BookingStateTransitionError } from "../booking/booking.errors";
 import { computeSlaDeadline } from "../support/support.service";
 import {
   ACTOR_TYPE,
+  MODALITY,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   NOTIFICATION_CATEGORY,
@@ -749,15 +750,14 @@ export function createAdminBookingService(deps: {
   }
 
   /**
-   * Records an admin-pasted manual meeting URL on a SCHEDULED/CONFIRMED
-   * online booking (U1 / FR-21: "Admin may paste any valid meeting URL as
-   * fallback" when Google Meet generation failed or is disabled).
+   * Records an authorized manual meeting URL on a SCHEDULED/CONFIRMED online
+   * booking when Google Meet generation failed or is disabled.
    *
    * @param adminId - the admin actor
    * @param input - the booking id and the meeting URL
    * @returns the resulting meeting event
    * @throws {BookingNotFoundError} if the booking does not exist
-   * @throws {BookingNotEditableError} if the booking is not SCHEDULED/CONFIRMED
+   * @throws {BookingNotEditableError} if the booking is not online or is not SCHEDULED/CONFIRMED
    */
   async function setMeetingLink(
     adminId: string,
@@ -766,12 +766,19 @@ export function createAdminBookingService(deps: {
     return db.transaction(async (tx) => {
       const bookingRow = await repo.findBookingById(tx, input.bookingId);
       if (!bookingRow) throw new BookingNotFoundError(input.bookingId);
+      if (bookingRow.modality !== MODALITY.ONLINE) {
+        throw new BookingNotEditableError(
+          input.bookingId,
+          "Manual meeting links are only available for online bookings",
+        );
+      }
       if (
         bookingRow.currentState !== BOOKING_STATE.SCHEDULED &&
         bookingRow.currentState !== BOOKING_STATE.CONFIRMED
       ) {
         throw new BookingNotEditableError(
-          `Meeting link can only be set on SCHEDULED/CONFIRMED bookings (current: ${bookingRow.currentState})`,
+          input.bookingId,
+          `This booking is not editable for a meeting link yet. A link can only be set on a scheduled or confirmed booking (current: ${bookingRow.currentState}).`,
         );
       }
 
