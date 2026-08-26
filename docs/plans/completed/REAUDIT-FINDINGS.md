@@ -2,7 +2,7 @@
 
 | Field   | Value                                                                                                        |
 | ------- | ------------------------------------------------------------------------------------------------------------ |
-| Status  | Active                                                                                                       |
+| Status  | Completed (2026-08-26)                                                                                        |
 | Created | 2026-08-26                                                                                                   |
 | Trigger | Re-audit after PR #106 (backend finalization) merged as `9919264`                                            |
 | Method  | Two read-only review workers (API-layer + server-layer), all HIGH/MEDIUM findings lead-verified against code |
@@ -17,6 +17,34 @@ PR #106 fixed the 10 documented gaps + 26 audit findings (F1–F25/S1–S14). Th
 
 - Email-verification gate, invite admin-demotion guard, escaped withdraw reason, outbox predicate, tutor-row headcount exclusion, lateness sweep (offline included), meeting deadline bumps, per-payment FIFO refunds, room-assign guards, achievement archive/restore, role-scope tightening, seed prices (PRD OQ-01), scheduler fail-loud, content-proxy hardening, S4 rate-limit matching, migration down-section removal — all VERIFIED in code with regression tests.
 - BullMQ repeatable jobs dedupe by name/pattern across replicas — no double-firing risk with 2 instances (confirmed by BullMQ semantics).
+
+## Implemented in the current worktree (2026-08-26)
+
+- [x] N1 — synchronized the booking-level group hold/snapshot even when the per-student price is unchanged; added a flat-price reconfirmation regression test.
+- [x] N2 — allowed an admin to move a suspended tutor to `changes_requested` or `approved_unpublished`, while keeping direct `publish` from `suspended` blocked; added state-machine tests.
+- [x] W1 — corrected the production `BETTER_AUTH_URL` example to `https://api.cogitoacademy.id`.
+- [x] W2 — added the standalone `seed-packages` production/staging guard and test; the RUNBOOK claim is now true.
+- [x] N3 — synchronized confirmed offline room assignments on booking-level reschedule accept/reject/expiry, with conflict/missing fallback to room approval; added room and booking tests.
+- [x] Booking UX follow-up — fixed the one-session group pre-submit hold check and visible hold summary, added deadline countdown/refetch behavior, updated the seeded availability window to support the fixed 90-minute session, and made the browser suite repeatable across seeded booking runs.
+- [x] Economy UI follow-up — parse locale-formatted IDR NumberField values safely, allow safe in-progress edits, render save errors without a missing Selia Field context, reset test defaults between runs, and verify the six-spec browser suite end to end (10 tests).
+- [x] W4/W5 + RUNBOOK RPC drift — removed the stale webhook header, documented the scheduler health check, and corrected the reschedule procedure paths used by the smoke runbook.
+
+## Verification pass (2026-08-26)
+
+- Browser E2E: 10 pass, 0 fail across six specs. Covered student/tutor/admin
+  role boundaries, online group acceptance, tutor decline reason, unauthorized
+  booking detail access, future-booking economy snapshots, and invalid negative
+  IDR input.
+- Backend targeted integration: 67 pass, 0 fail across group reschedule,
+  offline room approval, meeting lifecycle/retry, expiry/no-show, group
+  repricing, H-2 rules, withdrawal, and room-request flows.
+- Full API suite: 2,187 pass, 0 fail across 190 files. Unit coverage for the
+  changed booking/room/admin-tutor services: 317 pass, 0 fail.
+- Operational finding: the local Google Meet boot probe reports an
+  expired/revoked token. The fallback behavior is correct and tested, but real
+  Google Meet creation must be re-credentialed before a marketing recording.
+
+Already verified before this worktree change: N4 (`createContext` refreshes `emailVerified` from the user row on every request).
 
 ## Findings
 
@@ -37,8 +65,8 @@ PR #106 fixed the 10 documented gaps + 26 audit findings (F1–F25/S1–S14). Th
 
 ## Doc drift (no code change)
 
-- RUNBOOK manual smoke section uses stale RPC paths (`/rpc/booking/reschedule/propose`, `/rpc/tutor/booking/reschedule/propose`) — actual: `/rpc/booking/proposeReschedule`, `/rpc/tutorActions/proposeReschedule`.
-- CONTEXT known-bugs table + API-REFERENCE RPC paths verified correct after #106.
+- [x] RUNBOOK manual smoke section now uses the current RPC paths (`/rpc/booking/proposeReschedule`, `/rpc/tutorActions/proposeReschedule`).
+- [x] CONTEXT known-bugs table + API-REFERENCE RPC paths verified correct after #106.
 
 ## Deployment-readiness gaps (feed `DEPLOYMENT-FINALIZATION` plan)
 
@@ -55,7 +83,7 @@ PR #106 fixed the 10 documented gaps + 26 audit findings (F1–F25/S1–S14). Th
 
 ## Tasks
 
-### Task 1: Fix N1 — reconfirm reissue loop (HIGH)
+### Task 1: Fix N1 — reconfirm reissue loop (HIGH) — COMPLETE (2026-08-26)
 
 **Files:**
 
@@ -71,7 +99,7 @@ PR #106 fixed the 10 documented gaps + 26 audit findings (F1–F25/S1–S14). Th
 4. Run full `packages/api` suite — PASS.
 5. Commit `fix(booking): prevent reconfirm reissue loop when per-student price is unchanged`
 
-### Task 2: Fix N2 — suspended tutor restore path (MEDIUM)
+### Task 2: Fix N2 — suspended tutor restore path (MEDIUM) — COMPLETE (2026-08-26)
 
 **Files:**
 
@@ -82,29 +110,29 @@ PR #106 fixed the 10 documented gaps + 26 audit findings (F1–F25/S1–S14). Th
 
 **Steps:** TDD (fail → pass) as above. Commit `fix(admin-tutor): allow restoring suspended tutor profiles`.
 
-### Task 3: Fix W1 — `.env.prod.example` BETTER_AUTH_URL (HIGH)
+### Task 3: Fix W1 — `.env.prod.example` BETTER_AUTH_URL (HIGH) — COMPLETE (2026-08-26)
 
 Change `infra/.env.prod.example:5` to `https://api.cogitoacademy.id`. Commit `fix(infra): correct BETTER_AUTH_URL in prod env example`. No test; typecheck + lint.
 
-### Task 4: Fix W2 — seed-packages prod guard (MEDIUM)
+### Task 4: Fix W2 — seed-packages prod guard (MEDIUM) — COMPLETE (2026-08-26)
 
 **Files:** `apps/server/src/seed-packages.ts` — add the same `seedAllowed` guard from `seed.ts:23` (env + SEED_ALLOWED_IN_PROD). Test: `apps/server/src/seed.test.ts` (prod NODE_ENV exits). Docs: RUNBOOK claim becomes true.
 
 Commit `fix(seed): add production guard to seed-packages`.
 
-### Task 5: Fix N3 (Low-Med) — room row time drift on reschedule rejection
+### Task 5: Fix N3 (Low-Med) — room row time drift on reschedule rejection — COMPLETE (2026-08-26)
 
 **Files:** `packages/api/src/modules/booking/booking.service.ts` (proposal rejection/expiry paths) + `room.service.ts` (port to reset the confirmed row back to the original schedule).
 Test: proposal reject → confirmed roomBooking time equals the original schedule.
 Commit `fix(room): resync room booking times when a reschedule proposal is rejected`.
 
-### Task 6: Fix N4 (LOW) — re-fetch `emailVerified` in createContext
+### Task 6: Fix N4 (LOW) — re-fetch `emailVerified` in createContext — COMPLETE (2026-08-26)
 
 **Files:** `packages/api/src/context.ts` — add `emailVerified` to the per-request user refresh (alongside `role`).
 Test: existing context tests.
 Commit `fix(auth): refresh emailVerified per request`.
 
-### Task 7: Doc drift sweep (W4/W5 + RUNBOOK RPC paths)
+### Task 7: Doc drift sweep (W4/W5 + RUNBOOK RPC paths) — COMPLETE (2026-08-26)
 
 - `docs/API-REFERENCE.md`: remove `x-event-id` webhook header.
 - `infra/monitoring.md`: add `checks.scheduler` to health example.

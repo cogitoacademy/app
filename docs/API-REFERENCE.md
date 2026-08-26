@@ -507,10 +507,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, participants, history, meetingStatus, meetingUrl }` — access-checked for the proposer, tutor, participants, or admin; participant user objects include the optional profile `image`, and history entries include `fromState`, `toState`, `actorType`, `reason`, and `createdAt`
 - **Errors:** `BOOKING_NOT_FOUND` (404)
-- **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or an admin fallback link, and `failed` when automatic Google Meet creation needs another retry.
-- **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places role-appropriate primary actions (including reschedule and completion when eligible) directly below the status badge, keeps contextual actions above Marks or in the main flow, and keeps the API contract unchanged.
+- **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or a tutor/admin fallback link, and `failed` when automatic Google Meet creation needs another retry. If tutor acceptance encounters a provider failure, the booking remains `confirmed` until retry or manual-link recovery; clients must not treat that state as `scheduled`.
+- **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places role-appropriate primary actions (including reschedule and completion when eligible) directly below the status badge, keeps contextual actions above Marks or in the main flow, and shows a live response-window notice for deadline-bound states. The API contract is unchanged.
 
-**UI behavior note:** The booking detail surface uses compact accessible Selia `IconInfoSquareRounded` popover triggers for online-link explanations, retry/admin setup status, available meeting-room access, missing offline-room details, and tutor completion timing. Available links no longer render a `Ready` badge or standalone CTA; the popover contains the meeting-room action. The trigger supports hover, keyboard focus, click, and touch; the overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and does not change the `booking.get` response contract.
+**UI behavior note:** The booking detail surface uses compact accessible Selia `IconInfoSquareRounded` popover triggers for online-link explanations, retry/manual setup status, available meeting-room access, missing offline-room details, and tutor completion timing. Available links no longer render a `Ready` badge or standalone CTA; the popover contains the meeting-room action. The trigger supports hover, keyboard focus, click, and touch; the overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and does not change the `booking.get` response contract.
 
 ### `booking.listMine`
 
@@ -531,7 +531,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected; required tutor or active student voter
 - **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Records one acceptance on the active proposal. Partial acceptance does not change the schedule; unanimous tutor + active-student acceptance applies the proposed 90-minute time and restores the booking state that was active before the proposal.
+- **Description:** Records one acceptance on the active proposal. Partial acceptance does not change the schedule; unanimous tutor + active-student acceptance applies the proposed 90-minute time and restores the booking state that was active before the proposal. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
 
 ### `booking.getRescheduleAvailability`
 
@@ -546,7 +546,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected; required tutor or active student voter
 - **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Rejects the active proposal, preserves the original schedule, and restores the booking state that was active before the proposal
+- **Description:** Rejects the active proposal, preserves the original schedule, and restores the booking state that was active before the proposal. Offline booking-level proposals also restore the confirmed room assignment to the original window; a conflict or missing assignment falls back to `awaiting_admin_room_approval`.
 
 ### `booking.proposeReschedule`
 
@@ -579,9 +579,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.createGroup`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is server-fixed to 90 minutes)
+- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal, requestedRoomId? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is server-fixed to 90 minutes; `requestedRoomId` applies only to offline bookings)
 - **Output:** `{ booking }`
-- **Description:** Creates a group booking, holds proposer Marks, invites participants; idempotency via `idempotency-key` header
+- **Description:** Creates a group booking, holds the target headcount total from the proposer, invites participants, and releases the excess hold as invitees confirm; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
@@ -666,8 +666,17 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
-- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` when the attempt succeeds. If Google Meet creation fails, the booking remains `confirmed` and the `retry-failed-meetings` scheduler retries it every 5 minutes (up to 3 failed attempts); offline goes `awaiting_admin_room_approval`.
+- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` when the attempt succeeds. If Google Meet creation fails, the booking remains `confirmed`, the proposer receives meeting-setup attention copy, and the `retry-failed-meetings` scheduler retries it every 5 minutes (up to 3 failed attempts); after that, the assigned tutor or an admin can add a manual link with `setMeetingLink`; offline goes `awaiting_admin_room_approval`.
 - **Frontend note:** The tutor booking-detail flow presents a responsive confirmation summary before calling this unchanged procedure; the dialog does not change the input, output, or transition rules.
+
+### `tutorActions.setMeetingLink`
+
+- **RPC path:** `/rpc/tutorActions/setMeetingLink`
+- **Auth:** Tutor (assigned tutor only)
+- **Input:** `{ bookingId, url }` (`url` must be an `http://` or `https://` URL, max 2048 chars)
+- **Output:** `{ bookingId, meetingUrl, status }`
+- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_OWNED` (403), `BOOKING_NOT_EDITABLE` (400) for offline, terminal, or not-yet-confirmed/scheduled bookings
+- **Description:** Records a manual meeting URL when automatic Google Meet setup is unavailable. Only the assigned tutor can use it, and only for an online booking in `CONFIRMED` or `SCHEDULED`; it updates the active meeting-attempt row, notifies confirmed participants, and writes a `tutor_set_meeting_link` audit record.
 
 ### `tutorActions.declineBooking`
 
@@ -835,10 +844,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **RPC path:** `/rpc/adminBooking/setMeetingLink`
 - **Auth:** Admin
-- **Input:** `{ bookingId, url }` (`url` must be a valid URL, max 2048 chars)
+- **Input:** `{ bookingId, url }` (`url` must be an `http://` or `https://` URL, max 2048 chars)
 - **Output:** `{ bookingId, meetingUrl, status }`
-- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) unless the booking is `SCHEDULED`/`CONFIRMED`
-- **Description:** Records a manual meeting URL on a booking as fallback when Google Meet generation failed or is disabled (U1/FR-21); updates the newest meeting-attempt row so the booking detail reads the active link, notifies confirmed participants, and writes an `admin_set_meeting_link` audit record
+- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) unless the booking is online and `SCHEDULED`/`CONFIRMED`
+- **Description:** Records or replaces a manual meeting URL on an online booking as fallback when Google Meet generation failed or is disabled (U1/FR-21); only `SCHEDULED`/`CONFIRMED` bookings are editable. It updates the newest meeting-attempt row so the booking detail reads the active link, notifies confirmed participants, and writes an `admin_set_meeting_link` audit record.
 
 ### `adminBooking.cancelSeriesSession`
 
