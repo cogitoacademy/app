@@ -58,6 +58,18 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchAuthPath("/api/auth/change-email/email")).toBe(true);
   });
 
+  test("better-auth exact endpoints without trailing slashes are auth-limited (S4)", () => {
+    // better-auth registers these WITHOUT trailing segments — a literal
+    // `path.startsWith("/api/auth/request-password-reset/")` prefix would
+    // miss them and leave password-reset brute force unthrottled.
+    expect(matchAuthPath("/api/auth/request-password-reset")).toBe(true);
+    expect(matchAuthPath("/api/auth/reset-password")).toBe(true);
+    expect(matchAuthPath("/api/auth/sign-in/email")).toBe(true);
+    expect(matchAuthPath("/api/auth/sign-up/email")).toBe(true);
+    expect(matchAuthPath("/api/auth/change-email")).toBe(true);
+    expect(matchAuthPath("/api/auth/sign-in/social")).toBe(true);
+  });
+
   test("other paths are not rate limited", () => {
     expect(matchRateLimitPath("/rpc/wallet/getBalance")).toBeNull();
     expect(matchRateLimitPath("/health")).toBeNull();
