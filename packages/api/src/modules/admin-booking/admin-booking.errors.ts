@@ -66,6 +66,17 @@ export class OverrideMarksParticipantsRequiredError extends DomainError {
   }
 }
 
+export class OverrideParticipantNotInBookingError extends DomainError {
+  readonly domain = "admin-booking";
+  constructor(id: string, participantIds: string[]) {
+    super(
+      "OVERRIDE_PARTICIPANT_NOT_IN_BOOKING",
+      "Every affectedParticipant must be a participant of the booking — unknown participants are rejected, never silently filtered",
+      { id, participantIds },
+    );
+  }
+}
+
 export function mapAdminBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -75,6 +86,8 @@ export function mapAdminBookingError(
   if (err instanceof BookingOverrideConflictError)
     return conflict(err.message, err);
   if (err instanceof OverrideMarksParticipantsRequiredError)
+    return badRequest(err.message, err);
+  if (err instanceof OverrideParticipantNotInBookingError)
     return badRequest(err.message, err);
   if (err instanceof InvalidRefundStateError)
     return badRequest(err.message, err);

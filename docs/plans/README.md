@@ -2,10 +2,10 @@
 
 ## Active
 
-| Plan                                                  | Branch            | PR  | Status                                                                                                 |
-| ----------------------------------------------------- | ----------------- | --- | ------------------------------------------------------------------------------------------------------ |
-| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | main (merged #55) | —   | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface |
-| [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge) | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending     |
+| Plan                                                                | Branch                            | PR  | Status                                                                                                                          |
+| ------------------------------------------------------------------- | --------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md)               | main (merged #55)                 | —   | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface                          |
+| [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md)               | main (post-merge)                 | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                              |
 
 ## Completed (merged to main)
 
@@ -30,8 +30,10 @@
 | [BACKEND-CLEANUP.md](completed/BACKEND-CLEANUP.md)                                                 | main (merged)                                 | —                                                      |
 | [PRD-GAPS-PHASE3.md](completed/PRD-GAPS-PHASE3.md)                                                 | main (merged)                                 | Completed 2026-08-17 — all U-items closed              |
 | [WAVE-6-REVIEW-FIXES.md](completed/WAVE-6-REVIEW-FIXES.md)                                         | `fix/wave6-a` / `fix/wave6-b` / `fix/wave6-c` | #82–#84 — all findings fixed and merged                |
-| [COVERAGE-100.md](completed/COVERAGE-100.md)                                                       | `f/booking-list-refactor` (PR #93)            | Completed 2026-08-23 — 100% line coverage gate         |
-| [INTERACTIVE-GUIDE.md](completed/INTERACTIVE-GUIDE.md)                                             | main                                          | Completed 2026-08-23 — role-aware visual product guide |
+| [COVERAGE-100.md](completed/COVERAGE-100.md)                                                       | `f/booking-list-refactor` (PR #93)            | Completed 2026-08-23 — 100% line coverage gate |
+| [INTERACTIVE-GUIDE.md](completed/INTERACTIVE-GUIDE.md)                                               | main                                         | Completed 2026-08-23 — role-aware visual product guide |
+| [BACKEND-PROD-FINALIZATION.md](completed/BACKEND-PROD-FINALIZATION.md)                               | `finalize/backend-prod-readiness-v2`         | **Merged #106 (2026-08-26)** — PRD v1.7 alignment + production-readiness fixes (documented gaps 1–10 + audit findings F1–F25/S1–S14) |
+| [PRD-AUDIT.md](completed/PRD-AUDIT.md)                                                               | `finalize/backend-prod-readiness-v2`         | **Merged #106 (2026-08-26)** — PRD + wiring audit gap list (Phase 0 deliverable) |
 
 ## Archive (superseded / historical)
 

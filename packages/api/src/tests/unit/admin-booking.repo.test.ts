@@ -4,6 +4,7 @@ import {
   insertStateHistoryEntry,
   findParticipantsByBookingId,
   findPaymentById,
+  listCreditStatePaymentsForUser,
   updatePaymentStatus,
   updateBookingHoldAmount,
   createAdminBookingRepo,
@@ -129,6 +130,27 @@ describe("admin-booking.repo", () => {
     });
   });
 
+  describe("listCreditStatePaymentsForUser", () => {
+    test("lists the user's credit-state payments oldest first", async () => {
+      const rows = [
+        { id: "pay1", userId: "u1", status: "PAID" },
+        { id: "pay2", userId: "u1", status: "SETTLED" },
+      ];
+      const orderBy = mock(async () => rows);
+      const where = mock(() => ({ orderBy }));
+      const from = mock(() => ({ where }));
+      const select = mock(() => ({ from }));
+      const conn = { select, from, where, orderBy } as any;
+
+      const result = await listCreditStatePaymentsForUser(conn, "u1");
+
+      expect(result).toEqual(rows);
+      expect(from).toHaveBeenCalledTimes(1);
+      expect(where).toHaveBeenCalledTimes(1);
+      expect(orderBy).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("updatePaymentStatus", () => {
     test("updates payment status and returns updated row", async () => {
       const updated = { id: "pay1", status: "PAID" };
@@ -165,6 +187,7 @@ describe("admin-booking.repo", () => {
       expect(typeof repo.insertStateHistoryEntry).toBe("function");
       expect(typeof repo.findParticipantsByBookingId).toBe("function");
       expect(typeof repo.findPaymentById).toBe("function");
+      expect(typeof repo.listCreditStatePaymentsForUser).toBe("function");
       expect(typeof repo.updatePaymentStatus).toBe("function");
       expect(typeof repo.updateBookingHoldAmount).toBe("function");
     });

@@ -8,6 +8,7 @@ import {
   InviteNotFoundError,
   InviteEmailMismatchError,
   ProfileAlreadyExistsError,
+  InvalidRoleForClaimError,
 } from "./invite.errors";
 
 type InviteRow = typeof tutorInvite.$inferSelect;
@@ -18,6 +19,7 @@ function validateClaim(
   userEmail: string,
   existingProfile: TutorProfileRow | undefined,
   token: string,
+  userRole: string | null,
 ): void {
   if (!invite) {
     throw new InviteNotFoundError(token);
@@ -29,6 +31,10 @@ function validateClaim(
 
   if (existingProfile) {
     throw new ProfileAlreadyExistsError(userEmail);
+  }
+
+  if (userRole === USER_ROLE.ADMIN) {
+    throw new InvalidRoleForClaimError();
   }
 }
 
@@ -63,8 +69,9 @@ export function createInviteService(deps: {
       db,
       userId,
     );
+    const userRole = await inviteRepo.getUserRoleById(db, userId);
 
-    validateClaim(invite, userEmail, existingProfile, token);
+    validateClaim(invite, userEmail, existingProfile, token, userRole);
 
     return db.transaction(async (tx) => {
       const [acceptedInvite] = await inviteRepo.updateInviteStatus(

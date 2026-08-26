@@ -64,6 +64,23 @@ export async function signUpAndSignIn(
   password: string,
   name: string,
 ) {
+  const res = await signUpAndSignInUnverified(email, password, name);
+  // The email-verification gate (verifiedStudentProcedure) requires
+  // emailVerified=true for paid actions; most integration tests sign up and
+  // immediately use paid procedures, so the default helper marks users
+  // verified. Tests exercising the gate itself use signUpAndSignInUnverified.
+  await db
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.email, email));
+  return res;
+}
+
+export async function signUpAndSignInUnverified(
+  email: string,
+  password: string,
+  name: string,
+) {
   await auth.api.signUpEmail({
     body: { email, password, name },
     headers: new Headers(),
@@ -149,15 +166,15 @@ async function seedMarkPackages() {
   await db
     .insert(markPackage)
     .values([
-      { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 430000 },
-      { code: "learner", name: "Learner Pack", marks: 120, priceIdr: 990000 },
+      { code: "starter", name: "Starter Pack", marks: 50, priceIdr: 312500 },
+      { code: "learner", name: "Learner Pack", marks: 120, priceIdr: 690000 },
       {
         code: "explorer",
         name: "Explorer Pack",
         marks: 200,
-        priceIdr: 1570000,
+        priceIdr: 1070000,
       },
-      { code: "pioneer", name: "Pioneer Pack", marks: 300, priceIdr: 2180000 },
+      { code: "pioneer", name: "Pioneer Pack", marks: 400, priceIdr: 2000000 },
     ])
     .onConflictDoNothing({ target: markPackage.code });
 }

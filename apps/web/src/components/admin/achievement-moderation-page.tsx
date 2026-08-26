@@ -309,7 +309,7 @@ function ModerationCard({
   achievement: AdminAchievement;
   mutationPending: boolean;
   reviewingId?: string;
-  reviewingStatus?: "approved" | "rejected";
+  reviewingStatus?: "approved" | "rejected" | "archived";
   onApprove: (id: string, eventName: string) => void;
   onReject: (id: string, eventName: string) => void;
 }) {

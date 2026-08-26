@@ -372,4 +372,73 @@ describe("Tutor lateness flagging flow", () => {
       .where(eq(ledgerEntry.bookingId, b.id));
     expect(released.some((e) => e.entryType === "release")).toBe(false);
   });
+
+  test("F9: checkTutorLateness flags offline bookings with an absent tutor", async () => {
+    const adminRes = await signUpAndSignIn(
+      `admin.f9.${ts}@cogito.test`,
+      "Test1234!",
+      "Admin F9",
+    );
+    const adminCtx = await createTestContext(adminRes.cookie);
+    if (!adminCtx.session?.user) throw new Error("Admin session missing");
+    await setUserRole(adminCtx.session.user.id, "admin");
+    const adminClient = createTestClient(
+      await createTestContext(adminRes.cookie),
+    );
+    const room = await adminClient.room.create({
+      name: "Ruang F9",
+      location: "Lantai 1",
+      capacity: 10,
+    });
+
+    // A fresh student keeps the shared wallet's balance invariant intact.
+    const f9Student = await signUpAndSignIn(
+      `student.f9.${ts}@cogito.test`,
+      "Test1234!",
+      "Student F9",
+    );
+    const f9Ctx = await createTestContext(f9Student.cookie);
+    if (f9Ctx.session?.user) await creditWallet(f9Ctx.session.user.id, 200);
+    const f9Client = createTestClient(f9Ctx);
+
+    const start = new Date(Date.now() + 48 * 3600_000).toISOString();
+    const end = new Date(Date.now() + 49 * 3600_000).toISOString();
+    const b = await f9Client.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "offline",
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      timezone: "Asia/Jakarta",
+    });
+
+    const accepted = await tutorClient.tutorActions.acceptBooking({
+      bookingId: b.id,
+    });
+    expect(accepted.currentState).toBe("awaiting_admin_room_approval");
+
+    await adminClient.room.assign({
+      bookingId: b.id,
+      roomId: room.id,
+      startAt: start,
+      endAt: end,
+    });
+
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() - 20 * 60_000),
+        scheduledEndAt: new Date(Date.now() + 70 * 60_000),
+      })
+      .where(eq(booking.id, b.id));
+
+    const result = await services.booking.checkTutorLateness();
+    expect(result.flagged).toBe(1);
+    expect(result.failed).toBe(0);
+
+    const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
+    expect(row!.overrideMeta).toMatchObject({
+      category: "tutor_lateness_pending",
+    });
+  });
 });

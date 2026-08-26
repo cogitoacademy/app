@@ -1,5 +1,7 @@
 import { env } from "@cogito-app/env/server";
 import { log } from "@cogito-app/api/lib/logger";
+import { checkSchedulerHealth } from "@cogito-app/api/lib/db-health";
+import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { createSchedulerService } from "@cogito-app/api/modules/scheduler/scheduler.service";
 import { scheduleBookingExpiryCheck } from "@cogito-app/api/modules/scheduler/jobs/expire-bookings.job";
 import { scheduleHoldReleaseCheck } from "@cogito-app/api/modules/scheduler/jobs/release-holds.job";
@@ -14,6 +16,11 @@ let scheduler: ReturnType<typeof createSchedulerService> = null;
 /**
  * Initializes the BullMQ scheduler and repeatable jobs when enabled.
  *
+ * Fail-loud boot: when `SCHEDULER_ENABLED=true`, an unreachable Redis aborts
+ * the boot (throws) instead of silently skipping the expiry/hold-release/email
+ * jobs — a silently dead scheduler is worse than a failed deploy. When the
+ * scheduler is disabled, the skip log remains (an ops decision, not a defect).
+ *
  * @returns a promise resolving once the scheduler and repeatable jobs are registered
  */
 export async function initScheduler(): Promise<void> {
@@ -24,6 +31,15 @@ export async function initScheduler(): Promise<void> {
       message: "Scheduler disabled or REDIS_URL not configured",
     });
     return;
+  }
+
+  // Fail loud: ping the shared Redis before registering BullMQ workers. The
+  // scheduler depends on Redis persistence; booting without it would leave the
+  // booking-expiry / hold-release / email / SLA jobs silently dead.
+  if ((await checkSchedulerHealth(getRedisClient())) !== "ok") {
+    throw new Error(
+      "Scheduler is enabled (SCHEDULER_ENABLED=true) but Redis is unreachable — aborting boot. Fix Redis or disable the scheduler.",
+    );
   }
 
   scheduler = createSchedulerService(env.REDIS_URL!, {

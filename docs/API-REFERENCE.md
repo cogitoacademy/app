@@ -106,10 +106,10 @@ CI runs the API integration/unit suite together with the env, auth, and database
 
 ### `auth.searchStudents`
 
-- **Auth:** Protected
+- **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F16)
 - **Input:** `{ query, limit? }` (`query` 2–100 chars, `limit` 1–10 default 5)
 - **Output:** `[{ id, name, email }]` — up to 10 students matching a name or email, excluding the requester
-- **Description:** Debounced student lookup used by the group-booking invite UI
+- **Description:** Student-only debounced student lookup used by the group-booking invite UI
 
 ---
 
@@ -181,7 +181,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ tutorId, dateFrom?, dateTo? }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` is summed from IDR tutor-honorarium snapshots; legacy pre-economy bookings use the compatibility path)
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
-- **Description:** Tutor payout summary from completed bookings in a date range
+- **Description:** Tutor payout summary from completed bookings in a date range. `totalMarks` reports the split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
 
 ### `admin.getEconomySettings`
 
@@ -251,8 +251,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `adminTutor.reviewTutorProfile`
 
 - **Auth:** Admin
-- **Input:** `{ tutorProfileId, action, adminNote? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend)
+- **Input:** `{ tutorProfileId, action, adminNote? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend/approve_edits/request_edit_changes)
 - **Output:** `{ profile }`
+- **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `INVALID_INVITE_ACTION` (400) when the action is not allowed from the profile's current onboarding status (F25 state machine: publish only from `pending_review`/`changes_requested`/`approved_unpublished`; unpublish/suspend/approve_edits/request_edit_changes only from `published`; request_changes only from `pending_review`/`changes_requested`)
 
 ---
 
@@ -377,7 +378,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `achievement.listApproved`
 
-- **RPC path:** `/rpc/achievements/listApproved`
+- **RPC path:** `/rpc/achievement/listApproved`
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ items: Achievement[] }` — approved + visible achievements with the owner's `displayName` attached (public procedure retained for a future/public academy surface)
@@ -391,21 +392,21 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `achievement.create`
 
-- **Auth:** Protected
+- **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17; FR-18 is student-facing)
 - **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? }`
 - **Output:** `{ achievement }`
 - **Description:** Submits a new achievement in `pending` status
 
 ### `achievement.update`
 
-- **Auth:** Protected
+- **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17)
 - **Input:** `{ id, version, data: { ...achievementFields } }`
 - **Output:** `{ achievement }`
 - **Description:** Updates a pending achievement; optimistic locking via `version`
 
 ### `achievement.delete`
 
-- **Auth:** Protected
+- **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17)
 - **Input:** `{ id, version }`
 - **Output:** `{ deleted }`
 - **Description:** Deletes a pending achievement; optimistic locking via `version`
@@ -419,8 +420,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `achievement.adminReview`
 
 - **Auth:** Admin
-- **Input:** `{ achievementId, status, adminNote? }` (`status` one of `approved`/`rejected`)
+- **Input:** `{ achievementId, status, adminNote? }` (`status` one of `approved`/`rejected`/`archived`)
 - **Output:** `{ achievement }`
+- **Description:** Moderation action per the transition table (F12): `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived` (hide from public surfacing); `archived` → `approved`/`rejected` (restore). Other transitions throw `ACHIEVEMENT_NOT_EDITABLE`. Owner is notified and an `achievement_{status}` audit record is written.
 
 ---
 
@@ -444,7 +446,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ packages: MarkPackage[] }`
-- **Description:** Returns active purchasable mark packages
+- **Description:** Returns active purchasable mark packages. Seeded values (PRD OQ-01): Starter Pack 50 Marks / Rp 312,500; Learner Pack 120 Marks / Rp 690,000; Explorer Pack 200 Marks / Rp 1,070,000; Pioneer Pack 400 Marks / Rp 2,000,000.
 
 ### `wallet.knowledgeBankEligible`
 
@@ -461,7 +463,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `payment.createPurchase`
 
-- **Auth:** Protected
+- **Auth:** Verified Student (`verifiedStudentProcedure` — student role **and** `emailVerified: true`; unverified students get `FORBIDDEN` "Email verification required")
 - **Input:** `{ packageCode }`
 - **Output:** `{ paymentId, providerReference, checkoutUrl }`
 - **Errors:** `PACKAGE_NOT_FOUND` (404), `PACKAGE_ALREADY_PURCHASED` (409), `PAYMENT_PROVIDER_ERROR` (502)
@@ -493,7 +495,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `booking.createSolo`
 
-- **Auth:** Student
+- **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
 - **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`scheduledStartAt` must leave room for the server-fixed 90-minute session inside the availability window; `timezone` default `Asia/Jakarta`)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
@@ -576,22 +578,22 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `booking.createGroup`
 
-- **Auth:** Student
+- **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
 - **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is server-fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Description:** Creates a group booking, holds proposer Marks, invites participants; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
-- **Auth:** Student
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (2–4 sessions; each session is fixed to 90 minutes)
+- **Auth:** Verified Student (`verifiedStudentProcedure`; unverified → `FORBIDDEN`)
+- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoals }` (2–4 sessions; each session is fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
 
 ### `booking.createGroupSeries`
 
-- **Auth:** Student
+- **Auth:** Verified Student (`verifiedStudentProcedure` — unverified → `FORBIDDEN`)
 - **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
@@ -644,7 +646,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.listBookings`
 
-- **RPC path:** `/rpc/tutor/booking/list`
+- **RPC path:** `/rpc/tutorActions/listBookings`
 - **Auth:** Tutor
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
@@ -652,7 +654,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.proposeReschedule`
 
-- **RPC path:** `/rpc/tutor/booking/reschedule/propose`
+- **RPC path:** `/rpc/tutorActions/proposeReschedule`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
 - **Output:** `{ booking }`
@@ -660,7 +662,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.acceptBooking`
 
-- **RPC path:** `/rpc/tutor/booking/accept`
+- **RPC path:** `/rpc/tutorActions/acceptBooking`
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
@@ -669,7 +671,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.declineBooking`
 
-- **RPC path:** `/rpc/tutor/booking/decline`
+- **RPC path:** `/rpc/tutorActions/declineBooking`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ booking }`
@@ -677,7 +679,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.completeSession`
 
-- **RPC path:** `/rpc/tutor/booking/complete`
+- **RPC path:** `/rpc/tutorActions/completeSession`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ booking }`
@@ -686,7 +688,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.markAttendance`
 
-- **RPC path:** `/rpc/tutor/booking/mark-attendance`
+- **RPC path:** `/rpc/tutorActions/markAttendance`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, attendance }` (`attendance` one of `present`/`late`)
 - **Output:** `{ bookingId, attendanceState }`
@@ -694,7 +696,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `tutorActions.markParticipantNoShow`
 
-- **RPC path:** `/rpc/tutor/booking/mark-participant-no-show`
+- **RPC path:** `/rpc/tutorActions/markParticipantNoShow`
 - **Auth:** Tutor
 - **Input:** `{ bookingId, participantUserId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ bookingId, participantUserId, sessionId, forfeitedMarks }`
@@ -827,11 +829,11 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ paymentId, reason }`
 - **Output:** `{ correction }`
-- **Description:** Issues a compensating ledger entry for a payment error. **In-app Marks credit only (N1, PRD §677):** credits the payer's wallet with the spend-adjusted refundable Marks, marks the payment REFUNDED, and writes a `refund_record` with `amount_idr = 0` and no `provider_event_id`. The payment provider is **never** called (purchased Marks are not convertible back to rupiah; no cash moves). Errors: `BOOKING_NOT_FOUND` (404) for unknown payment/wallet, `INVALID_REFUND_STATE` (400) unless the payment is PAID/SETTLED, `REFUND_SPEND_EXHAUSTED` for fully-spent payments.
+- **Description:** Issues a compensating ledger entry for a payment error. **In-app Marks credit only (N1, PRD §677):** credits the payer's wallet with the spend-adjusted refundable Marks, marks the payment REFUNDED, and writes a `refund_record` with `amount_idr = 0` and no `provider_event_id`. The payment provider is **never** called (purchased Marks are not convertible back to rupiah; no cash moves). **Per-payment FIFO attribution (F11):** spend is attributed to the user's credit-state payments oldest-first (`listCreditStatePaymentsForUser`), so refunding a payment whose own Marks were spent rejects with `REFUND_SPEND_EXHAUSTED`, while an unspent payment refunds its full remaining Marks (capped at the wallet's current available balance) — a refund never credits Marks that belonged to a different, already-spent payment. Errors: `BOOKING_NOT_FOUND` (404) for unknown payment/wallet, `INVALID_REFUND_STATE` (400) unless the payment is PAID/SETTLED, `REFUND_SPEND_EXHAUSTED` for fully-spent payments.
 
 ### `adminBooking.setMeetingLink`
 
-- **RPC path:** `/rpc/admin/booking/setMeetingLink`
+- **RPC path:** `/rpc/adminBooking/setMeetingLink`
 - **Auth:** Admin
 - **Input:** `{ bookingId, url }` (`url` must be a valid URL, max 2048 chars)
 - **Output:** `{ bookingId, meetingUrl, status }`
@@ -840,7 +842,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `adminBooking.cancelSeriesSession`
 
-- **RPC path:** `/rpc/admin/booking/cancel-series-session`
+- **RPC path:** `/rpc/adminBooking/cancelSeriesSession`
 - **Auth:** Admin
 - **Input:** `{ sessionId, marksAction, amount? }` (`marksAction` one of `release`/`forfeit`/`partial`; `amount` required when `partial`, max 1000)
 - **Output:** `{ sessionId, currentState: "cancelled", marksAction, affectedParticipants }`
@@ -907,7 +909,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `upload.createUploadUrl`
 
-- **Auth:** Protected
+- **Auth:** Protected (F19 — intentionally NOT student-only: any authenticated role may mint a bounded upload URL; the tutor proof-file path needs it)
 - **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
 - **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)

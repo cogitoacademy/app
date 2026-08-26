@@ -51,6 +51,6 @@ export const adminListInput = z
 
 export const adminReviewInput = z.object({
   achievementId: z.string().max(100),
-  status: z.enum(["approved", "rejected"]),
+  status: z.enum(["approved", "rejected", "archived"]),
   adminNote: z.string().max(2000).optional(),
 });

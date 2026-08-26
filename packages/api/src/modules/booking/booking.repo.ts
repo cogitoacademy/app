@@ -222,6 +222,10 @@ async function findParticipant(
 /**
  * Lists confirmed participants for a booking, optionally excluding one user.
  *
+ * F8: the tutor attendance row (role='tutor') is never included — the tutor
+ * marks attendance via a participant row with confirmationState=CONFIRMED,
+ * which must not inflate group repricing headcounts or hold math.
+ *
  * @param conn - the database connection or active transaction
  * @param bookingId - the booking id
  * @param excludeUserId - optional user to exclude
@@ -234,6 +238,7 @@ async function findConfirmedParticipants(
 ) {
   const conditions = [
     eq(bookingParticipant.bookingId, bookingId),
+    ne(bookingParticipant.role, "tutor"),
     inArray(bookingParticipant.confirmationState, [
       CONFIRMATION_STATE.CONFIRMED,
       CONFIRMATION_STATE.RECONFIRMED,
@@ -285,6 +290,32 @@ async function findReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
   return conn
     .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
+    .where(
+      and(
+        eq(bookingParticipant.bookingId, bookingId),
+        eq(
+          bookingParticipant.confirmationState,
+          CONFIRMATION_STATE.RECONFIRMED,
+        ),
+      ),
+    );
+}
+
+/**
+ * Resets RECONFIRMED participants back to CONFIRMED and clears their
+ * reconfirmation timestamp. Used when a headcount change during the
+ * reconfirmation window forces a re-issued reconfirmation round (F3).
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ */
+async function resetReconfirmedParticipants(conn: DbOrTx, bookingId: string) {
+  await conn
+    .update(bookingParticipant)
+    .set({
+      confirmationState: CONFIRMATION_STATE.CONFIRMED,
+      reconfirmedAt: null,
+    })
     .where(
       and(
         eq(bookingParticipant.bookingId, bookingId),
@@ -721,7 +752,6 @@ async function findBookingsWithTutorLateness(conn: DbOrTx) {
     .where(
       and(
         eq(booking.currentState, "scheduled"),
-        eq(booking.modality, MODALITY.ONLINE),
         lt(booking.scheduledStartAt, cutoff),
         // Already-flagged bookings stay SCHEDULED with holds intact (admin
         // queue), so exclude them here to keep flagging idempotent — otherwise
@@ -1079,6 +1109,7 @@ export function createBookingRepo(db: DbType) {
     findUserEmails,
     findUsersByIds,
     findReconfirmedParticipants,
+    resetReconfirmedParticipants,
     insertBooking,
     updateBookingCancellationReason,
     updateBookingHoldAmount,

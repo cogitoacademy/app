@@ -4,6 +4,7 @@ import {
   BookingOverrideConflictError,
   InvalidRefundStateError,
   OverrideMarksParticipantsRequiredError,
+  OverrideParticipantNotInBookingError,
   RefundSpendExhaustedError,
   TerminalStateOverrideError,
 } from "./admin-booking.errors";
@@ -54,6 +55,9 @@ export const OVERRIDE_LIST_CATEGORIES = [
 ] as const;
 
 export type OverrideListCategory = (typeof OVERRIDE_LIST_CATEGORIES)[number];
+
+/** Max keyset windows walked when filling an escalated-only page (Task 6). */
+export const MAX_ESCALATED_WINDOWS = 5;
 
 export const MARKS_ACTIONS = [
   "release_holds",
@@ -230,6 +234,22 @@ export function createAdminBookingService(deps: {
       conn,
       input.bookingId,
     );
+    // F24: every affectedParticipant must be a real participant of this
+    // booking. A typo'd or stale user id would otherwise be silently filtered
+    // out — for a marksAction that silently skips the money movement for that
+    // user (stranded holds); reject loudly instead.
+    if (input.affectedParticipants && input.affectedParticipants.length > 0) {
+      const participantIds = new Set(participants.map((p) => p.userId));
+      const unknown = input.affectedParticipants.filter(
+        (id) => !participantIds.has(id),
+      );
+      if (unknown.length > 0) {
+        throw new OverrideParticipantNotInBookingError(
+          input.bookingId,
+          unknown,
+        );
+      }
+    }
     const affectedParts =
       input.affectedParticipants && input.affectedParticipants.length > 0
         ? participants.filter((p) =>
@@ -474,6 +494,12 @@ export function createAdminBookingService(deps: {
   /**
    * Lists bookings for the admin, by bookingId or with cursor pagination.
    *
+   * The `escalated` filter is applied in memory (the OQ-04 SLA deadline is a
+   * business-hours calculation), so the service walks bounded windows of the
+   * underlying keyset until it fills `limit` escalated items, the rows run
+   * out, or the window budget is exhausted — a single 100-row fetch could
+   * otherwise return an empty page while more escalated rows sit behind it.
+   *
    * @param opts - list options (bookingId, limit, cursor)
    * @returns the booking items and a nextCursor when more pages exist
    */
@@ -506,24 +532,71 @@ export function createAdminBookingService(deps: {
       filters.category !== undefined ||
       filters.urgency !== undefined ||
       filters.escalated !== undefined;
-    const rows = hasFilters
-      ? await repo.listBookingsByState(db, [], repoLimit, opts?.cursor, filters)
-      : await repo.listBookingsByState(db, [], repoLimit, opts?.cursor);
-    const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
-    const matchingItems =
-      opts?.escalated === true
-        ? rawItems.filter((item) => item.escalated)
-        : rawItems;
-    const items = matchingItems.slice(0, limit);
-    const hasMoreMatchingItems = matchingItems.length > limit;
-    const hasMoreRows = rows.length > repoLimit;
-    const cursorItem = hasMoreMatchingItems
-      ? items[items.length - 1]
-      : hasMoreRows
-        ? rawItems[rawItems.length - 1]
-        : undefined;
-    const nextCursor = cursorItem ? toOverrideCursor(cursorItem) : null;
-    return { items, nextCursor };
+
+    if (opts?.escalated !== true) {
+      const rows = hasFilters
+        ? await repo.listBookingsByState(
+            db,
+            [],
+            repoLimit,
+            opts?.cursor,
+            filters,
+          )
+        : await repo.listBookingsByState(db, [], repoLimit, opts?.cursor);
+      const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
+      const items = rawItems.slice(0, limit);
+      const hasMoreRows = rows.length > repoLimit;
+      const cursorItem =
+        rawItems.length > limit
+          ? items[items.length - 1]
+          : hasMoreRows
+            ? rawItems[rawItems.length - 1]
+            : undefined;
+      return {
+        items,
+        nextCursor: cursorItem ? toOverrideCursor(cursorItem) : null,
+      };
+    }
+
+    // Escalated-only queue: the SLA filter is applied in memory, so walk
+    // bounded keyset windows (at most MAX_ESCALATED_WINDOWS fetches) until the
+    // page fills with escalated rows, the rows run out, or the budget is
+    // exhausted. An empty page never carries a nextCursor.
+    type Row = Awaited<
+      ReturnType<AdminBookingRepo["listBookingsByState"]>
+    >[number];
+    const collected: (Row & {
+      escalated: boolean;
+      reportedAt: Date | null;
+      slaDeadline: Date | null;
+    })[] = [];
+    let cursor = opts?.cursor;
+    for (let window = 0; window < MAX_ESCALATED_WINDOWS; window++) {
+      const rows = await repo.listBookingsByState(
+        db,
+        [],
+        repoLimit,
+        cursor,
+        filters,
+      );
+      const rawItems = rows.slice(0, repoLimit).map(toOverrideQueueItem);
+      const hasMoreRows = rows.length > repoLimit;
+      for (const item of rawItems) {
+        if (item.escalated) collected.push(item);
+      }
+      const items = collected.slice(0, limit);
+      if (collected.length >= limit) {
+        return {
+          items,
+          nextCursor: toOverrideCursor(items[items.length - 1]!),
+        };
+      }
+      if (!hasMoreRows || rawItems.length === 0) {
+        return { items, nextCursor: null };
+      }
+      cursor = toOverrideCursor(rawItems[rawItems.length - 1]!);
+    }
+    return { items: collected.slice(0, limit), nextCursor: null };
   }
 
   /**
@@ -567,17 +640,41 @@ export function createAdminBookingService(deps: {
       const participantWallet = await wallet.getByUserId(tx, payment.userId);
       if (!participantWallet) throw new BookingNotFoundError(payment.userId);
 
-      // U8/B9 (TC-39 / Refund Policy prd.tex:687-688): refunds exist for
-      // payment errors, never a blind full refund of already-spent Marks.
-      // Spend = total purchase credits - current total balance; the
-      // refundable amount is this payment's unspent remainder (FIFO). A fully
-      // spent payment is rejected with a clean error.
+      // F11 (U8/B9, TC-39, Refund Policy prd.tex:687-688): spend is attributed
+      // per payment in FIFO order, never pooled across all payments. Credits
+      // are consumed oldest-first, so the refundable amount of THIS payment is
+      // its own credited Marks minus the spend attributed to it — refunding
+      // one payment can never credit Marks that belonged to a different,
+      // already-spent payment.
       const creditedMarks = await wallet.sumCreditedMarks(
         tx,
         participantWallet.id,
       );
-      const spent = Math.max(0, creditedMarks - participantWallet.totalBalance);
-      const refundableMarks = Math.max(0, payment.marks - spent);
+      const spentTotal = Math.max(
+        0,
+        creditedMarks - participantWallet.totalBalance,
+      );
+      const creditStatePayments = await repo.listCreditStatePaymentsForUser(
+        tx,
+        payment.userId,
+      );
+      let remainingSpend = spentTotal;
+      let attributedToTarget = 0;
+      for (const prior of creditStatePayments) {
+        if (prior.id === payment.id) {
+          attributedToTarget = Math.min(prior.marks, remainingSpend);
+          break;
+        }
+        // This older payment's credit absorbs spend first (FIFO).
+        remainingSpend = Math.max(0, remainingSpend - prior.marks);
+      }
+      // Never refund more than the user's currently available Marks
+      // (available = total − held), and never more than this payment's
+      // unspent remainder.
+      const refundableMarks = Math.min(
+        payment.marks - attributedToTarget,
+        participantWallet.availableBalance,
+      );
       if (refundableMarks <= 0) {
         throw new RefundSpendExhaustedError(input.paymentId);
       }
@@ -686,6 +783,7 @@ export function createAdminBookingService(deps: {
       const meetingEventRow = await meeting.setManualLink(
         input.bookingId,
         input.url,
+        tx,
       );
 
       const allParticipants = await repo.findParticipantsByBookingId(

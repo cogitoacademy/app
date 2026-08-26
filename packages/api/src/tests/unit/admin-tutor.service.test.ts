@@ -118,19 +118,50 @@ describe("AdminTutor Service", () => {
       );
     });
 
-    const actions: ReviewAction[] = [
+    // F25: the allowed actions are per-status. From pending_review the admin
+    // may request changes, approve unpublished, or publish — but not
+    // unpublish/suspend (those only apply to a published profile).
+    const allowedFromPendingReview: ReviewAction[] = [
       "request_changes",
       "approve_unpublished",
       "publish",
-      "unpublish",
-      "suspend",
     ];
-    for (const action of actions) {
-      test(`returns profile for action: ${action}`, () => {
+    for (const action of allowedFromPendingReview) {
+      test(`returns profile for action: ${action} from pending_review`, () => {
         const result = validateReviewAction(action, makeProfile());
         expect(result.profile.onboardingStatus).toBe("pending_review");
       });
     }
+
+    test("F25: rejects unpublish from pending_review (only published profiles unpublish)", () => {
+      expect(() => validateReviewAction("unpublish", makeProfile())).toThrow(
+        InvalidInviteActionError,
+      );
+    });
+
+    test("F25: rejects suspend from pending_review (only published profiles suspend)", () => {
+      expect(() => validateReviewAction("suspend", makeProfile())).toThrow(
+        InvalidInviteActionError,
+      );
+    });
+
+    test("F25: rejects publish from suspended (a suspended profile needs explicit review, not a blind publish)", () => {
+      expect(() =>
+        validateReviewAction(
+          "publish",
+          makeProfile({ onboardingStatus: "suspended" }),
+        ),
+      ).toThrow(InvalidInviteActionError);
+    });
+
+    test("F25: rejects request_changes from published (a published profile uses request_edit_changes)", () => {
+      expect(() =>
+        validateReviewAction(
+          "request_changes",
+          makeProfile({ onboardingStatus: "published" }),
+        ),
+      ).toThrow(InvalidInviteActionError);
+    });
 
     test("throws InvalidInviteActionError for invalid action string", () => {
       expect(() =>
@@ -483,7 +514,14 @@ describe("AdminTutor Service", () => {
     });
 
     test("rejects approving edits when there are no pending changes", async () => {
-      const deps = makeDeps();
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ onboardingStatus: "published" }),
+          ),
+        },
+      });
       const service = createAdminTutorService(deps as any);
 
       await expect(
@@ -495,7 +533,14 @@ describe("AdminTutor Service", () => {
     });
 
     test("rejects requesting edit changes when there are no pending changes", async () => {
-      const deps = makeDeps();
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({ onboardingStatus: "published" }),
+          ),
+        },
+      });
       const service = createAdminTutorService(deps as any);
 
       await expect(
@@ -511,7 +556,10 @@ describe("AdminTutor Service", () => {
         adminTutorRepo: {
           ...makeDeps().adminTutorRepo,
           getTutorProfileById: mock(async () =>
-            makeProfile({ pendingProfileChanges: { subjectIds: ["s1", 3] } }),
+            makeProfile({
+              onboardingStatus: "published",
+              pendingProfileChanges: { subjectIds: ["s1", 3] },
+            }),
           ),
         },
       });
@@ -538,6 +586,7 @@ describe("AdminTutor Service", () => {
           ...makeDeps().adminTutorRepo,
           getTutorProfileById: mock(async () =>
             makeProfile({
+              onboardingStatus: "published",
               pendingProfileChanges: { bio: "updated", subjectIds: ["s1"] },
             }),
           ),
@@ -578,7 +627,10 @@ describe("AdminTutor Service", () => {
         adminTutorRepo: {
           ...makeDeps().adminTutorRepo,
           getTutorProfileById: mock(async () =>
-            makeProfile({ pendingProfileChanges: { bio: "updated" } }),
+            makeProfile({
+              onboardingStatus: "published",
+              pendingProfileChanges: { bio: "updated" },
+            }),
           ),
         },
       });

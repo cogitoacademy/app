@@ -531,4 +531,84 @@ describe("Refund flow", () => {
       .where(eq(refundRecord.paymentId, intent.paymentId));
     expect(records.length).toBe(0);
   });
+
+  test("F11: per-payment FIFO — the spent payment is rejected while the unspent one refunds fully", async () => {
+    const { services } = await import("@cogito-app/api/services");
+    const userRes = await signUpAndSignIn(
+      `f11.two.${ts}@cogito.test`,
+      "Test1234!",
+      "F11 Two Payments",
+    );
+    const userCtx = await createTestContext(userRes.cookie);
+    if (!userCtx.session?.user) throw new Error("F11 user session missing");
+    const user = { id: userCtx.session.user.id };
+    const w = await creditWallet(user.id, 0);
+
+    // Two purchases of the same package are sequential rows; use two
+    // different packages to get two distinct PAID payments.
+    const p1 = await services.payment.createIntent(user.id, w.id, "starter");
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: p1.providerReference,
+      providerEventId: `evt_f11_p1_paid_${ts}`,
+      status: "PAID",
+    });
+    const p2 = await services.payment.createIntent(user.id, w.id, "learner");
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: p2.providerReference,
+      providerEventId: `evt_f11_p2_paid_${ts}`,
+      status: "PAID",
+    });
+
+    // 120 Marks spent (all of P1's 50 + 70 of P2's 120): the wallet holds 100
+    // (P2's remainder). FIFO attributes the spend to P1 first.
+    await db
+      .update(wallet)
+      .set({ totalBalance: 100, availableBalance: 100 })
+      .where(eq(wallet.id, w.id));
+
+    // Refunding P1 rejects: P1's own Marks were fully spent.
+    await expect(
+      adminClient.adminBooking.adminRefund({
+        paymentId: p1.paymentId,
+        reason: "F11 spent payment",
+      }),
+    ).rejects.toThrow(/no blind refund/i);
+
+    const [p1Row] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, p1.paymentId));
+    expect(p1Row!.status).toBe("PAID");
+
+    // Refunding P2 credits the unspent remainder (100 — the wallet's current
+    // balance), not 170 (which would double-credit spent Marks).
+    const result = await adminClient.adminBooking.adminRefund({
+      paymentId: p2.paymentId,
+      reason: "F11 unspent payment",
+    });
+    expect(result.status).toBe("refunded");
+
+    const [after] = await db.select().from(wallet).where(eq(wallet.id, w.id));
+    expect(after!.totalBalance).toBe(200);
+    expect(after!.availableBalance).toBe(200);
+
+    const [p2Row] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, p2.paymentId));
+    expect(p2Row!.status).toBe("REFUNDED");
+
+    const entries = await db
+      .select()
+      .from(ledgerEntry)
+      .where(eq(ledgerEntry.walletId, w.id));
+    const refundEntry = entries.find(
+      (e) => e.entryType === "compensate_credit",
+    );
+    expect(refundEntry).toBeDefined();
+    expect(refundEntry!.amount).toBe(100);
+    expect(refundEntry!.sourceReference).toBe(p2.paymentId);
+  });
 });

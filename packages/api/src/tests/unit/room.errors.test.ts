@@ -3,6 +3,7 @@ import { DomainError } from "../../lib/domain-errors";
 import {
   RoomNotFoundError,
   RoomBookingConflictError,
+  RoomBookingStateError,
   mapRoomError,
 } from "../../modules/room/room.errors";
 
@@ -56,6 +57,26 @@ describe("room.errors", () => {
       expect(err.name).toBe("RoomBookingConflictError");
     });
   });
+  describe("RoomBookingStateError", () => {
+    it("should be instance of DomainError", () => {
+      const err = new RoomBookingStateError("b_1", "confirmed");
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err).toBeInstanceOf(Error);
+    });
+    it("should have correct properties", () => {
+      const err = new RoomBookingStateError("b_1", "confirmed");
+      expect(err.code).toBe("ROOM_BOOKING_STATE");
+      expect(err.domain).toBe("room");
+      expect(err.message).toBe(
+        "Room assignment requires the booking to be awaiting admin room approval",
+      );
+      expect(err.details).toEqual({
+        bookingId: "b_1",
+        currentState: "confirmed",
+      });
+      expect(err.name).toBe("RoomBookingStateError");
+    });
+  });
   describe("mapRoomError", () => {
     it("should map RoomNotFoundError to NOT_FOUND", () => {
       const result = mapRoomError(new RoomNotFoundError("rm_1"));
@@ -64,6 +85,12 @@ describe("room.errors", () => {
     it("should map RoomBookingConflictError to CONFLICT", () => {
       const result = mapRoomError(
         new RoomBookingConflictError("rm_1", "2025-01-01", "2025-01-02"),
+      );
+      expect(result.status).toBe(409);
+    });
+    it("should map RoomBookingStateError to CONFLICT", () => {
+      const result = mapRoomError(
+        new RoomBookingStateError("b_1", "confirmed"),
       );
       expect(result.status).toBe(409);
     });

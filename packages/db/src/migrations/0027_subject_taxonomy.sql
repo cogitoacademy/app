@@ -84,3 +84,4 @@ ON CONFLICT ("slug") DO UPDATE SET
 	"sort_order" = EXCLUDED."sort_order",
 	"is_active" = true,
 	"updated_at" = now();
+

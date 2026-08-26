@@ -282,6 +282,34 @@ export async function findPaymentById(conn: DbOrTx, paymentId: string) {
 }
 
 /**
+ * Lists a user's credit-state payments (PAID/SETTLED) oldest first. Used by
+ * `adminRefund` to attribute spend to the earliest payments (F11 FIFO) so a
+ * refund never credits Marks that belonged to a different payment.
+ *
+ * @param conn - the database connection or active transaction
+ * @param userId - the paying user
+ * @returns the credit-state payment rows, oldest first
+ */
+export async function listCreditStatePaymentsForUser(
+  conn: DbOrTx,
+  userId: string,
+) {
+  return conn
+    .select()
+    .from(paymentRecord)
+    .where(
+      and(
+        eq(paymentRecord.userId, userId),
+        inArray(paymentRecord.status, [
+          PAYMENT_STATUS.PAID,
+          PAYMENT_STATUS.SETTLED,
+        ]),
+      ),
+    )
+    .orderBy(asc(paymentRecord.createdAt), asc(paymentRecord.id));
+}
+
+/**
  * Updates a payment record's status.
  *
  * @param conn - the database connection or active transaction
@@ -360,6 +388,7 @@ export function createAdminBookingRepo() {
     findSessionById,
     cancelSession,
     findPaymentById,
+    listCreditStatePaymentsForUser,
     updatePaymentStatus,
     updatePaymentStatusIfRefundable,
     updateBookingHoldAmount,

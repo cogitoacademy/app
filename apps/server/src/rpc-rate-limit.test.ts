@@ -41,11 +41,33 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchRateLimitPath("/rpc/upload/createUploadUrl")).toBe("upload");
   });
 
+  test("content file proxy matches /content/student-resources/*", () => {
+    expect(matchRateLimitPath("/content/student-resources/abc123/file")).toBe(
+      "content",
+    );
+    expect(
+      matchRateLimitPath("/content/student-resources/abc123/file?x=1"),
+    ).toBe("content");
+    expect(matchRateLimitPath("/content/competitions")).toBeNull();
+  });
+
   test("email-otp / forget-password / change-email paths are auth-limited (M3)", () => {
     expect(matchAuthPath("/api/auth/email-otp/verify-email")).toBe(true);
     expect(matchAuthPath("/api/auth/email-otp/send-otp")).toBe(true);
     expect(matchAuthPath("/api/auth/forget-password/email")).toBe(true);
     expect(matchAuthPath("/api/auth/change-email/email")).toBe(true);
+  });
+
+  test("better-auth exact endpoints without trailing slashes are auth-limited (S4)", () => {
+    // better-auth registers these WITHOUT trailing segments — a literal
+    // `path.startsWith("/api/auth/request-password-reset/")` prefix would
+    // miss them and leave password-reset brute force unthrottled.
+    expect(matchAuthPath("/api/auth/request-password-reset")).toBe(true);
+    expect(matchAuthPath("/api/auth/reset-password")).toBe(true);
+    expect(matchAuthPath("/api/auth/sign-in/email")).toBe(true);
+    expect(matchAuthPath("/api/auth/sign-up/email")).toBe(true);
+    expect(matchAuthPath("/api/auth/change-email")).toBe(true);
+    expect(matchAuthPath("/api/auth/sign-in/social")).toBe(true);
   });
 
   test("other paths are not rate limited", () => {

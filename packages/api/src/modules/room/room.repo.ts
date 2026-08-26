@@ -68,6 +68,10 @@ export async function findPendingRoomApprovals(conn: DbOrTx, limit = 50) {
  * Finds a pending offline booking that has no room-booking row yet. This is
  * used only by the admin cancellation path for requested-room conflicts.
  */
+/**
+ * Finds a pending offline booking that has no room-booking row yet. This is
+ * used only by the admin cancellation path for requested-room conflicts.
+ */
 export async function findPendingApprovalBookingById(
   conn: DbOrTx,
   bookingId: string,
@@ -88,6 +92,22 @@ export async function findPendingApprovalBookingById(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Returns a booking's current state (F22 room-assignment guard).
+ *
+ * @param conn - the database connection or active transaction
+ * @param bookingId - the booking id
+ * @returns the current state string, or null when the booking does not exist
+ */
+export async function findBookingStateById(conn: DbOrTx, bookingId: string) {
+  const [row] = await conn
+    .select({ currentState: booking.currentState })
+    .from(booking)
+    .where(eq(booking.id, bookingId))
+    .limit(1);
+  return row?.currentState ?? null;
 }
 
 /**
@@ -281,6 +301,7 @@ export function createRoomRepo() {
     findActiveRooms,
     findPendingRoomApprovals,
     findPendingApprovalBookingById,
+    findBookingStateById,
     insertRoom,
     findRoomById,
     findRoomBookings,

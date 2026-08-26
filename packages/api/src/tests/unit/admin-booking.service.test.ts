@@ -4,7 +4,9 @@ import {
   BookingNotFoundError,
   InvalidRefundStateError,
   OverrideMarksParticipantsRequiredError,
+  OverrideParticipantNotInBookingError,
   TerminalStateOverrideError,
+  RefundSpendExhaustedError,
 } from "../../modules/admin-booking/admin-booking.errors";
 import { BookingStateTransitionError } from "../../modules/booking/booking.errors";
 
@@ -43,6 +45,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
       id: "pay1",
       status: "REFUNDED",
     })),
+    listCreditStatePaymentsForUser: mock(async () => []),
     listBookingsByState: mock(async () => []),
     getStateHistory: mock(async () => []),
     updateBookingHoldAmount: mock(async () => {}),
@@ -779,6 +782,37 @@ describe("AdminBookingService", () => {
   });
 
   describe("applyOverride notifications", () => {
+    test("F24: planOverride rejects an affectedParticipant that is not a booking participant", async () => {
+      const repo = mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+          holdAmount: 100,
+        })),
+        findParticipantsByBookingId: mock(async () => [
+          { id: "p1", userId: "u1", heldAmount: 50 },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
+      });
+
+      await expect(
+        service.applyOverride("admin1", {
+          bookingId: "b1",
+          category: "tutor_no_show",
+          reason: "Bad participant",
+          marksAction: "release_holds",
+          affectedParticipants: ["u1", "u999"],
+        }),
+      ).rejects.toThrow(OverrideParticipantNotInBookingError);
+    });
+
     test("writes best-effort notification to affected participants", async () => {
       const notification = makeNotificationPort();
       const repo = mockRepo({
@@ -1103,6 +1137,111 @@ describe("AdminBookingService", () => {
         false,
       ]);
     });
+
+    test("escalated=true fills the page across windows (bounded loop)", async () => {
+      // First window: 100 rows (limit+1 => more rows behind), none escalated.
+      // Second window: 20 rows, 12 of them escalated. The service must
+      // advance the cursor and keep fetching until it can fill `limit`
+      // escalated items.
+      const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
+      const fresh = new Date().toISOString();
+      const windowOne = Array.from({ length: 101 }, (_, i) => ({
+        id: `b-w1-${i}`,
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + i * 60_000),
+        overrideMeta: { overriddenAt: fresh },
+      }));
+      const windowTwo = Array.from({ length: 20 }, (_, i) => ({
+        id: `b-w2-${i}`,
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + i * 60_000),
+        overrideMeta:
+          i < 10 ? { overriddenAt: stale } : { overriddenAt: fresh },
+      }));
+
+      const repo = mockRepo({
+        listBookingsByState: mock(
+          async (_db: any, _states: any, _limit: any, cursor?: string) => {
+            if (cursor === undefined) return windowOne;
+            return windowTwo;
+          },
+        ),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
+      });
+
+      const result = await service.listBookings({ escalated: true, limit: 10 });
+      expect(result.items).toHaveLength(10);
+      expect(result.items.every((i) => i.escalated)).toBe(true);
+      // Two repo fetches: the first window yielded no escalated rows.
+      expect(repo.listBookingsByState).toHaveBeenCalledTimes(2);
+    });
+
+    test("escalated=true never returns an empty page with a non-null cursor", async () => {
+      // A full first window with zero escalated rows and MORE rows behind it
+      // used to return items=[] + nextCursor (infinite empty page loop).
+      const fresh = new Date().toISOString();
+      const rows = Array.from({ length: 101 }, (_, i) => ({
+        id: `b-plain-${i}`,
+        currentState: "confirmed",
+        scheduledStartAt: new Date(Date.now() + i * 60_000),
+        overrideMeta: { overriddenAt: fresh },
+      }));
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => rows),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
+      });
+
+      const result = await service.listBookings({ escalated: true, limit: 10 });
+      expect(result.items).toEqual([]);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    test("escalated=true stops after the bounded window budget", async () => {
+      // Escalated rows exist only 6 windows deep — beyond the budget — so the
+      // loop must stop and return an empty page with no cursor (not spin).
+      const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
+      const fresh = new Date().toISOString();
+      let calls = 0;
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => {
+          calls++;
+          return Array.from({ length: 101 }, (_, i) => ({
+            id: `b-deep-${calls}-${i}`,
+            currentState: "confirmed",
+            scheduledStartAt: new Date(Date.now() + i * 60_000),
+            overrideMeta:
+              calls >= 6 ? { overriddenAt: stale } : { overriddenAt: fresh },
+          }));
+        }),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
+      });
+
+      const result = await service.listBookings({ escalated: true, limit: 10 });
+      expect(result.items).toEqual([]);
+      expect(result.nextCursor).toBeNull();
+      expect(calls).toBeLessThanOrEqual(6);
+    });
   });
 
   describe("getBookingStateHistory", () => {
@@ -1423,6 +1562,73 @@ describe("AdminBookingService", () => {
         expect(e.code).toBe("ADMIN_BOOKING_NOT_FOUND");
       }
     });
+
+    test("F11: rejects the spent payment and refunds the unspent one (per-payment FIFO attribution)", async () => {
+      // P1(100) and P2(100) were both credited; 100 Marks were spent and the
+      // wallet holds 100 (P2's credit). FIFO attributes the spend to P1, so:
+      //   - refunding P1 must reject (P1's own Marks are gone)
+      //   - refunding P2 must succeed (P2's Marks were never spent)
+      const payments = [
+        { id: "pay1", userId: "u1", status: "PAID", marks: 100 },
+        { id: "pay2", userId: "u1", status: "PAID", marks: 100 },
+      ];
+      const wallet = makeWalletPort({
+        getByUserId: mock(async () => ({
+          id: "w1",
+          totalBalance: 100,
+          heldBalance: 0,
+          availableBalance: 100,
+        })),
+        sumCreditedMarks: mock(async () => 200),
+        compensate: mock(async () => ({
+          id: "w1",
+          totalBalance: 150,
+          heldBalance: 0,
+          availableBalance: 150,
+        })),
+      });
+      const repo = mockRepo({
+        listCreditStatePaymentsForUser: mock(async () => payments),
+      });
+
+      const serviceFor = (paymentId: string) =>
+        createAdminBookingService({
+          db: makeDb(),
+          repo: {
+            ...repo,
+            findPaymentById: mock(async () =>
+              payments.find((p) => p.id === paymentId),
+            ),
+          },
+          auditPort: makeAuditPort(),
+          wallet: wallet as any,
+          refund: makeRefundPort(),
+        });
+
+      // P1 (earliest) was fully spent — rejected.
+      await expect(
+        serviceFor("pay1").adminRefund("admin1", {
+          paymentId: "pay1",
+          reason: "F11 spent",
+        }),
+      ).rejects.toThrow(RefundSpendExhaustedError);
+
+      // P2 (unspent) refunds its full 100.
+      const result = await serviceFor("pay2").adminRefund("admin1", {
+        paymentId: "pay2",
+        reason: "F11 unspent",
+      });
+      expect(result).toEqual({ paymentId: "pay2", status: "refunded" });
+      expect(wallet.compensate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          walletId: "w1",
+          amount: 100,
+          eventKey: "refund.pay2",
+          sourceReference: "pay2",
+        }),
+      );
+    });
   });
 });
 
@@ -1447,6 +1653,47 @@ describe("AdminBookingService additional guards", () => {
         url: "https://meet.example.com/manual",
       }),
     ).rejects.toThrow("Meeting port not configured");
+  });
+
+  test("F10: setMeetingLink passes the booking transaction to the meeting port", async () => {
+    const setManualLink = mock(async () => ({
+      id: "me1",
+      bookingId: "b1",
+      provider: "manual",
+      status: "created",
+      meetingUrl: "https://meet.example.com/manual",
+      externalEventId: null,
+      errorReason: null,
+    }));
+    const meeting = { setManualLink };
+    const db = makeDb();
+    const service = createAdminBookingService({
+      db,
+      repo: mockRepo({
+        findBookingById: mock(async () => ({
+          id: "b1",
+          currentState: "confirmed",
+        })),
+      }),
+      auditPort: makeAuditPort(),
+      wallet: makeWalletPort() as any,
+      refund: makeRefundPort(),
+      notification: makeNotificationPort(),
+      meeting,
+    });
+
+    await service.setMeetingLink("admin1", {
+      bookingId: "b1",
+      url: "https://meet.example.com/manual",
+    });
+
+    expect(setManualLink).toHaveBeenCalledTimes(1);
+    // The tx object is passed as the third arg — the row commits/rolls back
+    // with the booking transaction (F10, no orphan row on rollback).
+    const args = setManualLink.mock.calls[0] as unknown[];
+    expect(args[0]).toBe("b1");
+    expect(args[1]).toBe("https://meet.example.com/manual");
+    expect(args[2]).toBeDefined();
   });
 
   test("cancelSeriesSession rejects a session that is no longer scheduled", async () => {

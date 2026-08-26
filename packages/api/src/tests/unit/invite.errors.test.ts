@@ -4,6 +4,7 @@ import {
   InviteNotFoundError,
   InviteEmailMismatchError,
   ProfileAlreadyExistsError,
+  InvalidRoleForClaimError,
   mapInviteError,
 } from "../../modules/invite/invite.errors";
 
@@ -60,6 +61,22 @@ describe("invite.errors", () => {
       expect(err.name).toBe("ProfileAlreadyExistsError");
     });
   });
+  describe("InvalidRoleForClaimError", () => {
+    it("should be instance of DomainError", () => {
+      const err = new InvalidRoleForClaimError();
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err).toBeInstanceOf(Error);
+    });
+    it("should have correct properties", () => {
+      const err = new InvalidRoleForClaimError();
+      expect(err.code).toBe("INVALID_ROLE_FOR_CLAIM");
+      expect(err.domain).toBe("invite");
+      expect(err.message).toBe(
+        "Tutor invites cannot be claimed by an admin account",
+      );
+      expect(err.name).toBe("InvalidRoleForClaimError");
+    });
+  });
   describe("mapInviteError", () => {
     it("should map InviteNotFoundError to NOT_FOUND", () => {
       const result = mapInviteError(new InviteNotFoundError("inv_1"));
@@ -73,6 +90,10 @@ describe("invite.errors", () => {
     });
     it("should map ProfileAlreadyExistsError to CONFLICT", () => {
       const result = mapInviteError(new ProfileAlreadyExistsError("a@b.c"));
+      expect(result.status).toBe(409);
+    });
+    it("should map InvalidRoleForClaimError to CONFLICT", () => {
+      const result = mapInviteError(new InvalidRoleForClaimError());
       expect(result.status).toBe(409);
     });
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {

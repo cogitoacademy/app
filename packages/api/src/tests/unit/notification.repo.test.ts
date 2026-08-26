@@ -185,6 +185,33 @@ describe("claimPendingDispatches", () => {
     expect(set).toHaveBeenCalledWith({ status: "sending" });
     expect(where).toHaveBeenCalledTimes(1);
   });
+
+  test("F7: the reclaim predicate never matches sending rows with attempts >= 3", async () => {
+    const returning = mock(async () => []);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const updateFn = mock(() => ({ set }));
+    const conn = { update: updateFn } as any;
+
+    await claimPendingDispatches(conn, 10);
+
+    const predicate = where.mock.calls[0]![0] as any;
+    const renderChunk = (c: unknown): string => {
+      if (typeof c === "string") return c;
+      return (c as any)?.value ?? "";
+    };
+    const sqlText = (predicate?.queryChunks as unknown[])
+      ?.map(renderChunk)
+      .join("")
+      .replace(/\s+/g, " ");
+
+    // AND binds tighter than OR: without explicit parentheses the OR branch
+    // would also claim `sending` rows past the attempts budget. The whole
+    // disjunct must be parenthesized (F7).
+    expect(sqlText).toContain(
+      "WHERE (status IN ('queued', 'failed') AND attempts < ) OR (status = 'sending' AND attempts < AND created_at < now() - interval '10 minutes')",
+    );
+  });
 });
 
 describe("incrementDispatchAttempts", () => {

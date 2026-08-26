@@ -189,7 +189,7 @@ export async function claimPendingDispatches(conn: DbOrTx, limit = 50) {
     .where(
       sql`${notificationDispatch.id} IN (
         SELECT id FROM notification_dispatch
-        WHERE status IN ('queued', 'failed') AND attempts < ${MAX_DISPATCH_ATTEMPTS}
+        WHERE (status IN ('queued', 'failed') AND attempts < ${MAX_DISPATCH_ATTEMPTS})
            OR (status = 'sending' AND attempts < ${MAX_DISPATCH_ATTEMPTS}
                AND created_at < now() - interval '10 minutes')
         ORDER BY created_at
