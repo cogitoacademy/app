@@ -1,9 +1,9 @@
 # Production Admin Bootstrap
 
-| Field  | Value |
-| ------ | ----- |
-| Status | Completed |
-| Date   | 2026-08-27 |
+| Field  | Value                                                                             |
+| ------ | --------------------------------------------------------------------------------- |
+| Status | Completed                                                                         |
+| Date   | 2026-08-27                                                                        |
 | Scope  | Deterministic production/staging admin bootstrap with configurable trusted emails |
 
 ## Delivered

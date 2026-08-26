@@ -36,7 +36,7 @@
 | [BACKEND-PROD-FINALIZATION.md](completed/BACKEND-PROD-FINALIZATION.md)                             | `finalize/backend-prod-readiness-v2`          | **Merged #106 (2026-08-26)** — PRD v1.7 alignment + production-readiness fixes (documented gaps 1–10 + audit findings F1–F25/S1–S14) |
 | [PRD-AUDIT.md](completed/PRD-AUDIT.md)                                                             | `finalize/backend-prod-readiness-v2`          | **Merged #106 (2026-08-26)** — PRD + wiring audit gap list (Phase 0 deliverable)                                                     |
 | [REAUDIT-FINDINGS.md](completed/REAUDIT-FINDINGS.md)                                               | `fix/reaudit-findings`                        | **Merged #107 (2026-08-26)** — post-finalization re-audit: N1 reconfirm loop, N2 suspended restore, W1 env drift, env prod guards    |
- | [PRODUCTION-ADMIN-BOOTSTRAP.md](completed/PRODUCTION-ADMIN-BOOTSTRAP.md)                             | main                                          | Completed 2026-08-27 — configurable production/staging admin bootstrap with `itcogitoacademy01@gmail.com` default                  |
+| [PRODUCTION-ADMIN-BOOTSTRAP.md](completed/PRODUCTION-ADMIN-BOOTSTRAP.md)                           | main                                          | Completed 2026-08-27 — configurable production/staging admin bootstrap with `itcogitoacademy01@gmail.com` default                    |
 
 ## Archive (superseded / historical)
 
