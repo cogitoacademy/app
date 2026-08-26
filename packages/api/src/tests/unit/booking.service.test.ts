@@ -2973,9 +2973,7 @@ describe("BookingService", () => {
             },
           ),
           findReconfirmedParticipants: mock(async () =>
-            participants.filter(
-              (p) => p.confirmationState === "reconfirmed",
-            ),
+            participants.filter((p) => p.confirmationState === "reconfirmed"),
           ),
           findConfirmedParticipants: mock(async () => participants),
           resetReconfirmedParticipants: mock(async () => {

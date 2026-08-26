@@ -520,7 +520,9 @@ describe("Scheduler: group deadline repricing (FR-16/TC-18)", () => {
       .select()
       .from(bookingParticipant)
       .where(eq(bookingParticipant.bookingId, seeded.id));
-    const survivors = participants.filter((p) => [a.id, b2.id].includes(p.userId));
+    const survivors = participants.filter((p) =>
+      [a.id, b2.id].includes(p.userId),
+    );
     expect(survivors.length).toBe(2);
     for (const p of survivors) {
       expect(p.confirmationState).toBe("reconfirmed");

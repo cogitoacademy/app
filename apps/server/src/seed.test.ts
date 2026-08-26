@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { db } from "@cogito-app/db";
 import { markPackage } from "@cogito-app/db/schema";
 import { seedAllowed, seedAdminPassword } from "./seed";
@@ -22,6 +23,47 @@ describe("seed guards", () => {
     expect(seedAdminPassword("a-strong-12-char-pw")).toBe(
       "a-strong-12-char-pw",
     );
+  });
+
+  test("W2: seed-packages exits non-zero in production without SEED_ALLOWED_IN_PROD", () => {
+    const prodEnv: Record<string, string> = {
+      NODE_ENV: "production",
+      DATABASE_URL:
+        "postgresql://postgres:password@localhost:6767/cogito-test",
+      REDIS_URL: "redis://localhost:6379",
+      BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long-1234",
+      BETTER_AUTH_URL: "http://localhost:3101",
+      CORS_ORIGIN: "http://localhost:3100",
+      PAYMENT_PROVIDER: "stub",
+      PAYMENT_WEBHOOK_SECRET: "test-payment-webhook-secret-1234567890",
+      RESEND_API_KEY: "re_test_key",
+      EMAIL_FROM: "no-reply@cogitoacademy.id",
+      SCHEDULER_ENABLED: "true",
+      DB_SSL_ENABLED: "false",
+    };
+
+    const blocked = spawnSync(
+      "bun",
+      ["src/seed-packages.ts"],
+      {
+        cwd: new URL("..", import.meta.url).pathname,
+        env: { ...process.env, ...prodEnv },
+        encoding: "utf8",
+      },
+    );
+    expect(blocked.status).not.toBe(0);
+    expect(blocked.stderr).toContain("SEED_ALLOWED_IN_PROD");
+
+    const allowed = spawnSync(
+      "bun",
+      ["src/seed-packages.ts"],
+      {
+        cwd: new URL("..", import.meta.url).pathname,
+        env: { ...process.env, ...prodEnv, SEED_ALLOWED_IN_PROD: "true" },
+        encoding: "utf8",
+      },
+    );
+    expect(allowed.status).toBe(0);
   });
 });
 
