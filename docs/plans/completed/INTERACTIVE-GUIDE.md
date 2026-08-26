@@ -12,6 +12,7 @@ Completed — 2026-08-24
 - Refined the visual hierarchy into a flat journey surface with global step numbering, animated expand/collapse, and reduced-motion support.
 - Separated the top-level role selector from the guide introduction and changed chapter navigation into a right-side sticky desktop secondary sidebar with a centered `max-w-6xl` content shell, a stacked mobile layout, and active-chapter state.
 - Refined the desktop chapter sidebar into a restrained Scandinavian index rail with a progress index, numbered `Item` rows, a badge-like semantic `ItemMedia` tint, step counts, and token-based active states.
+- Added smooth in-page scrolling for chapter links while preserving the chapter hash and honoring reduced-motion preferences.
 - Made step details open by default for read-through use, with a single global Collapse/Expand details control for scan mode.
 - Refined the visual direction into a Scandinavian treatment: neutral sans-serif hierarchy, restrained borders, purposeful whitespace, and less card-heavy timeline grouping for learners ages 5–18 and adult operators.
 - Added a development-only anti-slop Tweaks Bar at `apps/web/public/tweaks-bar.js` for iterative visual tuning; it is not a production API or content surface.

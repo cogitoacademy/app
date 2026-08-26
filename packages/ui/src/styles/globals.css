@@ -350,3 +350,13 @@
     @apply text-base bg-background text-foreground;
   }
 }
+
+html:has([data-testid="guide-page"]) {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has([data-testid="guide-page"]) {
+    scroll-behavior: auto;
+  }
+}
