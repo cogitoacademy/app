@@ -2,10 +2,10 @@
 
 ## Active
 
-| Plan                                                  | Branch            | PR  | Status                                                                                                 |
-| ----------------------------------------------------- | ----------------- | --- | ------------------------------------------------------------------------------------------------------ |
-| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | main (merged #55) | —   | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface |
-| [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge) | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending     |
+| Plan                                                  | Branch                   | PR         | Status                                                                                                              |
+| ----------------------------------------------------- | ------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------- |
+| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | main (merged #55)        | —          | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface              |
+| [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge)        | —          | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                  |
 | [CONTACT-SHARING.md](active/CONTACT-SHARING.md)       | `f/contact-sharing-flow` | PR pending | Implemented — consent-based post-session contact request/share-email flow with privacy and leak-regression coverage |
 
 ## Completed (merged to main)
@@ -35,7 +35,7 @@
 | [INTERACTIVE-GUIDE.md](completed/INTERACTIVE-GUIDE.md)                                             | main                                          | Completed 2026-08-23 — role-aware visual product guide                                                                               |
 | [BACKEND-PROD-FINALIZATION.md](completed/BACKEND-PROD-FINALIZATION.md)                             | `finalize/backend-prod-readiness-v2`          | **Merged #106 (2026-08-26)** — PRD v1.7 alignment + production-readiness fixes (documented gaps 1–10 + audit findings F1–F25/S1–S14) |
 | [PRD-AUDIT.md](completed/PRD-AUDIT.md)                                                             | `finalize/backend-prod-readiness-v2`          | **Merged #106 (2026-08-26)** — PRD + wiring audit gap list (Phase 0 deliverable)                                                     |
-| [REAUDIT-FINDINGS.md](completed/REAUDIT-FINDINGS.md)                                                 | `fix/reaudit-findings`                        | **Merged #107 (2026-08-26)** — post-finalization re-audit: N1 reconfirm loop, N2 suspended restore, W1 env drift, env prod guards    |
+| [REAUDIT-FINDINGS.md](completed/REAUDIT-FINDINGS.md)                                               | `fix/reaudit-findings`                        | **Merged #107 (2026-08-26)** — post-finalization re-audit: N1 reconfirm loop, N2 suspended restore, W1 env drift, env prod guards    |
 
 ## Archive (superseded / historical)
 

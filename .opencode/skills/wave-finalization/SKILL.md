@@ -50,6 +50,7 @@ git fetch origin --prune
 ```
 
 Rules:
+
 - Worker branches are never merged directly; their content lands via the lead's clean PR (squash). So `-d` may refuse → `-D` is fine.
 - Do NOT remove worktrees/branches that predate your session (the user's own checkouts) — ask first.
 - Do not delete remote branches that never existed; only prune.
@@ -82,13 +83,13 @@ gh run list --limit 5          # no red runs on the wave's branches
 
 ## Common Mistakes
 
-| Mistake | Fix |
-| ------- | --- |
-| Closing a `working` worker's pane | Check `agent list` first; only close `idle`/`done` |
-| Closing the lead's own pane | The lead pane is `opencode` with your cwd — never close it |
-| Removing user-owned worktrees | Ask before touching worktrees that predate the session |
+| Mistake                                                          | Fix                                                            |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| Closing a `working` worker's pane                                | Check `agent list` first; only close `idle`/`done`             |
+| Closing the lead's own pane                                      | The lead pane is `opencode` with your cwd — never close it     |
+| Removing user-owned worktrees                                    | Ask before touching worktrees that predate the session         |
 | Docs still reference `docs/plans/active/<plan>` after completion | Grep for the plan name in CONTEXT + README and update all rows |
-| Pre-push hook fails after merge | `bun install` (lockfile drift) then push again |
+| Pre-push hook fails after merge                                  | `bun install` (lockfile drift) then push again                 |
 
 ## Real-World Impact
 
