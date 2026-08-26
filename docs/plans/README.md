@@ -6,6 +6,7 @@
 | ----------------------------------------------------- | ----------------- | --- | ------------------------------------------------------------------------------------------------------ |
 | [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | main (merged #55) | —   | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface |
 | [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge) | —   | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending     |
+| [CONTACT-SHARING.md](active/CONTACT-SHARING.md)       | `f/contact-sharing-flow` | PR pending | Implemented — consent-based post-session contact request/share-email flow with privacy and leak-regression coverage |
 
 ## Completed (merged to main)
 

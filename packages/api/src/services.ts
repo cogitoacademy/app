@@ -26,6 +26,7 @@ import { createContentModule } from "./modules/content";
 import type { ContentService } from "./modules/content/content.service";
 import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
+import { createContactModule } from "./modules/contact";
 import { createStorage } from "./lib/storage";
 
 import type { AuditPort } from "./modules/audit/audit.service";
@@ -66,6 +67,8 @@ import type { SupportHandler } from "./modules/support/support.handler";
 import type { UploadService } from "./modules/upload/upload.service";
 import type { UploadHandler } from "./modules/upload/upload.handler";
 import type { ContentHandler } from "./modules/content/content.handler";
+import type { ContactService } from "./modules/contact/contact.service";
+import type { ContactHandler } from "./modules/contact/contact.handler";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -88,6 +91,7 @@ export interface ServiceRegistry {
   upload: UploadService;
   content: ContentService;
   meeting: MeetingModule;
+  contact: ContactService;
 }
 
 export interface HandlerRegistry {
@@ -109,6 +113,7 @@ export interface HandlerRegistry {
   support: SupportHandler;
   upload: UploadHandler;
   content: ContentHandler;
+  contact: ContactHandler;
 }
 
 export interface GoogleMeetConfigInput {
@@ -223,6 +228,11 @@ function createServices() {
   const content = createContentModule({ wallet: wallet.service });
   const auth = createAuthModule({ db, wallet: wallet.service });
   const notification = createNotificationModule({ db, email: email.service });
+  const contact = createContactModule({
+    db,
+    notification: notification.service,
+    audit: audit.service,
+  });
 
   // Room is created before booking (U14: booking requests rooms at creation)
   // with a lazy booking port — the delegate only fires at runtime, after
@@ -357,6 +367,7 @@ function createServices() {
     upload: upload.service,
     content: content.service,
     meeting,
+    contact: contact.service,
   };
 
   const handlers: HandlerRegistry = {
@@ -378,6 +389,7 @@ function createServices() {
     support: support.handler,
     upload: upload.handler,
     content: content.handler,
+    contact: contact.handler,
   };
 
   return { services, handlers, redis };

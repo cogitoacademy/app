@@ -7,6 +7,13 @@ import {
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 
+const SAFE_TUTOR_USER_COLUMNS = {
+  id: true,
+  name: true,
+  image: true,
+  role: true,
+} as const;
+
 const tutorProfileSubjectFilterTable = sql.raw(
   '"tutor_profile_subject" as "tutorProfileSubjectFilter"',
 );
@@ -124,7 +131,7 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
     limit: input.limit,
     offset: input.offset,
     with: {
-      user: true,
+      user: { columns: SAFE_TUTOR_USER_COLUMNS },
       subjects: { with: { subject: { with: { parent: true } } } },
     },
   });
@@ -144,7 +151,7 @@ async function getProfileById(conn: DbOrTx, tutorId: string) {
       eq(tutorProfile.onboardingStatus, "published"),
     ),
     with: {
-      user: true,
+      user: { columns: SAFE_TUTOR_USER_COLUMNS },
       subjects: { with: { subject: { with: { parent: true } } } },
     },
   });

@@ -21,9 +21,9 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchRateLimitPath("/rpc/booking/create")).toBe("booking");
   });
 
-  test("student search matches /rpc/auth/searchStudents", () => {
-    expect(matchRateLimitPath("/rpc/auth/searchStudents")).toBe("search");
-    expect(matchRateLimitPath("/rpc/auth/searchStudents?q=x")).toBe("search");
+  test("student search matches the actual slash-key RPC path", () => {
+    expect(matchRateLimitPath("/rpc/auth/students/search")).toBe("search");
+    expect(matchRateLimitPath("/rpc/auth/students/search?q=x")).toBe("search");
   });
 
   test("support ticket creation matches /rpc/support/createTicket (M3)", () => {

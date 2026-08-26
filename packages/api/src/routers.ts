@@ -21,6 +21,7 @@ import { createRefundRouter } from "./modules/refund/refund.router";
 import { createSupportRouter } from "./modules/support/support.router";
 import { createUploadRouter } from "./modules/upload/upload.router";
 import { createContentRouter } from "./modules/content/content.router";
+import { createContactRouter } from "./modules/contact/contact.router";
 import { handlers } from "./services";
 
 const authRouter = createAuthRouter(handlers.auth);
@@ -41,6 +42,7 @@ const refundRouter = createRefundRouter(handlers.refund);
 const supportRouter = createSupportRouter(handlers.support);
 const uploadRouter = createUploadRouter(handlers.upload);
 const contentRouter = createContentRouter(handlers.content);
+const contactRouter = createContactRouter(handlers.contact);
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -72,6 +74,7 @@ export const appRouter = {
   support: supportRouter,
   upload: uploadRouter,
   content: contentRouter,
+  contact: contactRouter,
 };
 
 export type AppRouter = typeof appRouter;

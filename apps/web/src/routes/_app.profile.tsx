@@ -24,15 +24,18 @@ function RouteComponent() {
         image: user.image ?? sessionUser?.image ?? null,
       }
     : sessionUser;
-  const profileRecord: Record<string, string | null | undefined> | undefined =
-    profile
-      ? Object.fromEntries(
-          Object.entries(profile).map(([k, v]) => [
-            k,
-            typeof v === "string" || v === null ? v : undefined,
-          ]),
-        )
-      : undefined;
+  const profileRecord:
+    | Record<string, string | boolean | null | undefined>
+    | undefined = profile
+    ? Object.fromEntries(
+        Object.entries(profile).map(([k, v]) => [
+          k,
+          typeof v === "string" || typeof v === "boolean" || v === null
+            ? v
+            : undefined,
+        ]),
+      )
+    : undefined;
 
   return (
     <ProfilePage

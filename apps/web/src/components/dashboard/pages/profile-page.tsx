@@ -21,9 +21,15 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconBook2, IconSchool, IconUsers } from "@tabler/icons-react";
+import {
+  IconBook2,
+  IconLock,
+  IconSchool,
+  IconUsers,
+} from "@tabler/icons-react";
 import {
   type FormAsyncValidateOrFn,
   type FormValidateOrFn,
@@ -43,11 +49,17 @@ type ProfileValues = {
   parentName: string;
   parentPhone: string;
   parentEmail: string;
+  allowContactRequests: boolean;
 };
 
 type ProfileRecord = Partial<
-  Record<keyof ProfileValues, string | null | undefined>
->;
+  Record<
+    Exclude<keyof ProfileValues, "allowContactRequests">,
+    string | null | undefined
+  >
+> & {
+  allowContactRequests?: boolean | null;
+};
 
 type ProfileUser = Pick<CogitoUser, "name" | "email" | "image">;
 type ProfileSyncValidator = FormValidateOrFn<ProfileValues> | undefined;
@@ -76,8 +88,11 @@ function getProfileValues(profile?: ProfileRecord): ProfileValues {
     parentName: profile?.parentName ?? "",
     parentPhone: profile?.parentPhone ?? "",
     parentEmail: profile?.parentEmail ?? "",
+    allowContactRequests: profile?.allowContactRequests ?? true,
   };
 }
+
+type ProfileTextKey = Exclude<keyof ProfileValues, "allowContactRequests">;
 
 function FieldBlock({
   form,
@@ -90,7 +105,7 @@ function FieldBlock({
   className,
 }: {
   form: ProfileForm;
-  name: keyof ProfileValues;
+  name: ProfileTextKey;
   label: string;
   description?: string;
   placeholder: string;
@@ -136,7 +151,9 @@ export function ProfilePage({
 }) {
   const queryClient = useQueryClient();
   const profileValues = useMemo(() => getProfileValues(profile), [profile]);
-  const completedFields = Object.values(profileValues).filter(Boolean).length;
+  const completedFields = Object.values(profileValues).filter(
+    (value): value is string => typeof value === "string" && value.length > 0,
+  ).length;
   const [accountForm, setAccountForm] = useState(() => ({
     name: user?.name ?? "",
     image: user?.image ?? "",
@@ -200,7 +217,9 @@ export function ProfilePage({
       const clean = Object.fromEntries(
         Object.entries(value).map(([key, fieldValue]) => [
           key,
-          fieldValue.trim() || undefined,
+          typeof fieldValue === "string"
+            ? fieldValue.trim() || undefined
+            : fieldValue,
         ]),
       );
       await updateMutation.mutateAsync(clean);
@@ -373,6 +392,45 @@ export function ProfilePage({
               </CardBody>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <IconBox variant="info-subtle">
+                <IconLock aria-hidden="true" />
+              </IconBox>
+              <CardTitle>Contact privacy</CardTitle>
+              <CardDescription>
+                Choose whether classmates from completed shared sessions may
+                send you a contact request.
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              <form.Field name="allowContactRequests">
+                {(field) => (
+                  <div className="flex items-start gap-3 rounded-lg border border-item-border bg-item p-4">
+                    <Checkbox
+                      id="allow-contact-requests"
+                      checked={field.state.value}
+                      onCheckedChange={(checked) =>
+                        field.handleChange(checked === true)
+                      }
+                    />
+                    <div className="min-w-0">
+                      <FieldLabel htmlFor="allow-contact-requests">
+                        Allow contact requests
+                      </FieldLabel>
+                      <FieldDescription>
+                        Your email stays hidden unless you explicitly accept a
+                        request and choose to share it. Turning this off only
+                        blocks new requests; an email already shared cannot be
+                        recalled.
+                      </FieldDescription>
+                    </div>
+                  </div>
+                )}
+              </form.Field>
+            </CardBody>
+          </Card>
 
           <Card>
             <CardFooter className="flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">

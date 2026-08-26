@@ -83,6 +83,7 @@ import {
 } from "./booking-reschedule-action";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { orpc } from "@/utils/orpc";
+import { ContactRequestPanel } from "./contact-request-panel";
 
 const COGITO_MARK_SRC = "/cogito-mark.png";
 
@@ -620,6 +621,13 @@ export function BookingDetailPage({
               </section>
             </CardBody>
           </Card>
+
+          {!isTutor &&
+          !isAdmin &&
+          booking.currentState === "completed" &&
+          booking.targetGroupSize > 1 ? (
+            <ContactRequestPanel bookingId={bookingId} />
+          ) : null}
 
           {booking.type === "series" ? (
             <Card className="min-w-0 overflow-hidden">

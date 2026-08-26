@@ -17,6 +17,7 @@ export const updateProfileInput = z.object({
     .max(320)
     .refine((val) => val.trim() !== "", "Cannot be blank")
     .optional(),
+  allowContactRequests: z.boolean().optional(),
 });
 
 export const searchStudentsInput = z.object({
