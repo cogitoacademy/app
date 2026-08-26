@@ -20,13 +20,14 @@ Error entries include: `error.message`, `error.stack`, `error.cause`.
   "status": "ok",
   "checks": {
     "database": "ok",
-    "redis": "ok"
+    "redis": "ok",
+    "scheduler": "ok"
   },
   "timestamp": "..."
 }
 ```
 
-The Redis health check is implemented in the server's `db-health.ts` (added by DEFERRED-OPS 1.6) — the server pings Redis alongside the DB `SELECT 1` and reports both in `/health`.
+The Redis health check is implemented in the server's `db-health.ts` (added by DEFERRED-OPS 1.6) — the server pings Redis alongside the DB `SELECT 1` and reports both in `/health`. `checks.scheduler` (added in #106) reports `ok`/`error`/`degraded` from the same Redis ping: `error` whenever Redis is unreachable (the scheduler cannot run), `degraded` when no Redis client exists.
 
 ## Docker Log Rotation
 
