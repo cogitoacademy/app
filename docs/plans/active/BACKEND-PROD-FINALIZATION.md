@@ -1,16 +1,17 @@
 # Backend Finalization — PRD Alignment + Production Readiness Fixes
 
-| Field      | Value |
-| ---------- | ----- |
-| Status     | Active (implementation) |
-| Created    | 2026-08-25 |
-| Branch     | `finalize/backend-prod-readiness` |
+| Field      | Value                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Status     | Active (implementation)                                                                                                                                |
+| Created    | 2026-08-25                                                                                                                                             |
+| Branch     | `finalize/backend-prod-readiness`                                                                                                                      |
 | Depends on | PRD v1.7 (`docs/prd.tex`), PRD-AUDIT gap list (10 documented gaps), audit wave (2 review workers, 44 findings), PRODUCTION-READINESS spec (Phases 0/1) |
-| Scope      | Backend code fixes + docs alignment only. No frontend feature work. |
+| Scope      | Backend code fixes + docs alignment only. No frontend feature work.                                                                                    |
 
 This plan consolidates the **documented gaps** (from `docs/superpowers/plans/2026-08-25-backend-production-readiness.md`, Tasks 2–11) with the **undocumented findings** from the 2026-08-25 two-worker audit, and aligns the codebase with **PRD v1.7** (the correctness source of truth). All changes are test-first, follow the 4-layer architecture, and update docs in the same PR (AGENTS.md rule 11).
 
 **Findings provenance:**
+
 - Documented gaps 1–10: `docs/plans/active/PRD-AUDIT.md` (committed on `fix/backend-prod-readiness`, folded into this branch).
 - Audit findings F1–F30 (worker `audit-api`, `wt-audit-api/WORKER-REPORT.md`) and S1–S14 (worker `audit-server`, `wt-audit-server/WORKER-REPORT.md`). **All HIGH/MEDIUM findings were independently re-verified against code by the lead before planning**; F7 was downgraded to NOTE (see Task 11 rationale).
 
@@ -32,6 +33,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 2: Email-verification gate — paid actions require verified email
 
 **Files:**
+
 - Modify: `packages/api/src/procedures.ts` (add `requireVerifiedStudent` middleware + `verifiedStudentProcedure`)
 - Modify: `packages/api/src/modules/booking/booking.router.ts` (use `verifiedStudentProcedure` on the 4 create procedures)
 - Modify: `packages/api/src/modules/payment/payment.router.ts` (use `verifiedStudentProcedure` on `createPurchase`)
@@ -39,6 +41,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - Docs: `docs/CONTEXT.md` (G2 section — state enforcement level), `docs/MODULE-REFERENCE.md` (booking/payment rules), `docs/API-REFERENCE.md` (auth level on the 5 procedures)
 
 **Interfaces:**
+
 - Consumes: `context.session.user` — better-auth session user carries `emailVerified` (verified: `packages/auth/src/index.ts:17`, better-auth session contract). `CogitoUser` type is exported from `@cogito-app/auth`.
 - Produces: `requireVerifiedStudent` middleware — same contract as `requireStudent` but additionally throws `ORPCError("FORBIDDEN", { message: "Email verification required" })` when `context.session.user.emailVerified !== true`; `verifiedStudentProcedure = publicProcedure.use(requireVerifiedStudent)`.
 
@@ -53,6 +56,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 3: Escape user-supplied reason in `withdrawInvite` email body
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.service.ts:2558-2560` (notification body)
 - Test: extend `packages/api/src/tests/unit/booking.service.test.ts` (or the `booking-reprice-deadline.test.ts` neighbor — follow the file's existing notification-port spy pattern)
 - Docs: `docs/MODULE-REFERENCE.md` (booking module — note the escaping convention)
@@ -66,6 +70,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 3: Harden the Sanity content file proxy
 
 **Files:**
+
 - Modify: `apps/server/src/routes.ts:353-417` (add host allowlist, timeout, size cap, rate limit)
 - Modify: `apps/server/src/rate-limit-paths.ts` (add `"content"` RateLimitKind)
 - Test: `apps/server/src/` — extend the existing routes test (find the harness that mocks `content.getStudentResourceFile`; see `apps/server/src/` test files)
@@ -82,6 +87,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 4: Reconcile `getTutorPayouts` ledger columns
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.service.ts:3315-3381` (`getTutorPayouts`)
 - Test: extend `packages/api/src/tests/unit/booking.service.test.ts` (payouts test)
 - Docs: `docs/MODULE-REFERENCE.md` (payouts section), `docs/API-REFERENCE.md` (payouts output semantics)
@@ -96,6 +102,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 5: Fix escalated admin-queue pagination
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin-booking/admin-booking.service.ts:480-527` (`listBookings`)
 - Test: extend `packages/api/src/tests/unit/admin-booking.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (admin-booking)
@@ -109,6 +116,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 5: Decouple economy-config tutor notifications from the config transaction
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin/admin.service.ts:295-325` (`updateEconomySettings`)
 - Test: extend `packages/api/src/tests/unit/admin.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (admin module economy rules)
@@ -122,6 +130,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 6: Add down paths for migrations 0027 and 0028
 
 **Files:**
+
 - Modify: `packages/db/src/migrations/0027_subject_taxonomy.sql`, `packages/db/src/migrations/0028_economy_config.sql`
 - Docs: `docs/RUNBOOK.md` (rollback procedure section)
 
@@ -133,6 +142,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 7: Scheduler fail-loud boot check + health surface
 
 **Files:**
+
 - Modify: `apps/server/src/scheduler.ts:19-27` (`initScheduler`)
 - Modify: `packages/api/src/lib/db-health.ts` (add scheduler check to `/health`)
 - Test: `packages/api/src/tests/unit/` or `apps/server/src/` — new exported helper test
@@ -149,6 +159,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 8: Google Meet OAuth helper + RUNBOOK docs
 
 **Files:**
+
 - Create: `scripts/google-meet-auth.ts` (repo-root `scripts/` — exists with `run-test-suite.mjs`)
 - Docs: `docs/RUNBOOK.md` (Google Cloud console section), `docs/CONTEXT.md` (auth section)
 
@@ -160,6 +171,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 11: Xendit production switch prep (env + docs only)
 
 **Files:**
+
 - Modify: `apps/server/.env.example`, `infra/.env.prod.example`
 - Docs: `docs/RUNBOOK.md` (Xendit go-live checklist)
 
@@ -174,6 +186,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task B1: Fix seed package prices to PRD OQ-01 values (HIGH, F1)
 
 **Files:**
+
 - Modify: `apps/server/src/seed-packages.ts:5-8`, `apps/server/src/seed.ts:47-50`, `packages/api/src/tests/helpers/test-client.ts:141-149`
 - Test: `apps/server/src/seed.test.ts` (assert package table matches PRD values)
 - Docs: `docs/API-REFERENCE.md` (packages list), `docs/RUNBOOK.md` (seed section)
@@ -188,6 +201,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 9: Prevent admin demotion via tutor invite claim (HIGH, F2)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/invite/invite.service.ts:16-27` (`validateClaim`)
 - Test: extend `packages/api/src/tests/unit/invite.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (invite module), `docs/CONTEXT.md` (tutor invite flow — code now matches the documented claim)
@@ -202,6 +216,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 10: Reconfirm headcount-change reprice (HIGH, F3)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.service.ts:2588-2608` (`reconfirm` accept path)
 - Test: `packages/api/src/tests/unit/booking.service.test.ts` or new `booking-reconfirm-reprice.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (booking module reconfirm rule)
@@ -216,6 +231,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 11: Bump deadline when tutorAccept meeting fails (MEDIUM, F6)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.service.ts:1040-1070` (tutorAccept meeting-failure path)
 - Test: `packages/api/src/tests/unit/booking.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (booking rule)
@@ -230,6 +246,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 ### Task 12: Fix outbox claim SQL precedence (MEDIUM, F7 → verified harmless; do NOT parenthesize blindly)
 
 **Files:**
+
 - Verify only: `packages/api/src/modules/notification/notification.repo.ts:185-200`
 - Docs: `docs/MODULE-REFERENCE.md` note
 
@@ -243,6 +260,7 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 ### Task 13: Tutor attendance row must not inflate group headcount (MEDIUM, F8)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.service.ts:1743-1791` (`markTutorAttendance`) and `booking.repo.ts` `findConfirmedParticipants` (exclude `role='tutor'`)
 - Test: `packages/api/src/tests/unit/booking.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md`
@@ -256,6 +274,7 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 ### Task 14: Flag offline tutor lateness too (MEDIUM, F9)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.repo.ts:702-739` (`findBookingsWithTutorLateness`) — remove `eq(booking.modality, MODALITY.ONLINE)`
 - Test: `packages/api/src/tests/unit/booking.service.test.ts` or a repo test
 - Docs: `docs/MODULE-REFERENCE.md` (booking module)
@@ -269,6 +288,7 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 ### Task 14: Pass tx to `setManualLink` (MEDIUM, F10)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/meeting/fallback.provider.ts:65-90`, `google-meeting.provider.ts:497+`, `meeting/index.ts`, `booking.service.ts` callers
 - Test: `packages/api/src/tests/unit/` meeting fallback tests (existing)
 - Docs: `docs/MODULE-REFERENCE.md` (meeting module)
@@ -282,6 +302,7 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 ### Task 15: `adminRefund` per-payment attribution (MEDIUM, F11)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin-booking/admin-booking.service.ts:552-620` (`adminRefund`)
 - Test: extend `packages/api/src/tests/unit/admin-booking.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (admin-booking)
@@ -296,6 +317,7 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 ### Task 16: Achievement archive action (MEDIUM, F12)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/achievement/achievement.types.ts` (add `archive`/`restore` to `adminReviewInput.status`), `achievement.service.ts` (`adminReview` accept `archived`/`approved`/`rejected` + restore), `achievement.router.ts`
 - Test: extend `packages/api/src/tests/unit/achievement.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (achievement), `docs/API-REFERENCE.md` (adminReview input)
@@ -309,6 +331,7 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 ### Task 17: Role-scope drifts (LOW, F16–F19)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/auth/auth.router.ts:44-53` (`searchStudents` → `studentProcedure`)
 - Modify: `packages/api/src/modules/achievement/achievement.router.ts` (`create`/`update`/`delete` → `studentProcedure`)
 - Modify: `packages/api/src/modules/payment/payment.router.ts` (`createPurchase` → `verifiedStudentProcedure` — see Task 2, keep in sync)
@@ -323,6 +346,7 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 ### Task 18: Apply-override participant validation (LOW, F24) + room state guard (L-22)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin-booking/admin-booking.service.ts:229-284` (`planOverride` — validate all `affectedParticipants` ids are participants; throw `OverrideParticipantNotInBookingError`)
 - Modify: `packages/api/src/modules/room/room.service.ts:128-175` (`assignRoom`/`relocateRoom` — guard `AWAITING_ADMIN_ROOM_APPROVAL` before inserting roomBooking row)
 - Test: extend the respective service tests
@@ -339,45 +363,46 @@ Lead verification result: both OR branches carry `attempts < 3`; the precedence 
 
 This matrix was produced by the audit (workers A/B) and lead re-verification. It is the deliverable of the "align the codebase with the PRD" goal.
 
-| PRD ref | Rule | Code path | Status |
-|---|---|---|---|
-| FR-01 | Role-specific access | `procedures.ts` requireAdmin/Student/Tutor + routers | ALIGNED (role-scope drifts F16–F19 fixed in Task 17) |
-| FR-02 | Student profile + parent contact | `auth.updateProfile` | ALIGNED |
-| FR-03 | Wallet total/held/available + immutable ledger | `wallet` module | ALIGNED |
-| FR-04 | Package purchase | `payment` module | **MISMATCH → fixed Task 8 (seed prices)** |
-| FR-05 | Honoraria validation + schedules | `pricing.validateBaseRates` + `admin.updateEconomySettings` | ALIGNED |
-| FR-06 | Tutor listing w/ computed Marks | `tutor-discovery` | ALIGNED |
-| FR-07 | Solo booking lifecycle | `booking.createSolo/cancel/complete` | ALIGNED |
-| FR-08 | Group finalization | `createGroup/confirmInvite/expireBookings` | ALIGNED (+F3 fix Task 10) |
-| FR-09 | Tutor ops tools | `tutorActions` | ALIGNED |
-| FR-10 | Admin monitor/override | `adminBooking` | ALIGNED |
-| FR-11 | Competition Calendar auth | `content.listCompetitions` | ALIGNED |
-| FR-12 | KB 35-Mark gate | `wallet.knowledgeBankEligible` (student-only, total balance) | ALIGNED |
-| FR-13 | History preservation | audit + ledger retention | ALIGNED |
-| FR-14 | H-2 cancel/reschedule policy | `cancel`/`proposeReschedule` | ALIGNED |
-| FR-15 | Tutor reschedule proposal | `proposeReschedule`/`acceptReschedule` | ALIGNED |
-| FR-16 | Group deadline repricing | `expireBookings` B3 | ALIGNED (+F3) |
-| FR-17 | Notification matrix | `notification` module | ALIGNED (+F5 escape, F7 outbox) |
-| FR-18 | Achievements submission/mod | `achievement` module | ALIGNED (+F12 archive Task 16) |
-| FR-19 | IDR honorarium | `tutor.updateMyProfile` + pricing | ALIGNED |
-| FR-20 | Series up to 4 | `createSeries`/`createGroupSeries` | ALIGNED |
-| FR-21 | Meeting link after confirm | `finalizeMeetingSchedule` | ALIGNED (+F6 deadline Task 11) |
-| FR-22 | Offline room approval | `room` module | ALIGNED (+F22/F23 Task 18) |
-| FR-23 | Invite-only tutor access | `adminTutor` + `invite` | ALIGNED (+F2 Task 9, F15 verified) |
-| FR-24 | Onboarding publication gate | `tutor.submitForReview` + admin review | ALIGNED (+F25 Task 19 — see below) |
-| DL-04..DL-29 | Decision log | (each checked) | ALIGNED except OQ-01 (F1, Task 8) |
-| OQ-04 | SLA 30min/4h | `support` module | ALIGNED |
-| OQ-05 | Meet fallback | `meeting` module | ALIGNED |
-| OQ-06 | Non-refundable Marks | `adminRefund` in-app only (N1) | ALIGNED |
-| OQ-07 | 15-min lateness | `markAttendance`/`markParticipantNoShow` | ALIGNED (+F9 Task 13) |
-| OQ-08 | 12h release | `releaseExpiredHolds` | ALIGNED |
-| TC-01..TC-39 | Regression coverage | integration tests | ALIGNED except TC-03 (F1) + TC-18 headcount-change (F3) |
+| PRD ref      | Rule                                           | Code path                                                    | Status                                                  |
+| ------------ | ---------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------- |
+| FR-01        | Role-specific access                           | `procedures.ts` requireAdmin/Student/Tutor + routers         | ALIGNED (role-scope drifts F16–F19 fixed in Task 17)    |
+| FR-02        | Student profile + parent contact               | `auth.updateProfile`                                         | ALIGNED                                                 |
+| FR-03        | Wallet total/held/available + immutable ledger | `wallet` module                                              | ALIGNED                                                 |
+| FR-04        | Package purchase                               | `payment` module                                             | **MISMATCH → fixed Task 8 (seed prices)**               |
+| FR-05        | Honoraria validation + schedules               | `pricing.validateBaseRates` + `admin.updateEconomySettings`  | ALIGNED                                                 |
+| FR-06        | Tutor listing w/ computed Marks                | `tutor-discovery`                                            | ALIGNED                                                 |
+| FR-07        | Solo booking lifecycle                         | `booking.createSolo/cancel/complete`                         | ALIGNED                                                 |
+| FR-08        | Group finalization                             | `createGroup/confirmInvite/expireBookings`                   | ALIGNED (+F3 fix Task 10)                               |
+| FR-09        | Tutor ops tools                                | `tutorActions`                                               | ALIGNED                                                 |
+| FR-10        | Admin monitor/override                         | `adminBooking`                                               | ALIGNED                                                 |
+| FR-11        | Competition Calendar auth                      | `content.listCompetitions`                                   | ALIGNED                                                 |
+| FR-12        | KB 35-Mark gate                                | `wallet.knowledgeBankEligible` (student-only, total balance) | ALIGNED                                                 |
+| FR-13        | History preservation                           | audit + ledger retention                                     | ALIGNED                                                 |
+| FR-14        | H-2 cancel/reschedule policy                   | `cancel`/`proposeReschedule`                                 | ALIGNED                                                 |
+| FR-15        | Tutor reschedule proposal                      | `proposeReschedule`/`acceptReschedule`                       | ALIGNED                                                 |
+| FR-16        | Group deadline repricing                       | `expireBookings` B3                                          | ALIGNED (+F3)                                           |
+| FR-17        | Notification matrix                            | `notification` module                                        | ALIGNED (+F5 escape, F7 outbox)                         |
+| FR-18        | Achievements submission/mod                    | `achievement` module                                         | ALIGNED (+F12 archive Task 16)                          |
+| FR-19        | IDR honorarium                                 | `tutor.updateMyProfile` + pricing                            | ALIGNED                                                 |
+| FR-20        | Series up to 4                                 | `createSeries`/`createGroupSeries`                           | ALIGNED                                                 |
+| FR-21        | Meeting link after confirm                     | `finalizeMeetingSchedule`                                    | ALIGNED (+F6 deadline Task 11)                          |
+| FR-22        | Offline room approval                          | `room` module                                                | ALIGNED (+F22/F23 Task 18)                              |
+| FR-23        | Invite-only tutor access                       | `adminTutor` + `invite`                                      | ALIGNED (+F2 Task 9, F15 verified)                      |
+| FR-24        | Onboarding publication gate                    | `tutor.submitForReview` + admin review                       | ALIGNED (+F25 Task 19 — see below)                      |
+| DL-04..DL-29 | Decision log                                   | (each checked)                                               | ALIGNED except OQ-01 (F1, Task 8)                       |
+| OQ-04        | SLA 30min/4h                                   | `support` module                                             | ALIGNED                                                 |
+| OQ-05        | Meet fallback                                  | `meeting` module                                             | ALIGNED                                                 |
+| OQ-06        | Non-refundable Marks                           | `adminRefund` in-app only (N1)                               | ALIGNED                                                 |
+| OQ-07        | 15-min lateness                                | `markAttendance`/`markParticipantNoShow`                     | ALIGNED (+F9 Task 13)                                   |
+| OQ-08        | 12h release                                    | `releaseExpiredHolds`                                        | ALIGNED                                                 |
+| TC-01..TC-39 | Regression coverage                            | integration tests                                            | ALIGNED except TC-03 (F1) + TC-18 headcount-change (F3) |
 
 **Known accepted/backlog items (documented, not fixed):** K4 (dead states `draft`/`awaiting_marks_hold` — accepted), K5 (dead `repricedMarks` column — accepted), K6 (`timezone` unused — accepted), L3 (URL-less meeting row copy — defense-in-depth), N8 (`payment.getPurchase` — kept).
 
 ### Task 19: `reviewTutorProfile` action-state guard (F25, MEDIUM — same class as F24)
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin-tutor/admin-tutor.service.ts:139-180` (`reviewTutorProfile` — enforce per-status allowed actions via `validateReviewAction`)
 - Test: extend `packages/api/src/tests/unit/admin-tutor.service.test.ts`
 - Docs: `docs/MODULE-REFERENCE.md` (admin-tutor rules)

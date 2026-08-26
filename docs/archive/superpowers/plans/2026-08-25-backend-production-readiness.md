@@ -24,10 +24,12 @@
 ### Task 1: PRD + wiring audit (Phase 0)
 
 **Files:**
+
 - Create: `docs/plans/active/PRD-AUDIT.md`
 - Read: `docs/prd.tex`, `docs/API-REFERENCE.md`, `docs/MODULE-REFERENCE.md`, `docs/CONTEXT.md`
 
 **Interfaces:**
+
 - Consumes: nothing (research task).
 - Produces: `docs/plans/active/PRD-AUDIT.md` — the approved gap list that Task 2+ reference.
 
@@ -38,6 +40,7 @@ Read `docs/prd.tex` (the product requirements), `docs/API-REFERENCE.md` (endpoin
 - [ ] **Step 2: Cross-check backend modules against the PRD**
 
 For each module in `packages/api/src/modules/` (auth, admin, admin-tutor, admin-booking, booking, tutor, tutor-discovery, invite, achievement, wallet, pricing, payment, room, notification, refund, support, upload, scheduler, content, economy, meeting, email, audit), verify:
+
 1. Every PRD-mandated behavior has a code path (search the module for the behavior; note file:line).
 2. Every documented RPC in `docs/API-REFERENCE.md` exists in the routers and matches the documented input/output.
 3. Business rules in `docs/MODULE-REFERENCE.md` match the service code.
@@ -48,6 +51,7 @@ Also run the "can it boot with all moving parts" check: for each external depend
 - [ ] **Step 3: Write the gap list**
 
 Write `docs/plans/active/PRD-AUDIT.md` with:
+
 - Table of gaps: `# | Area | Gap | Evidence (file:line) | Severity | Fix owner (task #)`
 - A "verified sound" section listing what was checked and found correct.
 - The dependency wiring table from Step 2.
@@ -64,6 +68,7 @@ git commit -m "docs(plans): PRD and wiring audit gap list"
 ### Task 2: Email verification gate — paid actions require verified email
 
 **Files:**
+
 - Modify: `packages/api/src/procedures.ts` (add `requireVerifiedStudent` middleware)
 - Modify: `packages/api/src/modules/booking/booking.router.ts` (use `requireVerifiedStudent` on the 4 create procedures)
 - Modify: `packages/api/src/modules/payment/payment.router.ts` (use `requireVerifiedStudent` on `createPurchase`)
@@ -71,6 +76,7 @@ git commit -m "docs(plans): PRD and wiring audit gap list"
 - Docs: `docs/CONTEXT.md` (G2 section — state enforcement level), `docs/MODULE-REFERENCE.md`
 
 **Interfaces:**
+
 - Consumes: `context.session.user.emailVerified` (better-auth standard field, present on the session user object; `context.ts` already re-reads `role` from DB — `emailVerified` comes from the session user as returned by `auth.api.getSession`).
 - Produces: `requireVerifiedStudent` middleware — same contract as `studentProcedure` but additionally throws `ORPCError("FORBIDDEN", { message: "Email verification required" })` when `context.session.user.emailVerified !== true`.
 
@@ -84,7 +90,12 @@ import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import { user } from "@cogito-app/db/schema";
 import { ORPCError } from "@orpc/server";
-import { createTestContext, createTestClient, signUpAndSignIn, resetDatabase } from "../helpers/test-client";
+import {
+  createTestContext,
+  createTestClient,
+  signUpAndSignIn,
+  resetDatabase,
+} from "../helpers/test-client";
 import { appRouter } from "../../routers";
 
 describe("email verification gate on paid actions", () => {
@@ -96,7 +107,11 @@ describe("email verification gate on paid actions", () => {
   const email = `gate.${ts}@cogito.test`;
 
   test("unverified student cannot create a solo booking", async () => {
-    const { cookie } = await signUpAndSignIn(email, "Test1234!", "Gate Student");
+    const { cookie } = await signUpAndSignIn(
+      email,
+      "Test1234!",
+      "Gate Student",
+    );
     const context = await createTestContext({ cookie });
     const client = createTestClient(context);
 
@@ -111,9 +126,19 @@ describe("email verification gate on paid actions", () => {
 
   test("verified student can create a solo booking", async () => {
     // Mark verified directly (the OTP flow is covered by email-verification-g2.test.ts)
-    await db.update(user).set({ emailVerified: true }).where(eq(user.email, email));
-    const { cookie } = await signUpAndSignIn(`v.${ts}@cogito.test`, "Test1234!", "Verified Student");
-    await db.update(user).set({ emailVerified: true }).where(eq(user.email, `v.${ts}@cogito.test`));
+    await db
+      .update(user)
+      .set({ emailVerified: true })
+      .where(eq(user.email, email));
+    const { cookie } = await signUpAndSignIn(
+      `v.${ts}@cogito.test`,
+      "Test1234!",
+      "Verified Student",
+    );
+    await db
+      .update(user)
+      .set({ emailVerified: true })
+      .where(eq(user.email, `v.${ts}@cogito.test`));
     const context = await createTestContext({ cookie });
     const client = createTestClient(context);
 
@@ -141,35 +166,43 @@ Expected: FAIL — unverified user's `createSolo` succeeds (no gate exists yet).
 In `packages/api/src/procedures.ts`, after `requireStudent` (line ~60), add:
 
 ```ts
-export const requireVerifiedStudent = o.middleware(async ({ context, next }) => {
-  if (!context.session?.user) {
-    throw new ORPCError("UNAUTHORIZED");
-  }
-  const user = context.session.user as CogitoUser;
-  if (user.role !== USER_ROLE.STUDENT) {
-    throw new ORPCError("FORBIDDEN", { message: "Student access required" });
-  }
-  if (user.emailVerified !== true) {
-    throw new ORPCError("FORBIDDEN", { message: "Email verification required" });
-  }
-  return next({
-    context: {
-      session: context.session,
-      services: context.services,
-      headers: context.headers,
-    },
-  });
-});
+export const requireVerifiedStudent = o.middleware(
+  async ({ context, next }) => {
+    if (!context.session?.user) {
+      throw new ORPCError("UNAUTHORIZED");
+    }
+    const user = context.session.user as CogitoUser;
+    if (user.role !== USER_ROLE.STUDENT) {
+      throw new ORPCError("FORBIDDEN", { message: "Student access required" });
+    }
+    if (user.emailVerified !== true) {
+      throw new ORPCError("FORBIDDEN", {
+        message: "Email verification required",
+      });
+    }
+    return next({
+      context: {
+        session: context.session,
+        services: context.services,
+        headers: context.headers,
+      },
+    });
+  },
+);
 
-export const verifiedStudentProcedure = publicProcedure.use(requireVerifiedStudent);
+export const verifiedStudentProcedure = publicProcedure.use(
+  requireVerifiedStudent,
+);
 ```
 
 - [ ] **Step 4: Apply the gate to paid procedures**
 
 In `packages/api/src/modules/booking/booking.router.ts`:
+
 - Change `createSolo`, `createGroup`, `createSeries`, `createGroupSeries` from `studentProcedure` to `verifiedStudentProcedure` (import it from `../../procedures`).
 
 In `packages/api/src/modules/payment/payment.router.ts`:
+
 - Change `createPurchase` from `protectedProcedure` to `verifiedStudentProcedure` (import it from `../../procedures`). Note: `createPurchase` currently uses `protectedProcedure` — the gate adds the student-role check too; verify no admin/tutor purchase flow exists (search `createPurchase` callers) before switching. If a non-student flow exists, instead add the `emailVerified` check inside the existing middleware chain — but per the PRD, purchases are student-only, so the switch is expected.
 
 - [ ] **Step 5: Run tests to verify they pass**
@@ -193,11 +226,13 @@ git commit -m "fix(auth): gate paid actions on email verification"
 ### Task 3: Escape user-supplied reason in withdrawInvite email
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.service.ts:2556` (the `withdrawInvite` notification body)
 - Test: extend `packages/api/src/tests/unit/booking.service.test.ts` (or add a focused test)
 - Docs: `docs/MODULE-REFERENCE.md` (note the escaping convention)
 
 **Interfaces:**
+
 - Consumes: `escapeHtml` — already imported at `booking.service.ts:51` from `../../lib/sanitize`.
 - Produces: nothing new; behavior change only.
 
@@ -245,6 +280,7 @@ git commit -m "fix(booking): escape withdraw reason in notification email"
 ### Task 4: Harden the Sanity content file proxy
 
 **Files:**
+
 - Modify: `apps/server/src/routes.ts` (the `/content/student-resources/:resourceId/file` route, ~line 353-417)
 - Modify: `apps/server/src/rate-limit-paths.ts` (add a `content` rate-limit kind)
 - Modify: `apps/server/src/routes.ts` (wire the content rate limiter)
@@ -252,12 +288,14 @@ git commit -m "fix(booking): escape withdraw reason in notification email"
 - Docs: `docs/CONTEXT.md` (content section), `docs/RUNBOOK.md`
 
 **Interfaces:**
+
 - Consumes: `env` from `@cogito-app/env/server`; the existing `rateLimit` factory in `apps/server/src/routes.ts` (see `authRateLimit` at line 39 for the pattern).
 - Produces: a `contentRateLimit` instance; a `SANITY_CDN_ALLOWLIST`-style constant (hardcoded `cdn.sanity.io` + `*.sanity.io` suffix check is fine — no new env var needed).
 
 - [ ] **Step 1: Write the failing test**
 
 Find the existing test file for server routes (search `apps/server/src` for `*.test.ts` that exercises routes — e.g. `openapi.test.ts` or a routes test). Add tests:
+
 1. A request for a resource whose `fileUrl` is not on `cdn.sanity.io` (mock the content service to return `fileUrl: "https://evil.example.com/x.pdf"`) returns 502 and does NOT fetch.
 2. A request whose upstream fetch exceeds the timeout returns 502.
 3. A request exceeding the size cap returns 502.
@@ -380,11 +418,13 @@ git commit -m "fix(content): harden Sanity file proxy (allowlist, timeout, size 
 ### Task 5: Reconcile getTutorPayouts ledger columns
 
 **Files:**
+
 - Modify: `packages/api/src/modules/booking/booking.service.ts` (the `getTutorPayouts` aggregation, ~lines 3330-3380)
 - Test: `packages/api/src/tests/unit/booking.service.test.ts` (extend the payouts test)
 - Docs: `docs/MODULE-REFERENCE.md` (payouts section)
 
 **Interfaces:**
+
 - Consumes: `priceSnapshot` shape (`baseline`, `actualMarksPooled`, `cogitoTake`, `tutorShare`, `tutorHonorariumIdr`).
 - Produces: invariant `totalMarks === cogitoTake + tutorPayout` for every returned row set.
 
@@ -422,11 +462,13 @@ git commit -m "fix(admin): reconcile tutor payout ledger columns"
 ### Task 6: Fix escalated admin-queue pagination
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin-booking/admin-booking.service.ts` (the `listBookings` function, ~lines 480-526)
 - Test: `packages/api/src/tests/unit/admin-booking.service.test.ts` (extend)
 - Docs: `docs/MODULE-REFERENCE.md` (admin queue section)
 
 **Interfaces:**
+
 - Consumes: `repo.listBookingsByState(db, [], repoLimit, cursor, filters)` — unchanged.
 - Produces: `listBookings` never returns `nextCursor` when `items` is empty; when `escalated === true`, pages fill to `limit` by advancing the cursor across windows (bounded).
 
@@ -493,11 +535,13 @@ git commit -m "fix(admin): fill escalated queue pages and never return cursor wi
 ### Task 7: Move economy-config tutor notifications out of the transaction
 
 **Files:**
+
 - Modify: `packages/api/src/modules/admin/admin.service.ts` (`updateEconomySettings`, ~lines 237-320)
 - Test: `packages/api/src/tests/unit/admin.service.test.ts` (extend)
 - Docs: `docs/MODULE-REFERENCE.md` (economy section)
 
 **Interfaces:**
+
 - Consumes: `notification.write({ db, ... })` — the port accepts a `DbOrTx`; after the change it is called with the pool `db` (not `tx`).
 - Produces: `updateEconomySettings` commits the config change + audit row even if a notification write fails; notifications are written after commit, best-effort.
 
@@ -563,11 +607,13 @@ git commit -m "fix(admin): decouple economy-config notifications from the config
 ### Task 8: Add down paths for migrations 0027 and 0028
 
 **Files:**
+
 - Modify: `packages/db/src/migrations/0027_subject_taxonomy.sql` (append `-- down` section)
 - Modify: `packages/db/src/migrations/0028_economy_config.sql` (append `-- down` section)
 - Docs: `docs/RUNBOOK.md` (manual rollback procedure)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: documented rollback SQL for both migrations; no schema change.
 
@@ -609,12 +655,14 @@ git commit -m "chore(db): add down paths for migrations 0027 and 0028"
 ### Task 9: Scheduler fail-loud boot check
 
 **Files:**
+
 - Modify: `apps/server/src/scheduler.ts` (`initScheduler`)
 - Modify: `packages/api/src/lib/db-health.ts` (add a scheduler check to `/health`)
 - Test: `packages/api/src/tests/unit/` or `apps/server/src/` — add a test for the health surface; the boot check is covered by a unit test of a new exported helper.
 - Docs: `docs/RUNBOOK.md`, `docs/CONTEXT.md` (scheduler section)
 
 **Interfaces:**
+
 - Consumes: `env.SCHEDULER_ENABLED`, `env.REDIS_URL`, `getRedisClient()` from `@cogito-app/api/lib/redis`.
 - Produces: `initScheduler` throws at boot when `SCHEDULER_ENABLED=true` and Redis is unreachable; `/health` reports `scheduler: "ok" | "degraded" | "error"` based on a Redis heartbeat key.
 
@@ -632,7 +680,9 @@ Expected: FAIL — helper does not exist.
 In `packages/api/src/lib/db-health.ts` (or a new file), add:
 
 ```ts
-export async function checkSchedulerHealth(redis?: RedisClient): Promise<"ok" | "degraded" | "error"> {
+export async function checkSchedulerHealth(
+  redis?: RedisClient,
+): Promise<"ok" | "degraded" | "error"> {
   if (!redis) return "degraded";
   try {
     const start = performance.now();
@@ -684,11 +734,13 @@ git commit -m "fix(ops): fail loud when scheduler is enabled but Redis is unreac
 ### Task 10: Google OAuth + Meet wiring helper and docs
 
 **Files:**
+
 - Create: `scripts/google-meet-auth.ts` (repo-root scripts dir — check if `scripts/` exists; if not, create it)
 - Modify: `apps/server/.env.example` (annotate the Google Meet OAuth flow)
 - Docs: `docs/RUNBOOK.md` (Google Cloud console steps), `docs/CONTEXT.md` (auth section)
 
 **Interfaces:**
+
 - Consumes: `GOOGLE_MEET_CLIENT_ID`, `GOOGLE_MEET_CLIENT_SECRET` from env.
 - Produces: a one-time helper that prints `GOOGLE_MEET_REFRESH_TOKEN` for the operator to paste into SOPS.
 
@@ -713,7 +765,9 @@ import { createServer } from "node:http";
 const clientId = process.env.GOOGLE_MEET_CLIENT_ID;
 const clientSecret = process.env.GOOGLE_MEET_CLIENT_SECRET;
 if (!clientId || !clientSecret) {
-  console.error("GOOGLE_MEET_CLIENT_ID and GOOGLE_MEET_CLIENT_SECRET are required");
+  console.error(
+    "GOOGLE_MEET_CLIENT_ID and GOOGLE_MEET_CLIENT_SECRET are required",
+  );
   process.exit(1);
 }
 
@@ -755,18 +809,25 @@ const server = createServer(async (req, res) => {
       grant_type: "authorization_code",
     }),
   });
-  const token = (await tokenRes.json()) as { refresh_token?: string; error?: string };
+  const token = (await tokenRes.json()) as {
+    refresh_token?: string;
+    error?: string;
+  };
   if (!token.refresh_token) {
     res.writeHead(400).end(`no refresh_token: ${JSON.stringify(token)}`);
     return;
   }
-  res.writeHead(200).end("Authorization complete — copy the refresh token from the terminal.");
+  res
+    .writeHead(200)
+    .end("Authorization complete — copy the refresh token from the terminal.");
   console.log("\nGOOGLE_MEET_REFRESH_TOKEN=" + token.refresh_token);
   server.close();
   process.exit(0);
 });
 
-server.listen(8787, () => console.log("Waiting for the OAuth callback on http://localhost:8787 ..."));
+server.listen(8787, () =>
+  console.log("Waiting for the OAuth callback on http://localhost:8787 ..."),
+);
 ```
 
 - [ ] **Step 2: Verify it typechecks**
@@ -777,6 +838,7 @@ Expected: PASS.
 - [ ] **Step 3: Document the Google Cloud console steps**
 
 In `docs/RUNBOOK.md`, add a "Google OAuth + Meet credentials" section:
+
 1. Login OAuth: Google Cloud console → project → APIs & Services → Credentials → OAuth client (Web) → authorized redirect URI `https://api.cogitoacademy.id/api/auth/callback/google` → copy `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
 2. Meet: enable the Google Calendar API; create an OAuth client (Desktop app type works for the helper); run the helper script to get the refresh token; set `GOOGLE_MEET_CLIENT_ID/SECRET/REFRESH_TOKEN` (Gmail account — no domain-wide delegation needed).
 3. Note: `GOOGLE_CLIENT_ID` is reused as the Meet OAuth fallback client — prefer dedicated Meet credentials (L1 finding).
@@ -793,11 +855,13 @@ git commit -m "feat(ops): add Google Meet OAuth refresh-token helper and docs"
 ### Task 11: Xendit production switch prep (env + docs; switch happens in Phase 2/4)
 
 **Files:**
+
 - Modify: `apps/server/.env.example` (annotate Xendit prod values)
 - Modify: `infra/.env.prod.example` (fill in the Xendit + webhook sections with placeholders and instructions)
 - Docs: `docs/RUNBOOK.md` (sandbox E2E checklist)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: documented checklist + env template so the Phase 2/4 switch is mechanical.
 
@@ -808,6 +872,7 @@ In `infra/.env.prod.example`, ensure the Xendit block documents: `PAYMENT_PROVID
 - [ ] **Step 2: Write the sandbox E2E checklist**
 
 In `docs/RUNBOOK.md`, add a "Xendit go-live checklist":
+
 1. Sandbox: set `PAYMENT_PROVIDER=xendit` with sandbox keys; run a purchase E2E (create purchase → Xendit invoice → webhook → wallet credit).
 2. Verify webhook signature + IP allowlist behavior (test with a wrong token → rejected).
 3. Set the Xendit dashboard webhook URL to `https://api.cogitoacademy.id/webhooks/payments/xendit`.

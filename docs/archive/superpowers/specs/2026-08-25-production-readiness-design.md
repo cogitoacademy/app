@@ -44,13 +44,13 @@ Secrets: SOPS + Age keys, encrypted in git, decrypted by Ansible at deploy → C
 
 ### 3.1 Declarative layering
 
-| Layer | Tool | Owns |
-|---|---|---|
-| Host shell | Terraform (state in R2) | ufw, fail2ban, SSH hardening (keys only, no root pw), deploy user, unattended-upgrades, Docker |
-| Inside VPS | Ansible playbooks | Coolify install, **Coolify resources via its API** (apps, DB, Redis, env vars, domains), monitoring stack, backup cron, SOPS decryption |
-| App | Docker images from GHCR | server + web, versioned tags (`v<sha>`), `latest` for Coolify tracking |
-| CI/CD | GitHub Actions | build → test → push images → run migrations → trigger Coolify deploy → health poll → auto-rollback |
-| Secrets | SOPS + Age | all env vars, encrypted in git, applied via Ansible → Coolify API |
+| Layer      | Tool                    | Owns                                                                                                                                    |
+| ---------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Host shell | Terraform (state in R2) | ufw, fail2ban, SSH hardening (keys only, no root pw), deploy user, unattended-upgrades, Docker                                          |
+| Inside VPS | Ansible playbooks       | Coolify install, **Coolify resources via its API** (apps, DB, Redis, env vars, domains), monitoring stack, backup cron, SOPS decryption |
+| App        | Docker images from GHCR | server + web, versioned tags (`v<sha>`), `latest` for Coolify tracking                                                                  |
+| CI/CD      | GitHub Actions          | build → test → push images → run migrations → trigger Coolify deploy → health poll → auto-rollback                                      |
+| Secrets    | SOPS + Age              | all env vars, encrypted in git, applied via Ansible → Coolify API                                                                       |
 
 ### 3.2 Environments
 
