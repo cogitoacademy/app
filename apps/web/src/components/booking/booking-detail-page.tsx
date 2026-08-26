@@ -347,7 +347,7 @@ export function BookingDetailPage({
       spacing="lg"
       className="mx-auto w-full min-w-0 max-w-7xl"
     >
-      <div>
+      <header className="border-b border-border pb-6">
         <Button
           variant="underline"
           size="sm"
@@ -359,9 +359,6 @@ export function BookingDetailPage({
         >
           <IconArrowLeft /> Back to {bookingsLabel.toLowerCase()}
         </Button>
-      </div>
-
-      <header className="border-b border-border pb-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch sm:justify-between">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
