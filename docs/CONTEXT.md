@@ -461,7 +461,8 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 10. Review Fixes 4 (REVIEW-FIXES-4.md — docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud guards, G2 email verification) → **completed (merged via #68–#70, #75–#76)**
 11. Frontend Gaps (FRONTEND-GAPS-SPEC — F1/F8/F9/F13/F14/F16/F18 closed; F2/F3/F6/F7/F11/F17 closed by merged #55; F12 room approval queue implemented) → after / parallel with #10
 12. Backend Finalization (BACKEND-PROD-FINALIZATION.md — PRD v1.7 alignment + audit findings F1–F25/S1–S14) → **merged #106 (2026-08-26)**
-13. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
+13. Post-Finalization Re-Audit (REAUDIT-FINDINGS.md — N1 reconfirm loop, N2 suspended restore, W1 env drift, env prod guards) → **merged #107 (2026-08-26)**
+14. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
 ```
 
 Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). **REVIEW-FIXES-2 merged via #50–#57** (wave-2 findings), **REVIEW-FIXES-3 merged via #59–#65** (wave-3 findings), **REVIEW-FIXES-4 merged via #68–#70, #75–#76** (wave-4: docs/sdd reconciliation, money-correctness bugs C1–C3/H1–H6/M1–M9/L1–L5, Xendit provider rewrite for the 2024-11-11 API, fail-loud Resend/Google Meet/R2 guards, G2 email verification). Next: remaining frontend-gap work and production ops.
@@ -850,7 +851,7 @@ bun run test:coverage      # Run tests with coverage
 
 ### 2026-08-25 audit findings (tracked in `docs/plans/completed/BACKEND-PROD-FINALIZATION.md`)
 
-Status: **all fixed and merged via #106 (2026-08-26)**. Findings come from the two-worker audit (worker A: business-logic/data layer; worker B: server/ops/CI) plus lead re-verification.
+Status: **all fixed and merged via #106 (2026-08-26)**; the follow-up re-audit findings (N1–N4, W1–W5) were fixed and merged via #107 (2026-08-26). Findings come from the two-worker audit (worker A: business-logic/data layer; worker B: server/ops/CI) plus lead re-verification.
 
 | ID      | Severity | Finding                                                                                                                                                                                                       | Fix                                                                                                                                                                                   |
 | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
