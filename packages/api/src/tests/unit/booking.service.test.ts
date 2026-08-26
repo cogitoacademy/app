@@ -5445,6 +5445,67 @@ describe("BookingService", () => {
           expect.objectContaining({ currentState: "scheduled" }),
         );
       });
+
+      test("N3: proposal expiry routes an offline room conflict to admin approval", async () => {
+        const originalStart = new Date(Date.now() + 48 * 60 * 60 * 1000);
+        const originalEnd = new Date(originalStart.getTime() + 90 * 60 * 1000);
+        const expiringBooking = makeBooking({
+          currentState: "reschedule_proposed",
+          modality: "offline",
+          previousState: "scheduled",
+          scheduledStartAt: originalStart,
+          scheduledEndAt: originalEnd,
+        });
+        const proposal = {
+          id: "r1",
+          bookingId: "b1",
+          status: "pending",
+          proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+          proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        };
+
+        const { service, roomPort, repo } = createService({
+          repo: {
+            findBookingsExpiringByDeadline: mock(async () => [expiringBooking]),
+            findBookingById: mock(async () => ({
+              ...expiringBooking,
+              currentState: "reschedule_proposed",
+              version: 1,
+            })),
+            findPendingRescheduleProposal: mock(async () => proposal),
+            updateBookingVersioned: mock(async () => ({
+              updated: {
+                ...expiringBooking,
+                currentState: "awaiting_admin_room_approval",
+              },
+              newVersion: 2,
+            })),
+          },
+          roomPort: {
+            syncRoomBookingScheduleForBooking: mock(
+              async () => "conflict" as const,
+            ),
+          },
+        });
+
+        const result = await service.expireBookings();
+
+        expect(result).toEqual({ expired: 1, failed: 0 });
+        expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+          expect.anything(),
+          "b1",
+          1,
+          expect.objectContaining({
+            currentState: "awaiting_admin_room_approval",
+          }),
+        );
+        expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalledWith(
+          expect.anything(),
+          "b1",
+          originalStart,
+          originalEnd,
+        );
+      });
     });
 
     describe("SCHEDULED expiry → NO_SHOW", () => {
@@ -6549,6 +6610,60 @@ describe("BookingService", () => {
       const result = await service.rejectReschedule("student1", "b1");
 
       expect(result.currentState).toBe("scheduled");
+      expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        booking.scheduledStartAt,
+        booking.scheduledEndAt,
+      );
+    });
+
+    test("rejectReschedule routes an offline room conflict to admin approval", async () => {
+      const booking = makeRescheduleBooking({
+        modality: "offline",
+        previousState: "scheduled",
+      });
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 72 * 60 * 60 * 1000 + 3600_000),
+        status: "pending",
+      };
+      const { service, roomPort, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          updateBookingVersioned: mock(
+            async (_conn: any, _id: any, ver: number, updates: any) => ({
+              updated: {
+                ...booking,
+                ...updates,
+                version: ver + 1,
+              },
+              newVersion: ver + 1,
+            }),
+          ),
+        },
+        roomPort: {
+          syncRoomBookingScheduleForBooking: mock(
+            async () => "conflict" as const,
+          ),
+        },
+      });
+
+      const result = await service.rejectReschedule("student1", "b1");
+
+      expect(result.currentState).toBe("awaiting_admin_room_approval");
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({
+          currentState: "awaiting_admin_room_approval",
+        }),
+      );
       expect(roomPort.syncRoomBookingScheduleForBooking).toHaveBeenCalledWith(
         expect.anything(),
         "b1",
