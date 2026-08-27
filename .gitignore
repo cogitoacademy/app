@@ -68,3 +68,4 @@ infra/terraform/*.tfvars
 !infra/terraform/terraform.tfvars.example
 infra/terraform/crash.log
 infra/terraform/crash.*.log
+infra/secrets/prod.env

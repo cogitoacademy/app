@@ -19,3 +19,9 @@ variable "ssh_timeout" {
   type        = string
   default     = "2m"
 }
+
+variable "cloudflare_account_id" {
+  description = "Cloudflare account id (R2 buckets + state token live under it)."
+  type        = string
+}
+

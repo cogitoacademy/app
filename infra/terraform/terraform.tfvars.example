@@ -1,3 +1,6 @@
-server_ip             = "203.0.113.10"
+server_ip             = "15.235.186.159"
 ssh_user              = "ubuntu"
-ssh_private_key_path  = "C:/Users/YOUR_WINDOWS_USER/.ssh/cogito_ovh"
+ssh_private_key_path  = "~/.ssh/cogito_vps"
+# Cloudflare dashboard → right sidebar → Account ID. The Cloudflare API token
+# (Zone:DNS:Edit + R2 Admin on this account) comes from CLOUDFLARE_API_TOKEN env.
+cloudflare_account_id = "CHANGE_ME"
