@@ -14,7 +14,7 @@ checks. When the API is linked to Coolify's bundled private PostgreSQL, set
 serve TLS. `DB_SSL_REJECT_UNAUTHORIZED` is only relevant when database TLS is
 enabled.
 
-Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. This changes no request or response shape.
+Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no request or response shape.
 
 Production and staging server bootstrap also reconcile `ADMIN_EMAILS` before
 serving traffic (default: `itcogitoacademy01@gmail.com`). Matching addresses
@@ -96,6 +96,8 @@ CI runs the API integration/unit suite together with the env, auth, and database
 - **Input:** None
 - **Output:** `{ user, profile, tutorProfile?, wallet }`
 - **Description:** Returns current user with profile and wallet (lazily creates wallet)
+
+The auth endpoints do not grandfather existing users by changing `emailVerified`. The web sign-in handoff applies the same verification requirement to new and legacy unverified users; the OTP is requested through Better Auth's `/api/auth/email-otp/send-verification-otp` endpoint and completed through `/api/auth/email-otp/verify-email`.
 
 ### `auth.getProfile`
 
