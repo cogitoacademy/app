@@ -640,12 +640,29 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
 **Setup (one-time, user action):**
 
 1. Coolify → your service → **Webhooks** tab → copy the **Deploy webhook** URL.
-2. GitHub → repo **Settings → Secrets and variables → Actions**:
-   - `COOLIFY_STAGING_SERVER_WEBHOOK` — staging API service webhook URL
-   - `COOLIFY_STAGING_WEBHOOK` — staging web service webhook URL
-   - `COOLIFY_PROD_SERVER_WEBHOOK` — production API service webhook URL
-   - `COOLIFY_PROD_WEBHOOK` — production web service webhook URL
-3. Push to `staging` (or `main`) and verify the "Trigger Coolify deploy" step is green.
+2. The value to save is the **full URL**, not the separate Manual Git Webhook
+   Secret. Use this format:
+
+   ```text
+   https://cl.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
+   ```
+
+   Replace `<resource-uuid>` with the Coolify resource UUID and remove the
+   angle brackets. Keep `&` literal; do not add `\&`, backticks, quotes, or
+   trailing `??`. The URL host must be publicly DNS-resolvable from GitHub
+   Actions.
+
+3. GitHub → repo **Settings → Secrets and variables → Actions**:
+   - `COOLIFY_STAGING_SERVER_WEBHOOK` — full staging API resource URL
+   - `COOLIFY_STAGING_WEBHOOK` — full staging web resource URL
+   - `COOLIFY_PROD_SERVER_WEBHOOK` — full production API resource URL
+   - `COOLIFY_PROD_WEBHOOK` — full production web resource URL
+4. Current Coolify versions require a separate API token with the `deploy`
+   permission. Store it as another Actions secret and have the workflow send
+   `Authorization: Bearer <token>`; never append the token to the URL. See
+   [Setup and Deployment](./DEPLOYMENT.md#5-configure-deploy-webhooks) for the
+   full format and distinction from Manual Git Webhooks.
+5. Push to `staging` (or `main`) and verify the "Trigger Coolify deploy" step is green.
 
 Until the secrets are set, CD pushes will fail at the trigger step by design (a silent no-op deploy is worse than a red build).
 

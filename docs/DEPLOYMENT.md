@@ -236,15 +236,37 @@ valid request is submitted.
 
 ### 5. Configure deploy webhooks
 
-Create a deploy webhook for each Coolify resource and add the URLs as GitHub
-Actions secrets:
+Create a **Deploy Webhook** for each Coolify resource and store the complete
+URL as a GitHub Actions secret. These are URLs, not the separate
+**Manual Git Webhook Secret** used when Coolify receives GitHub repository
+webhooks.
+
+The URL shape is:
 
 ```text
-COOLIFY_PROD_SERVER_WEBHOOK  # production API resource
-COOLIFY_PROD_WEBHOOK         # production web resource
-COOLIFY_STAGING_SERVER_WEBHOOK
-COOLIFY_STAGING_WEBHOOK
+https://<coolify-public-host>/api/v1/deploy?uuid=<resource-uuid>&force=false
 ```
+
+For this deployment, the values look like this (replace the placeholders with
+the real Coolify resource UUIDs; do not include `<` or `>`):
+
+```text
+COOLIFY_PROD_SERVER_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false
+COOLIFY_PROD_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false
+COOLIFY_STAGING_SERVER_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<staging-api-resource-uuid>&force=false
+COOLIFY_STAGING_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<staging-web-resource-uuid>&force=false
+```
+
+Keep the `&` literal: do not add a backslash, backticks, quotes, or trailing
+question marks. The hostname must be publicly DNS-resolvable from a GitHub
+hosted runner. The `uuid` is the Coolify **resource** UUID, not a deployment
+UUID.
+
+Current Coolify versions label this endpoint **Deploy Webhook (auth
+required)**. The URL identifies the target, while a Coolify API token with the
+`deploy` permission authorizes the request; store that token separately and do
+not append it to the URL. The workflow must send it as an
+`Authorization: Bearer ...` header before this auth-required form can be used.
 
 The workflows intentionally fail if a webhook is missing or unreachable. A
 green image build without a successful Coolify deploy is not a completed
