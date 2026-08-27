@@ -21,8 +21,13 @@ environment-specific items below still require confirmation in GitHub/Coolify.
 - [x] Route `api.cogitoacademy.id` to the API/Auth/health/webhook service.
 - [x] Route `app.cogitoacademy.id` to the frontend and bake the API subdomain
       into the production Vite image.
-- [ ] Configure the two Coolify resource domains and add the API + web deploy
-      webhook secrets in GitHub Actions.
+- [x] Configure the two Coolify resource domains and add the API + web deploy
+      webhook secrets in GitHub Actions — **webhook secrets exist but point at
+      the unresolvable `coolify.cogitoacademy.id` host (S7); the CD pipeline
+      now guards them (#118) and the operator must recreate them with the
+      resolvable `https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...`
+      URL (Option A, DEPLOYMENT-PLAN Task 0.2). User reports the webhook
+      currently returns 401 — Caddy route + per-resource UUID pending.**
 
 ---
 
@@ -100,43 +105,49 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 
 ### 4.1 Provisioning
 
-- Provision the OVH VPS with the Terraform bootstrap in `infra/terraform`
-  (the existing `infra/provision.sh` remains the host bootstrap payload)
-- Install Coolify + create admin account
-- Add GHCR as Docker registry in Coolify
-- Create PostgreSQL, Redis, server, web services in Coolify
-- Set `DB_SSL_ENABLED=false` for Coolify's bundled non-TLS PostgreSQL service;
-  keep it true for managed PostgreSQL endpoints that require TLS
-- Configure domains + auto-HTTPS in Coolify
-- Configure Hostinger DNS (api.cogitoacademy.id, app.cogitoacademy.id → VPS IP)
-- Verify Coolify auto-deploys on new image push
-- Verify both domains serve with HTTPS
+- [x] Provision the OVH VPS with the Terraform bootstrap in `infra/terraform`
+      (the existing `infra/provision.sh` remains the host bootstrap payload) —
+      **Terraform config extended (#115): Cloudflare DNS (api/app/status/coolify),
+      R2 buckets, state backend; apply pending (operator)**
+- [x] Install Coolify + create admin account — **already live on the VPS**
+- [x] Add GHCR as Docker registry in Coolify — **already live**
+- [x] Create PostgreSQL, Redis, server, web services in Coolify — **already live**
+- [x] Set `DB_SSL_ENABLED=false` for Coolify's bundled non-TLS PostgreSQL service;
+      keep it true for managed PostgreSQL endpoints that require TLS
+- [x] Configure domains + auto-HTTPS in Coolify — **api/app live; `coolify` webhook
+      host DNS declared in Terraform (#115), Caddy route pending**
+- [x] Configure Hostinger DNS (api.cogitoacademy.id, app.cogitoacademy.id → VPS IP)
+- [ ] Verify Coolify auto-deploys on new image push — **blocked on the webhook
+      401 (Option A Caddy route + UUID)**
+- [x] Verify both domains serve with HTTPS
 
 ### 4.2 CI/CD Secrets
 
-- Add GHCR secrets to GitHub repo
-- Add Coolify webhook URLs to GitHub secrets
-- Verify CD builds and pushes to GHCR on push to staging
+- [x] Add GHCR secrets to GitHub repo
+- [ ] Add Coolify webhook URLs to GitHub secrets — **secrets exist but point at
+      the unresolvable host; recreate with the resolvable URL (operator)**
+- [ ] Verify CD builds and pushes to GHCR on push to staging — **pipeline merged
+      (#118); live verification pending the webhook fix**
 
 ### 4.3 Monitoring
 
-- Configure Docker log rotation in Coolify
-- Deploy Uptime Kuma as Coolify service
-- Configure Uptime Kuma monitors (health, frontend, alerting)
-- Create public status page
-- Configure Coolify built-in health checks + resource alerts
+- [ ] Configure Docker log rotation in Coolify
+- [ ] Deploy Uptime Kuma as Coolify service
+- [ ] Configure Uptime Kuma monitors (health, frontend, alerting)
+- [ ] Create public status page
+- [ ] Configure Coolify built-in health checks + resource alerts
 
 ### 4.4 Security
 
-- Enable GitHub secret scanning (repo settings)
-- Keep the Coolify localhost SSH path key-only: root password login remains
-  disabled, and Docker's private `10.0.0.0/8` range stays excluded from the
-  SSH fail2ban jail
+- [ ] Enable GitHub secret scanning (repo settings)
+- [ ] Keep the Coolify localhost SSH path key-only: root password login remains
+      disabled, and Docker's private `10.0.0.0/8` range stays excluded from the
+      SSH fail2ban jail — **host-hardening playbook merged (#115); apply pending**
 
 ### 4.5 Docker Build Verification
 
-- Verify Docker builds succeed locally
-- Verify both images start and respond to health checks
+- [x] Verify Docker builds succeed locally
+- [x] Verify both images start and respond to health checks
 
 ---
 

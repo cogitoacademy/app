@@ -2,10 +2,10 @@
 
 | Field       | Value                                                                                                                                                                                      |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Status      | Active                                                                                                                                                                                     |
+| Status      | Active — Phase 0/1 repo work merged (#115–#118); operator apply + secrets pending                                                                                                         |
 | Created     | 2026-08-26 (rev. 2: 2026-08-27 — Tailscale control plane, Uptime Kuma only, prod-first, no staging, Ansible replaces provision.sh)                                                         |
 | Branch      | `deploy/production-readiness`                                                                                                                                                              |
-| Depends on  | PR #106, #107 (merged); PR #102 (Terraform + runbook, **needs rebase + CI re-run**); main synced to `1636cf6` (13 new commits incl. #108 contact sharing, admin bootstrap, migration 0030) |
+| Depends on  | PR #106, #107 (merged); PR #102 (Terraform + runbook, **merged #115**); main synced to `ca34d9d` (deployment wave: #115 infra scaffold, #116 DLQ health, #117 backups, #118 CD pipeline) |
 | Scope       | Infrastructure first (network + hardening, fully declarative), then component wiring (credentials, env, backups, CD, monitoring)                                                           |
 | Credentials | **User has all credentials ready** (R2, API tokens, etc.). Tailscale auth key provided. Secrets go into SOPS (encrypted in git) / Coolify env via Ansible; the lead never types secrets.   |
 
@@ -24,16 +24,16 @@
 - DLQ: **verified wired** (`scheduler.service.ts` `worker.on("failed")` → `cogito-jobs-dlq` queue + bounded `cogito:dlq` Redis list, atomic LPUSH+LTRIM). No gap.
 - Scheduler: `SCHEDULER_ENABLED=true` required in prod (env guard, #107). Fail-loud boot (#106).
 
-## 1. Current state (verified 2026-08-27)
+## 1. Current state (verified 2026-08-27, post-wave)
 
 | Item                 | State                                                                                                                                                                                                                                                                                                                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Main                 | synced to `1636cf6` — 13 commits ahead of the last wave: **#108 consent-based contact sharing (migration 0030)**, admin bootstrap (`ADMIN_EMAILS` env var, default `itcogitoacademy01@gmail.com`), tutor fallback meeting links, booking/e2e hardening                                                                                                                               |
-| Live API `/health`   | `{"status":"ok","checks":{"database":"ok","redis":"ok"}}`                                                                                                                                                                                                                                                                                                                            |
+| Main                 | `ca34d9d` — deployment wave merged: **#115 infra scaffold** (Tailscale ACL, Terraform R2/DNS incl. `coolify` record, Ansible playbooks, SOPS scaffold), **#116 DLQ health** (`/health` `dlqDepth`, alert-only), **#117 nightly backups** (`infra/backup.sh` + Ansible cron), **#118 CD pipeline** (`/health` `version` = `GIT_SHA`, webhook guards, `scripts/migrate-and-deploy.sh`) |
+| Live API `/health`   | `{"status":"ok","checks":{"database":"ok","redis":"ok"}}` (no `version` yet — new image not deployed)                                                                                                                                                                                                                                                                                |
 | VPS                  | OVH `15.235.186.159`, 3.7GB RAM (318MB free / 2.3GB available), UFW active (22/80/443), `PasswordAuthentication no` effective, Coolify + own db/redis healthy, app Postgres/Redis containers running, **`drizzle-gateway` unhealthy (Coolify-internal, not ours)**, **Tailscale NOT installed**                                                                                      |
-| Deploy Production    | **Diagnosed 2026-08-27 (S7):** failing on every push — `curl exit 6 "Could not resolve host"`. The `COOLIFY_PROD_SERVER_WEBHOOK`/`COOLIFY_PROD_WEBHOOK` secrets EXIST since 2026-08-24, but the webhook URL inside points at `coolify.cogitoacademy.id`, which has NO DNS record (control plane is tailnet-only) → GitHub Actions (cloud) cannot resolve it. Fix = Option A (below). |
+| Deploy Production    | **Fixed in code (#118)** — webhook secrets guarded (clear error, no more curl exit 6); `scripts/migrate-and-deploy.sh` polls `/health` until `version == GIT_SHA`. **Operator still must recreate the secrets** with the resolvable `https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...` URL (Option A; DNS record now declared in Terraform #115). **User reports the webhook returns 401** — the Coolify deploy-webhook path needs the Caddy route + per-resource UUID verification (Task 0.2, operator step). |
 | Live env gaps        | `PAYMENT_PROVIDER=stub`, no Google/R2/Sanity vars, no backups, no monitoring, no status DNS                                                                                                                                                                                                                                                                                          |
-| PR #102              | OPEN, CONFLICTING, CI stale-base failure                                                                                                                                                                                                                                                                                                                                             |
+| PR #102              | **Merged (#115)** — Terraform + runbook landed with the infra scaffold                                                                                                                                                                                                                                                                                                              |
 | New env vars to wire | `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — verify this is the operator account)                                                                                                                                                                                                                                                                                         |
 
 ## 2. Target topology (single VPS, declarative, scale-ready)
@@ -69,28 +69,28 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 ### Task 0.1: Rebase + merge PR #102
 
-- [ ] Rebase `docs/production-deployment-runbook` on `origin/main` (now 13 commits ahead — expect conflicts in `docs/`; resolve to the merged state).
-- [ ] Fix its stale CI failure (coverage gate at old base), re-run CI until green.
-- [ ] Squash-merge #102.
-- Commit: `chore(infra): merge deployment runbook + terraform bootstrap (#102)`
+- [x] Rebase `docs/production-deployment-runbook` on `origin/main` — **landed as part of #115 (infra scaffold)**; Terraform + runbook merged.
+- [x] Fix its stale CI failure (coverage gate at old base), re-run CI until green.
+- [x] Squash-merge #102.
+- Commit: `chore(infra): merge deployment runbook + terraform bootstrap (#102)` — **merged via #115**
 
 ### Task 0.2: Fix Deploy Production (S7) — Option A: expose only the deploy-webhook path (repo + operator)
 
 **Files:** `.github/workflows/cd-prod.yml`, `infra/terraform/main.tf` (DNS record), `infra/ansible/coolify-resources.yml` (Caddy route)
 
-- [ ] **DNS (Terraform):** add `coolify` A record → VPS, proxied (Cloudflare) — needed ONLY so GitHub Actions can reach the webhook path. The Coolify UI stays tailnet-only (no other routes exposed).
-- [ ] **Caddy route (Ansible → Coolify):** route `coolify.cogitoacademy.id/api/v1/deploy/*` → Coolify proxy; everything else on that host returns 404/denied. The per-resource UUID in the webhook URL is the bearer secret — never put it in a public doc.
-- [ ] **Secrets:** recreate `COOLIFY_PROD_SERVER_WEBHOOK` + `COOLIFY_PROD_WEBHOOK` with the resolvable URL (`https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...`). Keep them in GitHub Actions secrets (this is the deliberate exception; real credentials stay in SOPS).
-- [ ] Guard the Coolify webhook steps (empty secret → clear error, not curl exit 6).
-- [ ] Add `version` (image sha) to the `/health` response (`apps/server/src/routes.ts` + test) so the poll verifies the **deployed sha**, not just "some container is up".
-- [ ] Health poll checks `version == <sha>`.
-- Commit: `fix(ci): wire Option A webhook path, guard secrets, verify deployed sha`
+- [x] **DNS (Terraform):** `coolify` A record → VPS, proxied — **declared in #115** (`cloudflare_record.coolify`). The Coolify UI stays tailnet-only (no other routes exposed).
+- [ ] **Caddy route (Ansible → Coolify):** route `coolify.cogitoacademy.id/api/v1/deploy/*` → Coolify proxy; everything else on that host returns 404/denied. The per-resource UUID in the webhook URL is the bearer secret — never put it in a public doc. **PENDING — user reports the webhook returns 401; this route + the per-resource UUID are the likely cause.**
+- [ ] **Secrets:** recreate `COOLIFY_PROD_SERVER_WEBHOOK` + `COOLIFY_PROD_WEBHOOK` with the resolvable URL (`https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...`). Keep them in GitHub Actions secrets (this is the deliberate exception; real credentials stay in SOPS). **PENDING (operator)** — existing secrets point at the unresolvable host.
+- [x] Guard the Coolify webhook steps (empty secret → clear error, not curl exit 6) — **#118**.
+- [x] Add `version` (image sha) to the `/health` response (`apps/server/src/routes.ts` + test) so the poll verifies the **deployed sha**, not just "some container is up" — **#118**.
+- [x] Health poll checks `version == <sha>` — **#118** (`scripts/migrate-and-deploy.sh`).
+- Commit: `fix(ci): wire Option A webhook path, guard secrets, verify deployed sha` — **merged via #118**
 
 ### Task 0.3: Tailscale ACL file — repo work + user console paste
 
-- [ ] Create `infra/tailscale/acl.hujson`: `tag:server` owned by admin; members → `tag:server:22,8000,6001,6002`; server egress allowed (app needs outbound); Tailscale SSH `check` for root/nonroot.
-- [ ] User pastes into the admin console (ACL page) — the file stays the source of truth.
-- Commit: `chore(infra): declarative tailscale ACL for server node`
+- [x] Create `infra/tailscale/acl.hujson`: `tag:server` owned by admin; members → `tag:server:22,8000,6001,6002`; server egress allowed (app needs outbound); Tailscale SSH `check` for root/nonroot — **#115**.
+- [ ] User pastes into the admin console (ACL page) — the file stays the source of truth. **PENDING (operator)**
+- Commit: `chore(infra): declarative tailscale ACL for server node` — **merged via #115**
 
 ---
 
@@ -98,21 +98,22 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 ### Task 1.1: Terraform — host shell + DNS + R2 (repo work, runs rarely)
 
-- [ ] Extend `infra/terraform` (from #102): keep the `terraform_data` bootstrap; add Cloudflare provider records (already-existing `api.`/`app.` become managed, plus `status.`); R2 bucket for backups + Terraform state backend.
-- [ ] `terraform validate` + plan in CI (no apply in CI — operator applies).
-- Commit: `feat(infra): terraform dns + r2 + state backend`
+- [x] Extend `infra/terraform` (from #102): keep the `terraform_data` bootstrap; add Cloudflare provider records (already-existing `api.`/`app.` become managed, plus `status.` and `coolify.`); R2 bucket for backups + Terraform state backend — **#115** (also fixed the provider source `cloudflare/cloudflare` and R2 `location = "APAC"`).
+- [x] `terraform validate` + plan in CI (no apply in CI — operator applies) — **#115** (validate verified locally; CI runs docs+infra).
+- Commit: `feat(infra): terraform dns + r2 + state backend` — **merged via #115**
+- [ ] **Apply** (operator runs `terraform apply` with `CLOUDFLARE_API_TOKEN` + R2 state token) — **PENDING**
 
 ### Task 1.2: Ansible — host hardening + Tailscale join (repo work + user auth key)
 
 **Files:** `infra/ansible/` (playbooks, `inventory.ini`, `group_vars/`)
 
-- [ ] Playbook `host-hardening.yml` (replaces `provision.sh` ad-hoc bits):
+- [x] Playbook `host-hardening.yml` (replaces `provision.sh` ad-hoc bits) — **#115**:
   - ufw: `80/443` from anywhere (Cloudflare-proxied public traffic), `22` + `8000/6001/6002` **from the tailnet CIDR only** (`100.64.0.0/10`)
   - fail2ban sshd jail enabled; unattended-upgrades on; sshd `PasswordAuthentication no`, root key-only for Coolify's internal loopback SSH
   - Docker pinned (no unpinned get.docker.com); verify no host ports except 80/443 public
-- [ ] Playbook `tailscale.yml`: install Tailscale, `tailscale up --authkey={{ ts_auth_key }} --hostname=cogito-vps --advertise-tags=tag:server` — the key lives in the SOPS vault (user pasted `tskey-auth-...`; lead never sees it).
-- [ ] Playbook `coolify-resources.yml`: drive the **Coolify API** — re-declare the existing app Postgres/Redis containers (names, volumes, private network), the API + web app resources (image tags, ports, domains, health checks), and all env vars from SOPS.
-- Commit: `feat(infra): ansible host hardening, tailscale join, coolify resources`
+- [x] Playbook `tailscale.yml` — **#115**: install Tailscale, `tailscale up --authkey={{ ts_auth_key }} --hostname=cogito-vps --advertise-tags=tag:server` — the key lives in the SOPS vault (user pasted `tskey-auth-...`; lead never sees it).
+- [ ] Playbook `coolify-resources.yml`: drive the **Coolify API** — re-declare the existing app Postgres/Redis containers (names, volumes, private network), the API + web app resources (image tags, ports, domains, health checks), and all env vars from SOPS. **PENDING — includes the Task 0.2 Caddy route for the deploy-webhook path.**
+- Commit: `feat(infra): ansible host hardening, tailscale join, coolify resources` — **scaffold merged via #115; coolify-resources.yml still to write**
 - [ ] **Apply** (operator runs `ansible-playbook` with the vault; or via a worker pane with `herd attach` for the vault password).
 - [ ] **Verify lock-down**: SSH via tailnet IP works; public `:8000` refused; `coolify` container only reachable via tailnet; app `/health` still ok.
 
@@ -127,9 +128,9 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 ### Task 2.1: SOPS vault (repo scaffold + user fills)
 
-- [ ] `.sops.yaml` + Age keypair (user generates; public key committed; private key off-repo).
-- [ ] `infra/secrets/prod.env` (encrypted) with ALL credentials the user has: `BETTER_AUTH_SECRET`, `PAYMENT_WEBHOOK_SECRET`, `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — confirm), `RESEND_API_KEY`+`EMAIL_FROM`, `XENDIT_SECRET_KEY`/`WEBHOOK_TOKEN`/redirects/`WEBHOOK_ALLOWED_IPS`, `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_MEET_*` (+ refresh token via `scripts/google-meet-auth.ts`), `R2_*`+`R2_PUBLIC_URL`, `SANITY_*`, `METRICS_TOKEN`, `DATABASE_URL`/`REDIS_URL` (existing containers).
-- Commit: `chore(secrets): add SOPS vault scaffold` (encrypted only)
+- [x] `.sops.yaml` + Age keypair scaffold — **#115** (public key placeholder `CHANGE_ME_OPERATOR_AGE_PUBLIC_KEY`; operator generates the keypair and updates it).
+- [ ] `infra/secrets/prod.env` (encrypted) with ALL credentials the user has: `BETTER_AUTH_SECRET`, `PAYMENT_WEBHOOK_SECRET`, `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — confirm), `RESEND_API_KEY`+`EMAIL_FROM`, `XENDIT_SECRET_KEY`/`WEBHOOK_TOKEN`/redirects/`WEBHOOK_ALLOWED_IPS`, `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_MEET_*` (+ refresh token via `scripts/google-meet-auth.ts`), `R2_*`+`R2_PUBLIC_URL`, `SANITY_*`, `METRICS_TOKEN`, `DATABASE_URL`/`REDIS_URL` (existing containers). **PENDING (operator fills; lead never sees secrets)**
+- Commit: `chore(secrets): add SOPS vault scaffold` (encrypted only) — **scaffold merged via #115**
 
 ### Task 2.2: Apply env + wire providers (Ansible → Coolify; operator confirms console bits)
 
@@ -148,16 +149,18 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 ### Task 3.1: Nightly backup → R2 (repo script + Ansible cron)
 
-- [ ] `infra/backup.sh`: `pg_dump` via the Coolify Postgres container → gzip → R2 (`backups/$(date +%F).sql.gz`) → prune 30 days.
-- [ ] Ansible installs the cron (nightly 02:00 WIB). Document restore drill in RUNBOOK.
-- Commit: `feat(ops): nightly postgres backup to R2 with retention`
+- [x] `infra/backup.sh`: `pg_dump -Fc` via the Coolify Postgres container → gzip → R2 (`backups/$(date +%F).sql.gz`) → prune 30 days — **#117**.
+- [x] Ansible installs the cron (nightly 02:00 WIB) — **#117** (`infra/ansible/backup-cron.yml`). Restore drill documented in RUNBOOK.
+- Commit: `feat(ops): nightly postgres backup to R2 with retention` — **merged via #117**
+- [ ] **Apply** the cron playbook on the VPS (operator; needs SOPS vault + host-reachable `DATABASE_URL`).
 
 ### Task 3.2: Migration strategy in CD (repo work)
 
-- [ ] Pre-deploy step in `cd-prod.yml`: `pg_dump` snapshot → R2 (`pre-migrate-<sha>`) → `bun run db:migrate` (prod `DATABASE_URL` from secret) → Coolify deploy → health poll (sha-verified).
-- [ ] On health failure: rollback to previous `v<sha>`; migration failure → restore snapshot manually under a maintenance window (never blind-auto-restore with live traffic).
-- [ ] Migration ordering: additive-only in a release; destructive steps are two-step.
-- Commit: `feat(ci): backup + migrate + deploy + health + rollback pipeline`
+- [x] Pre-deploy step in `cd-prod.yml`: `pg_dump` snapshot → R2 (`pre-migrate-<sha>`) → `bun run db:migrate` (prod `DATABASE_URL` from secret) → Coolify deploy → health poll (sha-verified) — **#118** (`scripts/migrate-and-deploy.sh`).
+- [x] On health failure: rollback to previous `v<sha>`; migration failure → restore snapshot manually under a maintenance window (never blind-auto-restore with live traffic) — **#118** (rollback hint names `v<prev-sha>` + R2 snapshot key).
+- [x] Migration ordering: additive-only in a release; destructive steps are two-step.
+- Commit: `feat(ci): backup + migrate + deploy + health + rollback pipeline` — **merged via #118**
+- [ ] **Secrets (operator):** add `PROD_DATABASE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` as GitHub Actions secrets; recreate the Coolify webhook secrets with the resolvable URL.
 
 ---
 
@@ -191,11 +194,11 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 ## Exit gates
 
-- Phase 1: ufw/tailnet lock-down verified; Coolify UI unreachable publicly; app `/health` ok.
-- Phase 2: `/health` + sha ok with full env; Xendit sandbox→live E2E; Meet probe ok; R2 round-trip ok.
-- Phase 3: nightly backup runs + restores (drill); CD migrate→deploy→rollback drill green.
-- Phase 4: Uptime Kuma live + Telegram alert (kill-container drill); security checklist; docs current.
-- Every PR: CI green (`gh pr checks --watch`).
+- Phase 1: ufw/tailnet lock-down verified; Coolify UI unreachable publicly; app `/health` ok. **Repo work done (#115); apply + verify pending.**
+- Phase 2: `/health` + sha ok with full env; Xendit sandbox→live E2E; Meet probe ok; R2 round-trip ok. **Pending (secrets + env wiring).**
+- Phase 3: nightly backup runs + restores (drill); CD migrate→deploy→rollback drill green. **Scripts merged (#117/#118); live drill pending.**
+- Phase 4: Uptime Kuma live + Telegram alert (kill-container drill); security checklist; docs current. **Pending.**
+- Every PR: CI green (`gh pr checks --watch`). **Held for the wave's 4 PRs (#115–#118).**
 
 ## Risks
 
