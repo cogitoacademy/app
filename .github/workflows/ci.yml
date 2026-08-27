@@ -31,18 +31,35 @@ jobs:
         run: |
           bunx oxlint --fix || true
           bunx oxfmt --write || true
-      - name: Check last commit author
+      - name: Check last commit message
         id: commit-check
-        run: echo "last-commit=$(git log -1 --format='%an')" >> "$GITHUB_OUTPUT"
+        run: echo "last-commit-msg=$(git log -1 --format='%s')" >> "$GITHUB_OUTPUT"
       - name: Commit auto-fixes
         # C7: only on pull_request events (never auto-commit to main on push),
         # only for non-fork branches, and never when the last commit is our
-        # own — otherwise the fix loop pushes straight to main unreviewed.
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.commit-check.outputs.last-commit != 'github-actions[bot]'
+        # own auto-fix commit (identified by its message, not its author —
+        # author-based guards break once the push uses a PAT).
+        #
+        # S8: when ACTIONS_BOT_PAT is set (a fine-grained PAT scoped to this
+        # repo with contents:write), the auto-fix push is attributed to the
+        # PAT owner (a human) and the re-triggered pull_request runs are NOT
+        # gated behind the "action_required" approval that github-actions[bot]
+        # pushes trigger. Without the PAT, the action falls back to
+        # GITHUB_TOKEN and the bot-commit approval gate applies — the operator
+        # must create the secret (or enable the repo setting "Allow GitHub
+        # Actions to create and approve pull requests").
+        if: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.commit-check.outputs.last-commit-msg != 'style: apply automated lint and format fixes' }}"
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "style: apply automated lint and format fixes"
           commit_options: "--no-verify"
+          commit_user_name: cogito-bot
+          commit_user_email: bot@cogitoacademy.id
+          commit_author: cogito-bot <bot@cogitoacademy.id>
+          # Fall back to the default GITHUB_TOKEN when the PAT secret is
+          # unset — an empty token would fail the push and break the lint
+          # job on every PR until the operator creates the secret.
+          token: ${{ secrets.ACTIONS_BOT_PAT || github.token }}
       - name: Verify lint
         run: bunx oxlint --format=github
       - name: Verify formatting
