@@ -62,7 +62,6 @@ export async function listApprovedPublic(conn: DbOrTx) {
   return conn
     .select({
       id: achievement.id,
-      userId: achievement.userId,
       eventName: achievement.eventName,
       category: achievement.category,
       award: achievement.award,
@@ -71,7 +70,7 @@ export async function listApprovedPublic(conn: DbOrTx) {
       awardingDate: achievement.awardingDate,
       location: achievement.location,
       description: achievement.description,
-      evidenceUrl: achievement.evidenceUrl,
+      subjects: achievement.subjects,
       documentationUrl: achievement.documentationUrl,
       createdAt: achievement.createdAt,
       displayName: user.name,

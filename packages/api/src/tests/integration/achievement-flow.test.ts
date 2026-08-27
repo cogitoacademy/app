@@ -218,6 +218,8 @@ describe("Achievement review flow", () => {
       const hit = publicResult.find((a) => a.id === approved[0]!.id);
       expect(hit).toBeDefined();
       expect(hit!.displayName).toBeTruthy();
+      expect(hit).not.toHaveProperty("userId");
+      expect(hit).not.toHaveProperty("evidenceUrl");
     }
     const rejected = await db
       .select()
