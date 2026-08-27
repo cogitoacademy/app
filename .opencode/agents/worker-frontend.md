@@ -4,13 +4,21 @@ mode: primary
 model: ollama-cloud/deepseek-v4-flash
 permission:
   edit: allow
+  read: allow
+  grep: allow
+  glob: allow
+  list: allow
   bash:
-    "*": ask
-    "git diff*": allow
-    "git status*": allow
-    "git log*": allow
-    "bun run check*": allow
-    "bun run check-types*": allow
+    "*": allow
+    "git push*": deny
+    "git push --force*": deny
+    "git reset --hard*": deny
+    "git clean*": deny
+    "git worktree remove*": deny
+    "rm -rf /": deny
+    "rm -rf ~": deny
+    "rm -rf $HOME": deny
+    "sudo *": deny
   skill:
     "*": deny
     frontend-design: allow
