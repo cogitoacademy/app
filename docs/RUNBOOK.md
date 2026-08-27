@@ -44,6 +44,7 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/onboarding`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial onboarding form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the submission form.
 - Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
+- In `/admin-tutors`, open a profile with pending edits and confirm the proposed subject changes show readable category/subject labels instead of raw UUIDs. Resize to a narrow viewport and verify subject badges and other long pending values wrap without horizontal page overflow; the review request/response payloads must remain unchanged.
 
 ### Theme shortcut smoke check
 
@@ -109,7 +110,7 @@ Verify the role-aware default tab: students open on Upcoming, tutors open on Pen
 
 ### Booking detail smoke check
 
-Open an online booking detail and verify the overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above Marks in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. If no link is available, the assigned tutor can use **Add meeting link** and an admin can use **Add/Replace link** in operations; verify the shared Selia dialog accepts a trusted `http`/`https` URL and that the student read becomes ready without a reload. Repeat after multiple failed provider rows to confirm the newest meeting-attempt row is updated. For an offline booking, verify the same overview section shows the room name and location instead of a meeting CTA.
+Open an online booking detail and verify the overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above Marks in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. In the Google Calendar event, verify a solo title follows `Solo session with [Tutor] & [Student]`, while group/series titles name the tutor, and the description lists the participants, includes the booking learning goal when present, and includes a clickable `/bookings/{bookingId}` Cogito link. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. If no link is available, the assigned tutor can use **Add meeting link** and an admin can use **Add/Replace link** in operations; verify the shared Selia dialog accepts a trusted `http`/`https` URL and that the student read becomes ready without a reload. Repeat after multiple failed provider rows to confirm the newest meeting-attempt row is updated. For an offline booking, verify the same overview section shows the room name and location instead of a meeting CTA.
 
 The overview row must show one `Date & time` field with the date and session hours merged beside `Format & access` in a two-column desktop grid; on narrow screens the two fields stack without horizontal overflow. The online `Format & access` section now shows only the compact info trigger; activate it with mouse, keyboard, and touch to verify the Selia popover exposes the pending/failed explanation plus retry or manual setup status, or the `Open meeting room` action when a URL is available. Available links must not render a `Ready` badge or standalone meeting CTA. Offline bookings without an assigned room should expose the same trigger beside `Offline`; tutors with an eligible `Complete session` action should find its completion-timing explanation beside the button. Confirm the Participants heading uses the matching Selia `IconBox`, and on desktop all eligible booking actions, including propose and complete, sit at the bottom of the right header column beneath the state badge.
 
@@ -155,6 +156,20 @@ On availability/profile/admin forms, verify dates use the Selia date picker, tim
 
 As a student, open `/achievements`, choose **Add Achievement**, and verify the Category and Level selects open above the modal and update their triggers. Open **Awarding Date**, confirm the calendar is visible above the modal, select a day, and verify the trigger shows the chosen date. Open the calendar month/year dropdowns as well; each popup must remain clickable and must not be hidden behind the dialog backdrop. This is a UI-only check; the existing `achievement.create` input and `awardingDate` contract remain unchanged.
 
+### Public achievements smoke check
+
+Open `https://cogitoacademy.id/id/achievements` and `https://cogitoacademy.id/en/achievements` without an authenticated session. Verify the archive shows only approved + visible records, the homepage preview links to the archive, and changing the locale updates labels without changing the record data. Open a record detail and confirm only the student's display name and public documentation link are shown; private verification evidence and internal user IDs must not appear in the rendered page or the network response.
+
+For an API-level check, run:
+
+```bash
+curl -sS -X POST https://api.cogitoacademy.id/rpc/achievement/listApproved \
+  -H 'content-type: application/json' \
+  --data '{"json":{}}'
+```
+
+The response should be the standard oRPC envelope with a JSON array. Inspect one returned record and verify it has no `userId` or `evidenceUrl`. If the API returns an empty array, the public site should render its intentional empty/error state rather than exposing draft or rejected records.
+
 On a completed booking, verify the Session notes card is visible to both tutor and student. Select text and exercise bold, italic, heading, paragraph, bullet, numbered-list, and safe-link actions; confirm the live preview matches the persisted note after reload, the author label distinguishes your note from the other participant's note, and an attempted `<script>` or `javascript:` link is removed by the render sanitizer.
 
 For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount and Marks holds unchanged, and creates a notification for that invitee. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply. For a one-session group, verify the booking form shows both the per-student price and the full temporary target-headcount hold, and blocks submit when the wallet cannot cover that hold.
@@ -167,7 +182,7 @@ From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, v
 
 ### Tutor subject taxonomy smoke check
 
-Open `/onboarding` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs.
+Open `/onboarding` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column.
 
 ### Profile UX smoke check
 
@@ -309,6 +324,106 @@ bun run db:test
 ```bash
 bun run db:studio        # Opens Drizzle Studio on port 4983
 ```
+
+## Backup & Restore
+
+### How the nightly backup works
+
+Every night at **02:00 WIB** (`Asia/Jakarta`) a cron job on the VPS runs
+[`infra/backup.sh`](../infra/backup.sh), which:
+
+1. Dumps the production database with `pg_dump --no-owner --no-acl -Fc` (custom
+   format, gzip-compressed — the file is still named `backups-YYYY-MM-DD.sql.gz`).
+2. Uploads it to Cloudflare R2 via the `aws` CLI
+   (`--endpoint-url https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com --region auto`)
+   under `s3://cogito-backups/backups/YYYY-MM-DD.sql.gz`.
+3. Prunes R2 objects older than `RETENTION_DAYS` (default **30 days**).
+
+The cron job, the `pg_dump`/`aws` CLI packages, the decrypted credential file
+(`/etc/cogito/backup.env`, root-only `0600`, decrypted from the SOPS vault on
+the control node — the age key never reaches the VPS) and log rotation
+(`/var/log/cogito-backup.log`, 7 daily files) are all installed by the
+idempotent playbook [`infra/ansible/backup-cron.yml`](../infra/ansible/backup-cron.yml):
+
+```bash
+ansible-playbook -i infra/ansible/inventory.ini \
+  infra/ansible/backup-cron.yml --ask-become-pass
+```
+
+The playbook runs the backup as **root** (documented in the playbook header):
+the single-tenant VPS is already root-managed, and the script needs the full
+`DATABASE_URL` plus the R2 token either way, so a dedicated `backup` user
+would duplicate credentials without adding isolation.
+
+> **Before first run:** `DATABASE_URL` in the SOPS vault must resolve from the
+> VPS **host** (e.g. `127.0.0.1:<published-port>` or the container IP) —
+> Coolify's bundled PostgreSQL hostname `postgres-prod` is only reachable
+> inside its private Docker network. `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and
+> `R2_SECRET_ACCESS_KEY` come from the same vault; the token needs Object
+> Read & Write on the bucket.
+
+### Manual run and verification
+
+```bash
+# Print the exact commands without executing (no credentials needed):
+/usr/local/bin/cogito-backup.sh --dry-run
+# Run one backup now:
+DATABASE_URL=... R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
+  /usr/local/bin/cogito-backup.sh
+```
+
+Verify a backup exists and is the expected size:
+
+```bash
+aws s3 ls s3://cogito-backups/backups/ \
+  --endpoint-url https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com --region auto
+```
+
+A fresh nightly backup should appear by ~02:10 WIB. Missing backups surface as
+an empty `backups/` listing plus the cron log at `/var/log/cogito-backup.log`.
+
+### Restore drill
+
+The nightly dumps are **custom-format** (from `pg_dump -Fc`) — restore them
+with `pg_restore`, not `psql`. Practice this on a scratch database before ever
+needing it in anger:
+
+```bash
+# 1. Pull the latest backup and decompress the custom-format dump.
+aws s3 cp s3://cogito-backups/backups/$(date +%F).sql.gz . \
+  --endpoint-url https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com --region auto
+gzip -dc backups-$(date +%F).sql.gz > backup.dump
+
+# 2. Restore into a scratch database (NOT the live one).
+createdb cogito-restore-drill
+pg_restore --no-owner --no-acl -d cogito-restore-drill backup.dump
+
+# 3. Verify against known-good expectations: row counts, newest rows.
+psql -d cogito-restore-drill -c "SELECT count(*) FROM \"user\";"
+psql -d cogito-restore-drill -c "SELECT count(*) FROM booking;"
+# Compare with the live database; also spot-check the newest ledger rows and
+# a recent booking state history.
+```
+
+**Promoting the drill to a real restore** (disaster recovery, not a drill):
+
+1. **Never restore over live traffic without a maintenance window.** Pick a
+   low-traffic slot, put the API in maintenance (or stop the `cogito-api`
+   resource in Coolify), and take a fresh pre-restore snapshot of the current
+   database in case the restore must be abandoned.
+2. Restore the verified dump into the production database:
+   ```bash
+   pg_restore --clean --if-exists --no-owner --no-acl -d <PROD_DATABASE_NAME> backup.dump
+   ```
+3. If the backup predates pending migrations, run `bun run db:migrate` with
+   the production `DATABASE_URL` (see DEPLOYMENT.md — migrations are never
+   automatic).
+4. Start the API and verify `/health` (database + Redis + scheduler `ok`) and
+   the smoke checks in this runbook before reopening traffic.
+
+Backups are retained 30 days; a restore older than that requires the R2
+bucket's lifecycle configuration to have kept the object, so verify any
+emergency restore against the actual object list first.
 
 ## Redis
 
@@ -452,7 +567,7 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
 
 1. Open the Coolify dashboard → the service (server / web)
 2. Use **Rollback to previous release** (Coolify keeps the previous image/version)
-3. Verify health: `curl https://api.cogitoacademy.id/health`
+3. Verify health **and the deployed sha**: `curl https://api.cogitoacademy.id/health` must return `"version": "<full-commit-sha>"` matching the image you intended to run. The CD pipeline (`scripts/migrate-and-deploy.sh`) polls `/health` until `version == GIT_SHA` (bounded 20×15s) and fails loudly with a rollback hint if the new image never comes up — a green deploy now means the _new_ image is serving, not merely "some container is up".
 4. If a database migration was part of the deployment, check migration status:
    ```bash
    bun run db:studio  # Check migration table
@@ -654,7 +769,7 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
 
 ## Deploy Secrets (CD webhooks)
 
-The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing.
+The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing. Since the CD-pipeline hardening (2026-08-27) `cd-prod.yml` also **guards the secrets explicitly**: an unset `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK` prints a clear message ("... is unset — configure the Coolify resource webhook and add it as a GitHub secret") and exits 1 before any curl runs, so the failure mode is a readable message, not a bare `curl exit 6`.
 
 **Setup (one-time, user action):**
 
@@ -663,13 +778,23 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
    Secret. Use this format:
 
    ```text
-   https://cl.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
+   https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
    ```
 
    Replace `<resource-uuid>` with the Coolify resource UUID and remove the
    angle brackets. Keep `&` literal; do not add `\&`, backticks, quotes, or
    trailing `??`. The URL host must be publicly DNS-resolvable from GitHub
    Actions.
+
+   > **Why `coolify.cogitoacademy.id` (2026-08-27, S7):** the Coolify control
+   > plane is tailnet-only — the UI and SSH are reachable only over Tailscale,
+   > and the old webhook host (`cl.cogitoacademy.id`) had no DNS record, so
+   > GitHub Actions (cloud) failed with `curl exit 6 "Could not resolve host"`.
+   > Option A exposes **only** the deploy-webhook path: a DNS record + Caddy
+   > route for `coolify.cogitoacademy.id/api/v1/deploy/*` (the per-resource UUID
+   > in the URL is the bearer secret); everything else on that host returns
+   > 404/denied and the Coolify UI stays tailnet-only. The operator must
+   > recreate the two production secrets with the resolvable URL above.
 
 3. GitHub → repo **Settings → Secrets and variables → Actions**:
    - `COOLIFY_STAGING_SERVER_WEBHOOK` — full staging API resource URL
@@ -735,6 +860,15 @@ surfaces manual/retry setup attention.
 ## GHCR / Docker Deploy (CD)
 
 The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
+
+The production pipeline (`cd-prod.yml`) runs the full backup → migrate → deploy → health sequence through `scripts/migrate-and-deploy.sh`:
+
+1. **Backup:** `pg_dump` snapshot of the production database, gzipped, uploaded to R2 as `pre-migrate-<GIT_SHA>.sql.gz` (aws CLI against the R2 S3 endpoint).
+2. **Migrate:** `bun run db:migrate` against the production `DATABASE_URL`.
+3. **Deploy:** POST the Coolify deploy webhook (`COOLIFY_PROD_SERVER_WEBHOOK`).
+4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min). On failure the script prints a clear rollback hint pointing at the previous immutable `v<prev-sha>` image.
+
+The server image is built with `--build-arg GIT_SHA=${{ github.sha }}`; the Dockerfile bakes it into `ENV GIT_SHA`, and `GET /health` returns it as `version` (`"dev"` when unset, e.g. local runs). The web image is built with `--build-arg VITE_SERVER_URL=https://api.cogitoacademy.id`.
 
 For the exact manual build, push, redeploy, verification, and rollback
 procedure when Actions cannot start, use [Setup and Deployment](./DEPLOYMENT.md#manual-deployment-when-ci-has-no-quota).

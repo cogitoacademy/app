@@ -1,8 +1,8 @@
 # Not-found and Error UX
 
-| Field  | Value |
-| ------ | ----- |
-| Status | **COMPLETED** — implemented 2026-08-27 |
+| Field  | Value                                                |
+| ------ | ---------------------------------------------------- |
+| Status | **COMPLETED** — implemented 2026-08-27               |
 | Scope  | `apps/web` route fallback and user-facing error copy |
 
 ## Delivered

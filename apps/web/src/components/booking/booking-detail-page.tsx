@@ -6,6 +6,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
   IconArrowLeft,
+  IconArrowUpRight,
   IconCalendarCheck,
   IconCalendarClock,
   IconCalendarEvent,
@@ -896,17 +897,15 @@ export function BookingDetailPage({
               <div className="rounded-lg border border-item-border bg-item p-4">
                 <div className="flex items-start gap-3">
                   <IconBox
-                    variant="secondary-subtle"
+                    variant="primary-subtle"
                     size="sm"
                     aria-hidden="true"
                   >
                     <IconCalendarEvent />
                   </IconBox>
                   <div className="min-w-0">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Session details
-                    </Text>
-                    <Text className="mt-1 font-medium">
+                    <Text className="text-sm text-muted">Session details</Text>
+                    <Text className="font-medium">
                       {formatBookingDate(
                         booking.scheduledStartAt,
                         booking.timezone,
@@ -1279,12 +1278,13 @@ function MeetingStatusPopover({
               />
             }
             nativeButton={false}
-            variant="plain"
+            variant="tertiary"
             size="xs"
             block
           >
             <IconDeviceLaptop aria-hidden="true" />
             Open meeting room
+            <IconArrowUpRight aria-hidden="true" />
           </Button>
         ) : meetingStatus === "failed" ? (
           <Badge variant="warning" size="sm" pill>
@@ -1391,14 +1391,11 @@ function ReviewMeta({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span
-        className="text-muted [&_svg:not([class*=size-])]:size-4"
-        aria-hidden="true"
-      >
+      <IconBox variant="primary-subtle" size="sm" aria-hidden="true">
         {icon}
-      </span>
+      </IconBox>
       <span>
-        <Text className="text-xs text-muted">{label}</Text>
+        <Text className="text-sm text-muted">{label}</Text>
         <Text className="text-sm font-medium">{value}</Text>
       </span>
     </div>

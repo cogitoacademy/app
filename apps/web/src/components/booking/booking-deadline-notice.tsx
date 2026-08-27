@@ -63,11 +63,11 @@ export function BookingDeadlineNotice({
       <IconClock
         aria-hidden="true"
         className={`mt-0.5 size-4 shrink-0 ${
-          expired || urgent ? "text-danger" : "text-warning-foreground"
+          expired || urgent ? "text-danger" : "text-warning"
         }`}
       />
       <div className="min-w-0">
-        <Text className="font-medium">
+        <Text className="font-medium text-base/5">
           {expired
             ? "Response window passed"
             : `Respond by ${deadlineLabel} WIB`}

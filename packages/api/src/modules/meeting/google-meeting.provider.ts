@@ -1,10 +1,12 @@
 import { google } from "googleapis";
+import type { calendar_v3 } from "googleapis";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { meetingEvent } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import type {
   MeetingAttendee,
   MeetingEvent,
+  MeetingEventDetails,
   MeetingPort,
 } from "./meeting.types";
 import { log } from "../../lib/logger";
@@ -23,16 +25,7 @@ interface GoogleMeetingConfig {
   refreshToken?: string;
 }
 
-interface GoogleCalendarEvent {
-  id?: string | null;
-  hangoutLink?: string | null;
-  conferenceData?: {
-    entryPoints?: Array<{
-      entryPointType?: string | null;
-      uri?: string | null;
-    }> | null;
-  } | null;
-}
+type GoogleCalendarEvent = calendar_v3.Schema$Event;
 
 interface GoogleOAuthTokenResponse {
   access_token?: string;
@@ -257,9 +250,12 @@ export function createGoogleMeetingProvider(
     start: Date,
     end: Date,
     attendees: MeetingAttendee[] | undefined,
+    details: MeetingEventDetails | undefined,
     timeoutMs: number,
   ): Promise<GoogleCalendarEvent> {
     const calendarId = encodeURIComponent(config.calendarId);
+    const summary = details?.title?.trim() || `Cogito Booking ${bookingId}`;
+    const description = details?.description?.trim();
     return fetchJson<GoogleCalendarEvent>(
       `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?conferenceDataVersion=1`,
       {
@@ -269,7 +265,8 @@ export function createGoogleMeetingProvider(
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          summary: `Cogito Booking ${bookingId}`,
+          summary,
+          ...(description ? { description } : {}),
           start: { dateTime: start.toISOString() },
           end: { dateTime: end.toISOString() },
           ...(attendees?.length
@@ -401,12 +398,26 @@ export function createGoogleMeetingProvider(
             TIMEOUT_MS,
           );
         } else {
+          // `events.update` replaces the entire event resource. Fetch the
+          // current event first so the human-readable title, description,
+          // attendees, and Meet conference are preserved on reschedule.
+          const current = await withTimeout(
+            Promise.resolve(
+              calendar!.events.get({
+                calendarId: config.calendarId,
+                eventId: row.externalEventId!,
+              }),
+            ).then((response) => response.data as GoogleCalendarEvent),
+            TIMEOUT_MS,
+            "Google Meet API timeout after 30s",
+          );
           await withTimeout(
             Promise.resolve(
               calendar!.events.update({
                 calendarId: config.calendarId,
                 eventId: row.externalEventId!,
                 requestBody: {
+                  ...current,
                   start: {
                     dateTime: (changes.startAt ?? new Date()).toISOString(),
                   },
@@ -576,6 +587,7 @@ export function createGoogleMeetingProvider(
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
     conn?: DbOrTx,
+    details?: MeetingEventDetails,
   ): Promise<MeetingEvent> {
     const startedAt = Date.now();
     // L2: when called inside a booking transaction, the local meetingEvent row
@@ -603,6 +615,7 @@ export function createGoogleMeetingProvider(
               start,
               end,
               attendees,
+              details,
               TIMEOUT_MS,
             )
           : withTimeout(
@@ -610,7 +623,11 @@ export function createGoogleMeetingProvider(
                 calendar!.events.insert({
                   calendarId: config.calendarId,
                   requestBody: {
-                    summary: `Cogito Booking ${bookingId}`,
+                    summary:
+                      details?.title?.trim() || `Cogito Booking ${bookingId}`,
+                    ...(details?.description?.trim()
+                      ? { description: details.description.trim() }
+                      : {}),
                     start: { dateTime: start.toISOString() },
                     end: { dateTime: end.toISOString() },
                     ...(attendees?.length
@@ -734,6 +751,7 @@ export function createGoogleMeetingProviderWithFallback(
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
     conn?: DbOrTx,
+    details?: MeetingEventDetails,
   ): Promise<MeetingEvent> {
     const result = await googleProvider.createEvent(
       bookingId,
@@ -741,6 +759,7 @@ export function createGoogleMeetingProviderWithFallback(
       scheduledEndAt,
       attendees,
       conn,
+      details,
     );
     if (result.status === "failed") {
       // Count this booking's failed google_meet attempts. The retry budget is

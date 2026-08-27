@@ -1,6 +1,10 @@
 import type { DbType } from "../../lib/db";
 import type { RedisClient } from "../../lib/redis";
-import type { MeetingEvent, MeetingPort } from "./meeting.types";
+import type {
+  MeetingEvent,
+  MeetingEventDetails,
+  MeetingPort,
+} from "./meeting.types";
 import { createFallbackMeetingProvider } from "./fallback.provider";
 import { createGoogleMeetingProviderWithFallback } from "./google-meeting.provider";
 
@@ -33,4 +37,4 @@ export function createMeetingModule(deps: {
   return createFallbackMeetingProvider(deps.db);
 }
 
-export type { MeetingEvent, MeetingPort };
+export type { MeetingEvent, MeetingEventDetails, MeetingPort };

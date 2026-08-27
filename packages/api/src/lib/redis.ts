@@ -18,6 +18,7 @@ export interface RedisClient {
   hget(key: string, field: string): Promise<string | null>;
   hgetall(key: string): Promise<Record<string, string>>;
   hdel(key: string, ...fields: string[]): Promise<number>;
+  llen(key: string): Promise<number>;
   eval(
     script: string,
     keys: string[],
@@ -189,6 +190,8 @@ export class InMemoryRedis implements RedisClient {
   async quit(): Promise<string> {
     return "OK";
   }
+
+  llen = async (_key: string): Promise<number> => 0;
 }
 
 let redisClient: RedisClient | null = null;
@@ -258,6 +261,7 @@ type RedisAdapterClient = {
   hget(key: string, field: string): Promise<string | null>;
   hgetall(key: string): Promise<Record<string, string>>;
   hdel(key: string, ...fields: string[]): Promise<number>;
+  llen(key: string): Promise<number>;
   eval(
     script: string,
     keyCount: number,
@@ -299,6 +303,7 @@ export function createRedisAdapter(client: RedisAdapterClient): RedisClient {
     hget: (key: string, field: string) => client.hget(key, field),
     hgetall: (key: string) => client.hgetall(key),
     hdel: (key: string, ...fields: string[]) => client.hdel(key, ...fields),
+    llen: (key: string) => client.llen(key),
     eval: (script: string, keys: string[], args: (string | number)[]) =>
       client.eval(script, keys.length, ...keys, ...args),
     ping: () => client.ping(),

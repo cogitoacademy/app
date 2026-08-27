@@ -15,6 +15,13 @@ export interface MeetingAttendee {
   name?: string;
 }
 
+export interface MeetingEventDetails {
+  /** The human-readable title shown in the provider calendar. */
+  title: string;
+  /** Optional provider-calendar description, including any app deep link. */
+  description?: string;
+}
+
 export interface MeetingPort {
   /**
    * Creates a provider-side meeting event and persists the local
@@ -31,6 +38,7 @@ export interface MeetingPort {
     scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
     conn?: DbOrTx,
+    details?: MeetingEventDetails,
   ): Promise<MeetingEvent>;
   /**
    * Moves the provider-side event to a new time after a booking reschedule is

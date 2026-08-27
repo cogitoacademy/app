@@ -171,16 +171,33 @@ describe("createGoogleMeetingProvider", () => {
     const db = { insert } as any;
 
     const provider = createGoogleMeetingProvider(config, db);
-    await provider.createEvent("b1", undefined, undefined, [
-      { email: "tutor@example.com", name: "Tutor" },
-      { email: "student@example.com" },
-    ]);
+    await provider.createEvent(
+      "b1",
+      undefined,
+      undefined,
+      [
+        { email: "tutor@example.com", name: "Tutor" },
+        { email: "student@example.com" },
+      ],
+      undefined,
+      {
+        title: "Solo session with Tutor & Student",
+        description:
+          "Open this booking in Cogito: https://app.cogito.test/bookings/b1",
+      },
+    );
 
     const insertCall = mockCalendarEventsInsert.mock.calls.at(-1)?.[0];
     expect(insertCall?.requestBody?.attendees).toEqual([
       { email: "tutor@example.com", displayName: "Tutor" },
       { email: "student@example.com" },
     ]);
+    expect(insertCall?.requestBody?.summary).toBe(
+      "Solo session with Tutor & Student",
+    );
+    expect(insertCall?.requestBody?.description).toBe(
+      "Open this booking in Cogito: https://app.cogito.test/bookings/b1",
+    );
 
     const insertValues = values.mock.calls[0]?.[0] as {
       attendeeEmails: string[] | null;
@@ -276,39 +293,46 @@ describe("createGoogleMeetingProvider", () => {
       refreshToken: "oauth-refresh-token",
       calendarId: "primary",
     };
+    let oauthRequestBody: Record<string, unknown> | undefined;
 
-    globalThis.fetch = mock(async (input: string | URL | Request) => {
-      const url = typeof input === "string" ? input : input.toString();
+    globalThis.fetch = mock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
 
-      if (url === "https://oauth2.googleapis.com/token") {
-        return new Response(
-          JSON.stringify({ access_token: "oauth-access-token" }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
+        if (url === "https://oauth2.googleapis.com/token") {
+          return new Response(
+            JSON.stringify({ access_token: "oauth-access-token" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
 
-      if (
-        url ===
-        "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1"
-      ) {
-        return new Response(
-          JSON.stringify({
-            id: "evt_oauth",
-            conferenceData: {
-              entryPoints: [
-                {
-                  entryPointType: "video",
-                  uri: "https://meet.google.com/oauth",
-                },
-              ],
-            },
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
+        if (
+          url ===
+          "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1"
+        ) {
+          oauthRequestBody = JSON.parse(String(init?.body)) as Record<
+            string,
+            unknown
+          >;
+          return new Response(
+            JSON.stringify({
+              id: "evt_oauth",
+              conferenceData: {
+                entryPoints: [
+                  {
+                    entryPointType: "video",
+                    uri: "https://meet.google.com/oauth",
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
 
-      throw new Error(`Unexpected fetch URL: ${url}`);
-    }) as typeof globalThis.fetch;
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      },
+    ) as typeof globalThis.fetch;
 
     const successRow = {
       id: "me_oauth",
@@ -326,10 +350,21 @@ describe("createGoogleMeetingProvider", () => {
     const db = { insert } as any;
 
     const provider = createGoogleMeetingProvider(oauthConfig, db);
-    const result = await provider.createEvent("b1", undefined, undefined, [
-      { email: "tutor@example.com", name: "Tutor" },
-      { email: "student@example.com" },
-    ]);
+    const result = await provider.createEvent(
+      "b1",
+      undefined,
+      undefined,
+      [
+        { email: "tutor@example.com", name: "Tutor" },
+        { email: "student@example.com" },
+      ],
+      undefined,
+      {
+        title: "Solo session with Tutor & Student",
+        description:
+          "Open this booking in Cogito: https://app.cogito.test/bookings/b1",
+      },
+    );
 
     expect(result.bookingId).toBe("b1");
     expect(result.provider).toBe("google_meet");
@@ -337,6 +372,11 @@ describe("createGoogleMeetingProvider", () => {
     expect(result.meetingUrl).toBe("https://meet.google.com/oauth");
     expect(result.externalEventId).toBe("evt_oauth");
     expect(result.errorReason).toBeNull();
+    expect(oauthRequestBody).toMatchObject({
+      summary: "Solo session with Tutor & Student",
+      description:
+        "Open this booking in Cogito: https://app.cogito.test/bookings/b1",
+    });
   });
 });
 
@@ -549,6 +589,19 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
 
   test("updateEvent moves the provider event start/end", async () => {
     const db = makeSelectDb(liveRow);
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: {
+        id: "evt_123",
+        summary: "Solo session with Tutor & Student",
+        description:
+          "Open this booking in Cogito: https://app.cogito.test/bookings/b1",
+        conferenceData: {
+          entryPoints: [
+            { entryPointType: "video", uri: "https://meet.google.com/abc" },
+          ],
+        },
+      },
+    }));
     const provider = createGoogleMeetingProvider(config, db);
     const start = new Date("2030-02-01T08:00:00Z");
     const end = new Date("2030-02-01T09:30:00Z");
@@ -558,6 +611,12 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     const call = mockCalendarEventsUpdate.mock.calls.at(-1)?.[0];
     expect(call?.eventId).toBe("evt_123");
     expect(call?.calendarId).toBe("primary");
+    expect(call?.requestBody?.summary).toBe(
+      "Solo session with Tutor & Student",
+    );
+    expect(call?.requestBody?.description).toBe(
+      "Open this booking in Cogito: https://app.cogito.test/bookings/b1",
+    );
     expect(call?.requestBody?.start?.dateTime).toBe(start.toISOString());
     expect(call?.requestBody?.end?.dateTime).toBe(end.toISOString());
   });
@@ -773,6 +832,16 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
   beforeEach(() => {
     mockCalendarEventsInsert.mockReset();
     mockCalendarEventsGet.mockReset();
+    mockCalendarEventsGet.mockImplementation(async () => ({
+      data: {
+        id: "evt_123",
+        conferenceData: {
+          entryPoints: [
+            { entryPointType: "video", uri: "https://meet.google.com/abc" },
+          ],
+        },
+      },
+    }));
     mockCalendarEventsUpdate.mockReset();
     mockCalendarEventsDelete.mockReset();
   });

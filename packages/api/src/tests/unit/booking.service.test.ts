@@ -1527,7 +1527,10 @@ describe("BookingService", () => {
     });
 
     test("accepts online booking — transitions to confirmed then scheduled and creates meeting with attendees", async () => {
-      const booking = makeBooking({ modality: "online" });
+      const booking = makeBooking({
+        modality: "online",
+        learningGoal: "Improve speaking confidence",
+      });
       let findCallCount = 0;
       const {
         service,
@@ -1586,6 +1589,12 @@ describe("BookingService", () => {
           { email: "student2@example.com", name: "Student Two" },
         ],
         expect.anything(), // L2: the meetingEvent row joins the booking tx
+        {
+          title: "Solo session with Tutor One & Student One",
+          description: expect.stringContaining(
+            "Learning goal: Improve speaking confidence",
+          ),
+        },
       );
       expect(notification.write).toHaveBeenCalledTimes(1);
       expect(notification.write.mock.calls[0][0].title).toBe(

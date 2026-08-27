@@ -12,6 +12,12 @@ Before non-trivial coding, review/load the relevant skills:
 - `production-reliability` for production, infrastructure, persistence, deployment, or reliability work.
 - `wave-finalization` when finishing a herd wave — closing worker panes, removing worker worktrees/branches, and syncing the plans/docs after merged PRs.
 
+## Project conventions
+
+Read `.opencode/CONVENTIONS.md` at session start — it holds the Cogito
+project conventions (worktree location `~/cogito/wt-*`, PR-only squash-merge
+workflow, docs-follow-code rule 11, CI quirks, worker spawn mechanics).
+
 ## Mandatory workflow
 
 For normal feature/bug/refactor work:
