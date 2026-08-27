@@ -8,7 +8,7 @@ global lead agent config (skill trigger map).
 
 - Monorepo: Turborepo + Bun workspaces. `apps/server` (Elysia, :3001),
   `apps/web` (Vite + React 19 + TanStack Router), `packages/{api,auth,config,
-  db,env,ui}`.
+db,env,ui}`.
 - UI: always import from `@cogito-app/ui/components/selia/*` — never shadcn
   or elsewhere. Compose existing Selia components before creating new ones.
   OKLCH design tokens only, never hardcoded colors. `use client` on all
@@ -22,7 +22,7 @@ global lead agent config (skill trigger map).
 - **Worktrees live in `~/cogito/wt-*`** (e.g. `~/cogito/wt-deploy-cd`), never
   in /tmp or the temp dir. Worker branches are cut from `origin/main` AFTER
   `git fetch`; never from a stale base (`git rev-list --count
-  origin/main..HEAD` must be 0 before pushing a PR).
+origin/main..HEAD` must be 0 before pushing a PR).
 - **PRs only, squash-merge.** Worker branches are never merged directly into
   main. The lead rebuilds the wave as a clean feature branch from
   `origin/main` with Conventional Commits, opens a PR with a full body
@@ -35,7 +35,7 @@ global lead agent config (skill trigger map).
 ## Workers (herd)
 
 - Workers are spawned via `herd-spawn-worker <name> worker-feature
-  <worktree-path>` in herdr panes, each in its own worktree + branch
+<worktree-path>` in herdr panes, each in its own worktree + branch
   (parallel-worktrees skill). Workers never share a working directory.
 - Overlap check before dispatch: two workers must not touch the same file.
 - Worker briefs are self-contained (goal, scope, do-not-touch list,
@@ -63,7 +63,7 @@ global lead agent config (skill trigger map).
 - Coverage gate: 100% lines for `packages/api` and 100% overall (enforced by
   `.github/scripts/coverage-comment.ts`).
 - The CI Lint job auto-commits `style: apply automated lint and format
-  fixes`. If the Lint job fails on the auto-commit step with "local changes
+fixes`. If the Lint job fails on the auto-commit step with "local changes
   would be overwritten by checkout", the branch base is stale — rebase on
   the latest `origin/main` and re-push. The bot's auto-fix push can also
   trigger the `action_required` approval gate (S8, `ACTIONS_BOT_PAT` unset);
@@ -74,4 +74,4 @@ global lead agent config (skill trigger map).
 - Test DB: `docker exec cogito-app-postgres psql -U postgres -d cogito-test`
   (port 6767, dev postgres). Run migrations with
   `DATABASE_URL=postgresql://postgres:password@localhost:6767/cogito-test
-  bun run db:migrate` from `packages/db` if tables are missing.
+bun run db:migrate` from `packages/db` if tables are missing.
