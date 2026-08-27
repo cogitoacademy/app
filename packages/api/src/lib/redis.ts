@@ -175,12 +175,6 @@ export class InMemoryRedis implements RedisClient {
     return removed;
   }
 
-  async llen(_key: string): Promise<number> {
-    // Lists are only written by the DLQ push script (EVAL), which the
-    // in-memory fallback does not support — so in dev/CI there is no DLQ.
-    return 0;
-  }
-
   async eval(
     _script: string,
     _keys: string[],
@@ -196,6 +190,8 @@ export class InMemoryRedis implements RedisClient {
   async quit(): Promise<string> {
     return "OK";
   }
+
+  llen = async (_key: string): Promise<number> => 0;
 }
 
 let redisClient: RedisClient | null = null;
