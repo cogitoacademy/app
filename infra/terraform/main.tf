@@ -2,6 +2,15 @@ locals {
   provision_script = abspath("${path.module}/../provision.sh")
 }
 
+terraform {
+  required_providers {
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Cloudflare provider — DNS is declarative here. The zone
 # (cogitoacademy.id) is proxied; the apex stays on Hostinger.
@@ -38,6 +47,19 @@ resource "cloudflare_record" "status" {
   proxied = true
 }
 
+# coolify.cogitoacademy.id — exposes ONLY the Coolify deploy-webhook path
+# (https://coolify.cogitoacademy.id/api/v1/deploy/*) so GitHub Actions can
+# trigger deployments; the Coolify UI itself stays tailnet-only. The
+# per-resource UUID in the webhook URL is the bearer secret. (DEPLOYMENT-PLAN
+# Task 0.2, Option A — locked 2026-08-27.)
+resource "cloudflare_record" "coolify" {
+  zone_id = data.cloudflare_zone.cogito.id
+  name    = "coolify"
+  content = var.server_ip
+  type    = "A"
+  proxied = true
+}
+
 # ---------------------------------------------------------------------------
 # R2 — infrastructure state bucket (tfstate backend) + backup bucket.
 #
@@ -51,13 +73,13 @@ resource "cloudflare_record" "status" {
 resource "cloudflare_r2_bucket" "infra_state" {
   account_id = var.cloudflare_account_id
   name       = "cogito-infra-state"
-  location   = "auto"
+  location   = "APAC"
 }
 
 resource "cloudflare_r2_bucket" "backups" {
   account_id = var.cloudflare_account_id
   name       = "cogito-backups"
-  location   = "auto"
+  location   = "APAC"
 }
 
 # This resource intentionally bootstraps an existing VPS instead of ordering
