@@ -97,6 +97,7 @@ interface TutorReviewCardProps {
     profileEditAdminNote: string | null;
     user?: { name: string; email: string } | null;
   };
+  subjectLabels: ReadonlyMap<string, string>;
   onAction?: () => void;
 }
 
@@ -110,7 +111,61 @@ function getInitials(name?: string | null) {
     .toUpperCase();
 }
 
-export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
+function formatPendingField(field: string) {
+  if (field === "subjectIds") return "Subjects";
+  return field.replace(/([A-Z])/g, " $1");
+}
+
+function PendingChangeValue({
+  field,
+  value,
+  subjectLabels,
+}: {
+  field: string;
+  value: unknown;
+  subjectLabels: ReadonlyMap<string, string>;
+}) {
+  if (field === "subjectIds" && Array.isArray(value)) {
+    return (
+      <div
+        className="flex min-w-0 flex-wrap gap-1.5"
+        aria-label="Proposed subjects"
+      >
+        {value.map((subjectId) => {
+          const id = String(subjectId);
+          return (
+            <Badge
+              key={id}
+              variant="secondary"
+              className="h-auto min-h-5.5 max-w-full whitespace-normal break-words py-0.5"
+            >
+              {subjectLabels.get(id) ?? "Subject unavailable"}
+            </Badge>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const displayValue =
+    value === null || value === undefined
+      ? "—"
+      : Array.isArray(value)
+        ? value.map((entry) => String(entry)).join(", ")
+        : typeof value === "object"
+          ? (JSON.stringify(value) ?? "—")
+          : String(value);
+
+  return (
+    <Text className="break-words text-sm font-medium">{displayValue}</Text>
+  );
+}
+
+export function TutorReviewCard({
+  profile,
+  subjectLabels,
+  onAction,
+}: TutorReviewCardProps) {
   const queryClient = useQueryClient();
   const [noteAction, setNoteAction] = useState<
     "request_changes" | "request_edit_changes" | "suspend" | null
@@ -332,17 +387,15 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
                 <Stack spacing="sm" className="mt-2">
                   {Object.entries(profile.pendingProfileChanges).map(
                     ([field, value]) => (
-                      <div key={field}>
+                      <div key={field} className="min-w-0">
                         <Text className="text-xs capitalize text-muted">
-                          {field.replace(/([A-Z])/g, " $1")}
+                          {formatPendingField(field)}
                         </Text>
-                        <Text className="text-sm font-medium">
-                          {Array.isArray(value)
-                            ? value.join(", ")
-                            : typeof value === "object"
-                              ? JSON.stringify(value)
-                              : String(value)}
-                        </Text>
+                        <PendingChangeValue
+                          field={field}
+                          value={value}
+                          subjectLabels={subjectLabels}
+                        />
                       </div>
                     ),
                   )}
