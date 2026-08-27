@@ -728,6 +728,18 @@ The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FRO
 3. Set `EMAIL_FROM` to a verified address, e.g. `noreply@cogitoacademy.id` — the env schema rejects the dev default when `NODE_ENV` is production/staging, so the verified domain's address is fine.
 4. Send a test invite/refund email on staging before enabling production email.
 
+### Legacy account email verification
+
+Accounts created before mandatory email verification remain `email_verified=false`; do not run a data backfill that marks them verified. On the next email/password or Google sign-in, the web client requests a fresh verification OTP and routes the account to `/verify-email`. After the code is accepted, the user continues to the original destination.
+
+Manual smoke test after an auth or web deploy:
+
+1. Sign in with a pre-verification account whose `email_verified` value is `false`.
+2. Confirm a verification email is delivered and the browser opens `/verify-email`.
+3. Enter the six-digit code and confirm the account reaches its original destination.
+4. Sign out and sign in again; confirm the account follows the normal role redirect without another verification step.
+5. If the automatic email request fails, use **Resend code** on `/verify-email`; inspect the email-service logs and Resend configuration before retrying.
+
 ### R2 bucket + API-token setup (X4 / P4.3)
 
 The production env schema requires all four `R2_*` vars together **and** `R2_PUBLIC_URL` when R2 is configured (partial config or a missing public URL fails loudly — no container-local disk fallback, no unreachable objects).

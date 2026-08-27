@@ -23,7 +23,10 @@ import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
+import type { CogitoUser } from "@cogito-app/auth";
+
 import { authClient } from "@/lib/auth-client";
+import { getUserFacingError } from "@/lib/error-message";
 
 import { getAuthErrorMessage } from "./auth-error-message";
 import {
@@ -88,18 +91,53 @@ export default function SignInForm({
           return;
         }
 
-        const role = (session.data.user as { role?: string } | undefined)?.role;
+        const sessionUser = session.data.user as CogitoUser | undefined;
+        const role = sessionUser?.role;
+        const destination = redirectPath
+          ? redirectPath
+          : role === "tutor"
+            ? "/onboarding"
+            : role === "admin"
+              ? "/admin-tutors"
+              : "/dashboard";
         toastManager.add({ title: "Sign in successful", type: "success" });
 
-        if (redirectPath) {
-          await navigate({ to: redirectPath });
-        } else if (role === "tutor") {
-          await navigate({ to: "/onboarding" });
-        } else if (role === "admin") {
-          await navigate({ to: "/admin-tutors" });
-        } else {
-          await navigate({ to: "/dashboard" });
+        if (sessionUser?.emailVerified !== true) {
+          try {
+            const verification = await authClient.emailOtp.sendVerificationOtp({
+              email: sessionUser?.email ?? value.email.trim(),
+              type: "email-verification",
+            });
+            if (verification.error) {
+              toastManager.add({
+                title: getUserFacingError(
+                  verification.error,
+                  "We could not send a verification code. You can request one again on the verification page.",
+                ),
+                type: "error",
+              });
+            }
+          } catch (error) {
+            toastManager.add({
+              title: getUserFacingError(
+                error,
+                "We could not send a verification code. You can request one again on the verification page.",
+              ),
+              type: "error",
+            });
+          }
+
+          await navigate({
+            to: "/verify-email",
+            search: {
+              email: sessionUser?.email ?? value.email.trim(),
+              redirect: destination,
+            },
+          });
+          return;
         }
+
+        await navigate({ to: destination });
       } catch (error) {
         toastManager.add({
           title: getAuthErrorMessage(error, "sign-in"),
