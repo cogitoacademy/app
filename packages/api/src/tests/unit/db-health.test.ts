@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { InMemoryRedis } from "../../lib/redis";
+import { InMemoryRedis, createRedisAdapter } from "../../lib/redis";
 import {
   checkDlqHealth,
   checkSchedulerHealth,
@@ -143,6 +143,35 @@ describe("checkDlqHealth", () => {
 
   test("returns 0 when no redis is provided", async () => {
     await expect(checkDlqHealth(undefined)).resolves.toBe(0);
+  });
+
+  test("InMemoryRedis.llen reports an empty DLQ (fallback has no lists)", async () => {
+    const redis = new InMemoryRedis();
+    await expect(redis.llen("cogito:dlq")).resolves.toBe(0);
+  });
+
+  test("createRedisAdapter forwards llen to the underlying client", async () => {
+    const calls: string[] = [];
+    const adapter = createRedisAdapter({
+      ping: async () => "PONG",
+      get: async () => null,
+      set: async () => "OK",
+      del: async () => 0,
+      expire: async () => 1,
+      incr: async () => 1,
+      hset: async () => 1,
+      hget: async () => null,
+      hgetall: async () => ({}),
+      hdel: async () => 0,
+      llen: async (key: string) => {
+        calls.push(key);
+        return 7;
+      },
+      eval: async () => null,
+      quit: async () => "OK",
+    });
+    await expect(adapter.llen("cogito:dlq")).resolves.toBe(7);
+    expect(calls).toEqual(["cogito:dlq"]);
   });
 
   test("is wired into healthCheck as checks.dlq + dlqDepth", async () => {
