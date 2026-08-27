@@ -1,5 +1,22 @@
 # Deployment Dispatch — Worker Briefs & Execution Plan
 
+> **EXECUTED 2026-08-27 — all four PRs merged.** This document is kept as the
+> historical brief record; the merged state supersedes it.
+>
+> - **PR A → #115** (infra scaffold, incl. `coolify` DNS record + Terraform
+>   provider/region fixes) — merged.
+> - **PR B → #116** (DLQ health surface) — re-cut from main, coverage gate
+>   fixed (class-field arrow for `llen`), merged.
+> - **W1 → #118** (CD pipeline: `/health` `version`, webhook guards,
+>   `scripts/migrate-and-deploy.sh`) — merged.
+> - **W2 → #117** (nightly backups: `infra/backup.sh` + Ansible cron) — merged.
+>
+> **Remaining (operator):** Terraform apply, Tailscale ACL paste + join,
+> SOPS vault fill, GitHub secrets (webhook URLs with the resolvable
+> `coolify.cogitoacademy.id` host — **user reports the webhook currently
+> returns 401**, so the Caddy route + per-resource UUID must be verified),
+> Ansible applies, live drills. Tracked in DEPLOYMENT-PLAN.md.
+
 > Handoff document for the deployment wave. Dispatch each worker brief below
 > to a FRESH worker in its own worktree (`~/cogito/wt-*`) via
 > `herd-spawn-worker <name> worker-feature <worktree-path>`.

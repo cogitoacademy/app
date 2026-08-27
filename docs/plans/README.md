@@ -2,11 +2,13 @@
 
 ## Active
 
-| Plan                                                  | Branch                   | PR   | Status                                                                                                              |
-| ----------------------------------------------------- | ------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------- |
-| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md) | main (merged #55)        | —    | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface              |
-| [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge)        | —    | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                  |
-| [CONTACT-SHARING.md](active/CONTACT-SHARING.md)       | `f/contact-sharing-flow` | #108 | Implemented — consent-based post-session contact request/share-email flow with privacy and leak-regression coverage |
+| Plan                                                    | Branch                   | PR   | Status                                                                                                                                      |
+| ------------------------------------------------------- | ------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [FRONTEND-GAPS-SPEC.md](active/FRONTEND-GAPS-SPEC.md)   | main (merged #55)        | —    | **Tracked gaps complete** — F1–F19, J2, and dead-component cleanup verified in the current web surface                                      |
+| [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md)   | main (post-merge)        | —    | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                                          |
+| [CONTACT-SHARING.md](active/CONTACT-SHARING.md)         | `f/contact-sharing-flow` | #108 | Implemented — consent-based post-session contact request/share-email flow with privacy and leak-regression coverage                         |
+| [DEPLOYMENT-PLAN.md](active/DEPLOYMENT-PLAN.md)         | main (merged #115–#118)  | —    | **Active (rev. 2)** — infra scaffold (#115), DLQ health (#116), backups (#117), CD pipeline (#118) merged; operator apply + secrets pending |
+| [DEPLOYMENT-DISPATCH.md](active/DEPLOYMENT-DISPATCH.md) | main (merged #115–#118)  | —    | **Executed 2026-08-27** — PR A (#115), PR B (#116), W1 (#118), W2 (#117) all merged; briefs superseded by the merged state                  |
 
 ## Completed (merged to main)
 
