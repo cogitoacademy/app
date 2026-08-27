@@ -12,6 +12,7 @@
 ## 0. Locked decisions (confirmed with user)
 
 - **Control plane: Tailscale** (not CF Zero Trust). VPS joins the existing tailnet (`argyavityasy1208@gmail.com`, `tail674634.ts.net`). Coolify UI + SSH reachable **only** via tailnet. No `coolify.*` DNS record at all.
+- **Deploy trigger: Option A — expose ONLY the Coolify deploy-webhook path publicly** (decided 2026-08-27). The CI pipeline (GitHub Actions, cloud-hosted) cannot reach a tailnet-only Coolify. Instead of opening the whole Coolify UI, add a DNS record + Caddy route for `coolify.cogitoacademy.id/api/v1/deploy/*` only. The URL contains a per-resource UUID that acts as the bearer secret; nothing else on the domain is exposed, and the Coolify UI itself stays tailnet-only. This is Coolify's standard deployment model. (Rejected Option B: SSH-from-Actions deploy key — more moving parts, no public surface; kept as documented fallback.)
 - **Tailscale ACL is declarative**: committed `infra/tailscale/acl.hujson`, pasted into the admin console, versioned in git. Default allow-all is NOT safe for a server node.
 - **Reverse proxy / LB**: Coolify's bundled proxy (Caddy) terminates TLS and routes `api.*` → :3001, `app.*` → :80. No extra proxy on a single VPS. LB deferred (scale lever, documented).
 - **Monitoring: Uptime Kuma + Telegram alerts only.** No Prometheus/Grafana (overkill for 3.7GB RAM; 318MB free now). Log tracing via Coolify json-file 10m×3 + structured JSON logs.
@@ -30,7 +31,7 @@
 | Main                 | synced to `1636cf6` — 13 commits ahead of the last wave: **#108 consent-based contact sharing (migration 0030)**, admin bootstrap (`ADMIN_EMAILS` env var, default `itcogitoacademy01@gmail.com`), tutor fallback meeting links, booking/e2e hardening                                          |
 | Live API `/health`   | `{"status":"ok","checks":{"database":"ok","redis":"ok"}}`                                                                                                                                                                                                                                       |
 | VPS                  | OVH `15.235.186.159`, 3.7GB RAM (318MB free / 2.3GB available), UFW active (22/80/443), `PasswordAuthentication no` effective, Coolify + own db/redis healthy, app Postgres/Redis containers running, **`drizzle-gateway` unhealthy (Coolify-internal, not ours)**, **Tailscale NOT installed** |
-| Deploy Production    | Failing on every push — `COOLIFY_PROD_SERVER_WEBHOOK` unset → curl exit 6 (S7)                                                                                                                                                                                                                  |
+| Deploy Production    | **Diagnosed 2026-08-27 (S7):** failing on every push — `curl exit 6 "Could not resolve host"`. The `COOLIFY_PROD_SERVER_WEBHOOK`/`COOLIFY_PROD_WEBHOOK` secrets EXIST since 2026-08-24, but the webhook URL inside points at `coolify.cogitoacademy.id`, which has NO DNS record (control plane is tailnet-only) → GitHub Actions (cloud) cannot resolve it. Fix = Option A (below).                                                                                                                                                                                                                  |
 | Live env gaps        | `PAYMENT_PROVIDER=stub`, no Google/R2/Sanity vars, no backups, no monitoring, no status DNS                                                                                                                                                                                                     |
 | PR #102              | OPEN, CONFLICTING, CI stale-base failure                                                                                                                                                                                                                                                        |
 | New env vars to wire | `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — verify this is the operator account)                                                                                                                                                                                                    |
@@ -60,7 +61,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 | Control plane  | **Tailscale ACL**  | `infra/tailscale/acl.hujson` (committed)                                                                                                                                                             | Pasted into admin console, versioned |
 | Code           | **GitHub Actions** | build → test → push → backup → migrate → deploy → health → rollback                                                                                                                                  | Every merge to main                  |
 
-**Not declarative (documented one-time steps):** Google Cloud console (OAuth client), Xendit dashboard (webhook URL + egress IPs), Resend domain verification. Their _outputs_ become SOPS vars.
+**Not declarative (documented one-time steps):** Google Cloud console (OAuth client), Xendit dashboard (webhook URL + egress IPs), Resend domain verification, and the Coolify webhook UUIDs (generated in the Coolify UI per resource). Their _outputs_ become SOPS vars / GitHub secrets. The webhook's DNS record + Caddy route ARE declarative (Task 0.2) — only the UUID itself is generated by the UI.
 
 ---
 
@@ -73,14 +74,17 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 - [ ] Squash-merge #102.
 - Commit: `chore(infra): merge deployment runbook + terraform bootstrap (#102)`
 
-### Task 0.2: Fix Deploy Production workflow (S7) — repo work
+### Task 0.2: Fix Deploy Production (S7) — Option A: expose only the deploy-webhook path (repo + operator)
 
-**Files:** `.github/workflows/cd-prod.yml`
+**Files:** `.github/workflows/cd-prod.yml`, `infra/terraform/main.tf` (DNS record), `infra/ansible/coolify-resources.yml` (Caddy route)
 
+- [ ] **DNS (Terraform):** add `coolify` A record → VPS, proxied (Cloudflare) — needed ONLY so GitHub Actions can reach the webhook path. The Coolify UI stays tailnet-only (no other routes exposed).
+- [ ] **Caddy route (Ansible → Coolify):** route `coolify.cogitoacademy.id/api/v1/deploy/*` → Coolify proxy; everything else on that host returns 404/denied. The per-resource UUID in the webhook URL is the bearer secret — never put it in a public doc.
+- [ ] **Secrets:** recreate `COOLIFY_PROD_SERVER_WEBHOOK` + `COOLIFY_PROD_WEBHOOK` with the resolvable URL (`https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...`). Keep them in GitHub Actions secrets (this is the deliberate exception; real credentials stay in SOPS).
 - [ ] Guard the Coolify webhook steps (empty secret → clear error, not curl exit 6).
 - [ ] Add `version` (image sha) to the `/health` response (`apps/server/src/routes.ts` + test) so the poll verifies the **deployed sha**, not just "some container is up".
 - [ ] Health poll checks `version == <sha>`.
-- Commit: `fix(ci): guard deploy webhook secrets and verify deployed image sha`
+- Commit: `fix(ci): wire Option A webhook path, guard secrets, verify deployed sha`
 
 ### Task 0.3: Tailscale ACL file — repo work + user console paste
 
