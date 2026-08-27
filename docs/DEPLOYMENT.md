@@ -305,7 +305,7 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
    **sha-verified**: `scripts/migrate-and-deploy.sh` requires
    `GET /health` to return `version == <commit-sha>` (the server image is
    built with `--build-arg GIT_SHA=${{ github.sha }}` and `/health` surfaces it
-   as `version`), so a green deploy means the *new* image is serving. On
+   as `version`), so a green deploy means the _new_ image is serving. On
    timeout the script prints a rollback hint pointing at the previous immutable
    `v<prev-sha>` image.
 6. Check both Coolify deployment logs and the public smoke checks below.

@@ -552,7 +552,7 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
 
 1. Open the Coolify dashboard → the service (server / web)
 2. Use **Rollback to previous release** (Coolify keeps the previous image/version)
-3. Verify health **and the deployed sha**: `curl https://api.cogitoacademy.id/health` must return `"version": "<full-commit-sha>"` matching the image you intended to run. The CD pipeline (`scripts/migrate-and-deploy.sh`) polls `/health` until `version == GIT_SHA` (bounded 20×15s) and fails loudly with a rollback hint if the new image never comes up — a green deploy now means the *new* image is serving, not merely "some container is up".
+3. Verify health **and the deployed sha**: `curl https://api.cogitoacademy.id/health` must return `"version": "<full-commit-sha>"` matching the image you intended to run. The CD pipeline (`scripts/migrate-and-deploy.sh`) polls `/health` until `version == GIT_SHA` (bounded 20×15s) and fails loudly with a rollback hint if the new image never comes up — a green deploy now means the _new_ image is serving, not merely "some container is up".
 4. If a database migration was part of the deployment, check migration status:
    ```bash
    bun run db:studio  # Check migration table
