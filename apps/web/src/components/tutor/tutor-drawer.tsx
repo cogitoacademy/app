@@ -8,7 +8,14 @@ import {
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { Separator } from "@cogito-app/ui/components/selia/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import {
   Drawer,
@@ -23,6 +30,7 @@ import {
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { IconX } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -70,6 +78,39 @@ type TutorDrawerProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+type PricingModality = "online" | "offline";
+type PricingMap = Record<string, number>;
+type PricingByModality = Partial<Record<PricingModality, PricingMap>>;
+const PRICING_MODALITIES = ["online", "offline"] as const;
+
+function getPricingTableData(
+  pricesByModality: PricingByModality | null | undefined,
+  legacyPrices: PricingMap | null,
+  modality: string | null,
+) {
+  const priceMaps: PricingByModality = pricesByModality ?? {
+    [modality === "offline" ? "offline" : "online"]: legacyPrices ?? {},
+  };
+  const modalities = PRICING_MODALITIES.filter(
+    (currentModality) =>
+      Object.keys(priceMaps[currentModality] ?? {}).length > 0,
+  );
+  const groupSizes = new Set(
+    modalities.flatMap((currentModality) =>
+      Object.keys(priceMaps[currentModality] ?? {}),
+    ),
+  );
+  const rows = [...groupSizes]
+    .toSorted((a, b) => Number(a) - Number(b))
+    .map((size) => ({
+      size,
+      online: priceMaps.online?.[size],
+      offline: priceMaps.offline?.[size],
+    }));
+
+  return { modalities, rows };
+}
+
 export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
   const lastTutorRef = useRef(tutor);
   if (tutor) lastTutorRef.current = tutor;
@@ -80,20 +121,11 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
   const tutorName =
     selectedTutor.displayName ?? selectedTutor.user?.name ?? "Tutor";
 
-  const priceSections = selectedTutor.pricesByModality
-    ? (
-        Object.entries(selectedTutor.pricesByModality) as Array<
-          ["online" | "offline", Record<string, number> | undefined]
-        >
-      ).flatMap(([modality, prices]) =>
-        prices ? [{ modality, entries: Object.entries(prices) }] : [],
-      )
-    : [
-        {
-          modality: selectedTutor.modality === "offline" ? "offline" : "online",
-          entries: Object.entries(selectedTutor.prices ?? {}),
-        },
-      ];
+  const { modalities: priceModalities, rows: priceRows } = getPricingTableData(
+    selectedTutor.pricesByModality,
+    selectedTutor.prices,
+    selectedTutor.modality,
+  );
   const subjectGroups = groupTutorSubjects(
     selectedTutor.subjects,
     selectedTutor.expertise,
@@ -143,13 +175,13 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                   {subjectGroups.map((group) => (
                     <div key={group.parent?.id ?? group.children[0]?.id}>
                       {group.parent && (
-                        <Text className="mb-1 text-sm font-medium">
+                        <Text className="mb-1 font-medium">
                           {group.parent.name}
                         </Text>
                       )}
                       <div className="flex flex-wrap gap-1.5">
                         {group.children.map((subject) => (
-                          <Badge key={subject.id} variant="secondary" size="sm">
+                          <Badge key={subject.id} variant="primary" size="md">
                             {subject.name}
                           </Badge>
                         ))}
@@ -160,59 +192,61 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               </div>
             )}
 
-            {priceSections.some(({ entries }) => entries.length > 0) && (
+            {priceRows.length > 0 && (
               <div className="mb-4">
                 <Heading size="sm" className="mb-2">
                   Pricing
                 </Heading>
-                <div className="flex flex-col gap-3">
-                  {priceSections.map(({ modality, entries }) => {
-                    const sortedEntries = entries.toSorted(
-                      ([a], [b]) => Number(a) - Number(b),
-                    );
-                    if (sortedEntries.length === 0) return null;
-                    return (
-                      <div
-                        key={modality}
-                        className="rounded-lg border border-item-border overflow-hidden"
-                      >
-                        <div className="bg-item px-3 py-2 text-sm font-medium">
-                          {modality === "offline" ? "Offline" : "Online"}
-                        </div>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-t border-item-border">
-                              <th className="px-3 py-2 text-left text-muted">
-                                Group Size
-                              </th>
-                              <th className="px-3 py-2 text-right text-muted">
-                                Price (Marks)
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sortedEntries.map(([size, price]) => (
-                              <tr
-                                key={size}
-                                className="border-t border-item-border"
-                              >
-                                <td className="px-3 py-2">
-                                  {size} student{Number(size) > 1 ? "s" : ""}
-                                </td>
-                                <td className="px-3 py-2 text-right font-medium">
-                                  {price}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })}
+                <div className="overflow-hidden rounded-lg border border-item-border">
+                  <Table className="text-sm">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="py-2!">Group Size</TableHead>
+                        {priceModalities.includes("online") && (
+                          <TableHead className="py-2! text-right">
+                            Online (Marks)
+                          </TableHead>
+                        )}
+                        {priceModalities.includes("offline") && (
+                          <TableHead className="py-2! text-right">
+                            Offline (Marks)
+                          </TableHead>
+                        )}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {priceRows.map(({ size, online, offline }) => (
+                        <TableRow key={size}>
+                          <TableCell className="py-2!">
+                            {size} student{Number(size) > 1 ? "s" : ""}
+                          </TableCell>
+                          {priceModalities.includes("online") && (
+                            <TableCell className="py-2! text-right font-medium">
+                              {online !== undefined ? (
+                                <CogitoMarks size="3" value={online} />
+                              ) : (
+                                <span className="text-dimmed">—</span>
+                              )}
+                            </TableCell>
+                          )}
+                          {priceModalities.includes("offline") && (
+                            <TableCell className="py-2! text-right font-medium">
+                              {offline !== undefined ? (
+                                <CogitoMarks size="3" value={offline} />
+                              ) : (
+                                <span className="text-dimmed">—</span>
+                              )}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
 
+            {/*
             {t.availabilitySummary && (
               <div className="mb-4">
                 <Heading size="sm" className="mb-2">
@@ -266,6 +300,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                 booking request.
               </Text>
             </div>
+            */}
           </>
 
           <DrawerDescription className="sr-only">
