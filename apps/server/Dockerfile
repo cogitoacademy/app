@@ -25,6 +25,12 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/package.json ./
 
+# The deployed image sha, surfaced by GET /health as `version` so the CD
+# pipeline can verify the deployed container matches the pushed image.
+# Passed at build time by cd-prod.yml (`--build-arg GIT_SHA=${{ github.sha }}`).
+ARG GIT_SHA
+ENV GIT_SHA=$GIT_SHA
+
 ENV NODE_ENV=production
 # C5: run as the unprivileged bun user (rootless container).
 USER bun

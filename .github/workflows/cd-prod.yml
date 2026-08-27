@@ -7,7 +7,9 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Build+push (~3 min) + migrate-and-deploy (backup, migrate, deploy,
+    # sha-verified health poll up to 20x15s ≈ 5 min) need headroom.
+    timeout-minutes: 20
     # Required so the GITHUB_TOKEN can push images to GHCR. Without this the
     # push fails with "denied: installation not allowed to Create organization
     # package" (the org must also allow Actions package creation).
@@ -28,7 +30,11 @@ jobs:
 
       - name: Build and push server
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/server:latest -f apps/server/Dockerfile .
+          docker build \
+            -t ghcr.io/${{ github.repository }}/server:latest \
+            -f apps/server/Dockerfile \
+            --build-arg GIT_SHA=${{ github.sha }} \
+            .
           docker tag ghcr.io/${{ github.repository }}/server:latest ghcr.io/${{ github.repository }}/server:v${{ github.sha }}
           docker push ghcr.io/${{ github.repository }}/server:latest
           docker push ghcr.io/${{ github.repository }}/server:v${{ github.sha }}
@@ -44,28 +50,38 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/web:latest
           docker push ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
 
-      - name: Trigger Coolify server deploy
-        # Fail loudly when the webhook secret is unset or the request fails —
-        # a silent no-op deploy is worse than a red build.
+      - name: Backup, migrate, deploy, sha-verified health poll
+        # Full production pipeline via scripts/migrate-and-deploy.sh:
+        #   1. pg_dump snapshot → gzip → R2 (pre-migrate-<sha>.sql.gz)
+        #   2. bun run db:migrate against the production DATABASE_URL
+        #   3. POST the Coolify server deploy webhook
+        #   4. Poll /health until `version == GIT_SHA` (bounded 20x15s)
+        #   5. On failure: clear rollback hint (previous v<prev-sha> image)
+        # The script fails loudly when any required env is unset.
+        #
+        # Secrets required (operator adds them in repo Settings → Secrets):
+        #   COOLIFY_PROD_SERVER_WEBHOOK — resolvable Coolify deploy webhook URL
+        #     (https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...)
+        #   PROD_DATABASE_URL, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
+        #   R2_SECRET_ACCESS_KEY, R2_BUCKET — backup target credentials
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          GIT_SHA: ${{ github.sha }}
+          HEALTH_URL: https://api.cogitoacademy.id/health
+          # Previous commit on the push = the last deployed sha (rollback hint).
+          PREV_GIT_SHA: ${{ github.event.before }}
         run: |
-          curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
+          bash scripts/migrate-and-deploy.sh
 
       - name: Trigger Coolify web deploy
         run: |
+          if [ -z "${{ secrets.COOLIFY_PROD_WEBHOOK }}" ]; then
+            echo "COOLIFY_PROD_WEBHOOK is unset — configure the Coolify resource webhook and add it as a GitHub secret" >&2
+            exit 1
+          fi
           curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }}
-
-      - name: Health check
-        # Coolify pulls the new images and restarts the containers asynchronously;
-        # a single sleep+curl is flaky. Poll with a bounded retry loop (up to
-        # ~5 min) and fail the job only if the API never comes back healthy.
-        run: |
-          for i in $(seq 1 20); do
-            if curl -fsS --max-time 10 https://api.cogitoacademy.id/health; then
-              echo "API healthy after ${i} attempts"
-              exit 0
-            fi
-            echo "attempt ${i}/20: not healthy yet, waiting 15s"
-            sleep 15
-          done
-          echo "API did not become healthy within the timeout" >&2
-          exit 1
