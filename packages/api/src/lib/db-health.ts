@@ -37,6 +37,28 @@ export async function checkSchedulerHealth(
   }
 }
 
+/**
+ * Reports the dead-letter queue depth (jobs whose attempts were exhausted).
+ *
+ * The DLQ is a bounded Redis list (`cogito:dlq`, max 100 entries, maintained
+ * by the scheduler's DLQ worker). A non-zero depth means at least one job
+ * failed permanently — holds may be unreleased, emails undelivered, meetings
+ * un-created. This check lets Uptime Kuma alert on `dlqDepth > 0` (the
+ * repeatable scheduler re-fires each job on its own cadence, so the DLQ is a
+ * ledger, not a retry queue — no auto-replay).
+ */
+export async function checkDlqHealth(
+  redis?: RedisClient,
+  dlqKey = "cogito:dlq",
+): Promise<number> {
+  if (!redis) return 0;
+  try {
+    return await redis.llen(dlqKey);
+  } catch {
+    return -1; // unknown — Redis unreachable
+  }
+}
+
 export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
   const checks: Record<string, "ok" | "degraded" | "error"> = {};
 
@@ -67,11 +89,26 @@ export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
     checks.scheduler = await checkSchedulerHealth(redis);
   }
 
-  const overall: HealthOverall = Object.values(checks).every((v) => v === "ok")
+  // Dead-letter queue depth — jobs that failed permanently. Surfaced for
+  // alerting (`dlqDepth > 0` → Uptime Kuma) but deliberately EXCLUDED from
+  // the overall status: the DLQ is a ledger, not a readiness gate, and a
+  // non-zero depth must not trip the Coolify probe into a restart loop.
+  const dlqDepth = await checkDlqHealth(redis);
+  const dlqStatus: "ok" | "error" = dlqDepth === 0 ? "ok" : "error";
+
+  // Readiness is computed from the service checks only (database, redis,
+  // scheduler) — `dlq` is informational.
+  const readiness = Object.values(checks);
+  const overall: HealthOverall = readiness.every((v) => v === "ok")
     ? "ok"
-    : Object.values(checks).some((v) => v === "error")
+    : readiness.some((v) => v === "error")
       ? "error"
       : "degraded";
 
-  return { status: overall, checks, timestamp: new Date().toISOString() };
+  return {
+    status: overall,
+    checks: { ...checks, dlq: dlqStatus },
+    dlqDepth,
+    timestamp: new Date().toISOString(),
+  };
 }

@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { InMemoryRedis } from "../../lib/redis";
 import {
+  checkDlqHealth,
   checkSchedulerHealth,
   healthCheck,
   healthStatus,
@@ -113,5 +114,52 @@ describe("checkSchedulerHealth", () => {
     );
     expect(failing.checks.scheduler).toBe("error");
     expect(failing.status).toBe("error");
+  });
+});
+
+describe("checkDlqHealth", () => {
+  test("returns 0 for an empty DLQ", async () => {
+    const redis = new InMemoryRedis();
+    await expect(checkDlqHealth(redis)).resolves.toBe(0);
+  });
+
+  test("returns the DLQ depth when jobs are queued", async () => {
+    const redis = {
+      ...new InMemoryRedis(),
+      llen: async (key: string) => (key === "cogito:dlq" ? 3 : 0),
+    };
+    await expect(checkDlqHealth(redis as any)).resolves.toBe(3);
+  });
+
+  test("returns -1 when redis llen throws (unknown depth)", async () => {
+    const failingRedis = {
+      ...new InMemoryRedis(),
+      llen: async () => {
+        throw new Error("connection refused");
+      },
+    };
+    await expect(checkDlqHealth(failingRedis as any)).resolves.toBe(-1);
+  });
+
+  test("returns 0 when no redis is provided", async () => {
+    await expect(checkDlqHealth(undefined)).resolves.toBe(0);
+  });
+
+  test("is wired into healthCheck as checks.dlq + dlqDepth", async () => {
+    const result = await healthCheck(new InMemoryRedis(), makeDb({ ms: 5 }));
+    expect(result.checks.dlq).toBe("ok");
+    expect(result.dlqDepth).toBe(0);
+
+    // NOTE: `{ ...new InMemoryRedis() }` would LOSE the class methods (they
+    // live on the prototype) — use Object.create to keep ping() etc.
+    const withJobs = Object.create(InMemoryRedis.prototype);
+    withJobs.llen = async () => 5;
+    const dlqResult = await healthCheck(withJobs, makeDb({ ms: 5 }));
+    expect(dlqResult.checks.dlq).toBe("error");
+    expect(dlqResult.dlqDepth).toBe(5);
+    // DLQ depth must not flip the overall status by itself — it is an
+    // alerting signal, not a readiness gate.
+    expect(dlqResult.status).toBe("ok");
+    expect(dlqResult.checks.scheduler).toBe("ok");
   });
 });
