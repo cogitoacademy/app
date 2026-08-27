@@ -6,7 +6,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 export const textareaVariants = cva(
   [
-    "min-h-28 w-full resize-y px-3.5 py-2.5 text-[16px] text-foreground rounded placeholder:text-dimmed transition-[color,box-shadow] shadow-input",
+    "min-h-28 w-full resize-y px-3.5 py-2.5 text-[16px] lg:text-base text-foreground rounded placeholder:text-dimmed transition-[color,box-shadow] shadow-input",
     "ring ring-input-border hover:not-[[data-disabled]]:not-[:focus]:ring-input-accent-border focus:outline-0 focus:ring-primary focus:ring-2",
     "disabled:opacity-70 disabled:cursor-not-allowed data-disabled:opacity-70 data-disabled:cursor-not-allowed",
   ],
