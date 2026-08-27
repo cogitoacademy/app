@@ -1,0 +1,124 @@
+#!/bin/bash
+# Nightly PostgreSQL backup to Cloudflare R2 with retention pruning.
+#
+# Dumps the database referenced by $DATABASE_URL, gzip-compresses it, uploads
+# it to R2 under backups/YYYY-MM-DD.sql.gz, then deletes R2 objects older than
+# $RETENTION_DAYS.
+#
+# Client tools: pg_dump (PostgreSQL client) + aws (AWS CLI v2, S3-compatible
+# against R2). No new dependencies beyond standard CLI tools.
+#
+# Dump format: custom format (-Fc) so the restore drill can use pg_restore
+# (plain SQL dumps cannot be consumed by pg_restore). The file is named
+# backups-YYYY-MM-DD.sql.gz: gzip-compressed custom-format dump.
+#
+# Env:
+#   DATABASE_URL          PostgreSQL connection string WITH credentials
+#                         (cron has no TTY, pg_dump will not prompt).
+#   R2_ACCOUNT_ID         Cloudflare account id (endpoint host).
+#   R2_ACCESS_KEY_ID      R2 API token access key id.
+#   R2_SECRET_ACCESS_KEY  R2 API token secret access key.
+#   R2_BUCKET             Bucket name (default: cogito-backups).
+#   RETENTION_DAYS        Keep backups younger than this many days (default: 30).
+#
+# Usage:
+#   infra/backup.sh            # run the backup
+#   infra/backup.sh --dry-run  # print the exact commands without executing
+#
+# Requires GNU date (Ubuntu VPS). Run as root or the backup user (see
+# infra/ansible/backup-cron.yml); the backup user only needs read access to
+# the database and write access to the R2 bucket.
+set -euo pipefail
+
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
+fi
+
+# --- Required environment ---------------------------------------------------
+for var in DATABASE_URL R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+  if [[ -z "${!var:-}" ]]; then
+    echo "ERROR: $var is not set" >&2
+    exit 1
+  fi
+done
+
+R2_BUCKET="${R2_BUCKET:-cogito-backups}"
+RETENTION_DAYS="${RETENTION_DAYS:-30}"
+R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+TODAY="$(date +%F)"
+LOCAL_FILE="backups-${TODAY}.sql.gz"
+R2_KEY="backups/${TODAY}.sql.gz"
+
+# --- Fail loud if the CLI tools are missing ---------------------------------
+if [[ "${DRY_RUN}" -eq 0 ]]; then
+  command -v pg_dump >/dev/null 2>&1 || { echo "ERROR: pg_dump not found (install postgresql-client)" >&2; exit 1; }
+  command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI not found (install awscli v2)" >&2; exit 1; }
+fi
+
+# --- 1. Dump + compress -------------------------------------------------------
+# pg_dump streams to stdout; gzip compresses on the fly. The archive stays
+# local only long enough to be uploaded (temp dir, cleaned up on exit).
+dump_cmd="pg_dump --no-owner --no-acl -Fc '${DATABASE_URL}' | gzip -9 > '${LOCAL_FILE}'"
+
+# --- 2. Upload to R2 ----------------------------------------------------------
+# S3-compatible R2 endpoint; region is 'auto' for R2.
+upload_cmd="aws s3 cp '${LOCAL_FILE}' 's3://${R2_BUCKET}/${R2_KEY}' --endpoint-url '${R2_ENDPOINT}' --region auto"
+verify_cmd="aws s3api head-object --bucket '${R2_BUCKET}' --key '${R2_KEY}' --endpoint-url '${R2_ENDPOINT}' --region auto"
+
+# --- 3. Retention prune --------------------------------------------------------
+# List backups/, keep only keys matching backups/YYYY-MM-DD.sql.gz, compute age
+# with GNU date, delete anything strictly older than RETENTION_DAYS.
+prune_cmd="aws s3 ls 's3://${R2_BUCKET}/backups/' --endpoint-url '${R2_ENDPOINT}' --region auto"
+
+if [[ "${DRY_RUN}" -eq 1 ]]; then
+  echo "DRY RUN — commands that would be executed:"
+  echo
+  echo "# 1. Dump + compress"
+  echo "${dump_cmd}"
+  echo
+  echo "# 2. Upload to R2 (s3://${R2_BUCKET}/${R2_KEY})"
+  echo "${upload_cmd}"
+  echo "${verify_cmd}"
+  echo
+  echo "# 3. Prune objects older than ${RETENTION_DAYS} days"
+  echo "${prune_cmd}"
+  echo "for each key older than ${RETENTION_DAYS} days:"
+  echo "  aws s3 rm 's3://${R2_BUCKET}/<key>' --endpoint-url '${R2_ENDPOINT}' --region auto"
+  exit 0
+fi
+
+echo "==> Dumping database and compressing (${TODAY})"
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "${WORK_DIR}"' EXIT
+cd "${WORK_DIR}"
+eval "${dump_cmd}"
+
+if [[ ! -s "${LOCAL_FILE}" ]]; then
+  echo "ERROR: backup file is empty; aborting before any upload" >&2
+  exit 1
+fi
+ls -lh "${LOCAL_FILE}"
+
+echo "==> Uploading to s3://${R2_BUCKET}/${R2_KEY}"
+eval "${upload_cmd}"
+eval "${verify_cmd}" >/dev/null
+
+echo "==> Pruning backups older than ${RETENTION_DAYS} days"
+# s3 ls line format: "2026-08-27 02:00:00     123456 backups/2026-08-26.sql.gz"
+now_epoch="$(date +%s)"
+pruned=0
+while IFS= read -r line; do
+  key="$(awk '{print $4}' <<<"${line}")"
+  [[ "${key}" =~ ^backups/[0-9]{4}-[0-9]{2}-[0-9]{2}\.sql\.gz$ ]] || continue
+  d="$(basename "${key}" .sql.gz)"
+  d_epoch="$(date -d "${d}" +%s)"
+  age_days=$(( (now_epoch - d_epoch) / 86400 ))
+  if (( age_days > RETENTION_DAYS )); then
+    echo "  deleting ${key} (${age_days} days old)"
+    aws s3 rm "s3://${R2_BUCKET}/${key}" --endpoint-url "${R2_ENDPOINT}" --region auto >/dev/null
+    pruned=$((pruned + 1))
+  fi
+done < <(eval "${prune_cmd}")
+echo "==> Done: uploaded ${R2_KEY}, pruned ${pruned} object(s)"
