@@ -7,10 +7,9 @@ Last updated: 2026-08-27
 The public company profile remains on the apex `cogitoacademy.id` host at
 Hostinger. The deployed Cogito application uses separate subdomains: the API
 and Better Auth base URL are `https://api.cogitoacademy.id`, while the web app
-and CORS origin are `https://app.cogitoacademy.id` on Cloudflare Pages. The
-Pages build must use `VITE_SERVER_URL=https://api.cogitoacademy.id`; the
-frontend is not deployed as a Coolify web container and the static build does
-not proxy `/rpc` to the API.
+and CORS origin are `https://app.cogitoacademy.id`. The production frontend
+image must be built with `VITE_SERVER_URL=https://api.cogitoacademy.id`; the
+static nginx image does not proxy `/rpc` to the API.
 
 The PostgreSQL service currently runs as Coolify's private `postgres:16-alpine`
 container and does not serve TLS. Production-like API deployments therefore set
@@ -26,6 +25,15 @@ covers a matching account created after boot; the production seed uses the
 first configured address while local/test seed keeps `admin@cogitoacademy.id`.
 Additional admins can still be granted through the existing admin role
 management flow.
+
+The OVH host bootstrap is repeatable through the Terraform configuration in
+`infra/terraform`, which runs the idempotent `infra/provision.sh` over SSH for
+an already-created VPS. The bootstrap keeps SSH password authentication off,
+allows only Coolify's generated key for its localhost root connection, and
+exempts Docker's private range from fail2ban so internal validation cannot
+self-ban. Coolify's service/resource setup remains a one-time control-plane
+operation. The end-to-end provisioning, release, manual CI-quota fallback,
+verification, and rollback procedure is documented in [Setup and Deployment](./DEPLOYMENT.md).
 
 The authenticated `/guide` route is the product-facing **How Cogito Works** guide. It is a frontend-only, code-managed journey map rather than a developer setup document. Students can see only the Student journey; tutors can switch between Tutor and Student; admins can switch between Admin, Tutor, and Student. The role selector sits on its own at the top of the page, while the introduction and journey sit in a centered `max-w-6xl` guide shell. Step details open by default so the full flow can be read without one-by-one interaction; a single global control can collapse or restore all details, while each step remains individually keyboard-accessible. Each view combines a detailed tutoring lifecycle timeline with expandable exception branches and links to the existing feature routes; desktop uses a sticky secondary chapter rail on the right with one restrained progress header and Selia `Item` rows with a semantic media tint for chapter wayfinding, while mobile stacks the same navigation above the content. Its Scandinavian treatment uses a neutral, sans-serif hierarchy, restrained borders, purposeful whitespace, and smooth reduced-motion-aware details so the guide works for learners from ages 5–18 as well as tutors and admins. Timing-sensitive copy is explicit and bolded in the rendered guide: invite links last 7 days; booking response, participant confirmation, reconfirmation, and room approval use 12-hour windows unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals last 24 hours; lateness is measured at 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and the admin support SLA is 30 minutes in business hours or 4 hours outside. The static content source is `apps/web/src/components/guide/guide-content.ts`; no API or database contract is involved.
 
@@ -255,7 +263,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Scheduler:** BullMQ with Redis persistence for booking expiry, hold release, email dispatch
 - **Email:** Resend (production) / stub (development) via EmailService
 - **Meeting:** Google Meet (production) / manual link fallback via CircuitBreaker. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
-- **Deployment:** API on Coolify on the VPS; frontend on Cloudflare Pages (after the infrastructure branch)
+- **Deployment:** Coolify on the OVH VPS; production API and web images are pulled from GHCR
 - **Database TLS:** Controlled by `DB_SSL_ENABLED`; Coolify's bundled PostgreSQL is non-TLS, while external managed databases may require it
 
 ## DB Schema (31 tables)
@@ -453,7 +461,7 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 ## CI/CD
 
 - **GitHub Actions** (`.github/workflows/ci.yml`): 4 parallel jobs (lint, typecheck, build, test+coverage). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/`, the env/auth/db package tests, and `apps/server/src/openapi.test.ts` in the coverage process; the remaining `apps/server/src/` tests stay in a **separate process** because the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`. Test hooks have a 30-second budget to absorb slow CI database setup while still catching hangs. Coverage gate: `packages/api` = 100% lines and overall = 100% lines (enforced by `.github/scripts/coverage-comment.ts`).
-- **CD** (after infrastructure branch): build the server image → push to GHCR → trigger the API Coolify webhook → poll `https://api.cogitoacademy.id/health`; Cloudflare Pages builds the frontend from the GitHub repository.
+- **CD**: GitHub Actions builds server/web images → pushes to GHCR → triggers the API and web Coolify webhooks → polls `https://api.cogitoacademy.id/health`; the manual GHCR/Coolify fallback is documented in `docs/DEPLOYMENT.md`
 - **Lefthook** pre-commit: oxlint + oxfmt. Pre-push: typecheck.
 - **Labeler** (`.github/workflows/labeler.yml`): labels PRs `server`/`web`/`infrastructure`/`docs` by changed paths (`.github/labeler.yml`); needs `pull-requests: write` permission.
 - **Dependabot**: weekly npm + GitHub Actions updates.
@@ -461,6 +469,7 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 - **Health**: `GET /health` returns `{ status, checks: { database, redis, scheduler }, timestamp }` — DB `SELECT 1`, Redis `ping()`, and scheduler readiness (`checkSchedulerHealth`) are checked; `checks.scheduler` is `error` whenever Redis is unreachable (the scheduler cannot run), `degraded` when no Redis client exists
 - **Deployment platform**: Coolify for the API (self-hosted PaaS on the VPS) and Cloudflare Pages for the frontend
 - **Scheduler boot**: The BullMQ worker + 6 repeatable jobs (`expire-bookings` 5m, `release-expired-holds` 10m, `check-tutor-lateness` 5m, `send-notification-email` 60s, `escalate-support-tickets` 15m, `retry-failed-meetings` 5m — wired in `apps/server/src/scheduler.ts`) only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and the booking-expiry/hold-release/email/SLA jobs never run. **Fail-loud boot:** when `SCHEDULER_ENABLED=true` but Redis is unreachable, `initScheduler()` pings the shared Redis (`checkSchedulerHealth`) and **throws — the boot aborts** instead of silently running without the expiry/hold-release/email jobs. `send-notification-email` consumes the email outbox (`notification.dispatchQueuedEmails`): notification writes queue dispatch rows (`status='queued'`) inside the DB transaction and the scheduler sends them, so no email I/O happens inside open transactions. `GET /health` surfaces a `checks.scheduler` entry (`ok`/`error`/`degraded` from the same Redis ping), so a dead scheduler trips the readiness check.
+  1d8dd3b (feat(infra): add OVH Terraform and Coolify bootstrap)
 
 ## Plans
 

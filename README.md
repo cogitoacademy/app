@@ -57,6 +57,10 @@ Open [http://localhost:3000](http://localhost:3000) for the web app.
 The API is at [http://localhost:3001](http://localhost:3001).
 API docs (dev only) at [http://localhost:3001/api-reference](http://localhost:3001/api-reference).
 
+For production provisioning, Coolify setup, the normal GitHub Actions release,
+and the manual GHCR fallback when CI quota is unavailable, see
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## Testing
 
 ```bash
@@ -99,6 +103,7 @@ cogito-app/
 │   └── ui/            # Selia component library (22 components)
 ├── docs/              # Architecture context + plans
 │   ├── CONTEXT.md     # Single source of truth for architecture
+│   ├── DEPLOYMENT.md  # Local/prod setup and deployment runbook
 │   └── plans/         # Active + completed plans (see plans/README.md)
 └── designs/           # .pen design files
 ```

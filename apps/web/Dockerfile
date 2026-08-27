@@ -20,8 +20,7 @@ COPY . .
 # z.url() env validation at bundle load and (b) resolve against the frontend
 # origin (app.cogitoacademy.id/rpc), which the static nginx container does not
 # route to the API.
-# Cloudflare Pages passes the per-environment value as a build variable; this
-# default keeps standalone Docker builds pointed at the production API.
+# CI passes the per-environment value via --build-arg (cd-prod/cd-staging).
 ARG VITE_SERVER_URL=https://api.cogitoacademy.id
 ENV VITE_SERVER_URL=$VITE_SERVER_URL
 RUN bun run build:web

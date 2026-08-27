@@ -9,14 +9,20 @@
 
 Tasks deferred from production-readiness (#18) and infrastructure (#19) that could not be completed without a live production environment or were identified as gaps during the post-merge audit.
 
+The current provisioning and release procedure, including the manual GHCR/Coolify
+fallback when CI quota is unavailable, is documented in
+[`docs/DEPLOYMENT.md`](../../DEPLOYMENT.md). Production API/web image and domain
+smoke verification was completed on 2026-08-25; the remaining unchecked
+environment-specific items below still require confirmation in GitHub/Coolify.
+
 ## 0. Production domain split
 
 - [x] Keep the Hostinger company profile on the apex `cogitoacademy.id`.
 - [x] Route `api.cogitoacademy.id` to the API/Auth/health/webhook service.
-- [x] Route `app.cogitoacademy.id` to the Cloudflare Pages frontend and set the
-      production Pages variable `VITE_SERVER_URL=https://api.cogitoacademy.id`.
-- [ ] Configure the Coolify API domain and add the API deploy webhook secrets
-      in GitHub Actions; configure the Pages custom domain/build variables.
+- [x] Route `app.cogitoacademy.id` to the frontend and bake the API subdomain
+      into the production Vite image.
+- [ ] Configure the two Coolify resource domains and add the API + web deploy
+      webhook secrets in GitHub Actions.
 
 ---
 
@@ -94,22 +100,22 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 
 ### 4.1 Provisioning
 
-- Provision Hetzner VPS with provision.sh
+- Provision the OVH VPS with the Terraform bootstrap in `infra/terraform`
+  (the existing `infra/provision.sh` remains the host bootstrap payload)
 - Install Coolify + create admin account
 - Add GHCR as Docker registry in Coolify
-- Create PostgreSQL, Redis, and server services in Coolify; keep the frontend on Pages
+- Create PostgreSQL, Redis, server, web services in Coolify
 - Set `DB_SSL_ENABLED=false` for Coolify's bundled non-TLS PostgreSQL service;
   keep it true for managed PostgreSQL endpoints that require TLS
-- Configure the API domain + auto-HTTPS in Coolify
-- Configure DNS (`api.cogitoacademy.id` A → VPS; `app.cogitoacademy.id` CNAME → Pages)
-- Verify Coolify auto-deploys the API image and Pages deploys the frontend
-- Verify the API and frontend domains serve with HTTPS
+- Configure domains + auto-HTTPS in Coolify
+- Configure Hostinger DNS (api.cogitoacademy.id, app.cogitoacademy.id → VPS IP)
+- Verify Coolify auto-deploys on new image push
+- Verify both domains serve with HTTPS
 
 ### 4.2 CI/CD Secrets
 
 - Add GHCR secrets to GitHub repo
-- Add the Coolify API webhook URLs to GitHub secrets
-- Configure the Cloudflare Pages Git integration and production/preview variables
+- Add Coolify webhook URLs to GitHub secrets
 - Verify CD builds and pushes to GHCR on push to staging
 
 ### 4.3 Monitoring
@@ -123,11 +129,14 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 ### 4.4 Security
 
 - Enable GitHub secret scanning (repo settings)
+- Keep the Coolify localhost SSH path key-only: root password login remains
+  disabled, and Docker's private `10.0.0.0/8` range stays excluded from the
+  SSH fail2ban jail
 
 ### 4.5 Docker Build Verification
 
-- Verify the server Docker image builds locally and responds to its health check
-- Verify the Pages frontend build succeeds with the production API URL
+- Verify Docker builds succeed locally
+- Verify both images start and respond to health checks
 
 ---
 

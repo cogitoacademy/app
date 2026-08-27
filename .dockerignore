@@ -5,6 +5,12 @@ node_modules
 .gitignore
 coverage
 dist
+.turbo
+.wrangler
+.worktrees
+.codex-logs
+.playwright-mcp
+.openai
 docs
 designs
 .superpowers

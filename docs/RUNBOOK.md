@@ -14,11 +14,21 @@ Tutor invitation delivery should be smoke-tested in both desktop and mobile emai
 
 - Company profile: `https://cogitoacademy.id` (kept on Hostinger)
 - API/Auth/health/webhooks: `https://api.cogitoacademy.id`
-- Frontend: `https://app.cogitoacademy.id` (Cloudflare Pages)
+- Frontend: `https://app.cogitoacademy.id`
 
-Do not point the apex DNS record at the VPS. Point only `api` to the Droplet
-with an A record. Point `app` to the Cloudflare Pages project with a CNAME;
-`coolify` may be added as a separate administration subdomain on the VPS.
+Do not point the apex DNS record at the OVH VPS. Configure only the `api` and
+`app` subdomains to the VPS; keep Coolify administration private through an
+SSH tunnel rather than exposing port `8000`.
+
+For Terraform bootstrap, first-time provisioning, normal releases, and the
+manual GHCR/Coolify fallback when CI quota is unavailable, see
+[Setup and Deployment](./DEPLOYMENT.md).
+
+The Coolify `localhost` server validates itself by SSH-ing to
+`host.docker.internal` with Coolify's generated key. Root password login stays
+disabled; only that key-based connection is allowed. The bootstrap exempts
+Docker's private `10.0.0.0/8` range from fail2ban, which prevents repeated
+Coolify checks from causing a false `Connection refused` status.
 
 ### Login/auth smoke check
 
@@ -173,7 +183,7 @@ bun run dev:web          # Web only (port 3000)
 
 ```bash
 bun run build            # Build server + web
-NODE_ENV=production bun apps/server/dist/index.js
+NODE_ENV=production bun apps/server/dist/index.mjs
 ```
 
 The server runs on port 3001 by default (configurable via `PORT` env var).
@@ -434,11 +444,9 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ## Rollback a Deployment
 
-API deployments are Coolify auto-deploys from the GHCR server image
-(`ghcr.io/cogitoacademy/app/server`). Roll back the API in Coolify; frontend
-deployments are managed by Cloudflare Pages from GitHub.
+Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/app/{server,web}`). Rollback is done in Coolify:
 
-1. Open the Coolify dashboard → the server service
+1. Open the Coolify dashboard → the service (server / web)
 2. Use **Rollback to previous release** (Coolify keeps the previous image/version)
 3. Verify health: `curl https://api.cogitoacademy.id/health`
 4. If a database migration was part of the deployment, check migration status:
@@ -534,7 +542,7 @@ Key environment variables (see `.env.example` for full list):
 | `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                                                                                                                                                                                                           |
 | `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                                                                                                                                           |
 | `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                                                                                                                                            |
-| `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                            |
+| `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                             |
 | `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                                                                                                                                                                                                                  |
 | `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                |
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                   |
@@ -627,10 +635,6 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
 
 ## Deploy Secrets (CD webhooks)
 
-The CD workflows deploy only the API on Coolify. Cloudflare Pages deploys the
-frontend automatically from the connected GitHub repository; it does not need a
-Coolify web webhook.
-
 The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing.
 
 **Setup (one-time, user action):**
@@ -638,7 +642,9 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
 1. Coolify → your service → **Webhooks** tab → copy the **Deploy webhook** URL.
 2. GitHub → repo **Settings → Secrets and variables → Actions**:
    - `COOLIFY_STAGING_SERVER_WEBHOOK` — staging API service webhook URL
+   - `COOLIFY_STAGING_WEBHOOK` — staging web service webhook URL
    - `COOLIFY_PROD_SERVER_WEBHOOK` — production API service webhook URL
+   - `COOLIFY_PROD_WEBHOOK` — production web service webhook URL
 3. Push to `staging` (or `main`) and verify the "Trigger Coolify deploy" step is green.
 
 Until the secrets are set, CD pushes will fail at the trigger step by design (a silent no-op deploy is worse than a red build).
@@ -692,20 +698,18 @@ surfaces manual/retry setup attention.
 
 ## GHCR / Docker Deploy (CD)
 
-The CD workflows build only the API image (`apps/server/Dockerfile`) and push
-it to `ghcr.io/cogitoacademy/app/server`. Cloudflare Pages builds and deploys
-the frontend from the GitHub repository.
+The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
+
+For the exact manual build, push, redeploy, verification, and rollback
+procedure when Actions cannot start, use [Setup and Deployment](./DEPLOYMENT.md#manual-deployment-when-ci-has-no-quota).
 
 If a push fails with `denied: installation not allowed to Create organization package`:
 
 1. **Workflow permission (code, already fixed):** the job must declare `permissions: { contents: read, packages: write }` so the `GITHUB_TOKEN` can write to GHCR.
-2. **Org-level (requires an org admin):** the `cogitoacademy` org must allow GitHub Actions to create packages. Either enable it in **Org Settings → Actions → General → Workflow permissions → "Read and write permissions"**, or initialize the server package once with an org member account:
+2. **Org-level (requires an org admin):** the `cogitoacademy` org must allow GitHub Actions to create packages. Either enable it in **Org Settings → Actions → General → Workflow permissions → "Read and write permissions"** (with "Allow GitHub Actions to create and approve pull requests" as needed), or initialize the packages once by pushing any image under `ghcr.io/cogitoacademy/app/{server,web}` with an org member account:
    ```bash
    docker pull oven/bun:1.3.14
    docker tag oven/bun:1.3.14 ghcr.io/cogitoacademy/app/server:init
-   docker push ghcr.io/cogitoacademy/app/server:init
+   docker push ghcr.io/cogitoacademy/app/server:init   # repeat for /web
    ```
-
-```
- After the packages exist, the workflows push without org changes.
-```
+   After the packages exist, the workflows push without org changes.

@@ -6,7 +6,7 @@ Last updated: 2026-08-27
 
 All oRPC endpoints use **POST** method. Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`. The protected Knowledge Bank file proxy is the documented exception and uses `GET`.
 
-In production, API and frontend use separate hosts: `https://api.cogitoacademy.id` serves `/rpc`, `/api/auth`, `/health`, and `/webhooks`; `https://app.cogitoacademy.id` serves the SPA from Cloudflare Pages. The apex `https://cogitoacademy.id` remains the company profile and is not an API host.
+In production, API and frontend use separate hosts: `https://api.cogitoacademy.id` serves `/rpc`, `/api/auth`, `/health`, and `/webhooks`; `https://app.cogitoacademy.id` serves the SPA. The apex `https://cogitoacademy.id` remains the company profile and is not an API host.
 
 The public `/health` result depends on the server's database and Redis boot
 checks. When the API is linked to Coolify's bundled private PostgreSQL, set
