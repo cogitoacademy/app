@@ -40,7 +40,7 @@
 | [REAUDIT-FINDINGS.md](completed/REAUDIT-FINDINGS.md)                                               | `fix/reaudit-findings`                        | **Merged #107 (2026-08-26)** — post-finalization re-audit: N1 reconfirm loop, N2 suspended restore, W1 env drift, env prod guards    |
 | [PRODUCTION-ADMIN-BOOTSTRAP.md](completed/PRODUCTION-ADMIN-BOOTSTRAP.md)                           | main                                          | Completed 2026-08-27 — configurable production/staging admin bootstrap with `itcogitoacademy01@gmail.com` default                    |
 | [PUBLIC-ACHIEVEMENTS-SURFACING.md](completed/PUBLIC-ACHIEVEMENTS-SURFACING.md)                     | main                                          | Completed 2026-08-27 — public `cogito-acad` achievement archive/homepage preview plus safe API projection                            |
-| [MEETING-CALENDAR-METADATA.md](completed/MEETING-CALENDAR-METADATA.md)                             | main                                          | Completed 2026-08-27 — human-readable Google Calendar titles, participant descriptions, and booking deep links                     |
+| [MEETING-CALENDAR-METADATA.md](completed/MEETING-CALENDAR-METADATA.md)                             | main                                          | Completed 2026-08-27 — human-readable Google Calendar titles, participant descriptions, and booking deep links                       |
 
 ## Archive (superseded / historical)
 
