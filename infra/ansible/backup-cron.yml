@@ -1,0 +1,129 @@
+# Nightly PostgreSQL backup to R2 — installs the cron and its environment.
+#
+# What this playbook does (all idempotent, safe to re-run):
+#   1. Installs postgresql-client (pg_dump) + awscli (S3-compatible R2 upload).
+#   2. Installs infra/backup.sh as /usr/local/bin/cogito-backup.sh (root-owned).
+#   3. Decrypts infra/secrets/prod.env with SOPS on the CONTROL NODE (the age
+#      key lives on the operator machine, never on the VPS) and writes
+#      /etc/cogito/backup.env (root:root 0600) as the cron's environment.
+#   4. Installs the nightly cron: 02:00 Asia/Jakarta (WIB), logs to
+#      /var/log/cogito-backup.log, rotated daily (7 kept).
+#   5. Logrotate config so the log file cannot grow unbounded.
+#
+# Why root (not a dedicated `backup` user): this is a single-tenant VPS that is
+# already root-managed (infra/provision.sh, Coolify's own SSH check). The
+# script needs both the full DATABASE_URL (with credentials) and the R2 token
+# either way, so a separate account would duplicate credentials without adding
+# isolation, and cron runs unattended with no interactive surface. Keeping the
+# secrets in one root-only 0600 file is simpler to audit. If this ever runs on
+# a multi-tenant host, re-evaluate.
+#
+# DATABASE_URL note: the value from the SOPS vault must resolve from the VPS
+# host. Coolify's bundled PostgreSQL lives on a private Docker network
+# (hostname postgres-prod), which the host cannot reach by name unless the
+# port is published or the host joins the network. Set DATABASE_URL in the
+# vault to a host-reachable endpoint (e.g. 127.0.0.1:<published-port> or the
+# container's IP) before running this playbook.
+#
+# Env file format note: the cron wrapper sources /etc/cogito/backup.env, so
+# vault values must be plain single-line KEY=VALUE (no surrounding quotes,
+# no spaces or '#' in values) — the same convention as infra/secrets/prod.env.
+#
+# Run (from the repository root; sops must be installed on the control node):
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/backup-cron.yml --ask-become-pass
+#
+# Manual test (no credentials needed, prints the commands):
+#   /usr/local/bin/cogito-backup.sh --dry-run
+---
+- name: Install the nightly PostgreSQL backup cron
+  hosts: cogito-vps
+  become: true
+  gather_facts: true
+
+  vars:
+    backup_script_src: ../backup.sh
+    backup_script_dest: /usr/local/bin/cogito-backup.sh
+    backup_env_dest: /etc/cogito/backup.env
+    backup_env_src: infra/secrets/prod.env # SOPS-encrypted, relative to the control node cwd (repo root)
+    backup_log: /var/log/cogito-backup.log
+    backup_env_file_mode: "0600"
+
+  tasks:
+    - name: Install pg_dump and aws CLI
+      ansible.builtin.apt:
+        name:
+          - postgresql-client # pg_dump
+          - awscli # S3-compatible client for R2 (v2 recommended; v1 works with --endpoint-url)
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install the backup script
+      ansible.builtin.copy:
+        src: "{{ backup_script_src }}"
+        dest: "{{ backup_script_dest }}"
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Decrypt prod env on the control node (SOPS; age key stays local)
+      ansible.builtin.command: sops -d {{ backup_env_src }}
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+      register: backup_env_plaintext
+
+    - name: Write the cron environment file (root-only)
+      ansible.builtin.copy:
+        dest: "{{ backup_env_dest }}"
+        content: "{{ backup_env_plaintext.stdout }}\n"
+        owner: root
+        group: root
+        mode: "{{ backup_env_file_mode }}"
+      no_log: true
+
+    - name: Install the nightly cron (02:00 Asia/Jakarta)
+      ansible.builtin.cron:
+        name: cogito-nightly-backup
+        minute: "0"
+        hour: "2"
+        job: >-
+          /bin/bash -c 'set -a; . {{ backup_env_dest }}; set +a;
+          {{ backup_script_dest }} >> {{ backup_log }} 2>&1'
+        state: present
+
+    # Debian/Ubuntu vixie-cron honors CRON_TZ, so the job above always fires at
+    # 02:00 WIB even if the host clock is set to UTC. The entry is its own
+    # env line (name = variable, job = value).
+    - name: Set cron timezone to Asia/Jakarta
+      ansible.builtin.cron:
+        name: CRON_TZ
+        env: true
+        job: Asia/Jakarta
+        state: present
+
+    - name: Rotate the backup log (keep 7 days)
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/cogito-backup
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {{ backup_log }} {
+            daily
+            rotate 7
+            compress
+            missingok
+            notifempty
+          }
+
+    - name: Show the resulting cron entry
+      ansible.builtin.command: crontab -l -u root
+      register: root_crontab
+      changed_when: false
+
+    - name: Print root crontab
+      ansible.builtin.debug:
+        var: root_crontab.stdout_lines

@@ -310,6 +310,106 @@ bun run db:test
 bun run db:studio        # Opens Drizzle Studio on port 4983
 ```
 
+## Backup & Restore
+
+### How the nightly backup works
+
+Every night at **02:00 WIB** (`Asia/Jakarta`) a cron job on the VPS runs
+[`infra/backup.sh`](../infra/backup.sh), which:
+
+1. Dumps the production database with `pg_dump --no-owner --no-acl -Fc` (custom
+   format, gzip-compressed — the file is still named `backups-YYYY-MM-DD.sql.gz`).
+2. Uploads it to Cloudflare R2 via the `aws` CLI
+   (`--endpoint-url https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com --region auto`)
+   under `s3://cogito-backups/backups/YYYY-MM-DD.sql.gz`.
+3. Prunes R2 objects older than `RETENTION_DAYS` (default **30 days**).
+
+The cron job, the `pg_dump`/`aws` CLI packages, the decrypted credential file
+(`/etc/cogito/backup.env`, root-only `0600`, decrypted from the SOPS vault on
+the control node — the age key never reaches the VPS) and log rotation
+(`/var/log/cogito-backup.log`, 7 daily files) are all installed by the
+idempotent playbook [`infra/ansible/backup-cron.yml`](../infra/ansible/backup-cron.yml):
+
+```bash
+ansible-playbook -i infra/ansible/inventory.ini \
+  infra/ansible/backup-cron.yml --ask-become-pass
+```
+
+The playbook runs the backup as **root** (documented in the playbook header):
+the single-tenant VPS is already root-managed, and the script needs the full
+`DATABASE_URL` plus the R2 token either way, so a dedicated `backup` user
+would duplicate credentials without adding isolation.
+
+> **Before first run:** `DATABASE_URL` in the SOPS vault must resolve from the
+> VPS **host** (e.g. `127.0.0.1:<published-port>` or the container IP) —
+> Coolify's bundled PostgreSQL hostname `postgres-prod` is only reachable
+> inside its private Docker network. `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and
+> `R2_SECRET_ACCESS_KEY` come from the same vault; the token needs Object
+> Read & Write on the bucket.
+
+### Manual run and verification
+
+```bash
+# Print the exact commands without executing (no credentials needed):
+/usr/local/bin/cogito-backup.sh --dry-run
+# Run one backup now:
+DATABASE_URL=... R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
+  /usr/local/bin/cogito-backup.sh
+```
+
+Verify a backup exists and is the expected size:
+
+```bash
+aws s3 ls s3://cogito-backups/backups/ \
+  --endpoint-url https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com --region auto
+```
+
+A fresh nightly backup should appear by ~02:10 WIB. Missing backups surface as
+an empty `backups/` listing plus the cron log at `/var/log/cogito-backup.log`.
+
+### Restore drill
+
+The nightly dumps are **custom-format** (from `pg_dump -Fc`) — restore them
+with `pg_restore`, not `psql`. Practice this on a scratch database before ever
+needing it in anger:
+
+```bash
+# 1. Pull the latest backup and decompress the custom-format dump.
+aws s3 cp s3://cogito-backups/backups/$(date +%F).sql.gz . \
+  --endpoint-url https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com --region auto
+gzip -dc backups-$(date +%F).sql.gz > backup.dump
+
+# 2. Restore into a scratch database (NOT the live one).
+createdb cogito-restore-drill
+pg_restore --no-owner --no-acl -d cogito-restore-drill backup.dump
+
+# 3. Verify against known-good expectations: row counts, newest rows.
+psql -d cogito-restore-drill -c "SELECT count(*) FROM \"user\";"
+psql -d cogito-restore-drill -c "SELECT count(*) FROM booking;"
+# Compare with the live database; also spot-check the newest ledger rows and
+# a recent booking state history.
+```
+
+**Promoting the drill to a real restore** (disaster recovery, not a drill):
+
+1. **Never restore over live traffic without a maintenance window.** Pick a
+   low-traffic slot, put the API in maintenance (or stop the `cogito-api`
+   resource in Coolify), and take a fresh pre-restore snapshot of the current
+   database in case the restore must be abandoned.
+2. Restore the verified dump into the production database:
+   ```bash
+   pg_restore --clean --if-exists --no-owner --no-acl -d <PROD_DATABASE_NAME> backup.dump
+   ```
+3. If the backup predates pending migrations, run `bun run db:migrate` with
+   the production `DATABASE_URL` (see DEPLOYMENT.md — migrations are never
+   automatic).
+4. Start the API and verify `/health` (database + Redis + scheduler `ok`) and
+   the smoke checks in this runbook before reopening traffic.
+
+Backups are retained 30 days; a restore older than that requires the R2
+bucket's lifecycle configuration to have kept the object, so verify any
+emergency restore against the actual object list first.
+
 ## Redis
 
 ### Check Redis Connection
