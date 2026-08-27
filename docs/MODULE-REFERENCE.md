@@ -103,7 +103,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 **Service Methods:**
 
 - `list(userId)` — Returns achievements for a user
-- `listApprovedPublic()` — Returns approved + visible achievements with the owner's display name for a future/public academy surface (F16; no active app landing route)
+- `listApprovedPublic()` — Returns the allowlisted approved + visible achievement projection with the owner's display name for the public `cogito-acad` homepage and archive (F16)
 - `create(userId, input)` — Creates achievement in `pending` status
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
@@ -117,6 +117,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Achievements start in `pending` status
 - Only the owning student can create/update/delete their achievements
 - `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available only to the owner/admin workflows, while `documentationUrl` is optional public-safe documentation
+- `listApprovedPublic()` must select only public-safe fields. It must not return `userId` or `evidenceUrl`; the public site uses `displayName` and `documentationUrl` when rendering an approved record.
 - The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
 - Optimistic locking prevents lost updates (`version` field)
 - Admin review changes status to `approved` or `rejected`
@@ -225,6 +226,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - The email states the exact account email required for claiming, shows expiry in UTC, and includes a plain fallback URL
 - Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
 - Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
+- The admin tutor review card maps pending `subjectIds` to active category/subject labels and wraps long pending values; this is presentation-only and does not change the admin API payload
 
 ---
 
@@ -475,8 +477,8 @@ chat directory.
 - Google Meet calls have 30-second timeout
 - OAuth refresh-token mode uses `GOOGLE_MEET_CLIENT_ID`, `GOOGLE_MEET_CLIENT_SECRET`, and `GOOGLE_MEET_REFRESH_TOKEN` to call Google Calendar API v3; `GOOGLE_CALENDAR_ID` defaults to `primary`. When the dedicated client variables are absent, the resolver falls back to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, but the Calendar refresh token is still required.
 - Service-account mode uses `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, and `GOOGLE_IMPERSONATED_USER`; the impersonated user is required for Workspace domain-wide delegation. `GOOGLE_MEET_ENABLED=true` requires either the complete OAuth set or the complete service-account set.
-- Booking scheduling supplies provider metadata: solo titles are `Solo session with {Tutor} & {Student}`; group/series titles name the tutor, while all resolved student names remain in the description alongside the booking's learning goal when present and the authenticated booking deep link. The same metadata is applied to both service-account and OAuth event insertion paths.
 - OAuth setup and token rotation instructions live in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
+- Booking scheduling supplies provider metadata: solo titles are `Solo session with {Tutor} & {Student}`; group/series titles name the tutor, while all resolved student names remain in the description alongside the booking's learning goal when present and the authenticated booking deep link. The same metadata is applied to both service-account and OAuth event insertion paths.
 - Circuit breaker: 5 failures → open for 60 seconds
 - On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
 - Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
@@ -826,6 +828,7 @@ chat directory.
 - `getProfile(userId)` — Returns full tutor profile and future availability
 - IDR profiles receive `pricesByModality` Marks maps computed from the active economy config; legacy profiles keep their stored Marks map and no student discovery response exposes the tutor's IDR base honorarium
 - Frontend filter selects normalize displayed objects back to primitive category/subject ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, child-subject options are the union of the selected mother categories, and the query is debounced by 300 ms.
+- The student tutor drawer combines the available modality maps into one group-size pricing matrix with separate Online and Offline Marks columns, prefixing populated values with the Cogito Marks icon; missing modality/size combinations are display-only em dashes and do not change the response contract.
 
 **Dependencies:** `DiscoveryRepo`, `PricingPort`
 

@@ -289,6 +289,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: TutorProfile[], total, limit, offset }`
+- **Description:** The admin review UI resolves pending `subjectIds` through the active subject taxonomy and displays category/subject labels; the procedure continues to return the pending change payload unchanged.
 
 ### `adminTutor.reviewTutorProfile`
 
@@ -386,7 +387,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
 - **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, isSelectable, parent }]` and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
-- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response.
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; this does not alter the RPC contract.
 
 ### `tutors.getProfile`
 
@@ -423,8 +424,8 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **RPC path:** `/rpc/achievement/listApproved`
 - **Auth:** Public
 - **Input:** None
-- **Output:** `{ items: Achievement[] }` — approved + visible achievements with the owner's `displayName` attached (public procedure retained for a future/public academy surface)
-- **Description:** Returns approved and visible achievements; rejected/pending achievements are never exposed. The app root now redirects to login, so no active app landing page consumes this procedure.
+- **Output:** `AchievementPublic[]` — the HTTP response uses the standard oRPC wrapper `{ "json": <array>, "meta": [...] }`. Each record contains `id`, `eventName`, `category`, `award`, `level`, optional `issuer`, `awardingDate`, `location`, `description`, `subjects`, `documentationUrl`, `createdAt`, and `displayName`.
+- **Description:** Returns approved and visible achievements for the public `cogito-acad` homepage preview and `/[locale]/achievements` archive. The projection intentionally excludes `userId` and private verification `evidenceUrl`; rejected, pending, and hidden achievements are never exposed. Results are ordered by awarding date, then creation date, and capped at 100 records.
 
 ### `achievement.list`
 

@@ -19,6 +19,14 @@ Tutor onboarding now uses the normalized competition category/child-subject cata
 
 The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Selected subjects appear as chips, while archived profile subjects are shown read-only. The tutor list continues to support selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
 
+### Admin tutor review readability follow-up (2026-08-27)
+
+The admin tutor review card now resolves proposed `subjectIds` through the active taxonomy and renders category/subject labels as wrapping badges instead of exposing raw UUIDs. Other pending values also wrap safely on narrow cards. This is presentation-only; the `adminTutor.listTutorProfiles` and `adminTutor.reviewTutorProfile` contracts are unchanged.
+
+### Tutor discovery pricing matrix follow-up (2026-08-27)
+
+The student-facing tutor drawer now combines the available Online and Offline Marks maps into one group-size table. Each modality has its own price column, populated values use the shared Cogito Marks icon prefix, and an em dash makes a missing modality/size combination explicit. This is a presentation-only change; the `tutors.listPublished`/`tutors.getProfile` response and pricing contracts are unchanged.
+
 ### Competition Calendar parity follow-up (2026-08-23)
 
 The authenticated calendar now carries the full read-only interaction model from `cogito-acad`: a responsive month grid with multi-day spans and overflow popup, a 30-day agenda view with rich event cards, period navigation, `M`/`A` keyboard shortcuts, and a responsive details modal with metadata and external actions. The app intentionally keeps its own Selia components, design tokens, Tabler icon set, and English-only copy; Sanity remains the source of truth and the API contract is unchanged.
@@ -684,6 +692,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.32 (2026-08-27): Improved admin tutor review readability by mapping pending subject IDs to active category/subject labels and wrapping long pending values. No RPC, schema, or persistence contract changed.
 - v1.31 (2026-08-27): Added the assigned-tutor `tutorActions.setMeetingLink` fallback plus a shared Selia manual-link dialog for tutor booking detail and admin operations. The fallback is limited to online `CONFIRMED`/`SCHEDULED` bookings, updates the active meeting-attempt row, and keeps force-majeure handling on the auditable admin override path. No schema change.
 - v1.28 (2026-08-26): Added the authenticated shell's `D` keyboard shortcut for toggling the rendered light/dark theme outside editable fields, while retaining the Light/Dark/System menu and `next-themes` persistence. No API, schema, or persistence contract changed.
 - v1.30 (2026-08-26): Constrained the shared booking status-tab strip to the available mobile width and kept horizontal tab scrolling inside a scrollbar-hidden region. No RPC, schema, or persistence contract changed.

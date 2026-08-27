@@ -96,7 +96,7 @@ export function BookingsPage() {
     <Stack
       direction="column"
       spacing="lg"
-      className="w-full min-w-0 max-w-full overflow-x-hidden"
+      className="w-full min-w-0 max-w-full"
     >
       <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 max-w-full">

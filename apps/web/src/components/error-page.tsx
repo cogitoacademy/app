@@ -72,13 +72,9 @@ export function ErrorPage() {
   return (
     <main
       aria-labelledby="error-page-title"
-      className="relative isolate flex min-h-svh items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6"
+      className="relative isolate flex min-h-[50svh] h-full items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6"
     >
       <title>Something went wrong · Cogito Academy</title>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-32 -top-32 size-96 rounded-full bg-cogito-orange/10 blur-3xl" />
-        <div className="absolute -bottom-40 -right-32 size-[30rem] rounded-full bg-cogito-purple/10 blur-3xl" />
-      </div>
 
       <ErrorPageContent
         code="500"

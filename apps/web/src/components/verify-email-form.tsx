@@ -179,6 +179,7 @@ export function VerifyEmailForm({
                     value={field.state.value}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
+                    disabled
                   />
                   {field.state.meta.errors.map((error) => (
                     <FieldError key={error?.message}>
@@ -234,13 +235,12 @@ export function VerifyEmailForm({
           </form>
 
           <div className="flex flex-col items-center gap-1">
-            <Text className="text-center">
+            <Text className="text-center flex items-center gap-1">
               Didn&apos;t get a code?{" "}
               <Button
                 type="button"
-                variant="plain"
+                variant="underline"
                 size="sm"
-                className="h-auto p-0! align-baseline text-sm text-primary"
                 disabled={resending}
                 onClick={() => void resendCode()}
               >

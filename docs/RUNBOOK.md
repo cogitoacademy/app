@@ -44,6 +44,7 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/onboarding`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial onboarding form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the submission form.
 - Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
+- In `/admin-tutors`, open a profile with pending edits and confirm the proposed subject changes show readable category/subject labels instead of raw UUIDs. Resize to a narrow viewport and verify subject badges and other long pending values wrap without horizontal page overflow; the review request/response payloads must remain unchanged.
 
 ### Theme shortcut smoke check
 
@@ -155,6 +156,20 @@ On availability/profile/admin forms, verify dates use the Selia date picker, tim
 
 As a student, open `/achievements`, choose **Add Achievement**, and verify the Category and Level selects open above the modal and update their triggers. Open **Awarding Date**, confirm the calendar is visible above the modal, select a day, and verify the trigger shows the chosen date. Open the calendar month/year dropdowns as well; each popup must remain clickable and must not be hidden behind the dialog backdrop. This is a UI-only check; the existing `achievement.create` input and `awardingDate` contract remain unchanged.
 
+### Public achievements smoke check
+
+Open `https://cogitoacademy.id/id/achievements` and `https://cogitoacademy.id/en/achievements` without an authenticated session. Verify the archive shows only approved + visible records, the homepage preview links to the archive, and changing the locale updates labels without changing the record data. Open a record detail and confirm only the student's display name and public documentation link are shown; private verification evidence and internal user IDs must not appear in the rendered page or the network response.
+
+For an API-level check, run:
+
+```bash
+curl -sS -X POST https://api.cogitoacademy.id/rpc/achievement/listApproved \
+  -H 'content-type: application/json' \
+  --data '{"json":{}}'
+```
+
+The response should be the standard oRPC envelope with a JSON array. Inspect one returned record and verify it has no `userId` or `evidenceUrl`. If the API returns an empty array, the public site should render its intentional empty/error state rather than exposing draft or rejected records.
+
 On a completed booking, verify the Session notes card is visible to both tutor and student. Select text and exercise bold, italic, heading, paragraph, bullet, numbered-list, and safe-link actions; confirm the live preview matches the persisted note after reload, the author label distinguishes your note from the other participant's note, and an attempted `<script>` or `javascript:` link is removed by the render sanitizer.
 
 For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount and Marks holds unchanged, and creates a notification for that invitee. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply. For a one-session group, verify the booking form shows both the per-student price and the full temporary target-headcount hold, and blocks submit when the wallet cannot cover that hold.
@@ -167,7 +182,7 @@ From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, v
 
 ### Tutor subject taxonomy smoke check
 
-Open `/onboarding` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs.
+Open `/onboarding` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column.
 
 ### Profile UX smoke check
 
