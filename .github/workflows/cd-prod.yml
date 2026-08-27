@@ -46,12 +46,26 @@ jobs:
 
       - name: Trigger Coolify server deploy
         # Fail loudly when the webhook secret is unset or the request fails —
-        # a silent no-op deploy is worse than a red build.
+        # a silent no-op deploy is worse than a red build. The explicit guard
+        # turns an unset secret into a readable message instead of a bare
+        # `curl exit 6 "Could not resolve host"` (S7: the webhook URL host had
+        # no DNS record because the Coolify control plane is tailnet-only; the
+        # operator recreates the secrets with the resolvable
+        # https://coolify.cogitoacademy.id/api/v1/deploy?uuid=... URL — only
+        # the deploy-webhook path is exposed, the UI stays tailnet-only).
         run: |
+          if [ -z "${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}" ]; then
+            echo "COOLIFY_PROD_SERVER_WEBHOOK is unset — configure the Coolify resource webhook and add it as a GitHub secret" >&2
+            exit 1
+          fi
           curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
 
       - name: Trigger Coolify web deploy
         run: |
+          if [ -z "${{ secrets.COOLIFY_PROD_WEBHOOK }}" ]; then
+            echo "COOLIFY_PROD_WEBHOOK is unset — configure the Coolify resource webhook and add it as a GitHub secret" >&2
+            exit 1
+          fi
           curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }}
 
       - name: Health check
