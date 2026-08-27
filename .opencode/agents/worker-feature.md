@@ -19,6 +19,9 @@ permission:
     "rm -rf ~": deny
     "rm -rf $HOME": deny
     "sudo *": deny
+  external_directory:
+    "/tmp/*": allow
+    "*": ask
   skill:
     "*": deny
     feature-workflow: allow
