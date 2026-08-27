@@ -1,0 +1,38 @@
+# Tailscale join — installs the node and joins the operator's tailnet.
+# The auth key is a credential: it lives in the SOPS vault, never in git.
+#
+# Run: ansible-playbook -i infra/ansible/inventory.ini \
+#        infra/ansible/tailscale.yml --ask-become-pass \
+#        -e "ts_auth_key=$(sops -d infra/secrets/prod.env | grep TS_AUTH_KEY | cut -d= -f2-)"
+---
+- name: Join the Cogito VPS to the tailnet
+  hosts: cogito-vps
+  become: true
+
+  tasks:
+    - name: Install Tailscale
+      ansible.builtin.shell: |
+        curl -fsSL https://tailscale.com/install.sh | sh
+      args:
+        creates: /usr/bin/tailscale
+      register: ts_install
+
+    - name: Join tailnet (auth key from vault, tag:server)
+      ansible.builtin.command: >
+        tailscale up
+        --authkey={{ ts_auth_key }}
+        --hostname=cogito-vps
+        --advertise-tags=tag:server
+        --accept-routes=false
+      register: ts_up
+      changed_when: ts_up.rc == 0
+      no_log: true
+
+    - name: Verify tailnet membership
+      ansible.builtin.command: tailscale status --peers
+      register: ts_status
+      changed_when: false
+
+    - name: Show node identity
+      ansible.builtin.debug:
+        msg: "{{ ts_status.stdout_lines }}"

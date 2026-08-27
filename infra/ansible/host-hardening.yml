@@ -1,0 +1,98 @@
+# Host hardening — replaces the ad-hoc bits of infra/provision.sh with an
+# idempotent, declarative playbook. Safe to re-run.
+#
+# Run: ansible-playbook -i infra/ansible/inventory.ini \
+#        infra/ansible/host-hardening.yml --ask-become-pass
+---
+- name: Harden the Cogito VPS host
+  hosts: cogito-vps
+  become: true
+  gather_facts: true
+
+  vars:
+    # Tailnet CIDR — only these sources reach the control plane.
+    tailnet_cidr: "100.64.0.0/10"
+    # Coolify control ports must be tailnet/loopback only.
+    coolify_ports:
+      - "8000"   # dashboard
+      - "6001"   # realtime
+      - "6002"   # realtime
+
+  tasks:
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ufw
+          - fail2ban
+          - unattended-upgrades
+          - git
+          - curl
+        state: present
+        update_cache: true
+
+    - name: Enable unattended-upgrades
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::AutocleanInterval "7";
+
+    - name: UFW default deny incoming
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    - name: UFW allow public web (Cloudflare-proxied)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: [80, 443]
+
+    - name: UFW allow SSH from tailnet only
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+        from_ip: "{{ tailnet_cidr }}"
+
+    - name: UFW allow Coolify control ports from tailnet only
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+        from_ip: "{{ tailnet_cidr }}"
+      loop: "{{ coolify_ports }}"
+
+    - name: Fail2ban sshd jail enabled
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [sshd]
+          enabled = true
+          maxretry = 5
+          bantime = 1h
+          ignoreip = 127.0.0.1/8 ::1 10.0.0.0/8
+      notify: restart fail2ban
+
+    - name: SSH — no password auth, root key-only
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/00-cogito-hardening.conf
+        content: |
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitRootLogin prohibit-password
+      notify: reload ssh
+
+  handlers:
+    - name: restart fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+
+    - name: reload ssh
+      ansible.builtin.service:
+        name: ssh
+        state: reloaded
