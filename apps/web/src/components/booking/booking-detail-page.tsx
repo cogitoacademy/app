@@ -904,9 +904,7 @@ export function BookingDetailPage({
                     <IconCalendarEvent />
                   </IconBox>
                   <div className="min-w-0">
-                    <Text className="text-sm text-muted">
-                      Session details
-                    </Text>
+                    <Text className="text-sm text-muted">Session details</Text>
                     <Text className="font-medium">
                       {formatBookingDate(
                         booking.scheduledStartAt,
@@ -1393,11 +1391,7 @@ function ReviewMeta({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <IconBox
-        variant="primary-subtle"
-        size="sm"
-        aria-hidden="true"
-      >
+      <IconBox variant="primary-subtle" size="sm" aria-hidden="true">
         {icon}
       </IconBox>
       <span>
