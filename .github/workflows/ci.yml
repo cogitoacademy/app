@@ -56,7 +56,10 @@ jobs:
           commit_user_name: cogito-bot
           commit_user_email: bot@cogitoacademy.id
           commit_author: cogito-bot <bot@cogitoacademy.id>
-          token: ${{ secrets.ACTIONS_BOT_PAT }}
+          # Fall back to the default GITHUB_TOKEN when the PAT secret is
+          # unset — an empty token would fail the push and break the lint
+          # job on every PR until the operator creates the secret.
+          token: ${{ secrets.ACTIONS_BOT_PAT || github.token }}
       - name: Verify lint
         run: bunx oxlint --format=github
       - name: Verify formatting
