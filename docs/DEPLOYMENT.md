@@ -251,8 +251,8 @@ For this deployment, the values look like this (replace the placeholders with
 the real Coolify resource UUIDs; do not include `<` or `>`):
 
 ```text
-COOLIFY_PROD_SERVER_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false
-COOLIFY_PROD_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false
+COOLIFY_PROD_SERVER_WEBHOOK=https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false
+COOLIFY_PROD_WEBHOOK=https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false
 COOLIFY_STAGING_SERVER_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<staging-api-resource-uuid>&force=false
 COOLIFY_STAGING_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<staging-web-resource-uuid>&force=false
 ```
@@ -262,6 +262,15 @@ question marks. The hostname must be publicly DNS-resolvable from a GitHub
 hosted runner. The `uuid` is the Coolify **resource** UUID, not a deployment
 UUID.
 
+> **Production host (2026-08-27, S7):** the Coolify control plane is
+> tailnet-only, so the production webhook host is `coolify.cogitoacademy.id` —
+> a DNS record + Caddy route expose **only** the `/api/v1/deploy/*` path
+> (the per-resource UUID is the bearer secret); the Coolify UI stays
+> tailnet-only. The old `cl.cogitoacademy.id` host had no DNS record, which is
+> why `Deploy Production` failed with `curl exit 6 "Could not resolve host"`.
+> The operator recreates `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK`
+> with the resolvable URL above.
+
 Current Coolify versions label this endpoint **Deploy Webhook (auth
 required)**. The URL identifies the target, while a Coolify API token with the
 `deploy` permission authorizes the request; store that token separately and do
@@ -270,7 +279,9 @@ not append it to the URL. The workflow must send it as an
 
 The workflows intentionally fail if a webhook is missing or unreachable. A
 green image build without a successful Coolify deploy is not a completed
-release.
+release. `cd-prod.yml` additionally guards the secrets before any curl: an
+unset `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK` prints a clear
+message and exits 1 (readable failure instead of a bare `curl exit 6`).
 
 ## Normal deployment: GitHub Actions
 
@@ -290,7 +301,13 @@ release.
 4. Production receives both `latest` and immutable `v<full-commit-sha>` tags.
    Staging receives the `staging` tag.
 5. The workflow calls the API and web Coolify webhooks, then polls the API
-   health endpoint for up to approximately five minutes.
+   health endpoint for up to approximately five minutes. The production poll is
+   **sha-verified**: `scripts/migrate-and-deploy.sh` requires
+   `GET /health` to return `version == <commit-sha>` (the server image is
+   built with `--build-arg GIT_SHA=${{ github.sha }}` and `/health` surfaces it
+   as `version`), so a green deploy means the *new* image is serving. On
+   timeout the script prints a rollback hint pointing at the previous immutable
+   `v<prev-sha>` image.
 6. Check both Coolify deployment logs and the public smoke checks below.
 
 For staging, use the `cogito-staging` project, `:staging` image tags,

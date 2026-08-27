@@ -552,7 +552,7 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
 
 1. Open the Coolify dashboard → the service (server / web)
 2. Use **Rollback to previous release** (Coolify keeps the previous image/version)
-3. Verify health: `curl https://api.cogitoacademy.id/health`
+3. Verify health **and the deployed sha**: `curl https://api.cogitoacademy.id/health` must return `"version": "<full-commit-sha>"` matching the image you intended to run. The CD pipeline (`scripts/migrate-and-deploy.sh`) polls `/health` until `version == GIT_SHA` (bounded 20×15s) and fails loudly with a rollback hint if the new image never comes up — a green deploy now means the *new* image is serving, not merely "some container is up".
 4. If a database migration was part of the deployment, check migration status:
    ```bash
    bun run db:studio  # Check migration table
@@ -739,7 +739,7 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
 
 ## Deploy Secrets (CD webhooks)
 
-The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing.
+The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing. Since the CD-pipeline hardening (2026-08-27) `cd-prod.yml` also **guards the secrets explicitly**: an unset `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK` prints a clear message ("... is unset — configure the Coolify resource webhook and add it as a GitHub secret") and exits 1 before any curl runs, so the failure mode is a readable message, not a bare `curl exit 6`.
 
 **Setup (one-time, user action):**
 
@@ -748,13 +748,23 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
    Secret. Use this format:
 
    ```text
-   https://cl.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
+   https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
    ```
 
    Replace `<resource-uuid>` with the Coolify resource UUID and remove the
    angle brackets. Keep `&` literal; do not add `\&`, backticks, quotes, or
    trailing `??`. The URL host must be publicly DNS-resolvable from GitHub
    Actions.
+
+   > **Why `coolify.cogitoacademy.id` (2026-08-27, S7):** the Coolify control
+   > plane is tailnet-only — the UI and SSH are reachable only over Tailscale,
+   > and the old webhook host (`cl.cogitoacademy.id`) had no DNS record, so
+   > GitHub Actions (cloud) failed with `curl exit 6 "Could not resolve host"`.
+   > Option A exposes **only** the deploy-webhook path: a DNS record + Caddy
+   > route for `coolify.cogitoacademy.id/api/v1/deploy/*` (the per-resource UUID
+   > in the URL is the bearer secret); everything else on that host returns
+   > 404/denied and the Coolify UI stays tailnet-only. The operator must
+   > recreate the two production secrets with the resolvable URL above.
 
 3. GitHub → repo **Settings → Secrets and variables → Actions**:
    - `COOLIFY_STAGING_SERVER_WEBHOOK` — full staging API resource URL
@@ -820,6 +830,15 @@ surfaces manual/retry setup attention.
 ## GHCR / Docker Deploy (CD)
 
 The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
+
+The production pipeline (`cd-prod.yml`) runs the full backup → migrate → deploy → health sequence through `scripts/migrate-and-deploy.sh`:
+
+1. **Backup:** `pg_dump` snapshot of the production database, gzipped, uploaded to R2 as `pre-migrate-<GIT_SHA>.sql.gz` (aws CLI against the R2 S3 endpoint).
+2. **Migrate:** `bun run db:migrate` against the production `DATABASE_URL`.
+3. **Deploy:** POST the Coolify deploy webhook (`COOLIFY_PROD_SERVER_WEBHOOK`).
+4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min). On failure the script prints a clear rollback hint pointing at the previous immutable `v<prev-sha>` image.
+
+The server image is built with `--build-arg GIT_SHA=${{ github.sha }}`; the Dockerfile bakes it into `ENV GIT_SHA`, and `GET /health` returns it as `version` (`"dev"` when unset, e.g. local runs). The web image is built with `--build-arg VITE_SERVER_URL=https://api.cogitoacademy.id`.
 
 For the exact manual build, push, redeploy, verification, and rollback
 procedure when Actions cannot start, use [Setup and Deployment](./DEPLOYMENT.md#manual-deployment-when-ci-has-no-quota).
