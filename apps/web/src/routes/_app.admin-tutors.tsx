@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -25,6 +25,7 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { client, orpc } from "@/utils/orpc";
 import { TutorInviteForm } from "@/components/admin/tutor-invite-form";
 import { TutorReviewCard } from "@/components/admin/tutor-review-card";
+import { useSubjectTaxonomy } from "@/components/tutor/subject-taxonomy";
 import {
   IconCopy,
   IconInbox,
@@ -50,6 +51,16 @@ function RouteComponent() {
   const [latestInviteLinks, setLatestInviteLinks] = useState<
     Record<string, string>
   >({});
+  const { data: subjectCategories = [] } = useSubjectTaxonomy();
+  const subjectLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const category of subjectCategories) {
+      for (const subject of category.children) {
+        labels.set(subject.id, `${category.name} · ${subject.name}`);
+      }
+    }
+    return labels;
+  }, [subjectCategories]);
 
   const { data: profiles = [], refetch: refetchProfiles } = useQuery({
     queryKey: ["adminTutorProfiles", profileFilter],
@@ -372,6 +383,7 @@ function RouteComponent() {
                       ...profile,
                       expertise: profile.expertise ?? [],
                     }}
+                    subjectLabels={subjectLabels}
                     onAction={() => refetchProfiles()}
                   />
                 ),
