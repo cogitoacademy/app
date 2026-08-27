@@ -22,6 +22,7 @@ import { useState } from "react";
 import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
+import { getUserFacingError } from "@/lib/error-message";
 
 export function ForgotPasswordForm() {
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
@@ -42,7 +43,10 @@ export function ForgotPasswordForm() {
           },
           onError: (error) => {
             toastManager.add({
-              title: error.error.message || error.error.statusText,
+              title: getUserFacingError(
+                error,
+                "We could not send the reset link. Please try again.",
+              ),
               type: "error",
             });
           },

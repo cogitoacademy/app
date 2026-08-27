@@ -40,6 +40,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { authClient } from "@/lib/auth-client";
 import { AccountIdentityCard } from "@/components/profile/account-identity-card";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 type ProfileValues = {
@@ -191,7 +192,7 @@ export function ProfilePage({
     onError: (error: Error) =>
       toastManager.add({
         title: "Account identity could not be saved",
-        description: error.message,
+        description: getUserFacingError(error),
         type: "error",
       }),
   });
@@ -205,7 +206,7 @@ export function ProfilePage({
       onError: (error: Error) =>
         toastManager.add({
           title: "Profile could not be saved",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),

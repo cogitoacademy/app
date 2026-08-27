@@ -67,6 +67,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
 import { InfoPreview } from "@/components/info-preview";
+import { getUserFacingError } from "@/lib/error-message";
 import {
   canCancelBooking,
   formatBookingDate,
@@ -162,7 +163,7 @@ export function BookingDetailPage({
       onError: (error: Error) =>
         toastManager.add({
           title: "Booking could not be cancelled",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),
@@ -177,7 +178,7 @@ export function BookingDetailPage({
       onError: (error: Error) =>
         toastManager.add({
           title: "Booking could not be accepted",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),
@@ -193,7 +194,7 @@ export function BookingDetailPage({
       onError: (error: Error) =>
         toastManager.add({
           title: "Booking could not be declined",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),
@@ -206,7 +207,11 @@ export function BookingDetailPage({
         refreshBookingQueries();
       },
       onError: (error: Error) =>
-        toastManager.add({ title: error.message, type: "error" }),
+        toastManager.add({
+          title: "Session could not be completed",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
     }),
   );
   const setMeetingLink = useMutation(
@@ -223,7 +228,7 @@ export function BookingDetailPage({
       onError: (error: Error) =>
         toastManager.add({
           title: "Meeting link could not be saved",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),
@@ -250,9 +255,10 @@ export function BookingDetailPage({
           </IconBox>
           <Heading size="sm">Booking details are unavailable</Heading>
           <Text className="mt-2 max-w-md text-muted">
-            {bookingQuery.error instanceof Error
-              ? bookingQuery.error.message
-              : "This booking could not be loaded."}
+            {getUserFacingError(
+              bookingQuery.error,
+              "This booking could not be loaded.",
+            )}
           </Text>
           <div className="mt-5 flex gap-2">
             <Button

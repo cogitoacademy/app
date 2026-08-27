@@ -52,6 +52,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { formatBookingTimeRange } from "@/components/booking/booking-ui";
 import { MinuteTimeInput } from "@/components/booking/minute-time-input";
 import { EmptyState } from "@/components/empty-state";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 const TIMEZONE = "Asia/Jakarta";
@@ -128,7 +129,7 @@ function weekStart(value: string) {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Availability update failed.";
+  return getUserFacingError(error, "Availability could not be updated.");
 }
 
 function timeValue(value: string | Date) {

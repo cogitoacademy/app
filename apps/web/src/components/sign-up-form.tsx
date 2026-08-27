@@ -115,10 +115,7 @@ export default function SignUpForm({
         }
       } catch (error) {
         toastManager.add({
-          title:
-            error instanceof Error
-              ? error.message
-              : "Unable to sign up. Please try again.",
+          title: getAuthErrorMessage(error, "sign-up"),
           type: "error",
         });
       } finally {

@@ -75,6 +75,10 @@ Guide copy is maintained in `apps/web/src/components/guide/guide-content.ts`. Wh
 
 The shared route pending state uses the token-based loading ring from `apps/web/src/components/loader.tsx` and the local Selia `Spinner` from `packages/ui/components/selia/spinner.tsx`. If a navigation smoke test catches a loading state, verify the ring track, primary progress arc, and `Loading` label remain visible in both light and dark themes, and that the ring remains understandable without animation under reduced-motion preferences.
 
+### Not-found and connection-error smoke check
+
+Open a clearly invalid client route such as `/this-page-does-not-exist`. Verify the branded 404 state appears with the large outlined `404` visual, human-readable copy, and a single tertiary **Go back** action; confirm the page does not show the generic `Not Found` fallback. Trigger a route/render failure in a controlled test environment and verify the matching `500` state offers the same single **Go back** action without exposing the raw exception. During a controlled API outage or offline browser state, verify query/auth surfaces say that Cogito could not connect and suggest checking the internet connection and trying again—never expose raw `Failed to fetch` or similar browser exception text.
+
 ### Notification inbox smoke check
 
 As a signed-in student or tutor, open `/notifications` and confirm the list shows the notification title/body, a human-readable category badge, an exact date/time, relative age, unread emphasis, and a booking link when the notification has a booking. Select one row and verify **Mark as read** and **Mark as unread** both update the row and the shell bell count. Select multiple rows, use **Select all**, and verify both bulk actions update only the selected rows. Loading older notifications must keep the current selection model usable; changing read status must clear the selection after success. As another user, confirm a selected ID cannot change a notification owned by someone else.

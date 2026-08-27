@@ -44,6 +44,7 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { AccountIdentityCard } from "@/components/profile/account-identity-card";
 import { EmptyState } from "@/components/empty-state";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
 import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
@@ -172,7 +173,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       });
     },
     onError: (error: Error) => {
-      toastManager.add({ title: error.message, type: "error" });
+      toastManager.add({
+        title: "Account profile could not be updated",
+        description: getUserFacingError(error),
+        type: "error",
+      });
     },
   });
 
@@ -206,11 +211,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
       },
       onError: (error: unknown) => {
-        const message =
-          error && typeof error === "object" && "message" in error
-            ? String((error as { message?: string }).message)
-            : "Failed to save";
-        toastManager.add({ title: message, type: "error" });
+        toastManager.add({
+          title: "Availability could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        });
       },
     }),
   );
@@ -231,11 +236,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         await navigate({ to: "/dashboard", replace: true });
       },
       onError: (error: unknown) => {
-        const message =
-          error && typeof error === "object" && "message" in error
-            ? String((error as { message?: string }).message)
-            : "Failed to submit";
-        toastManager.add({ title: message, type: "error" });
+        toastManager.add({
+          title: "Tutor profile could not be submitted",
+          description: getUserFacingError(error),
+          type: "error",
+        });
       },
     }),
   );

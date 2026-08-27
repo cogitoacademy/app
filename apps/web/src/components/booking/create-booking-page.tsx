@@ -267,9 +267,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           </IconBox>
           <Heading size="sm">Tutor details are unavailable</Heading>
           <Text className="mt-2 max-w-md text-muted">
-            {profileQuery.error instanceof Error
-              ? profileQuery.error.message
-              : "This tutor could not be loaded."}
+            {getUserFacingError(
+              profileQuery.error,
+              "This tutor could not be loaded.",
+            )}
           </Text>
           <div className="mt-5 flex gap-2">
             <Button

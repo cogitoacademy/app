@@ -9,6 +9,7 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { NotFoundPage } from "@/components/not-found-page";
 import { orpc } from "@/utils/orpc";
 
 import "../index.css";
@@ -20,6 +21,7 @@ export interface RouterAppContext {
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
   component: RootComponent,
+  notFoundComponent: NotFoundPage,
   head: () => ({
     meta: [
       {

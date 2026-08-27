@@ -23,6 +23,7 @@ import { useState } from "react";
 import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
+import { getUserFacingError } from "@/lib/error-message";
 
 export function ResetPasswordForm({
   token,
@@ -57,7 +58,10 @@ export function ResetPasswordForm({
           },
           onError: (error) => {
             toastManager.add({
-              title: error.error.message || error.error.statusText,
+              title: getUserFacingError(
+                error,
+                "We could not reset your password. Please try again.",
+              ),
               type: "error",
             });
           },

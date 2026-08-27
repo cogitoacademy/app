@@ -102,10 +102,7 @@ export default function SignInForm({
         }
       } catch (error) {
         toastManager.add({
-          title:
-            error instanceof Error
-              ? error.message
-              : "Unable to sign in. Please try again.",
+          title: getAuthErrorMessage(error, "sign-in"),
           type: "error",
         });
       } finally {

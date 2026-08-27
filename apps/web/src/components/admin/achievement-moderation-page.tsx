@@ -64,6 +64,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { getUserFacingError } from "@/lib/error-message";
 import { client, orpc } from "@/utils/orpc";
 
 type AdminAchievement = Awaited<
@@ -108,7 +109,11 @@ export function AchievementModerationPage() {
         });
       },
       onError: (error: Error) => {
-        toastManager.add({ title: error.message, type: "error" });
+        toastManager.add({
+          title: "Achievement update could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        });
       },
     }),
   );
@@ -124,9 +129,10 @@ export function AchievementModerationPage() {
           </IconBox>
           <Heading size="sm">Moderation queue is unavailable</Heading>
           <Text className="mt-2 max-w-md text-muted">
-            {achievementsQuery.error instanceof Error
-              ? achievementsQuery.error.message
-              : "Achievements could not be loaded."}
+            {getUserFacingError(
+              achievementsQuery.error,
+              "Achievements could not be loaded.",
+            )}
           </Text>
           <Button
             variant="secondary"

@@ -27,6 +27,7 @@ import {
 } from "@/components/booking/booking-card";
 import { EmptyStateCard } from "@/components/empty-state";
 import { useRole } from "@/hooks/use-role";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 export const BOOKING_TABS = [
@@ -136,9 +137,10 @@ export function BookingsPage() {
             </IconBox>
             <Heading size="sm">Bookings could not be loaded</Heading>
             <Text className="mt-1 max-w-md text-muted">
-              {bookingsQuery.error instanceof Error
-                ? bookingsQuery.error.message
-                : "The booking service is temporarily unavailable."}
+              {getUserFacingError(
+                bookingsQuery.error,
+                "The booking service is temporarily unavailable.",
+              )}
             </Text>
             <Button
               variant="secondary"

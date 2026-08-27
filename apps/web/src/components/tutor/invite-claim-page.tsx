@@ -14,6 +14,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { client } from "@/utils/orpc";
 import { authClient } from "@/lib/auth-client";
+import { getUserFacingError } from "@/lib/error-message";
 
 export function InviteClaimPage({ token }: { token: string }) {
   const navigate = useNavigate();
@@ -125,7 +126,14 @@ export function InviteClaimPage({ token }: { token: string }) {
           search: { redirect: `/invite?token=${token}` },
         });
       } else {
-        toastManager.add({ title: message, type: "error" });
+        toastManager.add({
+          title: "Invitation could not be claimed",
+          description: getUserFacingError(
+            error,
+            "Please try again or ask the administrator to send a new invitation link.",
+          ),
+          type: "error",
+        });
       }
     } finally {
       setLoading(false);

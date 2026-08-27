@@ -235,7 +235,10 @@ function BookingQueue() {
         <LoadingCard />
       ) : queueQuery.isError ? (
         <ErrorCard
-          message={queueQuery.error.message}
+          message={getUserFacingError(
+            queueQuery.error,
+            "The operations data could not be loaded.",
+          )}
           onRetry={() => void queueQuery.refetch()}
         />
       ) : (
@@ -681,9 +684,10 @@ function AdminBookingDetailDialog({
                 ) : historyQuery.isError ? (
                   <div className="py-4">
                     <Text>
-                      {historyQuery.error instanceof Error
-                        ? historyQuery.error.message
-                        : "State history could not be loaded."}
+                      {getUserFacingError(
+                        historyQuery.error,
+                        "State history could not be loaded.",
+                      )}
                     </Text>
                     <Button
                       className="mt-3"
@@ -1143,7 +1147,10 @@ function WalletLookup() {
       </Card>
       {walletQuery.isError ? (
         <ErrorCard
-          message={walletQuery.error.message}
+          message={getUserFacingError(
+            walletQuery.error,
+            "The wallet could not be loaded.",
+          )}
           onRetry={() => void walletQuery.refetch()}
         />
       ) : walletQuery.data ? (
@@ -1298,7 +1305,14 @@ function RoomOperations() {
       <PendingRoomApprovals
         items={pendingQuery.data ?? []}
         isPending={pendingQuery.isPending}
-        errorMessage={pendingQuery.isError ? pendingQuery.error.message : null}
+        errorMessage={
+          pendingQuery.isError
+            ? getUserFacingError(
+                pendingQuery.error,
+                "Pending room approvals could not be loaded.",
+              )
+            : null
+        }
         onRetry={() => void pendingQuery.refetch()}
         onRefresh={() => void pendingQuery.refetch()}
         onAssignRequested={assignRequested}

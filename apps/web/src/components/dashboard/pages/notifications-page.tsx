@@ -42,6 +42,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 const PAGE_SIZE = 20;
@@ -139,7 +140,7 @@ export function NotificationsPage() {
       onError: (error: Error) =>
         toastManager.add({
           title: "Notification status could not be updated",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),
@@ -158,7 +159,7 @@ export function NotificationsPage() {
       onError: (error: Error) =>
         toastManager.add({
           title: "Notifications could not be updated",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),
@@ -236,9 +237,10 @@ export function NotificationsPage() {
             </IconBox>
             <Heading size="sm">Notifications could not be loaded</Heading>
             <Text className="mt-2 max-w-md text-muted">
-              {notificationsQuery.error instanceof Error
-                ? notificationsQuery.error.message
-                : "The notification service is temporarily unavailable."}
+              {getUserFacingError(
+                notificationsQuery.error,
+                "The notification service is temporarily unavailable.",
+              )}
             </Text>
             <Button
               variant="secondary"

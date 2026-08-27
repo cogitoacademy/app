@@ -1,11 +1,29 @@
+export const NETWORK_ERROR_MESSAGE =
+  "We couldn't connect to Cogito just now. Check your internet connection and try again.";
+
+function readErrorMessage(error: unknown) {
+  if (!error || typeof error !== "object") return "";
+
+  const candidate = error as {
+    message?: unknown;
+    statusText?: unknown;
+    error?: { message?: unknown; statusText?: unknown };
+  };
+  if (typeof candidate.message === "string") return candidate.message.trim();
+  if (typeof candidate.error?.message === "string") {
+    return candidate.error.message.trim();
+  }
+  if (typeof candidate.statusText === "string") return candidate.statusText;
+  return typeof candidate.error?.statusText === "string"
+    ? candidate.error.statusText
+    : "";
+}
+
 export function getUserFacingError(
   error: unknown,
   fallback = "Something went wrong. Please try again.",
 ) {
-  const message =
-    error && typeof error === "object" && "message" in error
-      ? String((error as { message?: string }).message ?? "")
-      : "";
+  const message = readErrorMessage(error);
   const normalized = message.toLowerCase();
 
   if (!message) return fallback;
@@ -26,9 +44,11 @@ export function getUserFacingError(
   }
   if (
     normalized.includes("failed to fetch") ||
-    normalized.includes("network")
+    normalized.includes("network") ||
+    normalized.includes("load failed") ||
+    normalized.includes("err_network")
   ) {
-    return "The service could not be reached. Check your connection and try again.";
+    return NETWORK_ERROR_MESSAGE;
   }
 
   return message;

@@ -32,6 +32,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
+import { getUserFacingError } from "@/lib/error-message";
 
 export const Route = createFileRoute("/_app/admin-tutors")({
   component: RouteComponent,
@@ -99,7 +100,7 @@ function RouteComponent() {
       onError: (error: Error) =>
         toastManager.add({
           title: "Invitation could not be renewed",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),
@@ -129,7 +130,7 @@ function RouteComponent() {
       onError: (error: Error) =>
         toastManager.add({
           title: "Invitation could not be sent",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),
@@ -144,7 +145,7 @@ function RouteComponent() {
       onError: (error: Error) =>
         toastManager.add({
           title: "Invitation could not be revoked",
-          description: error.message,
+          description: getUserFacingError(error),
           type: "error",
         }),
     }),

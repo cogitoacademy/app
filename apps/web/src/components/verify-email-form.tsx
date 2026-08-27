@@ -21,6 +21,7 @@ import { useEffect, useState } from "react";
 import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
+import { getUserFacingError } from "@/lib/error-message";
 
 export function VerifyEmailForm({
   email,
@@ -54,7 +55,10 @@ export function VerifyEmailForm({
           },
           onError: (error) => {
             toastManager.add({
-              title: error.error.message || error.error.statusText,
+              title: getUserFacingError(
+                error,
+                "We could not verify your email. Please try again.",
+              ),
               type: "error",
             });
           },
@@ -96,7 +100,10 @@ export function VerifyEmailForm({
       });
       if (response.error) {
         toastManager.add({
-          title: response.error.message || response.error.statusText,
+          title: getUserFacingError(
+            response.error,
+            "We could not send a new verification code. Please try again.",
+          ),
           type: "error",
         });
         return;

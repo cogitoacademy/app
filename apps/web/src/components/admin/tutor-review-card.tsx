@@ -39,6 +39,7 @@ import {
   IconSchool,
 } from "@tabler/icons-react";
 
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 const FLOOR_ONLINE: Record<string, number> = {
@@ -127,11 +128,11 @@ export function TutorReviewCard({ profile, onAction }: TutorReviewCardProps) {
         onAction?.();
       },
       onError: (error: unknown) => {
-        const message =
-          error && typeof error === "object" && "message" in error
-            ? String((error as { message?: string }).message)
-            : "Failed to update profile";
-        toastManager.add({ title: message, type: "error" });
+        toastManager.add({
+          title: "Tutor profile could not be updated",
+          description: getUserFacingError(error),
+          type: "error",
+        });
       },
     }),
   );

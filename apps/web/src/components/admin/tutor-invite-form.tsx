@@ -15,6 +15,7 @@ import { Input } from "@cogito-app/ui/components/selia/input";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 export function TutorInviteForm() {
@@ -69,11 +70,11 @@ export function TutorInviteForm() {
         setInternalNotes("");
       },
       onError: (error: unknown) => {
-        const message =
-          error && typeof error === "object" && "message" in error
-            ? String((error as { message?: string }).message)
-            : "Failed to create invite";
-        toastManager.add({ title: message, type: "error" });
+        toastManager.add({
+          title: "Invitation could not be created",
+          description: getUserFacingError(error),
+          type: "error",
+        });
       },
     }),
   );

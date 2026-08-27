@@ -1,3 +1,5 @@
+import { getUserFacingError } from "@/lib/error-message";
+
 type AuthErrorContext = "sign-in" | "sign-up";
 
 type AuthErrorShape = {
@@ -55,12 +57,10 @@ export function getAuthErrorMessage(error: unknown, context: AuthErrorContext) {
     return "Enter a valid email address.";
   }
 
-  const message =
-    typeof candidate.message === "string" ? candidate.message.trim() : "";
-  return (
-    message ||
-    (context === "sign-in"
+  return getUserFacingError(
+    error,
+    context === "sign-in"
       ? "Unable to sign in. Please try again."
-      : "Unable to sign up. Please try again.")
+      : "Unable to sign up. Please try again.",
   );
 }
