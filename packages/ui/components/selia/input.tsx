@@ -7,7 +7,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 export const inputVariants = cva(
   [
-    "h-9.5 px-3.5 w-full text-foreground rounded placeholder:text-dimmed transition-[color,box-shadow] shadow-input",
+    "h-9.5 px-3.5 w-full text-[16px] text-foreground rounded placeholder:text-dimmed transition-[color,box-shadow] shadow-input",
     "ring ring-input-border hover:not-[[data-disabled]]:not-[:focus]:ring-input-accent-border focus:outline-0 focus:ring-primary focus:ring-2",
     "aria-invalid:border-danger-border/64 aria-invalid:ring-danger-border/24 aria-invalid:ring-2 aria-invalid:focus:ring-danger-border/24 aria-invalid:shadow-none",
     '[&[type="file"]]:py-2 [&[type="file"]]:text-dimmed file:-ml-1.5',
