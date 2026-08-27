@@ -14,9 +14,9 @@
     tailnet_cidr: "100.64.0.0/10"
     # Coolify control ports must be tailnet/loopback only.
     coolify_ports:
-      - "8000"   # dashboard
-      - "6001"   # realtime
-      - "6002"   # realtime
+      - "8000" # dashboard
+      - "6001" # realtime
+      - "6002" # realtime
 
   tasks:
     - name: Install base packages
