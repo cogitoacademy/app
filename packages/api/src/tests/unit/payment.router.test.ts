@@ -64,6 +64,40 @@ describe("paymentHandler", () => {
       expect(payment.createIntent).toHaveBeenCalledWith("u1", "w1", "basic");
       expect(result).toEqual({ id: "pay1", status: "pending" });
     });
+
+    test("restricts production Test Mode purchases to the configured UAT emails", async () => {
+      const payment = {
+        createIntent: mock(async () => ({
+          id: "pay1",
+          status: "pending",
+        })),
+      };
+      const wallet = { getOrCreate: mock(async () => ({ id: "w1" })) };
+      const handler = createPaymentHandler(payment as any, wallet as any, {
+        xenditMode: "test",
+        testAllowedEmails: ["qa@cogitoacademy.id"],
+      });
+
+      await expect(
+        handler.createPurchase({
+          context: {
+            session: { user: { id: "u1", email: "student@example.com" } },
+          } as any,
+          input: { packageCode: "basic" } as any,
+        }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(wallet.getOrCreate).not.toHaveBeenCalled();
+      expect(payment.createIntent).not.toHaveBeenCalled();
+
+      await expect(
+        handler.createPurchase({
+          context: {
+            session: { user: { id: "u1", email: "QA@cogitoacademy.id" } },
+          } as any,
+          input: { packageCode: "basic" } as any,
+        }),
+      ).resolves.toEqual({ id: "pay1", status: "pending" });
+    });
   });
 
   describe("getPurchase", () => {

@@ -59,6 +59,13 @@ const serverShape = {
   WEBHOOK_ALLOWED_IPS: z.string().optional(),
   XENDIT_SECRET_KEY: z.string().min(1).optional(),
   XENDIT_WEBHOOK_TOKEN: z.string().min(1).optional(),
+  // Xendit selects the actual environment from the API key. Keep this
+  // explicit in our app so a production deployment cannot accidentally omit
+  // the intended Test/Live choice.
+  XENDIT_MODE: z.enum(["test", "live"]).optional(),
+  // Comma-separated UAT account emails. Required for production-like Test
+  // Mode so a sandbox payment cannot grant Marks to arbitrary users.
+  XENDIT_TEST_ALLOWED_EMAILS: z.string().optional(),
   XENDIT_SUCCESS_REDIRECT_URL: z.string().url().optional(),
   XENDIT_FAILURE_REDIRECT_URL: z.string().url().optional(),
   XENDIT_DEFAULT_PAYMENT_METHOD: z
@@ -107,6 +114,41 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
         path: ["XENDIT_WEBHOOK_TOKEN"],
         message: "required when PAYMENT_PROVIDER=xendit",
       });
+    }
+    if (!val.XENDIT_MODE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["XENDIT_MODE"],
+        message:
+          "required when PAYMENT_PROVIDER=xendit; choose test for Xendit Test Mode or live for Live Mode",
+      });
+    }
+    if (
+      val.XENDIT_MODE === "test" &&
+      isProductionLike(val.NODE_ENV) &&
+      !val.XENDIT_TEST_ALLOWED_EMAILS?.trim()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["XENDIT_TEST_ALLOWED_EMAILS"],
+        message:
+          "required when XENDIT_MODE=test in production/staging — restrict sandbox purchases to explicit UAT accounts",
+      });
+    }
+    if (val.XENDIT_TEST_ALLOWED_EMAILS?.trim()) {
+      const emails = val.XENDIT_TEST_ALLOWED_EMAILS.split(",")
+        .map((email) => email.trim())
+        .filter(Boolean);
+      if (
+        emails.length === 0 ||
+        emails.some((email) => !z.string().email().safeParse(email).success)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["XENDIT_TEST_ALLOWED_EMAILS"],
+          message: "must be a comma-separated list of valid email addresses",
+        });
+      }
     }
     // P3.7: the 2024-11-11 payment-request schema requires the success and
     // failure return URLs (channel_properties) — an empty default would make

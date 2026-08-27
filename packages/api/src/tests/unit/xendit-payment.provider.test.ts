@@ -4,6 +4,7 @@ import { createXenditPaymentProvider } from "../../modules/payment/xendit-paymen
 const opts = {
   secretKey: "xnd_development_test123",
   webhookToken: "wh_token_test_abc",
+  mode: "test" as const,
   successRedirectUrl: "http://localhost:3000/balance?status=success",
   failureRedirectUrl: "http://localhost:3000/balance?status=failed",
 };

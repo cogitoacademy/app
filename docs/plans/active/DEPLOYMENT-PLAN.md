@@ -129,7 +129,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 ### Task 2.1: SOPS vault (repo scaffold + user fills)
 
 - [x] `.sops.yaml` + Age keypair scaffold — **#115** (public key placeholder `CHANGE_ME_OPERATOR_AGE_PUBLIC_KEY`; operator generates the keypair and updates it).
-- [ ] `infra/secrets/prod.env` (encrypted) with ALL credentials the user has: `BETTER_AUTH_SECRET`, `PAYMENT_WEBHOOK_SECRET`, `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — confirm), `RESEND_API_KEY`+`EMAIL_FROM`, `XENDIT_SECRET_KEY`/`WEBHOOK_TOKEN`/redirects/`WEBHOOK_ALLOWED_IPS`, `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_MEET_*` (+ refresh token via `scripts/google-meet-auth.ts`), `R2_*`+`R2_PUBLIC_URL`, `SANITY_*`, `METRICS_TOKEN`, `DATABASE_URL`/`REDIS_URL` (existing containers). **PENDING (operator fills; lead never sees secrets)**
+- [ ] `infra/secrets/prod.env` (encrypted) with ALL credentials the user has: `BETTER_AUTH_SECRET`, `PAYMENT_WEBHOOK_SECRET`, `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — confirm), `RESEND_API_KEY`+`EMAIL_FROM`, `XENDIT_MODE` + matching Test/Live `XENDIT_SECRET_KEY`/`WEBHOOK_TOKEN`/redirects/`WEBHOOK_ALLOWED_IPS` (and `XENDIT_TEST_ALLOWED_EMAILS` while in Test Mode), `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_MEET_*` (+ refresh token via `scripts/google-meet-auth.ts`), `R2_*`+`R2_PUBLIC_URL`, `SANITY_*`, `METRICS_TOKEN`, `DATABASE_URL`/`REDIS_URL` (existing containers). **PENDING (operator fills; lead never sees secrets)**
 - Commit: `chore(secrets): add SOPS vault scaffold` (encrypted only) — **scaffold merged via #115**
 
 ### Task 2.2: Apply env + wire providers (Ansible → Coolify; operator confirms console bits)
@@ -140,7 +140,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 - [ ] Google Meet: run the OAuth helper locally → `GOOGLE_MEET_REFRESH_TOKEN` → verify boot probe.
 - [ ] R2: uploads now land in R2 (env guard requires all vars in prod — verified).
 - [ ] Sanity: verify `content.listCompetitions` + KB file proxy against live CDN.
-- [ ] Xendit: `PAYMENT_PROVIDER=xendit` + creds + `WEBHOOK_ALLOWED_IPS` (env guard requires it); **sandbox E2E first, then one real small transaction** (RUNBOOK checklist).
+- [ ] Xendit: deploy with `PAYMENT_PROVIDER=xendit` + `XENDIT_MODE=test` + matching Test Mode credentials + UAT email/IP allowlists first; **production-domain sandbox E2E, then switch to Live Mode for one real small transaction** (RUNBOOK checklist).
 - [ ] Redeploy; verify `/health` + deployed sha.
 
 ---
@@ -195,7 +195,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 ## Exit gates
 
 - Phase 1: ufw/tailnet lock-down verified; Coolify UI unreachable publicly; app `/health` ok. **Repo work done (#115); apply + verify pending.**
-- Phase 2: `/health` + sha ok with full env; Xendit sandbox→live E2E; Meet probe ok; R2 round-trip ok. **Pending (secrets + env wiring).**
+- Phase 2: `/health` + sha ok with full env; production-domain Xendit Test Mode UAT → Live Mode E2E; Meet probe ok; R2 round-trip ok. **Pending (secrets + env wiring).**
 - Phase 3: nightly backup runs + restores (drill); CD migrate→deploy→rollback drill green. **Scripts merged (#117/#118); live drill pending.**
 - Phase 4: Uptime Kuma live + Telegram alert (kill-container drill); security checklist; docs current. **Pending.**
 - Every PR: CI green (`gh pr checks --watch`). **Held for the wave's 4 PRs (#115–#118).**
@@ -204,7 +204,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 - **RAM (3.7GB)**: skip Prometheus (locked); monitor `free -m` after each phase; if <500MB free, defer Uptime Kuma to a tiny external host (documented fallback).
 - **GitHub Actions quota**: repo public; if it binds, self-hosted runner on the VPS (documented in #102).
-- **Xendit go-live**: sandbox E2E first; one real small transaction before wider use.
+- **Xendit go-live**: production can stay on Test Mode during UAT, restricted by `XENDIT_TEST_ALLOWED_EMAILS`; switch to Live Mode only after sandbox E2E and then run one real small transaction.
 - **Gmail refresh token expiry**: documented re-auth (RUNBOOK).
 - **Migration in CD**: never auto-restore with live traffic; snapshot is the recovery artifact under a maintenance window.
 - **Ansible→Coolify API**: Coolify API surface may lag UI features; fall back to UI + drift-check for anything the API can't express (documented per resource).

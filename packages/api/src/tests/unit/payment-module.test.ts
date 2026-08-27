@@ -33,6 +33,7 @@ describe("createPaymentModule provider selection (C4)", () => {
       xenditConfig: {
         secretKey: "sk_test",
         webhookToken: "wh_token",
+        mode: "test",
         successRedirectUrl: "http://localhost:3000/success",
         failureRedirectUrl: "http://localhost:3000/failure",
       },

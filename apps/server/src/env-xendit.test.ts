@@ -21,6 +21,7 @@ describe("server env schema", () => {
         ...base,
         XENDIT_SECRET_KEY: "sk",
         XENDIT_WEBHOOK_TOKEN: "wh",
+        XENDIT_MODE: "test",
       }),
     ).toThrow();
   });
@@ -31,6 +32,7 @@ describe("server env schema", () => {
       PAYMENT_PROVIDER: "xendit",
       XENDIT_SECRET_KEY: "sk",
       XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "test",
     };
     const err = serverEnvSchema.safeParse(base);
     expect(err.success).toBe(false);
@@ -40,6 +42,7 @@ describe("server env schema", () => {
     expect(() =>
       serverEnvSchema.parse({
         ...base,
+        XENDIT_MODE: "test",
         XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
         XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
       }),
@@ -243,6 +246,7 @@ describe("server env schema", () => {
       PAYMENT_PROVIDER: "xendit",
       XENDIT_SECRET_KEY: "sk",
       XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "live",
       XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
       XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
     };
@@ -268,10 +272,39 @@ describe("server env schema", () => {
       PAYMENT_PROVIDER: "xendit",
       XENDIT_SECRET_KEY: "sk",
       XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "test",
       XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
       XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
     };
     expect(() => serverEnvSchema.parse(devXendit)).not.toThrow();
+  });
+
+  test("production Xendit Test Mode requires a UAT email allowlist", () => {
+    const prodTest = {
+      ...validEnv,
+      NODE_ENV: "production",
+      RESEND_API_KEY: "re",
+      EMAIL_FROM: "no-reply@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "test",
+      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+      WEBHOOK_ALLOWED_IPS: "103.10.65.0/24",
+    };
+    const missing = serverEnvSchema.safeParse(prodTest);
+    expect(missing.success).toBe(false);
+    const paths = (missing.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("XENDIT_TEST_ALLOWED_EMAILS");
+
+    expect(() =>
+      serverEnvSchema.parse({
+        ...prodTest,
+        XENDIT_TEST_ALLOWED_EMAILS: "qa@cogitoacademy.id",
+      }),
+    ).not.toThrow();
   });
 
   test("D3: production requires SCHEDULER_ENABLED=true (silently skipping all jobs is a prod outage)", () => {
