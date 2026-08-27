@@ -4,6 +4,7 @@ import type { DbOrTx } from "../../lib/tx";
 import type {
   MeetingAttendee,
   MeetingEvent,
+  MeetingEventDetails,
   MeetingPort,
 } from "./meeting.types";
 import { log } from "../../lib/logger";
@@ -15,6 +16,7 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
     _scheduledEndAt?: Date,
     attendees?: MeetingAttendee[],
     conn?: DbOrTx,
+    _details?: MeetingEventDetails,
   ): Promise<MeetingEvent> {
     // L2: when called inside a booking transaction, the local row must join
     // that transaction so it rolls back with the booking.

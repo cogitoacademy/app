@@ -506,12 +506,49 @@ export function createBookingService(deps: {
   }
 
   /**
-   * Builds the deep-link CTA used by the group/group-series invitee email so
-   * an invited student can view and accept the invite directly in-platform.
+   * Builds the booking deep link used by invite notifications and Calendar
+   * descriptions so users can open the booking directly in-platform.
    */
   function formatInviteCta(bookingId: string): string {
     const origin = env.CORS_ORIGIN.replace(/\/$/, "");
     return `${origin}/bookings/${bookingId}`;
+  }
+
+  function buildMeetingEventDetails(
+    booking: Pick<BookingRow, "id" | "type" | "tutorId" | "learningGoal">,
+    users: { id: string; name: string }[],
+  ) {
+    const tutorName =
+      users.find((user) => user.id === booking.tutorId)?.name.trim() ||
+      "Cogito tutor";
+    const studentNames = users
+      .filter((user) => user.id !== booking.tutorId)
+      .map((user) => user.name.trim())
+      .filter(Boolean);
+    const sessionLabel =
+      booking.type === BOOKING_TYPE.GROUP
+        ? "Group session"
+        : booking.type === BOOKING_TYPE.SERIES
+          ? "Session series"
+          : "Solo session";
+    const title =
+      booking.type === BOOKING_TYPE.SOLO && studentNames[0]
+        ? `${sessionLabel} with ${tutorName} & ${studentNames[0]}`
+        : `${sessionLabel} with ${tutorName}`;
+    const learningGoal = booking.learningGoal?.trim();
+    const descriptionLines = [
+      `Tutor: ${tutorName}`,
+      ...(studentNames.length
+        ? [
+            `Student${studentNames.length === 1 ? "" : "s"}: ${studentNames.join(", ")}`,
+          ]
+        : []),
+      ...(learningGoal ? ["", `Learning goal: ${learningGoal}`] : []),
+      "",
+      `Open this booking in Cogito: ${formatInviteCta(booking.id)}`,
+    ];
+
+    return { title, description: descriptionLines.join("\n") };
   }
 
   function normalizeSession(startAt: Date) {
@@ -3691,6 +3728,7 @@ export function createBookingService(deps: {
         email: u.email,
         name: u.name,
       }));
+      const meetingDetails = buildMeetingEventDetails(b, users);
 
       const meetingResult = await meeting.createEvent(
         bookingId,
@@ -3698,6 +3736,7 @@ export function createBookingService(deps: {
         b.scheduledEndAt,
         attendees,
         tx,
+        meetingDetails,
       );
 
       if (meetingResult.status === "failed") {

@@ -264,7 +264,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Redis:** Shared instance for sessions, idempotency, rate limiting, circuit breaker state, BullMQ persistence (after production readiness)
 - **Scheduler:** BullMQ with Redis persistence for booking expiry, hold release, email dispatch
 - **Email:** Resend (production) / stub (development) via EmailService
-- **Meeting:** Google Meet (production) / manual link fallback via CircuitBreaker. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
+- **Meeting:** Google Meet (production) / manual link fallback via CircuitBreaker. Automatically created calendar events use a human-readable session title (`Solo session with {Tutor} & {Student}` for solo bookings; tutor-only labels for group/series bookings), list the tutor/students and learning goal in the description, and include an authenticated `/bookings/{bookingId}` deep link. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
 - **Deployment:** Coolify on the OVH VPS; production API and web images are pulled from GHCR
 - **Database TLS:** Controlled by `DB_SSL_ENABLED`; Coolify's bundled PostgreSQL is non-TLS, while external managed databases may require it
 
@@ -315,7 +315,7 @@ when set to false.
 
 ### `roomBooking` (booking.ts) — room assignment with status requested/confirmed/relocated/cancelled
 
-### `meetingEvent` (booking.ts) — meeting links (google_meet/manual), status + error_reason
+### `meetingEvent` (booking.ts) — meeting links (google_meet/manual), status + error_reason. Calendar title/description metadata is provider-side and is rebuilt when a meeting attempt is created; it is not a new database field.
 
 ### `paymentRecord` (payment-record.ts) — payment status tracking
 

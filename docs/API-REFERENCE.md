@@ -706,7 +706,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
-- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` when the attempt succeeds. If Google Meet creation fails, the booking remains `confirmed`, the proposer receives meeting-setup attention copy, and the `retry-failed-meetings` scheduler retries it every 5 minutes (up to 3 failed attempts); after that, the assigned tutor or an admin can add a manual link with `setMeetingLink`; offline goes `awaiting_admin_room_approval`.
+- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` when the attempt succeeds. The Google Calendar event uses a human-readable title (`Solo session with {Tutor} & {Student}` for solo bookings, or the session type with the tutor for group/series bookings) and its description includes the tutor/students, the booking's learning goal when present, and an authenticated `/bookings/{bookingId}` link. If Google Meet creation fails, the booking remains `confirmed`, the proposer receives meeting-setup attention copy, and the `retry-failed-meetings` scheduler retries it every 5 minutes (up to 3 failed attempts); after that, the assigned tutor or an admin can add a manual link with `setMeetingLink`; offline goes `awaiting_admin_room_approval`.
 - **Frontend note:** The tutor booking-detail flow presents a responsive confirmation summary before calling this unchanged procedure; the dialog does not change the input, output, or transition rules.
 
 ### `tutorActions.setMeetingLink`

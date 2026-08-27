@@ -39,6 +39,7 @@
 | [PRD-AUDIT.md](completed/PRD-AUDIT.md)                                                             | `finalize/backend-prod-readiness-v2`          | **Merged #106 (2026-08-26)** — PRD + wiring audit gap list (Phase 0 deliverable)                                                     |
 | [REAUDIT-FINDINGS.md](completed/REAUDIT-FINDINGS.md)                                               | `fix/reaudit-findings`                        | **Merged #107 (2026-08-26)** — post-finalization re-audit: N1 reconfirm loop, N2 suspended restore, W1 env drift, env prod guards    |
 | [PRODUCTION-ADMIN-BOOTSTRAP.md](completed/PRODUCTION-ADMIN-BOOTSTRAP.md)                           | main                                          | Completed 2026-08-27 — configurable production/staging admin bootstrap with `itcogitoacademy01@gmail.com` default                    |
+| [MEETING-CALENDAR-METADATA.md](completed/MEETING-CALENDAR-METADATA.md) | main | Completed 2026-08-27 — human-readable Google Calendar titles, participant descriptions, and booking deep links |
 
 ## Archive (superseded / historical)
 

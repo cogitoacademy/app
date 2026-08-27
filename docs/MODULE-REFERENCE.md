@@ -457,14 +457,14 @@ chat directory.
 
 **Files:**
 
-- `meeting.types.ts` — `MeetingEvent` interface
+- `meeting.types.ts` — `MeetingEvent`, attendee, and provider-calendar metadata interfaces
 - `google-meeting.provider.ts` — Production provider with 30s timeout and circuit breaker (5 failures → open for 60s)
 - `fallback.provider.ts` — Manual link fallback when Google Meet fails
 - `index.ts` — Exports `createGoogleMeetingProvider` and `createGoogleMeetingProviderWithFallback`
 
 **Service Methods:**
 
-- `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?)` — Creates Google Calendar event with Meet conference; falls back to manual link on failure
+- `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?, attendees?, conn?, details?)` — Creates a Google Calendar event with Meet conference and optional human-readable title/description metadata; falls back to manual link on failure
 - `updateEvent(bookingId, scheduledStartAt, scheduledEndAt)` — Updates the Google event when a reschedule is accepted (OQ-05, #46)
 - `cancelEvent(bookingId)` — Cancels the Google event on terminal booking states (cancel/late-cancel/decline/expire; best-effort via circuit breaker) (#46)
 - `probe()` — Boot-time connectivity probe (P4.2/X3): `calendarList.get` with a 10s timeout, logs loudly on failure (wired into the server bootstrap so a broken Google Meet swap is visible at boot, not only at the first booking; the server keeps manual fallback available)
@@ -475,6 +475,7 @@ chat directory.
 - Google Meet calls have 30-second timeout
 - OAuth refresh-token mode uses `GOOGLE_MEET_CLIENT_ID`, `GOOGLE_MEET_CLIENT_SECRET`, and `GOOGLE_MEET_REFRESH_TOKEN` to call Google Calendar API v3; `GOOGLE_CALENDAR_ID` defaults to `primary`. When the dedicated client variables are absent, the resolver falls back to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, but the Calendar refresh token is still required.
 - Service-account mode uses `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, and `GOOGLE_IMPERSONATED_USER`; the impersonated user is required for Workspace domain-wide delegation. `GOOGLE_MEET_ENABLED=true` requires either the complete OAuth set or the complete service-account set.
+- Booking scheduling supplies provider metadata: solo titles are `Solo session with {Tutor} & {Student}`; group/series titles name the tutor, while all resolved student names remain in the description alongside the booking's learning goal when present and the authenticated booking deep link. The same metadata is applied to both service-account and OAuth event insertion paths.
 - OAuth setup and token rotation instructions live in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
 - Circuit breaker: 5 failures → open for 60 seconds
 - On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
