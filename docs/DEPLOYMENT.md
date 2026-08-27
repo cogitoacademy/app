@@ -319,6 +319,10 @@ Remove-Item Env:ENV_FILE
 Use a one-off Coolify task or a secured operator machine for production. Do
 not use `db:push` as an unreviewed production migration mechanism.
 
+A nightly PostgreSQL backup runs on the VPS at 02:00 WIB and uploads to
+Cloudflare R2 (`cogito-backups`) with 30-day retention — see
+[Backup & Restore](./RUNBOOK.md#backup--restore) for the restore drill.
+
 ## Manual deployment when CI has no quota
 
 Use this path when a GitHub Actions job cannot start because of account billing,
