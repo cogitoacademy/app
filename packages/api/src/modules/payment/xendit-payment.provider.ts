@@ -20,6 +20,8 @@ const XENDIT_API_VERSION = "2024-11-11";
 
 type XenditPaymentMethod = "ewallet_ovo" | "qris" | "va_bca";
 
+export type XenditMode = "test" | "live";
+
 // 2024-11-11 channel codes (channel_code enum in the Payments API).
 const PAYMENT_METHOD_CONFIG: Record<
   XenditPaymentMethod,
@@ -69,6 +71,7 @@ export interface XenditCustomer {
 export function createXenditPaymentProvider(opts: {
   secretKey: string;
   webhookToken: string;
+  mode: XenditMode;
   successRedirectUrl: string;
   failureRedirectUrl: string;
   defaultPaymentMethod?: XenditPaymentMethod;
@@ -79,13 +82,17 @@ export function createXenditPaymentProvider(opts: {
     failureThreshold: 5,
     resetTimeoutMs: 30_000,
     halfOpenMaxAttempts: 1,
-    name: "xendit",
+    // Keep Test and Live breaker state separate in case an operator switches
+    // modes without restarting Redis. Xendit itself selects the environment
+    // from the API key; `mode` is our explicit deployment assertion only.
+    name: `xendit-${opts.mode}`,
     redis: opts.redis ?? undefined,
     monitor: (state, error) => {
       log({
         level: state === "open" ? "error" : "info",
         action: "circuit_breaker_state_change",
         service: "xendit",
+        xenditMode: opts.mode,
         state,
         error: error ? { message: String(error) } : undefined,
       });

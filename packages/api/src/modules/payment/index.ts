@@ -17,6 +17,7 @@ import { createPaymentHandler } from "./payment.handler";
 import { createPaymentRepo } from "./payment.repo";
 import { createStubPaymentProvider } from "./stub-payment.provider";
 import { createXenditPaymentProvider } from "./xendit-payment.provider";
+import type { XenditMode } from "./xendit-payment.provider";
 import type { PaymentService } from "./payment.service";
 import type { PaymentHandler } from "./payment.handler";
 
@@ -62,6 +63,8 @@ export function createPaymentModule(deps: {
   xenditConfig?: {
     secretKey: string;
     webhookToken: string;
+    mode: XenditMode;
+    testAllowedEmails?: readonly string[];
     successRedirectUrl: string;
     failureRedirectUrl: string;
     defaultPaymentMethod?: string;
@@ -86,6 +89,7 @@ export function createPaymentModule(deps: {
     ? createXenditPaymentProvider({
         secretKey: deps.xenditConfig!.secretKey,
         webhookToken: deps.xenditConfig!.webhookToken,
+        mode: deps.xenditConfig!.mode,
         successRedirectUrl: deps.xenditConfig!.successRedirectUrl,
         failureRedirectUrl: deps.xenditConfig!.failureRedirectUrl,
         defaultPaymentMethod: deps.xenditConfig!.defaultPaymentMethod as
@@ -109,7 +113,12 @@ export function createPaymentModule(deps: {
     audit: deps.audit,
     refundRecord: deps.refundRecord,
   });
-  const handler = createPaymentHandler(service, deps.wallet);
+  const handler = createPaymentHandler(service, deps.wallet, {
+    xenditMode: useXendit ? deps.xenditConfig!.mode : undefined,
+    testAllowedEmails: useXendit
+      ? deps.xenditConfig!.testAllowedEmails
+      : undefined,
+  });
   return { service, handler };
 }
 

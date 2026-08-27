@@ -28,6 +28,7 @@ import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
 import { createContactModule } from "./modules/contact";
 import { createStorage } from "./lib/storage";
+import type { XenditMode } from "./modules/payment/xendit-payment.provider";
 
 import type { AuditPort } from "./modules/audit/audit.service";
 import type { PricingPort } from "./modules/pricing/pricing.service";
@@ -159,19 +160,31 @@ export interface XenditConfigInput {
   provider: string;
   secretKey?: string;
   webhookToken?: string;
+  mode?: XenditMode;
+  testAllowedEmails?: string;
   successRedirectUrl?: string;
   failureRedirectUrl?: string;
   defaultPaymentMethod: "ewallet_ovo" | "qris" | "va_bca";
 }
 
 export function resolveXenditConfig(input: XenditConfigInput) {
-  if (input.provider !== "xendit" || !input.secretKey || !input.webhookToken) {
+  if (
+    input.provider !== "xendit" ||
+    !input.secretKey ||
+    !input.webhookToken ||
+    !input.mode
+  ) {
     return undefined;
   }
 
   return {
     secretKey: input.secretKey,
     webhookToken: input.webhookToken,
+    mode: input.mode,
+    testAllowedEmails: (input.testAllowedEmails ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
     successRedirectUrl: input.successRedirectUrl ?? "",
     failureRedirectUrl: input.failureRedirectUrl ?? "",
     defaultPaymentMethod: input.defaultPaymentMethod,
@@ -302,6 +315,8 @@ function createServices() {
       provider: env.PAYMENT_PROVIDER,
       secretKey: env.XENDIT_SECRET_KEY,
       webhookToken: env.XENDIT_WEBHOOK_TOKEN,
+      mode: env.XENDIT_MODE,
+      testAllowedEmails: env.XENDIT_TEST_ALLOWED_EMAILS,
       successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL,
       failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL,
       defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,

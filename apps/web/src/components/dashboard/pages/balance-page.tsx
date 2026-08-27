@@ -223,23 +223,13 @@ export function BalancePage() {
         <CardBody>
           <div className="rounded-lg border border-border bg-card p-4 mb-4">
             <Heading size="sm" className="mb-1">
-              Test mode active
+              Payment processing
             </Heading>
             <Text className="text-dimmed text-sm">
-              Payments currently use the stub provider (
-              <code className="rounded bg-item px-1 text-xs">
-                PAYMENT_PROVIDER=stub
-              </code>
-              ). Clicking <strong>Buy</strong> adds Marks immediately without
-              real money. To switch to Xendit, set{" "}
-              <code className="rounded bg-item px-1 text-xs">
-                PAYMENT_PROVIDER=xendit
-              </code>{" "}
-              and provide{" "}
-              <code className="rounded bg-item px-1 text-xs">
-                XENDIT_SECRET_KEY
-              </code>{" "}
-              plus webhook credentials.
+              Checkout is controlled by the server payment configuration. If
+              this deployment is using Xendit Test Mode, use an approved UAT
+              account: test transactions do not charge real money and Marks are
+              credited only after a verified webhook.
             </Text>
           </div>
           {packagesLoading ? (

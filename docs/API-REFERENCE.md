@@ -508,8 +508,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role **and** `emailVerified: true`; unverified students get `FORBIDDEN` "Email verification required")
 - **Input:** `{ packageCode }`
 - **Output:** `{ paymentId, providerReference, checkoutUrl }`
-- **Errors:** `PACKAGE_NOT_FOUND` (404), `PACKAGE_ALREADY_PURCHASED` (409), `PAYMENT_PROVIDER_ERROR` (502)
+- **Errors:** `PACKAGE_NOT_FOUND` (404), `PACKAGE_ALREADY_PURCHASED` (409), `PAYMENT_TEST_MODE_RESTRICTED` (403), `PAYMENT_PROVIDER_ERROR` (502)
 - **Description:** Creates a purchase intent with the payment provider (reuses a pending intent; resets FAILED/EXPIRED payments to PENDING and re-creates the checkout — re-purchase, #46); on success the webhook credits the wallet
+
+### Xendit environment selection
+
+- `PAYMENT_PROVIDER=xendit` selects the Xendit provider. `XENDIT_MODE` is required and must be `test` or `live`; the Xendit API key, created in the matching Xendit Dashboard mode, selects the actual transaction environment. `XENDIT_MODE` is not sent as an API field.
+- In production/staging, `XENDIT_MODE=test` also requires `XENDIT_TEST_ALLOWED_EMAILS`; only those verified student emails can call `payment.createPurchase`. This keeps production-domain UAT from granting sandbox-funded Marks to arbitrary accounts.
+- Test and live webhooks use the same endpoint path, but must be configured in the matching Xendit Dashboard mode and must use that mode's `x-callback-token`.
 
 ### `payment.getPurchase`
 

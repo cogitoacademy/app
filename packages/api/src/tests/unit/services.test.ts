@@ -51,6 +51,8 @@ describe("Services conditional logic", () => {
         provider: "xendit",
         secretKey: "secret",
         webhookToken: "token",
+        mode: "test",
+        testAllowedEmails: "QA@cogitoacademy.id",
         successRedirectUrl: "https://app.test/success",
         failureRedirectUrl: "https://app.test/failure",
         defaultPaymentMethod: "qris",
@@ -58,6 +60,7 @@ describe("Services conditional logic", () => {
     ).toMatchObject({
       secretKey: "secret",
       webhookToken: "token",
+      mode: "test",
       defaultPaymentMethod: "qris",
     });
     expect(

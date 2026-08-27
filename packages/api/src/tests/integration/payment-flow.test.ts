@@ -284,6 +284,7 @@ describe("PaymentService", () => {
   const xenditProvider = createXenditPaymentProvider({
     secretKey: "xnd_development_test",
     webhookToken: "wh_token_test",
+    mode: "test",
     successRedirectUrl: "http://localhost:3000/balance?status=success",
     failureRedirectUrl: "http://localhost:3000/balance?status=failed",
   });

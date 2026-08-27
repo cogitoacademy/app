@@ -96,7 +96,7 @@ Same as above but:
 - Project: "cogito-staging"
 - Images tagged :staging
 - Domains: staging.cogitoacademy.id (API), staging-app.cogitoacademy.id (web)
-- PAYMENT_PROVIDER=stub
+- PAYMENT_PROVIDER=stub, or `xendit` with `XENDIT_MODE=test`, matching Test Mode credentials, `XENDIT_TEST_ALLOWED_EMAILS`, and a non-empty webhook IP allowlist
 - SCHEDULER_ENABLED=true
 
 ## Step 8: Configure Docker Log Rotation

@@ -52,6 +52,7 @@ describe("server environment schema", () => {
         expect.arrayContaining([
           "XENDIT_SECRET_KEY",
           "XENDIT_WEBHOOK_TOKEN",
+          "XENDIT_MODE",
           "XENDIT_SUCCESS_REDIRECT_URL",
           "XENDIT_FAILURE_REDIRECT_URL",
         ]),
@@ -145,6 +146,7 @@ describe("server environment schema", () => {
       PAYMENT_PROVIDER: "xendit",
       XENDIT_SECRET_KEY: "sk",
       XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "live",
       XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
       XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
     };
@@ -169,9 +171,40 @@ describe("server environment schema", () => {
       PAYMENT_PROVIDER: "xendit",
       XENDIT_SECRET_KEY: "sk",
       XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "test",
       XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
       XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
     });
     expect(devXendit.success).toBe(true);
+  });
+
+  test("production Xendit Test Mode requires a UAT email allowlist", () => {
+    const prodTest = {
+      ...baseEnv(),
+      NODE_ENV: "production",
+      RESEND_API_KEY: "resend-key",
+      EMAIL_FROM: "verified@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "test",
+      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+      WEBHOOK_ALLOWED_IPS: "103.10.65.0/24",
+    };
+    const missing = serverEnvSchema.safeParse(prodTest);
+    expect(missing.success).toBe(false);
+    if (!missing.success) {
+      expect(
+        missing.error.issues.map((issue) => issue.path.join(".")),
+      ).toContain("XENDIT_TEST_ALLOWED_EMAILS");
+    }
+
+    const valid = serverEnvSchema.safeParse({
+      ...prodTest,
+      XENDIT_TEST_ALLOWED_EMAILS: "qa@cogitoacademy.id, owner@cogitoacademy.id",
+    });
+    expect(valid.success).toBe(true);
   });
 });

@@ -11,6 +11,7 @@ function createProvider(opts?: {
   return createXenditPaymentProvider({
     secretKey: opts?.secretKey ?? "test-secret-key",
     webhookToken: "test-webhook-token",
+    mode: "test",
     successRedirectUrl: "https://example.com/success",
     failureRedirectUrl: "https://example.com/failure",
     defaultPaymentMethod: opts?.defaultPaymentMethod as any,

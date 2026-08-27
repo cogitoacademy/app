@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { DomainError } from "../../lib/domain-errors";
 import {
   notFound,
+  forbidden,
   conflict,
   serviceUnavailable,
   internalServerError,
@@ -43,6 +44,16 @@ export class PaymentProviderError extends DomainError {
   }
 }
 
+export class PaymentTestModeRestrictedError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super(
+      "PAYMENT_TEST_MODE_RESTRICTED",
+      "Payment Test Mode is restricted to approved UAT accounts",
+    );
+  }
+}
+
 export function mapPaymentError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -50,6 +61,8 @@ export function mapPaymentError(
   if (err instanceof PaymentNotFoundError) return notFound(err.message, err);
   if (err instanceof PackageAlreadyPurchasedError)
     return conflict(err.message, err);
+  if (err instanceof PaymentTestModeRestrictedError)
+    return forbidden(err.message, err);
   if (err instanceof PaymentProviderError)
     return serviceUnavailable(err.message, err);
   return internalServerError(err.message, err);

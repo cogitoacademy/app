@@ -80,6 +80,19 @@ const app = createServer();
 const port = env.PORT;
 
 const { services } = await import("@cogito-app/api/services");
+
+// Xendit Test/Live is selected by the API key, while XENDIT_MODE records the
+// intended deployment mode and drives the production UAT allowlist. Log only
+// the non-secret mode so operators can verify a Coolify rollout safely.
+if (env.PAYMENT_PROVIDER === "xendit") {
+  log({
+    level: "info",
+    action: "payment_provider_configured",
+    provider: "xendit",
+    xenditMode: env.XENDIT_MODE,
+  });
+}
+
 setAuthEmailSender(async ({ user, url }) => {
   if (!isProductionLike(env.NODE_ENV)) {
     log({
