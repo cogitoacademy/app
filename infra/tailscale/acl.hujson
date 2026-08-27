@@ -1,0 +1,54 @@
+// Tailscale ACL — declarative control-plane policy for the Cogito tailnet.
+//
+// This file is the source of truth for the tailnet policy. Paste it into the
+// Tailscale admin console (Access Controls) and keep it versioned here.
+// Changes roll back by reverting this file + re-pasting.
+//
+// Tailnet: argyavityasy1208@gmail.com (tail674634.ts.net)
+// Nodes:
+//   laptop        (100.119.76.120, macOS)  — operator
+//   iphone        (100.107.75.120, iOS)    — operator
+//   cogito-vps    (tag:server)             — OVH VPS, the only server node
+{
+  // tag:server is owned by tailnet admins only — a node can only be tagged
+  // with a tag its owner may administer, so a compromised laptop cannot
+  // tag itself as a server.
+  "tagOwners": {
+    "tag:server": ["autogroup:admin"]
+  },
+
+  "acls": [
+    // Operators (any member device) may reach the server ONLY on:
+    //   22    — SSH (Tailscale SSH enforces identity below)
+    //   8000  — Coolify admin UI
+    //   6001/6002 — Coolify realtime channel
+    // No other server ports are exposed on the tailnet.
+    {
+      "action": "accept",
+      "src": ["autogroup:member"],
+      "dst": ["tag:server:22,8000,6001,6002"]
+    },
+
+    // The server needs outbound egress for its public traffic (Postgres,
+    // Redis, Resend, Xendit, Google, Sanity, R2, backups). The tailnet ACL
+    // governs *control-plane* reachability; public egress is not a tailnet
+    // route. Allow server -> members for any future control-plane need
+    // (e.g. pulling from the operator's machine), scoped narrowly.
+    {
+      "action": "accept",
+      "src": ["tag:server"],
+      "dst": ["autogroup:member:*"]
+    }
+  ],
+
+  // Tailscale SSH: operators get interactive SSH with identity check.
+  // "check" prompts for approval in the admin console on first use.
+  "ssh": [
+    {
+      "action": "check",
+      "src": ["autogroup:member"],
+      "dst": ["tag:server"],
+      "users": ["autogroup:nonroot", "root"]
+    }
+  ]
+}
