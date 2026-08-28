@@ -207,4 +207,45 @@ describe("server environment schema", () => {
     });
     expect(valid.success).toBe(true);
   });
+
+  test("production Xendit Test Mode rejects an invalid XENDIT_TEST_ALLOWED_EMAILS list", () => {
+    const prodTest = {
+      ...baseEnv(),
+      NODE_ENV: "production",
+      RESEND_API_KEY: "resend-key",
+      EMAIL_FROM: "verified@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "test",
+      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+      WEBHOOK_ALLOWED_IPS: "103.10.65.0/24",
+    };
+
+    // An entry that is not an email is rejected with a clear issue.
+    const badEmail = serverEnvSchema.safeParse({
+      ...prodTest,
+      XENDIT_TEST_ALLOWED_EMAILS: "qa@cogitoacademy.id, not-an-email",
+    });
+    expect(badEmail.success).toBe(false);
+    if (!badEmail.success) {
+      expect(
+        badEmail.error.issues.map((issue) => issue.path.join(".")),
+      ).toContain("XENDIT_TEST_ALLOWED_EMAILS");
+      expect(
+        badEmail.error.issues.some((issue) =>
+          issue.message.includes("comma-separated list of valid email"),
+        ),
+      ).toBe(true);
+    }
+
+    // A list that trims to nothing (e.g. stray commas) is also rejected.
+    const emptyList = serverEnvSchema.safeParse({
+      ...prodTest,
+      XENDIT_TEST_ALLOWED_EMAILS: ", ,",
+    });
+    expect(emptyList.success).toBe(false);
+  });
 });
