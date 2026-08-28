@@ -143,31 +143,38 @@ export function BookingListCard({
             <AvatarStack people={people} />
             <Separator orientation="vertical" className="h-full" />
             <BookingFinancialInfo booking={booking} viewerRole={viewerRole} />
-            {showStatus ? (
-              <BookingStatusBadge
-                bookingId={booking.id}
-                state={booking.currentState}
-              />
-            ) : null}
           </div>
         </div>
 
-        <Button
-          variant={attention ? "primary" : "tertiary"}
-          size="sm"
-          className="w-full min-w-0 max-w-full md:w-auto md:justify-self-end"
-          render={
-            <Link
-              to="/bookings/$bookingId"
-              params={{ bookingId: booking.id }}
-              aria-label={`${resolvedActionLabel}: ${title}`}
-            />
-          }
-          nativeButton={false}
+        <div
+          className={cn(
+            "flex w-full min-w-0 max-w-full flex-col gap-2 md:w-auto md:self-stretch md:items-end md:gap-0",
+            showStatus ? "md:justify-between" : "md:justify-center",
+          )}
         >
-          {resolvedActionLabel}
-          <IconChevronRight />
-        </Button>
+          {showStatus ? (
+            <BookingStatusBadge
+              bookingId={booking.id}
+              state={booking.currentState}
+            />
+          ) : null}
+          <Button
+            variant={attention ? "primary" : "tertiary"}
+            size="sm"
+            className="w-full min-w-0 max-w-full md:w-auto"
+            render={
+              <Link
+                to="/bookings/$bookingId"
+                params={{ bookingId: booking.id }}
+                aria-label={`${resolvedActionLabel}: ${title}`}
+              />
+            }
+            nativeButton={false}
+          >
+            {resolvedActionLabel}
+            <IconChevronRight />
+          </Button>
+        </div>
       </div>
     </Card>
   );
