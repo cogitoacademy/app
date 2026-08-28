@@ -63,35 +63,19 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
 
   return (
     <Stack direction="column" spacing="lg">
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <DashboardWelcomeCard
           name={tutorName}
           viewerRole="tutor"
           reviewCount={reviewQueue.length}
         />
 
-        <TeachingSetupCard profileStatus={profileStatus} />
-      </div>
-
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <ReviewRequestsCard
-          isLoading={bookings.isPending}
-          reviewQueue={reviewQueue}
-        />
-
-        <NextLessonSection
-          booking={nextBooking}
-          isLoading={bookings.isPending}
-          viewerRole="tutor"
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 h-full">
         <MetricCard
           icon={<IconInbox />}
           label="Needs review"
           value={bookings.isPending ? "—" : String(reviewQueue.length)}
-          tone={reviewQueue.length > 0 ? "warning-subtle" : "secondary-subtle"}
+          tone={reviewQueue.length > 0 ? "warning-subtle" : "primary-subtle"}
         />
         <MetricCard
           icon={<IconCalendarCheck />}
@@ -115,12 +99,32 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           value={
             payouts.isPending
               ? "—"
-              : "Rp " +
+              : "Rp" +
                 (payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")
           }
           tone="success-subtle"
         />
       </div>
+
+      
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <NextLessonSection
+          booking={nextBooking}
+          isLoading={bookings.isPending}
+          viewerRole="tutor"
+        />
+        
+        <ReviewRequestsCard
+          isLoading={bookings.isPending}
+          reviewQueue={reviewQueue}
+        />
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+
+        <TeachingSetupCard profileStatus={profileStatus} />
 
       <Card>
         <CardHeader>
@@ -156,6 +160,8 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           </div>
         </CardBody>
       </Card>
+      </div>
+
     </Stack>
   );
 }
@@ -285,13 +291,16 @@ function MetricCard({
     | "success-subtle";
 }) {
   return (
-    <Card>
-      <CardBody className="flex items-center gap-4 p-5">
-        <IconBox variant={tone}>{icon}</IconBox>
-        <div>
-          <Text className="text-sm text-muted">{label}</Text>
-          <Heading size="sm">{value}</Heading>
+    <Card className="h-full">
+      <CardBody className="flex h-full items-stretch justify-between p-5">
+        <div className="flex items-center gap-4 self-start">
+          <IconBox variant={tone}>{icon}</IconBox>
+          <Text className="text-muted">{label}</Text>
         </div>
+
+        <Heading size="" className="self-end text-right">
+          {value}
+        </Heading>
       </CardBody>
     </Card>
   );
