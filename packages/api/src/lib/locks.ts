@@ -22,3 +22,13 @@ export async function lockTutorForBooking(
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${tutorId}, 0))`,
   );
 }
+
+/** Serializes proposal replacement for a single booking. */
+export async function lockBookingReschedule(
+  conn: DbOrTx,
+  bookingId: string,
+): Promise<void> {
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${bookingId}, 1))`,
+  );
+}

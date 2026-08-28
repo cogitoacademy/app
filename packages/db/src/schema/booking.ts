@@ -253,6 +253,9 @@ export const bookingRescheduleProposal = pgTable(
     ),
     index("reschedule_bookingId_idx").on(table.bookingId),
     index("reschedule_sessionId_idx").on(table.sessionId),
+    uniqueIndex("reschedule_booking_pending_uniq")
+      .on(table.bookingId)
+      .where(sql`${table.status} = 'pending'`),
   ],
 );
 

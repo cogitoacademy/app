@@ -4091,6 +4091,96 @@ describe("BookingService", () => {
       await service.proposeReschedule("student1", "b1", start, end);
       expect(repo.insertRescheduleProposal).toHaveBeenCalledTimes(1);
     });
+
+    test("rejects a proposed time matching the current schedule", async () => {
+      const scheduledStartAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      scheduledStartAt.setSeconds(0, 0);
+      const booking = makeBooking({ scheduledStartAt });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findParticipant: mock(async () => makeParticipant()),
+        },
+      });
+
+      await expect(
+        service.proposeReschedule(
+          "tutor1",
+          "b1",
+          new Date(scheduledStartAt),
+          new Date(scheduledStartAt.getTime() + 90 * 60 * 1000),
+        ),
+      ).rejects.toThrow(
+        "Proposed time must be different from the current schedule",
+      );
+      expect(repo.insertRescheduleProposal).not.toHaveBeenCalled();
+    });
+
+    test("rejects a series proposal matching the target session schedule", async () => {
+      const scheduledStartAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+      scheduledStartAt.setSeconds(0, 0);
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ type: "series", scheduledStartAt: new Date(0) }),
+          ),
+          findSessionById: mock(async () => ({
+            id: "s2",
+            seriesBookingId: "b1",
+            scheduledStartAt,
+            scheduledEndAt: new Date(
+              scheduledStartAt.getTime() + 90 * 60 * 1000,
+            ),
+            currentState: "scheduled",
+          })),
+        },
+      });
+
+      await expect(
+        service.proposeReschedule(
+          "tutor1",
+          "b1",
+          scheduledStartAt,
+          new Date(scheduledStartAt.getTime() + 90 * 60 * 1000),
+          undefined,
+          undefined,
+          "s2",
+        ),
+      ).rejects.toThrow(
+        "Proposed time must be different from the current schedule",
+      );
+      expect(repo.insertRescheduleProposal).not.toHaveBeenCalled();
+    });
+
+    test("rejects a proposal matching the pending proposal", async () => {
+      const proposedStartAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+      proposedStartAt.setSeconds(0, 0);
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "reschedule_proposed" }),
+          ),
+          findPendingRescheduleProposal: mock(async () => ({
+            id: "pending-proposal",
+            sessionId: null,
+            proposedStartAt,
+          })),
+        },
+      });
+
+      await expect(
+        service.proposeReschedule(
+          "tutor1",
+          "b1",
+          proposedStartAt,
+          new Date(proposedStartAt.getTime() + 90 * 60 * 1000),
+        ),
+      ).rejects.toThrow(
+        "Proposed time must be different from the pending proposal",
+      );
+      expect(repo.updateRescheduleProposal).not.toHaveBeenCalled();
+      expect(repo.insertRescheduleProposal).not.toHaveBeenCalled();
+    });
   });
 
   describe("listSessions", () => {
@@ -6998,7 +7088,11 @@ describe("BookingService additional coverage paths", () => {
 
   test("supersedes an existing reschedule proposal", async () => {
     const booking = makeBooking({ currentState: "reschedule_proposed" });
-    const pending = { id: "old-proposal" };
+    const pending = {
+      id: "old-proposal",
+      sessionId: null,
+      proposedStartAt: new Date(Date.now() + 96 * 60 * 60 * 1000),
+    };
     const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
     const { service, repo } = createService({
       repo: {

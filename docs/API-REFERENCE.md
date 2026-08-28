@@ -589,6 +589,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ bookingId }`
 - **Output:** `AvailabilitySlot[]`
 - **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility.
+- **Reschedule invariant:** `/rpc/booking/proposeReschedule` and `/rpc/tutorActions/proposeReschedule` reject a proposed start in the same minute as the active booking/target-session start or the pending proposal for that same target with `BOOKING_NOT_EDITABLE`. Proposal replacement is serialized, and only one pending proposal may exist per booking.
 
 ### `booking.rejectReschedule`
 

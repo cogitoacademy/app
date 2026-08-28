@@ -326,6 +326,7 @@ export function BookingDetailPage({
       viewerRole={viewerRole}
       modality={booking.modality}
       currentStartAt={booking.scheduledStartAt}
+      pendingStartAt={activeRescheduleProposal?.proposedStartAt}
       onBookingChanged={refreshBookingQueries}
     />
   ) : null;

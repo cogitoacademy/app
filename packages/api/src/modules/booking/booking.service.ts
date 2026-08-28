@@ -49,7 +49,7 @@ import {
   BookingAcceptanceDeadlinePassedError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
-import { lockTutorForBooking } from "../../lib/locks";
+import { lockBookingReschedule, lockTutorForBooking } from "../../lib/locks";
 import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
 import {
@@ -1955,6 +1955,7 @@ export function createBookingService(deps: {
     sessionId?: string,
   ) {
     return db.transaction(async (tx) => {
+      await lockBookingReschedule(tx, bookingId);
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (b.tutorId !== userId && b.proposerId !== userId)
         throw new BookingNotOwnedError(bookingId, userId);
@@ -1967,6 +1968,25 @@ export function createBookingService(deps: {
       }
 
       const session = normalizeSession(proposedStartAt);
+      let existingSession: Awaited<ReturnType<BookingRepo["findSessionById"]>> =
+        null;
+      if (sessionId) {
+        existingSession = await repo.findSessionById(tx, sessionId);
+        if (!existingSession || existingSession.seriesBookingId !== bookingId) {
+          throw new BookingSessionNotFoundError(sessionId);
+        }
+      }
+      const activeStartAt =
+        existingSession?.scheduledStartAt ?? b.scheduledStartAt;
+      if (
+        Math.floor(session.scheduledStartAt.getTime() / 60_000) ===
+        Math.floor(activeStartAt.getTime() / 60_000)
+      ) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "Proposed time must be different from the current schedule",
+        );
+      }
       if (userId !== b.tutorId) {
         // C2: the current session must also still be beyond H-2 — a student
         // close to class cannot bypass the late-cancel penalty by proposing a
@@ -2008,10 +2028,6 @@ export function createBookingService(deps: {
         );
       }
       if (sessionId) {
-        const existingSession = await repo.findSessionById(tx, sessionId);
-        if (!existingSession || existingSession.seriesBookingId !== bookingId) {
-          throw new BookingSessionNotFoundError(sessionId);
-        }
         // U7: the booking-level overlap check cannot see sibling series
         // sessions — check them explicitly so a session cannot be moved onto
         // another session of the same series.
@@ -2048,6 +2064,16 @@ export function createBookingService(deps: {
 
       const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
       if (pending) {
+        if (
+          (pending.sessionId ?? null) === (sessionId ?? null) &&
+          Math.floor(pending.proposedStartAt.getTime() / 60_000) ===
+            Math.floor(session.scheduledStartAt.getTime() / 60_000)
+        ) {
+          throw new BookingNotEditableError(
+            bookingId,
+            "Proposed time must be different from the pending proposal",
+          );
+        }
         await repo.updateRescheduleProposal(tx, pending.id, {
           status: "superseded",
           decidedAt: new Date(),

@@ -1,13 +1,13 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                                                                                                            |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                                                                                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status     | Living gap inventory (updated 2026-08-28; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy follow-up implemented; meeting fallback follow-up added; booking overflow polish added) |
-| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                        |
-| Created    | 2026-07-29                                                                                                                                                                                                                       |
-| Audited    | 2026-08-28                                                                                                                                                                                                                       |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                    |
-| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                           |
+| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                       |
+| Created    | 2026-07-29                                                                                                                                                                                                                                                      |
+| Audited    | 2026-08-28                                                                                                                                                                                                                                                      |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                   |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                          |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
@@ -354,7 +354,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22).** `booking-reschedule-action.tsx` (calendar + time input + reason; role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule`, per-session `sessionId`, supersedes pending proposal) — merged via #55 with the tutor route wiring corrected in the follow-up.
+**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22; no-op/race guards 2026-08-28).** `booking-reschedule-action.tsx` (calendar + time input + reason; role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule`, per-session `sessionId`, supersedes pending proposal) — merged via #55 with the tutor route wiring corrected in the follow-up. The UI disables proposals matching either the active start or pending proposal; the service applies the same invariant to booking and series-session targets, serializes replacement, and the database permits only one pending proposal per booking.
 
 **Required (after G6 backend fix):**
 

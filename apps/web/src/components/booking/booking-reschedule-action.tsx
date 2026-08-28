@@ -71,6 +71,7 @@ export function BookingRescheduleAction({
   viewerRole,
   modality,
   currentStartAt,
+  pendingStartAt,
   onBookingChanged,
 }: {
   bookingId: string;
@@ -78,6 +79,7 @@ export function BookingRescheduleAction({
   viewerRole: string;
   modality: string;
   currentStartAt?: Date | string | null;
+  pendingStartAt?: Date | string | null;
   onBookingChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -118,6 +120,16 @@ export function BookingRescheduleAction({
   const validTime =
     isValidMinuteTime(newTime) &&
     (!usingAvailability || isTimeWithinRange(newTime, minTime, maxTime));
+  const matchesCurrentSchedule = isSameScheduleMinute(
+    currentStartAt,
+    newDate,
+    newTime,
+  );
+  const matchesPendingProposal = isSameScheduleMinute(
+    pendingStartAt,
+    newDate,
+    newTime,
+  );
   const proposalMutationOptions = {
     onSuccess: () => {
       setOpen(false);
@@ -293,6 +305,11 @@ export function BookingRescheduleAction({
                 {usingAvailability && minTime && maxTime
                   ? ` · valid starts ${minTime}–${maxTime}`
                   : ""}
+                {matchesCurrentSchedule
+                  ? " · choose a time different from the current schedule"
+                  : matchesPendingProposal
+                    ? " · choose a time different from the pending proposal"
+                    : ""}
               </FieldDescription>
             </Field>
             {newDate && validTime ? (
@@ -341,6 +358,8 @@ export function BookingRescheduleAction({
               disabled={
                 !newDate ||
                 !validTime ||
+                matchesCurrentSchedule ||
+                matchesPendingProposal ||
                 (usingAvailability && !selectedSlotId) ||
                 propose.isPending
               }
@@ -351,6 +370,19 @@ export function BookingRescheduleAction({
         </DialogPopup>
       </Dialog>
     </>
+  );
+}
+
+export function isSameScheduleMinute(
+  currentStartAt: Date | string | null | undefined,
+  date: string,
+  time: string,
+) {
+  if (!currentStartAt || !date || !isValidMinuteTime(time)) return false;
+  const proposed = new Date(`${date}T${time}:00+07:00`);
+  return (
+    Math.floor(new Date(currentStartAt).getTime() / 60_000) ===
+    Math.floor(proposed.getTime() / 60_000)
   );
 }
 
