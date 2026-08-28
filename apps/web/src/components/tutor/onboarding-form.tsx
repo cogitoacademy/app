@@ -77,6 +77,8 @@ interface OnboardingFormProps {
     credentialsSummary: string | null;
     achievements: string | null;
     experiences: string | null;
+    achievementProofUrls: string[] | null;
+    experienceProofUrls: string[] | null;
     sourcePhotoUrl: string | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
@@ -89,6 +91,8 @@ interface OnboardingFormProps {
       displayName: string;
       achievements: string;
       experiences: string;
+      achievementProofUrls: string[];
+      experienceProofUrls: string[];
       sourcePhotoUrl: string;
       expertise: string[];
       subjectIds: string[];
@@ -139,6 +143,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       profile.credentialsSummary ??
       "",
     experiences: pending.experiences ?? profile.experiences ?? "",
+    achievementProofUrls:
+      pending.achievementProofUrls ?? profile.achievementProofUrls ?? [],
+    experienceProofUrls:
+      pending.experienceProofUrls ?? profile.experienceProofUrls ?? [],
     sourcePhotoUrl: pending.sourcePhotoUrl ?? profile.sourcePhotoUrl ?? "",
     expertise: pending.expertise ?? profile.expertise ?? [],
     subjectIds: initialSubjectIds,
@@ -256,6 +264,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       shortBio?: string;
       achievements?: string;
       experiences?: string;
+      achievementProofUrls?: string[];
+      experienceProofUrls?: string[];
       sourcePhotoUrl?: string;
       expertise?: string[];
       subjectIds?: string[];
@@ -273,6 +283,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (shortBio) payload.shortBio = shortBio;
     if (achievements) payload.achievements = achievements;
     if (experiences) payload.experiences = experiences;
+    payload.achievementProofUrls = form.achievementProofUrls;
+    payload.experienceProofUrls = form.experienceProofUrls;
     if (sourcePhotoUrl) payload.sourcePhotoUrl = sourcePhotoUrl;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (
@@ -575,9 +587,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     Achievements <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <FieldDescription>
-                    Add one achievement or experience per line. A structured
-                    editor will replace this once the final client format is
-                    approved.
+                    Add one achievement per line. A structured editor will
+                    replace this once the final client format is approved.
                   </FieldDescription>
                   <Textarea
                     id="tutor-achievements"
@@ -597,6 +608,33 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   {errors.achievements ? (
                     <FieldError>{errors.achievements}</FieldError>
                   ) : null}
+                </Field>
+
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="tutor-achievement-proofs">
+                    Achievement proof links
+                  </FieldLabel>
+                  <FieldDescription>
+                    Optional. Add one public certificate, result, or portfolio
+                    URL per line. These links are only used for admin
+                    verification.
+                  </FieldDescription>
+                  <Textarea
+                    id="tutor-achievement-proofs"
+                    name="achievementProofUrls"
+                    rows={3}
+                    value={form.achievementProofUrls.join("\n")}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        achievementProofUrls: event.target.value
+                          .split(/\r?\n/)
+                          .map((url) => url.trim())
+                          .filter(Boolean),
+                      }))
+                    }
+                    placeholder="https://example.com/certificate"
+                  />
                 </Field>
 
                 <Field className="sm:col-span-2">
@@ -624,6 +662,33 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   {errors.experiences ? (
                     <FieldError>{errors.experiences}</FieldError>
                   ) : null}
+                </Field>
+
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="tutor-experience-proofs">
+                    Experience proof links
+                  </FieldLabel>
+                  <FieldDescription>
+                    Optional. Add one public reference, portfolio, or supporting
+                    URL per line. These links are only used for admin
+                    verification.
+                  </FieldDescription>
+                  <Textarea
+                    id="tutor-experience-proofs"
+                    name="experienceProofUrls"
+                    rows={3}
+                    value={form.experienceProofUrls.join("\n")}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        experienceProofUrls: event.target.value
+                          .split(/\r?\n/)
+                          .map((url) => url.trim())
+                          .filter(Boolean),
+                      }))
+                    }
+                    placeholder="https://example.com/reference"
+                  />
                 </Field>
 
                 <Field className="sm:col-span-2">

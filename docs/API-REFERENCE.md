@@ -312,10 +312,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName?, shortBio?, achievements?, experiences?, sourcePhotoUrl?, expertise?, subjectIds?, modality?, baseRatesIdr?, prices? }`
+- **Input:** `{ version, displayName?, shortBio?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, expertise?, subjectIds?, modality?, baseRatesIdr?, prices? }`
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. Achievements and experiences are separate multiline plain-text fields pending the client's final structured format. `sourcePhotoUrl` is the tutor-uploaded private editing source and never replaces the public account image; only an admin may set the edited public photo through tutor review. Availability summaries, credential summaries, and proof URLs are no longer accepted by this procedure. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. For published profiles, trust-sensitive changes wait in `pendingProfileChanges` for admin approval.
+- **Description:** Updates the tutor profile with optimistic locking. Achievements and experiences are separate multiline plain-text fields pending the client's final structured format. `achievementProofUrls` and `experienceProofUrls` are optional admin-verification evidence grouped by section; they are review-protected and excluded from public discovery responses. `sourcePhotoUrl` is the tutor-uploaded private editing source and never replaces the public account image; only an admin may set the edited public photo through tutor review. The retired generic credential-proof field is not accepted. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. For published profiles, trust-sensitive changes wait in `pendingProfileChanges` for admin approval.
 
 ### `tutor.submitForReview`
 

@@ -13,6 +13,8 @@ export interface UpdateProfileInput {
   shortBio?: string;
   achievements?: string;
   experiences?: string;
+  achievementProofUrls?: string[];
+  experienceProofUrls?: string[];
   sourcePhotoUrl?: string;
   expertise?: string[];
   subjectIds?: string[];

@@ -17,6 +17,8 @@ The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This
 
 Tutor onboarding now has separate multiline Achievements and Experiences fields, with the legacy credential summary migrated into Achievements. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a source-upload/admin-edited-public-photo workflow. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
 
+Achievement and Experience sections now each accept an optional list of supporting proof URLs. They are visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
+
 ### Subject taxonomy follow-up (2026-08-25)
 
 Tutor onboarding now uses the normalized competition category/child-subject catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 child subjects. Tutors must select at least one current child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. Archived legacy subjects remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
@@ -162,7 +164,7 @@ for classmates.
 | `/_app/dashboard`            | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                                               |
 | `/_app/balance`              | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                                                         |
 | `/_app/calendar`             | competition-calendar-page.tsx   | Complete — authenticated, English-only read-only calendar backed by published Sanity content                                  |
-| `/_app/knowledge-bank`       | knowledge-bank-page.tsx          | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                       |
+| `/_app/knowledge-bank`       | knowledge-bank-page.tsx         | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                       |
 | `/_app/bookings`             | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                                                          |
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                         |
 | `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                                                       |

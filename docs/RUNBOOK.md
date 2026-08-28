@@ -112,6 +112,10 @@ editing and applying the standard background, an admin pastes the finished publi
 the tutor review card and completes an allowed review action. Never copy a tutor source
 photo directly into `user.image`; only the admin-provided edited asset is public.
 
+Achievement and experience proof URLs are verification-only tutor-profile data.
+Operators may open them from the admin tutor review card, but they must not be added
+to public discovery projections, marketing exports, or student-facing interfaces.
+
 ### Shared booking list smoke check
 
 With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with the Cogito mark icon before `Earns: X` and `Total: Y`, and admins see the full list with the icon before `Total X` and `Tutor Y`, with no lifecycle mutations. Verify the Upcoming/Pending/Recurring/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that hovering/focusing a visible status badge shows its explanation. On a narrow viewport, confirm the rounded tab strip fills the available page width, only the inner tab list can be swiped horizontally to reach every tab, active-tab shadows and focus rings remain visible at both scroll edges, and the page does not create horizontal overflow or show a scrollbar. Confirm the empty-state outline and decorative glow remain visible inside the rounded card boundary without creating overflow. Confirm mobile rows keep date, location, and tutor name readable beside the booking summary, while desktop time/location/tutor metadata stays aligned and the action button remains at the far edge. For single-session group bookings, student `You pay` must show the per-student amount, and the participant avatar stack must not include the tutor. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.

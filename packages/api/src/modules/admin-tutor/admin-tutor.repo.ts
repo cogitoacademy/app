@@ -60,6 +60,8 @@ export interface TutorProfileUpdates {
   credentialsSummary?: string | null;
   achievements?: string | null;
   experiences?: string | null;
+  achievementProofUrls?: string[] | null;
+  experienceProofUrls?: string[] | null;
   expertise?: string[] | null;
   modality?: string | null;
   prices?: Record<string, number> | null;

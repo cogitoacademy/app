@@ -91,6 +91,8 @@ interface TutorReviewCardProps {
     credentialsSummary: string | null;
     achievements: string | null;
     experiences: string | null;
+    achievementProofUrls: string[] | null;
+    experienceProofUrls: string[] | null;
     expertise: string[] | null;
     modality: string | null;
     prices: Record<string, number> | null;
@@ -312,6 +314,11 @@ export function TutorReviewCard({
               </Text>
             </section>
 
+            <ProofLinks
+              label="Achievement proof"
+              urls={profile.achievementProofUrls}
+            />
+
             <section>
               <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
                 Experiences
@@ -326,6 +333,11 @@ export function TutorReviewCard({
                 {profile.experiences ?? "No experiences provided."}
               </Text>
             </section>
+
+            <ProofLinks
+              label="Experience proof"
+              urls={profile.experienceProofUrls}
+            />
 
             <section>
               <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
@@ -650,5 +662,31 @@ function ReviewDetail({
         {value}
       </Text>
     </div>
+  );
+}
+
+function ProofLinks({ label, urls }: { label: string; urls: string[] | null }) {
+  if (!urls?.length) return null;
+
+  return (
+    <section>
+      <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+        {label}
+      </Text>
+      <ul className="space-y-1">
+        {urls.map((url) => (
+          <li key={url}>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all text-sm underline underline-offset-2"
+            >
+              {url}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

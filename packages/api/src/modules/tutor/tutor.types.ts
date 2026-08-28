@@ -7,6 +7,8 @@ export const updateMyProfileInput = z.object({
   shortBio: z.string().max(2000).optional(),
   achievements: z.string().max(5000).optional(),
   experiences: z.string().max(5000).optional(),
+  achievementProofUrls: z.array(z.string().url().max(2048)).max(20).optional(),
+  experienceProofUrls: z.array(z.string().url().max(2048)).max(20).optional(),
   sourcePhotoUrl: z.string().url().max(2048).optional(),
   expertise: z.array(z.string().max(255)).max(20).optional(),
   subjectIds: z

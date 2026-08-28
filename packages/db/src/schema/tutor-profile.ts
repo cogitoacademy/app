@@ -29,6 +29,12 @@ export const tutorProfile = pgTable(
     credentialsSummary: text("credentials_summary"),
     achievements: text("achievements"),
     experiences: text("experiences"),
+    achievementProofUrls: jsonb("achievement_proof_urls")
+      .$type<string[]>()
+      .default([]),
+    experienceProofUrls: jsonb("experience_proof_urls")
+      .$type<string[]>()
+      .default([]),
     sourcePhotoUrl: text("source_photo_url"),
     expertise: jsonb("expertise").$type<string[]>().default([]),
     modality: text("modality"),
@@ -47,6 +53,8 @@ export const tutorProfile = pgTable(
         credentialsSummary: string;
         achievements: string;
         experiences: string;
+        achievementProofUrls: string[];
+        experienceProofUrls: string[];
         sourcePhotoUrl: string;
         expertise: string[];
         subjectIds: string[];

@@ -238,6 +238,8 @@ export function createTutorService(deps: {
       "displayName",
       "achievements",
       "experiences",
+      "achievementProofUrls",
+      "experienceProofUrls",
       "sourcePhotoUrl",
       "expertise",
       "modality",

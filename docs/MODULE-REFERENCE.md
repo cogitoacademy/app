@@ -786,7 +786,7 @@ chat directory.
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; the legacy Marks map remains readable during migration
-- Tutor achievements and experiences are separate multiline fields. The legacy credential summary is read-only fallback data and migration 0032 copies it into achievements. Availability summaries and credential-proof URLs are retired from tutor editing.
+- Tutor achievements and experiences are separate multiline fields. Each section has its own optional proof URL list for admin verification; these lists are protected by profile review and never enter the public discovery projection. The legacy credential summary is read-only fallback data and migration 0032 copies it into achievements. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
 - Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only completed-session count and IDR honorarium.
 - New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids

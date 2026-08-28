@@ -91,10 +91,10 @@ describe("Validation bounds — string .max()", () => {
     }
   });
 
-  test("URL: proofUrls item rejects >2048 chars", () => {
+  test("URL: achievement proof item rejects >2048 chars", () => {
     const result = updateMyProfileInput.safeParse({
       version: 1,
-      proofUrls: [LONG_URL],
+      achievementProofUrls: [LONG_URL],
     });
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -273,15 +273,18 @@ describe("Validation bounds — array .max()", () => {
     }
   });
 
-  test("proofUrls rejects >10 items", () => {
+  test("achievement proof URLs reject >20 items", () => {
     const proofUrls = Array.from(
-      { length: 11 },
+      { length: 21 },
       (_, i) => `https://example.com/${i}`,
     );
-    const result = updateMyProfileInput.safeParse({ version: 1, proofUrls });
+    const result = updateMyProfileInput.safeParse({
+      version: 1,
+      achievementProofUrls: proofUrls,
+    });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toMatch(/<=10/i);
+      expect(result.error.issues[0].message).toMatch(/<=20/i);
     }
   });
 
