@@ -74,16 +74,17 @@
 #   ansible-playbook --syntax-check -i infra/ansible/inventory.ini \
 #     infra/ansible/coolify-resources.yml
 #   ansible-playbook -i infra/ansible/inventory.ini \
-#     infra/ansible/coolify-resources.yml --check   # structure only, no API calls
+#     infra/ansible/coolify-resources.yml --check   # structure only (uri makes
+#                                                   # no requests in check mode;
+#                                                   # the play ends cleanly)
 #   ansible-playbook -i infra/ansible/inventory.ini \
 #     infra/ansible/coolify-resources.yml           # idempotent apply
 #
 #   The Coolify API token must be in the SOPS vault as COOLIFY_API_TOKEN
 #   (Coolify UI → Keys & Tokens → API tokens, `deploy` permission).
 #
-# CHECK MODE: the `uri` module performs no requests in check mode, so
-# `--check` validates the playbook structure only. A full run is idempotent:
-# every write is conditional on a prior GET, so re-runs change nothing.
+# IDEMPOTENCE: every write is conditional on a prior GET, so re-runs change
+# nothing. Databases are never recreated (see the database task).
 ---
 - name: Declare Coolify production resources (control-node driven)
   hosts: localhost
@@ -190,6 +191,22 @@
       - SENTRY_ENVIRONMENT
 
   tasks:
+    # Check mode: the `uri` module performs no requests in check mode, so the
+    # API flow cannot run. `--check` therefore validates the playbook
+    # structure and ends cleanly; a full run is idempotent (every write is
+    # conditional on a prior GET, so re-runs change nothing).
+    - name: Check mode — structure validated, API flow skipped
+      ansible.builtin.debug:
+        msg: >-
+          Running with --check: the Coolify API flow is skipped (uri performs
+          no requests in check mode). This run validated the playbook
+          structure only. Run without --check to apply.
+      when: ansible_check_mode
+
+    - name: End the play in check mode
+      ansible.builtin.meta: end_play
+      when: ansible_check_mode
+
     # --- 0. Vault: decrypt + parse on the control node (never on the VPS) ---
     - name: Decrypt the SOPS vault on the control node
       ansible.builtin.command: sops -d {{ vault_path }}
