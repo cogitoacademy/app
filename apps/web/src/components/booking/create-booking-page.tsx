@@ -170,7 +170,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
         void Promise.all([
           queryClient.invalidateQueries({
-            queryKey: orpc.booking.listMine.queryKey({ input: {} }),
+            queryKey: orpc.booking.listMine.key(),
           }),
           queryClient.invalidateQueries({
             queryKey: orpc.wallet.get.queryKey(),
@@ -217,7 +217,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   function refreshAfterCreate() {
     return Promise.all([
       queryClient.invalidateQueries({
-        queryKey: orpc.booking.listMine.queryKey({ input: {} }),
+        queryKey: orpc.booking.listMine.key(),
       }),
       queryClient.invalidateQueries({ queryKey: orpc.wallet.get.queryKey() }),
     ]);

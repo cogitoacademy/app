@@ -2,10 +2,11 @@
 
 import { useMemo } from "react";
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   IconCalendarEvent,
+  IconChevronDown,
   IconInbox,
   IconRefresh,
   IconSearch,
@@ -49,6 +50,7 @@ export const BOOKING_TABS = [
 
 export type BookingTab = (typeof BOOKING_TABS)[number]["value"];
 export type BookingSort = "recommended" | "soonest" | "latest";
+const BOOKING_PAGE_SIZE = 20;
 
 export function BookingsPage() {
   const navigate = useNavigate();
@@ -59,13 +61,22 @@ export function BookingsPage() {
   const requestedTab = isBookingTab(search.tab) ? search.tab : undefined;
   const activeSort = isBookingSort(search.sort) ? search.sort : "recommended";
   const { role, isLoading: isRoleLoading } = useRole();
-  const bookingsQuery = useQuery(
-    orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
+  const bookingsQuery = useInfiniteQuery(
+    orpc.booking.listMine.infiniteOptions({
+      initialPageParam: null as string | null,
+      input: (cursor) => ({
+        limit: BOOKING_PAGE_SIZE,
+        ...(cursor ? { cursor } : {}),
+      }),
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+    }),
   );
 
   const bookings = useMemo(
-    () => (bookingsQuery.data?.items ?? []) as BookingListItem[],
-    [bookingsQuery.data?.items],
+    () =>
+      (bookingsQuery.data?.pages.flatMap((page) => page.items) ??
+        []) as BookingListItem[],
+    [bookingsQuery.data?.pages],
   );
   const now = Date.now();
   const tabCounts = useMemo(() => getTabCounts(bookings, now), [bookings, now]);
@@ -105,6 +116,8 @@ export function BookingsPage() {
         ? "Monitor every booking and open the detail view for operations."
         : "See your scheduled sessions, invitations, and booking history.";
   const isLoading = bookingsQuery.isPending || isRoleLoading;
+  const hasLoadedPages = (bookingsQuery.data?.pages.length ?? 0) > 0;
+  const isInitialError = bookingsQuery.isError && !hasLoadedPages;
 
   return (
     <Stack
@@ -116,7 +129,9 @@ export function BookingsPage() {
         <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2">
             <Heading size="md">Bookings</Heading>
-            {bookingsQuery.isFetching && !bookingsQuery.isPending ? (
+            {bookingsQuery.isFetching &&
+            !bookingsQuery.isPending &&
+            !bookingsQuery.isFetchingNextPage ? (
               <Badge variant="secondary" pill>
                 <IconRefresh className="animate-spin" /> Refreshing
               </Badge>
@@ -139,6 +154,7 @@ export function BookingsPage() {
         <BookingTabBar
           activeTab={activeTab}
           counts={tabCounts}
+          hasMore={bookingsQuery.hasNextPage}
           onChange={selectTab}
         />
         <BookingSortSelect value={activeSort} onChange={selectSort} />
@@ -146,7 +162,7 @@ export function BookingsPage() {
 
       {isLoading ? (
         <BookingListSkeleton />
-      ) : bookingsQuery.isError ? (
+      ) : isInitialError ? (
         <Card className="w-full min-w-0 max-w-full">
           <CardBody className="flex min-h-64 flex-col items-center justify-center text-center">
             <IconBox variant="danger-subtle" size="lg" className="mb-4">
@@ -172,10 +188,16 @@ export function BookingsPage() {
         <EmptyStateCard
           icon={<IconInbox />}
           title={getEmptyStateTitle(activeTab)}
-          description={getEmptyStateDescription(activeTab, role)}
+          description={
+            bookingsQuery.hasNextPage
+              ? "No matching bookings in the loaded results yet. Load more to check the rest of your bookings."
+              : getEmptyStateDescription(activeTab, role)
+          }
           tone={activeTab === "action" ? "warning" : "secondary"}
           action={
-            role === "student" && activeTab === "upcoming" ? (
+            !bookingsQuery.hasNextPage &&
+            role === "student" &&
+            activeTab === "upcoming" ? (
               <Button
                 render={<Link to="/tutors" aria-label="Browse tutors" />}
                 nativeButton={false}
@@ -217,6 +239,27 @@ export function BookingsPage() {
           ))}
         </div>
       )}
+
+      {!isLoading && hasLoadedPages && bookingsQuery.hasNextPage ? (
+        <div className="flex flex-col items-center gap-2">
+          {bookingsQuery.isFetchNextPageError ? (
+            <Text className="text-center text-danger">
+              {getUserFacingError(
+                bookingsQuery.error,
+                "More bookings could not be loaded. Try again.",
+              )}
+            </Text>
+          ) : null}
+          <Button
+            variant="outline"
+            onClick={() => void bookingsQuery.fetchNextPage()}
+            progress={bookingsQuery.isFetchingNextPage}
+            disabled={bookingsQuery.isFetchingNextPage}
+          >
+            <IconChevronDown /> Load more bookings
+          </Button>
+        </div>
+      ) : null}
     </Stack>
   );
 }
@@ -224,10 +267,12 @@ export function BookingsPage() {
 function BookingTabBar({
   activeTab,
   counts,
+  hasMore,
   onChange,
 }: {
   activeTab: BookingTab;
   counts: Record<BookingTab, number>;
+  hasMore: boolean;
   onChange: (tab: BookingTab) => void;
 }) {
   return (
@@ -260,6 +305,7 @@ function BookingTabBar({
                   {tab.label}
                   <span className="ml-1.5 text-xs text-dimmed">
                     {counts[tab.value]}
+                    {hasMore ? "+" : ""}
                   </span>
                 </button>
               );

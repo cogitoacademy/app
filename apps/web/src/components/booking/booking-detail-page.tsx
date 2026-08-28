@@ -146,7 +146,7 @@ export function BookingDetailPage({
         queryKey: orpc.booking.get.queryKey({ input: { bookingId } }),
       }),
       queryClient.invalidateQueries({
-        queryKey: orpc.booking.listMine.queryKey({ input: { limit: 100 } }),
+        queryKey: orpc.booking.listMine.key(),
       }),
       queryClient.invalidateQueries({
         queryKey: orpc.tutorActions.listBookings.queryKey({ input: {} }),

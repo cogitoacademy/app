@@ -12,7 +12,7 @@ request and disables the controls until the next page arrives. Cursor-loaded
 notifications already preserve prior pages by design. User-specific wallet
 lookup and student search do not retain stale results across a changed query.
 
-The shared booking list uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors land on Needs action when pending decisions exist; admins retain All. Recommended sorting ranks pending decisions first, active bookings next, and terminal outcomes last; Soonest and Latest provide direct date ordering. The URL stores both presentation choices.
+The shared booking list uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors land on Needs action when pending decisions exist; admins retain All. Recommended sorting ranks pending decisions first, active bookings next, and terminal outcomes last; Soonest and Latest provide direct date ordering. The URL stores both presentation choices. The page consumes `booking.listMine` in cursor-backed batches of 20 with an explicit **Load more bookings** action. Infinite-query pages are appended without replacing loaded cards; tabs and sorting operate on loaded pages, and counts use a `+` suffix while another cursor remains.
 
 `BookingListCard` derives one contextual time chip from server facts: pending states read `deadlineAt`, confirmed/scheduled states read the scheduled window, and terminal states render none. A module-level external clock store updates all mounted cards from one 30-second interval rather than allocating one timer per row.
 The reusable card exposes `showFinancialInfo`; booking lists keep it enabled and place the time chip after it, while dashboard next-lesson cards disable it.

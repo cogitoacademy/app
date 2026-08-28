@@ -21,6 +21,13 @@ Student cancellation closes at the exact scheduled start. The backend rejects `b
 
 The shared `/bookings` surface is task-oriented with Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors are taken to Needs action when a response is pending. History consolidates terminal outcomes. URL-backed Recommended sorting keeps pending decisions above active bookings and terminal outcomes at the bottom, with Soonest and Latest alternatives.
 
+The shared booking list consumes `booking.listMine` with cursor-based infinite
+loading in batches of 20. Loaded cards remain visible while **Load more
+bookings** fetches the next cursor, so large histories do not require an
+unbounded first response or replace the current screen. Tabs and sorting still
+apply client-side to the loaded pages; tab counts show `+` while more pages
+remain because they are lower bounds until the list is fully loaded.
+
 Shared booking cards include a compact time indicator. Deadline-bound pending states use the server-provided `deadlineAt` to show `Respond in`, urgent, or overdue messaging; confirmed/scheduled bookings show Today, Starts in, Starting soon, or In progress when relevant. Terminal bookings show no time indicator. One shared client clock refreshes all visible cards every 30 seconds.
 In booking lists, this indicator sits after the Marks summary with a vertical divider. Dashboard next-lesson cards hide their financial summary to keep the compact overview focused on people, timing, and the detail action.
 
