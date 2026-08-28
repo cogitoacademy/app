@@ -171,8 +171,8 @@ export function AppSidebar({
                         <Link
                           to={item.to}
                           className={
-                            pathname === item.to
-                              && "text-cogito-orange! **:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                            pathname === item.to &&
+                            "text-cogito-orange! **:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
                           }
                           preload="intent"
                           aria-label={item.label}
@@ -197,10 +197,16 @@ export function AppSidebar({
                   <SidebarItem key={item.to}>
                     <SidebarItemButton
                       active={pathname === item.to}
-                      render={<Link to={item.to} className={
-                            pathname === item.to
-                              && "text-cogito-orange! **:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
-                          } aria-label={item.label} />}
+                      render={
+                        <Link
+                          to={item.to}
+                          className={
+                            pathname === item.to &&
+                            "text-cogito-orange! **:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                          }
+                          aria-label={item.label}
+                        />
+                      }
                     >
                       <Icon />
                       {item.label}
