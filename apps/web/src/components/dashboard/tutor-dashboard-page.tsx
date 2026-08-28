@@ -71,42 +71,40 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
         />
 
         <div className="grid gap-4 sm:grid-cols-2 h-full">
-        <MetricCard
-          icon={<IconInbox />}
-          label="Needs review"
-          value={bookings.isPending ? "—" : String(reviewQueue.length)}
-          tone={reviewQueue.length > 0 ? "warning-subtle" : "primary-subtle"}
-        />
-        <MetricCard
-          icon={<IconCalendarCheck />}
-          label="Upcoming sessions"
-          value={bookings.isPending ? "—" : String(upcoming.length)}
-          tone="info-subtle"
-        />
-        <MetricCard
-          icon={<IconClock />}
-          label="Availability slots"
-          value={
-            availability.isPending
-              ? "—"
-              : String(availability.data?.length ?? 0)
-          }
-          tone="tertiary-subtle"
-        />
-        <MetricCard
-          icon={<IconCoins />}
-          label="Honorarium earned"
-          value={
-            payouts.isPending
-              ? "—"
-              : "Rp" +
-                (payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")
-          }
-          tone="success-subtle"
-        />
-      </div>
-
-      
+          <MetricCard
+            icon={<IconInbox />}
+            label="Needs review"
+            value={bookings.isPending ? "—" : String(reviewQueue.length)}
+            tone={reviewQueue.length > 0 ? "warning-subtle" : "primary-subtle"}
+          />
+          <MetricCard
+            icon={<IconCalendarCheck />}
+            label="Upcoming sessions"
+            value={bookings.isPending ? "—" : String(upcoming.length)}
+            tone="info-subtle"
+          />
+          <MetricCard
+            icon={<IconClock />}
+            label="Availability slots"
+            value={
+              availability.isPending
+                ? "—"
+                : String(availability.data?.length ?? 0)
+            }
+            tone="tertiary-subtle"
+          />
+          <MetricCard
+            icon={<IconCoins />}
+            label="Honorarium earned"
+            value={
+              payouts.isPending
+                ? "—"
+                : "Rp" +
+                  (payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")
+            }
+            tone="success-subtle"
+          />
+        </div>
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -115,7 +113,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           isLoading={bookings.isPending}
           viewerRole="tutor"
         />
-        
+
         <ReviewRequestsCard
           isLoading={bookings.isPending}
           reviewQueue={reviewQueue}
@@ -123,45 +121,44 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
-
         <TeachingSetupCard profileStatus={profileStatus} />
 
-      <Card>
-        <CardHeader>
-          <IconBox variant="success-subtle">
-            <IconCoins />
-          </IconBox>
-          <div>
-            <CardTitle>Payout details</CardTitle>
-            <CardDescription>
-              Completed sessions settle the IDR honorarium captured in each
-              booking.
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardBody>
-          <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <IconBox variant="success-subtle">
+              <IconCoins />
+            </IconBox>
             <div>
-              <Text className="text-sm text-muted">Completed sessions</Text>
-              <Text className="mt-1 text-lg font-semibold">
-                {payouts.data?.completedSessions ?? 0}
-              </Text>
+              <CardTitle>Payout details</CardTitle>
+              <CardDescription>
+                Completed sessions settle the IDR honorarium captured in each
+                booking.
+              </CardDescription>
             </div>
-            <div>
-              <Text className="text-sm text-muted">Tutor honorarium</Text>
-              <Text className="mt-1 text-lg font-semibold">
-                Rp {(payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")}
-              </Text>
-              <Text className="mt-1 text-sm text-muted">
-                {payouts.data?.completedSessions ?? 0} completed session
-                {(payouts.data?.completedSessions ?? 0) === 1 ? "" : "s"}
-              </Text>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Text className="text-sm text-muted">Completed sessions</Text>
+                <Text className="mt-1 text-lg font-semibold">
+                  {payouts.data?.completedSessions ?? 0}
+                </Text>
+              </div>
+              <div>
+                <Text className="text-sm text-muted">Tutor honorarium</Text>
+                <Text className="mt-1 text-lg font-semibold">
+                  Rp{" "}
+                  {(payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")}
+                </Text>
+                <Text className="mt-1 text-sm text-muted">
+                  {payouts.data?.completedSessions ?? 0} completed session
+                  {(payouts.data?.completedSessions ?? 0) === 1 ? "" : "s"}
+                </Text>
+              </div>
             </div>
-          </div>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
       </div>
-
     </Stack>
   );
 }
