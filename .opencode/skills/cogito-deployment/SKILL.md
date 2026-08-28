@@ -74,10 +74,10 @@ Code plane (git)          Control plane (operator machine)     Data plane (VPS)
 
 ## R2 buckets (never mix)
 
-| Bucket | Purpose | Access |
-| --- | --- | --- |
-| `cogito-bucket` | App uploads (avatars, evidence) | PUBLIC via `r2bucket.cogitoacademy.id` (`R2_BUCKET` + `R2_PUBLIC_URL`) |
-| `cogito-backups` | Nightly dumps + CD pre-migrate snapshots | PRIVATE, API-token only (`R2_BACKUP_BUCKET`) |
+| Bucket           | Purpose                                  | Access                                                                 |
+| ---------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
+| `cogito-bucket`  | App uploads (avatars, evidence)          | PUBLIC via `r2bucket.cogitoacademy.id` (`R2_BUCKET` + `R2_PUBLIC_URL`) |
+| `cogito-backups` | Nightly dumps + CD pre-migrate snapshots | PRIVATE, API-token only (`R2_BACKUP_BUCKET`)                           |
 
 Never put dumps in the public bucket — a guessable URL leaks the whole DB.
 
@@ -96,12 +96,12 @@ Never put dumps in the public bucket — a guessable URL leaks the whole DB.
 
 ## Common mistakes
 
-| Mistake | Fix |
-| --- | --- |
-| Editing the vault from scratch each time | Use `sops` editor mode / `sops set` |
-| Committing plaintext vault | Pre-commit guard blocks it; `git add -f` only after `sops -e -i` |
-| `sops` fails with "no matching creation rules" | Run from repo root (`.sops.yaml` matches relative paths) |
-| `sops` fails "failed to get the data key" | `SOPS_AGE_KEY_FILE` not exported |
-| Terraform tries to recreate the R2 bucket/domain | `terraform import` first (they pre-exist in the dashboard) |
-| Docs say "Caddy" | Traefik — fix the doc |
-| Putting dumps in the public bucket | Never — use `R2_BACKUP_BUCKET` |
+| Mistake                                          | Fix                                                              |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| Editing the vault from scratch each time         | Use `sops` editor mode / `sops set`                              |
+| Committing plaintext vault                       | Pre-commit guard blocks it; `git add -f` only after `sops -e -i` |
+| `sops` fails with "no matching creation rules"   | Run from repo root (`.sops.yaml` matches relative paths)         |
+| `sops` fails "failed to get the data key"        | `SOPS_AGE_KEY_FILE` not exported                                 |
+| Terraform tries to recreate the R2 bucket/domain | `terraform import` first (they pre-exist in the dashboard)       |
+| Docs say "Caddy"                                 | Traefik — fix the doc                                            |
+| Putting dumps in the public bucket               | Never — use `R2_BACKUP_BUCKET`                                   |
