@@ -79,7 +79,14 @@ primary progress arc, and a `Loading` label instead of a small arc that could
 read as a stray line. Reduced-motion users still receive a clear static
 loading indicator. No API, schema, or persistence contract changed.
 
+Update (2026-08-28, started-session cancellation): student cancellation now closes at `scheduledStartAt` in both the booking service and detail action visibility. The backend remains authoritative and returns `BOOKING_CANCELLATION_DEADLINE_PASSED` for direct or stale-client attempts, preserving tutor completion and payout handling; post-start disputes use the existing support/admin path.
+
 ### Shared booking list follow-up (2026-08-22)
+
+Update (2026-08-28): navigation is now Needs action, Upcoming, Recurring, History, and All. History consolidates terminal outcomes; URL-backed Recommended/Soonest/Latest sorting defaults to decisions first, active bookings next, and terminal outcomes last. Students and tutors land on Needs action whenever pending decisions exist.
+
+Update (2026-08-28, timing): shared booking cards now show server-deadline countdowns for pending states and same-day/start proximity indicators for confirmed or scheduled sessions. The implementation shares one live clock across visible cards and does not alter lifecycle state client-side.
+The indicator is positioned after financial metadata in the list; dashboard next-lesson cards intentionally suppress financial metadata.
 
 The booking list is now one role-aware surface at `/_app/bookings`. Students,
 tutors, and admins use the protected `booking.listMine` read contract; the
@@ -94,7 +101,7 @@ mutations remain in the operations console. Marks values use the Cogito mark
 icon as a prefix, and visible status badges reveal the state explanation on
 hover or keyboard focus.
 
-The shared booking list orders active/all rows by the nearest scheduled start
+The shared booking list offers Recommended, Soonest, and Latest ordering
 while keeping past/cancelled history newest-first. Defaults are role-aware:
 students see Upcoming, tutors see Pending when requests exist (or Upcoming
 otherwise), and admins see All; an explicit `tab` query parameter wins.

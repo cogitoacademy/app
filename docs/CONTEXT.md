@@ -2,6 +2,13 @@
 
 Last updated: 2026-08-28
 
+Student cancellation closes at the exact scheduled start. The backend rejects `booking.cancel`, participant `withdraw`, and per-series-session cancellation at or after the applicable `scheduledStartAt`, leaving the booking live for tutor completion; the booking-detail UI hides the primary cancel action on the same boundary. Pre-start H-2 penalties remain unchanged. Attendance or delivery problems after start use support/admin review instead of allowing a student cancellation path to strand tutor payout.
+
+The shared `/bookings` surface is task-oriented with Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors are taken to Needs action when a response is pending. History consolidates terminal outcomes. URL-backed Recommended sorting keeps pending decisions above active bookings and terminal outcomes at the bottom, with Soonest and Latest alternatives.
+
+Shared booking cards include a compact time indicator. Deadline-bound pending states use the server-provided `deadlineAt` to show `Respond in`, urgent, or overdue messaging; confirmed/scheduled bookings show Today, Starts in, Starting soon, or In progress when relevant. Terminal bookings show no time indicator. One shared client clock refreshes all visible cards every 30 seconds.
+In booking lists, this indicator sits after the Marks summary with a vertical divider. Dashboard next-lesson cards hide their financial summary to keep the compact overview focused on people, timing, and the detail action.
+
 ## Production deployment topology
 
 The public company profile remains on the apex `cogitoacademy.id` host at
@@ -570,6 +577,8 @@ The tutor workspace now has the primary management surfaces: tutor-only onboardi
 Published tutor profiles remain editable. Bio edits publish immediately; trust-sensitive edits are held in `pendingProfileChanges` with a separate edit-review status, so discovery continues serving the last approved profile until an admin approves the proposal or requests revisions.
 
 Tutor onboarding separates Achievements and Experiences as multiline plain text until the client confirms a structured format. Each section accepts its own optional proof URL list for admin verification; proof remains private and review-protected. Availability summary, credential summary, and the old generic credential proof input are removed. Tutors upload an original source portrait for admin editing; it is stored on the tutor profile and cannot directly replace the public image. Admin review accepts the finished public image URL and is the only path that changes the tutor's displayed photo. Profile status and feedback stay visible above the form. Base honorarium uses Rp 5,000 step controls and group-size simulations render as tables. Tutor payout UI exposes completed sessions and IDR honorarium only, with no take-rate or Marks language.
+
+Manage Tutors shows at most eight invitations and eight tutor profiles per section and paginates each list independently. Status filter changes reset the corresponding list to page one. Review cards retain the full achievements, experiences, section-specific private proof links, source-photo, and review-action workflow while preventing large tutor inventories from creating an unbounded page.
 
 Tutor subjects are normalized in `subject_category` (self-referencing mother/child hierarchy) and `tutor_profile_subject` (profile-to-child join). Migration `0029_competition_taxonomy.sql` archives the previous catalog with `is_active = false` and seeds the seven current competition categories plus 33 child subjects. The legacy `expertise` array remains readable for compatibility, while onboarding and published discovery use normalized child subjects. Subject changes on a published profile follow the existing pending-review path and are applied atomically when an admin approves the edit. The onboarding selector shows all current categories with checkboxes and renders archived profile subjects as read-only labels; raw subject IDs should never be shown to tutors or students.
 

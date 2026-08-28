@@ -2,6 +2,11 @@
 
 Last updated: 2026-08-28
 
+Booking-list UI note: `/bookings` uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors default to Needs action when a response is pending and Upcoming otherwise; admins default to All. URL-backed Recommended, Soonest, and Latest sorting is client-side; Recommended ranks pending, active, then terminal bookings, and History consolidates terminal outcomes. The RPC contract is unchanged.
+
+Booking-card timing note: list rows already include the booking `deadlineAt` column. The web client uses it for pending response countdowns and uses scheduled start/end times for Today, Starts in, Starting soon, and In progress labels. It never derives response windows from `createdAt` and does not infer an Expired lifecycle state before the server transitions it.
+The list presentation places the timing chip after financial metadata with a divider; dashboard reuse hides the financial metadata. This remains presentation-only.
+
 ## Overview
 
 All oRPC endpoints use **POST** method. Auth is via session cookies (Better Auth). Base path: `/rpc/{namespace}/{method}` — the path segments are the oRPC procedure keys (e.g. `POST /rpc/auth/me`, `POST /rpc/payment/createPurchase`; not the dotted identifiers used as section headers below). Request bodies must be wrapped in the `{"json": <input>}` protocol envelope. Responses are wrapped as `{"json": <data>, "meta": [...]}`. The protected Knowledge Bank file proxy is the documented exception and uses `GET`.
@@ -573,7 +578,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student
 - **Input:** `{ bookingId, cancellationReason? }`
 - **Output:** `{ booking }`
-- **Description:** Cancels booking and releases held Marks; late cancel within H-2 becomes `late_cancelled`
+- **Description:** Cancels a booking before its scheduled start. A cancellation within H-2 becomes `late_cancelled` and forfeits held Marks; at or after `scheduledStartAt`, the procedure rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED` so the live booking remains available for tutor completion. Session-delivery or attendance problems after start go through support/admin review.
 
 ### `booking.acceptReschedule`
 
@@ -681,7 +686,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (participant)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ withdrawn: true, late: boolean }`
-- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels. Group-series bookings (`type: "series"` with `targetGroupSize > 1`) are rejected with `CONFLICT` (`BOOKING_SERIES_NO_OPT_OUT`) — no opt-out from the series (U4)
+- **Description:** Participant withdraws before the scheduled start; pre-H-2 releases held Marks and a pre-start post-H-2 withdrawal forfeits them. At/after `scheduledStartAt`, the procedure rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED`. Group-series bookings (`type: "series"` with `targetGroupSize > 1`) are rejected with `CONFLICT` (`BOOKING_SERIES_NO_OPT_OUT`) — no opt-out from the series (U4)
 
 ### `booking.listSessions`
 

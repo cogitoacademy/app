@@ -17,12 +17,21 @@ import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import {
+  Select,
+  SelectItem,
+  SelectList,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@cogito-app/ui/components/selia/select";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import {
   BookingListCard,
   BookingListCardSkeleton,
   PENDING_BOOKING_STATES,
+  TERMINAL_BOOKING_STATES,
   type BookingListItem,
 } from "@/components/booking/booking-card";
 import { EmptyStateCard } from "@/components/empty-state";
@@ -31,22 +40,24 @@ import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 export const BOOKING_TABS = [
+  { value: "action", label: "Needs action" },
   { value: "upcoming", label: "Upcoming" },
-  { value: "pending", label: "Pending" },
   { value: "recurring", label: "Recurring" },
-  { value: "past", label: "Past" },
-  { value: "cancelled", label: "Cancelled" },
+  { value: "history", label: "History" },
   { value: "all", label: "All" },
 ] as const;
 
 export type BookingTab = (typeof BOOKING_TABS)[number]["value"];
-
-const CANCELLED_STATES = new Set(["cancelled", "late_cancelled"]);
+export type BookingSort = "recommended" | "soonest" | "latest";
 
 export function BookingsPage() {
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { tab?: BookingTab };
+  const search = useSearch({ strict: false }) as {
+    tab?: BookingTab;
+    sort?: BookingSort;
+  };
   const requestedTab = isBookingTab(search.tab) ? search.tab : undefined;
+  const activeSort = isBookingSort(search.sort) ? search.sort : "recommended";
   const { role, isLoading: isRoleLoading } = useRole();
   const bookingsQuery = useQuery(
     orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
@@ -60,17 +71,13 @@ export function BookingsPage() {
   const tabCounts = useMemo(() => getTabCounts(bookings, now), [bookings, now]);
   const activeTab =
     requestedTab ??
-    getDefaultBookingTab(isRoleLoading ? undefined : role, tabCounts.pending);
+    getDefaultBookingTab(isRoleLoading ? undefined : role, tabCounts.action);
   const visibleBookings = useMemo(
     () =>
-      getBookingsForTab(bookings, activeTab, now).toSorted((left, right) => {
-        const leftTime = new Date(left.scheduledStartAt).getTime();
-        const rightTime = new Date(right.scheduledStartAt).getTime();
-        return activeTab === "past" || activeTab === "cancelled"
-          ? rightTime - leftTime
-          : leftTime - rightTime;
-      }),
-    [activeTab, bookings, now],
+      getBookingsForTab(bookings, activeTab, now).toSorted(
+        getBookingComparator(activeSort, activeTab),
+      ),
+    [activeSort, activeTab, bookings, now],
   );
   const groups = useMemo(
     () => groupBookingsByMonth(visibleBookings),
@@ -81,6 +88,13 @@ export function BookingsPage() {
     void navigate({
       to: "/bookings",
       search: (previous) => ({ ...previous, tab }),
+    });
+  }
+
+  function selectSort(sort: BookingSort) {
+    void navigate({
+      to: "/bookings",
+      search: (previous) => ({ ...previous, sort }),
     });
   }
 
@@ -121,11 +135,14 @@ export function BookingsPage() {
         ) : null}
       </div>
 
-      <BookingTabBar
-        activeTab={activeTab}
-        counts={tabCounts}
-        onChange={selectTab}
-      />
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <BookingTabBar
+          activeTab={activeTab}
+          counts={tabCounts}
+          onChange={selectTab}
+        />
+        <BookingSortSelect value={activeSort} onChange={selectSort} />
+      </div>
 
       {isLoading ? (
         <BookingListSkeleton />
@@ -156,7 +173,7 @@ export function BookingsPage() {
           icon={<IconInbox />}
           title={getEmptyStateTitle(activeTab)}
           description={getEmptyStateDescription(activeTab, role)}
-          tone={activeTab === "pending" ? "warning" : "secondary"}
+          tone={activeTab === "action" ? "warning" : "secondary"}
           action={
             role === "student" && activeTab === "upcoming" ? (
               <Button
@@ -269,6 +286,34 @@ function BookingListSkeleton() {
   );
 }
 
+function BookingSortSelect({
+  value,
+  onChange,
+}: {
+  value: BookingSort;
+  onChange: (sort: BookingSort) => void;
+}) {
+  return (
+    <Select
+      value={value}
+      onValueChange={(nextValue) => {
+        if (isBookingSort(nextValue)) onChange(nextValue);
+      }}
+    >
+      <SelectTrigger className="w-full sm:w-44" aria-label="Sort bookings">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPopup>
+        <SelectList>
+          <SelectItem value="recommended">Recommended</SelectItem>
+          <SelectItem value="soonest">Date: soonest</SelectItem>
+          <SelectItem value="latest">Date: latest</SelectItem>
+        </SelectList>
+      </SelectPopup>
+    </Select>
+  );
+}
+
 function getBookingsForTab(
   bookings: BookingListItem[],
   tab: BookingTab,
@@ -276,20 +321,18 @@ function getBookingsForTab(
 ) {
   return bookings.filter((booking) => {
     const isFuture = new Date(booking.scheduledEndAt).getTime() >= now;
-    const isCancelled = CANCELLED_STATES.has(booking.currentState);
+    const isTerminal = TERMINAL_BOOKING_STATES.has(booking.currentState);
     const isPending = PENDING_BOOKING_STATES.has(booking.currentState);
 
     switch (tab) {
-      case "upcoming":
-        return isFuture && !isCancelled && !isPending;
-      case "pending":
+      case "action":
         return isPending;
+      case "upcoming":
+        return isFuture && !isTerminal && !isPending;
       case "recurring":
-        return booking.type === "series" && !isCancelled;
-      case "past":
-        return !isFuture && !isCancelled;
-      case "cancelled":
-        return isCancelled;
+        return booking.type === "series" && !isTerminal;
+      case "history":
+        return isTerminal || (!isFuture && !isPending);
       case "all":
         return true;
     }
@@ -310,8 +353,28 @@ function getDefaultBookingTab(
   pendingCount: number,
 ): BookingTab {
   if (role === "admin") return "all";
-  if (role === "tutor" && pendingCount > 0) return "pending";
+  if (pendingCount > 0) return "action";
   return "upcoming";
+}
+
+function getBookingComparator(sort: BookingSort, tab: BookingTab) {
+  return (left: BookingListItem, right: BookingListItem) => {
+    const leftTime = new Date(left.scheduledStartAt).getTime();
+    const rightTime = new Date(right.scheduledStartAt).getTime();
+    if (sort === "soonest") return leftTime - rightTime;
+    if (sort === "latest") return rightTime - leftTime;
+    const rankDifference =
+      getBookingStateRank(left.currentState) -
+      getBookingStateRank(right.currentState);
+    if (rankDifference !== 0) return rankDifference;
+    return tab === "history" ? rightTime - leftTime : leftTime - rightTime;
+  };
+}
+
+function getBookingStateRank(state: string) {
+  if (PENDING_BOOKING_STATES.has(state)) return 0;
+  if (TERMINAL_BOOKING_STATES.has(state)) return 2;
+  return 1;
 }
 
 function groupBookingsByMonth(bookings: BookingListItem[]) {
@@ -341,29 +404,27 @@ function groupBookingsByMonth(bookings: BookingListItem[]) {
 }
 
 function shouldShowStatusBadge(state: string, tab: BookingTab) {
-  if (tab === "all" || tab === "pending" || tab === "cancelled") return true;
+  if (tab === "all" || tab === "action" || tab === "history") return true;
   return !["confirmed", "scheduled"].includes(state);
 }
 
 function getEmptyStateTitle(tab: BookingTab) {
   switch (tab) {
+    case "action":
+      return "Nothing needs your attention";
     case "upcoming":
       return "No upcoming bookings";
-    case "pending":
-      return "Nothing needs your attention";
     case "recurring":
       return "No recurring bookings";
-    case "past":
-      return "No past bookings";
-    case "cancelled":
-      return "No cancelled bookings";
+    case "history":
+      return "No booking history";
     case "all":
       return "No bookings yet";
   }
 }
 
 function getEmptyStateDescription(tab: BookingTab, role: string): ReactNode {
-  if (tab === "pending") {
+  if (tab === "action") {
     return role === "tutor"
       ? "New student requests and reschedule decisions will appear here."
       : "Requests, confirmations, and reschedule proposals will appear here.";
@@ -374,4 +435,8 @@ function getEmptyStateDescription(tab: BookingTab, role: string): ReactNode {
 
 function isBookingTab(value: unknown): value is BookingTab {
   return BOOKING_TABS.some((tab) => tab.value === value);
+}
+
+function isBookingSort(value: unknown): value is BookingSort {
+  return ["recommended", "soonest", "latest"].includes(String(value));
 }
