@@ -47,6 +47,7 @@ import {
   BookingNotCompletedError,
   BookingSeriesNoOptOutError,
   BookingAcceptanceDeadlinePassedError,
+  BookingCancellationDeadlinePassedError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { lockBookingReschedule, lockTutorForBooking } from "../../lib/locks";
@@ -977,6 +978,13 @@ export function createBookingService(deps: {
         );
       }
 
+      // Once teaching has started, cancellation is no longer a student-owned
+      // lifecycle action. Keep the booking live so the tutor can complete it;
+      // attendance or delivery problems must go through support/admin review.
+      if (Date.now() >= b.scheduledStartAt.getTime()) {
+        throw new BookingCancellationDeadlinePassedError(bookingId);
+      }
+
       // M3: once a group series is past participant confirmation, the proposer
       // cannot pull the whole class — the participants' package holds are
       // committed (U4 no-opt-out applies to cancel too, not just withdraw).
@@ -1650,6 +1658,10 @@ export function createBookingService(deps: {
           "cancelSession",
           BOOKING_STATE.CANCELLED,
         );
+      }
+
+      if (Date.now() >= session.scheduledStartAt.getTime()) {
+        throw new BookingCancellationDeadlinePassedError(sessionId);
       }
 
       const now = new Date();
@@ -2938,6 +2950,10 @@ export function createBookingService(deps: {
       }
       if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
         throw new BookingCancelledError(bookingId);
+      }
+
+      if (Date.now() >= b.scheduledStartAt.getTime()) {
+        throw new BookingCancellationDeadlinePassedError(bookingId);
       }
 
       const participant = await repo.findParticipant(tx, bookingId, userId);

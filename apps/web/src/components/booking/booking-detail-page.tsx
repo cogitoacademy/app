@@ -299,7 +299,9 @@ export function BookingDetailPage({
   const canReview = isTutor && booking.currentState === "awaiting_tutor_review";
   const canComplete = isTutor && booking.currentState === "scheduled";
   const canCancel =
-    !isTutor && !isAdmin && canCancelBooking(booking.currentState);
+    !isTutor &&
+    !isAdmin &&
+    canCancelBooking(booking.currentState, booking.scheduledStartAt);
   const canSetManualLink =
     isTutor &&
     booking.modality === "online" &&

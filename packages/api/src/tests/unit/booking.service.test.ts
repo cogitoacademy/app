@@ -24,6 +24,7 @@ import {
   BookingNotCompletedError,
   BookingSeriesNoOptOutError,
   BookingAcceptanceDeadlinePassedError,
+  BookingCancellationDeadlinePassedError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -1244,6 +1245,28 @@ describe("BookingService", () => {
       await expect(service.cancel("student1", "b1")).rejects.toThrow(
         BookingStateTransitionError,
       );
+    });
+
+    test("rejects student cancellation once the session has started", async () => {
+      const { service, wallet, repo, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({
+              currentState: "scheduled",
+              scheduledStartAt: new Date(Date.now() - 1_000),
+            }),
+          ),
+          findParticipant: mock(async () => makeParticipant()),
+        },
+      });
+
+      await expect(service.cancel("student1", "b1")).rejects.toThrow(
+        BookingCancellationDeadlinePassedError,
+      );
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
+      expect(meeting.cancelEvent).not.toHaveBeenCalled();
     });
 
     test("cancels booking and releases holds (non-late)", async () => {
@@ -3523,7 +3546,7 @@ describe("BookingService", () => {
     test("withdraws after H-2 and deducts held marks (late withdrawal penalty)", async () => {
       const booking = makeBooking({
         currentState: "awaiting_participant_confirmation",
-        scheduledStartAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+        scheduledStartAt: new Date(Date.now() + 1 * 60 * 60 * 1000),
       });
       const participant = makeParticipant({ heldAmount: 42 });
       const { service, wallet, repo } = createService({
@@ -3945,6 +3968,27 @@ describe("BookingService", () => {
         "b1",
         0,
       );
+    });
+
+    test("rejects participant withdrawal once the booking has started", async () => {
+      const { service, wallet, repo } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({
+              currentState: "scheduled",
+              scheduledStartAt: new Date(Date.now() - 1_000),
+            }),
+          ),
+          findParticipant: mock(async () => makeParticipant()),
+        },
+      });
+
+      await expect(service.withdraw("student1", "b1")).rejects.toThrow(
+        BookingCancellationDeadlinePassedError,
+      );
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
     });
 
     test("meeting cancellation happens after the transaction commits, not inside it (R3)", async () => {
@@ -6099,6 +6143,35 @@ describe("BookingService", () => {
       await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
         BookingCancelledError,
       );
+      expect(repo.cancelSession).not.toHaveBeenCalled();
+    });
+
+    test("rejects series-session cancellation once that session has started", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 1,
+        currentState: "scheduled",
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() - 1_000),
+        scheduledEndAt: new Date(Date.now() + 60 * 60 * 1000),
+        currentState: "scheduled",
+        holdAmount: 42,
+      };
+      const { service, wallet, repo } = createService({
+        repo: {
+          findSessionById: mock(async () => session),
+          findBookingById: mock(async () => booking),
+        },
+      });
+
+      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
+        BookingCancellationDeadlinePassedError,
+      );
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(wallet.release).not.toHaveBeenCalled();
       expect(repo.cancelSession).not.toHaveBeenCalled();
     });
 

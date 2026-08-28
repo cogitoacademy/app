@@ -615,7 +615,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (proposer)
 - **Input:** `{ sessionId }`
 - **Output:** `{ booking }`
-- **Description:** Student cancels an individual series session; pre-H-2 releases the session hold, post-H-2 forfeits it (per-session penalty, #46). Group-series sessions cannot be cancelled (no opt-out)
+- **Description:** Student cancels an individual series session before that session starts; pre-H-2 releases the session hold and a pre-start post-H-2 cancellation forfeits it (per-session penalty, #46). At/after the session start it rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED`. Group-series sessions cannot be cancelled (no opt-out).
 
 ### `booking.addSessionNote`
 
