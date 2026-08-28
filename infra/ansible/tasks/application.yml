@@ -1,0 +1,95 @@
+# application.yml — re-declare one Coolify application (included from
+# coolify-resources.yml). Creates the application when the name is missing;
+# otherwise PATCHes drifted fields (image, ports, domains, health check).
+# Deploys are NEVER triggered here — CD owns deploys.
+---
+- name: Find the application by name
+  ansible.builtin.set_fact:
+    app_found: "{{ applications.json | selectattr('name', 'equalto', app_spec.name) | list }}"
+
+- name: Application missing — create it
+  ansible.builtin.uri:
+    url: "{{ coolify_api_url }}/applications/public"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+    body:
+      project_uuid: "{{ project_uuid }}"
+      environment_name: "{{ environment_name }}"
+      server_uuid: "{{ server_uuid }}"
+      name: "{{ app_spec.name }}"
+      build_pack: "dockerfile"
+      docker_registry_image_name: "{{ app_spec.image_name }}"
+      docker_registry_image_tag: "{{ app_spec.image_tag }}"
+      ports_exposes: "{{ app_spec.ports_exposes }}"
+      domains: "{{ app_spec.domains }}"
+      is_auto_deploy_enabled: false
+      is_force_https_enabled: true
+      health_check_enabled: "{{ app_spec.health_check_enabled }}"
+      health_check_path: "{{ app_spec.health_check_path }}"
+      health_check_port: "{{ app_spec.health_check_port }}"
+      health_check_method: "{{ app_spec.health_check_method }}"
+      health_check_return_code: "{{ app_spec.health_check_return_code }}"
+      health_check_interval: "{{ app_spec.health_check_interval }}"
+      health_check_timeout: "{{ app_spec.health_check_timeout }}"
+      health_check_retries: "{{ app_spec.health_check_retries }}"
+      health_check_start_period: "{{ app_spec.health_check_start_period }}"
+    body_format: json
+    status_code: 201
+  register: app_created
+  no_log: true
+  when: app_found | length == 0
+
+- name: Resolve the application UUID
+  ansible.builtin.set_fact:
+    app_uuid: "{{ app_found[0].uuid if app_found | length > 0 else app_created.json.uuid }}"
+
+- name: Application exists — compare declared fields (drift check)
+  ansible.builtin.set_fact:
+    app_live: "{{ app_found[0] }}"
+  when: app_found | length > 0
+
+- name: Build the drift comparison for an existing application
+  ansible.builtin.set_fact:
+    app_drift: >-
+      {%- set live = app_live -%}
+      {%- set ns = namespace(parts=[]) -%}
+      {%- if live.docker_registry_image_name is defined and live.docker_registry_image_name != app_spec.image_name -%}{%- set ns.parts = ns.parts + ['image_name: ' ~ live.docker_registry_image_name ~ ' != ' ~ app_spec.image_name] -%}{%- endif -%}
+      {%- if live.docker_registry_image_tag is defined and live.docker_registry_image_tag != app_spec.image_tag -%}{%- set ns.parts = ns.parts + ['image_tag: ' ~ live.docker_registry_image_tag ~ ' != ' ~ app_spec.image_tag] -%}{%- endif -%}
+      {%- if live.ports_exposes is defined and live.ports_exposes != app_spec.ports_exposes -%}{%- set ns.parts = ns.parts + ['ports_exposes: ' ~ live.ports_exposes ~ ' != ' ~ app_spec.ports_exposes] -%}{%- endif -%}
+      {%- if live.fqdn is defined and live.fqdn != app_spec.domains -%}{%- set ns.parts = ns.parts + ['fqdn: ' ~ live.fqdn ~ ' != ' ~ app_spec.domains] -%}{%- endif -%}
+      {{- ns.parts | join('; ') -}}
+  when: app_found | length > 0
+
+- name: PATCH drifted fields on an existing application
+  ansible.builtin.uri:
+    url: "{{ coolify_api_url }}/applications/{{ app_uuid }}"
+    method: PATCH
+    headers:
+      Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+    body:
+      docker_registry_image_name: "{{ app_spec.image_name }}"
+      docker_registry_image_tag: "{{ app_spec.image_tag }}"
+      ports_exposes: "{{ app_spec.ports_exposes }}"
+      domains: "{{ app_spec.domains }}"
+      health_check_enabled: "{{ app_spec.health_check_enabled }}"
+      health_check_path: "{{ app_spec.health_check_path }}"
+      health_check_port: "{{ app_spec.health_check_port }}"
+      health_check_method: "{{ app_spec.health_check_method }}"
+      health_check_return_code: "{{ app_spec.health_check_return_code }}"
+      health_check_interval: "{{ app_spec.health_check_interval }}"
+      health_check_timeout: "{{ app_spec.health_check_timeout }}"
+      health_check_retries: "{{ app_spec.health_check_retries }}"
+      health_check_start_period: "{{ app_spec.health_check_start_period }}"
+    body_format: json
+    status_code: 200
+  no_log: true
+  when: app_found | length > 0 and app_drift | length > 0
+
+- name: Report application state
+  ansible.builtin.debug:
+    msg: >-
+      Application {{ app_spec.name }} (uuid={{ app_uuid }}):
+      {% if app_found | length == 0 %}created (deploy NOT triggered — CD owns
+      deploys).{% elif app_drift | length > 0 %}drift patched: {{ app_drift }}.{% else %}
+      no drift — matches the declaration.{% endif %}

@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -574,6 +574,132 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
    ```
 5. Roll back migrations if needed (rare — coordinate with DBA)
 
+## Incident Response
+
+> **The "do I restart?" cheat sheet:** never restart for a deploy failure —
+> roll back. Crash-loops are a config problem — fix + redeploy, not restart.
+> Circuit breakers heal themselves — wait. Restart only for stuck containers
+> (healthy but wedged). When in doubt, check `/health` and the Coolify
+> deployment log before touching anything.
+
+### Deploy failure
+
+| Symptom                                      | Action                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CD pipeline red at the Coolify webhook step  | Check the webhook secret is the resolvable `https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...` URL (S7) and that the Traefik route for `/api/v1/deploy/*` exists. A `401` means the route is present but the `Authorization: Bearer <coolify-api-token>` header is missing or the token lacks the `deploy` permission. A `404` means the route is missing. |
+| CD pipeline red at the health poll           | The new image never came up. **Do not restart** — roll back to the previous immutable `v<prev-sha>` tag in Coolify, verify `/health` returns `version == <prev-sha>`, then investigate the API logs.                                                                                                                                                             |
+| Coolify deploy succeeds but `/health` is 503 | Wait for the bounded rollout/healthcheck (up to ~5 min), then inspect API logs. Common causes: `DB_SSL_ENABLED=false` missing (TLS mismatch), Redis unreachable (scheduler fail-loud boot aborts), missing env vars.                                                                                                                                             |
+| Image pushed but Coolify did not redeploy    | Check auto-deploy toggle + webhook logs; use **Force deploy without cache** to pull the new digest.                                                                                                                                                                                                                                                              |
+
+### Crash-loop
+
+| Symptom                                                 | Action                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Container restarts repeatedly (`Restarting` in Coolify) | **Fix the config, not the container.** Read the crash log (Coolify → Logs). The most common production causes: env schema rejection (missing/incorrect env var — the server fails fast), `DB_SSL_ENABLED=false` missing, `SCHEDULER_ENABLED=true` with unreachable Redis (fail-loud boot abort), or a bad image tag. Fix the cause, redeploy. A restart loop will not fix a config error. |
+| Crash-loop after a migration                            | The migration may have failed or the code expects a newer schema. Check the migration journal, apply the pending migration with the production `DATABASE_URL`, then redeploy. Never restart into a half-migrated state.                                                                                                                                                                   |
+
+### Circuit breaker
+
+| Symptom                             | Action                                                                                                          |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `Email service unavailable: 503`    | Resend circuit breaker open. **Wait** (2 min auto-reset) or reset manually: `redis-cli DEL "cogito:cb:resend"`. |
+| `Google Meet API timeout after 30s` | Google Meet circuit open. **Wait** (1 min) or reset: `redis-cli DEL "cogito:cb:google_meet"`.                   |
+| `Payment provider error`            | Xendit circuit open. **Wait** (30 s) or reset: `redis-cli DEL "cogito:cb:xendit"`.                              |
+
+Circuit breakers trip on repeated provider failures and reset automatically
+after their timeout. Restarting the container resets the in-memory state but
+not the Redis state — the breaker will still be open. Only reset manually
+after the underlying provider issue is fixed.
+
+### DLQ alert
+
+| Symptom                                                                | Action                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/health` reports `dlqDepth > 0` (alert-only, does not trip the probe) | Inspect the DLQ: `redis-cli LRANGE "cogito:dlq" 0 -1`. The DLQ is a **ledger, not a retry queue** — repeatable BullMQ jobs re-fire on their cadence, so never auto-replay (double-running money paths). Identify the failing job from the entry, fix the root cause (provider config, data issue), and let the next scheduled run succeed. Clear the list only after confirming the cause is resolved. |
+
+### Database loss / corruption
+
+| Symptom                               | Action                                                                                                                                                                                                                                                    |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DB container gone or data volume lost | **Do not recreate the container blindly** — Coolify recreating the Postgres service without the volume loses data. Restore from the nightly R2 backup under a maintenance window (see Backup & Restore → restore drill). Never restore over live traffic. |
+| `ECONNREFUSED` / `connection timeout` | Check the Postgres container is running and `DATABASE_URL` resolves from the API container's network (`postgres-prod` on the private network).                                                                                                            |
+| `server does not support SSL`         | `DB_SSL_ENABLED=false` for Coolify's bundled non-TLS PostgreSQL.                                                                                                                                                                                          |
+
+### Disk full
+
+| Symptom                                                | Action                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `No space left on device`, containers failing to start | Check `df -h` on the VPS. Common culprits: Docker logs (json-file rotation not applied — verify `max-size 10m, max-file 3` per resource), old images (`docker image prune`), R2 uploads buffered locally. Free space, then verify log rotation is configured on every resource. |
+| Postgres refuses writes (`disk full`)                  | Free space immediately, then verify the nightly backup still ran (a full disk silently kills the 02:00 WIB backup).                                                                                                                                                             |
+
+### VPS loss / unreachable
+
+| Symptom                  | Action                                                                                                                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VPS unreachable over SSH | Try the tailnet IP first (`tailscale status`), then the public IP. Check OVH console for host state. If the host is gone, restore from the R2 backups onto a new VPS (Terraform bootstrap + restore drill). |
+| Coolify UI unreachable   | The control plane is tailnet-only by design — connect via the tailnet/tunnel, never by exposing port 8000 publicly.                                                                                         |
+
+## Migration Policy (live users)
+
+Rules for shipping schema changes once real users are on the database:
+
+1. **Additive-only in a release.** New tables, new nullable columns, new
+   indexes — safe to ship with the code. Never drop or rename a column in the
+   same release that reads it.
+2. **Destructive steps are two-step.** Drop/rename/backfill in a _later_
+   release, after the code that no longer needs the old shape has been live
+   for at least one full deploy cycle. Each destructive migration is reviewed
+   and applied manually.
+3. **Up-only Drizzle files.** Migration files contain only the up-DDL.
+   `drizzle-kit` executes each file as one batch, so embedded down-DDL would
+   run immediately after the up-DDL — never put down-SQL inside a migration
+   file.
+4. **Manual down-SQL, newest-first.** Rollback SQL lives in the RUNBOOK
+   (see Migration rollback above), ordered newest-first, applied with `psql`
+   against the target database. There is **no automatic CD rollback** —
+   revert the code first, then run the down SQL, then re-run
+   `bun run db:migrate` to restore the journal state.
+5. **Pre-migrate snapshot + restore under a maintenance window.** The CD
+   pipeline snapshots the database to R2 (`pre-migrate-<sha>.sql.gz`) before
+   migrating. If a migration fails, restore that snapshot under a maintenance
+   window — never blind-auto-restore with live traffic.
+6. **Migrations are never automatic** in the server container. Apply with the
+   exact production `DATABASE_URL` (`ENV_FILE=/secure/cogito-prod.env bun run db:migrate`)
+   before or during the rollout. Never use `db:push` as a production migration
+   mechanism.
+
+## Drizzle Studio (Database GUI)
+
+```bash
+bun run db:studio        # Opens Drizzle Studio on port 4983
+```
+
+### Drizzle Studio against production (tailnet SSH tunnel)
+
+Never run Drizzle Studio on the production container. The production database
+is on Coolify's private Docker network, so reach it from the operator machine
+through a tailnet SSH tunnel:
+
+```bash
+# 1. Forward the production Postgres port through the tailnet SSH connection.
+#    The production Postgres publishes no host port; use the container's
+#    private-network port (5432) via the VPS host.
+ssh -N -L 5433:127.0.0.1:5432 ubuntu@<tailnet-ip-of-cogito-vps>
+
+# 2. Point Drizzle Studio at the tunnel with the production credentials
+#    (from the SOPS vault — never commit them):
+DATABASE_URL=postgresql://cogito:<password>@127.0.0.1:5433/cogito bun run db:studio
+```
+
+Notes:
+
+- The tunnel is read-write — treat it as a production console. Prefer
+  read-only queries; run DDL only through reviewed migrations.
+- The VPS host must be able to reach the Postgres container (publish the port
+  or join the host to the private network) — the same requirement as the
+  nightly backup (`DATABASE_URL` host-reachable note in backup-cron.yml).
+- Close the tunnel when done; never leave a production DB port forwarded.
+
 ## Agent Herd
 
 Parallel development with a lead agent and skill-gated worker agents on top of Herdr. Prereqs: `herdr` + `herd` installed (`~/.local/bin/`), you are inside a Herdr-managed pane (`echo $HERDR_ENV` → `1`).
@@ -645,44 +771,44 @@ Student account name/image editing uses the existing Better Auth session and req
 
 Key environment variables (see `.env.example` for full list):
 
-| Variable                                                                                      | Required | Description                                                                                                                                                                                                                                                                      |
-| --------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                                                                                                                                     |
-| `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                                                                                                                                                                                                                  |
-| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                                                                                                                                       |
-| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                                                                                                                                             |
-| `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                                                                                                                                                                                                                  |
-| `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                                                                                                                                                                                                              |
-| `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                                                                                                                                                                                                     |
-| `GOOGLE_PRIVATE_KEY`                                                                          | No       | Google service account private key                                                                                                                                                                                                                                               |
-| `GOOGLE_CALENDAR_ID`                                                                          | No       | Google Calendar ID for meeting creation                                                                                                                                                                                                                                          |
-| `GOOGLE_IMPERSONATED_USER`                                                                    | No       | SA-mode impersonation address (REVIEW-FIXES-4 P4.2)                                                                                                                                                                                                                              |
-| `GOOGLE_MEET_ENABLED`                                                                         | No       | Enables Google Meet provider (default false)                                                                                                                                                                                                                                     |
-| `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                                                                                                                                                                                                           |
-| `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                                                                                                                                           |
-| `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                                                                                                                                            |
-| `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                             |
-| `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                                                                                                                                                                                                                  |
-| `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                |
-| `XENDIT_MODE`                                                                                 | No       | Required when `PAYMENT_PROVIDER=xendit`: `test` for Xendit Test Mode or `live` for Live Mode. The matching Xendit API key selects the actual environment                                                                                                                         |
-| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Comma-separated verified student emails allowed to create purchases when `XENDIT_MODE=test` in production/staging; required there to prevent unrestricted sandbox-funded Marks                                                                                                   |
-| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                   |
-| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated). **Required in production/staging when `PAYMENT_PROVIDER=xendit`** (D2) — the env schema rejects boot with an empty allowlist so the endpoint is never open to every IP                                                            |
-| `SCHEDULER_ENABLED`                                                                           | No       | Starts the BullMQ worker + repeatable jobs (default false). **Required `true` in production/staging (D3)** — the env schema rejects boot with it false, since a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation |
-| `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs                                                                                                                     |
-| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                                                                                                                                      |
-| `DB_SSL_REJECT_UNAUTHORIZED`                                                                  | No       | Reject unauthorized TLS certificates on the DB connection (default true)                                                                                                                                                                                                         |
-| `METRICS_TOKEN`                                                                               | No       | Bearer token for the metrics endpoint                                                                                                                                                                                                                                            |
-| `UPLOAD_DIR`                                                                                  | No       | Local upload directory when R2 is not configured (default `./uploads`)                                                                                                                                                                                                           |
-| `SANITY_PROJECT_ID`                                                                           | No       | Sanity project id (defaults to the Cogito Academy project; set explicitly per deployment)                                                                                                                                                                                        |
-| `SANITY_DATASET`                                                                              | No       | Sanity dataset (defaults to `development`; production/staging must set the intended published dataset)                                                                                                                                                                           |
-| `SANITY_API_VERSION`                                                                          | No       | Sanity API version in `YYYY-MM-DD` format (default `2024-03-01`)                                                                                                                                                                                                                 |
-| `SANITY_API_TOKEN`                                                                            | No       | Server-only token for private Sanity datasets; never add it to `apps/web`/`VITE_*` variables                                                                                                                                                                                     |
-| `XENDIT_DEFAULT_PAYMENT_METHOD`                                                               | No       | Default Xendit channel (`ewallet_ovo`/`qris`/`va_bca`; default `ewallet_ovo`)                                                                                                                                                                                                    |
-| `SESSION_COOKIE_CACHE_MAX_AGE`                                                                | No       | Better Auth session-cookie cache max age in seconds (default 60)                                                                                                                                                                                                                 |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3)                                                                                                                                                                                                             |
-| `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                     |
-| `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                 |
+| Variable                                                                                      | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                                                                                                                                                                                                                                                                                     |
+| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                                                                                                                                                                                                                                                                                           |
+| `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                                                                                                                                                                                                                                                                                                                                                                |
+| `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                                                                                                                                                                                                                                                                                                                                                            |
+| `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `GOOGLE_PRIVATE_KEY`                                                                          | No       | Google service account private key                                                                                                                                                                                                                                                                                                                                                                                             |
+| `GOOGLE_CALENDAR_ID`                                                                          | No       | Google Calendar ID for meeting creation                                                                                                                                                                                                                                                                                                                                                                                        |
+| `GOOGLE_IMPERSONATED_USER`                                                                    | No       | SA-mode impersonation address (REVIEW-FIXES-4 P4.2)                                                                                                                                                                                                                                                                                                                                                                            |
+| `GOOGLE_MEET_ENABLED`                                                                         | No       | Enables Google Meet provider (default false)                                                                                                                                                                                                                                                                                                                                                                                   |
+| `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                                                                                                                                                                                                                                                                                                                                                         |
+| `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                                                                                                                                                                                                                                                                                         |
+| `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                                                                                                                                                                                                                                                                                          |
+| `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                                                                                                                                                                           |
+| `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                                                                                                                                                                                                                                                                                                                                                                |
+| `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                                                                                                                                                              |
+| `XENDIT_MODE`                                                                                 | No       | Required when `PAYMENT_PROVIDER=xendit`: `test` for Xendit Test Mode or `live` for Live Mode. The matching Xendit API key selects the actual environment                                                                                                                                                                                                                                                                       |
+| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Comma-separated verified student emails allowed to create purchases when `XENDIT_MODE=test` in production/staging; required there to prevent unrestricted sandbox-funded Marks                                                                                                                                                                                                                                                 |
+| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                                                                                                                                                                 |
+| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated). **Optional defense-in-depth** (the D2 mandatory guard was removed 2026-08-28): when set, the webhook endpoint rejects sources outside the list. Populate it from **observed** webhook source IPs (see the Xendit webhook wiring section) — never from a published list, because Xendit publishes none. Leave empty to rely on `x-callback-token` + signature verification alone |
+| `SCHEDULER_ENABLED`                                                                           | No       | Starts the BullMQ worker + repeatable jobs (default false). **Required `true` in production/staging (D3)** — the env schema rejects boot with it false, since a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation                                                                                                                                               |
+| `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs                                                                                                                                                                                                                                                                   |
+| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                                                                                                                                                                                                                                                                                    |
+| `DB_SSL_REJECT_UNAUTHORIZED`                                                                  | No       | Reject unauthorized TLS certificates on the DB connection (default true)                                                                                                                                                                                                                                                                                                                                                       |
+| `METRICS_TOKEN`                                                                               | No       | Bearer token for the metrics endpoint                                                                                                                                                                                                                                                                                                                                                                                          |
+| `UPLOAD_DIR`                                                                                  | No       | Local upload directory when R2 is not configured (default `./uploads`)                                                                                                                                                                                                                                                                                                                                                         |
+| `SANITY_PROJECT_ID`                                                                           | No       | Sanity project id (defaults to the Cogito Academy project; set explicitly per deployment)                                                                                                                                                                                                                                                                                                                                      |
+| `SANITY_DATASET`                                                                              | No       | Sanity dataset (defaults to `development`; production/staging must set the intended published dataset)                                                                                                                                                                                                                                                                                                                         |
+| `SANITY_API_VERSION`                                                                          | No       | Sanity API version in `YYYY-MM-DD` format (default `2024-03-01`)                                                                                                                                                                                                                                                                                                                                                               |
+| `SANITY_API_TOKEN`                                                                            | No       | Server-only token for private Sanity datasets; never add it to `apps/web`/`VITE_*` variables                                                                                                                                                                                                                                                                                                                                   |
+| `XENDIT_DEFAULT_PAYMENT_METHOD`                                                               | No       | Default Xendit channel (`ewallet_ovo`/`qris`/`va_bca`; default `ewallet_ovo`)                                                                                                                                                                                                                                                                                                                                                  |
+| `SESSION_COOKIE_CACHE_MAX_AGE`                                                                | No       | Better Auth session-cookie cache max age in seconds (default 60)                                                                                                                                                                                                                                                                                                                                                               |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3)                                                                                                                                                                                                                                                                                                                                                           |
+| `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                                                                                                                                                               |
 
 ## Real-Provider Swap (Resend / Xendit / Google Meet / R2)
 
@@ -703,7 +829,7 @@ The production app can run Xendit Test Mode first. The switch to Live Mode happe
 
 1. **Pre-flight:** run the sandbox checklist above against the sandbox keys. Confirm `XENDIT_DEFAULT_PAYMENT_METHOD` matches the launch channel (default `ewallet_ovo`).
 2. **Webhook wiring:** set the Xendit dashboard webhook URL to `https://api.cogitoacademy.id/webhooks/payments/xendit` and confirm the dashboard sends the `api-version: 2024-11-11` payload shape (`data.payment_id` / `data.payment_request_id`). The webhook idempotency key derives from the verified payload id — no `x-callback-token` guessing.
-3. **Env:** in the SOPS-encrypted prod env, set `XENDIT_MODE=live` and replace the Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` with Live Mode credentials. Keep the redirect URLs, update the webhook configuration to Live Mode, and set `WEBHOOK_ALLOWED_IPS` to the live egress IPs from Xendit. The env schema fails boot if `PAYMENT_PROVIDER=xendit` lacks credentials or an explicit mode, so a half-swapped config cannot silently run the stub.
+3. **Env:** in the SOPS-encrypted prod env, set `XENDIT_MODE=live` and replace the Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` with Live Mode credentials. Keep the redirect URLs, update the webhook configuration to Live Mode, and set `WEBHOOK_ALLOWED_IPS` to the **observed** live egress IPs (defense-in-depth; optional since the D2 guard was removed — see the two-allowlist section). The env schema fails boot if `PAYMENT_PROVIDER=xendit` lacks credentials or an explicit mode, so a half-swapped config cannot silently run the stub.
 4. **Live smoke:** run one real small purchase (Pioneer 400 / Rp 2,000,000 or the smallest approved package) end-to-end: create purchase → Xendit checkout → webhook → wallet credit once. Verify the redirect return works and the balance page reflects the credit.
 5. **Negative tests:** deliver a webhook with a wrong token (rejected), from a non-allowlisted IP (rejected), and a duplicate delivery (idempotent — single credit).
 6. **Refund path:** confirm an `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL — no Xendit cash refund is ever issued (PRD §677).
@@ -721,6 +847,53 @@ Steps to validate the Xendit integration on the production domain before accepti
 6. Verify the wrong Test Mode token returns 401, a non-allowlisted webhook source returns 403, a duplicate webhook is idempotent, and a REFUNDED webhook follows the reconciliation rules. Xendit timestamp validation is intentionally skipped because the current integration relies on `x-callback-token`.
 7. Record the test payment IDs and remove/expire the UAT data or use dedicated test accounts before switching to Live Mode. Test transactions in the production database are still application data and may affect “package already purchased” checks.
 8. Only after all checks pass, follow the go-live checklist and switch the key/token + `XENDIT_MODE` from `test` to `live`.
+
+### Xendit webhook wiring (two-allowlist distinction)
+
+There are **two different allowlists** that are easy to confuse:
+
+| Allowlist                           | Where it lives                      | What it contains                          | Purpose                                                                                             |
+| ----------------------------------- | ----------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Xendit dashboard IP Allowlist**   | Xendit dashboard (webhook settings) | **Your VPS public IP** (`15.235.186.159`) | Tells Xendit which IPs may _receive_ webhooks — Xendit only delivers to allowlisted destination IPs |
+| **`WEBHOOK_ALLOWED_IPS`** (app env) | Coolify API env                     | **Observed Xendit source IPs**            | Tells the app which IPs may _send_ webhooks — the app rejects sources outside the list              |
+
+The two are not interchangeable: the dashboard list gates Xendit's _delivery_,
+the app env gates the app's _acceptance_. Xendit publishes **no** source-IP
+list, so `WEBHOOK_ALLOWED_IPS` can never be populated from a published list —
+it must be populated from **observed** webhook source IPs.
+
+**Primary gate: `x-callback-token`.** The app verifies the callback token
+(`XENDIT_WEBHOOK_TOKEN`) and the webhook signature before processing; that is
+the primary authentication. `WEBHOOK_ALLOWED_IPS` is defense-in-depth only
+(the D2 mandatory guard was removed 2026-08-28) — when set, sources outside
+the list are rejected with 403.
+
+**Observed-IPs approach (recommended):**
+
+1. Leave `WEBHOOK_ALLOWED_IPS` empty initially (rely on `x-callback-token` +
+   signature verification).
+2. Watch the API logs for webhook deliveries and record the source IPs
+   (`x-forwarded-for` first hop — requires `TRUST_PROXY=true`).
+3. Once the observed set is stable, set `WEBHOOK_ALLOWED_IPS` to that
+   comma-separated list as defense-in-depth.
+4. Re-check after any Xendit infrastructure change (they can rotate egress
+   IPs); a suddenly-rejected webhook is usually a rotated source IP, not a
+   broken integration.
+
+**Webhook 401 investigation (wave-2, 2026-08-28):** the Coolify deploy webhook
+currently returns 401. Two candidate causes, both documented:
+
+1. **Missing Traefik route** for `coolify.cogitoacademy.id/api/v1/deploy/*`
+   (the route is declared in `coolify-resources.yml`; a 404/401 from the
+   proxy means the route is not live).
+2. **Missing `Authorization: Bearer` header** — current Coolify versions label
+   the endpoint **Deploy Webhook (auth required)**: the URL identifies the
+   target, and a Coolify API token with the `deploy` permission must be sent
+   as `Authorization: Bearer <coolify-api-token>` (see DEPLOYMENT.md §5).
+
+Verify which one it is: curl the webhook URL from a public client — `404`
+means the route is missing, `401` with the Bearer header means the token is
+wrong/expired, `401` without it means the header is missing.
 
 ### Google Meet refresh-token acquisition (X3)
 
@@ -790,11 +963,13 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
    > plane is tailnet-only — the UI and SSH are reachable only over Tailscale,
    > and the old webhook host (`cl.cogitoacademy.id`) had no DNS record, so
    > GitHub Actions (cloud) failed with `curl exit 6 "Could not resolve host"`.
-   > Option A exposes **only** the deploy-webhook path: a DNS record + Caddy
+   > Option A exposes **only** the deploy-webhook path: a DNS record + Traefik
    > route for `coolify.cogitoacademy.id/api/v1/deploy/*` (the per-resource UUID
    > in the URL is the bearer secret); everything else on that host returns
    > 404/denied and the Coolify UI stays tailnet-only. The operator must
    > recreate the two production secrets with the resolvable URL above.
+   > (The Coolify bundled proxy is **Traefik v3.6**, verified 2026-08-28 —
+   > not Caddy.)
 
 3. GitHub → repo **Settings → Secrets and variables → Actions**:
    - `COOLIFY_STAGING_SERVER_WEBHOOK` — full staging API resource URL

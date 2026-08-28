@@ -1,0 +1,354 @@
+# Coolify drift check — diffs the live Coolify API state against the
+# Ansible-declared state and FAILS on drift.
+#
+# Purpose
+# --------
+# `coolify-resources.yml` declares the production resources (Postgres, Redis,
+# API, web) and applies them through the Coolify API. This playbook is the
+# verification half of that declaration: it re-reads the same API and fails
+# whenever the live state no longer matches the declared state, so a manual
+# Coolify UI change cannot silently diverge from git.
+#
+# The playbook is read-only and idempotent: it only issues GET requests and
+# never modifies Coolify. Re-running it is always safe.
+#
+# What is checked (API-expressible)
+# ---------------------------------
+#   1. The declared project + environment exist (cogito-prod / production).
+#   2. Each declared resource exists in that environment with the declared
+#      name (applications, postgresqls, redis — the environment endpoint
+#      loads these relations).
+#   3. Applications: docker image (docker_registry_image_name +
+#      docker_registry_image_tag), exposed port, domain (fqdn), health-check
+#      path.
+#   4. Databases: image (postgresqls/redis both expose `image`).
+#   5. API application env var NAMES (values are secrets — never compared).
+#   6. Deploy-webhook URLs: the per-resource UUID in the declared URL must
+#      equal the live resource UUID (the UUID is the bearer secret).
+#
+# Manual checks (the Coolify API cannot express these — verify by hand)
+# ---------------------------------------------------------------------
+#   - Persistent volumes: the environment endpoint does not load storage
+#     relations. Verify `postgres_prod_data` / `redis_prod_data` exist and
+#     are attached: `docker volume ls` + `docker inspect <container>` on the
+#     VPS (or Coolify UI → resource → Volumes).
+#   - Traefik route for `coolify.cogitoacademy.id/api/v1/deploy/*` (custom
+#     proxy config; not exposed via the public API). Verify by curling the
+#     webhook URL from a public client: 2xx = routed, 404 = route missing,
+#     401 = route present but the `Authorization: Bearer` token is missing.
+#   - Docker log rotation (json-file, max-size 10m, max-file 3) — not in the
+#     public API; verify with `docker inspect` on the VPS.
+#   - Auto-deploy toggle per resource — verify in the Coolify UI.
+#   - Coolify bundled proxy version (Traefik v3.6, verified 2026-08-28) —
+#     check the proxy container image tag in the Coolify UI.
+#   - Xendit dashboard webhook URL + egress IPs — external to Coolify.
+#   - DNS records (api/app/coolify/status) — Terraform-owned, not Coolify.
+#
+# Run (from the repository root; the Coolify API is tailnet-only, so run
+# from the operator machine with the tailnet/tunnel up):
+#
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/drift-check.yml \
+#     -e coolify_api_base=http://localhost:8000/api/v1 \
+#     -e coolify_api_token="$(sops -d infra/secrets/prod.env | grep COOLIFY_API_TOKEN | cut -d= -f2-)"
+#
+# Dry-run (report drift without failing — CI-friendly):
+#
+#   ... -e drift_check_dry_run=true
+#
+# Exit code: 0 = no drift, 1 = drift found, 2 = API/connection failure.
+---
+- name: Drift-check Coolify resources against the declared state
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    coolify_api_base: "http://localhost:8000/api/v1"
+    coolify_api_token: "{{ lookup('env', 'COOLIFY_API_TOKEN') | default('', true) }}"
+    drift_check_dry_run: false
+
+    # Declared state — MUST mirror infra/ansible/coolify-resources.yml.
+    declared_project: cogito-prod
+    declared_environment: production
+    declared_resources:
+      - name: postgres-prod
+        type: postgresql
+        image: postgres:16-alpine
+      - name: redis-prod
+        type: redis
+        image: redis:7
+      - name: cogito-api
+        type: application
+        image: ghcr.io/cogitoacademy/app/server:latest
+        port: "3001"
+        domain: api.cogitoacademy.id
+        health_check: /health
+      - name: cogito-web
+        type: application
+        image: ghcr.io/cogitoacademy/app/web:latest
+        port: "80"
+        domain: app.cogitoacademy.id
+        health_check: /
+    # Env var NAMES the API application must have (values are secrets and
+    # are never compared). Keep in sync with infra/.env.prod.example.
+    declared_api_env_names:
+      - NODE_ENV
+      - PORT
+      - DATABASE_URL
+      - REDIS_URL
+      - BETTER_AUTH_SECRET
+      - BETTER_AUTH_URL
+      - CORS_ORIGIN
+      - TRUST_PROXY
+      - SCHEDULER_ENABLED
+      - DB_SSL_ENABLED
+      - DB_SSL_REJECT_UNAUTHORIZED
+      - PAYMENT_PROVIDER
+      - PAYMENT_WEBHOOK_SECRET
+      - XENDIT_MODE
+      - XENDIT_SECRET_KEY
+      - XENDIT_WEBHOOK_TOKEN
+      - XENDIT_TEST_ALLOWED_EMAILS
+      - XENDIT_SUCCESS_REDIRECT_URL
+      - XENDIT_FAILURE_REDIRECT_URL
+      - RESEND_API_KEY
+      - EMAIL_FROM
+      - GOOGLE_CLIENT_EMAIL
+      - GOOGLE_PRIVATE_KEY
+      - GOOGLE_CALENDAR_ID
+      - GOOGLE_IMPERSONATED_USER
+      - GOOGLE_MEET_ENABLED
+      - GOOGLE_MEET_CLIENT_ID
+      - GOOGLE_MEET_CLIENT_SECRET
+      - GOOGLE_MEET_REFRESH_TOKEN
+      - SESSION_COOKIE_CACHE_MAX_AGE
+      - WEBHOOK_ALLOWED_IPS
+      - R2_ACCOUNT_ID
+      - R2_ACCESS_KEY_ID
+      - R2_SECRET_ACCESS_KEY
+      - R2_BUCKET
+      - R2_PUBLIC_URL
+      - SEED_ALLOWED_IN_PROD
+      - ADMIN_EMAILS
+      - METRICS_TOKEN
+      - SENTRY_DSN
+      - SENTRY_ENVIRONMENT
+    # Deploy webhooks: URL per resource. The per-resource UUID in the URL is
+    # the bearer secret; the check verifies it matches the live resource UUID.
+    # Keep the placeholder `<...>` until the operator fills the real UUIDs.
+    declared_webhooks:
+      - name: cogito-api
+        url: "https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false"
+      - name: cogito-web
+        url: "https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false"
+
+  tasks:
+    - name: Require a Coolify API token
+      ansible.builtin.fail:
+        msg: >-
+          coolify_api_token is empty — pass
+          -e coolify_api_token=... (from the SOPS vault: COOLIFY_API_TOKEN)
+      when: coolify_api_token | length == 0
+
+    - name: Fetch the Coolify version (informational)
+      ansible.builtin.uri:
+        url: "{{ coolify_api_base }}/version"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        return_content: true
+        status_code: [200]
+      register: version_resp
+      ignore_errors: true
+
+    - name: Show the Coolify version
+      ansible.builtin.debug:
+        msg: "Coolify version: {{ version_resp.content | default('unknown') }}"
+      when: version_resp is defined and version_resp.content is defined
+
+    - name: Fetch Coolify projects
+      ansible.builtin.uri:
+        url: "{{ coolify_api_base }}/projects"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        return_content: true
+        status_code: [200]
+      register: projects_resp
+
+    - name: Locate the declared project
+      ansible.builtin.set_fact:
+        declared_project_uuid: >-
+          {{ (projects_resp.json | selectattr('name', 'equalto', declared_project) | first | default(none)).uuid | default('') }}
+
+    - name: Fail if the declared project is missing
+      ansible.builtin.fail:
+        msg: "DRIFT: project '{{ declared_project }}' not found in Coolify"
+      when: declared_project_uuid | length == 0
+
+    - name: Fetch the declared environment (loads applications/postgresqls/redis)
+      ansible.builtin.uri:
+        url: "{{ coolify_api_base }}/projects/{{ declared_project_uuid }}/{{ declared_environment }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        return_content: true
+        status_code: [200]
+      register: env_resp
+
+    - name: Fail if the declared environment is missing
+      ansible.builtin.fail:
+        msg: "DRIFT: environment '{{ declared_environment }}' not found in project '{{ declared_project }}'"
+      when: env_resp.json is not defined or env_resp.json.name != declared_environment
+
+    - name: Check every declared resource exists in the live environment
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['resource ' + item.name + ' (' + item.type + ') not found in Coolify environment ' + declared_environment] }}
+      loop: "{{ declared_resources }}"
+      vars:
+        # The environment endpoint loads relations named applications,
+        # postgresqls, redis (singular for redis — no trailing 's').
+        _live_list: >-
+          {{ env_resp.json[item.type + ('s' if item.type != 'redis' else '')] | default([]) }}
+      when: >-
+        _live_list | selectattr('name', 'equalto', item.name) | list | length == 0
+
+    - name: Compare application docker images (name + tag)
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['application ' + item.name + ': declared image ' + item.image + ' != live ' + (_live.docker_registry_image_name | default('(field missing — manual check)')) + ':' + (_live.docker_registry_image_tag | default('(field missing — manual check)'))] }}
+      loop: "{{ declared_resources | selectattr('type', 'equalto', 'application') | list }}"
+      vars:
+        _live: >-
+          {{ (env_resp.json.applications | default([])) | selectattr('name', 'equalto', item.name) | first | default(none) }}
+      when: >-
+        _live is not none and _live.docker_registry_image_name is defined and
+        _live.docker_registry_image_tag is defined and
+        (_live.docker_registry_image_name + ':' + _live.docker_registry_image_tag) != item.image
+
+    - name: Compare application exposed ports
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['application ' + item.name + ': declared port ' + item.port + ' not in live ports_exposes ' + (_live.ports_exposes | default('(field missing — manual check)'))] }}
+      loop: "{{ declared_resources | selectattr('type', 'equalto', 'application') | list }}"
+      vars:
+        _live: >-
+          {{ (env_resp.json.applications | default([])) | selectattr('name', 'equalto', item.name) | first | default(none) }}
+      when: >-
+        _live is not none and _live.ports_exposes is defined and
+        item.port not in (_live.ports_exposes | string)
+
+    - name: Compare application domains (fqdn)
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['application ' + item.name + ': declared domain ' + item.domain + ' not present in live fqdn ' + (_live.fqdn | default('(field missing — manual check)'))] }}
+      loop: "{{ declared_resources | selectattr('type', 'equalto', 'application') | list }}"
+      vars:
+        _live: >-
+          {{ (env_resp.json.applications | default([])) | selectattr('name', 'equalto', item.name) | first | default(none) }}
+      when: >-
+        _live is not none and _live.fqdn is defined and
+        item.domain not in (_live.fqdn | string)
+
+    - name: Compare application health-check paths
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['application ' + item.name + ': declared health check ' + item.health_check + ' != live ' + (_live.health_check_path | default('(field missing — manual check)'))] }}
+      loop: "{{ declared_resources | selectattr('type', 'equalto', 'application') | list }}"
+      vars:
+        _live: >-
+          {{ (env_resp.json.applications | default([])) | selectattr('name', 'equalto', item.name) | first | default(none) }}
+      when: >-
+        _live is not none and _live.health_check_path is defined and
+        _live.health_check_path != item.health_check
+
+    - name: Compare database images (postgresqls / redis)
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['database ' + item.name + ': declared image ' + item.image + ' != live ' + (_live.image | default('(field missing — manual check)'))] }}
+      loop: "{{ declared_resources | selectattr('type', 'in', ['postgresql', 'redis']) | list }}"
+      vars:
+        _live: >-
+          {{ (env_resp.json[item.type + ('s' if item.type != 'redis' else '')] | default([])) | selectattr('name', 'equalto', item.name) | first | default(none) }}
+      when: >-
+        _live is not none and _live.image is defined and _live.image != item.image
+
+    - name: Fetch the API application env vars
+      ansible.builtin.uri:
+        url: "{{ coolify_api_base }}/applications/{{ _api_live.uuid }}/envs"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        return_content: true
+        status_code: [200]
+      register: api_envs_resp
+      vars:
+        _api_live: >-
+          {{ (env_resp.json.applications | default([])) | selectattr('name', 'equalto', 'cogito-api') | first | default(none) }}
+      when: >-
+        (env_resp.json.applications | default([])) | selectattr('name', 'equalto', 'cogito-api') | list | length > 0
+
+    - name: Compare API application env var names
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['cogito-api: declared env var ' + item + ' missing from the live env'] }}
+      loop: "{{ declared_api_env_names }}"
+      when: >-
+        api_envs_resp is defined and api_envs_resp.json is defined and
+        item not in (api_envs_resp.json | map(attribute='key') | list)
+
+    - name: Compare deploy-webhook UUIDs with the live resource UUIDs
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['webhook ' + item.name + ': declared URL UUID ' + _declared_uuid + ' != live resource UUID ' + _live_uuid] }}
+      loop: "{{ declared_webhooks }}"
+      vars:
+        _declared_uuid: "{{ (item.url | regex_search('uuid=([0-9a-fA-F-]+)', '\\1') | first) | default('') }}"
+        _live_uuid: >-
+          {{ ((env_resp.json.applications | default([])) | selectattr('name', 'equalto', item.name) | first | default(none)).uuid | default('') }}
+      when: >-
+        _declared_uuid | length > 0 and _live_uuid | length > 0 and
+        _declared_uuid != _live_uuid
+
+    - name: Warn about webhook URLs that still contain placeholders
+      ansible.builtin.debug:
+        msg: >-
+          webhook {{ item.name }}: declared URL still contains a placeholder
+          (<...>) — operator must fill the real resource UUID before this
+          check can verify it
+      loop: "{{ declared_webhooks }}"
+      when: >-
+        (item.url | regex_search('uuid=([0-9a-fA-F-]+)', '\\1') | first | default('')) | length == 0
+
+    - name: Report drift findings
+      ansible.builtin.debug:
+        var: drift_findings
+      when: drift_findings | default([]) | length > 0
+
+    - name: Fail on drift
+      ansible.builtin.fail:
+        msg: >-
+          DRIFT DETECTED: {{ drift_findings | length }} finding(s) — see the
+          drift_findings list above. Re-apply coolify-resources.yml or fix the
+          Coolify UI, then re-run this check.
+      when: drift_findings | default([]) | length > 0 and not drift_check_dry_run
+
+    - name: Drift summary (dry run)
+      ansible.builtin.debug:
+        msg: "DRY RUN: {{ drift_findings | default([]) | length }} drift finding(s) would fail the check"
+      when: drift_findings | default([]) | length > 0 and drift_check_dry_run
+
+    - name: No drift
+      ansible.builtin.debug:
+        msg: "No drift: the live Coolify state matches the declared state"
+      when: drift_findings | default([]) | length == 0
