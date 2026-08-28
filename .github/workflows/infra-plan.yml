@@ -1,0 +1,164 @@
+# Plan-only infrastructure audit.
+#
+# Runs on PRs that touch infra/ (or this workflow): Terraform validate +
+# plan (read-only Cloudflare + R2 tokens) and `ansible-playbook
+# --syntax-check` on every playbook. It NEVER applies anything and never
+# touches the server:
+#
+#   - The Age private key (SOPS decryption) must never enter CI — anyone
+#     with repo access could decrypt the whole vault. Playbook content
+#     referencing vault secrets is syntax-checked, not executed.
+#   - SSH is tailnet-only, so GitHub runners cannot reach the VPS:
+#     `ansible --check` is impossible in CI. `--syntax-check` is the
+#     CI-safe equivalent; full `--check`/apply remain local operator
+#     commands (see docs/DEPLOYMENT.md → "Plan-only audit").
+#   - Terraform `plan` needs credentials. When the read-only tokens are
+#     not configured the plan step is SKIPPED (validate still runs) and
+#     the job exits 0 — this workflow must never fail CI because secrets
+#     are unset.
+#
+# Read-only token placeholders (create in the repo Settings → Secrets and
+# variables → Actions if you want plan to run on PRs):
+#   CLOUDFLARE_API_TOKEN       Zone:DNS:Edit for cogitoacademy.id (read-only:
+#                              only DNS read is used by plan; keep write tokens
+#                              out of CI)
+#   R2_ACCESS_KEY_ID           R2 API token scoped to the cogito-infra-state
+#   R2_SECRET_ACCESS_KEY       bucket, Object Read only
+#   R2_STATE_ENDPOINT          https://<accountid>.r2.cloudflarestorage.com
+#
+# See also: docs/DEPLOYMENT.md → "Plan-only audit".
+
+name: Infra Plan (audit-only)
+
+on:
+  pull_request:
+    branches: [main, staging]
+    paths:
+      - infra/**
+      - .github/workflows/infra-plan.yml
+
+concurrency:
+  group: infra-plan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terraform:
+    name: Terraform validate + plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.0
+
+      # -backend=false skips the R2 state backend (its endpoint is a
+      # placeholder until the account id is set), so validate always runs
+      # even when no credentials are configured.
+      - name: Terraform init (no backend)
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Check read-only plan credentials
+        id: check-creds
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_STATE_ENDPOINT: ${{ secrets.R2_STATE_ENDPOINT }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$R2_ACCESS_KEY_ID" ] \
+            || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_STATE_ENDPOINT" ]; then
+            echo "skip-plan=true" >> "$GITHUB_OUTPUT"
+            echo "reason=read-only Cloudflare/R2 tokens are not configured in this repo"
+          else
+            echo "skip-plan=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Terraform plan (read-only)
+        if: steps.check-creds.outputs.skip-plan == 'false'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # R2 state-backend credentials (s3-compatible backend reads
+          # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY).
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.R2_STATE_ENDPOINT }}
+        run: |
+          terraform init -reconfigure
+          terraform plan -lock=false -out=tfplan
+          terraform show -no-color tfplan > tfplan.txt
+          echo "::notice title=Terraform plan written::infra-plan artifact (tfplan.txt)"
+
+      - name: Terraform plan skipped (tokens not configured)
+        if: steps.check-creds.outputs.skip-plan == 'true'
+        run: |
+          echo "::notice title=Terraform plan skipped::${{ steps.check-creds.outputs.reason }} — validate passed; configure the read-only CLOUDFLARE_API_TOKEN / R2_* secrets to enable plan."
+          # Intentionally exit 0: unset secrets are not a CI failure.
+
+      - name: Upload plan artifact
+        if: steps.check-creds.outputs.skip-plan == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/terraform/tfplan.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  ansible:
+    name: Ansible syntax-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # ansible-core only: the playbooks use the builtin collection and a
+      # few community modules; --syntax-check never connects, so the full
+      # community.general collection is not needed in CI.
+      - name: Install ansible-core (pinned)
+        run: python3 -m pip install --disable-pip-version-check --user ansible-core==2.21.3
+
+      # Glob, not an explicit list: playbooks get added over time
+      # (coolify-resources, drift-check, ...) and must be picked up
+      # automatically.
+      - name: Syntax-check all playbooks
+        shell: bash
+        run: |
+          shopt -s nullglob
+          playbooks=(infra/ansible/*.yml)
+          if [ ${#playbooks[@]} -eq 0 ]; then
+            echo "No playbooks found under infra/ansible/" >&2
+            exit 1
+          fi
+          for pb in "${playbooks[@]}"; do
+            echo "::group::ansible-playbook --syntax-check ${pb}"
+            python3 -m ansible.playbook --syntax-check \
+              -i infra/ansible/inventory.ini "${pb}"
+            echo "::endgroup::"
+          done
+
+  docs:
+    name: Plan-only audit docs present
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Plan-only audit docs section
+        run: |
+          if ! grep -q "^## Plan-only audit" docs/DEPLOYMENT.md; then
+            echo "docs/DEPLOYMENT.md is missing the '## Plan-only audit' section" >&2
+            exit 1
+          fi
