@@ -776,6 +776,45 @@ export function BookingDetailPage({
               </CardBody>
             </Card>
           ) : null}
+
+          <div className="order-3 grid min-w-0 gap-4 lg:order-none">
+            {!isAdmin ? (
+              <BookingLifecycleActions
+                {...lifecycleActionProps}
+                section="supplementary"
+              />
+            ) : null}
+
+            <Card className="min-w-0 overflow-hidden">
+              <CardHeader>
+                <CardTitle>Activity</CardTitle>
+                <CardDescription>
+                  A chronological record of this booking
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="px-6">
+                {history.length > 0 ? (
+                  <ol aria-label="Booking activity" className="relative">
+                    {history.map((entry) => (
+                      <ActivityTimelineItem
+                        key={entry.id}
+                        entry={entry}
+                        timeZone={booking.timezone}
+                        isLast={entry.id === history[history.length - 1]?.id}
+                      />
+                    ))}
+                  </ol>
+                ) : (
+                  <EmptyState
+                    icon={<IconClock />}
+                    title="No activity yet"
+                    description="Booking updates will appear here."
+                    size="inline"
+                  />
+                )}
+              </CardBody>
+            </Card>
+          </div>
         </div>
 
         <aside className="order-2 grid min-w-0 gap-4 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
@@ -817,45 +856,6 @@ export function BookingDetailPage({
             </CardBody>
           </Card>
         </aside>
-
-        <div className="order-3 grid min-w-0 gap-4 lg:order-none">
-          {!isAdmin ? (
-            <BookingLifecycleActions
-              {...lifecycleActionProps}
-              section="supplementary"
-            />
-          ) : null}
-
-          <Card className="min-w-0 overflow-hidden">
-            <CardHeader>
-              <CardTitle>Activity</CardTitle>
-              <CardDescription>
-                A chronological record of this booking
-              </CardDescription>
-            </CardHeader>
-            <CardBody className="px-6">
-              {history.length > 0 ? (
-                <ol aria-label="Booking activity" className="relative">
-                  {history.map((entry) => (
-                    <ActivityTimelineItem
-                      key={entry.id}
-                      entry={entry}
-                      timeZone={booking.timezone}
-                      isLast={entry.id === history[history.length - 1]?.id}
-                    />
-                  ))}
-                </ol>
-              ) : (
-                <EmptyState
-                  icon={<IconClock />}
-                  title="No activity yet"
-                  description="Booking updates will appear here."
-                  size="inline"
-                />
-              )}
-            </CardBody>
-          </Card>
-        </div>
       </div>
 
       <Dialog
