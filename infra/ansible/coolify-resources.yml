@@ -393,7 +393,6 @@
         validate_certs: true
       register: webhook_probe
       ignore_errors: true
-      when: vault_env.COOLIFY_PROD_SERVER_WEBHOOK is defined
 
     - name: Interpret the webhook probe
       ansible.builtin.debug:
