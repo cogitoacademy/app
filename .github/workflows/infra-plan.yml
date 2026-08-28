@@ -143,7 +143,7 @@ jobs:
           fi
           for pb in "${playbooks[@]}"; do
             echo "::group::ansible-playbook --syntax-check ${pb}"
-            python3 -m ansible.playbook --syntax-check \
+            "$HOME/.local/bin/ansible-playbook" --syntax-check \
               -i infra/ansible/inventory.ini "${pb}"
             echo "::endgroup::"
           done
