@@ -215,7 +215,7 @@ function BookingTabBar({
 }) {
   return (
     <div className="w-full min-w-0 max-w-full overflow-visible pb-1">
-      <div className="w-full min-w-0 max-w-full overflow-visible rounded-xl bg-accent/60 p-1 sm:w-fit">
+      <div className="w-full min-w-0 max-w-full overflow-visible rounded-full bg-accent/60 p-1 sm:w-fit">
         <div
           data-slot="booking-tab-scroller"
           className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain scrollbar-hidden sm:w-fit"
@@ -232,7 +232,7 @@ function BookingTabBar({
                   role="tab"
                   aria-selected={selected}
                   className={cn(
-                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    "rounded-full px-3 py-2 text-sm font-medium transition-colors",
                     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                     selected
                       ? "bg-background text-foreground shadow-sm"
