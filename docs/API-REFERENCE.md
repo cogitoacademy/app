@@ -2,6 +2,14 @@
 
 Last updated: 2026-08-28
 
+## Stable collection transitions (2026-08-28)
+
+Pagination and filter-transition stability is client-side only. The admin tutor
+tables, tutor discovery list, and admin booking queue retain their previous
+successful collection while the next query is loading; pagination scrolls to
+the selected table card by DOM ID. No RPC path, request envelope, response
+shape, cursor/offset contract, or URL search parameter changes.
+
 Booking-list UI note: `/bookings` uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors default to Needs action when a response is pending and Upcoming otherwise; admins default to All. URL-backed Recommended, Soonest, and Latest sorting is client-side; Recommended ranks pending, active, then terminal bookings, and History consolidates terminal outcomes. The RPC contract is unchanged.
 
 Booking-card timing note: list rows already include the booking `deadlineAt` column. The web client uses it for pending response countdowns and uses scheduled start/end times for Today, Starts in, Starting soon, and In progress labels. It never derives response windows from `createdAt` and does not infer an Expired lifecycle state before the server transitions it.

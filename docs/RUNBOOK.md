@@ -2,6 +2,17 @@
 
 Last updated: 2026-08-28
 
+## Collection transition QA (2026-08-28)
+
+The stable-pagination behavior requires no environment variable, migration, or
+server rollout. When checking the web UI, verify that changing either admin
+tutor table page keeps the old rows visible while loading, disables that table's
+pagination controls during the request, and scrolls the owning card into view.
+Changing tutor discovery search/filters and the admin booking-queue filters
+should also retain the prior collection until the response arrives. Wallet
+lookup and student search should continue to replace results only after their
+own query completes.
+
 Started-session cancellation check: open a scheduled booking as its student before start and confirm Cancel booking is available. At/after `scheduledStartAt`, reload the detail and confirm the action is absent. Calling `/rpc/booking/cancel`, participant withdrawal, or per-series-session cancellation directly must return `BOOKING_CANCELLATION_DEADLINE_PASSED`, must not deduct/release Marks or cancel the meeting, and the tutor must still be able to complete the booking. Route post-start delivery/attendance problems through support/admin review.
 
 Booking-list smoke check: verify Needs action, Upcoming, Recurring, History, and All. Students and tutors default to Needs action when pending decisions exist and Upcoming otherwise; admins default to All. Recommended places pending decisions above active bookings and terminal outcomes at the bottom. Soonest and Latest order by scheduled date, `?tab=`/`?sort=` preserve choices, and History contains every terminal outcome.

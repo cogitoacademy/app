@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardBody,
@@ -122,7 +122,11 @@ function RouteComponent() {
     return labels;
   }, [subjectCategories]);
 
-  const { data: profiles = [], refetch: refetchProfiles } = useQuery({
+  const {
+    data: profiles = [],
+    isFetching: profilesFetching,
+    refetch: refetchProfiles,
+  } = useQuery({
     queryKey: ["adminTutorProfiles", profileFilter, profilePage],
     queryFn: () =>
       profileFilter
@@ -141,9 +145,14 @@ function RouteComponent() {
             limit: PAGE_SIZE + 1,
             offset: profilePage * PAGE_SIZE,
           }),
+    placeholderData: keepPreviousData,
   });
 
-  const { data: invites = [], refetch: refetchInvites } = useQuery({
+  const {
+    data: invites = [],
+    isFetching: invitesFetching,
+    refetch: refetchInvites,
+  } = useQuery({
     queryKey: ["adminTutorInvites", inviteFilter, invitePage],
     queryFn: () =>
       inviteFilter
@@ -160,6 +169,7 @@ function RouteComponent() {
             limit: PAGE_SIZE + 1,
             offset: invitePage * PAGE_SIZE,
           }),
+    placeholderData: keepPreviousData,
   });
 
   const visibleProfiles = profiles.slice(0, PAGE_SIZE);
@@ -239,7 +249,7 @@ function RouteComponent() {
     <div className="flex flex-col gap-6">
       <TutorInviteForm />
 
-      <Card>
+      <Card id="admin-tutor-invites" className="scroll-mt-4">
         <CardHeader>
           <CardTitle>Invitations</CardTitle>
           <CardHeaderAction>
@@ -265,7 +275,7 @@ function RouteComponent() {
             </Select>
           </CardHeaderAction>
         </CardHeader>
-        <CardBody>
+        <CardBody aria-busy={invitesFetching}>
           {invites.length === 0 ? (
             <EmptyState
               icon={<IconInbox />}
@@ -397,9 +407,11 @@ function RouteComponent() {
           )}
           {invites.length > 0 || invitePage > 0 ? (
             <PaginationControls
+              targetId="admin-tutor-invites"
               label="invitations"
               page={invitePage}
               hasNext={invites.length > PAGE_SIZE}
+              isFetching={invitesFetching}
               onPrevious={() => setInvitePage((page) => Math.max(0, page - 1))}
               onNext={() => setInvitePage((page) => page + 1)}
             />
@@ -407,7 +419,7 @@ function RouteComponent() {
         </CardBody>
       </Card>
 
-      <Card>
+      <Card id="admin-tutor-profiles" className="scroll-mt-4">
         <CardHeader>
           <CardTitle>Tutor Profiles</CardTitle>
           <CardHeaderAction>
@@ -439,7 +451,7 @@ function RouteComponent() {
             </Select>
           </CardHeaderAction>
         </CardHeader>
-        <CardBody>
+        <CardBody aria-busy={profilesFetching}>
           {profiles.length === 0 ? (
             <EmptyState
               icon={<IconInbox />}
@@ -510,9 +522,11 @@ function RouteComponent() {
           )}
           {profiles.length > 0 || profilePage > 0 ? (
             <PaginationControls
+              targetId="admin-tutor-profiles"
               label="tutor profiles"
               page={profilePage}
               hasNext={profiles.length > PAGE_SIZE}
+              isFetching={profilesFetching}
               onPrevious={() => setProfilePage((page) => Math.max(0, page - 1))}
               onNext={() => setProfilePage((page) => page + 1)}
             />
@@ -566,18 +580,37 @@ function RouteComponent() {
 }
 
 function PaginationControls({
+  targetId,
   label,
   page,
   hasNext,
+  isFetching,
   onPrevious,
   onNext,
 }: {
+  targetId: string;
   label: string;
   page: number;
   hasNext: boolean;
+  isFetching: boolean;
   onPrevious: () => void;
   onNext: () => void;
 }) {
+  function changePage(change: () => void) {
+    change();
+    requestAnimationFrame(() => {
+      const target = document.getElementById(targetId);
+      if (!target) return;
+
+      target.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      });
+    });
+  }
+
   return (
     <Pagination className="mt-4 flex-col gap-3 border-t border-card-separator pt-4 sm:flex-row sm:items-center sm:justify-between">
       <Text className="text-sm text-muted">
@@ -588,8 +621,13 @@ function PaginationControls({
           <PaginationButton
             type="button"
             aria-label="Previous page"
-            disabled={page === 0}
-            onClick={page === 0 ? undefined : onPrevious}
+            aria-controls={targetId}
+            disabled={page === 0 || isFetching}
+            onClick={
+              page === 0 || isFetching
+                ? undefined
+                : () => changePage(onPrevious)
+            }
           >
             <IconChevronLeft /> Previous
           </PaginationButton>
@@ -603,8 +641,11 @@ function PaginationControls({
           <PaginationButton
             type="button"
             aria-label="Next page"
-            disabled={!hasNext}
-            onClick={hasNext ? onNext : undefined}
+            aria-controls={targetId}
+            disabled={!hasNext || isFetching}
+            onClick={
+              !hasNext || isFetching ? undefined : () => changePage(onNext)
+            }
           >
             Next <IconChevronRight />
           </PaginationButton>

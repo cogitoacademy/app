@@ -715,6 +715,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.36 (2026-08-28): Stabilized server-backed collection transitions with TanStack Query `keepPreviousData` for admin tutor pagination, tutor discovery search/filters, and the admin booking queue. Admin tutor pagination scrolls to the selected table card by DOM ID and disables controls while loading. No RPC, schema, persistence, or URL search contract changed.
 - v1.35 (2026-08-28): Kept the booking-detail overview/activity flow independent from the sticky desktop Actions/Marks rail so rail height cannot create a blank row before Activity; narrow layouts retain actions/Marks before Activity. No RPC, schema, or persistence contract changed.
 - v1.34 (2026-08-28): Added paint-safe tab-scroller padding and overflow-safe empty-state/card boundaries for the shared bookings page, including an E2E narrow-viewport regression. No RPC, schema, or persistence contract changed.
 - v1.32 (2026-08-27): Improved admin tutor review readability by mapping pending subject IDs to active category/subject labels and wrapping long pending values. No RPC, schema, or persistence contract changed.

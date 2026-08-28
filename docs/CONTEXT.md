@@ -2,6 +2,21 @@
 
 Last updated: 2026-08-28
 
+## Stable collection transitions (2026-08-28)
+
+The admin tutor Invitations and Tutor Profiles tables use TanStack Query's
+`keepPreviousData` placeholder while a page or status filter changes. Their
+pagination controls target the owning card IDs (`admin-tutor-invites` and
+`admin-tutor-profiles`) and scroll that card into view after a page change, so
+only the selected collection becomes the user's visual focus. This is handled
+with an element anchor and `scrollIntoView`; pagination does not add a route
+query or hash parameter. Tutor discovery applies the same stale-data pattern
+when search or filters change, and the admin booking queue applies it while
+its server-side filters reload. Wallet lookup and student search intentionally
+show only results for the submitted query because retaining another user's
+data would be misleading. Notifications already retain loaded pages through
+`useInfiniteQuery`.
+
 Student cancellation closes at the exact scheduled start. The backend rejects `booking.cancel`, participant `withdraw`, and per-series-session cancellation at or after the applicable `scheduledStartAt`, leaving the booking live for tutor completion; the booking-detail UI hides the primary cancel action on the same boundary. Pre-start H-2 penalties remain unchanged. Attendance or delivery problems after start use support/admin review instead of allowing a student cancellation path to strand tutor payout.
 
 The shared `/bookings` surface is task-oriented with Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors are taken to Needs action when a response is pending. History consolidates terminal outcomes. URL-backed Recommended sorting keeps pending decisions above active bookings and terminal outcomes at the bottom, with Soonest and Latest alternatives.

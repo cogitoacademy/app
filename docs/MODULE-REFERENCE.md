@@ -2,6 +2,16 @@
 
 Last updated: 2026-08-28
 
+## Collection transition behavior (2026-08-28)
+
+The web collection layer uses `keepPreviousData` for server-backed admin tutor
+pagination, tutor discovery search/filter changes, and admin booking-queue
+filter changes. Admin tutor pagination uses per-card DOM anchors and
+`scrollIntoView` after a click; it keeps the current table visible during the
+request and disables the controls until the next page arrives. Cursor-loaded
+notifications already preserve prior pages by design. User-specific wallet
+lookup and student search do not retain stale results across a changed query.
+
 The shared booking list uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors land on Needs action when pending decisions exist; admins retain All. Recommended sorting ranks pending decisions first, active bookings next, and terminal outcomes last; Soonest and Latest provide direct date ordering. The URL stores both presentation choices.
 
 `BookingListCard` derives one contextual time chip from server facts: pending states read `deadlineAt`, confirmed/scheduled states read the scheduled window, and terminal states render none. A module-level external clock store updates all mounted cards from one 30-second interval rather than allocating one timer per row.
