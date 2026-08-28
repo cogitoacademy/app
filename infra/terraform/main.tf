@@ -6,7 +6,7 @@ terraform {
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 4.0"
+      version = "~> 5.0" # cloudflare_r2_custom_domain requires >= 5.13.0
     }
   }
 }
@@ -20,30 +20,35 @@ provider "cloudflare" {
 }
 
 data "cloudflare_zone" "cogito" {
-  name = "cogitoacademy.id"
+  filter = {
+    name = "cogitoacademy.id"
+  }
 }
 
-resource "cloudflare_record" "api" {
+resource "cloudflare_dns_record" "api" {
   zone_id = data.cloudflare_zone.cogito.id
   name    = "api"
   content = var.server_ip
   type    = "A"
+  ttl     = 1 # automatic (Cloudflare-proxied)
   proxied = true
 }
 
-resource "cloudflare_record" "app" {
+resource "cloudflare_dns_record" "app" {
   zone_id = data.cloudflare_zone.cogito.id
   name    = "app"
   content = var.server_ip
   type    = "A"
+  ttl     = 1 # automatic (Cloudflare-proxied)
   proxied = true
 }
 
-resource "cloudflare_record" "status" {
+resource "cloudflare_dns_record" "status" {
   zone_id = data.cloudflare_zone.cogito.id
   name    = "status"
   content = var.server_ip
   type    = "A"
+  ttl     = 1 # automatic (Cloudflare-proxied)
   proxied = true
 }
 
@@ -52,11 +57,12 @@ resource "cloudflare_record" "status" {
 # trigger deployments; the Coolify UI itself stays tailnet-only. The
 # per-resource UUID in the webhook URL is the bearer secret. (DEPLOYMENT-PLAN
 # Task 0.2, Option A — locked 2026-08-27.)
-resource "cloudflare_record" "coolify" {
+resource "cloudflare_dns_record" "coolify" {
   zone_id = data.cloudflare_zone.cogito.id
   name    = "coolify"
   content = var.server_ip
   type    = "A"
+  ttl     = 1 # automatic (Cloudflare-proxied)
   proxied = true
 }
 
@@ -81,6 +87,39 @@ resource "cloudflare_r2_bucket" "backups" {
   name       = "cogito-backups"
   location   = "APAC"
 }
+
+# PUBLIC bucket for app uploads (profile images, achievement evidence, etc.).
+# Served via the r2bucket.cogitoacademy.id custom domain. Database backups
+# live in cogito-backups (private, API-token only) — never mix dumps into a
+# bucket with a public custom domain (the nightly dump URL would be
+# guessable).
+#
+# NOTE: this bucket + custom domain were created manually in the Cloudflare
+# dashboard (2026-08-28) with the values already in the SOPS vault
+# (R2_BUCKET=cogito-bucket, R2_PUBLIC_URL=https://r2bucket.cogitoacademy.id).
+# The operator must `terraform import` them before the first apply, otherwise
+# Terraform will try to create a second bucket/domain:
+#   terraform import cloudflare_r2_bucket.uploads <bucket-name>
+#   terraform import cloudflare_r2_custom_domain.uploads <domain>
+resource "cloudflare_r2_bucket" "uploads" {
+  account_id = var.cloudflare_account_id
+  name       = "cogito-bucket"
+  location   = "APAC"
+}
+
+resource "cloudflare_r2_custom_domain" "uploads" {
+  account_id  = var.cloudflare_account_id
+  bucket_name = cloudflare_r2_bucket.uploads.name
+  domain      = "r2bucket.cogitoacademy.id"
+  enabled     = true
+  zone_id     = data.cloudflare_zone.cogito.id
+}
+
+# NOTE: no separate DNS record for r2.cogitoacademy.id is created here. For a
+# zone hosted on Cloudflare, the R2 custom domain provisions its own DNS route
+# (CNAME into Cloudflare's R2 infrastructure) automatically when the custom
+# domain is enabled. An A record pointing at the VPS would route r2.* traffic
+# to the origin instead of R2 — do NOT add one.
 
 # This resource intentionally bootstraps an existing VPS instead of ordering
 # one. The OVH VPS product is billable infrastructure; adding an ovh_vps
