@@ -18,7 +18,15 @@ type PricesByModality = Partial<
   Record<SupportedModality, Record<string, number>>
 >;
 
-export interface ProfileWithUser extends TutorProfileRow {
+export interface ProfileWithUser extends Omit<
+  TutorProfileRow,
+  | "bankName"
+  | "bankAccountNumber"
+  | "bankAccountHolderName"
+  | "bankAccountOpeningCity"
+  | "bankAccountOwnership"
+  | "bankTransferDisclaimerAccepted"
+> {
   user: PublicTutorUser | null;
   subjects?: Array<TutorSubjectRelation & { subjectId: string }>;
 }

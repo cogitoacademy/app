@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Avatar,
   AvatarFallback,
@@ -38,6 +38,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconAlertTriangle,
   IconCertificate,
+  IconCoins,
   IconMail,
   IconSchool,
 } from "@tabler/icons-react";
@@ -61,6 +62,7 @@ const FLOOR_OFFLINE: Record<string, number> = {
   "5": 30,
   "6": 27,
 };
+const NON_BCA_TRANSFER_FEE_IDR = 2_500;
 
 const STATUS_BADGE: Record<
   string,
@@ -95,6 +97,12 @@ interface TutorReviewCardProps {
     experienceProofUrls: string[] | null;
     expertise: string[] | null;
     modality: string | null;
+    bankName: string | null;
+    bankAccountNumber: string | null;
+    bankAccountHolderName: string | null;
+    bankAccountOpeningCity: string | null;
+    bankAccountOwnership: "self" | "trusted_person" | null;
+    bankTransferDisclaimerAccepted: boolean | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
     sourcePhotoUrl: string | null;
@@ -103,7 +111,7 @@ interface TutorReviewCardProps {
     pendingProfileChanges: Record<string, unknown> | null;
     profileEditStatus: string;
     profileEditAdminNote: string | null;
-    user?: { name: string; email: string } | null;
+    user?: { id: string; name: string; email: string } | null;
   };
   subjectLabels: ReadonlyMap<string, string>;
   onAction?: () => void;
@@ -175,6 +183,32 @@ export function TutorReviewCard({
   onAction,
 }: TutorReviewCardProps) {
   const queryClient = useQueryClient();
+  const pendingPayout = useQuery({
+    ...orpc.admin.getPendingTutorPayouts.queryOptions({
+      input: { tutorId: profile.user?.id ?? "" },
+    }),
+    enabled: Boolean(profile.user?.id),
+  });
+  const markPayoutMutation = useMutation(
+    orpc.admin.markTutorPayoutPaid.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: orpc.admin.getPendingTutorPayouts.key(),
+        });
+        toastManager.add({
+          title: "Tutor payout marked as paid",
+          type: "success",
+        });
+      },
+      onError: (error: unknown) => {
+        toastManager.add({
+          title: "Tutor payout could not be marked paid",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
+    }),
+  );
   const [noteAction, setNoteAction] = useState<
     "request_changes" | "request_edit_changes" | "suspend" | null
   >(null);
@@ -239,6 +273,21 @@ export function TutorReviewCard({
   );
   const reviewAction = reviewMutation.variables?.action;
   const isPending = reviewMutation.isPending;
+  const hasCompletePayoutDetails = Boolean(
+    profile.bankName?.trim() &&
+    profile.bankAccountNumber?.trim() &&
+    profile.bankAccountHolderName?.trim() &&
+    profile.bankAccountOpeningCity?.trim() &&
+    profile.bankAccountOwnership &&
+    profile.bankTransferDisclaimerAccepted,
+  );
+  const pendingHonorarium = pendingPayout.data?.tutorPayoutIdr ?? 0;
+  const usesBca = profile.bankName?.trim().toUpperCase() === "BCA";
+  const transferFee =
+    pendingHonorarium > 0 && profile.bankName?.trim() && !usesBca
+      ? NON_BCA_TRANSFER_FEE_IDR
+      : 0;
+  const netHonorarium = Math.max(0, pendingHonorarium - transferFee);
 
   return (
     <>
@@ -293,6 +342,100 @@ export function TutorReviewCard({
                 capitalize={Boolean(profile.modality)}
               />
             </div>
+
+            <section className="rounded-lg border border-item-border bg-item p-3">
+              <div className="flex items-center gap-2">
+                <IconCoins className="size-4 text-muted" />
+                <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Unpaid honorarium
+                </Text>
+              </div>
+              <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <Text className="text-xs text-muted">
+                    {pendingPayout.data?.completedSessions ?? 0} completed
+                    session(s)
+                    {profile.bankName
+                      ? ` · ${profile.bankName}`
+                      : " · Bank not set"}
+                  </Text>
+                  <div className="mt-2 grid gap-1 text-sm">
+                    <div className="flex items-center justify-between gap-6">
+                      <Text className="text-muted">Gross honorarium</Text>
+                      <Text className="font-semibold">
+                        Rp{pendingHonorarium.toLocaleString("id-ID")}
+                      </Text>
+                    </div>
+                    <div className="flex items-center justify-between gap-6">
+                      <Text className="text-muted">Transfer fee</Text>
+                      <Text className="font-medium">
+                        {transferFee > 0
+                          ? `−Rp${transferFee.toLocaleString("id-ID")}`
+                          : "Rp0"}
+                      </Text>
+                    </div>
+                    <div className="flex items-center justify-between gap-6 border-t border-item-border pt-1">
+                      <Text className="font-medium">Net to transfer</Text>
+                      <Text className="font-semibold">
+                        Rp{netHonorarium.toLocaleString("id-ID")}
+                      </Text>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  progress={markPayoutMutation.isPending}
+                  disabled={
+                    markPayoutMutation.isPending ||
+                    pendingHonorarium <= 0 ||
+                    !hasCompletePayoutDetails
+                  }
+                  onClick={() => {
+                    if (profile.user?.id) {
+                      markPayoutMutation.mutate({ tutorId: profile.user.id });
+                    }
+                  }}
+                >
+                  Mark as paid
+                </Button>
+              </div>
+              <Text className="mt-3 text-xs text-muted">
+                Only conventional BCA (enter BCA as the bank name) has no
+                transfer deduction. BCA Syariah, blu (BCA Digital), and other
+                banks deduct Rp2.500 once from this payout; mark as paid after
+                transferring the net amount.
+              </Text>
+              {profile.bankAccountNumber ? (
+                <Text className="mt-2 text-xs text-muted">
+                  Account ending in {profile.bankAccountNumber.slice(-4)}
+                </Text>
+              ) : null}
+              {profile.bankAccountHolderName ? (
+                <Text className="mt-1 text-xs text-muted">
+                  Account holder: {profile.bankAccountHolderName}
+                </Text>
+              ) : null}
+              {profile.bankAccountOpeningCity ? (
+                <Text className="mt-1 text-xs text-muted">
+                  Opened in: {profile.bankAccountOpeningCity}
+                </Text>
+              ) : null}
+              {profile.bankAccountOwnership ? (
+                <Text className="mt-1 text-xs text-muted">
+                  Ownership:{" "}
+                  {profile.bankAccountOwnership === "self"
+                    ? "Tutor's own account"
+                    : "Trusted person's account"}
+                </Text>
+              ) : null}
+              {!hasCompletePayoutDetails ? (
+                <Text className="mt-2 text-xs text-warning">
+                  Tutor must complete and confirm all payout account details
+                  before transfer.
+                </Text>
+              ) : null}
+            </section>
 
             <section>
               <div className="mb-2 flex items-center gap-2">

@@ -79,6 +79,7 @@ function RouteComponent() {
           role={(session.data.user as CogitoUser).role}
         />
       }
+      role={(session.data.user as CogitoUser).role}
       sessionExpiresAt={session.data.session.expiresAt}
     >
       <Outlet />

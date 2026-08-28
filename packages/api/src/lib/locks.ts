@@ -23,6 +23,16 @@ export async function lockTutorForBooking(
   );
 }
 
+/** Serializes payout cutoff creation for a single tutor. */
+export async function lockTutorForPayout(
+  conn: DbOrTx,
+  tutorId: string,
+): Promise<void> {
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${tutorId}, 2))`,
+  );
+}
+
 /** Serializes proposal replacement for a single booking. */
 export async function lockBookingReschedule(
   conn: DbOrTx,

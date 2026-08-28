@@ -20,6 +20,12 @@ export interface UpdateProfileInput {
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   baseRatesIdr?: Partial<{ online: number; offline: number }>;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolderName?: string;
+  bankAccountOpeningCity?: string;
+  bankAccountOwnership?: "self" | "trusted_person";
+  bankTransferDisclaimerAccepted?: boolean;
   prices?: Record<string, number>;
 }
 

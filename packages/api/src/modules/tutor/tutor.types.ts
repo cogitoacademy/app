@@ -31,6 +31,16 @@ export const updateMyProfileInput = z.object({
       { message: "baseRatesIdr must only contain online/offline keys" },
     )
     .optional(),
+  bankName: z.string().trim().min(2).max(100).optional(),
+  bankAccountNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{6,30}$/, "Bank account number must contain 6-30 digits")
+    .optional(),
+  bankAccountHolderName: z.string().trim().min(2).max(100).optional(),
+  bankAccountOpeningCity: z.string().trim().min(2).max(100).optional(),
+  bankAccountOwnership: z.enum(["self", "trusted_person"]).optional(),
+  bankTransferDisclaimerAccepted: z.boolean().optional(),
   prices: z
     .record(z.string(), z.number())
     .refine(

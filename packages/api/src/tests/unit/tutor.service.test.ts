@@ -25,6 +25,12 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     experiences: "Mathematics tutor (2024–2025)",
     sourcePhotoUrl: "https://example.com/source-photo.jpg",
     modality: "online",
+    bankName: "BCA",
+    bankAccountNumber: "1234567890",
+    bankAccountHolderName: "Dr. Smith",
+    bankAccountOpeningCity: "Jakarta Selatan",
+    bankAccountOwnership: "self",
+    bankTransferDisclaimerAccepted: true,
     prices: { "1": 50 },
     expertise: ["math"],
     subjects: [
@@ -183,6 +189,21 @@ describe("Tutor Service", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({ displayName: null }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
+    });
+
+    test("requires payout account ownership and transfer disclaimer confirmation", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ bankAccountOwnership: null }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ bankTransferDisclaimerAccepted: false }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);

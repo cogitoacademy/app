@@ -55,6 +55,11 @@ function RouteComponent() {
       profile={{
         ...profile,
         expertise: profile.expertise ?? [],
+        bankAccountOwnership:
+          profile.bankAccountOwnership === "self" ||
+          profile.bankAccountOwnership === "trusted_person"
+            ? profile.bankAccountOwnership
+            : null,
       }}
     />
   );

@@ -22,6 +22,10 @@ import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
+
+// Legacy snapshots predate tutorHonorariumIdr; keep their tutor-facing value
+// in IDR while new snapshots use the authoritative stored amount.
+const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import {
@@ -49,7 +53,11 @@ export type BookingCardData = {
   deadlineAt?: string | Date | null;
   timezone: string;
   originalMarks: number;
-  priceSnapshot: { perStudent?: number; tutorShare?: number } | null;
+  priceSnapshot: {
+    perStudent?: number;
+    tutorShare?: number;
+    tutorHonorariumIdr?: number;
+  } | null;
   tutor: BookingCardPerson | null;
   proposer: BookingCardPerson | null;
   participants?: Array<{
@@ -534,14 +542,17 @@ function BookingFinancialInfo({
       : total;
 
   if (viewerRole === "tutor") {
+    const honorariumIdr =
+      booking.priceSnapshot?.tutorHonorariumIdr ??
+      tutorShare * LEGACY_TUTOR_PAYOUT_RATE_IDR;
     return (
-      <div className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium">
-        <FinancialValue label="Earns" value={tutorShare} />
-        <span className="text-dimmed" aria-hidden="true">
-          ·
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium">
+        <span className="text-muted">Honorarium</span>
+        <span>
+          Rp
+          {honorariumIdr.toLocaleString("id-ID")}
         </span>
-        <FinancialValue label="Total" value={total} />
-      </div>
+      </span>
     );
   }
 

@@ -58,6 +58,19 @@ export class EconomyConfigConflictError extends DomainError {
   }
 }
 
+export class TutorPayoutNotAvailableError extends DomainError {
+  readonly domain = "admin";
+  constructor(tutorId: string) {
+    super(
+      "TUTOR_PAYOUT_NOT_AVAILABLE",
+      "No unpaid tutor honorarium is available",
+      {
+        tutorId,
+      },
+    );
+  }
+}
+
 export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof UserNotFoundError) return notFound(err.message, err);
   if (err instanceof WalletNotFoundError) return notFound(err.message, err);
@@ -67,5 +80,7 @@ export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
     return badRequest(err.message, err);
   if (err instanceof EconomyConfigConflictError)
     return conflict(err.message, err);
+  if (err instanceof TutorPayoutNotAvailableError)
+    return badRequest(err.message, err);
   return internalServerError(err.message, err);
 }

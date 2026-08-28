@@ -19,6 +19,7 @@ import {
   FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -35,6 +36,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconAlertTriangle,
+  IconBuildingBank,
   IconPhoto,
   IconSchool,
   IconShieldCheck,
@@ -49,6 +51,7 @@ import { TutorPricingFields } from "./tutor-pricing-fields";
 import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
 
 type Modality = "online" | "offline" | "both";
+type BankAccountOwnership = "self" | "trusted_person";
 
 type TutorStatusBadge = {
   label: string;
@@ -84,6 +87,12 @@ interface OnboardingFormProps {
     subjects?: TutorSubject[] | null;
     modality: string | null;
     baseRatesIdr: Partial<{ online: number; offline: number }> | null;
+    bankName: string | null;
+    bankAccountNumber: string | null;
+    bankAccountHolderName: string | null;
+    bankAccountOpeningCity: string | null;
+    bankAccountOwnership: BankAccountOwnership | null;
+    bankTransferDisclaimerAccepted: boolean | null;
     prices: Record<string, number> | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
@@ -156,6 +165,15 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         online: 175_000,
         offline: 225_000,
       },
+    bankName: profile.bankName ?? "",
+    bankAccountNumber: profile.bankAccountNumber ?? "",
+    bankAccountHolderName: profile.bankAccountHolderName ?? "",
+    bankAccountOpeningCity: profile.bankAccountOpeningCity ?? "",
+    bankAccountOwnership: (profile.bankAccountOwnership ?? "") as
+      | BankAccountOwnership
+      | "",
+    bankTransferDisclaimerAccepted:
+      profile.bankTransferDisclaimerAccepted ?? false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -271,6 +289,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       subjectIds?: string[];
       modality?: Modality;
       baseRatesIdr?: Partial<{ online: number; offline: number }>;
+      bankName?: string;
+      bankAccountNumber?: string;
+      bankAccountHolderName?: string;
+      bankAccountOpeningCity?: string;
+      bankAccountOwnership?: BankAccountOwnership;
+      bankTransferDisclaimerAccepted?: boolean;
       prices?: Record<string, number>;
     } = { version: profile.version };
     const displayName = form.displayName.trim();
@@ -278,6 +302,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const achievements = form.achievements.trim();
     const experiences = form.experiences.trim();
     const sourcePhotoUrl = form.sourcePhotoUrl.trim();
+    const bankName = form.bankName.trim();
+    const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
+    const bankAccountHolderName = form.bankAccountHolderName.trim();
+    const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
 
     if (displayName) payload.displayName = displayName;
     if (shortBio) payload.shortBio = shortBio;
@@ -294,6 +322,16 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       payload.subjectIds = form.subjectIds;
     }
     if (form.modality) payload.modality = form.modality;
+    if (bankName) payload.bankName = bankName;
+    if (bankAccountNumber) payload.bankAccountNumber = bankAccountNumber;
+    if (bankAccountHolderName)
+      payload.bankAccountHolderName = bankAccountHolderName;
+    if (bankAccountOpeningCity)
+      payload.bankAccountOpeningCity = bankAccountOpeningCity;
+    if (form.bankAccountOwnership)
+      payload.bankAccountOwnership = form.bankAccountOwnership;
+    payload.bankTransferDisclaimerAccepted =
+      form.bankTransferDisclaimerAccepted;
     if (form.baseRatesIdr && Object.keys(form.baseRatesIdr).length > 0) {
       const cleanBaseRates = Object.fromEntries(
         Object.entries(form.baseRatesIdr).filter(([, value]) => value > 0),
@@ -317,6 +355,21 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (!form.sourcePhotoUrl.trim())
       validationErrors.sourcePhotoUrl = "Required";
     if (!form.modality) validationErrors.modality = "Required";
+    if (!form.bankName.trim()) validationErrors.bankName = "Required";
+    if (!/^\d{6,30}$/.test(form.bankAccountNumber.replaceAll(/\D/g, ""))) {
+      validationErrors.bankAccountNumber = "Enter a valid account number";
+    }
+    if (!form.bankAccountHolderName.trim())
+      validationErrors.bankAccountHolderName = "Required";
+    if (!form.bankAccountOpeningCity.trim())
+      validationErrors.bankAccountOpeningCity = "Required";
+    if (!form.bankAccountOwnership)
+      validationErrors.bankAccountOwnership =
+        "Select an account ownership option";
+    if (!form.bankTransferDisclaimerAccepted) {
+      validationErrors.bankTransferDisclaimerAccepted =
+        "Please confirm the transfer-account responsibility statement";
+    }
     if (form.subjectIds.length === 0)
       validationErrors.subjects = "Select at least one child subject";
     const requiredRates =
@@ -546,7 +599,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
           className="flex flex-col gap-6"
         >
           <div className="grid gap-6 xl:grid-cols-2">
-            <Card className="min-w-0">
+            <Card className="min-w-0 xl:col-span-2">
               <CardHeader>
                 <IconBox variant="secondary-subtle">
                   <IconUser aria-hidden="true" />
@@ -807,6 +860,196 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     pricing fields.
                   </Text>
                 )}
+              </CardBody>
+            </Card>
+
+            <Card className="min-w-0">
+              <CardHeader>
+                <IconBox variant="success-subtle">
+                  <IconBuildingBank aria-hidden="true" />
+                </IconBox>
+                <CardTitle>Payout account</CardTitle>
+                <CardDescription>
+                  Weekly honorarium payouts are sent to this bank account.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="flex flex-col gap-5">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="tutor-bankName">
+                      Bank <span aria-hidden="true">*</span>
+                    </FieldLabel>
+                    <Input
+                      id="tutor-bankName"
+                      value={form.bankName}
+                      placeholder="BCA"
+                      aria-invalid={Boolean(errors.bankName)}
+                      onChange={(event) => {
+                        setForm((current) => ({
+                          ...current,
+                          bankName: event.target.value,
+                        }));
+                        clearError("bankName");
+                      }}
+                    />
+                    <FieldDescription>
+                      Only conventional BCA is fee-free. BCA Syariah and blu
+                      (BCA Digital) are treated as non-BCA and incur a Rp2,500
+                      transfer fee per payout.
+                    </FieldDescription>
+                    {errors.bankName ? (
+                      <FieldError>{errors.bankName}</FieldError>
+                    ) : null}
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="tutor-bankAccountNumber">
+                      Account number <span aria-hidden="true">*</span>
+                    </FieldLabel>
+                    <Input
+                      id="tutor-bankAccountNumber"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={form.bankAccountNumber}
+                      placeholder="Enter account number"
+                      aria-invalid={Boolean(errors.bankAccountNumber)}
+                      onChange={(event) => {
+                        setForm((current) => ({
+                          ...current,
+                          bankAccountNumber: event.target.value.replaceAll(
+                            /\D/g,
+                            "",
+                          ),
+                        }));
+                        clearError("bankAccountNumber");
+                      }}
+                    />
+                    {errors.bankAccountNumber ? (
+                      <FieldError>{errors.bankAccountNumber}</FieldError>
+                    ) : null}
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="tutor-bankAccountHolderName">
+                      Account holder name <span aria-hidden="true">*</span>
+                    </FieldLabel>
+                    <Input
+                      id="tutor-bankAccountHolderName"
+                      autoComplete="name"
+                      value={form.bankAccountHolderName}
+                      placeholder="Name as registered by the bank"
+                      aria-invalid={Boolean(errors.bankAccountHolderName)}
+                      onChange={(event) => {
+                        setForm((current) => ({
+                          ...current,
+                          bankAccountHolderName: event.target.value,
+                        }));
+                        clearError("bankAccountHolderName");
+                      }}
+                    />
+                    {errors.bankAccountHolderName ? (
+                      <FieldError>{errors.bankAccountHolderName}</FieldError>
+                    ) : null}
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="tutor-bankAccountOpeningCity">
+                      Account opening city/regency{" "}
+                      <span aria-hidden="true">*</span>
+                    </FieldLabel>
+                    <Input
+                      id="tutor-bankAccountOpeningCity"
+                      value={form.bankAccountOpeningCity}
+                      placeholder="e.g. Jakarta Selatan"
+                      aria-invalid={Boolean(errors.bankAccountOpeningCity)}
+                      onChange={(event) => {
+                        setForm((current) => ({
+                          ...current,
+                          bankAccountOpeningCity: event.target.value,
+                        }));
+                        clearError("bankAccountOpeningCity");
+                      }}
+                    />
+                    {errors.bankAccountOpeningCity ? (
+                      <FieldError>{errors.bankAccountOpeningCity}</FieldError>
+                    ) : null}
+                  </Field>
+                </div>
+
+                <Field>
+                  <FieldLabel htmlFor="tutor-bankAccountOwnership">
+                    Account ownership <span aria-hidden="true">*</span>
+                  </FieldLabel>
+                  <Select
+                    value={form.bankAccountOwnership}
+                    onValueChange={(value) => {
+                      const ownership =
+                        typeof value === "object" &&
+                        value !== null &&
+                        "value" in value
+                          ? (value as { value: string }).value
+                          : value;
+                      if (
+                        ownership !== "self" &&
+                        ownership !== "trusted_person"
+                      ) {
+                        return;
+                      }
+                      setForm((current) => ({
+                        ...current,
+                        bankAccountOwnership: ownership,
+                      }));
+                      clearError("bankAccountOwnership");
+                    }}
+                  >
+                    <SelectTrigger
+                      id="tutor-bankAccountOwnership"
+                      aria-invalid={Boolean(errors.bankAccountOwnership)}
+                    >
+                      <SelectValue placeholder="Select who owns this account" />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectList>
+                        <SelectItem value="self">
+                          My own bank account
+                        </SelectItem>
+                        <SelectItem value="trusted_person">
+                          A trusted person's account for this transfer
+                        </SelectItem>
+                      </SelectList>
+                    </SelectPopup>
+                  </Select>
+                  {errors.bankAccountOwnership ? (
+                    <FieldError>{errors.bankAccountOwnership}</FieldError>
+                  ) : null}
+                </Field>
+
+                <div className="flex items-start gap-3 rounded-lg border border-item-border bg-item p-4">
+                  <Checkbox
+                    id="tutor-bankTransferDisclaimerAccepted"
+                    checked={form.bankTransferDisclaimerAccepted}
+                    onCheckedChange={(checked) => {
+                      setForm((current) => ({
+                        ...current,
+                        bankTransferDisclaimerAccepted: checked === true,
+                      }));
+                      clearError("bankTransferDisclaimerAccepted");
+                    }}
+                  />
+                  <div className="min-w-0">
+                    <FieldLabel htmlFor="tutor-bankTransferDisclaimerAccepted">
+                      I confirm the account can receive Cogito transfers
+                    </FieldLabel>
+                    <FieldDescription>
+                      I confirm this is my own account or an account belonging
+                      to someone I trust for receiving this transfer. Cogito is
+                      not responsible for any issue after the transfer reaches
+                      the account provided here.
+                    </FieldDescription>
+                    {errors.bankTransferDisclaimerAccepted ? (
+                      <FieldError>
+                        {errors.bankTransferDisclaimerAccepted}
+                      </FieldError>
+                    ) : null}
+                  </div>
+                </div>
               </CardBody>
             </Card>
           </div>

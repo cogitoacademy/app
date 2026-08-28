@@ -71,6 +71,7 @@ export const booking = pgTable(
     scheduledEndAt: timestamp("scheduled_end_at", {
       withTimezone: true,
     }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     timezone: text("timezone").notNull().default("Asia/Jakarta"), // TODO(production-readiness): use timezone in deadline calculations instead of server time
     roomId: text("room_id"),
     priceSnapshot: jsonb("price_snapshot").$type<{
@@ -148,6 +149,7 @@ export const booking = pgTable(
       table.deadlineAt,
     ),
     index("booking_scheduledStartAt_idx").on(table.scheduledStartAt),
+    index("booking_tutor_completedAt_idx").on(table.tutorId, table.completedAt),
   ],
 );
 
@@ -282,6 +284,7 @@ export const bookingSession = pgTable(
     scheduledEndAt: timestamp("scheduled_end_at", {
       withTimezone: true,
     }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     currentState: text("current_state").notNull().default("scheduled"),
     holdAmount: integer("hold_amount").notNull().default(0),
     priceSnapshot: jsonb("price_snapshot").$type<{
@@ -319,6 +322,7 @@ export const bookingSession = pgTable(
     ),
     index("booking_session_seriesBookingId_idx").on(table.seriesBookingId),
     index("booking_session_scheduledStartAt_idx").on(table.scheduledStartAt),
+    index("booking_session_completedAt_idx").on(table.completedAt),
   ],
 );
 

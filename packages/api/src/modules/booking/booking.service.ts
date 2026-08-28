@@ -50,7 +50,11 @@ import {
   BookingCancellationDeadlinePassedError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
-import { lockBookingReschedule, lockTutorForBooking } from "../../lib/locks";
+import {
+  lockBookingReschedule,
+  lockTutorForBooking,
+  lockTutorForPayout,
+} from "../../lib/locks";
 import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
 import {
@@ -81,6 +85,12 @@ const EXPIRY_TARGET: Record<string, BookingState> = {
   [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
   [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
 };
+
+export const NON_BCA_TRANSFER_FEE_IDR = 2_500;
+
+export function getTutorPayoutTransferFeeIdr(bankName: string): number {
+  return bankName.trim().toUpperCase() === "BCA" ? 0 : NON_BCA_TRANSFER_FEE_IDR;
+}
 
 export interface CreateSoloInput {
   tutorId: string;
@@ -295,6 +305,9 @@ export function createBookingService(deps: {
         currentState: toState,
         previousState: fromState,
         stateReason: params.reason ?? null,
+        ...(toState === BOOKING_STATE.COMPLETED
+          ? { completedAt: new Date() }
+          : {}),
       },
     );
     if (!versioned) {
@@ -1375,6 +1388,10 @@ export function createBookingService(deps: {
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
         throw new BookingNotOwnedError(bookingId, tutorId);
+      // Serialize completion with admin payout cutoffs. A session that is
+      // completed while a payout is being marked must land wholly before or
+      // after that cutoff, never disappear between the two reads.
+      await lockTutorForPayout(tx, b.tutorId);
 
       if (b.type !== BOOKING_TYPE.SERIES) {
         return completeSingleSession(tx, b, bookingId, tutorId);
@@ -3642,16 +3659,21 @@ export function createBookingService(deps: {
    * session; a series completed without session rows falls back to its
    * booking-level snapshot.
    */
-  async function getTutorPayouts(input: {
-    tutorId: string;
-    dateFrom?: Date;
-    dateTo?: Date;
-  }): Promise<TutorPayoutResult> {
+  async function aggregateTutorPayouts(
+    conn: DbOrTx,
+    input: {
+      tutorId: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+      dateBasis?: "scheduledStartAt" | "completedAt";
+    },
+  ): Promise<TutorPayoutResult> {
     const bookings = await repo.findCompletedBookingsByTutor(
-      db,
+      conn,
       input.tutorId,
       input.dateFrom,
       input.dateTo,
+      input.dateBasis,
     );
 
     let completedSessions = 0;
@@ -3662,9 +3684,7 @@ export function createBookingService(deps: {
 
     for (const b of bookings) {
       if (b.type === BOOKING_TYPE.SERIES) {
-        // eslint-disable-next-line no-await-in-loop
-
-        const sessions = await repo.listSessionsBySeriesId(db, b.id);
+        const sessions = await repo.listSessionsBySeriesId(conn, b.id);
         const completed = sessions.filter(
           (s) => s.currentState === BOOKING_STATE.COMPLETED,
         );
@@ -3708,6 +3728,79 @@ export function createBookingService(deps: {
       tutorPayout,
       tutorPayoutIdr: Math.round(tutorPayoutIdr),
     };
+  }
+
+  async function getTutorPayouts(input: {
+    tutorId: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<TutorPayoutResult> {
+    return aggregateTutorPayouts(db, input);
+  }
+
+  async function getPendingTutorPayouts(tutorId: string) {
+    const lastPaid = await repo.findLatestPaidTutorPayout(db, tutorId);
+    const result = await aggregateTutorPayouts(db, {
+      tutorId,
+      dateFrom: lastPaid
+        ? new Date(lastPaid.cutoffAt.getTime() + 1)
+        : undefined,
+      dateBasis: "completedAt",
+    });
+    return { ...result, lastPaidAt: lastPaid?.paidAt ?? null };
+  }
+
+  async function markTutorPayoutPaid(tutorId: string, adminId: string) {
+    return db.transaction(async (tx) => {
+      await lockTutorForPayout(tx, tutorId);
+      const lastPaid = await repo.findLatestPaidTutorPayout(tx, tutorId);
+      const cutoffAt = new Date();
+      const result = await aggregateTutorPayouts(tx, {
+        tutorId,
+        dateFrom: lastPaid
+          ? new Date(lastPaid.cutoffAt.getTime() + 1)
+          : undefined,
+        dateTo: cutoffAt,
+        dateBasis: "completedAt",
+      });
+      if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
+        return null;
+      }
+      const profile = await repo.findTutorProfile(tx, tutorId);
+      if (
+        !profile?.bankName?.trim() ||
+        !profile.bankAccountNumber?.trim() ||
+        !profile.bankAccountHolderName?.trim() ||
+        !profile.bankAccountOpeningCity?.trim() ||
+        !profile.bankAccountOwnership ||
+        !profile.bankTransferDisclaimerAccepted
+      ) {
+        return null;
+      }
+      const bankName = profile.bankName.trim();
+      const transferFeeIdr = getTutorPayoutTransferFeeIdr(bankName);
+      const paidAt = new Date();
+      const row = await repo.insertTutorPayout(tx, {
+        tutorId,
+        cutoffAt,
+        grossHonorariumIdr: result.tutorPayoutIdr,
+        transferFeeIdr,
+        netHonorariumIdr: Math.max(0, result.tutorPayoutIdr - transferFeeIdr),
+        bankName,
+        status: "paid",
+        paidAt,
+        paidBy: adminId,
+      });
+      return {
+        id: row.id,
+        tutorId: row.tutorId,
+        grossHonorariumIdr: row.grossHonorariumIdr,
+        transferFeeIdr: row.transferFeeIdr,
+        netHonorariumIdr: row.netHonorariumIdr,
+        bankName: row.bankName,
+        paidAt: row.paidAt,
+      };
+    });
   }
 
   /**
@@ -4482,6 +4575,8 @@ export function createBookingService(deps: {
     getSessionNotes,
     listSessions,
     getTutorPayouts,
+    getPendingTutorPayouts,
+    markTutorPayoutPaid,
     expireBookings,
     releaseExpiredHolds,
     checkTutorLateness,

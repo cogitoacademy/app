@@ -564,6 +564,11 @@ function RouteComponent() {
                 profile={{
                   ...selectedProfile,
                   expertise: selectedProfile.expertise ?? [],
+                  bankAccountOwnership:
+                    selectedProfile.bankAccountOwnership === "self" ||
+                    selectedProfile.bankAccountOwnership === "trusted_person"
+                      ? selectedProfile.bankAccountOwnership
+                      : null,
                 }}
                 subjectLabels={subjectLabels}
                 onAction={() => {

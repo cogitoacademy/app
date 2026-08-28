@@ -39,6 +39,8 @@ import {
 } from "@/components/booking/booking-ui";
 import { orpc } from "@/utils/orpc";
 
+const NON_BCA_TRANSFER_FEE_IDR = 2_500;
+
 export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   const bookings = useQuery(
     orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
@@ -60,6 +62,21 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
     );
   const nextBooking = upcoming[0];
   const profileStatus = profile.data?.onboardingStatus ?? "draft";
+  const pendingHonorarium = payouts.data?.tutorPayoutIdr ?? 0;
+  const hasBankDetails = Boolean(
+    profile.data?.bankName?.trim() &&
+    profile.data?.bankAccountNumber?.trim() &&
+    profile.data?.bankAccountHolderName?.trim() &&
+    profile.data?.bankAccountOpeningCity?.trim() &&
+    profile.data?.bankAccountOwnership &&
+    profile.data?.bankTransferDisclaimerAccepted,
+  );
+  const usesBca = profile.data?.bankName?.trim().toUpperCase() === "BCA";
+  const transferFee =
+    pendingHonorarium > 0 && hasBankDetails && !usesBca
+      ? NON_BCA_TRANSFER_FEE_IDR
+      : 0;
+  const estimatedPayout = Math.max(0, pendingHonorarium - transferFee);
 
   return (
     <Stack direction="column" spacing="lg">
@@ -95,12 +112,11 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           />
           <MetricCard
             icon={<IconCoins />}
-            label="Honorarium earned"
+            label="Honorarium awaiting payout"
             value={
               payouts.isPending
                 ? "—"
-                : "Rp" +
-                  (payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")
+                : "Rp" + pendingHonorarium.toLocaleString("id-ID")
             }
             tone="success-subtle"
           />
@@ -131,8 +147,9 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
             <div>
               <CardTitle>Payout details</CardTitle>
               <CardDescription>
-                Completed sessions settle the IDR honorarium captured in each
-                booking.
+                Honorarium from completed sessions that have not yet been paid
+                by an admin. Payouts are processed weekly, then this amount is
+                cleared against the recorded payout.
               </CardDescription>
             </div>
           </CardHeader>
@@ -145,16 +162,49 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
                 </Text>
               </div>
               <div>
-                <Text className="text-sm text-muted">Tutor honorarium</Text>
+                <Text className="text-sm text-muted">Unpaid honorarium</Text>
                 <Text className="mt-1 text-lg font-semibold">
-                  Rp{" "}
-                  {(payouts.data?.tutorPayoutIdr ?? 0).toLocaleString("id-ID")}
+                  Rp {pendingHonorarium.toLocaleString("id-ID")}
                 </Text>
                 <Text className="mt-1 text-sm text-muted">
                   {payouts.data?.completedSessions ?? 0} completed session
                   {(payouts.data?.completedSessions ?? 0) === 1 ? "" : "s"}
                 </Text>
               </div>
+            </div>
+            <div className="mt-4 rounded-lg bg-accent p-4">
+              <div className="flex items-center justify-between gap-3">
+                <Text className="text-sm text-muted">
+                  {!hasBankDetails
+                    ? "Transfer fee"
+                    : usesBca
+                      ? "BCA transfer fee"
+                      : "Non-BCA transfer fee"}
+                </Text>
+                <Text className="font-medium">
+                  {transferFee > 0
+                    ? `−Rp${transferFee.toLocaleString("id-ID")}`
+                    : "Rp0"}
+                </Text>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <Text className="font-medium">Estimated next payout</Text>
+                <Text className="font-semibold">
+                  Rp{estimatedPayout.toLocaleString("id-ID")}
+                </Text>
+              </div>
+              <Text className="mt-2 text-sm text-muted">
+                Only conventional BCA is fee-free. BCA Syariah, blu (BCA
+                Digital), and other banks are charged Rp2.500 once per payout,
+                deducted from the tutor fee. The amount clears only after an
+                admin records the payout as paid.
+              </Text>
+              {!hasBankDetails ? (
+                <Text className="mt-2 text-sm text-warning">
+                  Complete your payout account details in your tutor profile
+                  before requesting a payout.
+                </Text>
+              ) : null}
             </div>
           </CardBody>
         </Card>
@@ -282,6 +332,7 @@ function MetricCard({
   value: string;
   tone:
     | "warning-subtle"
+    | "primary-subtle"
     | "secondary-subtle"
     | "info-subtle"
     | "tertiary-subtle"
@@ -295,9 +346,7 @@ function MetricCard({
           <Text className="text-muted">{label}</Text>
         </div>
 
-        <Heading size="" className="self-end text-right">
-          {value}
-        </Heading>
+        <Heading className="self-end text-right">{value}</Heading>
       </CardBody>
     </Card>
   );

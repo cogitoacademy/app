@@ -126,6 +126,14 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
   }
 
   return conn.query.tutorProfile.findMany({
+    columns: {
+      bankName: false,
+      bankAccountNumber: false,
+      bankAccountHolderName: false,
+      bankAccountOpeningCity: false,
+      bankAccountOwnership: false,
+      bankTransferDisclaimerAccepted: false,
+    },
     where: and(...conditions),
     orderBy: [desc(tutorProfile.publishedAt)],
     limit: input.limit,
@@ -146,6 +154,14 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
  */
 async function getProfileById(conn: DbOrTx, tutorId: string) {
   return conn.query.tutorProfile.findFirst({
+    columns: {
+      bankName: false,
+      bankAccountNumber: false,
+      bankAccountHolderName: false,
+      bankAccountOpeningCity: false,
+      bankAccountOwnership: false,
+      bankTransferDisclaimerAccepted: false,
+    },
     where: and(
       eq(tutorProfile.id, tutorId),
       eq(tutorProfile.onboardingStatus, "published"),

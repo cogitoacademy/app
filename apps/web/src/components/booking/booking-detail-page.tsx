@@ -90,6 +90,8 @@ import {
 } from "./booking-reschedule-action";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { orpc } from "@/utils/orpc";
+
+const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import { ContactRequestPanel } from "./contact-request-panel";
 import { ManualMeetingLinkDialog } from "./manual-meeting-link-dialog";
 
@@ -501,7 +503,7 @@ export function BookingDetailPage({
                         title="Completion timing"
                         description={
                           sessionHasEnded
-                            ? "Confirm completion to settle the held Marks."
+                            ? "Confirm completion to record your IDR honorarium."
                             : "Completion becomes available after the scheduled end time."
                         }
                         label="About completing this session"
@@ -696,8 +698,9 @@ export function BookingDetailPage({
               <CardHeader>
                 <CardTitle>Series sessions</CardTitle>
                 <CardDescription>
-                  Each session is completed individually to settle its held
-                  Marks.
+                  {isTutor
+                    ? "Each session is completed individually to record its IDR honorarium."
+                    : "Each session is completed individually to settle its held Marks."}
                 </CardDescription>
               </CardHeader>
               <CardBody className="grid gap-3">
@@ -832,30 +835,43 @@ export function BookingDetailPage({
               <IconBox variant="warning-subtle">
                 <IconCoins />
               </IconBox>
-              <CardTitle>Marks</CardTitle>
-              <CardDescription>Cost and reservation</CardDescription>
+              <CardTitle>{isTutor ? "Honorarium" : "Marks"}</CardTitle>
+              <CardDescription>
+                {isTutor
+                  ? "Amount earned after completion"
+                  : "Cost and reservation"}
+              </CardDescription>
             </CardHeader>
             <CardBody className="space-y-4">
-              <SummaryRow
-                label="Original price"
-                value={<MarkAmount value={booking.originalMarks} />}
-              />
-              <SummaryRow
-                label="Currently held"
-                value={<MarkAmount value={booking.holdAmount} />}
-              />
-              <SummaryRow
-                label="Refunded"
-                value={<MarkAmount value={booking.refundedAmount} />}
-              />
-              {booking.priceSnapshot ? (
+              {isTutor ? (
                 <SummaryRow
-                  label="Per participant"
-                  value={
-                    <MarkAmount value={booking.priceSnapshot.perStudent} />
-                  }
+                  label="Session honorarium"
+                  value={`Rp${(booking.priceSnapshot?.tutorHonorariumIdr ?? (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR).toLocaleString("id-ID")}`}
                 />
-              ) : null}
+              ) : (
+                <>
+                  <SummaryRow
+                    label="Original price"
+                    value={<MarkAmount value={booking.originalMarks} />}
+                  />
+                  <SummaryRow
+                    label="Currently held"
+                    value={<MarkAmount value={booking.holdAmount} />}
+                  />
+                  <SummaryRow
+                    label="Refunded"
+                    value={<MarkAmount value={booking.refundedAmount} />}
+                  />
+                  {booking.priceSnapshot ? (
+                    <SummaryRow
+                      label="Per participant"
+                      value={
+                        <MarkAmount value={booking.priceSnapshot.perStudent} />
+                      }
+                    />
+                  ) : null}
+                </>
+              )}
             </CardBody>
           </Card>
         </aside>
@@ -890,7 +906,9 @@ export function BookingDetailPage({
               </DialogTitle>
               <DialogDescription>
                 {reviewDialog === "decline"
-                  ? "The held Marks will be released and the student will receive your reason."
+                  ? isTutor
+                    ? "The student's reservation will be released and they will receive your reason."
+                    : "The held Marks will be released and the student will receive your reason."
                   : booking.modality === "online"
                     ? "The student will be notified and the session will move to scheduling."
                     : "The student will be notified and the booking will move to room confirmation."}
@@ -1024,7 +1042,9 @@ export function BookingDetailPage({
         description={
           confirmationDialog?.action === "cancel"
             ? "Cancellation rules and applicable refunds will be applied."
-            : "Held Marks will be settled."
+            : isTutor
+              ? "The session will be marked complete and your IDR honorarium will be recorded."
+              : "Held Marks will be settled."
         }
         confirmLabel={
           confirmationDialog?.action === "cancel"
