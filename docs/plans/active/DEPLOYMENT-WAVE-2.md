@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                                                                                         |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | **Repo work MERGED (#121, 2026-08-28)** — operator apply + secrets pending |
+| Status     | **Repo work MERGED (#121, 2026-08-28)** — operator apply + secrets pending                                                                                                    |
 | Created    | 2026-08-28                                                                                                                                                                    |
 | Depends on | main `151fd2a` (#115–#118 merged; **#120 Xendit Test Mode merged 2026-08-28**; deployment wave state synced in #119)                                                          |
 | Scope      | Repo work only: `coolify-resources.yml` (Coolify API playbook + deploy-webhook route fix), drift-check + docs, plan-only CI audit. **No secrets values needed — names only.** |
