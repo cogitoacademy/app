@@ -1,0 +1,417 @@
+# coolify-resources.yml — declare the existing production resources via the
+# Coolify API, idempotently. This is the fix for the production deploy webhook
+# returning 401 (Task 0.2 of docs/plans/active/DEPLOYMENT-PLAN.md).
+#
+# WHAT THIS PLAYBOOK DECLARES (drift-check source of truth):
+#   1. The existing app Postgres 16 + Redis 7 containers (names, images,
+#      private network). NEVER recreated — if a database exists by name the
+#      playbook only compares its image and reports drift. If it is MISSING the
+#      playbook creates a NEW EMPTY database and prints a loud warning (the
+#      operator must confirm the existing container was not renamed before
+#      letting that happen — data lives in the container's volume).
+#   2. The API + web application resources: image (ghcr.io/cogitoacademy/app/
+#      {server,web}:latest), exposed ports (3001 / 80), domains
+#      (api./app.cogitoacademy.id), health checks (GET /health on 3001 for the
+#      API; GET / on 80 for the web). Drifted fields are PATCHed; deploys are
+#      NOT triggered here (CD owns deploys).
+#   3. The application env vars, sourced from the SOPS-encrypted vault
+#      (infra/secrets/prod.env) decrypted ON THE CONTROL NODE — the Age key
+#      never reaches the VPS and decrypted secrets are never written to disk
+#      on the VPS. Only the keys in `app_env_keys` are applied (ops-only keys
+#      like TS_AUTH_KEY / COOLIFY_API_TOKEN stay out of the app env).
+#   4. The Traefik route for the deploy webhook host
+#      (coolify.cogitoacademy.id → ONLY /api/v1/deploy/*, everything else
+#      404). The Coolify API cannot express a proxy route for the Coolify
+#      instance itself, so this is a documented UI fallback + drift-check note
+#      (DEPLOYMENT-PLAN risk note): the operator pastes the Traefik dynamic
+#      config below into Coolify UI → Servers → cogito-vps → Proxy → Custom
+#      Configuration, and the playbook's report-only probe verifies the route
+#      is live (see the `Verify the deploy-webhook route` task).
+#
+#   Traefik dynamic config to paste in the Coolify UI (Server → Proxy →
+#   Custom Configuration) — the ONLY public route on this host:
+#
+#     http:
+#       routers:
+#         coolify-deploy-webhook:
+#           rule: "Host(`coolify.cogitoacademy.id`) && PathPrefix(`/api/v1/deploy`)"
+#           service: coolify
+#           entryPoints: [https]
+#           tls:
+#             certResolver: letsencrypt
+#       services:
+#         coolify:
+#           loadBalancer:
+#             servers:
+#               - url: "http://coolify:8000"
+#
+#   Everything else on coolify.cogitoacademy.id returns 404 (no other router
+#   matches). The per-resource UUID in the webhook URL is the bearer secret;
+#   the Coolify UI itself stays tailnet-only.
+#
+# WHY CONTROL-NODE DRIVEN: the Coolify API (:8000) is reachable only from the
+# tailnet, and the SOPS Age key lives on the operator machine. This playbook
+# therefore runs entirely on the control node (hosts: localhost) and talks to
+# the API over the tailnet hostname. It needs no SSH to the VPS.
+#
+# COOLIFY API SURFACE NOTES (verified field names):
+#   - GET  /api/v1/projects, /api/v1/servers, /api/v1/databases,
+#          /api/v1/applications, /api/v1/applications/{uuid}/envs
+#   - POST /api/v1/projects, /api/v1/projects/{uuid}/environments,
+#          /api/v1/databases/postgres, /api/v1/databases/redis,
+#          /api/v1/applications/public
+#   - PATCH /api/v1/applications/{uuid}, /api/v1/applications/{uuid}/envs/{env_uuid}
+#   - Application model: docker_registry_image_name, docker_registry_image_tag,
+#     fqdn (GET), ports_exposes, health_check_*; writes use `domains`
+#     (comma-separated URLs) — the create/update body field, not `fqdn`.
+#   - Databases expose `image` (e.g. postgres:16-alpine, redis:7).
+#   - All endpoints use bearerAuth: Authorization: Bearer <api-token>.
+#   - If any endpoint shape differs on the live instance, the playbook fails
+#     loudly on that task; fix the field in this file (drift-check keeps the
+#     UI honest) rather than in the UI.
+#
+# RUN (from the repository root; sops + python3 on the control node):
+#   ansible-playbook --syntax-check -i infra/ansible/inventory.ini \
+#     infra/ansible/coolify-resources.yml
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/coolify-resources.yml --check   # structure only, no API calls
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/coolify-resources.yml           # idempotent apply
+#
+#   The Coolify API token must be in the SOPS vault as COOLIFY_API_TOKEN
+#   (Coolify UI → Keys & Tokens → API tokens, `deploy` permission).
+#
+# CHECK MODE: the `uri` module performs no requests in check mode, so
+# `--check` validates the playbook structure only. A full run is idempotent:
+# every write is conditional on a prior GET, so re-runs change nothing.
+---
+- name: Declare Coolify production resources (control-node driven)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Tailnet hostname of the VPS — the Coolify API is tailnet-only.
+    coolify_api_url: "http://cogito-vps.tail674634.ts.net:8000/api/v1"
+    vault_path: "infra/secrets/prod.env" # SOPS-encrypted, relative to repo root
+    project_name: "cogito"
+    environment_name: "production"
+    server_ip: "15.235.186.159"
+
+    # --- Declared resources (drift-check source of truth) ---
+    databases:
+      - name: "cogito-postgres"
+        type: "postgres"
+        image: "postgres:16-alpine"
+      - name: "cogito-redis"
+        type: "redis"
+        image: "redis:7"
+
+    applications:
+      - name: "cogito-api"
+        image_name: "ghcr.io/cogitoacademy/app/server"
+        image_tag: "latest"
+        ports_exposes: "3001"
+        domains: "https://api.cogitoacademy.id"
+        health_check_enabled: true
+        health_check_path: "/health"
+        health_check_port: "3001"
+        health_check_method: "GET"
+        health_check_return_code: 200
+        health_check_interval: 10
+        health_check_timeout: 5
+        health_check_retries: 3
+        health_check_start_period: 20
+      - name: "cogito-web"
+        image_name: "ghcr.io/cogitoacademy/app/web"
+        image_tag: "latest"
+        ports_exposes: "80"
+        domains: "https://app.cogitoacademy.id"
+        health_check_enabled: true
+        health_check_path: "/"
+        health_check_port: "80"
+        health_check_method: "GET"
+        health_check_return_code: 200
+        health_check_interval: 10
+        health_check_timeout: 5
+        health_check_retries: 3
+        health_check_start_period: 20
+
+    # Env keys applied to the API resource from the SOPS vault. Curated to the
+    # app surface (see infra/.env.prod.example); ops-only keys (TS_AUTH_KEY,
+    # COOLIFY_API_TOKEN, ...) never enter the app env.
+    app_env_keys:
+      - NODE_ENV
+      - DATABASE_URL
+      - REDIS_URL
+      - BETTER_AUTH_SECRET
+      - BETTER_AUTH_URL
+      - CORS_ORIGIN
+      - PORT
+      - TRUST_PROXY
+      - PAYMENT_PROVIDER
+      - PAYMENT_WEBHOOK_SECRET
+      - XENDIT_MODE
+      - XENDIT_SECRET_KEY
+      - XENDIT_WEBHOOK_TOKEN
+      - XENDIT_TEST_ALLOWED_EMAILS
+      - XENDIT_SUCCESS_REDIRECT_URL
+      - XENDIT_FAILURE_REDIRECT_URL
+      - WEBHOOK_ALLOWED_IPS
+      - SCHEDULER_ENABLED
+      - RESEND_API_KEY
+      - EMAIL_FROM
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GOOGLE_MEET_CLIENT_ID
+      - GOOGLE_MEET_CLIENT_SECRET
+      - GOOGLE_MEET_REFRESH_TOKEN
+      - GOOGLE_CLIENT_EMAIL
+      - GOOGLE_PRIVATE_KEY
+      - GOOGLE_CALENDAR_ID
+      - GOOGLE_IMPERSONATED_USER
+      - GOOGLE_MEET_ENABLED
+      - SESSION_COOKIE_CACHE_MAX_AGE
+      - R2_ACCOUNT_ID
+      - R2_ACCESS_KEY_ID
+      - R2_SECRET_ACCESS_KEY
+      - R2_BUCKET
+      - R2_PUBLIC_URL
+      - SANITY_PROJECT_ID
+      - SANITY_DATASET
+      - SANITY_API_VERSION
+      - SANITY_API_TOKEN
+      - ADMIN_EMAILS
+      - DB_SSL_ENABLED
+      - DB_SSL_REJECT_UNAUTHORIZED
+      - METRICS_TOKEN
+      - SEED_ALLOWED_IN_PROD
+      - SENTRY_DSN
+      - SENTRY_ENVIRONMENT
+
+  tasks:
+    # --- 0. Vault: decrypt + parse on the control node (never on the VPS) ---
+    - name: Decrypt the SOPS vault on the control node
+      ansible.builtin.command: sops -d {{ vault_path }}
+      changed_when: false
+      no_log: true
+      register: vault_plaintext
+
+    - name: Create a temp file for the decrypted vault
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .env
+      register: vault_tmpfile
+
+    - name: Write the decrypted vault to the temp file
+      ansible.builtin.copy:
+        dest: "{{ vault_tmpfile.path }}"
+        content: "{{ vault_plaintext.stdout }}"
+      no_log: true
+
+    - name: Parse the vault into a JSON fact
+      ansible.builtin.command: >-
+        python3 -c "import json,sys;
+        print(json.dumps({l.split('=',1)[0].strip(): l.split('=',1)[1].strip().strip(chr(34)).strip(chr(39))
+        for l in open(sys.argv[1])
+        if l.strip() and not l.strip().startswith('#') and '=' in l}))"
+        {{ vault_tmpfile.path }}
+      changed_when: false
+      no_log: true
+      register: vault_json
+
+    - name: Remove the temp vault file
+      ansible.builtin.file:
+        path: "{{ vault_tmpfile.path }}"
+        state: absent
+
+    - name: Load the vault as a fact
+      ansible.builtin.set_fact:
+        vault_env: "{{ vault_json.stdout | from_json }}"
+
+    - name: Require COOLIFY_API_TOKEN in the vault
+      ansible.builtin.assert:
+        that:
+          - vault_env.COOLIFY_API_TOKEN is defined
+          - vault_env.COOLIFY_API_TOKEN | length > 0
+        fail_msg: >-
+          COOLIFY_API_TOKEN is missing from {{ vault_path }} — create a Coolify
+          API token (Coolify UI → Keys & Tokens → API tokens, `deploy`
+          permission) and add it to the SOPS vault.
+
+    # --- 1. Project + environment + server lookup (create if missing) ---
+    - name: List Coolify projects
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: projects
+      no_log: true
+
+    - name: Find the project by name
+      ansible.builtin.set_fact:
+        project_found: "{{ projects.json | selectattr('name', 'equalto', project_name) | list }}"
+
+    - name: Create the project if missing
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        body:
+          name: "{{ project_name }}"
+        body_format: json
+        status_code: 201
+      register: project_created
+      no_log: true
+      when: project_found | length == 0
+
+    - name: Resolve the project UUID
+      ansible.builtin.set_fact:
+        project_uuid: "{{ project_found[0].uuid if project_found | length > 0 else project_created.json.uuid }}"
+
+    - name: List environments in the project
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects/{{ project_uuid }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: project_detail
+      no_log: true
+
+    - name: Find the production environment
+      ansible.builtin.set_fact:
+        env_found: "{{ project_detail.json.environments | default([]) | selectattr('name', 'equalto', environment_name) | list }}"
+
+    - name: Create the production environment if missing
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects/{{ project_uuid }}/environments"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        body:
+          name: "{{ environment_name }}"
+        body_format: json
+        status_code: 201
+      register: env_created
+      no_log: true
+      when: env_found | length == 0
+
+    - name: Resolve the environment UUID
+      ansible.builtin.set_fact:
+        environment_uuid: "{{ env_found[0].uuid if env_found | length > 0 else env_created.json.uuid }}"
+
+    - name: List Coolify servers
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/servers"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: servers
+      no_log: true
+
+    - name: Resolve the VPS server UUID
+      ansible.builtin.set_fact:
+        server_uuid: "{{ (servers.json | selectattr('ip', 'equalto', server_ip) | first).uuid }}"
+
+    # --- 2. Databases: re-declare, NEVER recreate -------------------------
+    - name: List Coolify databases
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/databases"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: databases
+      no_log: true
+
+    - name: Re-declare each database (create only when missing, with warning)
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/database.yml"
+      loop: "{{ databases }}"
+      loop_control:
+        loop_var: db_spec
+
+    # --- 3. Applications: API + web (create when missing, PATCH drift) ----
+    - name: List Coolify applications
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/applications"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: applications
+      no_log: true
+
+    - name: Re-declare each application
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/application.yml"
+      loop: "{{ applications }}"
+      loop_control:
+        loop_var: app_spec
+
+    # --- 4. Env vars: apply the SOPS vault to the API resource ------------
+    - name: Apply the vault env to the API application
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/env.yml"
+      vars:
+        app_spec: "{{ applications | selectattr('name', 'equalto', 'cogito-api') | first }}"
+
+    # --- 5. Deploy-webhook route: UI fallback + report-only probe ---------
+    - name: Print the Traefik route spec for the deploy-webhook host
+      ansible.builtin.debug:
+        msg: |-
+          The Coolify API cannot express a proxy route for the Coolify instance
+          itself. Paste this Traefik dynamic config in Coolify UI → Servers →
+          cogito-vps → Proxy → Custom Configuration (drift-check note: the
+          route is verified by the probe task below, not by the API):
+
+          http:
+            routers:
+              coolify-deploy-webhook:
+                rule: "Host(`coolify.cogitoacademy.id`) && PathPrefix(`/api/v1/deploy`)"
+                service: coolify
+                entryPoints: [https]
+                tls:
+                  certResolver: letsencrypt
+            services:
+              coolify:
+                loadBalancer:
+                  servers:
+                    - url: "http://coolify:8000"
+
+          Everything else on coolify.cogitoacademy.id returns 404 (no other
+          router matches). The per-resource UUID in the webhook URL is the
+          bearer secret; the Coolify UI stays tailnet-only.
+
+    - name: Verify the deploy-webhook route (report-only, never triggers a deploy)
+      ansible.builtin.uri:
+        url: "https://coolify.cogitoacademy.id/api/v1/deploy?uuid=probe&force=false"
+        method: GET # GET never deploys; we only read the status code
+        status_code: [200, 401, 403, 404, 405]
+        validate_certs: true
+      register: webhook_probe
+      ignore_errors: true
+      when: vault_env.COOLIFY_PROD_SERVER_WEBHOOK is defined
+
+    - name: Interpret the webhook probe
+      ansible.builtin.debug:
+        msg: >-
+          GET {{ webhook_probe.status }} on the deploy-webhook host.
+          {% if webhook_probe.status == 404 %}No Traefik route yet — paste the
+          dynamic config above, then re-run.{% elif webhook_probe.status == 401
+          %}Route is live; the 401 is the auth-required form — the CD pipeline
+          must send Authorization: Bearer <coolify-api-token> (Bearer support
+          added to scripts/migrate-and-deploy.sh + cd-prod.yml).{% elif
+          webhook_probe.status == 405 %}Route is live (GET not allowed on the
+          deploy endpoint — expected).{% else %}Route is live ({{ webhook_probe.status }}).{% endif %}
+      when: webhook_probe is defined and webhook_probe.status is defined
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Declared project={{ project_name }} env={{ environment_name }}
+          server={{ server_uuid }}. Databases and applications are declared
+          (see per-resource tasks above); env applied to cogito-api. Deploys
+          are NOT triggered — CD owns them.
