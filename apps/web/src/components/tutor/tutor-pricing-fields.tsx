@@ -5,10 +5,15 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
-import { Button } from "@cogito-app/ui/components/selia/button";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { IconMinus, IconPlus } from "@tabler/icons-react";
+import {
+  NumberField,
+  NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "@cogito-app/ui/components/selia/number-field";
 import {
   Table,
   TableBody,
@@ -64,46 +69,45 @@ export function TutorPricingFields({
               <FieldLabel htmlFor={"tutor-base-rate-" + key}>
                 {key === "online" ? "Online" : "Offline"} base rate
               </FieldLabel>
-              <div className="grid grid-cols-[auto_1fr_auto] gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  aria-label={`Decrease ${key} base honorarium by Rp 5,000`}
-                  disabled={(value ?? MIN_BASE_RATE_IDR) <= MIN_BASE_RATE_IDR}
-                  onClick={() =>
-                    onChange({
-                      ...baseRatesIdr,
-                      [key]: Math.max(
-                        MIN_BASE_RATE_IDR,
-                        (value ?? MIN_BASE_RATE_IDR) - 5_000,
-                      ),
-                    })
-                  }
-                >
-                  <IconMinus />
-                </Button>
-                <Input
-                  id={"tutor-base-rate-" + key}
-                  name={"base-rate-" + key}
-                  value={formatIdr(value ?? MIN_BASE_RATE_IDR)}
-                  readOnly
-                  className="text-center font-medium"
-                  aria-invalid={Boolean(errors.baseRatesIdr)}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  aria-label={`Increase ${key} base honorarium by Rp 5,000`}
-                  onClick={() =>
-                    onChange({
-                      ...baseRatesIdr,
-                      [key]: (value ?? MIN_BASE_RATE_IDR) + 5_000,
-                    })
-                  }
-                >
-                  <IconPlus />
-                </Button>
-              </div>
+              <NumberField
+                id={"tutor-base-rate-" + key}
+                name={"base-rate-" + key}
+                value={value ?? MIN_BASE_RATE_IDR}
+                min={MIN_BASE_RATE_IDR}
+                step={5_000}
+                snapOnStep
+                locale="id-ID"
+                format={{
+                  style: "currency",
+                  currency: "IDR",
+                  currencyDisplay: "symbol",
+                  maximumFractionDigits: 0,
+                }}
+                onValueChange={(nextValue) =>
+                  onChange({
+                    ...baseRatesIdr,
+                    [key]: nextValue ?? MIN_BASE_RATE_IDR,
+                  })
+                }
+              >
+                <NumberFieldGroup className="w-full">
+                  <NumberFieldDecrement
+                    aria-label={`Decrease ${key} base honorarium by Rp 5,000`}
+                  >
+                    <IconMinus />
+                  </NumberFieldDecrement>
+                  <NumberFieldInput
+                    className="min-w-0 flex-1 font-medium"
+                    aria-invalid={Boolean(errors.baseRatesIdr)}
+                    inputMode="numeric"
+                  />
+                  <NumberFieldIncrement
+                    aria-label={`Increase ${key} base honorarium by Rp 5,000`}
+                  >
+                    <IconPlus />
+                  </NumberFieldIncrement>
+                </NumberFieldGroup>
+              </NumberField>
               <FieldDescription>
                 Minimum {formatIdr(MIN_BASE_RATE_IDR)} · +{" "}
                 {formatIdr(TUTOR_INCREMENT_IDR[key])} per additional student
