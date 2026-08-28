@@ -85,6 +85,7 @@ const EXPIRY_TARGET: Record<string, BookingState> = {
 export interface CreateSoloInput {
   tutorId: string;
   availabilitySlotId: string;
+  subjectId?: string;
   modality: "online" | "offline";
   scheduledStartAt: Date;
   scheduledEndAt?: Date;
@@ -96,6 +97,7 @@ export interface CreateSoloInput {
 export interface CreateGroupInput {
   tutorId: string;
   availabilitySlotId: string;
+  subjectId?: string;
   modality: "online" | "offline";
   targetGroupSize: number;
   inviteeUserIds: string[];
@@ -109,6 +111,7 @@ export interface CreateGroupInput {
 export interface CreateSeriesInput {
   tutorId: string;
   availabilitySlotId: string;
+  subjectId?: string;
   modality: "online" | "offline";
   sessions: {
     availabilitySlotId?: string;
@@ -122,6 +125,7 @@ export interface CreateSeriesInput {
 export interface CreateGroupSeriesInput {
   tutorId: string;
   availabilitySlotId: string;
+  subjectId?: string;
   modality: "online" | "offline";
   targetGroupSize: number;
   inviteeUserIds: string[];
@@ -190,6 +194,20 @@ export type BookingService = ReturnType<typeof createBookingService>;
 type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
 >;
+
+const CALENDAR_COMPETITION_LABELS: Record<string, string> = {
+  "competition-model-united-nations": "MUN",
+  "model-united-nations": "MUN",
+  "competition-world-scholars-cup": "WSC",
+  "world-scholars-cup": "WSC",
+};
+
+function formatCalendarCompetitionLabel(
+  topic: BookingRow["sessionTopic"],
+): string {
+  if (!topic) return "Session";
+  return CALENDAR_COMPETITION_LABELS[topic.categorySlug] ?? topic.categoryName;
+}
 
 /**
  * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
@@ -515,36 +533,58 @@ export function createBookingService(deps: {
     return `${origin}/bookings/${bookingId}`;
   }
 
+  async function resolveSessionTopic(tutorId: string, subjectId?: string) {
+    const topic = await repo.findTutorSubjectTopic(db, tutorId, subjectId);
+    if (subjectId && !topic) {
+      throw new BookingNotEditableError(subjectId);
+    }
+    return topic;
+  }
+
   function buildMeetingEventDetails(
-    booking: Pick<BookingRow, "id" | "type" | "tutorId" | "learningGoal">,
+    booking: Pick<
+      BookingRow,
+      | "id"
+      | "tutorId"
+      | "proposerId"
+      | "targetGroupSize"
+      | "learningGoal"
+      | "sessionTopic"
+    >,
     users: { id: string; name: string }[],
   ) {
     const tutorName =
       users.find((user) => user.id === booking.tutorId)?.name.trim() ||
       "Cogito tutor";
-    const studentNames = users
-      .filter((user) => user.id !== booking.tutorId)
+    const proposerName =
+      users.find((user) => user.id === booking.proposerId)?.name.trim() || "";
+    const otherStudentNames = users
+      .filter(
+        (user) => user.id !== booking.tutorId && user.id !== booking.proposerId,
+      )
       .map((user) => user.name.trim())
       .filter(Boolean);
-    const sessionLabel =
-      booking.type === BOOKING_TYPE.GROUP
-        ? "Group session"
-        : booking.type === BOOKING_TYPE.SERIES
-          ? "Session series"
-          : "Solo session";
-    const title =
-      booking.type === BOOKING_TYPE.SOLO && studentNames[0]
-        ? `${sessionLabel} with ${tutorName} & ${studentNames[0]}`
-        : `${sessionLabel} with ${tutorName}`;
-    const learningGoal = booking.learningGoal?.trim();
+    const studentNames = [proposerName, ...otherStudentNames].filter(Boolean);
+    const primaryStudentName = proposerName || studentNames[0] || "Student";
+    const titleStudent =
+      booking.targetGroupSize > 1
+        ? `${primaryStudentName} & Friends`
+        : primaryStudentName;
+    const competitionLabel = formatCalendarCompetitionLabel(
+      booking.sessionTopic,
+    );
+    const title = `Cogito - ${competitionLabel} | ${tutorName} x ${titleStudent}`;
+    const sessionNotes = booking.learningGoal?.trim();
     const descriptionLines = [
       `Tutor: ${tutorName}`,
-      ...(studentNames.length
+      ...(studentNames.length ? [`Student: ${studentNames.join(", ")}`] : []),
+      ...(booking.sessionTopic
         ? [
-            `Student${studentNames.length === 1 ? "" : "s"}: ${studentNames.join(", ")}`,
+            "",
+            `Session Topic: ${competitionLabel} - ${booking.sessionTopic.subcategoryName}`,
           ]
         : []),
-      ...(learningGoal ? ["", `Learning goal: ${learningGoal}`] : []),
+      ...(sessionNotes ? ["", "Session Notes:", sessionNotes] : []),
       "",
       `Open this booking in Cogito: ${formatInviteCta(booking.id)}`,
     ];
@@ -806,6 +846,10 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    const sessionTopic = await resolveSessionTopic(
+      input.tutorId,
+      input.subjectId,
+    );
 
     const slot = await repo.findAvailabilitySlot(
       db,
@@ -879,6 +923,7 @@ export function createBookingService(deps: {
         scheduledEndAt: session.scheduledEndAt,
         timezone: input.timezone,
         learningGoal: input.learningGoal ?? "",
+        sessionTopic,
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -2395,6 +2440,10 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    const sessionTopic = await resolveSessionTopic(
+      input.tutorId,
+      input.subjectId,
+    );
 
     // Validate invitees: registered users (DL-19), no duplicates, no self-
     // invite, and the total headcount must fit the target group size.
@@ -2485,6 +2534,7 @@ export function createBookingService(deps: {
         scheduledEndAt: session.scheduledEndAt,
         timezone: input.timezone,
         learningGoal: input.learningGoal ?? "",
+        sessionTopic,
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -3214,6 +3264,10 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    const sessionTopic = await resolveSessionTopic(
+      input.tutorId,
+      input.subjectId,
+    );
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
@@ -3307,6 +3361,7 @@ export function createBookingService(deps: {
         scheduledEndAt: sessions[sessions.length - 1]!.scheduledEndAt,
         timezone: input.timezone,
         learningGoal: input.learningGoal ?? "",
+        sessionTopic,
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -3365,6 +3420,10 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    const sessionTopic = await resolveSessionTopic(
+      input.tutorId,
+      input.subjectId,
+    );
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
@@ -3478,6 +3537,7 @@ export function createBookingService(deps: {
         scheduledEndAt: sessions[sessions.length - 1]!.scheduledEndAt,
         timezone: input.timezone,
         learningGoal: input.learningGoal ?? "",
+        sessionTopic,
         priceSnapshot,
         originalMarks: packageTotal,
         holdAmount: packageTotal,

@@ -57,7 +57,7 @@ The shared frontend empty-state presentation is rendered by `apps/web/src/compon
 
 Theme selection is also frontend-only. `apps/web/src/components/mode-toggle.tsx` composes the `next-themes` provider with Light/Dark/System menu items and a `D` keydown handler that toggles the currently rendered light/dark mode outside editable fields. Theme preference persistence stays in `next-themes`; there is no service module, repository, event key, or API contract.
 
-The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. The desktop overview/activity flow uses an independent left column from the sticky Actions/Marks rail so rail height cannot create a blank row before Activity; narrow layouts keep actions/Marks before Activity. Admin review and override actions remain in the dedicated admin operations surface. Dashboard cards link to the existing feature routes where mutations and detailed workflows live. This layout refinement is presentation-only and does not add a service module, event key, or API contract.
+The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. The desktop overview/activity flow uses an independent left column from the sticky Actions/financial rail so rail height cannot create a blank row before Activity; narrow layouts keep actions/financial information before Activity. Tutors see IDR honorarium only; student/admin views retain Marks context. Admin review and override actions remain in the dedicated admin operations surface. Dashboard cards link to the existing feature routes where mutations and detailed workflows live. This layout refinement is presentation-only and does not add a service module, event key, or API contract.
 Editorial content integration is also read-only: Sanity remains the source of truth, while the app's API enforces session/role/Marks access before returning content or streaming Knowledge Bank files. The academy's bilingual presentation is resolved to English in the server projection; the authenticated app does not carry a locale selector for these surfaces.
 
 | File                  | Purpose                                                  |
@@ -145,11 +145,11 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Files:**
 
-- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminUpdateEconomySettingsInput`
-- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`
+- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
+- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, `TutorPayoutNotAvailableError`
 - `admin.repo.ts` — `findUserById`, `listUsers`, `listUserIdsByRole`, `updateUserRole`
-- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
-- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
+- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
@@ -158,7 +158,9 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
 - `getWallet({ userId })` — Returns any user's wallet balances; throws `WalletNotFoundError`
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
-- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's all-completed-bookings reporting port
+- `getPendingTutorPayouts({ tutorId })` — Returns unpaid honorarium after the latest admin-paid cutoff
+- `markTutorPayoutPaid(adminId, { tutorId })` — Records a paid payout (gross, exact bank, non-BCA transfer fee, net, cutoff, and payer) and audits the immutable payout record; returns `TutorPayoutNotAvailableError` when the amount or required payout-account details are unavailable
 - `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
 - `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; identical values return the current config without a write. The tutor rate-change notification fan-out runs **after the config transaction commits** (best-effort, per-tutor catch+log): a notification failure never rolls back the config update or the audit row. The event key `economy_config_updated:{version}:{tutorId}` keeps retries idempotent per version
 
@@ -353,7 +355,7 @@ Reschedule proposals must change the active booking or target-session start minu
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled. **F8:** the attendance row is inserted with `role='tutor'` and `confirmationState=confirmed`; `findConfirmedParticipants` excludes `role='tutor'` so the tutor row never inflates group repricing headcounts, hold recomputation, or no-show forfeit math
 - `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
-- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback. `totalMarks` reports the **split basis** (`priceSnapshot.baseline`) so the ledger columns reconcile: `totalMarks = cogitoTake + tutorPayout`. Students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25)
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback. `totalMarks` reports the **split basis** (`priceSnapshot.baseline`) so the ledger columns reconcile: `totalMarks = cogitoTake + tutorPayout`. Students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25). The pending-payout path uses explicit completion timestamps (with a migration fallback for legacy completed rows), and completion is serialized with payout cutoff creation.
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Transition-or-skip (M4): transitions past-deadline bookings to their terminal target (shared `EXPIRY_TARGET` with `expireBookings`) FIRST, then releases holds (or forfeits for NO_SHOW); version conflicts / terminal / RESCHEDULE_PROPOSED bookings are skipped without touching the wallet
 - `checkTutorLateness()` — Flags scheduled bookings where the tutor never marked attendance past the 15-min lateness tolerance: keeps the booking SCHEDULED with holds intact, sets `overrideMeta.category = "tutor_lateness_pending"` (admin-queue surface), writes a `tutor_lateness_pending_review` audit record, and notifies proposer + tutor; returns `{ flagged, failed }` (no auto-cancel, no hold release). **F9:** applies to **offline and online** bookings alike — `findBookingsWithTutorLateness` has no modality filter, so an absent offline tutor is flagged too
@@ -495,7 +497,7 @@ chat directory.
 - OAuth refresh-token mode uses `GOOGLE_MEET_CLIENT_ID`, `GOOGLE_MEET_CLIENT_SECRET`, and `GOOGLE_MEET_REFRESH_TOKEN` to call Google Calendar API v3; `GOOGLE_CALENDAR_ID` defaults to `primary`. When the dedicated client variables are absent, the resolver falls back to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, but the Calendar refresh token is still required.
 - Service-account mode uses `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, and `GOOGLE_IMPERSONATED_USER`; the impersonated user is required for Workspace domain-wide delegation. `GOOGLE_MEET_ENABLED=true` requires either the complete OAuth set or the complete service-account set.
 - OAuth setup and token rotation instructions live in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
-- Booking scheduling supplies provider metadata: solo titles are `Solo session with {Tutor} & {Student}`; group/series titles name the tutor, while all resolved student names remain in the description alongside the booking's learning goal when present and the authenticated booking deep link. The same metadata is applied to both service-account and OAuth event insertion paths.
+- Booking creation validates `subjectId` against the tutor's active tracks and stores an immutable category/subcategory snapshot in `booking.session_topic`. Scheduling uses `Cogito - {Competition} | {Tutor} x {Student}` and appends `& Friends` for group/group-series events; MUN/WSC use abbreviations. Descriptions include Session Topic, all resolved students, Session Notes/reference links, and the booking deep link. The metadata reaches service-account and OAuth paths; `learning_goal` remains the Session Notes compatibility carrier.
 - Circuit breaker: 5 failures → open for 60 seconds
 - On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
 - Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
@@ -789,7 +791,7 @@ chat directory.
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
 - `replaceWeeklyAvailability(userId, input)` — Atomically replaces future recurring occurrences from weekday/time ranges; preserves one-off overrides and skips generated occurrences they supersede
 - `deleteAvailability(userId, slotId)` — Deactivates a slot (soft delete)
-- `getMyPayouts(userId, { dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
+- `getMyPayouts(userId, { dateFrom?, dateTo? })` — Delegates to the booking module's pending-cutoff payout path when no date filters are provided; explicit date filters use the reporting path. The tutor presentation is IDR-only even though internal split fields remain in the compatibility response.
 
 **Dependencies:** `TutorRepo`, `TutorPricingPort`, `TutorAuditPort`, `BookingPayoutPort`
 
@@ -801,8 +803,9 @@ chat directory.
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; the legacy Marks map remains readable during migration
+- Tutor onboarding renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only
 - Tutor achievements and experiences are separate multiline fields. Each section has its own optional proof URL list for admin verification; these lists are protected by profile review and never enter the public discovery projection. The legacy credential summary is read-only fallback data and migration 0032 copies it into achievements. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
-- Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only completed-session count and IDR honorarium.
+- Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
 - New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
 
@@ -914,3 +917,7 @@ chat directory.
 - Idempotency via `eventKey` on ledger entries
 - Insufficient available balance throws `InsufficientBalanceError`
 - `hold`/`release`/`deduct`/`credit`/`compensate` are service-layer only — consumed via ports, not exposed over RPC
+
+## Tutor payout presentation (2026-08-28)
+
+Tutor financial presentation is denominated in IDR and must not expose Marks. The dashboard's honorarium is the unpaid balance since the latest admin-paid cutoff, not lifetime earnings or a calendar-reset balance. Admin payout records are immutable and contain the cutoff, gross, bank, transfer fee, net, paidAt, and paidBy. Only conventional BCA (the exact bank name `BCA`) has no transfer deduction; BCA Syariah, `blu` (BCA Digital), and other banks deduct Rp2,500 once per payout. Bank name, account number, account-holder name, account-opening city/regency, ownership, and the transfer disclaimer are private tutor-profile payout fields; all are required by onboarding submission validation and omitted from public discovery.

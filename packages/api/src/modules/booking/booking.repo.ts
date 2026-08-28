@@ -30,6 +30,7 @@ import {
   user,
   meetingEvent,
   type booking as bookingTable,
+  type BookingSessionTopic,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -145,6 +146,60 @@ async function findTutorProfile(
       where: and(...conditions),
     })) ?? null
   );
+}
+
+/**
+ * Resolves one immutable booking-topic snapshot from the tutor's approved
+ * competition tracks. When no subject id is supplied, a single available
+ * track can be selected automatically for backward-compatible callers.
+ */
+async function findTutorSubjectTopic(
+  conn: DbOrTx,
+  tutorId: string,
+  subjectId?: string,
+): Promise<BookingSessionTopic | null> {
+  const profile = await conn.query.tutorProfile.findFirst({
+    where: eq(tutorProfile.userId, tutorId),
+    columns: { id: true },
+    with: {
+      subjects: {
+        with: {
+          subject: {
+            with: { parent: true },
+          },
+        },
+      },
+    },
+  });
+  if (!profile) return null;
+
+  const topics: BookingSessionTopic[] = [];
+  for (const relation of profile.subjects) {
+    const subject = relation.subject;
+    const category = subject?.parent;
+    if (
+      !subject ||
+      !category ||
+      !subject.parentId ||
+      !subject.isActive ||
+      !category.isActive
+    ) {
+      continue;
+    }
+    topics.push({
+      categoryId: category.id,
+      categorySlug: category.slug,
+      categoryName: category.name,
+      subcategoryId: subject.id,
+      subcategorySlug: subject.slug,
+      subcategoryName: subject.name,
+    });
+  }
+
+  if (subjectId) {
+    return topics.find((topic) => topic.subcategoryId === subjectId) ?? null;
+  }
+  return topics.length === 1 ? topics[0]! : null;
 }
 
 /**
@@ -1128,6 +1183,7 @@ export function createBookingRepo(db: DbType) {
     listBookingsByTutor,
     listBookingsForAccess,
     findTutorProfile,
+    findTutorSubjectTopic,
     findAvailabilitySlot,
     findAvailabilityWindowContaining,
     listActiveTutorAvailability,

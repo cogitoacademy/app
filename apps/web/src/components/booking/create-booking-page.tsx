@@ -119,9 +119,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedModality, setSelectedModality] = useState<Modality>("online");
+  const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
   const [startTimes, setStartTimes] = useState<Record<string, string>>({});
-  const [learningGoal, setLearningGoal] = useState("");
+  const [sessionNotes, setSessionNotes] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [debouncedStudentSearch, setDebouncedStudentSearch] = useState("");
   const [invitees, setInvitees] = useState<StudentMatch[]>([]);
@@ -293,6 +294,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   }
 
   const profile = profileQuery.data;
+  const subjects = profile.subjects ?? [];
+  const effectiveSubjectId =
+    selectedSubjectId || (subjects.length === 1 ? subjects[0]!.id : "");
+  const selectedSubject =
+    subjects.find((subject) => subject.id === effectiveSubjectId) ?? null;
   const effectiveModality: Modality =
     profile.modality === "offline" ? "offline" : selectedModality;
   const modalityOptions: Modality[] =
@@ -356,10 +362,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
     const baseInput = {
       tutorId: profile.userId,
+      subjectId: effectiveSubjectId || undefined,
       availabilitySlotId: selectedSlot.id,
       modality: effectiveModality,
       timezone: BOOKING_TIMEZONE,
-      learningGoal: learningGoal.trim(),
+      // Keep the existing API field for compatibility while the booking UI
+      // presents this as one flexible Session Notes field.
+      learningGoal: sessionNotes.trim(),
     };
     if (isGroupBooking) {
       if (invitees.length > 5) return;
@@ -447,26 +456,81 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               <IconBox variant="info-subtle">
                 <IconSchool />
               </IconBox>
-              <CardTitle>Learning goal</CardTitle>
+              <CardTitle>Session topic</CardTitle>
               <CardDescription>
-                Help the tutor prepare for your session.
+                Choose the competition and focus area for this booking.
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              {subjects.length > 0 ? (
+                <Field>
+                  <FieldLabel htmlFor="booking-subject">
+                    Competition and category
+                  </FieldLabel>
+                  <Select
+                    value={effectiveSubjectId}
+                    onValueChange={(value) => {
+                      const subjectId = getSelectItemValue(value);
+                      if (typeof subjectId !== "string") return;
+                      setSelectedSubjectId(subjectId);
+                    }}
+                    disabled={subjects.length === 1}
+                  >
+                    <SelectTrigger id="booking-subject">
+                      <SelectValue placeholder="Choose a session topic" />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectList>
+                        {subjects.map((subject) => (
+                          <SelectItem key={subject.id} value={subject.id}>
+                            {subject.parent.name} — {subject.name}
+                          </SelectItem>
+                        ))}
+                      </SelectList>
+                    </SelectPopup>
+                  </Select>
+                  <FieldDescription>
+                    {selectedSubject
+                      ? `${selectedSubject.parent.name} - ${selectedSubject.name}`
+                      : "This appears in the Calendar and Google Meet details."}
+                  </FieldDescription>
+                </Field>
+              ) : (
+                <Text className="text-sm text-muted">
+                  This tutor has no competition topic configured yet. You can
+                  still send the booking request.
+                </Text>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <IconBox variant="info-subtle">
+                <IconSchool />
+              </IconBox>
+              <CardTitle>Session notes</CardTitle>
+              <CardDescription>
+                Help the tutor prepare with your goals, questions, or useful
+                links.
               </CardDescription>
             </CardHeader>
             <CardBody>
               <Field>
-                <FieldLabel htmlFor="learning-goal">
-                  What do you want to learn?
+                <FieldLabel htmlFor="session-notes">
+                  What would you like to focus on?
                 </FieldLabel>
                 <Textarea
-                  id="learning-goal"
-                  value={learningGoal}
+                  id="session-notes"
+                  value={sessionNotes}
                   maxLength={2_000}
                   required
-                  onChange={(event) => setLearningGoal(event.target.value)}
-                  placeholder="Topics, current level, questions, or an outcome you want from the session…"
+                  onChange={(event) => setSessionNotes(event.target.value)}
+                  placeholder="Share your learning goal, topics, questions, or reference links…"
                 />
                 <FieldDescription>
-                  {learningGoal.length}/2,000 characters
+                  Paste any useful reference links here. {sessionNotes.length}
+                  /2,000 characters
                 </FieldDescription>
               </Field>
             </CardBody>
@@ -864,7 +928,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   createGroup.isPending ||
                   createSeries.isPending ||
                   createGroupSeries.isPending ||
-                  !learningGoal.trim() ||
+                  !sessionNotes.trim() ||
+                  (subjects.length > 0 && !effectiveSubjectId) ||
                   invitees.length > 5
                 }
               >

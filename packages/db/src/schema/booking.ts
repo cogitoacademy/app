@@ -33,6 +33,15 @@ export const BOOKING_STATES = [
 export const BOOKING_TYPES = ["solo", "group", "series"] as const;
 export const MODALITIES = ["online", "offline"] as const;
 
+export type BookingSessionTopic = {
+  categoryId: string;
+  categorySlug: string;
+  categoryName: string;
+  subcategoryId: string;
+  subcategorySlug: string;
+  subcategoryName: string;
+};
+
 export const booking = pgTable(
   "booking",
   {
@@ -92,6 +101,7 @@ export const booking = pgTable(
     version: integer("version").default(1).notNull(),
     cancellationReason: text("cancellation_reason"),
     learningGoal: text("learning_goal").notNull().default(""),
+    sessionTopic: jsonb("session_topic").$type<BookingSessionTopic>(),
     overrideMeta: jsonb("override_meta"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")

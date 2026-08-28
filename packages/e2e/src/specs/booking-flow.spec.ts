@@ -69,7 +69,7 @@ async function createSoloBooking(
 ) {
   await login(page);
   await openBookingPage(page);
-  await page.getByLabel("What do you want to learn?").fill(learningGoal);
+  await page.getByLabel("What would you like to focus on?").fill(learningGoal);
   await chooseAvailableSlot(page, slotIndex);
   const submit = page.getByRole("button", {
     name: "Send booking request",
@@ -159,7 +159,7 @@ test("student can book a solo session from tutor discovery", async ({
   await login(page);
   await openBookingPage(page);
   await page
-    .getByLabel("What do you want to learn?")
+    .getByLabel("What would you like to focus on?")
     .fill("Review quadratic equations before the next exam.");
   await chooseAvailableSlot(page);
   const submit = page.getByRole("button", {
@@ -184,10 +184,10 @@ test("student can configure an offline group booking and see the target hold", a
   await openBookingPage(page);
 
   await page
-    .getByLabel("What do you want to learn?")
+    .getByLabel("What would you like to focus on?")
     .fill("Practice a group problem-solving session.");
 
-  const modality = page.getByRole("combobox").first();
+  const modality = page.getByRole("combobox", { name: "Modality" });
   await modality.click();
   await page.getByRole("option", { name: "Offline" }).click();
   await expect(
@@ -224,7 +224,7 @@ test("group invitee can accept and tutor can accept the full online booking", as
   await login(page);
   await openBookingPage(page);
   await page
-    .getByLabel("What do you want to learn?")
+    .getByLabel("What would you like to focus on?")
     .fill("Solve a group set of quadratic-equation problems.");
 
   const studentSearch = page.getByPlaceholder("Type a name or email");

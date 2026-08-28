@@ -236,7 +236,22 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ tutorId, dateFrom?, dateTo? }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` is summed from IDR tutor-honorarium snapshots; legacy pre-economy bookings use the compatibility path)
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
-- **Description:** Tutor payout summary from completed bookings in a date range. `totalMarks` reports the split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
+- **Description:** Internal tutor payout reporting from completed bookings in the requested date range. With no date filters this is an all-time report; use `admin.getPendingTutorPayouts` for the unpaid amount after the latest admin-paid cutoff. `totalMarks` reports the internal split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
+
+### `admin.getPendingTutorPayouts`
+
+- **Auth:** Admin
+- **Input:** `{ tutorId }`
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr, lastPaidAt }`
+- **Description:** Returns the unpaid tutor honorarium since the latest admin-paid cutoff. The cutoff advances only when `admin.markTutorPayoutPaid` succeeds; no calendar-week reset is applied.
+
+### `admin.markTutorPayoutPaid`
+
+- **Auth:** Admin
+- **Input:** `{ tutorId }`
+- **Output:** `{ id, tutorId, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, bankName, paidAt }`
+- **Errors:** `TUTOR_PAYOUT_NOT_AVAILABLE` (400) when no unpaid honorarium exists or payout account details are incomplete
+- **Description:** Atomically records an immutable paid payout at the current completion-time cutoff. Exact conventional `BCA` has no transfer fee; all other bank names deduct Rp2,500 once from the payout. The application records the payment and audit trail but does not execute the bank transfer.
 
 ### `admin.getEconomySettings`
 
@@ -325,10 +340,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName?, shortBio?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, expertise?, subjectIds?, modality?, baseRatesIdr?, prices? }`
+- **Input:** `{ version, displayName?, shortBio?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. Achievements and experiences are separate multiline plain-text fields pending the client's final structured format. `achievementProofUrls` and `experienceProofUrls` are optional admin-verification evidence grouped by section; they are review-protected and excluded from public discovery responses. `sourcePhotoUrl` is the tutor-uploaded private editing source and never replaces the public account image; only an admin may set the edited public photo through tutor review. The retired generic credential-proof field is not accepted. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. For published profiles, trust-sensitive changes wait in `pendingProfileChanges` for admin approval.
+- **Description:** Updates the tutor profile with optimistic locking. Achievements and experiences are separate multiline plain-text fields pending the client's final structured format. `achievementProofUrls` and `experienceProofUrls` are optional admin-verification evidence grouped by section; they are review-protected and excluded from public discovery responses. `sourcePhotoUrl` is the tutor-uploaded private editing source and never replaces the public account image; only an admin may set the edited public photo through tutor review. The retired generic credential-proof field is not accepted. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. Payout-account fields are private and capture the bank, account number, account-holder name, account-opening city/regency, whether the destination is the tutor's own account or a trusted person's account, and the tutor's transfer-responsibility acknowledgment. For published profiles, trust-sensitive changes wait in `pendingProfileChanges` for admin approval. The tutor editor's combined honorarium matrix and responsive section layout are presentation-only, while onboarding submission requires complete payout details and the acknowledgment.
 
 ### `tutor.submitForReview`
 
@@ -380,9 +395,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Tutor
 - **Input:** `{ dateFrom?, dateTo? }`
-- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (internal split fields remain for compatibility; the tutor UI renders only `tutorPayoutIdr`)
 - **Errors:** `INVALID_DATE_RANGE` (400)
-- **Description:** The authenticated tutor's payout summary from completed bookings
+- **Description:** The authenticated tutor's unpaid honorarium summary. With no date filters, completed sessions are selected after the latest admin-paid cutoff; the cutoff advances only when an admin records a payout. Weekly processing is an operational cadence, not an automatic Monday reset.
 
 ---
 
@@ -558,7 +573,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.createSolo`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`scheduledStartAt` must leave room for the server-fixed 90-minute session inside the availability window; `timezone` default `Asia/Jakarta`)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`subjectId` selects one active subcategory offered by the tutor and is snapshotted as the session topic; legacy callers may omit it and the sole tutor topic is selected automatically; `learningGoal` carries Session Notes and accepts up to 2,000 characters including reference links; duration is server-fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
 - **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
@@ -642,14 +657,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.createGroup`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal, requestedRoomId? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is server-fixed to 90 minutes; `requestedRoomId` applies only to offline bookings)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal, requestedRoomId? }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes including reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Description:** Creates a group booking, holds the target headcount total from the proposer, invites participants, and releases the excess hold as invitees confirm; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure`; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoals }` (2–4 sessions; each session is fixed to 90 minutes)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes including reference links; 2–4 fixed 90-minute sessions)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
@@ -657,7 +672,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.createGroupSeries`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone?, learningGoal }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes/reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
 - **Description:** Creates a group series with upfront per-participant holds for all sessions (FR-20, #46); invitees accept/decline the full-series package via `booking.confirmInvite`/`booking.declineInvite`
@@ -729,7 +744,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
-- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` when the attempt succeeds. The Google Calendar event uses a human-readable title (`Solo session with {Tutor} & {Student}` for solo bookings, or the session type with the tutor for group/series bookings) and its description includes the tutor/students, the booking's learning goal when present, and an authenticated `/bookings/{bookingId}` link. If Google Meet creation fails, the booking remains `confirmed`, the proposer receives meeting-setup attention copy, and the `retry-failed-meetings` scheduler retries it every 5 minutes (up to 3 failed attempts); after that, the assigned tutor or an admin can add a manual link with `setMeetingLink`; offline goes `awaiting_admin_room_approval`.
+- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` on success. Calendar titles use `Cogito - {Competition} | {Tutor} x {Student}` or append `& Friends` for groups. Descriptions include tutor/students, the snapshotted Session Topic, Session Notes/reference links, and `/bookings/{bookingId}`. Provider failure leaves the booking `confirmed` for retry/manual fallback; offline goes `awaiting_admin_room_approval`.
 - **Frontend note:** The tutor booking-detail flow presents a responsive confirmation summary before calling this unchanged procedure; the dialog does not change the input, output, or transition rules.
 
 ### `tutorActions.setMeetingLink`
@@ -987,3 +1002,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
 - **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
+
+## Tutor payout profile fields (2026-08-28)
+
+`/rpc/tutor/updateMyProfile` accepts payout-account fields (`bankName`, `bankAccountNumber`, `bankAccountHolderName`, `bankAccountOpeningCity`, `bankAccountOwnership`, and `bankTransferDisclaimerAccepted`) inside the standard `{"json": <input>}` envelope. `/rpc/tutor/getMyProfile` returns the private fields to the authenticated tutor; the public tutor discovery projection omits all of them. `/rpc/tutor/submitForReview` requires every payout field plus the acknowledgment. Only the exact bank name `BCA` represents conventional BCA and has no transfer fee; `BCA Syariah`, `blu`/`BCA Digital`, and all other bank names incur Rp2,500 once per payout. `/rpc/tutor/payouts/get` with no date filters returns honorarium since the latest admin-paid cutoff; explicit date filters remain available for reporting. Admins use `/rpc/admin/payouts/tutor/pending` to inspect unpaid honorarium and `/rpc/admin/payouts/tutor/mark-paid` to atomically create a paid payout record. Completion timestamps, rather than calendar weeks, determine which completed sessions enter a payout batch; completion and payout use a per-tutor lock to avoid a race at the cutoff.

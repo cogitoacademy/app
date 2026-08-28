@@ -1,5 +1,9 @@
 import { describe, test, expect, mock } from "bun:test";
-import { createBookingService } from "../../modules/booking/booking.service";
+import {
+  createBookingService,
+  NON_BCA_TRANSFER_FEE_IDR,
+  getTutorPayoutTransferFeeIdr,
+} from "../../modules/booking/booking.service";
 import { RESPONSE_WINDOW_MS } from "../../shared/constants";
 import {
   BookingNotFoundError,
@@ -44,6 +48,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     listBookingsByProposer: mock(async () => []),
     listBookingsForAccess: mock(async () => []),
     findTutorProfile: mock(async () => null),
+    findTutorSubjectTopic: mock(async () => null),
     findAvailabilitySlot: mock(async () => null),
     findAvailabilityWindowContaining: mock(async () => null),
     listActiveTutorAvailability: mock(async () => []),
@@ -210,6 +215,7 @@ function makeBooking(overrides: Record<string, unknown> = {}) {
     scheduledStartAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
     scheduledEndAt: new Date(Date.now() + 48 * 60 * 60 * 1000 + 90 * 60 * 1000),
     timezone: "Asia/Jakarta",
+    sessionTopic: null,
     version: 1,
     cancellationReason: null,
     deadlineAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
@@ -355,6 +361,20 @@ function makeRoomPort(overrides: Record<string, unknown> = {}) {
 }
 
 describe("BookingService", () => {
+  test("charges only conventional BCA no transfer fee", () => {
+    expect(getTutorPayoutTransferFeeIdr("BCA")).toBe(0);
+    expect(getTutorPayoutTransferFeeIdr(" bca ")).toBe(0);
+    expect(getTutorPayoutTransferFeeIdr("BCA Syariah")).toBe(
+      NON_BCA_TRANSFER_FEE_IDR,
+    );
+    expect(getTutorPayoutTransferFeeIdr("blu (BCA Digital)")).toBe(
+      NON_BCA_TRANSFER_FEE_IDR,
+    );
+    expect(getTutorPayoutTransferFeeIdr("Mandiri")).toBe(
+      NON_BCA_TRANSFER_FEE_IDR,
+    );
+  });
+
   describe("getById", () => {
     test("returns booking with participants when found and user is proposer", async () => {
       const booking = {
@@ -798,16 +818,28 @@ describe("BookingService", () => {
 
     test("creates solo booking successfully with hold, transition, and notifications", async () => {
       const booking = makeBooking();
+      const sessionTopic = {
+        categoryId: "competition-mun",
+        categorySlug: "competition-model-united-nations",
+        categoryName: "Model United Nations",
+        subcategoryId: "mun-speech",
+        subcategorySlug: "speech",
+        subcategoryName: "Speech",
+      };
       const { service, repo, wallet, audit, notification } = createService({
         repo: {
           findTutorProfile: mock(async () => makeTutorProfile()),
+          findTutorSubjectTopic: mock(async () => sessionTopic),
           findAvailabilitySlot: mock(async () => makeSlot()),
           findOverlappingBookings: mock(async () => []),
           insertBooking: mock(async () => booking),
         },
       });
 
-      await service.createSolo("student1", soloInput);
+      await service.createSolo("student1", {
+        ...soloInput,
+        subjectId: "mun-speech",
+      });
 
       expect(wallet.hold).toHaveBeenCalledTimes(1);
       expect(wallet.hold.mock.calls[0][1]).toMatchObject({
@@ -815,6 +847,9 @@ describe("BookingService", () => {
         reason: "Hold Marks for solo booking",
       });
       expect(repo.insertBooking).toHaveBeenCalledTimes(1);
+      expect(repo.insertBooking.mock.calls[0][1]).toMatchObject({
+        sessionTopic,
+      });
       expect(repo.insertParticipant).toHaveBeenCalledTimes(1);
       expect(repo.insertStateHistory).toHaveBeenCalledTimes(1);
       expect(audit.record).toHaveBeenCalledTimes(1);
@@ -1552,7 +1587,16 @@ describe("BookingService", () => {
     test("accepts online booking — transitions to confirmed then scheduled and creates meeting with attendees", async () => {
       const booking = makeBooking({
         modality: "online",
-        learningGoal: "Improve speaking confidence",
+        sessionTopic: {
+          categoryId: "competition-mun",
+          categorySlug: "competition-model-united-nations",
+          categoryName: "Model United Nations",
+          subcategoryId: "mun-speech",
+          subcategorySlug: "speech",
+          subcategoryName: "Speech",
+        },
+        learningGoal:
+          "Improve speaking confidence\nhttps://example.com/session-brief",
       });
       let findCallCount = 0;
       const {
@@ -1613,9 +1657,9 @@ describe("BookingService", () => {
         ],
         expect.anything(), // L2: the meetingEvent row joins the booking tx
         {
-          title: "Solo session with Tutor One & Student One",
+          title: "Cogito - MUN | Tutor One x Student One",
           description: expect.stringContaining(
-            "Learning goal: Improve speaking confidence",
+            "Session Topic: MUN - Speech\n\nSession Notes:\nImprove speaking confidence\nhttps://example.com/session-brief",
           ),
         },
       );
