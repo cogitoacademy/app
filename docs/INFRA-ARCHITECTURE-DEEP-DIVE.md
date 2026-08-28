@@ -35,9 +35,9 @@ every question below answers itself:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Code plane** decides *what the app does*.
-- **Control plane** decides *what the infrastructure is* (declarative, in git).
-- **Data plane** *runs* it.
+- **Code plane** decides _what the app does_.
+- **Control plane** decides _what the infrastructure is_ (declarative, in git).
+- **Data plane** _runs_ it.
 
 The three planes communicate through exactly four doors: **HTTPS** (users,
 webhooks, deploy webhook), **SSH over tailnet** (operator → VPS), **the
@@ -66,11 +66,11 @@ DNS). The apex `cogitoacademy.id` stays on Hostinger (company profile site).
 
 **The VPS firewall (UFW, declared in `host-hardening.yml`):**
 
-| Port | Allowed from | Purpose |
-|---|---|---|
-| 80, 443 | anywhere | Cloudflare-proxied public traffic |
-| 22 | `100.64.0.0/10` (tailnet only) | SSH — unreachable from the public internet |
-| 8000, 6001, 6002 | `100.64.0.0/10` (tailnet only) | Coolify UI + realtime |
+| Port             | Allowed from                   | Purpose                                    |
+| ---------------- | ------------------------------ | ------------------------------------------ |
+| 80, 443          | anywhere                       | Cloudflare-proxied public traffic          |
+| 22               | `100.64.0.0/10` (tailnet only) | SSH — unreachable from the public internet |
+| 8000, 6001, 6002 | `100.64.0.0/10` (tailnet only) | Coolify UI + realtime                      |
 
 Plus: fail2ban sshd jail, unattended-upgrades, `PasswordAuthentication no`,
 root key-only. **The Coolify dashboard has no public DNS record at all** — you
@@ -83,8 +83,8 @@ Tailscale creates a private mesh network (`100.64.0.0/10`) between your
 laptop, phone, and the VPS (`cogito-vps`, tagged `tag:server`). The ACL
 (`infra/tailscale/acl.hujson`) is the declarative policy: only your admin
 account can reach the server's SSH/Coolify ports. This is what makes the
-"no public SSH, no public Coolify" posture possible — the VPS is *on* the
-internet but *invisible* on it.
+"no public SSH, no public Coolify" posture possible — the VPS is _on_ the
+internet but _invisible_ on it.
 
 ### 1.3 Inside the box (Coolify's private network)
 
@@ -127,17 +127,17 @@ invite 10/min, booking 30/min, search 30/min, support 5/min, achievement
 
 ### 2.1 The four key systems (they do NOT overlap)
 
-| System | What it is | Who holds it | Protects |
-|---|---|---|---|
-| **Better Auth secret** | One symmetric key signing session cookies + hashing tokens | API server env only | Your users' login sessions |
-| **OAuth client ID/secret** | Google's identity for *your app* | API server env + Google console | The "Sign in with Google" button |
-| **OAuth refresh token** | Long-lived token from authorizing the calendar-owner account; lets the server *act as that account* | API server env | Google Calendar/Meet integration |
-| **Provider API keys** | Each vendor's own credential (Resend, Xendit, R2, Sanity) | API server env | Email, payments, storage, content |
+| System                     | What it is                                                                                          | Who holds it                    | Protects                          |
+| -------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------- |
+| **Better Auth secret**     | One symmetric key signing session cookies + hashing tokens                                          | API server env only             | Your users' login sessions        |
+| **OAuth client ID/secret** | Google's identity for _your app_                                                                    | API server env + Google console | The "Sign in with Google" button  |
+| **OAuth refresh token**    | Long-lived token from authorizing the calendar-owner account; lets the server _act as that account_ | API server env                  | Google Calendar/Meet integration  |
+| **Provider API keys**      | Each vendor's own credential (Resend, Xendit, R2, Sanity)                                           | API server env                  | Email, payments, storage, content |
 
-The common confusion: **Better Auth secret ≠ OAuth**. Better Auth is *your*
-auth system (email/password, sessions, OTP). Google OAuth is one *login
-method* plugged into it — Google proves identity, Better Auth creates the
-session with *its own* secret. The Meet refresh token is a *third* thing: not
+The common confusion: **Better Auth secret ≠ OAuth**. Better Auth is _your_
+auth system (email/password, sessions, OTP). Google OAuth is one _login
+method_ plugged into it — Google proves identity, Better Auth creates the
+session with _its own_ secret. The Meet refresh token is a _third_ thing: not
 login at all, but the server impersonating the calendar account to create
 events.
 
@@ -198,11 +198,11 @@ never sees the Age key.
 
 ## 3. Who runs what — and why not Actions for Terraform/Ansible
 
-| Layer | Runs where | When | Credentials it needs |
-|---|---|---|---|
-| **Terraform** (DNS, R2 buckets, host bootstrap) | Your machine | Rarely (infra changes) | `CLOUDFLARE_API_TOKEN`, R2 state token, SSH key |
-| **Ansible** (hardening, Tailscale, Coolify resources, env, cron, Uptime Kuma) | Your machine | Every infra/env change (idempotent) | Age private key (SOPS), SSH over tailnet |
-| **GitHub Actions CD** (build → push → backup → migrate → deploy → health) | GitHub cloud | Every merge to main | GitHub secrets (webhook URL, DB URL, R2) |
+| Layer                                                                         | Runs where   | When                                | Credentials it needs                            |
+| ----------------------------------------------------------------------------- | ------------ | ----------------------------------- | ----------------------------------------------- |
+| **Terraform** (DNS, R2 buckets, host bootstrap)                               | Your machine | Rarely (infra changes)              | `CLOUDFLARE_API_TOKEN`, R2 state token, SSH key |
+| **Ansible** (hardening, Tailscale, Coolify resources, env, cron, Uptime Kuma) | Your machine | Every infra/env change (idempotent) | Age private key (SOPS), SSH over tailnet        |
+| **GitHub Actions CD** (build → push → backup → migrate → deploy → health)     | GitHub cloud | Every merge to main                 | GitHub secrets (webhook URL, DB URL, R2)        |
 
 **Why your old "Actions runs Terraform/Ansible" setup can't be copied here:**
 
@@ -218,7 +218,7 @@ never sees the Age key.
 
 **Your auditability concern is valid, and there's a middle path** (recommended
 follow-up, not in this wave): a **plan-only CI job** — `terraform plan` +
-`ansible-playbook --check` with *read-only* credentials (a Cloudflare token
+`ansible-playbook --check` with _read-only_ credentials (a Cloudflare token
 scoped to read, a read-only R2 token, no Age key — `--check` against the
 Coolify API with a read-only API token). CI then produces an auditable
 "what would change" trail on every PR, while the private key and the actual
@@ -257,20 +257,20 @@ immutable `v<sha>` image.
 
 **Yes — every one is implemented, guarded, and fail-loud. Verified in code:**
 
-| Provider | Status in code | What happens if credentials are missing/broken |
-|---|---|---|
-| **Xendit** | ✅ Fully implemented for the 2024-11-11 API (`payment_requests`, `channel_code` OVO/QRIS/BCA, `actions[].value`, statuses, refund port, webhook `data.payment_id` idempotency). Sandbox keys work. | Env schema **fails boot** if `PAYMENT_PROVIDER=xendit` without secret key, webhook token, redirect URLs, and `WEBHOOK_ALLOWED_IPS`. Webhook: `x-callback-token` signature + IP allowlist + 256KB cap + 120s idempotency claim; permanent errors dead-letter (4xx), transient retry (5xx). |
-| **Resend** | ✅ Email outbox pattern (notification rows `queued` → scheduler sends, no I/O in transactions), circuit breaker, 3 retries. | Env schema **fails boot** in prod without `RESEND_API_KEY`; rejects unverified `EMAIL_FROM`. |
-| **Google Meet** | ✅ OAuth triple OR service account, boot-time probe, 5-min retry job (×3), manual-link fallback, circuit breaker. | `GOOGLE_MEET_ENABLED=true` without a complete set **fails boot**. With `false`: fallback provider — bookings stay `confirmed`, tutor/admin enters a manual link. **No data risk.** |
-| **Google OAuth login** | ✅ Conditional on env vars. | Unverified-app warning only; email/password works meanwhile. |
-| **R2** | ✅ Presigned POST uploads, all-or-nothing env guard, `R2_PUBLIC_URL` required in prod. | **Fails boot** in prod without all four `R2_*` + `R2_PUBLIC_URL` (P4.3). This is the one hard blocker today. |
-| **Sanity** | ✅ Tokenless CDN reads (`useCdn: true`, `perspective: published`); token optional. Hardened file proxy (host allowlist, 10s timeout, 5MB cap, 30/min rate limit). | Works with no token for public content. |
-| **Tailscale** | ✅ Declarative ACL + join playbook. | Auth key in vault; join is one Ansible run. |
-| **Cloudflare** | ✅ DNS + proxy + R2 buckets declared in Terraform. | Token needed only at apply time. |
+| Provider               | Status in code                                                                                                                                                                                     | What happens if credentials are missing/broken                                                                                                                                                                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Xendit**             | ✅ Fully implemented for the 2024-11-11 API (`payment_requests`, `channel_code` OVO/QRIS/BCA, `actions[].value`, statuses, refund port, webhook `data.payment_id` idempotency). Sandbox keys work. | Env schema **fails boot** if `PAYMENT_PROVIDER=xendit` without secret key, webhook token, redirect URLs, and `WEBHOOK_ALLOWED_IPS`. Webhook: `x-callback-token` signature + IP allowlist + 256KB cap + 120s idempotency claim; permanent errors dead-letter (4xx), transient retry (5xx). |
+| **Resend**             | ✅ Email outbox pattern (notification rows `queued` → scheduler sends, no I/O in transactions), circuit breaker, 3 retries.                                                                        | Env schema **fails boot** in prod without `RESEND_API_KEY`; rejects unverified `EMAIL_FROM`.                                                                                                                                                                                              |
+| **Google Meet**        | ✅ OAuth triple OR service account, boot-time probe, 5-min retry job (×3), manual-link fallback, circuit breaker.                                                                                  | `GOOGLE_MEET_ENABLED=true` without a complete set **fails boot**. With `false`: fallback provider — bookings stay `confirmed`, tutor/admin enters a manual link. **No data risk.**                                                                                                        |
+| **Google OAuth login** | ✅ Conditional on env vars.                                                                                                                                                                        | Unverified-app warning only; email/password works meanwhile.                                                                                                                                                                                                                              |
+| **R2**                 | ✅ Presigned POST uploads, all-or-nothing env guard, `R2_PUBLIC_URL` required in prod.                                                                                                             | **Fails boot** in prod without all four `R2_*` + `R2_PUBLIC_URL` (P4.3). This is the one hard blocker today.                                                                                                                                                                              |
+| **Sanity**             | ✅ Tokenless CDN reads (`useCdn: true`, `perspective: published`); token optional. Hardened file proxy (host allowlist, 10s timeout, 5MB cap, 30/min rate limit).                                  | Works with no token for public content.                                                                                                                                                                                                                                                   |
+| **Tailscale**          | ✅ Declarative ACL + join playbook.                                                                                                                                                                | Auth key in vault; join is one Ansible run.                                                                                                                                                                                                                                               |
+| **Cloudflare**         | ✅ DNS + proxy + R2 buckets declared in Terraform.                                                                                                                                                 | Token needed only at apply time.                                                                                                                                                                                                                                                          |
 
 **The fail-loud philosophy** (the single most important design decision):
-every external dependency has a boot-time or first-use guard that *stops the
-server* (or loudly logs) instead of silently degrading. A prod server without
+every external dependency has a boot-time or first-use guard that _stops the
+server_ (or loudly logs) instead of silently degrading. A prod server without
 the scheduler **refuses to boot** (`SCHEDULER_ENABLED` guard). A prod server
 without Resend **refuses to boot**. Partial R2 config **refuses to boot**.
 This is why the current live API (hand-configured Coolify env) is a risk: it
@@ -280,58 +280,58 @@ predates these guards.
 
 ## 6. Failure modes & safety nets (already in code)
 
-| Risk | Net |
-|---|---|
-| Webhook replay/duplicate | Idempotency claim (120s) + 24h processed record; keyed on `data.payment_id` |
-| Provider retry loops | Permanent errors → 4xx dead-letter; transient → 5xx + claim release |
-| Scheduler crash | DLQ (`cogito-jobs-dlq` + bounded `cogito:dlq` list), `/health` `dlqDepth`, alert-only |
-| DB loss | Nightly `pg_dump -Fc` → R2 (30-day retention) + pre-migrate snapshot in CD |
-| Bad deploy | Sha-verified health poll; rollback to previous `v<sha>`; snapshot for restore |
-| External provider down | Circuit breakers (email, meeting) + manual fallback (meeting links) |
-| Boot with broken config | Zod env schema superRefine — fail loud, never silent stub |
-| Unbounded abuse | Rate limits per path, body-size caps, IP allowlists, security headers |
-| Crash mid-request | Idempotency keys on booking creation; atomic wallet guards; outbox pattern |
+| Risk                     | Net                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| Webhook replay/duplicate | Idempotency claim (120s) + 24h processed record; keyed on `data.payment_id`           |
+| Provider retry loops     | Permanent errors → 4xx dead-letter; transient → 5xx + claim release                   |
+| Scheduler crash          | DLQ (`cogito-jobs-dlq` + bounded `cogito:dlq` list), `/health` `dlqDepth`, alert-only |
+| DB loss                  | Nightly `pg_dump -Fc` → R2 (30-day retention) + pre-migrate snapshot in CD            |
+| Bad deploy               | Sha-verified health poll; rollback to previous `v<sha>`; snapshot for restore         |
+| External provider down   | Circuit breakers (email, meeting) + manual fallback (meeting links)                   |
+| Boot with broken config  | Zod env schema superRefine — fail loud, never silent stub                             |
+| Unbounded abuse          | Rate limits per path, body-size caps, IP allowlists, security headers                 |
+| Crash mid-request        | Idempotency keys on booking creation; atomic wallet guards; outbox pattern            |
 
 ---
 
 ## 7. Current state & the gap list (what's blocking go-live)
 
-| Item | State | Blocker? |
-|---|---|---|
-| R2 bucket + token | **Not created** | ✅ **Hard blocker** — prod boot fails without it; also the backup target |
-| SOPS vault | Filled but **not yet encrypted** (Age keypair + `sops -e -i`) | Must do before committing |
-| Google Meet refresh token | Missing | Not a blocker — set `GOOGLE_MEET_ENABLED=false`, manual links work |
-| Xendit | Sandbox keys | Not a blocker — sandbox E2E first, then one real transaction |
-| Google OAuth | Unverified app | Not a blocker — warning screen; video needed before real-user go-live |
-| Sanity | Tokenless | Not a blocker — public content works |
+| Item                                                                                            | State                                                          | Blocker?                                                                                  |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| R2 bucket + token                                                                               | **Not created**                                                | ✅ **Hard blocker** — prod boot fails without it; also the backup target                  |
+| SOPS vault                                                                                      | Filled but **not yet encrypted** (Age keypair + `sops -e -i`)  | Must do before committing                                                                 |
+| Google Meet refresh token                                                                       | Missing                                                        | Not a blocker — set `GOOGLE_MEET_ENABLED=false`, manual links work                        |
+| Xendit                                                                                          | Sandbox keys                                                   | Not a blocker — sandbox E2E first, then one real transaction                              |
+| Google OAuth                                                                                    | Unverified app                                                 | Not a blocker — warning screen; video needed before real-user go-live                     |
+| Sanity                                                                                          | Tokenless                                                      | Not a blocker — public content works                                                      |
 | `coolify-resources.yml` (Ansible → Coolify API, incl. the Traefik route fixing the webhook 401) | **Written in wave-2** (`deploy/coolify-resources`, 2026-08-28) | Repo work done; operator apply pending (needs encrypted SOPS vault + `COOLIFY_API_TOKEN`) |
-| Terraform apply, Tailscale join, Ansible applies | Pending | Operator steps after the wave |
-| GitHub secrets (webhook URLs, DB URL, R2) | Pending | Operator steps after the wave |
+| Terraform apply, Tailscale join, Ansible applies                                                | Pending                                                        | Operator steps after the wave                                                             |
+| GitHub secrets (webhook URLs, DB URL, R2)                                                       | Pending                                                        | Operator steps after the wave                                                             |
 
 ---
 
 ## 8. Appendix — env var inventory (where each value comes from)
 
-| Var | Source | Required in prod? |
-|---|---|---|
-| `BETTER_AUTH_SECRET` | `openssl rand -hex 32` | ✅ |
-| `PAYMENT_WEBHOOK_SECRET` | `openssl rand -hex 32` | ✅ |
-| `METRICS_TOKEN` | `openssl rand -hex 32` | optional (endpoint 404s if unset) |
-| `ADMIN_EMAILS` | your operator account | ✅ (default `itcogitoacademy01@gmail.com`) |
-| `RESEND_API_KEY` | resend.com → API Keys | ✅ (boot fails without) |
-| `EMAIL_FROM` | resend.com → verified domain | ✅ (unverified default rejected) |
-| `XENDIT_SECRET_KEY` / `XENDIT_WEBHOOK_TOKEN` | dashboard.xendit.co → API Keys / Webhooks | ✅ when `PAYMENT_PROVIDER=xendit` |
-| `WEBHOOK_ALLOWED_IPS` | Xendit documented egress IPs | ✅ with xendit in prod |
-| `XENDIT_SUCCESS/FAILURE_REDIRECT_URL` | your choice (defaults fine) | ✅ with xendit |
-| `GOOGLE_CLIENT_ID/SECRET` | Google Cloud Console → Credentials | optional (login method) |
-| `GOOGLE_MEET_CLIENT_ID/SECRET/REFRESH_TOKEN` | Console + OAuth Playground (GOOGLE-MEET-SETUP.md) | ✅ when `GOOGLE_MEET_ENABLED=true` |
-| `R2_ACCOUNT_ID` | Cloudflare dashboard (Account ID) | ✅ all-or-nothing |
-| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 → Manage API Tokens | ✅ all-or-nothing |
-| `R2_BUCKET` | R2 bucket name | ✅ all-or-nothing |
-| `R2_PUBLIC_URL` | R2 bucket custom domain or endpoint | ✅ when R2 configured |
-| `SANITY_PROJECT_ID` / `DATASET` / `API_TOKEN` | sanity.io/manage | token optional |
-| `DATABASE_URL` / `REDIS_URL` | Coolify Postgres/Redis resources | ✅ |
-| `TS_AUTH_KEY` | login.tailscale.com → Keys | ✅ (one-time join) |
-| GitHub: `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK` | Coolify UI → resource webhooks | ✅ (CD) |
-| GitHub: `PROD_DATABASE_URL`, `R2_*` | as above | ✅ (CD) |
-| Terraform: `CLOUDFLARE_API_TOKEN`, `cloudflare_account_id` | Cloudflare dashboard | at apply time only |
+| Var                                                            | Source                                            | Required in prod?                          |
+| -------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------ |
+| `BETTER_AUTH_SECRET`                                           | `openssl rand -hex 32`                            | ✅                                         |
+| `PAYMENT_WEBHOOK_SECRET`                                       | `openssl rand -hex 32`                            | ✅                                         |
+| `METRICS_TOKEN`                                                | `openssl rand -hex 32`                            | optional (endpoint 404s if unset)          |
+| `ADMIN_EMAILS`                                                 | your operator account                             | ✅ (default `itcogitoacademy01@gmail.com`) |
+| `RESEND_API_KEY`                                               | resend.com → API Keys                             | ✅ (boot fails without)                    |
+| `EMAIL_FROM`                                                   | resend.com → verified domain                      | ✅ (unverified default rejected)           |
+| `XENDIT_SECRET_KEY` / `XENDIT_WEBHOOK_TOKEN`                   | dashboard.xendit.co → API Keys / Webhooks         | ✅ when `PAYMENT_PROVIDER=xendit`          |
+| `WEBHOOK_ALLOWED_IPS`                                          | Xendit documented egress IPs                      | ✅ with xendit in prod                     |
+| `XENDIT_SUCCESS/FAILURE_REDIRECT_URL`                          | your choice (defaults fine)                       | ✅ with xendit                             |
+| `GOOGLE_CLIENT_ID/SECRET`                                      | Google Cloud Console → Credentials                | optional (login method)                    |
+| `GOOGLE_MEET_CLIENT_ID/SECRET/REFRESH_TOKEN`                   | Console + OAuth Playground (GOOGLE-MEET-SETUP.md) | ✅ when `GOOGLE_MEET_ENABLED=true`         |
+| `R2_ACCOUNT_ID`                                                | Cloudflare dashboard (Account ID)                 | ✅ all-or-nothing                          |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`                    | R2 → Manage API Tokens                            | ✅ all-or-nothing                          |
+| `R2_BUCKET`                                                    | R2 bucket name                                    | ✅ all-or-nothing                          |
+| `R2_PUBLIC_URL`                                                | R2 bucket custom domain or endpoint               | ✅ when R2 configured                      |
+| `SANITY_PROJECT_ID` / `DATASET` / `API_TOKEN`                  | sanity.io/manage                                  | token optional                             |
+| `DATABASE_URL` / `REDIS_URL`                                   | Coolify Postgres/Redis resources                  | ✅                                         |
+| `TS_AUTH_KEY`                                                  | login.tailscale.com → Keys                        | ✅ (one-time join)                         |
+| GitHub: `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK` | Coolify UI → resource webhooks                    | ✅ (CD)                                    |
+| GitHub: `PROD_DATABASE_URL`, `R2_*`                            | as above                                          | ✅ (CD)                                    |
+| Terraform: `CLOUDFLARE_API_TOKEN`, `cloudflare_account_id`     | Cloudflare dashboard                              | at apply time only                         |

@@ -556,11 +556,11 @@ putting secrets there.
 
 What it runs:
 
-| Job      | Checks                                                                                                                            |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Job       | Checks                                                                                                                                                                                                                                                              |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Terraform | `terraform init -backend=false` + `terraform validate` (always). `terraform plan` (read-only) runs only when the read-only tokens below are configured; otherwise the plan step prints a clear "skipped" notice and exits 0 — unset secrets are never a CI failure. |
-| Ansible  | `ansible-playbook --syntax-check -i infra/ansible/inventory.ini` on **every** playbook under `infra/ansible/*.yml` (glob, so new playbooks are picked up automatically). |
-| Docs     | Verifies this `## Plan-only audit` section still exists.                                                                          |
+| Ansible   | `ansible-playbook --syntax-check -i infra/ansible/inventory.ini` on **every** playbook under `infra/ansible/*.yml` (glob, so new playbooks are picked up automatically).                                                                                            |
+| Docs      | Verifies this `## Plan-only audit` section still exists.                                                                                                                                                                                                            |
 
 Why not full `apply` (or `--check`) in CI:
 
@@ -577,12 +577,12 @@ Read-only token placeholders — create these repo secrets if you want
 `terraform plan` to run on PRs (plan reads DNS/zone data and the R2 state
 bucket; it must never be given write-scoped tokens):
 
-| Secret                    | Scope                                              |
-| ------------------------- | -------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`    | Cloudflare, `Zone:DNS:Read` for `cogitoacademy.id` |
-| `R2_ACCESS_KEY_ID`        | R2 API token, Object **Read** on `cogito-infra-state` |
-| `R2_SECRET_ACCESS_KEY`    | same token, secret half                           |
-| `R2_STATE_ENDPOINT`       | `https://<accountid>.r2.cloudflarestorage.com`    |
+| Secret                 | Scope                                                 |
+| ---------------------- | ----------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare, `Zone:DNS:Read` for `cogitoacademy.id`    |
+| `R2_ACCESS_KEY_ID`     | R2 API token, Object **Read** on `cogito-infra-state` |
+| `R2_SECRET_ACCESS_KEY` | same token, secret half                               |
+| `R2_STATE_ENDPOINT`    | `https://<accountid>.r2.cloudflarestorage.com`        |
 
 Without them the Terraform job still runs `validate` (it is the
 always-on gate) and reports plan as skipped.

@@ -1,10 +1,10 @@
 # Deployment Wave 2 — Finalized Plan & Dispatch (rev. 1)
 
-| Field      | Value |
-| ---------- | ----- |
-| Status     | Active — planning finalized 2026-08-28, awaiting dispatch approval |
-| Created    | 2026-08-28 |
-| Depends on | main `151fd2a` (#115–#118 merged; **#120 Xendit Test Mode merged 2026-08-28**; deployment wave state synced in #119) |
+| Field      | Value                                                                                                                                                                         |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Active — planning finalized 2026-08-28, awaiting dispatch approval                                                                                                            |
+| Created    | 2026-08-28                                                                                                                                                                    |
+| Depends on | main `151fd2a` (#115–#118 merged; **#120 Xendit Test Mode merged 2026-08-28**; deployment wave state synced in #119)                                                          |
 | Scope      | Repo work only: `coolify-resources.yml` (Coolify API playbook + deploy-webhook route fix), drift-check + docs, plan-only CI audit. **No secrets values needed — names only.** |
 
 ---
@@ -16,8 +16,8 @@
    R2 remains the **first operator task** before any prod apply/boot (env
    guard P4.3 + backup target). Documented, not blocking.
 2. **Google Meet: token EXISTS but expires every 7 days** (root cause
-   confirmed in GOOGLE-MEET-SETUP.md:152: *"A project left in Testing issues
-   Calendar refresh tokens that expire after 7 days"*). Permanent fix: set the
+   confirmed in GOOGLE-MEET-SETUP.md:152: _"A project left in Testing issues
+   Calendar refresh tokens that expire after 7 days"_). Permanent fix: set the
    OAuth consent screen publishing status to **In production**, then
    regenerate the refresh token (long-lived; the unverified-app warning
    remains until the verification video is done — separate track). Decision:
@@ -27,9 +27,9 @@
 3. **`ADMIN_EMAILS`** = `itcogitoacademy01@gmail.com` — confirmed.
 4. **Plan-only CI audit job — IN THIS WAVE** (user-approved). Precise scope:
    `terraform validate` + `terraform plan` (read-only Cloudflare + R2 tokens)
-   + `ansible-playbook --syntax-check`. NOTE: `ansible --check` is NOT
-   possible in CI (needs tailnet SSH); `--syntax-check` is the CI-safe
-   equivalent. Full `--check` remains a local operator command.
+   - `ansible-playbook --syntax-check`. NOTE: `ansible --check` is NOT
+     possible in CI (needs tailnet SSH); `--syntax-check` is the CI-safe
+     equivalent. Full `--check` remains a local operator command.
 5. **Drizzle Studio tunnel docs — IN THIS WAVE** (safe path: tailnet SSH
    tunnel + local `bun run db:studio`; never on the prod container).
 6. **Uptime Kuma — DEFERRED to a follow-up plan** (RAM verified healthy —
@@ -46,7 +46,7 @@
    D2 env superRefine (mandatory in prod with xendit) is removed; the env
    var stays optional and the `ipAllowed` check stays as defense-in-depth
    (empty = signature-only gating). Code change: `packages/env/src/server.ts`
-   + tests. Folded into W1.
+   - tests. Folded into W1.
 10. **Webhook 401 — second hypothesis found in the doc audit (2026-08-28):**
     `docs/DEPLOYMENT.md` §5 documents the endpoint as **"Deploy Webhook (auth
     required)"** requiring `Authorization: Bearer <coolify-api-token>` (deploy
@@ -87,8 +87,7 @@ written as a Traefik route**, not a Caddy route.
 
 This changes Task 0.2's implementation: the `coolify-resources.yml` playbook
 must drive the **Coolify API / Traefik labels** for
-`coolify.cogitoacademy.id` → only `/api/v1/deploy/*` proxied, everything else
-404. Worker W1 owns this and the doc corrections.
+`coolify.cogitoacademy.id` → only `/api/v1/deploy/*` proxied, everything else 404. Worker W1 owns this and the doc corrections.
 
 ---
 
@@ -144,11 +143,11 @@ allowlist (`XENDIT_TEST_ALLOWED_EMAILS`).**
 
 **The two "allowlists" (still distinct, still NOT the same thing):**
 
-| Feature | Where | Value | What it protects |
-| ------- | ----- | ----- | ---------------- |
-| **Xendit dashboard "IP Allowlist"** | Xendit dashboard → IP Allowlist settings | **YOUR VPS IP** (`15.235.186.159`) | Xendit's APIs — only your server can call them. Protects against API-key theft. **This is the merchant-side allowlist — yes, it's your IP.** |
-| **Our `WEBHOOK_ALLOWED_IPS` env var** | Our SOPS vault → Coolify env | **Xendit's webhook SOURCE IPs** (observed, see below) | OUR endpoint — only Xendit's IPs can deliver webhooks. Defense-in-depth second layer; the `x-callback-token` signature is the primary gate. **§0.9: the D2 mandatory guard is being removed (user decision); the var stays optional.** |
-| **`XENDIT_TEST_ALLOWED_EMAILS` (NEW in #120)** | Our SOPS vault → Coolify env | UAT account emails (comma-separated) | **Who may purchase in Test Mode** — `createPurchase` throws `PaymentTestModeRestrictedError` for anyone else. This is the real "test mode" gate. |
+| Feature                                        | Where                                    | Value                                                 | What it protects                                                                                                                                                                                                                       |
+| ---------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Xendit dashboard "IP Allowlist"**            | Xendit dashboard → IP Allowlist settings | **YOUR VPS IP** (`15.235.186.159`)                    | Xendit's APIs — only your server can call them. Protects against API-key theft. **This is the merchant-side allowlist — yes, it's your IP.**                                                                                           |
+| **Our `WEBHOOK_ALLOWED_IPS` env var**          | Our SOPS vault → Coolify env             | **Xendit's webhook SOURCE IPs** (observed, see below) | OUR endpoint — only Xendit's IPs can deliver webhooks. Defense-in-depth second layer; the `x-callback-token` signature is the primary gate. **§0.9: the D2 mandatory guard is being removed (user decision); the var stays optional.** |
+| **`XENDIT_TEST_ALLOWED_EMAILS` (NEW in #120)** | Our SOPS vault → Coolify env             | UAT account emails (comma-separated)                  | **Who may purchase in Test Mode** — `createPurchase` throws `PaymentTestModeRestrictedError` for anyone else. This is the real "test mode" gate.                                                                                       |
 
 **The honest problem with `WEBHOOK_ALLOWED_IPS`:** Xendit does NOT publish a
 stable list of webhook source IPs (their docs emphasize the `x-callback-token`
@@ -158,15 +157,15 @@ retries for 24h → payments silently never credit. Safe approach: log the
 source IPs of received sandbox webhooks, populate with **observed** IPs, verify
 webhooks still flow. If unstable, leave empty (signature-only gating).
 
-| Vault var | Where to get it | What it is |
-| --------- | --------------- | ---------- |
-| `XENDIT_MODE` | Your choice — `test` for UAT, `live` for go-live | Explicit deployment-mode assertion (required with xendit) |
-| `XENDIT_SECRET_KEY` | Settings → API Keys (Test Mode section) | Authenticates API calls; Test Mode = test key |
-| `XENDIT_WEBHOOK_TOKEN` | Settings → Webhooks → Callback Token | Sent as `x-callback-token` header on every webhook; the server compares it (constant-time) |
-| `XENDIT_TEST_ALLOWED_EMAILS` | Your UAT accounts | Who may purchase while `XENDIT_MODE=test` (required in prod-like envs) |
-| Webhook URL (set in Xendit dashboard) | Settings → Webhooks → per event type | `https://api.cogitoacademy.id/webhooks/payments/xendit` — events: payment succeeded / refunded / failed / expired |
-| `WEBHOOK_ALLOWED_IPS` | **Observed from real sandbox webhooks** (log source IPs), not from a published list | Comma-separated source IPs Xendit sends webhooks from; server rejects anything else (403) |
-| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL` | Your choice | Where the customer lands after paying/cancelling — defaults `https://app.cogitoacademy.id/balance` work fine |
+| Vault var                                                     | Where to get it                                                                     | What it is                                                                                                        |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `XENDIT_MODE`                                                 | Your choice — `test` for UAT, `live` for go-live                                    | Explicit deployment-mode assertion (required with xendit)                                                         |
+| `XENDIT_SECRET_KEY`                                           | Settings → API Keys (Test Mode section)                                             | Authenticates API calls; Test Mode = test key                                                                     |
+| `XENDIT_WEBHOOK_TOKEN`                                        | Settings → Webhooks → Callback Token                                                | Sent as `x-callback-token` header on every webhook; the server compares it (constant-time)                        |
+| `XENDIT_TEST_ALLOWED_EMAILS`                                  | Your UAT accounts                                                                   | Who may purchase while `XENDIT_MODE=test` (required in prod-like envs)                                            |
+| Webhook URL (set in Xendit dashboard)                         | Settings → Webhooks → per event type                                                | `https://api.cogitoacademy.id/webhooks/payments/xendit` — events: payment succeeded / refunded / failed / expired |
+| `WEBHOOK_ALLOWED_IPS`                                         | **Observed from real sandbox webhooks** (log source IPs), not from a published list | Comma-separated source IPs Xendit sends webhooks from; server rejects anything else (403)                         |
+| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL` | Your choice                                                                         | Where the customer lands after paying/cancelling — defaults `https://app.cogitoacademy.id/balance` work fine      |
 
 **Can the app really transact with Xendit now? YES — in Test Mode, on the
 production domain, restricted to UAT emails.** Student picks OVO/QRIS/BCA →
@@ -190,9 +189,10 @@ failed job could **double-run a money path** — that's why replay is
 deliberately absent.
 
 **What we should do better (ranked):**
+
 1. **Now (this wave):** nothing extra in code — the alert hook is designed;
    the Uptime Kuma `dlqDepth` monitor lands with the deferred Kuma follow-up.
-2. **Next (small, follow-up):** a protected admin RPC to *read* DLQ entries
+2. **Next (small, follow-up):** a protected admin RPC to _read_ DLQ entries
    (currently only `redis-cli` can inspect them) — read-only, no replay.
 3. **Never:** auto-replay on money paths.
 
@@ -222,6 +222,7 @@ this is already a locked decision (DEPLOYMENT-PLAN §Task 3.2). Concretely:
 is required by the env schema (no boot without it), and with
 `SCHEDULER_ENABLED=true` an unreachable Redis **aborts boot**. The in-memory
 stores (idempotency/rate-limit/circuit-breaker) exist for:
+
 - **unit tests** (`InMemoryRedis`), and
 - a **last-ditch per-call defense** if a configured Redis call fails at
   runtime mid-flight (a network blip keeps that one request working instead
@@ -267,8 +268,7 @@ the two example files and W2 mirrors it), `packages/env/src/server.ts` +
 `docs/RUNBOOK.md`, `docs/DEPLOYMENT.md`.
 
 **Key points:** Traefik, not Caddy — route
-`coolify.cogitoacademy.id/api/v1/deploy/*` only; everything else on that host
-404. Env values come from `sops -d` on the control node (never written to
+`coolify.cogitoacademy.id/api/v1/deploy/*` only; everything else on that host 404. Env values come from `sops -d` on the control node (never written to
 disk on the VPS). Playbook is idempotent + dry-runnable. `--syntax-check`
 passes. This is the 401 fix.
 
@@ -327,19 +327,19 @@ skippable/skipped when secrets are unset (documented).
 
 ## 7. Overlap map & merge order
 
-| File | W1 | W2 | W3 |
-| --- | --- | --- | --- |
-| `infra/ansible/coolify-resources.yml` | ✅ owns | — | — |
-| `infra/ansible/drift-check.yml` | — | ✅ owns | — |
-| `.github/workflows/infra-plan.yml` | — | — | ✅ owns |
-| `.github/workflows/cd-prod.yml` | ✅ owns | — | — |
-| `packages/env/src/server.ts` + tests | ✅ owns | — | — |
-| `scripts/migrate-and-deploy.sh` | ✅ owns | — | — |
-| `docs/plans/active/DEPLOYMENT-PLAN.md` | ✅ owns | — | — |
-| `docs/RUNBOOK.md` | — | ✅ owns | — |
-| `docs/DEPLOYMENT.md` | — | ✅ (rest) | ✅ (audit section only) |
-| `docs/CONTEXT.md`, `docs/plans/README.md`, `docs/plans/active/DEFERRED-OPS-TASKS.md` | — | ✅ owns | — |
-| `docs/INFRA-ARCHITECTURE-DEEP-DIVE.md`, `docs/INFRA-KNOWLEDGE-SYNC.md` | ✅ (Traefik fixes only) | — | — |
+| File                                                                                 | W1                      | W2        | W3                      |
+| ------------------------------------------------------------------------------------ | ----------------------- | --------- | ----------------------- |
+| `infra/ansible/coolify-resources.yml`                                                | ✅ owns                 | —         | —                       |
+| `infra/ansible/drift-check.yml`                                                      | —                       | ✅ owns   | —                       |
+| `.github/workflows/infra-plan.yml`                                                   | —                       | —         | ✅ owns                 |
+| `.github/workflows/cd-prod.yml`                                                      | ✅ owns                 | —         | —                       |
+| `packages/env/src/server.ts` + tests                                                 | ✅ owns                 | —         | —                       |
+| `scripts/migrate-and-deploy.sh`                                                      | ✅ owns                 | —         | —                       |
+| `docs/plans/active/DEPLOYMENT-PLAN.md`                                               | ✅ owns                 | —         | —                       |
+| `docs/RUNBOOK.md`                                                                    | —                       | ✅ owns   | —                       |
+| `docs/DEPLOYMENT.md`                                                                 | —                       | ✅ (rest) | ✅ (audit section only) |
+| `docs/CONTEXT.md`, `docs/plans/README.md`, `docs/plans/active/DEFERRED-OPS-TASKS.md` | —                       | ✅ owns   | —                       |
+| `docs/INFRA-ARCHITECTURE-DEEP-DIVE.md`, `docs/INFRA-KNOWLEDGE-SYNC.md`               | ✅ (Traefik fixes only) | —         | —                       |
 
 **Merge order:** W3 → W1 → W2 (W2 last: it owns the most docs and rebases
 trivially on the others).
@@ -359,7 +359,7 @@ trivially on the others).
 - W3: workflow runs `terraform plan` (or skips with a clear message when
   tokens are unset) + `ansible --syntax-check`; CI passes on the PR.
 - Lead: rebuild the wave on `origin/main`, PR with full body, `gh pr checks
-  --watch`, squash-merge; then wave finalization (close panes, remove
+--watch`, squash-merge; then wave finalization (close panes, remove
   worktrees `~/cogito/wt-deploy-*` + stale `wt-backend-prod-readiness`,
   `wt-review-fixes3`, `wt-review-fixes4`, delete merged local branches,
   sync plans/docs).
