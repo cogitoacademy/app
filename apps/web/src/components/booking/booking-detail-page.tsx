@@ -512,9 +512,9 @@ export function BookingDetailPage({
         </div>
       </header>
 
-      <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,36rem)] lg:auto-rows-max">
-        <div className="grid min-w-0 gap-4 lg:col-start-1 lg:row-start-1">
-          <Card className="min-w-0 overflow-hidden">
+      <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,36rem)]">
+        <div className="contents lg:col-start-1 lg:flex lg:flex-col lg:gap-4">
+          <Card className="order-1 min-w-0 overflow-hidden lg:order-none">
             <CardHeader>
               <CardTitle>Session overview</CardTitle>
               <CardDescription>
@@ -683,11 +683,13 @@ export function BookingDetailPage({
           !isAdmin &&
           booking.currentState === "completed" &&
           booking.targetGroupSize > 1 ? (
-            <ContactRequestPanel bookingId={bookingId} />
+            <div className="order-1 min-w-0 lg:order-none">
+              <ContactRequestPanel bookingId={bookingId} />
+            </div>
           ) : null}
 
           {booking.type === "series" ? (
-            <Card className="min-w-0 overflow-hidden">
+            <Card className="order-1 min-w-0 overflow-hidden lg:order-none">
               <CardHeader>
                 <CardTitle>Series sessions</CardTitle>
                 <CardDescription>
@@ -776,7 +778,7 @@ export function BookingDetailPage({
           ) : null}
         </div>
 
-        <aside className="grid min-w-0 gap-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
+        <aside className="order-2 grid min-w-0 gap-4 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
           {!isAdmin ? (
             <BookingLifecycleActions
               {...lifecycleActionProps}
@@ -816,7 +818,7 @@ export function BookingDetailPage({
           </Card>
         </aside>
 
-        <div className="grid min-w-0 gap-4 lg:col-start-1 lg:row-start-2">
+        <div className="order-3 grid min-w-0 gap-4 lg:order-none">
           {!isAdmin ? (
             <BookingLifecycleActions
               {...lifecycleActionProps}
