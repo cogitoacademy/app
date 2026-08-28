@@ -15,14 +15,9 @@ import {
   NumberFieldInput,
 } from "@cogito-app/ui/components/selia/number-field";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@cogito-app/ui/components/selia/table";
+  TutorPricingTable,
+  type TutorPricingModality,
+} from "./tutor-pricing-table";
 
 const MIN_BASE_RATE_IDR = 50_000;
 const TUTOR_INCREMENT_IDR = { online: 30_000, offline: 40_000 } as const;
@@ -46,10 +41,25 @@ export function TutorPricingFields({
   onChange,
   errors,
 }: PricingFieldsProps) {
-  const modalities =
+  const modalities: readonly TutorPricingModality[] =
     modality === "both"
       ? (["online", "offline"] as const)
-      : ([modality] as const);
+      : ([modality as TutorPricingModality] as const);
+  const previewModalities = modalities.filter(
+    (currentModality) =>
+      typeof baseRatesIdr[currentModality as "online" | "offline"] === "number",
+  );
+  const previewRows = Array.from({ length: 6 }, (_, index) => ({
+    size: String(index + 1),
+    ...(previewModalities.includes("online")
+      ? { online: baseRatesIdr.online! + index * TUTOR_INCREMENT_IDR.online }
+      : {}),
+    ...(previewModalities.includes("offline")
+      ? {
+          offline: baseRatesIdr.offline! + index * TUTOR_INCREMENT_IDR.offline,
+        }
+      : {}),
+  }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -116,42 +126,20 @@ export function TutorPricingFields({
           );
         })}
       </div>
-      {modalities.map((currentModality) => {
-        const key = currentModality as "online" | "offline";
-        const base = baseRatesIdr[key];
-        if (typeof base !== "number") return null;
-        const increment = TUTOR_INCREMENT_IDR[key];
-        return (
-          <div
-            key={currentModality + "-breakdown"}
-            className="overflow-hidden rounded-lg border border-item-border"
-          >
-            <Text className="bg-accent px-3 py-2 font-medium capitalize">
-              {currentModality} honorarium preview
-            </Text>
-            <TableContainer className="rounded-none border-0 shadow-none">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Students</TableHead>
-                    <TableHead className="text-right">Honorarium</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Array.from({ length: 6 }, (_, index) => (
-                    <TableRow key={index + 1}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatIdr(base + index * increment)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </div>
-        );
-      })}
+      {previewModalities.length > 0 ? (
+        <div>
+          <Text className="mb-2 font-medium">Honorarium preview</Text>
+          <TutorPricingTable
+            modalities={previewModalities}
+            rows={previewRows}
+            columnLabels={{
+              online: "Online honorarium",
+              offline: "Offline honorarium",
+            }}
+            renderValue={formatIdr}
+          />
+        </div>
+      ) : null}
       {errors.baseRatesIdr ? (
         <Text className="text-sm text-danger" role="alert">
           {errors.baseRatesIdr}

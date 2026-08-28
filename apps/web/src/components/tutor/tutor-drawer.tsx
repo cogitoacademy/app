@@ -8,14 +8,6 @@ import {
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import {
@@ -33,6 +25,7 @@ import { IconX } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
+import { TutorPricingTable } from "./tutor-pricing-table";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -198,52 +191,17 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                 <Heading size="sm" className="mb-2">
                   Pricing
                 </Heading>
-                <div className="overflow-hidden rounded-lg border border-item-border">
-                  <Table className="text-sm">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="py-2!">Group Size</TableHead>
-                        {priceModalities.includes("online") && (
-                          <TableHead className="py-2! text-right">
-                            Online (Marks)
-                          </TableHead>
-                        )}
-                        {priceModalities.includes("offline") && (
-                          <TableHead className="py-2! text-right">
-                            Offline (Marks)
-                          </TableHead>
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {priceRows.map(({ size, online, offline }) => (
-                        <TableRow key={size}>
-                          <TableCell className="py-2!">
-                            {size} student{Number(size) > 1 ? "s" : ""}
-                          </TableCell>
-                          {priceModalities.includes("online") && (
-                            <TableCell className="py-2! text-right font-medium">
-                              {online !== undefined ? (
-                                <CogitoMarks size="3" value={online} />
-                              ) : (
-                                <span className="text-dimmed">—</span>
-                              )}
-                            </TableCell>
-                          )}
-                          {priceModalities.includes("offline") && (
-                            <TableCell className="py-2! text-right font-medium">
-                              {offline !== undefined ? (
-                                <CogitoMarks size="3" value={offline} />
-                              ) : (
-                                <span className="text-dimmed">—</span>
-                              )}
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <TutorPricingTable
+                  modalities={priceModalities}
+                  rows={priceRows}
+                  columnLabels={{
+                    online: "Online (Marks)",
+                    offline: "Offline (Marks)",
+                  }}
+                  renderValue={(value) => (
+                    <CogitoMarks size="3" value={value} />
+                  )}
+                />
               </div>
             )}
 
