@@ -8,6 +8,12 @@
 #
 # Env inputs (all required unless noted):
 #   COOLIFY_WEBHOOK        Full Coolify deploy webhook URL (server resource)
+#   COOLIFY_API_TOKEN      (optional) Coolify API token. When set, the deploy
+#                          curl sends `Authorization: Bearer <token>` — some
+#                          Coolify versions label the deploy endpoint "Deploy
+#                          Webhook (auth required)" and 401 requests without
+#                          it (docs/DEPLOYMENT.md §5). When unset, no header
+#                          is sent and behavior is exactly as before.
 #   PROD_DATABASE_URL      Production PostgreSQL connection string
 #   R2_ACCOUNT_ID          Cloudflare account id (R2 S3 endpoint host)
 #   R2_ACCESS_KEY_ID       R2 API token access key id
@@ -86,10 +92,26 @@ fi
 
 # --- 4. Deploy: trigger Coolify ------------------------------------------
 log "4/5 triggering Coolify deploy"
+# Optional Bearer auth: some Coolify versions label the deploy endpoint
+# "Deploy Webhook (auth required)" and 401 requests without the header
+# (docs/DEPLOYMENT.md §5). Only send the header when COOLIFY_API_TOKEN is
+# set — unset behaves exactly as before (no header).
 if [[ "$DRY_RUN" == "0" ]]; then
-  curl --fail --max-time 30 -X POST "$COOLIFY_WEBHOOK"
+  if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
+    log "    sending Authorization: Bearer <COOLIFY_API_TOKEN> (set)"
+    curl --fail --max-time 30 -X POST \
+      -H "Authorization: Bearer ${COOLIFY_API_TOKEN}" \
+      "$COOLIFY_WEBHOOK"
+  else
+    log "    COOLIFY_API_TOKEN unset — no Authorization header (endpoint must not require auth)"
+    curl --fail --max-time 30 -X POST "$COOLIFY_WEBHOOK"
+  fi
 else
-  log "    [dry-run] curl --fail --max-time 30 -X POST \"\$COOLIFY_WEBHOOK\""
+  if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
+    log "    [dry-run] curl --fail --max-time 30 -X POST -H \"Authorization: Bearer <token>\" \"\$COOLIFY_WEBHOOK\""
+  else
+    log "    [dry-run] curl --fail --max-time 30 -X POST \"\$COOLIFY_WEBHOOK\""
+  fi
 fi
 
 # --- 5. Health poll: verify the deployed sha -----------------------------
