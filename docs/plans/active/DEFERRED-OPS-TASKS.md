@@ -31,7 +31,7 @@ environment-specific items below still require confirmation in GitHub/Coolify.
       two candidate causes: a missing Traefik route for
       `coolify.cogitoacademy.id/api/v1/deploy/*` (declared in
       `coolify-resources.yml`) and/or a missing `Authorization: Bearer
-  <coolify-api-token>` header (Deploy Webhook is auth-required in current
+<coolify-api-token>` header (Deploy Webhook is auth-required in current
       Coolify versions). Both documented in RUNBOOK → Xendit webhook wiring.**
 
 ---
