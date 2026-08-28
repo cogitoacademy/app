@@ -2042,8 +2042,9 @@ export function createBookingService(deps: {
       }
 
       const session = normalizeSession(proposedStartAt);
-      let existingSession: Awaited<ReturnType<BookingRepo["findSessionById"]>> =
-        null;
+      let existingSession: Awaited<
+        ReturnType<BookingRepo["findSessionById"]>
+      > | null = null;
       if (sessionId) {
         existingSession = await repo.findSessionById(tx, sessionId);
         if (!existingSession || existingSession.seriesBookingId !== bookingId) {
