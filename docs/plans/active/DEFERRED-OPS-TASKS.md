@@ -26,8 +26,13 @@ environment-specific items below still require confirmation in GitHub/Coolify.
       the unresolvable `coolify.cogitoacademy.id` host (S7); the CD pipeline
       now guards them (#118) and the operator must recreate them with the
       resolvable `https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...`
-      URL (Option A, DEPLOYMENT-PLAN Task 0.2). User reports the webhook
-      currently returns 401 — Caddy route + per-resource UUID pending.**
+      URL (Option A, DEPLOYMENT-PLAN Task 0.2). Webhook 401 → **wave-2
+      (DEPLOYMENT-WAVE-2.md): Traefik route + optional Bearer** — the 401 has
+      two candidate causes: a missing Traefik route for
+      `coolify.cogitoacademy.id/api/v1/deploy/*` (declared in
+      `coolify-resources.yml`) and/or a missing `Authorization: Bearer
+      <coolify-api-token>` header (Deploy Webhook is auth-required in current
+      Coolify versions). Both documented in RUNBOOK → Xendit webhook wiring.**
 
 ---
 
@@ -108,33 +113,37 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 - [x] Provision the OVH VPS with the Terraform bootstrap in `infra/terraform`
       (the existing `infra/provision.sh` remains the host bootstrap payload) —
       **Terraform config extended (#115): Cloudflare DNS (api/app/status/coolify),
-      R2 buckets, state backend; apply pending (operator)**
+      R2 buckets, state backend; apply pending (operator) — R2 is the
+      operator's first task (blocked on payment info)**
 - [x] Install Coolify + create admin account — **already live on the VPS**
 - [x] Add GHCR as Docker registry in Coolify — **already live**
 - [x] Create PostgreSQL, Redis, server, web services in Coolify — **already live**
 - [x] Set `DB_SSL_ENABLED=false` for Coolify's bundled non-TLS PostgreSQL service;
       keep it true for managed PostgreSQL endpoints that require TLS
 - [x] Configure domains + auto-HTTPS in Coolify — **api/app live; `coolify` webhook
-      host DNS declared in Terraform (#115), Caddy route pending**
+      host DNS declared in Terraform (#115), Traefik route pending (wave-2)**
 - [x] Configure Hostinger DNS (api.cogitoacademy.id, app.cogitoacademy.id → VPS IP)
 - [ ] Verify Coolify auto-deploys on new image push — **blocked on the webhook
-      401 (Option A Caddy route + UUID)**
+      401 (wave-2: Traefik route + optional Bearer)**
 - [x] Verify both domains serve with HTTPS
 
 ### 4.2 CI/CD Secrets
 
 - [x] Add GHCR secrets to GitHub repo
 - [ ] Add Coolify webhook URLs to GitHub secrets — **secrets exist but point at
-      the unresolvable host; recreate with the resolvable URL (operator)**
+      the unresolvable host; recreate with the resolvable URL (operator);
+      webhook 401 → wave-2 (Traefik route + optional Bearer)**
 - [ ] Verify CD builds and pushes to GHCR on push to staging — **pipeline merged
       (#118); live verification pending the webhook fix**
 
 ### 4.3 Monitoring
 
 - [ ] Configure Docker log rotation in Coolify
-- [ ] Deploy Uptime Kuma as Coolify service
-- [ ] Configure Uptime Kuma monitors (health, frontend, alerting)
-- [ ] Create public status page
+- [ ] Deploy Uptime Kuma as Coolify service — **DEFERRED to a follow-up plan
+      (user decision, 2026-08-28); no Kuma playbook this wave**
+- [ ] Configure Uptime Kuma monitors (health, frontend, alerting) — **deferred
+      with the Kuma deploy**
+- [ ] Create public status page — **deferred with the Kuma deploy**
 - [ ] Configure Coolify built-in health checks + resource alerts
 
 ### 4.4 Security
@@ -156,3 +165,4 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 - v1.0 (2026-07-29): Created from post-merge audit of #18 + #19. Groups code gaps (done in next PR), manual verification (needs running env), and production ops (needs live VPS).
 - v1.1 (2026-07-30): Items 1.1, 1.2, 1.3, 1.6 completed in `improvement/foundation-critical-fixes` branch. Remaining: 1.4, 1.5, 1.7, 1.8, §2 Redis session caching.
 - v1.2 (2026-08-12): Items 1.4 (PR C / C3), 1.5 (PR C / C5), 1.7 (PR C / C4), 1.8 (PR B / B2) completed in BACKEND-HARDENING PRs. §2 Redis session caching remains unimplemented and moved under a "Deferred / needs separate plan" note.
+- v1.3 (2026-08-28): Wave-2 status sync — webhook 401 moved to wave-2 (Traefik route + optional Bearer, DEPLOYMENT-WAVE-2.md); Uptime Kuma deferred to a follow-up plan (user decision); R2 apply marked as the operator's first task (blocked on payment info).

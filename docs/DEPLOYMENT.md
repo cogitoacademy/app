@@ -1,6 +1,6 @@
 # Cogito Setup and Deployment
 
-Last updated: 2026-08-25
+Last updated: 2026-08-28
 
 This is the operational guide for the current production setup. It covers the
 first-time VPS/Coolify setup, the normal GitHub Actions deployment, and the
@@ -163,7 +163,8 @@ app.cogitoacademy.id  -> VPS IP
 ```
 
 Assign the API domain to the API resource and the app domain to the web
-resource. Coolify/Caddy then provisions HTTPS and routes traffic as follows:
+resource. Coolify's bundled proxy (Traefik v3.6, verified 2026-08-28 — not
+Caddy) then provisions HTTPS and routes traffic as follows:
 
 ```text
 api.cogitoacademy.id/*  -> API container :3001
@@ -264,18 +265,28 @@ UUID.
 
 > **Production host (2026-08-27, S7):** the Coolify control plane is
 > tailnet-only, so the production webhook host is `coolify.cogitoacademy.id` —
-> a DNS record + Caddy route expose **only** the `/api/v1/deploy/*` path
+> a DNS record + Traefik route expose **only** the `/api/v1/deploy/*` path
 > (the per-resource UUID is the bearer secret); the Coolify UI stays
 > tailnet-only. The old `cl.cogitoacademy.id` host had no DNS record, which is
 > why `Deploy Production` failed with `curl exit 6 "Could not resolve host"`.
 > The operator recreates `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK`
-> with the resolvable URL above.
+> with the resolvable URL above. (The Coolify bundled proxy is **Traefik
+> v3.6**, verified 2026-08-28 — not Caddy.)
 
 Current Coolify versions label this endpoint **Deploy Webhook (auth
 required)**. The URL identifies the target, while a Coolify API token with the
 `deploy` permission authorizes the request; store that token separately and do
 not append it to the URL. The workflow must send it as an
 `Authorization: Bearer ...` header before this auth-required form can be used.
+
+> **Bearer variant is conditional (wave-2, 2026-08-28):** whether the webhook
+> accepts the URL alone or requires `Authorization: Bearer <coolify-api-token>`
+> depends on the Coolify version. If the webhook returns `401`, try the Bearer
+> variant first (token with the `deploy` permission); if it still returns
+> `401`/`404`, the Traefik route for `coolify.cogitoacademy.id/api/v1/deploy/*`
+> is missing (declared in `infra/ansible/coolify-resources.yml`). Both causes
+> are documented in RUNBOOK → Xendit webhook wiring → "Webhook 401
+> investigation".
 
 The workflows intentionally fail if a webhook is missing or unreachable. A
 green image build without a successful Coolify deploy is not a completed

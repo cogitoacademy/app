@@ -1,6 +1,18 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
+
+## Deployment wave state
+
+**Wave-2 active (2026-08-28).** #120 merged: Xendit Test Mode
+(`XENDIT_MODE=test|live` + `XENDIT_TEST_ALLOWED_EMAILS` UAT allowlist) — the
+production-domain story is Test Mode UAT restricted to UAT emails, then a
+switch to live with one real small transaction. R2 (backups + uploads) is
+**pending operator apply** (Terraform apply + SOPS vault fill + GitHub
+secrets). The Coolify deploy webhook returns 401 — under investigation
+(missing Traefik route and/or missing `Authorization: Bearer`; see RUNBOOK →
+Xendit webhook wiring). Uptime Kuma is **deferred** to a follow-up plan.
+Tracked in `docs/plans/active/DEPLOYMENT-WAVE-2.md`.
 
 ## Production deployment topology
 
@@ -768,15 +780,28 @@ Redis keys follow the pattern `cogito:{namespace}:{key}`. **Redis is mandatory**
 > `cogito:sess` is **reserved/unused** — Redis session caching is not implemented (Better Auth uses cookieCache + DB adapter; DEFERRED-OPS-TASKS §2).
 > | `cogito-jobs` | BullMQ managed | Scheduler | Per-job repeat interval |
 
-### In-Memory Fallback (defensive only)
+### In-Memory Fallback (note — not a feature)
 
-Each stateful service (`IdempotencyStore`, `rateLimit`, `CircuitBreaker`) checks for Redis availability at runtime. If a configured Redis call fails, the service falls back to an in-memory implementation (with a warning log):
+> **Status (2026-08-28): downgraded from a feature to a note.** The in-memory
+> implementations are a **test utility + last-ditch per-call defense**, not a
+> supported runtime mode.
+
+Each stateful service (`IdempotencyStore`, `rateLimit`, `CircuitBreaker`)
+checks for Redis availability at runtime. If a configured Redis call fails,
+the service falls back to an in-memory implementation (with a warning log):
 
 - **IdempotencyStore**: `Map<string, { result, timestamp }>` with periodic cleanup and max-entries eviction.
 - **rateLimit**: `Map<string, { count, resetAt }>` with periodic cleanup and max-entries eviction.
 - **CircuitBreaker**: In-memory `state`, `failureCount`, `lastFailureTime`, `halfOpenAttempts` fields.
 
-Redis itself is mandatory (`REDIS_URL` is required); the fallback only keeps tests and degraded moments working, and only per-process.
+**Redis is mandatory** — `REDIS_URL` is required by the env schema (since
+#48) and the server will not boot without it. The fallback only keeps tests
+and degraded moments working, and only per-process. It **never silently
+replaces Redis**: a configured Redis failure logs a warning, and the
+degradation is observable via `/health` (`checks.redis` / `checks.scheduler`
+go `error`/`degraded`). Treat any production log line showing an in-memory
+fallback as an incident signal — Redis is down or misconfigured — not as
+normal operation.
 
 ### Adding Redis to a New Feature
 
