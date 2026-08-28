@@ -2,10 +2,10 @@
 
 | Field      | Value                                                                                                                                                                                                                            |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-27; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy follow-up implemented; meeting fallback follow-up added) |
+| Status     | Living gap inventory (updated 2026-08-28; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy follow-up implemented; meeting fallback follow-up added; booking overflow polish added) |
 | Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                        |
 | Created    | 2026-07-29                                                                                                                                                                                                                       |
-| Audited    | 2026-08-26                                                                                                                                                                                                                       |
+| Audited    | 2026-08-28                                                                                                                                                                                                                       |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                    |
 | Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                           |
 
@@ -99,6 +99,16 @@ The rounded booking status-tab strip fills the available width on narrow
 screens. Only its inner tab list remains horizontally swipeable, while the
 native scrollbar is hidden so the page itself does not overflow. This is a
 presentation-only change with no RPC, schema, or persistence contract change.
+
+### Booking-list overflow polish follow-up (2026-08-28)
+
+The booking tab scroller now includes internal horizontal and vertical paint
+padding, so the selected tab's shadow and keyboard focus ring remain visible at
+the edges while horizontal swiping stays inside the tab list. The shared
+`EmptyStateCard` keeps its rounded decorative glow and card shadow visible
+without widening the page, and loading/error/list branches use explicit
+`min-w-0`/`max-w-full` constraints. This is presentation-only; the
+`booking.listMine` contract is unchanged.
 
 ### Dashboard next-lesson and onboarding follow-up (2026-08-24)
 
@@ -588,7 +598,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above Marks or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admin review and override actions remain on the dedicated admin operations surface. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
+**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above Marks or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. The desktop overview/activity flow now stays in an independent left column from the sticky Actions/Marks rail, preventing the rail height from creating a blank row before Activity; narrow layouts retain the overview → actions/Marks → Activity order. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admin review and override actions remain on the dedicated admin operations surface. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
 
 **Required:**
 
@@ -692,6 +702,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.35 (2026-08-28): Kept the booking-detail overview/activity flow independent from the sticky desktop Actions/Marks rail so rail height cannot create a blank row before Activity; narrow layouts retain actions/Marks before Activity. No RPC, schema, or persistence contract changed.
+- v1.34 (2026-08-28): Added paint-safe tab-scroller padding and overflow-safe empty-state/card boundaries for the shared bookings page, including an E2E narrow-viewport regression. No RPC, schema, or persistence contract changed.
 - v1.32 (2026-08-27): Improved admin tutor review readability by mapping pending subject IDs to active category/subject labels and wrapping long pending values. No RPC, schema, or persistence contract changed.
 - v1.31 (2026-08-27): Added the assigned-tutor `tutorActions.setMeetingLink` fallback plus a shared Selia manual-link dialog for tutor booking detail and admin operations. The fallback is limited to online `CONFIRMED`/`SCHEDULED` bookings, updates the active meeting-attempt row, and keeps force-majeure handling on the auditable admin override path. No schema change.
 - v1.28 (2026-08-26): Added the authenticated shell's `D` keyboard shortcut for toggling the rendered light/dark theme outside editable fields, while retaining the Light/Dark/System menu and `next-themes` persistence. No API, schema, or persistence contract changed.

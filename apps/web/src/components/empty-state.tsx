@@ -149,9 +149,11 @@ export function EmptyState({
 
 export function EmptyStateCard({ className, ...props }: EmptyStateProps) {
   return (
-    <Card className={cn("overflow-hidden", className)}>
+    <Card
+      className={cn("w-full min-w-0 max-w-full overflow-hidden", className)}
+    >
       <CardBody className="p-0!">
-        <EmptyState {...props} />
+        <EmptyState {...props} className={cn("rounded-[inherit]", className)} />
       </CardBody>
     </Card>
   );

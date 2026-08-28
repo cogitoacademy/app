@@ -96,7 +96,7 @@ export function BookingsPage() {
     <Stack
       direction="column"
       spacing="lg"
-      className="w-full min-w-0 max-w-full"
+      className="w-full min-w-0 max-w-full overflow-visible"
     >
       <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 max-w-full">
@@ -130,7 +130,7 @@ export function BookingsPage() {
       {isLoading ? (
         <BookingListSkeleton />
       ) : bookingsQuery.isError ? (
-        <Card>
+        <Card className="w-full min-w-0 max-w-full">
           <CardBody className="flex min-h-64 flex-col items-center justify-center text-center">
             <IconBox variant="danger-subtle" size="lg" className="mb-4">
               <IconCalendarEvent />
@@ -169,11 +169,12 @@ export function BookingsPage() {
           }
         />
       ) : (
-        <div className="grid min-w-0 gap-6">
+        <div className="grid min-w-0 max-w-full gap-6">
           {groups.map((group) => (
             <section
               key={group.key}
               aria-labelledby={`booking-group-${group.key}`}
+              className="min-w-0 max-w-full"
             >
               <Heading
                 id={`booking-group-${group.key}`}
@@ -213,14 +214,15 @@ function BookingTabBar({
   onChange: (tab: BookingTab) => void;
 }) {
   return (
-    <div className="w-full min-w-0 max-w-full pb-1">
-      <div className="w-full min-w-0 max-w-full rounded-xl bg-accent/60 p-1 sm:w-fit">
+    <div className="w-full min-w-0 max-w-full overflow-visible pb-1">
+      <div className="w-full min-w-0 max-w-full overflow-visible rounded-xl bg-accent/60 p-1 sm:w-fit">
         <div
-          className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain scrollbar-hidden sm:w-fit"
+          data-slot="booking-tab-scroller"
+          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain scrollbar-hidden sm:w-fit"
           role="tablist"
           aria-label="Booking status"
         >
-          <div className="flex min-w-max whitespace-nowrap">
+          <div className="flex min-w-max whitespace-nowrap px-1 py-1">
             {BOOKING_TABS.map((tab) => {
               const selected = activeTab === tab.value;
               return (
@@ -254,7 +256,10 @@ function BookingTabBar({
 
 function BookingListSkeleton() {
   return (
-    <div className="grid gap-3" aria-label="Loading bookings">
+    <div
+      className="grid min-w-0 max-w-full gap-3"
+      aria-label="Loading bookings"
+    >
       {["booking-skeleton-primary", "booking-skeleton-secondary"].map(
         (placeholder) => (
           <BookingListCardSkeleton key={placeholder} />
