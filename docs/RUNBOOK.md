@@ -806,7 +806,7 @@ Key environment variables (see `.env.example` for full list):
 | `SANITY_API_TOKEN`                                                                            | No       | Server-only token for private Sanity datasets; never add it to `apps/web`/`VITE_*` variables                                                                                                                                                                                                                                                                                                                                   |
 | `XENDIT_DEFAULT_PAYMENT_METHOD`                                                               | No       | Default Xendit channel (`ewallet_ovo`/`qris`/`va_bca`; default `ewallet_ovo`)                                                                                                                                                                                                                                                                                                                                                  |
 | `SESSION_COOKIE_CACHE_MAX_AGE`                                                                | No       | Better Auth session-cookie cache max age in seconds (default 60)                                                                                                                                                                                                                                                                                                                                                               |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3)                                                                                                                                                                                                                                                                                                                                                           |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3). `R2_BUCKET` is the PUBLIC uploads bucket (`cogito-bucket`); backups use the separate `R2_BACKUP_BUCKET` (private, `cogito-backups`)                                                                                                                                                                                                                      |
 | `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                                                                                                                                                               |
 
@@ -935,10 +935,17 @@ Manual smoke test after an auth or web deploy:
 
 The production env schema requires all four `R2_*` vars together **and** `R2_PUBLIC_URL` when R2 is configured (partial config or a missing public URL fails loudly — no container-local disk fallback, no unreachable objects).
 
-1. Cloudflare dashboard → **R2** → create a bucket (region `auto`).
-2. **Manage R2 API Tokens** → create a token with Object Read & Write on the bucket → copy `ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` into `R2_ACCOUNT_ID` (your Cloudflare account id), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
-3. Set `R2_PUBLIC_URL` to the public object URL (e.g. `https://media.cogitoacademy.id` via a custom domain, or the `r2.cloudflarestorage.com` endpoint). `GET /uploads/*` is disabled whenever `R2_PUBLIC_URL` is set (objects are served from R2 instead).
-4. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
+**Two buckets, never mixed (2026-08-28):**
+
+- `cogito-bucket` — **PUBLIC** app uploads (avatars, achievement evidence), served via the `r2bucket.cogitoacademy.id` custom domain. This is the app's `R2_BUCKET`.
+- `cogito-backups` — **PRIVATE** nightly DB dumps + CD pre-migrate snapshots, API-token access only, **no public domain**. This is `R2_BACKUP_BUCKET` (used by `infra/backup.sh` + `scripts/migrate-and-deploy.sh`).
+
+Never put database dumps in the public bucket — a guessable `https://r2bucket.cogitoacademy.id/backups/2026-08-28.sql.gz` URL would leak the full DB (PII, payments).
+
+1. Cloudflare dashboard → **R2** → create the two buckets above (region `auto`).
+2. **Manage R2 API Tokens** → create a token with Object Read & Write on both buckets → copy `ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` into `R2_ACCOUNT_ID` (your Cloudflare account id), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (public), `R2_BACKUP_BUCKET` (private).
+3. Set `R2_PUBLIC_URL` to the public custom domain (`https://r2bucket.cogitoacademy.id`). `GET /uploads/*` is disabled whenever `R2_PUBLIC_URL` is set (objects are served from R2 instead).
+4. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`; verify a backup lands in `s3://cogito-backups/backups/` (private).
 
 ## Deploy Secrets (CD webhooks)
 

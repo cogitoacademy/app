@@ -7,6 +7,11 @@ pre-commit:
     format:
       glob: "*.{ts,tsx,js,jsx,json}"
       run: bunx oxfmt --write {staged_files}
+    sops-plaintext-guard:
+      glob: "infra/secrets/prod.env"
+      # Accept both sops formats: YAML ("sops:" block) and dotenv/flat
+      # ("sops_age__...=" prefixed keys). Plaintext has neither.
+      run: grep -qE "^(sops:|sops_)" {staged_files} || (echo "❌ Refusing to commit PLAINTEXT infra/secrets/prod.env — encrypt it first (sops -e -i) or use 'sops infra/secrets/prod.env' for edits" && exit 1)
 
 pre-push:
   parallel: true

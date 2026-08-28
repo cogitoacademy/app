@@ -69,4 +69,9 @@ infra/terraform/*.tfvars
 !infra/terraform/terraform.tfvars.example
 infra/terraform/crash.log
 infra/terraform/crash.*.log
+# Plaintext SOPS vault — NEVER committed. The ENCRYPTED version is committed
+# deliberately via `git add -f infra/secrets/prod.env` after `sops -e -i`
+# (the standard SOPS pattern). A pre-commit hook blocks accidental plaintext
+# commits. Edit the vault with `sops infra/secrets/prod.env` (in-memory
+# decrypt/re-encrypt) or `sops set ...` — never keep a plaintext copy.
 infra/secrets/prod.env

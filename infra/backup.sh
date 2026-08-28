@@ -18,7 +18,10 @@
 #   R2_ACCOUNT_ID         Cloudflare account id (endpoint host).
 #   R2_ACCESS_KEY_ID      R2 API token access key id.
 #   R2_SECRET_ACCESS_KEY  R2 API token secret access key.
-#   R2_BUCKET             Bucket name (default: cogito-backups).
+#   R2_BACKUP_BUCKET      Private bucket for backups (default: cogito-backups).
+#                         Deliberately separate from the app's public
+#                         R2_BUCKET (uploads) so database dumps are never
+#                         reachable via the public custom domain.
 #   RETENTION_DAYS        Keep backups younger than this many days (default: 30).
 #
 # Usage:
@@ -43,7 +46,7 @@ for var in DATABASE_URL R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
   fi
 done
 
-R2_BUCKET="${R2_BUCKET:-cogito-backups}"
+R2_BACKUP_BUCKET="${R2_BACKUP_BUCKET:-cogito-backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
 R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
@@ -64,13 +67,13 @@ dump_cmd="pg_dump --no-owner --no-acl -Fc '${DATABASE_URL}' | gzip -9 > '${LOCAL
 
 # --- 2. Upload to R2 ----------------------------------------------------------
 # S3-compatible R2 endpoint; region is 'auto' for R2.
-upload_cmd="aws s3 cp '${LOCAL_FILE}' 's3://${R2_BUCKET}/${R2_KEY}' --endpoint-url '${R2_ENDPOINT}' --region auto"
-verify_cmd="aws s3api head-object --bucket '${R2_BUCKET}' --key '${R2_KEY}' --endpoint-url '${R2_ENDPOINT}' --region auto"
+upload_cmd="aws s3 cp '${LOCAL_FILE}' 's3://${R2_BACKUP_BUCKET}/${R2_KEY}' --endpoint-url '${R2_ENDPOINT}' --region auto"
+verify_cmd="aws s3api head-object --bucket '${R2_BACKUP_BUCKET}' --key '${R2_KEY}' --endpoint-url '${R2_ENDPOINT}' --region auto"
 
 # --- 3. Retention prune --------------------------------------------------------
 # List backups/, keep only keys matching backups/YYYY-MM-DD.sql.gz, compute age
 # with GNU date, delete anything strictly older than RETENTION_DAYS.
-prune_cmd="aws s3 ls 's3://${R2_BUCKET}/backups/' --endpoint-url '${R2_ENDPOINT}' --region auto"
+prune_cmd="aws s3 ls 's3://${R2_BACKUP_BUCKET}/backups/' --endpoint-url '${R2_ENDPOINT}' --region auto"
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   echo "DRY RUN — commands that would be executed:"
@@ -78,14 +81,14 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
   echo "# 1. Dump + compress"
   echo "${dump_cmd}"
   echo
-  echo "# 2. Upload to R2 (s3://${R2_BUCKET}/${R2_KEY})"
+  echo "# 2. Upload to R2 (s3://${R2_BACKUP_BUCKET}/${R2_KEY})"
   echo "${upload_cmd}"
   echo "${verify_cmd}"
   echo
   echo "# 3. Prune objects older than ${RETENTION_DAYS} days"
   echo "${prune_cmd}"
   echo "for each key older than ${RETENTION_DAYS} days:"
-  echo "  aws s3 rm 's3://${R2_BUCKET}/<key>' --endpoint-url '${R2_ENDPOINT}' --region auto"
+  echo "  aws s3 rm 's3://${R2_BACKUP_BUCKET}/<key>' --endpoint-url '${R2_ENDPOINT}' --region auto"
   exit 0
 fi
 
@@ -101,7 +104,7 @@ if [[ ! -s "${LOCAL_FILE}" ]]; then
 fi
 ls -lh "${LOCAL_FILE}"
 
-echo "==> Uploading to s3://${R2_BUCKET}/${R2_KEY}"
+echo "==> Uploading to s3://${R2_BACKUP_BUCKET}/${R2_KEY}"
 eval "${upload_cmd}"
 eval "${verify_cmd}" >/dev/null
 
@@ -117,7 +120,7 @@ while IFS= read -r line; do
   age_days=$(( (now_epoch - d_epoch) / 86400 ))
   if (( age_days > RETENTION_DAYS )); then
     echo "  deleting ${key} (${age_days} days old)"
-    aws s3 rm "s3://${R2_BUCKET}/${key}" --endpoint-url "${R2_ENDPOINT}" --region auto >/dev/null
+    aws s3 rm "s3://${R2_BACKUP_BUCKET}/${key}" --endpoint-url "${R2_ENDPOINT}" --region auto >/dev/null
     pruned=$((pruned + 1))
   fi
 done < <(eval "${prune_cmd}")
