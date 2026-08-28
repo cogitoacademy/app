@@ -154,7 +154,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 ### Task 2.1: SOPS vault (repo scaffold + user fills)
 
 - [x] `.sops.yaml` + Age keypair scaffold — **#115** (public key placeholder `CHANGE_ME_OPERATOR_AGE_PUBLIC_KEY`; operator generates the keypair and updates it).
-- [ ] `infra/secrets/prod.env` (encrypted) with ALL credentials the user has: `BETTER_AUTH_SECRET`, `PAYMENT_WEBHOOK_SECRET`, `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — confirm), `RESEND_API_KEY`+`EMAIL_FROM`, `XENDIT_MODE` + matching Test/Live `XENDIT_SECRET_KEY`/`WEBHOOK_TOKEN`/redirects/`WEBHOOK_ALLOWED_IPS` (and `XENDIT_TEST_ALLOWED_EMAILS` while in Test Mode), `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_MEET_*` (+ refresh token via `scripts/google-meet-auth.ts`), `R2_*`+`R2_PUBLIC_URL`, `SANITY_*`, `METRICS_TOKEN`, `DATABASE_URL`/`REDIS_URL` (existing containers). **PENDING (operator fills; lead never sees secrets)**
+- [x] `infra/secrets/prod.env` (encrypted) with ALL credentials the user has: `BETTER_AUTH_SECRET`, `PAYMENT_WEBHOOK_SECRET`, `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — confirm), `RESEND_API_KEY`+`EMAIL_FROM`, `XENDIT_MODE` + matching Test/Live `XENDIT_SECRET_KEY`/`WEBHOOK_TOKEN`/redirects/`WEBHOOK_ALLOWED_IPS` (and `XENDIT_TEST_ALLOWED_EMAILS` while in Test Mode), `GOOGLE_CLIENT_ID/SECRET`, `GOOGLE_MEET_*` (+ refresh token via `scripts/google-meet-auth.ts`), `R2_*`+`R2_PUBLIC_URL`+`R2_BACKUP_BUCKET`, `SANITY_*`, `METRICS_TOKEN`, `DATABASE_URL`/`REDIS_URL` (existing containers). **DONE 2026-08-28** — 44 keys filled + encrypted + committed (r2-split PR #122)
 - Commit: `chore(secrets): add SOPS vault scaffold` (encrypted only) — **scaffold merged via #115**
 
 ### Task 2.2: Apply env + wire providers (Ansible → Coolify; operator confirms console bits)
@@ -185,7 +185,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 - [x] On health failure: rollback to previous `v<sha>`; migration failure → restore snapshot manually under a maintenance window (never blind-auto-restore with live traffic) — **#118** (rollback hint names `v<prev-sha>` + R2 snapshot key).
 - [x] Migration ordering: additive-only in a release; destructive steps are two-step.
 - Commit: `feat(ci): backup + migrate + deploy + health + rollback pipeline` — **merged via #118**
-- [ ] **Secrets (operator):** add `PROD_DATABASE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` as GitHub Actions secrets; recreate the Coolify webhook secrets with the resolvable URL.
+- [ ] **Secrets (operator):** add `PROD_DATABASE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BACKUP_BUCKET` as GitHub Actions secrets; recreate the Coolify webhook secrets with the resolvable URL. **DONE 2026-08-28** — all 8 GitHub secrets set (webhook URLs + API token + DB URL + R2 creds); webhook URLs still need live verification after the Traefik route is applied.
 
 ---
 

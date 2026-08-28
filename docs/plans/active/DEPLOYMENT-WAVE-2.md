@@ -121,10 +121,13 @@ Host processes: bun 244MB (app server) · traefik 99MB · soketi 79MB ·
 
 1. **SOPS encryption (do before any commit):**
    `age-keygen -o ~/.config/sops/age/keys.txt` → public key into `.sops.yaml`
-   → `sops -e -i infra/secrets/prod.env`.
-2. **R2 creation** (first task when payment info is available): R2 → create
-   bucket `cogito-backups` + API token (Object Read/Write) + custom domain or
-   endpoint for `R2_PUBLIC_URL`.
+   → `sops -e -i infra/secrets/prod.env`. **DONE 2026-08-28** — vault filled
+   (44 keys) + encrypted + committed (r2-split PR).
+2. **R2 creation** — **DONE 2026-08-28**: public `cogito-bucket` +
+   `r2bucket.cogitoacademy.id` custom domain (app uploads, `R2_BUCKET`) and
+   private `cogito-backups` (`R2_BACKUP_BUCKET`, dumps/snapshots). Terraform
+   declares both (r2-split PR); operator must `terraform import` the
+   pre-created bucket + domain before first apply.
 3. **Google Meet**: publish OAuth consent screen → **In production** →
    regenerate refresh token (permanent fix for the 7-day expiry).
 4. **Xendit sandbox wiring** (see §4).
