@@ -123,11 +123,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ansible-core only: the playbooks use the builtin collection and a
-      # few community modules; --syntax-check never connects, so the full
-      # community.general collection is not needed in CI.
-      - name: Install ansible-core (pinned)
-        run: python3 -m pip install --disable-pip-version-check --user ansible-core==2.21.3
+      # ansible-core + community.general: host-hardening.yml uses the ufw
+      # module; --syntax-check resolves module FQCNs, so the collection must
+      # be present even though it never connects.
+      - name: Install ansible-core (pinned) + community.general
+        run: |
+          python3 -m pip install --disable-pip-version-check --user ansible-core==2.21.3
+          "$HOME/.local/bin/ansible-galaxy" collection install community.general
 
       # Glob, not an explicit list: playbooks get added over time
       # (coolify-resources, drift-check, ...) and must be picked up
