@@ -79,7 +79,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 - [ ] **Step 1: Write failing tests** — (a) `fileUrl` host not on `cdn.sanity.io`/`*.sanity.io` → 502, no upstream fetch; (b) upstream fetch exceeding 10s timeout → 502; (c) response with `content-length` > 5MB → 502; (d) streamed body exceeding 5MB → 502. Follow the existing routes-test harness.
 - [ ] **Step 2: Run — FAIL** (bare `fetch(file.fileUrl)` at `routes.ts:389`).
 - [ ] **Step 3: Implement** — allowlist check, `AbortController` + 10s timeout, `MAX_PROXY_BYTES = 5 * 1024 * 1024` pre-check via `content-length` AND streaming counter via `ReadableStream` wrapper.
-- [ ] **Step 4: Add rate limit** — `"content"` kind in `rate-limit-paths.ts` (`urlPath.startsWith("/content/student-resources/")`); wire `contentRateLimit` (30/min window 60s, keyPrefix `content`) mirroring the `authRateLimit` pattern in `routes.ts:39`.
+- [ ] **Step 4: Add rate limit** — `"content"` kind in `rate-limit-paths.ts` (`urlPath.startsWith("/content/knowledge-bank/")`); wire `contentRateLimit` (30/min window 60s, keyPrefix `content`) mirroring the `authRateLimit` pattern in `routes.ts:39`.
 - [ ] **Step 5: Run tests + `bun run typecheck` — PASS**.
 - [ ] **Step 6: Docs** (CONTEXT content section, RUNBOOK behavior note).
 - [ ] **Step 7: Commit** `fix(content): harden Sanity file proxy (allowlist, timeout, size cap, rate limit)`

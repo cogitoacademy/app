@@ -113,7 +113,7 @@ function KnowledgeBankCard({ eligible }: { eligible: boolean }) {
           nativeButton={false}
           render={
             eligible ? (
-              <Link to="/student-resources" aria-label="Open Knowledge Bank" />
+              <Link to="/knowledge-bank" aria-label="Open Knowledge Bank" />
             ) : (
               <Link to="/balance" aria-label="View Marks balance" />
             )

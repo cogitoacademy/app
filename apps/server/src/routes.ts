@@ -360,7 +360,7 @@ export function createServer() {
       return new Response(file);
     })
     .get(
-      "/content/student-resources/:resourceId/file",
+      "/content/knowledge-bank/:resourceId/file",
       async (routeContext) => {
         const { params, set } = routeContext;
         const context = await createContext({ context: routeContext });

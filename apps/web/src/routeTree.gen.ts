@@ -28,10 +28,10 @@ import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppGuideRouteImport } from './routes/_app.guide'
+import { Route as AppKnowledgeBankRouteImport } from './routes/_app.knowledge-bank'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
-import { Route as AppStudentResourcesRouteImport } from './routes/_app.student-resources'
 import { Route as AppTutorBookingsRouteImport } from './routes/_app.tutor-bookings'
 import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
@@ -132,6 +132,11 @@ const AppGuideRoute = AppGuideRouteImport.update({
   path: '/guide',
   getParentRoute: () => AppRoute,
 } as any)
+const AppKnowledgeBankRoute = AppKnowledgeBankRouteImport.update({
+  id: '/knowledge-bank',
+  path: '/knowledge-bank',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppNotificationsRoute = AppNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
@@ -145,11 +150,6 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
 const AppProfileRoute = AppProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppStudentResourcesRoute = AppStudentResourcesRouteImport.update({
-  id: '/student-resources',
-  path: '/student-resources',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTutorBookingsRoute = AppTutorBookingsRouteImport.update({
@@ -197,10 +197,10 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof AppCalendarRoute
   '/dashboard': typeof AppDashboardRoute
   '/guide': typeof AppGuideRoute
+  '/knowledge-bank': typeof AppKnowledgeBankRoute
   '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
-  '/student-resources': typeof AppStudentResourcesRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -226,10 +226,10 @@ export interface FileRoutesByTo {
   '/calendar': typeof AppCalendarRoute
   '/dashboard': typeof AppDashboardRoute
   '/guide': typeof AppGuideRoute
+  '/knowledge-bank': typeof AppKnowledgeBankRoute
   '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
-  '/student-resources': typeof AppStudentResourcesRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -257,10 +257,10 @@ export interface FileRoutesById {
   '/_app/calendar': typeof AppCalendarRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/guide': typeof AppGuideRoute
+  '/_app/knowledge-bank': typeof AppKnowledgeBankRoute
   '/_app/notifications': typeof AppNotificationsRoute
   '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/profile': typeof AppProfileRoute
-  '/_app/student-resources': typeof AppStudentResourcesRoute
   '/_app/tutor-bookings': typeof AppTutorBookingsRoute
   '/_app/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -288,10 +288,10 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/dashboard'
     | '/guide'
+    | '/knowledge-bank'
     | '/notifications'
     | '/onboarding'
     | '/profile'
-    | '/student-resources'
     | '/tutor-bookings'
     | '/tutors'
     | '/auth/callback'
@@ -317,10 +317,10 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/dashboard'
     | '/guide'
+    | '/knowledge-bank'
     | '/notifications'
     | '/onboarding'
     | '/profile'
-    | '/student-resources'
     | '/tutor-bookings'
     | '/tutors'
     | '/auth/callback'
@@ -347,10 +347,10 @@ export interface FileRouteTypes {
     | '/_app/calendar'
     | '/_app/dashboard'
     | '/_app/guide'
+    | '/_app/knowledge-bank'
     | '/_app/notifications'
     | '/_app/onboarding'
     | '/_app/profile'
-    | '/_app/student-resources'
     | '/_app/tutor-bookings'
     | '/_app/tutors'
     | '/auth/callback'
@@ -504,6 +504,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGuideRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/knowledge-bank': {
+      id: '/_app/knowledge-bank'
+      path: '/knowledge-bank'
+      fullPath: '/knowledge-bank'
+      preLoaderRoute: typeof AppKnowledgeBankRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/notifications': {
       id: '/_app/notifications'
       path: '/notifications'
@@ -523,13 +530,6 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof AppProfileRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/student-resources': {
-      id: '/_app/student-resources'
-      path: '/student-resources'
-      fullPath: '/student-resources'
-      preLoaderRoute: typeof AppStudentResourcesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/tutor-bookings': {
@@ -583,10 +583,10 @@ interface AppRouteChildren {
   AppCalendarRoute: typeof AppCalendarRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppGuideRoute: typeof AppGuideRoute
+  AppKnowledgeBankRoute: typeof AppKnowledgeBankRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
-  AppStudentResourcesRoute: typeof AppStudentResourcesRoute
   AppTutorBookingsRoute: typeof AppTutorBookingsRoute
   AppTutorsRoute: typeof AppTutorsRoute
   AppBookingsBookingIdRoute: typeof AppBookingsBookingIdRoute
@@ -606,10 +606,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppCalendarRoute: AppCalendarRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppGuideRoute: AppGuideRoute,
+  AppKnowledgeBankRoute: AppKnowledgeBankRoute,
   AppNotificationsRoute: AppNotificationsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
-  AppStudentResourcesRoute: AppStudentResourcesRoute,
   AppTutorBookingsRoute: AppTutorBookingsRoute,
   AppTutorsRoute: AppTutorsRoute,
   AppBookingsBookingIdRoute: AppBookingsBookingIdRoute,

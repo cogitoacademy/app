@@ -56,6 +56,10 @@ As an authenticated user, open `/calendar` and confirm published Sanity competit
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
 
+### Knowledge Bank smoke check
+
+As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action; opening the Knowledge Bank must not create a Marks deduction.
+
 ### Empty-state consistency smoke check
 
 With signed-in student, tutor, and admin sessions, exercise empty data and no-match states in the calendar, tutor discovery, Knowledge Bank, bookings, notifications, achievements, balance history, availability preview, booking detail, and admin operations surfaces. Confirm each state has the shared Selia icon/title/description treatment, uses the right density for its context, distinguishes an empty collection from an active filter with no matches, and keeps its action usable when one exists. Check the notification menu, calendar popup, dialog sections, field-level subject/proof-link states, and table/list sections for blank areas or orphaned headers. Repeat in light and dark themes and at narrow width; no horizontal overflow or duplicate empty copy should appear. This is frontend-only and must not change request payloads.

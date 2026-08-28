@@ -60,7 +60,7 @@ describe("guide content", () => {
       "/calendar",
       "/achievements",
       "/tutors",
-      "/student-resources",
+      "/knowledge-bank",
       "/notifications",
       "/onboarding",
       "/availability",

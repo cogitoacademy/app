@@ -52,9 +52,9 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Student
 - **Input:** None
 - **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
-- **Description:** Returns published Knowledge Bank metadata only when the student's total Marks balance meets the 35-Mark threshold. Held Marks count toward eligibility. Below the threshold, `items` is empty and the access state explains the lock.
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route only when the student's total Marks balance meets the 35-Mark threshold. Held Marks count toward eligibility. Below the threshold, `items` is empty and the access state explains the lock.
 
-### `GET /content/student-resources/:resourceId/file`
+### `GET /content/knowledge-bank/:resourceId/file`
 
 - **Auth:** Student with current total balance at or above the threshold
 - **Input:** `resourceId` path parameter

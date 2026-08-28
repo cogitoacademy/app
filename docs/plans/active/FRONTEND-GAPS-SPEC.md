@@ -162,7 +162,7 @@ for classmates.
 | `/_app/dashboard`            | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                                               |
 | `/_app/balance`              | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                                                         |
 | `/_app/calendar`             | competition-calendar-page.tsx   | Complete — authenticated, English-only read-only calendar backed by published Sanity content                                  |
-| `/_app/student-resources`    | student-resources-page.tsx      | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                       |
+| `/_app/knowledge-bank`       | knowledge-bank-page.tsx          | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                       |
 | `/_app/bookings`             | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                                                          |
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                         |
 | `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                                                       |
@@ -562,7 +562,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **Required:**
 
-1. Verify the "Open Knowledge Bank" button links to the authenticated `/student-resources` route
+1. Verify the "Open Knowledge Bank" button links to the authenticated `/knowledge-bank` route
 2. User-facing copy must say: "Knowledge Bank access requires at least 35 Marks in your wallet. You are not paying 35 Marks to open it." (DL-16)
 3. If below 35 Marks: show "Top up your wallet to unlock the Knowledge Bank" with link to balance/top-up
 4. Opening Knowledge Bank must NOT deduct Marks (verify no deduction entry created)

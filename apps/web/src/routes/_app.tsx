@@ -28,7 +28,7 @@ const routeTitles: Record<string, string> = {
   "/admin-operations": "Operations",
   "/admin-economy": "Economy Settings",
   "/calendar": "Competition Calendar",
-  "/student-resources": "Knowledge Bank",
+  "/knowledge-bank": "Knowledge Bank",
   "/guide": "How Cogito Works",
 };
 

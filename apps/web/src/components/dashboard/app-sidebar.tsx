@@ -81,7 +81,7 @@ const resourceItems = [
     icon: IconCalendarEvent,
   },
   {
-    to: "/student-resources",
+    to: "/knowledge-bank",
     label: "Knowledge Bank",
     icon: IconLibrary,
   },

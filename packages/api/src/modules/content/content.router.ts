@@ -17,7 +17,7 @@ export function createContentRouter(handler: ContentHandler) {
     listStudentResources: studentProcedure
       .route({
         method: "POST",
-        path: "/content/student-resources/list",
+        path: "/content/knowledge-bank/list",
         tags: ["Content"],
         summary: "List Knowledge Bank resources",
         description:
