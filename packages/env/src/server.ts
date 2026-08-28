@@ -56,6 +56,11 @@ const serverShape = {
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .default("2024-03-01"),
   SANITY_API_TOKEN: z.string().min(1).optional(),
+  // Optional defense-in-depth (2026-08-28): Xendit publishes no stable webhook
+  // source IP list, so a wrong allowlist silently 403s webhooks and payments
+  // never credit — the x-callback-token signature is the primary gate. The
+  // runtime `ipAllowed` check in apps/server/src/webhooks/payments.ts still
+  // enforces this list when set; an empty value skips the IP check.
   WEBHOOK_ALLOWED_IPS: z.string().optional(),
   XENDIT_SECRET_KEY: z.string().min(1).optional(),
   XENDIT_WEBHOOK_TOKEN: z.string().min(1).optional(),
@@ -266,23 +271,6 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
       path: ["SCHEDULER_ENABLED"],
       message:
         "must be true when NODE_ENV is production/staging — a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation",
-    });
-  }
-
-  // D2: with PAYMENT_PROVIDER=xendit in production-like environments the
-  // webhook IP allowlist is mandatory — an empty WEBHOOK_ALLOWED_IPS means
-  // every IP can reach the webhook endpoint (signature still gates, but the
-  // allowlist is the second defense layer; RUNBOOK requires it at deploy).
-  if (
-    isProductionLike(val.NODE_ENV) &&
-    val.PAYMENT_PROVIDER === "xendit" &&
-    !val.WEBHOOK_ALLOWED_IPS
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["WEBHOOK_ALLOWED_IPS"],
-      message:
-        "required when PAYMENT_PROVIDER=xendit in production/staging — an empty allowlist leaves the webhook endpoint open to every IP",
     });
   }
 });

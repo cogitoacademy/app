@@ -136,7 +136,7 @@ describe("server environment schema", () => {
     expect(enabled.success).toBe(true);
   });
 
-  test("D2: production xendit requires WEBHOOK_ALLOWED_IPS", () => {
+  test("D2 (2026-08-28): production xendit does NOT require WEBHOOK_ALLOWED_IPS", () => {
     const prodXendit = {
       ...baseEnv(),
       NODE_ENV: "production",
@@ -150,22 +150,22 @@ describe("server environment schema", () => {
       XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
       XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
     };
-    const missing = serverEnvSchema.safeParse(prodXendit);
-    expect(missing.success).toBe(false);
-    if (!missing.success) {
-      expect(
-        missing.error.issues.map((issue) => issue.path.join(".")),
-      ).toContain("WEBHOOK_ALLOWED_IPS");
-    }
+    // Xendit publishes no stable webhook source IP list; a wrong allowlist
+    // silently 403s webhooks and payments never credit. The x-callback-token
+    // signature is the primary gate, so the allowlist is optional
+    // defense-in-depth (the runtime ipAllowed check still enforces it when
+    // set).
+    const withoutAllowlist = serverEnvSchema.safeParse(prodXendit);
+    expect(withoutAllowlist.success).toBe(true);
 
+    // Setting the allowlist still parses and is enforced at runtime.
     const withAllowlist = serverEnvSchema.safeParse({
       ...prodXendit,
       WEBHOOK_ALLOWED_IPS: "103.10.65.0/24",
     });
     expect(withAllowlist.success).toBe(true);
 
-    // Dev/test envs are exempt: same xendit set with NODE_ENV=test parses
-    // without WEBHOOK_ALLOWED_IPS (the stub/sandbox webhooks are not gated).
+    // Dev/test envs are exempt as before.
     const devXendit = serverEnvSchema.safeParse({
       ...baseEnv(),
       PAYMENT_PROVIDER: "xendit",
