@@ -535,6 +535,65 @@ forward fix.
 | API health is 503 immediately after deploy                                       | Wait for the bounded rollout/healthcheck, then inspect API logs and the Coolify domain/port mapping.                                                                                                                                                                                                                                                                           |
 | Health says Redis is down                                                        | Check `REDIS_URL`, private network membership, and Redis resource health.                                                                                                                                                                                                                                                                                                      |
 
+## Plan-only audit
+
+`.github/workflows/infra-plan.yml` runs an **audit-only** infrastructure
+check on every PR that touches `infra/**` (or the workflow itself). It
+never applies anything and never connects to the server; it exists so
+infra changes get a reviewable, machine-checked trail in CI without
+putting secrets there.
+
+What it runs:
+
+| Job      | Checks                                                                                                                            |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Terraform | `terraform init -backend=false` + `terraform validate` (always). `terraform plan` (read-only) runs only when the read-only tokens below are configured; otherwise the plan step prints a clear "skipped" notice and exits 0 — unset secrets are never a CI failure. |
+| Ansible  | `ansible-playbook --syntax-check -i infra/ansible/inventory.ini` on **every** playbook under `infra/ansible/*.yml` (glob, so new playbooks are picked up automatically). |
+| Docs     | Verifies this `## Plan-only audit` section still exists.                                                                          |
+
+Why not full `apply` (or `--check`) in CI:
+
+- **The Age private key must never enter CI.** Anyone with repo access to
+  the runner could decrypt the entire SOPS vault (`infra/secrets/prod.env`
+  holds the backup `DATABASE_URL`, R2 token, Tailscale auth key). CI only
+  syntax-checks playbooks; vault decryption stays on operator machines.
+- **SSH is tailnet-only.** GitHub runners cannot reach the VPS, so
+  `ansible --check` cannot run in CI. `--syntax-check` catches YAML,
+  module, and task-structure errors without a network path; full
+  `--check` remains a local operator command (below).
+
+Read-only token placeholders — create these repo secrets if you want
+`terraform plan` to run on PRs (plan reads DNS/zone data and the R2 state
+bucket; it must never be given write-scoped tokens):
+
+| Secret                    | Scope                                              |
+| ------------------------- | -------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`    | Cloudflare, `Zone:DNS:Read` for `cogitoacademy.id` |
+| `R2_ACCESS_KEY_ID`        | R2 API token, Object **Read** on `cogito-infra-state` |
+| `R2_SECRET_ACCESS_KEY`    | same token, secret half                           |
+| `R2_STATE_ENDPOINT`       | `https://<accountid>.r2.cloudflarestorage.com`    |
+
+Without them the Terraform job still runs `validate` (it is the
+always-on gate) and reports plan as skipped.
+
+Local operator commands (full verification is only possible from an
+operator machine that can reach the tailnet):
+
+```bash
+# Full read-only check of every playbook against the real server state
+# (needs tailnet access + the SOPS vault to decrypt secrets on this node).
+for pb in infra/ansible/*.yml; do
+  ansible-playbook -i infra/ansible/inventory.ini "$pb" --check
+done
+
+# Terraform plan/apply with the real state backend (R2 credentials in env):
+#   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY, plus AWS_ENDPOINT_URL_S3 set
+#   to https://<accountid>.r2.cloudflarestorage.com and CLOUDFLARE_API_TOKEN.
+terraform -chdir=infra/terraform init -reconfigure
+terraform -chdir=infra/terraform plan -out=tfplan
+terraform -chdir=infra/terraform apply tfplan   # single-operator, R2 has no state locking
+```
+
 Related references:
 
 - [`docs/RUNBOOK.md`](./RUNBOOK.md) — application smoke checks and incident runbook
