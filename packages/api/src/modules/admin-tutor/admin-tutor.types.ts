@@ -60,4 +60,5 @@ export const reviewTutorProfileInput = z.object({
     "request_edit_changes",
   ]),
   adminNote: z.string().max(2000).optional(),
+  publicPhotoUrl: z.string().url().max(2048).optional(),
 });

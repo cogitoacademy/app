@@ -516,6 +516,14 @@ export function createAdminTutorService(deps: {
         updates,
       );
 
+      if (input.publicPhotoUrl) {
+        await adminTutorRepo.updateTutorPublicPhoto(
+          tx,
+          profile!.userId,
+          input.publicPhotoUrl,
+        );
+      }
+
       if (pendingSubjectIds !== undefined) {
         await adminTutorRepo.replaceTutorProfileSubjects(
           tx,

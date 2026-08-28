@@ -131,28 +131,16 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
             <CardTitle>Payout details</CardTitle>
             <CardDescription>
               Completed sessions settle the IDR honorarium captured in each
-              booking. Marks stay closed-loop and are not converted for tutors.
+              booking.
             </CardDescription>
           </div>
         </CardHeader>
         <CardBody>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Text className="text-sm text-muted">Completed sessions</Text>
               <Text className="mt-1 text-lg font-semibold">
                 {payouts.data?.completedSessions ?? 0}
-              </Text>
-            </div>
-            <div>
-              <Text className="text-sm text-muted">Total session Marks</Text>
-              <Text className="mt-1 text-lg font-semibold">
-                {payouts.data?.totalMarks ?? 0}
-              </Text>
-            </div>
-            <div>
-              <Text className="text-sm text-muted">Cogito take (Marks)</Text>
-              <Text className="mt-1 text-lg font-semibold">
-                {payouts.data?.cogitoTake ?? 0}
               </Text>
             </div>
             <div>

@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
 import {
   Drawer,
   DrawerBody,
@@ -62,6 +63,8 @@ type TutorDrawerProps = {
     displayName: string | null;
     shortBio: string | null;
     credentialsSummary: string | null;
+    achievements: string | null;
+    experiences: string | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
@@ -69,8 +72,6 @@ type TutorDrawerProps = {
     pricesByModality?: Partial<
       Record<"online" | "offline", Record<string, number>>
     > | null;
-    availabilitySummary: string | null;
-    proofUrls: string[] | null;
     publishedAt: Date | null;
     user: { name: string | null; image: string | null } | null;
   } | null;
@@ -246,61 +247,32 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               </div>
             )}
 
-            {/*
-            {t.availabilitySummary && (
-              <div className="mb-4">
-                <Heading size="sm" className="mb-2">
-                  Availability
-                </Heading>
-                <Text className="text-muted">{t.availabilitySummary}</Text>
-              </div>
-            )}
-
-            {t.credentialsSummary && (
+            {(t.achievements || t.credentialsSummary) && (
               <>
                 <Separator className="my-4" />
                 <div className="mb-4">
                   <Heading size="sm" className="mb-2">
-                    Credentials
+                    Achievements
                   </Heading>
-                  <Text className="text-muted">{t.credentialsSummary}</Text>
+                  <Text className="whitespace-pre-line text-muted">
+                    {t.achievements ?? t.credentialsSummary}
+                  </Text>
                 </div>
               </>
             )}
-
-            {t.proofUrls && t.proofUrls.length > 0 && (
-              <div className="mb-4">
-                <Heading size="sm" className="mb-2">
-                  Proof Links
-                </Heading>
-                <ul className="space-y-1">
-                  {t.proofUrls.map((url) => (
-                    <li key={url}>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary underline text-sm break-all"
-                      >
-                        {url}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {t.experiences && (
+              <>
+                <Separator className="my-4" />
+                <div className="mb-4">
+                  <Heading size="sm" className="mb-2">
+                    Experiences
+                  </Heading>
+                  <Text className="whitespace-pre-line text-muted">
+                    {t.experiences}
+                  </Text>
+                </div>
+              </>
             )}
-
-            <Separator className="my-4" />
-            <div className="mb-4">
-              <Heading size="sm" className="mb-2">
-                Book a session
-              </Heading>
-              <Text className="text-muted">
-                Review current availability, choose a modality, and send a
-                booking request.
-              </Text>
-            </div>
-            */}
           </>
 
           <DrawerDescription className="sr-only">

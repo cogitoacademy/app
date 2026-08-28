@@ -27,6 +27,9 @@ export const tutorProfile = pgTable(
     displayName: text("display_name"),
     shortBio: text("short_bio"),
     credentialsSummary: text("credentials_summary"),
+    achievements: text("achievements"),
+    experiences: text("experiences"),
+    sourcePhotoUrl: text("source_photo_url"),
     expertise: jsonb("expertise").$type<string[]>().default([]),
     modality: text("modality"),
     prices: jsonb("prices").$type<Record<string, number>>(),
@@ -42,6 +45,9 @@ export const tutorProfile = pgTable(
       Partial<{
         displayName: string;
         credentialsSummary: string;
+        achievements: string;
+        experiences: string;
+        sourcePhotoUrl: string;
         expertise: string[];
         subjectIds: string[];
         modality: "online" | "offline" | "both";

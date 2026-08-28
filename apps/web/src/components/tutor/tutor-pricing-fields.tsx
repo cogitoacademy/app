@@ -5,8 +5,19 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
-import { NumberField } from "@cogito-app/ui/components/selia/number-field";
+import { Button } from "@cogito-app/ui/components/selia/button";
+import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { IconMinus, IconPlus } from "@tabler/icons-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@cogito-app/ui/components/selia/table";
 
 const MIN_BASE_RATE_IDR = 50_000;
 const TUTOR_INCREMENT_IDR = { online: 30_000, offline: 40_000 } as const;
@@ -40,8 +51,8 @@ export function TutorPricingFields({
       <div>
         <Text className="font-medium">Base honorarium</Text>
         <Text className="mt-1 text-sm text-muted">
-          Set your one-student IDR honorarium. Values use Rp 5,000 increments;
-          Cogito adds the platform take separately.
+          Adjust your one-student IDR honorarium with the minus and plus
+          controls. Each step is Rp 5,000.
         </Text>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -53,27 +64,46 @@ export function TutorPricingFields({
               <FieldLabel htmlFor={"tutor-base-rate-" + key}>
                 {key === "online" ? "Online" : "Offline"} base rate
               </FieldLabel>
-              <NumberField
-                id={"tutor-base-rate-" + key}
-                name={"base-rate-" + key}
-                min={MIN_BASE_RATE_IDR}
-                step={5_000}
-                allowOutOfRange
-                value={value ?? null}
-                onValueChange={(nextValue) => {
-                  if (nextValue === null) {
-                    const next = { ...baseRatesIdr };
-                    delete next[key];
-                    onChange(next);
-                    return;
+              <div className="grid grid-cols-[auto_1fr_auto] gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  aria-label={`Decrease ${key} base honorarium by Rp 5,000`}
+                  disabled={(value ?? MIN_BASE_RATE_IDR) <= MIN_BASE_RATE_IDR}
+                  onClick={() =>
+                    onChange({
+                      ...baseRatesIdr,
+                      [key]: Math.max(
+                        MIN_BASE_RATE_IDR,
+                        (value ?? MIN_BASE_RATE_IDR) - 5_000,
+                      ),
+                    })
                   }
-                  onChange({ ...baseRatesIdr, [key]: nextValue });
-                }}
-                inputProps={{
-                  placeholder: String(MIN_BASE_RATE_IDR),
-                  "aria-invalid": Boolean(errors.baseRatesIdr),
-                }}
-              />
+                >
+                  <IconMinus />
+                </Button>
+                <Input
+                  id={"tutor-base-rate-" + key}
+                  name={"base-rate-" + key}
+                  value={formatIdr(value ?? MIN_BASE_RATE_IDR)}
+                  readOnly
+                  className="text-center font-medium"
+                  aria-invalid={Boolean(errors.baseRatesIdr)}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  aria-label={`Increase ${key} base honorarium by Rp 5,000`}
+                  onClick={() =>
+                    onChange({
+                      ...baseRatesIdr,
+                      [key]: (value ?? MIN_BASE_RATE_IDR) + 5_000,
+                    })
+                  }
+                >
+                  <IconPlus />
+                </Button>
+              </div>
               <FieldDescription>
                 Minimum {formatIdr(MIN_BASE_RATE_IDR)} · +{" "}
                 {formatIdr(TUTOR_INCREMENT_IDR[key])} per additional student
@@ -90,19 +120,31 @@ export function TutorPricingFields({
         return (
           <div
             key={currentModality + "-breakdown"}
-            className="rounded-lg bg-accent px-3 py-2 text-sm text-muted"
+            className="overflow-hidden rounded-lg border border-item-border"
           >
-            <Text className="font-medium capitalize">
+            <Text className="bg-accent px-3 py-2 font-medium capitalize">
               {currentModality} honorarium preview
             </Text>
-            <Text className="mt-1 text-sm text-muted">
-              {Array.from({ length: 6 }, (_, index) => {
-                const size = index + 1;
-                return (
-                  "Class " + size + ": " + formatIdr(base + index * increment)
-                );
-              }).join(" · ")}
-            </Text>
+            <TableContainer className="rounded-none border-0 shadow-none">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Students</TableHead>
+                    <TableHead className="text-right">Honorarium</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <TableRow key={index + 1}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatIdr(base + index * increment)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </div>
         );
       })}

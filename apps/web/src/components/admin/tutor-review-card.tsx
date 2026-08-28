@@ -2,7 +2,11 @@
 
 import { type ReactNode, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -33,7 +37,6 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconAlertTriangle,
-  IconCalendarClock,
   IconCertificate,
   IconMail,
   IconSchool,
@@ -86,10 +89,13 @@ interface TutorReviewCardProps {
     displayName: string | null;
     shortBio: string | null;
     credentialsSummary: string | null;
+    achievements: string | null;
+    experiences: string | null;
     expertise: string[] | null;
     modality: string | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
+    sourcePhotoUrl: string | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Record<string, unknown> | null;
@@ -171,6 +177,7 @@ export function TutorReviewCard({
     "request_changes" | "request_edit_changes" | "suspend" | null
   >(null);
   const [adminNote, setAdminNote] = useState("");
+  const [publicPhotoUrl, setPublicPhotoUrl] = useState("");
   const reviewMutation = useMutation(
     orpc.adminTutor.reviewTutorProfile.mutationOptions({
       onSuccess: () => {
@@ -207,6 +214,7 @@ export function TutorReviewCard({
       tutorProfileId: profile.id,
       action,
       adminNote: note,
+      publicPhotoUrl: publicPhotoUrl.trim() || undefined,
     });
   }
 
@@ -235,6 +243,10 @@ export function TutorReviewCard({
       <Card className="flex h-full min-w-0 flex-col overflow-hidden">
         <CardHeader className="items-start">
           <Avatar>
+            <AvatarImage
+              src={profile.sourcePhotoUrl ?? undefined}
+              alt="Tutor source portrait"
+            />
             <AvatarFallback>
               {getInitials(profile.displayName ?? profile.user?.name)}
             </AvatarFallback>
@@ -278,18 +290,13 @@ export function TutorReviewCard({
                 }
                 capitalize={Boolean(profile.modality)}
               />
-              <ReviewDetail
-                icon={<IconCalendarClock />}
-                label="Availability"
-                value={profile.availabilitySummary ?? "Not specified"}
-              />
             </div>
 
             <section>
               <div className="mb-2 flex items-center gap-2">
                 <IconCertificate className="size-4 text-muted" />
                 <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
-                  Credentials
+                  Achievements
                 </Text>
               </div>
               <Text
@@ -299,7 +306,56 @@ export function TutorReviewCard({
                     : "text-sm italic text-dimmed"
                 }
               >
-                {profile.credentialsSummary ?? "No credentials provided."}
+                {profile.achievements ??
+                  profile.credentialsSummary ??
+                  "No achievements provided."}
+              </Text>
+            </section>
+
+            <section>
+              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                Experiences
+              </Text>
+              <Text
+                className={
+                  profile.experiences
+                    ? "whitespace-pre-line text-sm"
+                    : "text-sm italic text-dimmed"
+                }
+              >
+                {profile.experiences ?? "No experiences provided."}
+              </Text>
+            </section>
+
+            <section>
+              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                Edited public photo
+              </Text>
+              {profile.sourcePhotoUrl ? (
+                <a
+                  href={profile.sourcePhotoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm underline underline-offset-2"
+                >
+                  Download original tutor photo
+                </a>
+              ) : (
+                <Text className="text-sm italic text-dimmed">
+                  No source photo uploaded.
+                </Text>
+              )}
+              <Input
+                className="mt-2"
+                type="url"
+                value={publicPhotoUrl}
+                onChange={(event) => setPublicPhotoUrl(event.target.value)}
+                placeholder="Paste the edited public image URL"
+                aria-label="Edited public tutor photo URL"
+              />
+              <Text className="mt-1 text-xs text-muted">
+                Only this admin-provided image can replace the tutor's public
+                photo.
               </Text>
             </section>
 

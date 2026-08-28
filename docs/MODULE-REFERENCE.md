@@ -216,7 +216,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `revokeInvite(inviteId, adminId, reason?)` — Marks invite as revoked
 - `listInvites(opts)` — Paginated invite list
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
-- `reviewTutorProfile(profileId, status, adminNote?)` — Approve/reject tutor profile. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`. Anything else throws `InvalidInviteActionError` (e.g. `publish` from `suspended`, `request_changes` from `published`). The tutor cannot self-restore via `submitForReview`, and restoring never blindly publishes a suspended profile.
+- `reviewTutorProfile(profileId, status, adminNote?, publicPhotoUrl?)` — Approve/reject tutor profile and optionally install an admin-edited public tutor photo. The tutor's `sourcePhotoUrl` remains separate and cannot directly become the public account image. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
@@ -786,6 +786,8 @@ chat directory.
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; the legacy Marks map remains readable during migration
+- Tutor achievements and experiences are separate multiline fields. The legacy credential summary is read-only fallback data and migration 0032 copies it into achievements. Availability summaries and credential-proof URLs are retired from tutor editing.
+- Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only completed-session count and IDR honorarium.
 - New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
 

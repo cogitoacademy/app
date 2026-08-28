@@ -128,7 +128,9 @@ export function validateSubmitForReview(
   const requiredFields: { key: string; value: unknown }[] = [
     { key: "displayName", value: profile.displayName },
     { key: "shortBio", value: profile.shortBio },
-    { key: "credentialsSummary", value: profile.credentialsSummary },
+    { key: "achievements", value: profile.achievements },
+    { key: "experiences", value: profile.experiences },
+    { key: "sourcePhotoUrl", value: profile.sourcePhotoUrl },
     { key: "modality", value: profile.modality },
     {
       key: "baseRatesIdr",
@@ -234,12 +236,13 @@ export function createTutorService(deps: {
       profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
     const protectedFields = [
       "displayName",
-      "credentialsSummary",
+      "achievements",
+      "experiences",
+      "sourcePhotoUrl",
       "expertise",
       "modality",
       "baseRatesIdr",
       "prices",
-      "proofUrls",
     ] as const;
     const directData: Omit<UpdateProfileInput, "version" | "subjectIds"> & {
       pendingProfileChanges?: Record<string, unknown>;

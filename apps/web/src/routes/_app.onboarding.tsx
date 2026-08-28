@@ -55,7 +55,6 @@ function RouteComponent() {
       profile={{
         ...profile,
         expertise: profile.expertise ?? [],
-        proofUrls: profile.proofUrls ?? [],
       }}
     />
   );

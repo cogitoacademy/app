@@ -225,6 +225,13 @@
       "when": 1787913007525,
       "tag": "0031_moaning_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1787913550318,
+      "tag": "0032_striped_inertia",
+      "breakpoints": true
     }
   ]
 }

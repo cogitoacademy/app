@@ -58,10 +58,13 @@ export interface TutorProfileUpdates {
   publishedAt?: Date | null;
   displayName?: string | null;
   credentialsSummary?: string | null;
+  achievements?: string | null;
+  experiences?: string | null;
   expertise?: string[] | null;
   modality?: string | null;
   prices?: Record<string, number> | null;
   proofUrls?: string[] | null;
+  sourcePhotoUrl?: string | null;
   pendingProfileChanges?: Record<string, unknown> | null;
   profileEditStatus?: string;
   profileEditAdminNote?: string | null;
@@ -214,6 +217,19 @@ async function updateTutorProfile(
   return row!;
 }
 
+async function updateTutorPublicPhoto(
+  conn: DbOrTx,
+  userId: string,
+  image: string,
+) {
+  const [row] = await conn
+    .update(user)
+    .set({ image })
+    .where(eq(user.id, userId))
+    .returning();
+  return row!;
+}
+
 /**
  * Lists tutor profiles with pagination and optional onboarding status filter, including the user.
  *
@@ -287,6 +303,7 @@ export function createAdminTutorRepo() {
     listActiveChildSubjects,
     replaceTutorProfileSubjects,
     updateTutorProfile,
+    updateTutorPublicPhoto,
     listTutorProfiles,
   };
 }

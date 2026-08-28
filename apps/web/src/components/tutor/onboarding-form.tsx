@@ -35,7 +35,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconAlertTriangle,
-  IconCalendarClock,
+  IconPhoto,
   IconSchool,
   IconShieldCheck,
   IconUser,
@@ -43,9 +43,8 @@ import {
 
 import { authClient } from "@/lib/auth-client";
 import { AccountIdentityCard } from "@/components/profile/account-identity-card";
-import { EmptyState } from "@/components/empty-state";
 import { getUserFacingError } from "@/lib/error-message";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
 import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
 
@@ -76,24 +75,26 @@ interface OnboardingFormProps {
     displayName: string | null;
     shortBio: string | null;
     credentialsSummary: string | null;
+    achievements: string | null;
+    experiences: string | null;
+    sourcePhotoUrl: string | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
     baseRatesIdr: Partial<{ online: number; offline: number }> | null;
     prices: Record<string, number> | null;
-    availabilitySummary: string | null;
-    proofUrls: string[];
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Partial<{
       displayName: string;
-      credentialsSummary: string;
+      achievements: string;
+      experiences: string;
+      sourcePhotoUrl: string;
       expertise: string[];
       subjectIds: string[];
       modality: Modality;
       baseRatesIdr: Partial<{ online: number; offline: number }>;
       prices: Record<string, number>;
-      proofUrls: string[];
     }> | null;
     profileEditStatus: string;
     profileEditAdminNote: string | null;
@@ -132,8 +133,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const [form, setForm] = useState({
     displayName: pending.displayName ?? profile.displayName ?? "",
     shortBio: profile.shortBio ?? "",
-    credentialsSummary:
-      pending.credentialsSummary ?? profile.credentialsSummary ?? "",
+    achievements:
+      pending.achievements ??
+      profile.achievements ??
+      profile.credentialsSummary ??
+      "",
+    experiences: pending.experiences ?? profile.experiences ?? "",
+    sourcePhotoUrl: pending.sourcePhotoUrl ?? profile.sourcePhotoUrl ?? "",
     expertise: pending.expertise ?? profile.expertise ?? [],
     subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
@@ -142,11 +148,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         online: 175_000,
         offline: 225_000,
       },
-    availabilitySummary: profile.availabilitySummary ?? "",
-    proofUrls: pending.proofUrls ?? profile.proofUrls ?? [],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [newProofUrl, setNewProofUrl] = useState("");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const accountChanged =
     accountForm.name.trim() !== accountUser.name.trim() ||
@@ -250,23 +254,26 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       version: number;
       displayName?: string;
       shortBio?: string;
-      credentialsSummary?: string;
+      achievements?: string;
+      experiences?: string;
+      sourcePhotoUrl?: string;
       expertise?: string[];
       subjectIds?: string[];
       modality?: Modality;
       baseRatesIdr?: Partial<{ online: number; offline: number }>;
       prices?: Record<string, number>;
-      availabilitySummary?: string;
-      proofUrls?: string[];
     } = { version: profile.version };
     const displayName = form.displayName.trim();
     const shortBio = form.shortBio.trim();
-    const credentialsSummary = form.credentialsSummary.trim();
-    const availabilitySummary = form.availabilitySummary.trim();
+    const achievements = form.achievements.trim();
+    const experiences = form.experiences.trim();
+    const sourcePhotoUrl = form.sourcePhotoUrl.trim();
 
     if (displayName) payload.displayName = displayName;
     if (shortBio) payload.shortBio = shortBio;
-    if (credentialsSummary) payload.credentialsSummary = credentialsSummary;
+    if (achievements) payload.achievements = achievements;
+    if (experiences) payload.experiences = experiences;
+    if (sourcePhotoUrl) payload.sourcePhotoUrl = sourcePhotoUrl;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (
       form.subjectIds.length > 0 &&
@@ -286,8 +293,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         }>;
       }
     }
-    if (availabilitySummary) payload.availabilitySummary = availabilitySummary;
-    if (form.proofUrls.length > 0) payload.proofUrls = form.proofUrls;
     return payload;
   }
 
@@ -295,8 +300,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const validationErrors: Record<string, string> = {};
     if (!form.displayName.trim()) validationErrors.displayName = "Required";
     if (!form.shortBio.trim()) validationErrors.shortBio = "Required";
-    if (!form.credentialsSummary.trim())
-      validationErrors.credentialsSummary = "Required";
+    if (!form.achievements.trim()) validationErrors.achievements = "Required";
+    if (!form.experiences.trim()) validationErrors.experiences = "Required";
+    if (!form.sourcePhotoUrl.trim())
+      validationErrors.sourcePhotoUrl = "Required";
     if (!form.modality) validationErrors.modality = "Required";
     if (form.subjectIds.length === 0)
       validationErrors.subjects = "Select at least one child subject";
@@ -339,22 +346,46 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     }
   }
 
-  function addProofUrl() {
-    const proofUrl = newProofUrl.trim();
-    if (!proofUrl || form.proofUrls.includes(proofUrl)) return;
-
-    setForm((current) => ({
-      ...current,
-      proofUrls: [...current.proofUrls, proofUrl],
-    }));
-    setNewProofUrl("");
-  }
-
-  function removeProofUrl(url: string) {
-    setForm((current) => ({
-      ...current,
-      proofUrls: current.proofUrls.filter((item) => item !== url),
-    }));
+  async function uploadSourcePhoto(file: File) {
+    setIsUploadingPhoto(true);
+    try {
+      const signed = await client.upload.createUploadUrl({
+        filename: file.name,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+      });
+      if (file.size > signed.maxBytes)
+        throw new Error("Photo is larger than 5 MB");
+      if (signed.method === "POST") {
+        const body = new FormData();
+        Object.entries(signed.fields ?? {}).forEach(([key, value]) =>
+          body.append(key, value),
+        );
+        body.append("file", file);
+        const response = await fetch(signed.uploadUrl, {
+          method: "POST",
+          body,
+        });
+        if (!response.ok) throw new Error("Photo upload failed");
+      } else {
+        const response = await fetch(signed.uploadUrl, {
+          method: signed.method,
+          headers: { "content-type": file.type },
+          body: file,
+        });
+        if (!response.ok) throw new Error("Photo upload failed");
+      }
+      setForm((current) => ({ ...current, sourcePhotoUrl: signed.publicUrl }));
+      clearError("sourcePhotoUrl");
+      toastManager.add({ title: "Source photo uploaded", type: "success" });
+    } catch (error) {
+      toastManager.add({
+        title: "Photo could not be uploaded",
+        description: getUserFacingError(error),
+        type: "error",
+      });
+    } finally {
+      setIsUploadingPhoto(false);
+    }
   }
 
   const isDraft =
@@ -455,6 +486,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         onImageChange={(image) =>
           setAccountForm((current) => ({ ...current, image }))
         }
+        imageEditable={false}
         onSave={() => accountMutation.mutate()}
       />
 
@@ -538,26 +570,59 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   ) : null}
                 </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="tutor-credentials-summary">
-                    Credentials summary <span aria-hidden="true">*</span>
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="tutor-achievements">
+                    Achievements <span aria-hidden="true">*</span>
                   </FieldLabel>
-                  <Input
-                    id="tutor-credentials-summary"
-                    name="credentialsSummary"
-                    value={form.credentialsSummary}
+                  <FieldDescription>
+                    Add one achievement or experience per line. A structured
+                    editor will replace this once the final client format is
+                    approved.
+                  </FieldDescription>
+                  <Textarea
+                    id="tutor-achievements"
+                    name="achievements"
+                    value={form.achievements}
                     onChange={(event) => {
                       setForm((current) => ({
                         ...current,
-                        credentialsSummary: event.target.value,
+                        achievements: event.target.value,
                       }));
-                      clearError("credentialsSummary");
+                      clearError("achievements");
                     }}
-                    placeholder="Degrees, certifications, achievements"
-                    aria-invalid={Boolean(errors.credentialsSummary)}
+                    rows={8}
+                    placeholder="Mahasiswa Berprestasi Universitas Airlangga (Surabaya, 2025)"
+                    aria-invalid={Boolean(errors.achievements)}
                   />
-                  {errors.credentialsSummary ? (
-                    <FieldError>{errors.credentialsSummary}</FieldError>
+                  {errors.achievements ? (
+                    <FieldError>{errors.achievements}</FieldError>
+                  ) : null}
+                </Field>
+
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="tutor-experiences">
+                    Experiences <span aria-hidden="true">*</span>
+                  </FieldLabel>
+                  <FieldDescription>
+                    Add one experience per line.
+                  </FieldDescription>
+                  <Textarea
+                    id="tutor-experiences"
+                    name="experiences"
+                    rows={6}
+                    value={form.experiences}
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        experiences: event.target.value,
+                      }));
+                      clearError("experiences");
+                    }}
+                    placeholder="Legal GRC Intern, PT Pelindo Energi Logistik (Surabaya, 2025)"
+                    aria-invalid={Boolean(errors.experiences)}
+                  />
+                  {errors.experiences ? (
+                    <FieldError>{errors.experiences}</FieldError>
                   ) : null}
                 </Field>
 
@@ -617,8 +682,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 </IconBox>
                 <CardTitle>Teaching setup</CardTitle>
                 <CardDescription>
-                  Set the session format and your IDR honorarium. Cogito
-                  calculates the student Marks price from the active economy.
+                  Set the session format and your IDR honorarium.
                 </CardDescription>
               </CardHeader>
               <CardBody className="flex flex-col gap-5">
@@ -685,109 +749,43 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
           <Card className="min-w-0">
             <CardHeader>
               <IconBox variant="tertiary-subtle">
-                <IconCalendarClock aria-hidden="true" />
+                <IconPhoto aria-hidden="true" />
               </IconBox>
-              <CardTitle>Availability and proof</CardTitle>
+              <CardTitle>Source profile photo</CardTitle>
               <CardDescription>
-                Give students a useful scheduling hint and add optional evidence
-                for admin review.
+                Upload the original photo for the Cogito team to edit. It will
+                not be shown publicly until an admin publishes the edited
+                version.
               </CardDescription>
             </CardHeader>
-            <CardBody className="grid gap-6 lg:grid-cols-2">
+            <CardBody>
               <Field>
-                <FieldLabel htmlFor="tutor-availability-summary">
-                  Availability summary
+                <FieldLabel htmlFor="tutor-source-photo">
+                  Original photo <span aria-hidden="true">*</span>
                 </FieldLabel>
                 <FieldDescription>
-                  A short guide; exact bookable windows are managed separately
-                  in Availability.
+                  JPG, PNG, or WebP, maximum 5 MB. Use a clear, high-resolution
+                  portrait.
                 </FieldDescription>
                 <Input
-                  id="tutor-availability-summary"
-                  name="availabilitySummary"
-                  value={form.availabilitySummary}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      availabilitySummary: event.target.value,
-                    }))
-                  }
-                  placeholder="e.g. Weekdays 3–6 PM, Saturdays 9 AM–12 PM"
+                  id="tutor-source-photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={isUploadingPhoto}
+                  aria-invalid={Boolean(errors.sourcePhotoUrl)}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadSourcePhoto(file);
+                  }}
                 />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="tutor-proof-url">
-                  Credential proof URLs
-                </FieldLabel>
-                <FieldDescription>
-                  Optional public links to certificates, portfolios, or results.
-                </FieldDescription>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    id="tutor-proof-url"
-                    name="proofUrl"
-                    type="url"
-                    autoComplete="url"
-                    value={newProofUrl}
-                    onChange={(event) => setNewProofUrl(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        addProofUrl();
-                      }
-                    }}
-                    placeholder="https://..."
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 sm:w-auto"
-                    onClick={addProofUrl}
-                    disabled={!newProofUrl.trim()}
-                  >
-                    Add link
-                  </Button>
-                </div>
-                {form.proofUrls.length > 0 ? (
-                  <ul
-                    className="mt-2 flex flex-col gap-2"
-                    aria-label="Credential proof links"
-                  >
-                    {form.proofUrls.map((url) => (
-                      <li
-                        key={url}
-                        className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-item px-3 py-2"
-                      >
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="min-w-0 truncate text-sm text-foreground underline underline-offset-2"
-                        >
-                          {url}
-                        </a>
-                        <Button
-                          type="button"
-                          variant="plain"
-                          size="xs"
-                          onClick={() => removeProofUrl(url)}
-                        >
-                          Remove
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <EmptyState
-                    icon={<IconShieldCheck />}
-                    title="No proof links yet"
-                    description="Add a public proof link when you have one, such as a certificate or portfolio."
-                    tone="secondary"
-                    size="inline"
-                    className="mt-2 rounded-lg border border-item-border"
-                  />
-                )}
+                {form.sourcePhotoUrl ? (
+                  <Text className="text-sm text-success">
+                    Photo received and ready for admin editing.
+                  </Text>
+                ) : null}
+                {errors.sourcePhotoUrl ? (
+                  <FieldError>{errors.sourcePhotoUrl}</FieldError>
+                ) : null}
               </Field>
             </CardBody>
           </Card>

@@ -11,14 +11,14 @@ export interface UpdateProfileInput {
   version: number;
   displayName?: string;
   shortBio?: string;
-  credentialsSummary?: string;
+  achievements?: string;
+  experiences?: string;
+  sourcePhotoUrl?: string;
   expertise?: string[];
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   baseRatesIdr?: Partial<{ online: number; offline: number }>;
   prices?: Record<string, number>;
-  availabilitySummary?: string;
-  proofUrls?: string[];
 }
 
 export interface PersistedProfileUpdate extends Omit<

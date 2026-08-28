@@ -102,6 +102,12 @@ Rp 50,000 minimum and Rp 5,000 steps, and must not describe Marks as cash-out. S
 tutor discovery and booking previews should show computed Marks per student for the
 selected modality; legacy profiles without `baseRatesIdr` remain readable.
 
+Tutor portrait operations use a two-stage workflow: the tutor uploads an image through
+`upload.createUploadUrl`, which is saved as `sourcePhotoUrl` for internal editing. After
+editing and applying the standard background, an admin pastes the finished public URL in
+the tutor review card and completes an allowed review action. Never copy a tutor source
+photo directly into `user.image`; only the admin-provided edited asset is public.
+
 ### Shared booking list smoke check
 
 With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with the Cogito mark icon before `Earns: X` and `Total: Y`, and admins see the full list with the icon before `Total X` and `Tutor Y`, with no lifecycle mutations. Verify the Upcoming/Pending/Recurring/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that hovering/focusing a visible status badge shows its explanation. On a narrow viewport, confirm the rounded tab strip fills the available page width, only the inner tab list can be swiped horizontally to reach every tab, active-tab shadows and focus rings remain visible at both scroll edges, and the page does not create horizontal overflow or show a scrollbar. Confirm the empty-state outline and decorative glow remain visible inside the rounded card boundary without creating overflow. Confirm mobile rows keep date, location, and tutor name readable beside the booking summary, while desktop time/location/tutor metadata stays aligned and the action button remains at the far edge. For single-session group bookings, student `You pay` must show the per-student amount, and the participant avatar stack must not include the tutor. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.

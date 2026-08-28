@@ -29,13 +29,13 @@ export interface ProfileProjection {
   displayName: string | null;
   shortBio: string | null;
   credentialsSummary: string | null;
+  achievements: string | null;
+  experiences: string | null;
   expertise: string[];
   subjects: NormalizedTutorSubject[];
   modality: string | null;
   prices: Record<string, number> | null;
   pricesByModality: PricesByModality | null;
-  availabilitySummary: string | null;
-  proofUrls: string[] | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
 }
@@ -47,13 +47,13 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     displayName: profile.displayName,
     shortBio: profile.shortBio,
     credentialsSummary: profile.credentialsSummary,
+    achievements: profile.achievements,
+    experiences: profile.experiences,
     expertise: profile.expertise ?? [],
     subjects: toNormalizedTutorSubjects(profile.subjects),
     modality: profile.modality,
     prices: profile.prices,
     pricesByModality: null,
-    availabilitySummary: profile.availabilitySummary,
-    proofUrls: profile.proofUrls,
     publishedAt: profile.publishedAt,
     user: profile.user
       ? { name: profile.user.name, image: profile.user.image }

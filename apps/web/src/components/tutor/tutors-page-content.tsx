@@ -39,6 +39,8 @@ type PublishedTutor = {
   displayName: string | null;
   shortBio: string | null;
   credentialsSummary: string | null;
+  achievements: string | null;
+  experiences: string | null;
   expertise: string[];
   subjects?: TutorSubject[] | null;
   modality: string | null;
@@ -46,8 +48,6 @@ type PublishedTutor = {
   pricesByModality?: Partial<
     Record<"online" | "offline", Record<string, number>>
   > | null;
-  availabilitySummary: string | null;
-  proofUrls: string[] | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
 };

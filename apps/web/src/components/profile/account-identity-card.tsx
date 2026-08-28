@@ -49,6 +49,7 @@ export function AccountIdentityCard({
   onNameChange,
   onImageChange,
   onSave,
+  imageEditable = true,
 }: {
   idPrefix: string;
   roleLabel: string;
@@ -61,6 +62,7 @@ export function AccountIdentityCard({
   onNameChange: (value: string) => void;
   onImageChange: (value: string) => void;
   onSave: () => void;
+  imageEditable?: boolean;
 }) {
   const displayName = name.trim() || "Your profile";
 
@@ -85,17 +87,19 @@ export function AccountIdentityCard({
         </div>
       </CardHeader>
       <CardBody className="grid gap-5 md:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor={`${idPrefix}-name`}>Account name</FieldLabel>
-          <Input
-            id={`${idPrefix}-name`}
-            name={`${idPrefix}-name`}
-            autoComplete="name"
-            value={name}
-            onChange={(event) => onNameChange(event.target.value)}
-            placeholder="Your full name"
-          />
-        </Field>
+        {imageEditable ? (
+          <Field>
+            <FieldLabel htmlFor={`${idPrefix}-name`}>Account name</FieldLabel>
+            <Input
+              id={`${idPrefix}-name`}
+              name={`${idPrefix}-name`}
+              autoComplete="name"
+              value={name}
+              onChange={(event) => onNameChange(event.target.value)}
+              placeholder="Your full name"
+            />
+          </Field>
+        ) : null}
         <Field>
           <FieldLabel htmlFor={`${idPrefix}-image`}>
             Profile image URL

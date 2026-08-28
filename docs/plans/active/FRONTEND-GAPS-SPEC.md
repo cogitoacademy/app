@@ -13,6 +13,10 @@ This document catalogs all PRD-required frontend surfaces that are not yet imple
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
+### Tutor profile and payout privacy follow-up (2026-08-28)
+
+Tutor onboarding now has separate multiline Achievements and Experiences fields, with the legacy credential summary migrated into Achievements. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a source-upload/admin-edited-public-photo workflow. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+
 ### Subject taxonomy follow-up (2026-08-25)
 
 Tutor onboarding now uses the normalized competition category/child-subject catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 child subjects. Tutors must select at least one current child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. Archived legacy subjects remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
