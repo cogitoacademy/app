@@ -154,16 +154,21 @@ export function createAchievementService(deps: {
   }
 
   async function adminReview(adminId: string, input: AdminReviewInput) {
-    const existing = await achievementRepo.getById(db, input.achievementId);
-    validateReviewTransition(existing, input.status);
-
     return db.transaction(async (tx) => {
+      const existing = await achievementRepo.getById(tx, input.achievementId);
+      validateReviewTransition(existing, input.status);
+
       const updated = await achievementRepo.updateStatus(
         tx,
         input.achievementId,
         input.status,
         input.adminNote,
+        existing!.status,
+        existing!.version,
       );
+      if (!updated) {
+        throw new OptimisticLockError(input.achievementId, existing!.version);
+      }
 
       const reviewCopy: Record<string, { title: string; body: string }> = {
         approved: {

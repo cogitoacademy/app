@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { externalHttpUrl } from "../../lib/url-schema";
 
 export const ACHIEVEMENT_CATEGORIES = [
   "competition",
@@ -26,8 +27,8 @@ export const achievementInput = z.object({
   location: z.string().max(255).optional(),
   description: z.string().max(2000).optional(),
   subjects: z.array(z.string().max(255)).max(20).optional(),
-  evidenceUrl: z.string().url().max(2048).optional(),
-  documentationUrl: z.string().url().max(2048).optional(),
+  evidenceUrl: externalHttpUrl.optional(),
+  documentationUrl: externalHttpUrl.optional(),
 });
 
 export const updateAchievementInput = z.object({

@@ -291,10 +291,10 @@ describe("updateStatus", () => {
 
     await repo.updateStatus(conn, "a1", "rejected", "Not eligible");
 
-    expect(conn.set).toHaveBeenCalledWith({
+    expect(conn.set).toHaveBeenCalledWith(expect.objectContaining({
       status: "rejected",
       adminNote: "Not eligible",
-    });
+    }));
   });
 
   test("defaults adminNote to null when not provided", async () => {
@@ -302,10 +302,10 @@ describe("updateStatus", () => {
 
     await repo.updateStatus(conn, "a1", "approved");
 
-    expect(conn.set).toHaveBeenCalledWith({
+    expect(conn.set).toHaveBeenCalledWith(expect.objectContaining({
       status: "approved",
       adminNote: null,
-    });
+    }));
   });
 
   test("returns undefined when no row matched", async () => {

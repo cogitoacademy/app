@@ -42,6 +42,33 @@ describe("Achievement Types (Zod schemas)", () => {
     expect(result.data!.visibility).toBe(false);
   });
 
+  test("achievementInput allows only HTTP(S) external links", () => {
+    const base = {
+      eventName: "Olympiad",
+      category: "competition" as const,
+      award: "Gold",
+      level: "national",
+    };
+    expect(
+      achievementInput.safeParse({
+        ...base,
+        evidenceUrl: "https://example.com/evidence",
+      }).success,
+    ).toBe(true);
+    expect(
+      achievementInput.safeParse({
+        ...base,
+        evidenceUrl: "javascript:alert(1)",
+      }).success,
+    ).toBe(false);
+    expect(
+      achievementInput.safeParse({
+        ...base,
+        documentationUrl: "data:text/html,unsafe",
+      }).success,
+    ).toBe(false);
+  });
+
   test("achievementInput rejects missing required fields", () => {
     const result = achievementInput.safeParse({ eventName: "" });
     expect(result.success).toBe(false);

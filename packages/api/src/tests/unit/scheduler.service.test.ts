@@ -387,7 +387,13 @@ describe("createSchedulerService", () => {
 
     const error = new Error("boom");
     capturedFailedHandler!(
-      { id: "job-1", name: "expire-bookings", attemptsMade: 3, data: { x: 1 } },
+      {
+        id: "job-1",
+        name: "expire-bookings",
+        attemptsMade: 3,
+        opts: { attempts: 3 },
+        data: { x: 1 },
+      },
       error,
     );
 
@@ -400,6 +406,29 @@ describe("createSchedulerService", () => {
       failedReason: "boom",
       data: { x: 1 },
     });
+  });
+
+  test("M4: retryable failure is not copied to the DLQ", () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    capturedFailedHandler!(
+      {
+        id: "job-retrying",
+        name: "expire-bookings",
+        attemptsMade: 1,
+        opts: { attempts: 3 },
+        data: {},
+      },
+      new Error("transient failure"),
+    );
+
+    expect(mockDlqQueueAdd).not.toHaveBeenCalled();
   });
 
   test("M4: DLQ worker logs the job and keeps a bounded Redis list", async () => {
@@ -469,6 +498,7 @@ describe("createSchedulerService", () => {
         id: "job-error",
         name: "expire-bookings",
         attemptsMade: 3,
+        opts: { attempts: 3 },
         data: {},
       },
       new Error("job failed"),

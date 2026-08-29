@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   account,
   subjectCategory,
@@ -210,13 +210,21 @@ async function updateTutorProfile(
   conn: DbOrTx,
   id: string,
   updates: TutorProfileUpdates,
-): Promise<TutorProfileRow> {
+  expectedVersion?: number,
+): Promise<TutorProfileRow | undefined> {
+  const conditions = [eq(tutorProfile.id, id)];
+  if (expectedVersion !== undefined) {
+    conditions.push(eq(tutorProfile.version, expectedVersion));
+  }
   const [row] = await conn
     .update(tutorProfile)
-    .set(updates)
-    .where(eq(tutorProfile.id, id))
+    .set({
+      ...updates,
+      version: sql`${tutorProfile.version} + 1`,
+    })
+    .where(and(...conditions))
     .returning();
-  return row!;
+  return row;
 }
 
 async function updateTutorPublicPhoto(

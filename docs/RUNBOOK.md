@@ -139,6 +139,10 @@ the tutor review card and completes an allowed review action. Never copy a tutor
 photo directly into `user.image`; only the admin-provided edited asset is public.
 
 Achievement and experience proof URLs are verification-only tutor-profile data.
+All user/admin-supplied external links in achievement evidence/documentation,
+tutor proof/source/public-photo fields, and manual meeting-link dialogs must use
+`http://` or `https://`; schemes such as `javascript:`, `data:`, and `file:` must
+be rejected by the API even if client validation is bypassed.
 Operators may open them from the admin tutor review card, but they must not be added
 to public discovery projections, marketing exports, or student-facing interfaces.
 
@@ -486,6 +490,11 @@ curl http://localhost:3001/health
 ```
 
 `checks.scheduler` mirrors Redis reachability (`ok`/`error`/`degraded`) because the BullMQ scheduler runs on the same Redis — an `error` there means the booking-expiry/hold-release/email/SLA jobs are not running and the readiness check trips (503).
+
+When investigating `cogito-jobs-dlq`, expect one entry only after the source
+job has exhausted its configured BullMQ attempt count. A failure with retries
+remaining is intentionally absent from the DLQ; inspect the source queue's
+attempt counter and backoff state instead.
 
 **Scheduler boot failure mode:** with `SCHEDULER_ENABLED=true`, `initScheduler()` pings Redis first and **throws if unreachable — the API boot aborts**. This is intentional: a silently dead scheduler (no expiry/hold-release/email jobs) is worse than a failed deploy. Fix Redis (or set `SCHEDULER_ENABLED=false` for a scheduler-less instance) and redeploy.
 

@@ -1,0 +1,24 @@
+# Website Audit P2 Hardening
+
+Status: Completed  
+Date: 2026-08-29  
+Branch: `f/website-audit-hardening`
+
+## Scope
+
+- Reject browser-executable and non-web schemes in persisted external-link fields.
+- Keep retryable BullMQ failures out of the DLQ until their attempt budget is exhausted.
+- Prevent concurrent achievement and tutor-profile moderation decisions from overwriting each other or duplicating side effects.
+
+## Delivered
+
+- Added one bounded HTTP(S)-only Zod schema and applied it to achievement evidence/documentation, tutor proof/source photo, admin public photo, and manual meeting-link inputs.
+- Made scheduler DLQ routing aware of each job's configured `attempts` count.
+- Added compare-and-swap updates for achievement and tutor-profile moderation using their existing version columns, with explicit 409 errors on a lost race.
+- Kept notification, photo/subject, and audit writes behind the successful versioned update.
+- Added focused validation, retry-state, repository, and service race regression tests.
+
+## Verification
+
+- Focused API tests: 175 passed, 0 failed.
+- `bun run check-types`: passed, including the production web build.

@@ -12,6 +12,7 @@ import {
   InvalidInviteActionError,
   DuplicateInviteError,
   InviteNotFoundError,
+  TutorProfileOptimisticLockError,
 } from "../../modules/admin-tutor/admin-tutor.errors";
 
 function makeProfile(
@@ -19,6 +20,7 @@ function makeProfile(
 ): TutorProfileSnapshot {
   return {
     id: "p1",
+    version: 1,
     onboardingStatus: "pending_review",
     publishedAt: null,
     ...overrides,
@@ -279,6 +281,26 @@ describe("AdminTutor Service", () => {
         hasGoogle: false,
         hasPassword: false,
       });
+    });
+
+    test("rejects a tutor moderation decision that lost an optimistic race", async () => {
+      const profile = makeProfile({ version: 7 } as any);
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => profile),
+          updateTutorProfile: mock(async () => undefined),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.reviewTutorProfile("admin1", {
+          tutorProfileId: "p1",
+          action: "approve_unpublished",
+        }),
+      ).rejects.toBeInstanceOf(TutorProfileOptimisticLockError);
+      expect(deps.auditPort.record).not.toHaveBeenCalled();
     });
 
     test("reports a failed invite email delivery", async () => {
@@ -566,11 +588,12 @@ describe("AdminTutor Service", () => {
       });
       expect(result.onboardingStatus).toBe("approved_unpublished");
       expect(updateTutorProfile).toHaveBeenCalledWith(
-        expect.anything(),
+        {},
         "p1",
         expect.objectContaining({
           onboardingStatus: "approved_unpublished",
         }),
+        1,
       );
     });
 
@@ -711,13 +734,14 @@ describe("AdminTutor Service", () => {
         ["s1"],
       );
       expect(updateTutorProfile).toHaveBeenCalledWith(
-        expect.anything(),
+        {},
         "p1",
         expect.objectContaining({
           onboardingStatus: "published",
           pendingProfileChanges: null,
           profileEditStatus: "none",
         }),
+        1,
       );
     });
 

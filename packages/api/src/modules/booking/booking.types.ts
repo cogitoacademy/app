@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { externalHttpUrl } from "../../lib/url-schema";
 
 const futureStart = z.coerce
   .date()
@@ -134,17 +135,8 @@ export const completeSessionInput = z.object({
   sessionId: z.string().max(100).optional(),
 });
 
-const manualMeetingUrl = z
-  .string()
-  .url()
-  .max(2048)
-  .refine((value) => {
-    const protocol = new URL(value).protocol;
-    return protocol === "http:" || protocol === "https:";
-  }, "Meeting links must start with http:// or https://");
-
 export const setMeetingLinkInput = bookingActionInput.extend({
-  url: manualMeetingUrl,
+  url: externalHttpUrl,
 });
 
 export const cancelSessionInput = z.object({

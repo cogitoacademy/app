@@ -322,9 +322,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `adminTutor.reviewTutorProfile`
 
 - **Auth:** Admin
-- **Input:** `{ tutorProfileId, action, adminNote? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend/approve_edits/request_edit_changes)
+- **Input:** `{ tutorProfileId, action, adminNote?, publicPhotoUrl? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend/approve_edits/request_edit_changes; `publicPhotoUrl`, when present, must be an HTTP(S) URL of at most 2048 characters)
 - **Output:** `{ profile }`
-- **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `INVALID_INVITE_ACTION` (400) when the action is not allowed from the profile's current onboarding status (F25 state machine: publish only from `pending_review`/`changes_requested`/`approved_unpublished`; unpublish/suspend/approve_edits/request_edit_changes only from `published`; request_changes only from `pending_review`/`changes_requested`)
+- **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `INVALID_INVITE_ACTION` (400) when the action is not allowed from the profile's current onboarding status (F25 state machine: publish only from `pending_review`/`changes_requested`/`approved_unpublished`; unpublish/suspend/approve_edits/request_edit_changes only from `published`; request_changes only from `pending_review`/`changes_requested`), `TUTOR_PROFILE_OPTIMISTIC_LOCK` (409) if another moderator changed the profile first
 
 ---
 
@@ -343,7 +343,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ version, displayName?, shortBio?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. Achievements and experiences are separate multiline plain-text fields pending the client's final structured format. `achievementProofUrls` and `experienceProofUrls` are optional admin-verification evidence grouped by section; they are review-protected and excluded from public discovery responses. `sourcePhotoUrl` is the tutor-uploaded private editing source and never replaces the public account image; only an admin may set the edited public photo through tutor review. The retired generic credential-proof field is not accepted. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. Payout-account fields are private and capture the bank, account number, account-holder name, account-opening city/regency, whether the destination is the tutor's own account or a trusted person's account, and the tutor's transfer-responsibility acknowledgment. For published profiles, trust-sensitive changes wait in `pendingProfileChanges` for admin approval. The tutor editor's combined honorarium matrix and responsive section layout are presentation-only, while onboarding submission requires complete payout details and the acknowledgment.
+- **Description:** Updates the tutor profile with optimistic locking. Achievements and experiences are separate multiline plain-text fields pending the client's final structured format. `achievementProofUrls`, `experienceProofUrls`, and `sourcePhotoUrl` accept only HTTP(S) URLs up to 2048 characters. Proof URLs are optional admin-verification evidence grouped by section; they are review-protected and excluded from public discovery responses. `sourcePhotoUrl` is the tutor-uploaded private editing source and never replaces the public account image; only an admin may set the edited public photo through tutor review. The retired generic credential-proof field is not accepted. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. Payout-account fields are private and capture the bank, account number, account-holder name, account-opening city/regency, whether the destination is the tutor's own account or a trusted person's account, and the tutor's transfer-responsibility acknowledgment. For published profiles, trust-sensitive changes wait in `pendingProfileChanges` for admin approval. The tutor editor's combined honorarium matrix and responsive section layout are presentation-only, while onboarding submission requires complete payout details and the acknowledgment.
 
 ### `tutor.submitForReview`
 
@@ -466,7 +466,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17; FR-18 is student-facing)
 - **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? }`
 - **Output:** `{ achievement }`
-- **Description:** Submits a new achievement in `pending` status
+- **Description:** Submits a new achievement in `pending` status. `evidenceUrl` and `documentationUrl`, when present, must be HTTP(S) URLs of at most 2048 characters.
 
 ### `achievement.update`
 
@@ -493,7 +493,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ achievementId, status, adminNote? }` (`status` one of `approved`/`rejected`/`archived`)
 - **Output:** `{ achievement }`
-- **Description:** Moderation action per the transition table (F12): `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived` (hide from public surfacing); `archived` → `approved`/`rejected` (restore). Other transitions throw `ACHIEVEMENT_NOT_EDITABLE`. Owner is notified and an `achievement_{status}` audit record is written.
+- **Description:** Moderation action per the transition table (F12): `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived` (hide from public surfacing); `archived` → `approved`/`rejected` (restore). Other transitions throw `ACHIEVEMENT_NOT_EDITABLE`. The row is updated with optimistic compare-and-swap semantics; a concurrent moderation decision returns `OPTIMISTIC_LOCK` (409) and emits no duplicate notification/audit. Owner is notified and an `achievement_{status}` audit record is written after a successful update.
 
 ---
 

@@ -123,7 +123,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
 - `adminList(input)` — Paginated list with optional status filter
-- `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Notifies the owner and writes an `achievement_{status}` audit record
+- `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Reads and updates inside one transaction using the current status/version as a compare-and-swap; a lost race throws `OptimisticLockError` before notification/audit side effects. Notifies the owner and writes an `achievement_{status}` audit record after success
 
 **Dependencies:** `AchievementRepo`
 
@@ -131,7 +131,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Achievements start in `pending` status
 - Only the owning student can create/update/delete their achievements
-- `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available only to the owner/admin workflows, while `documentationUrl` is optional public-safe documentation
+- `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available only to the owner/admin workflows, while `documentationUrl` is optional public-safe documentation. Both accept only HTTP(S) URLs up to 2048 characters
 - `listApprovedPublic()` must select only public-safe fields. It must not return `userId` or `evidenceUrl`; the public site uses `displayName` and `documentationUrl` when rendering an approved record.
 - The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
 - Optimistic locking prevents lost updates (`version` field)
@@ -220,7 +220,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 **Files:**
 
 - `admin-tutor.types.ts` — Zod schemas for invite creation and profile review
-- `admin-tutor.errors.ts` — `InviteNotFoundError`, `TutorProfileNotFoundError`, `InvalidInviteActionError`, `DuplicateInviteError`
+- `admin-tutor.errors.ts` — `InviteNotFoundError`, `TutorProfileNotFoundError`, `TutorProfileOptimisticLockError`, `InvalidInviteActionError`, `DuplicateInviteError`
 - `admin-tutor.repo.ts` — Invite CRUD, tutor profile listing and review
 - `admin-tutor.service.ts` — `createInvite`, `resendInvite`, `revokeInvite`, `listInvites`, `listTutorProfiles`, `reviewTutorProfile`
 - `admin-tutor.handler.ts` — Maps handler input to service calls
@@ -233,7 +233,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `revokeInvite(inviteId, adminId, reason?)` — Marks invite as revoked
 - `listInvites(opts)` — Paginated invite list
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
-- `reviewTutorProfile(profileId, status, adminNote?, publicPhotoUrl?)` — Approve/reject tutor profile and optionally install an admin-edited public tutor photo. The tutor's `sourcePhotoUrl` remains separate and cannot directly become the public account image. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
+- `reviewTutorProfile(profileId, status, adminNote?, publicPhotoUrl?)` — Approve/reject tutor profile and optionally install an admin-edited public tutor photo. The tutor's `sourcePhotoUrl` remains separate and cannot directly become the public account image; both URLs accept HTTP(S) only. The profile status/version is updated atomically and a lost moderation race throws `TutorProfileOptimisticLockError` before photo, subject, notification, or audit writes. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
@@ -730,7 +730,7 @@ chat directory.
 **Business Rules:**
 
 - Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min
-- Jobs use retry with exponential backoff (3 attempts); after attempts are exhausted the job is moved to the `cogito-jobs-dlq` dead-letter queue, whose worker logs the entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection (M4)
+- Jobs use retry with exponential backoff (3 attempts); the failed-event handler compares `attemptsMade` with the job's configured `opts.attempts`, and only after that budget is exhausted copies the job to `cogito-jobs-dlq`. Intermediate failures remain eligible for BullMQ retry. The DLQ worker logs the entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection (M4)
 - Circuit breaker state persisted in Redis (when available)
 
 ---
