@@ -1,10 +1,10 @@
 # Public Achievements Surfacing
 
-| Field  | Value |
-| ------ | ----- |
+| Field  | Value                                                                      |
+| ------ | -------------------------------------------------------------------------- |
 | Status | **COMPLETED** — public archive and homepage preview implemented 2026-08-27 |
-| Scope  | Public `cogito-acad` integration plus API projection hardening |
-| Repos  | `cogito-app`, `cogito-acad` |
+| Scope  | Public `cogito-acad` integration plus API projection hardening             |
+| Repos  | `cogito-app`, `cogito-acad`                                                |
 
 ## Delivered
 

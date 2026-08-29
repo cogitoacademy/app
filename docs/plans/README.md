@@ -8,7 +8,7 @@
 | [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md)   | main (post-merge)        | —    | Code gaps 1.1–1.8 done (1.4: 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending                                          |
 | [CONTACT-SHARING.md](active/CONTACT-SHARING.md)         | `f/contact-sharing-flow` | #108 | Implemented — consent-based post-session contact request/share-email flow with privacy and leak-regression coverage                         |
 | [DEPLOYMENT-PLAN.md](active/DEPLOYMENT-PLAN.md)         | main (merged #115–#118)  | —    | **Active (rev. 2)** — infra scaffold (#115), DLQ health (#116), backups (#117), CD pipeline (#118) merged; operator apply + secrets pending |
-| [DEPLOYMENT-DISPATCH.md](active/DEPLOYMENT-DISPATCH.md) | main (merged #115–#118)  | —    | **Executed 2026-08-27** — PR A (#115), PR B (#116), W1 (#118), W2 (#117) all merged; briefs superseded by the merged state                  |
+| [DEPLOYMENT-WAVE-2.md](active/DEPLOYMENT-WAVE-2.md)     | main (merged #121–#122)  | #121–#122 | **Active (wave-2, 2026-08-28)** — Coolify resources, Traefik routing, drift check, plan-only CI, and production backup/env wiring merged; operator apply + vault/secrets pending |
 
 ## Completed (merged to main)
 
@@ -27,6 +27,7 @@
 | [REVIEW-FIXES-2.md](completed/REVIEW-FIXES-2.md)                                                   | main (merged #50–#57)                         | #50–#57                                                                                                                              |
 | [REVIEW-FIXES-3.md](completed/REVIEW-FIXES-3.md)                                                   | main (merged #59–#65)                         | #59–#65                                                                                                                              |
 | [REVIEW-FIXES-4.md](completed/REVIEW-FIXES-4.md)                                                   | main (merged #68–#70, #75–#76)                | #68–#70, #75–#76                                                                                                                     |
+| [DEPLOYMENT-DISPATCH.md](completed/DEPLOYMENT-DISPATCH.md)                                         | main (merged #115–#118)                       | #115–#118                                                                                                                            |
 | [REVIEW-FIXES-3-AGENT-PROMPT.md](completed/REVIEW-FIXES-3-AGENT-PROMPT.md)                         | main (merged #66)                             | —                                                                                                                                    |
 | [REVIEW-FIXES-4-AGENT-PROMPT.md](completed/REVIEW-FIXES-4-AGENT-PROMPT.md)                         | main (merged #77)                             | —                                                                                                                                    |
 | [TUTOR-INVITE-HARDENING.md](completed/TUTOR-INVITE-HARDENING.md)                                   | main (merged #55)                             | —                                                                                                                                    |

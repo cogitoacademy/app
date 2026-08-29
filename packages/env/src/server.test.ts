@@ -136,7 +136,7 @@ describe("server environment schema", () => {
     expect(enabled.success).toBe(true);
   });
 
-  test("D2: production xendit requires WEBHOOK_ALLOWED_IPS", () => {
+  test("D2 (2026-08-28): production xendit does NOT require WEBHOOK_ALLOWED_IPS", () => {
     const prodXendit = {
       ...baseEnv(),
       NODE_ENV: "production",
@@ -150,22 +150,22 @@ describe("server environment schema", () => {
       XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
       XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
     };
-    const missing = serverEnvSchema.safeParse(prodXendit);
-    expect(missing.success).toBe(false);
-    if (!missing.success) {
-      expect(
-        missing.error.issues.map((issue) => issue.path.join(".")),
-      ).toContain("WEBHOOK_ALLOWED_IPS");
-    }
+    // Xendit publishes no stable webhook source IP list; a wrong allowlist
+    // silently 403s webhooks and payments never credit. The x-callback-token
+    // signature is the primary gate, so the allowlist is optional
+    // defense-in-depth (the runtime ipAllowed check still enforces it when
+    // set).
+    const withoutAllowlist = serverEnvSchema.safeParse(prodXendit);
+    expect(withoutAllowlist.success).toBe(true);
 
+    // Setting the allowlist still parses and is enforced at runtime.
     const withAllowlist = serverEnvSchema.safeParse({
       ...prodXendit,
       WEBHOOK_ALLOWED_IPS: "103.10.65.0/24",
     });
     expect(withAllowlist.success).toBe(true);
 
-    // Dev/test envs are exempt: same xendit set with NODE_ENV=test parses
-    // without WEBHOOK_ALLOWED_IPS (the stub/sandbox webhooks are not gated).
+    // Dev/test envs are exempt as before.
     const devXendit = serverEnvSchema.safeParse({
       ...baseEnv(),
       PAYMENT_PROVIDER: "xendit",
@@ -206,5 +206,46 @@ describe("server environment schema", () => {
       XENDIT_TEST_ALLOWED_EMAILS: "qa@cogitoacademy.id, owner@cogitoacademy.id",
     });
     expect(valid.success).toBe(true);
+  });
+
+  test("production Xendit Test Mode rejects an invalid XENDIT_TEST_ALLOWED_EMAILS list", () => {
+    const prodTest = {
+      ...baseEnv(),
+      NODE_ENV: "production",
+      RESEND_API_KEY: "resend-key",
+      EMAIL_FROM: "verified@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "xendit",
+      XENDIT_SECRET_KEY: "sk",
+      XENDIT_WEBHOOK_TOKEN: "wh",
+      XENDIT_MODE: "test",
+      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
+      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
+      WEBHOOK_ALLOWED_IPS: "103.10.65.0/24",
+    };
+
+    // An entry that is not an email is rejected with a clear issue.
+    const badEmail = serverEnvSchema.safeParse({
+      ...prodTest,
+      XENDIT_TEST_ALLOWED_EMAILS: "qa@cogitoacademy.id, not-an-email",
+    });
+    expect(badEmail.success).toBe(false);
+    if (!badEmail.success) {
+      expect(
+        badEmail.error.issues.map((issue) => issue.path.join(".")),
+      ).toContain("XENDIT_TEST_ALLOWED_EMAILS");
+      expect(
+        badEmail.error.issues.some((issue) =>
+          issue.message.includes("comma-separated list of valid email"),
+        ),
+      ).toBe(true);
+    }
+
+    // A list that trims to nothing (e.g. stray commas) is also rejected.
+    const emptyList = serverEnvSchema.safeParse({
+      ...prodTest,
+      XENDIT_TEST_ALLOWED_EMAILS: ", ,",
+    });
+    expect(emptyList.success).toBe(false);
   });
 });

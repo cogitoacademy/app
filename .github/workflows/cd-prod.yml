@@ -62,15 +62,23 @@ jobs:
         # Secrets required (operator adds them in repo Settings → Secrets):
         #   COOLIFY_PROD_SERVER_WEBHOOK — resolvable Coolify deploy webhook URL
         #     (https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...)
+        #   COOLIFY_API_TOKEN — (optional) Coolify API token; when set, the
+        #     deploy curl sends `Authorization: Bearer <token>` (some Coolify
+        #     versions label the endpoint "Deploy Webhook (auth required)" and
+        #     401 requests without it — docs/DEPLOYMENT.md §5). Unset = no
+        #     header, behavior unchanged.
         #   PROD_DATABASE_URL, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
-        #   R2_SECRET_ACCESS_KEY, R2_BUCKET — backup target credentials
+        #   R2_SECRET_ACCESS_KEY, R2_BACKUP_BUCKET — backup target credentials
+        #   (R2_BACKUP_BUCKET is the PRIVATE bucket; the app's R2_BUCKET is
+        #   the public uploads bucket and must never hold dumps)
         env:
           COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
           PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
           GIT_SHA: ${{ github.sha }}
           HEALTH_URL: https://api.cogitoacademy.id/health
           # Previous commit on the push = the last deployed sha (rollback hint).
@@ -84,4 +92,13 @@ jobs:
             echo "COOLIFY_PROD_WEBHOOK is unset — configure the Coolify resource webhook and add it as a GitHub secret" >&2
             exit 1
           fi
-          curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }}
+          # Optional Bearer auth (docs/DEPLOYMENT.md §5): some Coolify versions
+          # label the deploy endpoint "Deploy Webhook (auth required)" and 401
+          # requests without the header. Only send it when the secret is set.
+          if [ -n "${{ secrets.COOLIFY_API_TOKEN }}" ]; then
+            curl --fail --max-time 30 -X POST \
+              -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" \
+              ${{ secrets.COOLIFY_PROD_WEBHOOK }}
+          else
+            curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }}
+          fi

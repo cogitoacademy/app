@@ -8,11 +8,19 @@
 #
 # Env inputs (all required unless noted):
 #   COOLIFY_WEBHOOK        Full Coolify deploy webhook URL (server resource)
+#   COOLIFY_API_TOKEN      (optional) Coolify API token. When set, the deploy
+#                          curl sends `Authorization: Bearer <token>` — some
+#                          Coolify versions label the deploy endpoint "Deploy
+#                          Webhook (auth required)" and 401 requests without
+#                          it (docs/DEPLOYMENT.md §5). When unset, no header
+#                          is sent and behavior is exactly as before.
 #   PROD_DATABASE_URL      Production PostgreSQL connection string
 #   R2_ACCOUNT_ID          Cloudflare account id (R2 S3 endpoint host)
 #   R2_ACCESS_KEY_ID       R2 API token access key id
 #   R2_SECRET_ACCESS_KEY   R2 API token secret access key
-#   R2_BUCKET              R2 bucket name
+#   R2_BACKUP_BUCKET       PRIVATE bucket for the pre-migrate snapshot
+#                          (deliberately separate from the app's public
+#                          R2_BUCKET uploads bucket)
 #   GIT_SHA                Full commit sha being deployed
 #   HEALTH_URL             Health endpoint to poll (e.g. https://api.cogitoacademy.id/health)
 #   PREV_GIT_SHA           (optional) Previous deployed sha for the rollback hint
@@ -48,7 +56,7 @@ require_env PROD_DATABASE_URL
 require_env R2_ACCOUNT_ID
 require_env R2_ACCESS_KEY_ID
 require_env R2_SECRET_ACCESS_KEY
-require_env R2_BUCKET
+require_env R2_BACKUP_BUCKET
 require_env GIT_SHA
 require_env HEALTH_URL
 
@@ -66,14 +74,14 @@ else
 fi
 
 # --- 2. Upload snapshot to R2 -------------------------------------------
-log "2/5 uploading snapshot to R2 (${R2_BUCKET}/${BACKUP_KEY})"
+log "2/5 uploading snapshot to R2 (${R2_BACKUP_BUCKET}/${BACKUP_KEY})"
 if [[ "$DRY_RUN" == "0" ]]; then
   AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
   AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
-  aws s3 cp "/tmp/${BACKUP_KEY}" "s3://${R2_BUCKET}/${BACKUP_KEY}" \
+  aws s3 cp "/tmp/${BACKUP_KEY}" "s3://${R2_BACKUP_BUCKET}/${BACKUP_KEY}" \
     --endpoint-url "$R2_ENDPOINT"
 else
-  log "    [dry-run] aws s3 cp /tmp/${BACKUP_KEY} s3://${R2_BUCKET}/${BACKUP_KEY} --endpoint-url ${R2_ENDPOINT}"
+  log "    [dry-run] aws s3 cp /tmp/${BACKUP_KEY} s3://${R2_BACKUP_BUCKET}/${BACKUP_KEY} --endpoint-url ${R2_ENDPOINT}"
 fi
 
 # --- 3. Migrate ----------------------------------------------------------
@@ -86,10 +94,26 @@ fi
 
 # --- 4. Deploy: trigger Coolify ------------------------------------------
 log "4/5 triggering Coolify deploy"
+# Optional Bearer auth: some Coolify versions label the deploy endpoint
+# "Deploy Webhook (auth required)" and 401 requests without the header
+# (docs/DEPLOYMENT.md §5). Only send the header when COOLIFY_API_TOKEN is
+# set — unset behaves exactly as before (no header).
 if [[ "$DRY_RUN" == "0" ]]; then
-  curl --fail --max-time 30 -X POST "$COOLIFY_WEBHOOK"
+  if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
+    log "    sending Authorization: Bearer <COOLIFY_API_TOKEN> (set)"
+    curl --fail --max-time 30 -X POST \
+      -H "Authorization: Bearer ${COOLIFY_API_TOKEN}" \
+      "$COOLIFY_WEBHOOK"
+  else
+    log "    COOLIFY_API_TOKEN unset — no Authorization header (endpoint must not require auth)"
+    curl --fail --max-time 30 -X POST "$COOLIFY_WEBHOOK"
+  fi
 else
-  log "    [dry-run] curl --fail --max-time 30 -X POST \"\$COOLIFY_WEBHOOK\""
+  if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
+    log "    [dry-run] curl --fail --max-time 30 -X POST -H \"Authorization: Bearer <token>\" \"\$COOLIFY_WEBHOOK\""
+  else
+    log "    [dry-run] curl --fail --max-time 30 -X POST \"\$COOLIFY_WEBHOOK\""
+  fi
 fi
 
 # --- 5. Health poll: verify the deployed sha -----------------------------
@@ -106,9 +130,9 @@ if [[ "$DRY_RUN" == "0" ]]; then
     sleep "$POLL_INTERVAL_SECONDS"
   done
   if [[ -n "${PREV_GIT_SHA:-}" ]]; then
-    die "deployed image did not report version == ${GIT_SHA} within the timeout. ROLLBACK: point the Coolify server resource at the previous immutable image ghcr.io/cogitoacademy/app/server:v${PREV_GIT_SHA} (or use Coolify 'Rollback to previous release'), then re-verify /health. The pre-migrate snapshot is at s3://${R2_BUCKET}/${BACKUP_KEY}."
+    die "deployed image did not report version == ${GIT_SHA} within the timeout. ROLLBACK: point the Coolify server resource at the previous immutable image ghcr.io/cogitoacademy/app/server:v${PREV_GIT_SHA} (or use Coolify 'Rollback to previous release'), then re-verify /health. The pre-migrate snapshot is at s3://${R2_BACKUP_BUCKET}/${BACKUP_KEY}."
   else
-    die "deployed image did not report version == ${GIT_SHA} within the timeout. ROLLBACK: point the Coolify server resource at the previous immutable image (or use Coolify 'Rollback to previous release'), then re-verify /health. The pre-migrate snapshot is at s3://${R2_BUCKET}/${BACKUP_KEY}."
+    die "deployed image did not report version == ${GIT_SHA} within the timeout. ROLLBACK: point the Coolify server resource at the previous immutable image (or use Coolify 'Rollback to previous release'), then re-verify /health. The pre-migrate snapshot is at s3://${R2_BACKUP_BUCKET}/${BACKUP_KEY}."
   fi
 else
   log "    [dry-run] poll ${HEALTH_URL} until version == ${GIT_SHA} (bounded ${POLL_ATTEMPTS} x ${POLL_INTERVAL_SECONDS}s)"

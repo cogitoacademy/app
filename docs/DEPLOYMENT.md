@@ -1,6 +1,6 @@
 # Cogito Setup and Deployment
 
-Last updated: 2026-08-25
+Last updated: 2026-08-28
 
 This is the operational guide for the current production setup. It covers the
 first-time VPS/Coolify setup, the normal GitHub Actions deployment, and the
@@ -163,7 +163,8 @@ app.cogitoacademy.id  -> VPS IP
 ```
 
 Assign the API domain to the API resource and the app domain to the web
-resource. Coolify/Caddy then provisions HTTPS and routes traffic as follows:
+resource. Coolify's bundled proxy (Traefik v3.6, verified 2026-08-28 — not
+Caddy) then provisions HTTPS and routes traffic as follows:
 
 ```text
 api.cogitoacademy.id/*  -> API container :3001
@@ -264,18 +265,28 @@ UUID.
 
 > **Production host (2026-08-27, S7):** the Coolify control plane is
 > tailnet-only, so the production webhook host is `coolify.cogitoacademy.id` —
-> a DNS record + Caddy route expose **only** the `/api/v1/deploy/*` path
+> a DNS record + Traefik route expose **only** the `/api/v1/deploy/*` path
 > (the per-resource UUID is the bearer secret); the Coolify UI stays
 > tailnet-only. The old `cl.cogitoacademy.id` host had no DNS record, which is
 > why `Deploy Production` failed with `curl exit 6 "Could not resolve host"`.
 > The operator recreates `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK`
-> with the resolvable URL above.
+> with the resolvable URL above. (The Coolify bundled proxy is **Traefik
+> v3.6**, verified 2026-08-28 — not Caddy.)
 
 Current Coolify versions label this endpoint **Deploy Webhook (auth
 required)**. The URL identifies the target, while a Coolify API token with the
 `deploy` permission authorizes the request; store that token separately and do
 not append it to the URL. The workflow must send it as an
 `Authorization: Bearer ...` header before this auth-required form can be used.
+
+> **Bearer variant is conditional (wave-2, 2026-08-28):** whether the webhook
+> accepts the URL alone or requires `Authorization: Bearer <coolify-api-token>`
+> depends on the Coolify version. If the webhook returns `401`, try the Bearer
+> variant first (token with the `deploy` permission); if it still returns
+> `401`/`404`, the Traefik route for `coolify.cogitoacademy.id/api/v1/deploy/*`
+> is missing (declared in `infra/ansible/coolify-resources.yml`). Both causes
+> are documented in RUNBOOK → Xendit webhook wiring → "Webhook 401
+> investigation".
 
 The workflows intentionally fail if a webhook is missing or unreachable. A
 green image build without a successful Coolify deploy is not a completed
@@ -337,8 +348,11 @@ Use a one-off Coolify task or a secured operator machine for production. Do
 not use `db:push` as an unreviewed production migration mechanism.
 
 A nightly PostgreSQL backup runs on the VPS at 02:00 WIB and uploads to
-Cloudflare R2 (`cogito-backups`) with 30-day retention — see
-[Backup & Restore](./RUNBOOK.md#backup--restore) for the restore drill.
+Cloudflare R2 (`cogito-backups`, the **private** `R2_BACKUP_BUCKET`) with
+30-day retention — see [Backup & Restore](./RUNBOOK.md#backup--restore) for
+the restore drill. App uploads use the separate **public** `cogito-bucket`
+(`R2_BUCKET`, served via `r2bucket.cogitoacademy.id`) — dumps and uploads
+never share a bucket (a public dump URL would leak the database).
 
 ## Manual deployment when CI has no quota
 
@@ -534,6 +548,65 @@ forward fix.
 | New `latest` image is not running                                                | Check auto-deploy/webhook logs, then force a pull/redeploy without cache.                                                                                                                                                                                                                                                                                                      |
 | API health is 503 immediately after deploy                                       | Wait for the bounded rollout/healthcheck, then inspect API logs and the Coolify domain/port mapping.                                                                                                                                                                                                                                                                           |
 | Health says Redis is down                                                        | Check `REDIS_URL`, private network membership, and Redis resource health.                                                                                                                                                                                                                                                                                                      |
+
+## Plan-only audit
+
+`.github/workflows/infra-plan.yml` runs an **audit-only** infrastructure
+check on every PR that touches `infra/**` (or the workflow itself). It
+never applies anything and never connects to the server; it exists so
+infra changes get a reviewable, machine-checked trail in CI without
+putting secrets there.
+
+What it runs:
+
+| Job       | Checks                                                                                                                                                                                                                                                              |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terraform | `terraform init -backend=false` + `terraform validate` (always). `terraform plan` (read-only) runs only when the read-only tokens below are configured; otherwise the plan step prints a clear "skipped" notice and exits 0 — unset secrets are never a CI failure. |
+| Ansible   | `ansible-playbook --syntax-check -i infra/ansible/inventory.ini` on **every** playbook under `infra/ansible/*.yml` (glob, so new playbooks are picked up automatically).                                                                                            |
+| Docs      | Verifies this `## Plan-only audit` section still exists.                                                                                                                                                                                                            |
+
+Why not full `apply` (or `--check`) in CI:
+
+- **The Age private key must never enter CI.** Anyone with repo access to
+  the runner could decrypt the entire SOPS vault (`infra/secrets/prod.env`
+  holds the backup `DATABASE_URL`, R2 token, Tailscale auth key). CI only
+  syntax-checks playbooks; vault decryption stays on operator machines.
+- **SSH is tailnet-only.** GitHub runners cannot reach the VPS, so
+  `ansible --check` cannot run in CI. `--syntax-check` catches YAML,
+  module, and task-structure errors without a network path; full
+  `--check` remains a local operator command (below).
+
+Read-only token placeholders — create these repo secrets if you want
+`terraform plan` to run on PRs (plan reads DNS/zone data and the R2 state
+bucket; it must never be given write-scoped tokens):
+
+| Secret                 | Scope                                                 |
+| ---------------------- | ----------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare, `Zone:DNS:Read` for `cogitoacademy.id`    |
+| `R2_ACCESS_KEY_ID`     | R2 API token, Object **Read** on `cogito-infra-state` |
+| `R2_SECRET_ACCESS_KEY` | same token, secret half                               |
+| `R2_STATE_ENDPOINT`    | `https://<accountid>.r2.cloudflarestorage.com`        |
+
+Without them the Terraform job still runs `validate` (it is the
+always-on gate) and reports plan as skipped.
+
+Local operator commands (full verification is only possible from an
+operator machine that can reach the tailnet):
+
+```bash
+# Full read-only check of every playbook against the real server state
+# (needs tailnet access + the SOPS vault to decrypt secrets on this node).
+for pb in infra/ansible/*.yml; do
+  ansible-playbook -i infra/ansible/inventory.ini "$pb" --check
+done
+
+# Terraform plan/apply with the real state backend (R2 credentials in env):
+#   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY, plus AWS_ENDPOINT_URL_S3 set
+#   to https://<accountid>.r2.cloudflarestorage.com and CLOUDFLARE_API_TOKEN.
+terraform -chdir=infra/terraform init -reconfigure
+terraform -chdir=infra/terraform plan -out=tfplan
+terraform -chdir=infra/terraform apply tfplan   # single-operator, R2 has no state locking
+```
 
 Related references:
 
