@@ -6555,6 +6555,31 @@ describe("BookingService", () => {
       });
     });
 
+    test("final acceptance rechecks tutor overlap before changing the schedule", async () => {
+      const booking = makeRescheduleBooking();
+      const proposal = {
+        id: "r1",
+        bookingId: "b1",
+        proposedBy: "tutor1",
+        proposedStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        proposedEndAt: new Date(Date.now() + 73 * 60 * 60 * 1000),
+        status: "pending",
+      };
+      const { service, repo, meeting } = createService({
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 1 })),
+          findPendingRescheduleProposal: mock(async () => proposal),
+          findOverlappingBookings: mock(async () => [{ id: "new-conflict" }]),
+        },
+      });
+
+      await expect(
+        service.acceptReschedule("student1", "b1", "r1"),
+      ).rejects.toThrow(BookingConflictError);
+      expect(repo.updateBookingSchedule).not.toHaveBeenCalled();
+      expect(meeting.updateEvent).not.toHaveBeenCalled();
+    });
+
     test("partial acceptance records the decision without changing the schedule", async () => {
       const booking = makeRescheduleBooking({ previousState: "scheduled" });
       const proposal = {
@@ -7181,6 +7206,35 @@ describe("BookingService additional coverage paths", () => {
     ).rejects.toThrow(BookingStateTransitionError);
   });
 
+  test("rejects no-show marking with a session from another series", async () => {
+    const { service, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "series", currentState: "scheduled" }),
+        ),
+        findParticipant: mock(async () => makeParticipant()),
+        findSessionById: mock(async () => ({
+          id: "foreign-session",
+          seriesBookingId: "another-booking",
+          currentState: "scheduled",
+          scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
+          holdAmount: 42,
+        })),
+      },
+    });
+
+    await expect(
+      service.markParticipantNoShow(
+        "b1",
+        "tutor1",
+        "student1",
+        "foreign-session",
+      ),
+    ).rejects.toThrow(BookingSessionNotFoundError);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+  });
+
   test("rejects a series reschedule for an unknown session", async () => {
     const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
     const { service } = createService({
@@ -7247,6 +7301,24 @@ describe("BookingService additional coverage paths", () => {
     ).rejects.toThrow(BookingRescheduleNotFoundError);
   });
 
+  test("rejects accepting an expired reschedule proposal", async () => {
+    const booking = makeBooking({ currentState: "reschedule_proposed" });
+    const { service, repo } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findPendingRescheduleProposal: mock(async () => ({
+          id: "r1",
+          expiresAt: new Date(Date.now() - 1),
+        })),
+      },
+    });
+
+    await expect(
+      service.acceptReschedule("student1", "b1", "r1"),
+    ).rejects.toThrow(BookingRescheduleNotPendingError);
+    expect(repo.updateRescheduleProposal).not.toHaveBeenCalled();
+  });
+
   test("rejects accepting a reschedule when the caller is absent from decisions", async () => {
     const booking = makeBooking({ currentState: "reschedule_proposed" });
     const { service } = createService({
@@ -7291,6 +7363,25 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.rejectReschedule("student1", "b1", "wrong"),
     ).rejects.toThrow(BookingRescheduleNotFoundError);
+  });
+
+  test("rejects rejecting an expired reschedule proposal", async () => {
+    const { service, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ currentState: "reschedule_proposed" }),
+        ),
+        findPendingRescheduleProposal: mock(async () => ({
+          id: "r1",
+          expiresAt: new Date(Date.now() - 1),
+        })),
+      },
+    });
+
+    await expect(
+      service.rejectReschedule("student1", "b1", "r1"),
+    ).rejects.toThrow(BookingRescheduleNotPendingError);
+    expect(repo.updateRescheduleProposal).not.toHaveBeenCalled();
   });
 
   test("rejects rejecting a reschedule when caller has no decision", async () => {

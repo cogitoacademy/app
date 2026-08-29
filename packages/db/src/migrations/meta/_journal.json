@@ -267,6 +267,13 @@
       "when": 1787937105510,
       "tag": "0037_mixed_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1787964592065,
+      "tag": "0038_room_booking_overlap_guard",
+      "breakpoints": true
     }
   ]
 }

@@ -315,6 +315,8 @@ describe("H3: relocateRoom transitions AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULE
   test("expireBookings sweep does not cancel/no-show the relocated SCHEDULED booking", async () => {
     const startISO = new Date(Date.now() + 52 * 3600_000).toISOString();
     const endISO = new Date(Date.now() + 53 * 3600_000).toISOString();
+    const proposedStartISO = new Date(Date.now() + 54 * 3600_000).toISOString();
+    const proposedEndISO = new Date(Date.now() + 55 * 3600_000).toISOString();
 
     const created = await studentClient.booking.createSolo({
       tutorId,
@@ -327,16 +329,16 @@ describe("H3: relocateRoom transitions AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULE
     await tutorClient.tutorActions.acceptBooking({ bookingId: created.id });
     await studentClient.booking.proposeReschedule({
       bookingId: created.id,
-      proposedStartAt: startISO,
-      proposedEndAt: endISO,
+      proposedStartAt: proposedStartISO,
+      proposedEndAt: proposedEndISO,
       reason: "Pindah ruangan",
       availabilitySlotId: slotId,
     });
     await adminClient.room.assign({
       bookingId: created.id,
       roomId: roomAId,
-      startAt: startISO,
-      endAt: endISO,
+      startAt: proposedStartISO,
+      endAt: proposedEndISO,
     });
     await tutorClient.booking.acceptReschedule({ bookingId: created.id });
 
@@ -346,8 +348,8 @@ describe("H3: relocateRoom transitions AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULE
     await adminClient.room.relocate({
       bookingId: created.id,
       roomId: roomBId,
-      startAt: startISO,
-      endAt: endISO,
+      startAt: proposedStartISO,
+      endAt: proposedEndISO,
     });
 
     row = await getBookingRow(created.id);

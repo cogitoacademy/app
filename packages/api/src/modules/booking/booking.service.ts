@@ -1863,6 +1863,9 @@ export function createBookingService(deps: {
         : null;
       if (isSeries && !session)
         throw new BookingSessionNotFoundError(sessionId ?? "");
+      if (session && session.seriesBookingId !== bookingId) {
+        throw new BookingSessionNotFoundError(sessionId ?? "");
+      }
 
       const sessionStartAt = session?.scheduledStartAt ?? b.scheduledStartAt;
       const now = new Date();
@@ -2219,6 +2222,7 @@ export function createBookingService(deps: {
   ) {
     const { proposal, updated, finalized } = await db.transaction(
       async (tx) => {
+        await lockBookingReschedule(tx, bookingId);
         const b = await repo.findBookingById(tx, bookingId);
         if (!b) throw new BookingNotFoundError(bookingId);
         await assertBookingAccess(b, userId, tx, bookingId);
@@ -2230,6 +2234,9 @@ export function createBookingService(deps: {
         if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
         if (proposalId && pending.id !== proposalId) {
           throw new BookingRescheduleNotFoundError(bookingId);
+        }
+        if (pending.expiresAt && pending.expiresAt.getTime() <= Date.now()) {
+          throw new BookingRescheduleNotPendingError(bookingId);
         }
 
         const currentDecisions = pending.decisions ?? {
@@ -2255,6 +2262,53 @@ export function createBookingService(deps: {
 
         if (!allAccepted) {
           return { proposal: pending, updated: b, finalized: false };
+        }
+
+        await lockTutorForBooking(tx, b.tutorId);
+
+        if (pending.sessionId) {
+          const targetSession = await repo.findSessionById(
+            tx,
+            pending.sessionId,
+          );
+          if (
+            !targetSession ||
+            targetSession.seriesBookingId !== bookingId ||
+            targetSession.currentState !== BOOKING_STATE.SCHEDULED
+          ) {
+            throw new BookingSessionNotFoundError(pending.sessionId);
+          }
+
+          const siblings = await repo.listSessionsBySeriesId(tx, bookingId);
+          const overlappingSibling = siblings.find(
+            (sibling) =>
+              sibling.id !== pending.sessionId &&
+              sibling.currentState === BOOKING_STATE.SCHEDULED &&
+              sibling.scheduledStartAt < pending.proposedEndAt &&
+              sibling.scheduledEndAt > pending.proposedStartAt,
+          );
+          if (overlappingSibling) {
+            throw new BookingConflictError(
+              b.tutorId,
+              pending.proposedStartAt.toISOString(),
+              pending.proposedEndAt.toISOString(),
+            );
+          }
+        }
+
+        const overlapping = await repo.findOverlappingBookings(
+          tx,
+          b.tutorId,
+          pending.proposedStartAt,
+          pending.proposedEndAt,
+          { excludeBookingId: bookingId, excludeStates: [...TERMINAL_STATES] },
+        );
+        if (overlapping.length) {
+          throw new BookingConflictError(
+            b.tutorId,
+            pending.proposedStartAt.toISOString(),
+            pending.proposedEndAt.toISOString(),
+          );
         }
 
         if (pending.sessionId) {
@@ -2348,6 +2402,7 @@ export function createBookingService(deps: {
     proposalId?: string,
   ) {
     return db.transaction(async (tx) => {
+      await lockBookingReschedule(tx, bookingId);
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       await assertBookingAccess(b, userId, tx, bookingId);
@@ -2359,6 +2414,9 @@ export function createBookingService(deps: {
       if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
       if (proposalId && proposal.id !== proposalId) {
         throw new BookingRescheduleNotFoundError(bookingId);
+      }
+      if (proposal.expiresAt && proposal.expiresAt.getTime() <= Date.now()) {
+        throw new BookingRescheduleNotPendingError(bookingId);
       }
 
       const currentDecisions = proposal.decisions ?? {

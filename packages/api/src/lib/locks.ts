@@ -42,3 +42,13 @@ export async function lockBookingReschedule(
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${bookingId}, 1))`,
   );
 }
+
+/** Serializes room conflict checks and writes for a single room. */
+export async function lockRoomForBooking(
+  conn: DbOrTx,
+  roomId: string,
+): Promise<void> {
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${roomId}, 3))`,
+  );
+}

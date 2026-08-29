@@ -269,6 +269,8 @@ bun run db:migrate       # Apply pending migrations
 bun run db:generate      # Generate new migration from schema changes
 ```
 
+Migration `0038_room_booking_overlap_guard.sql` enables PostgreSQL `btree_gist` and adds `room_booking_confirmed_no_overlap`. Before applying it to an existing environment, query for overlapping `confirmed` room assignments and resolve any duplicates; PostgreSQL will refuse the constraint if conflicting historical rows exist. The range is half-open (`[start,end)`), so back-to-back room sessions are valid. The migration requires a database role allowed to install the trusted `btree_gist` extension (or an operator must pre-install it).
+
 Contact sharing uses migration `0030_bouncy_madrox.sql`, which adds
 `student_profile.allow_contact_requests` and the `contact_request` table. Apply
 the migration before starting an API build that includes the Contact Module;
@@ -551,6 +553,8 @@ Invalid state machine transition. Check `booking-transitions.ts` for valid trans
 For rescheduling, `reschedule_proposed` must return to the state captured in `booking.previousState` after unanimous acceptance or rejection. A partial acceptance must leave both the current schedule and `reschedule_proposed` state unchanged. If a decision reports that no pending proposal exists, refresh booking detail: the supplied `proposalId` may belong to a superseded proposal.
 
 When a 24-hour reschedule proposal deadline passes, expire only the proposal. Keep the original schedule and wallet holds, restore `booking.previousState`, and do not cancel the provider meeting event.
+
+Acceptance/rejection calls also reject an already expired proposal. Final acceptance rechecks the tutor and series-session target under advisory locks; `BOOKING_CONFLICT` at this stage means the proposed slot became occupied after it was proposed and a fresh time must be proposed.
 
 ### `BOOKING_NOT_EDITABLE` while creating a booking (400)
 

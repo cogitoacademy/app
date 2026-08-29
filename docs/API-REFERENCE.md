@@ -608,7 +608,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected; required tutor or active student voter
 - **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Records one acceptance on the active proposal. Partial acceptance does not change the schedule; unanimous tutor + active-student acceptance applies the proposed 90-minute time and restores the booking state that was active before the proposal. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
+- **Description:** Records one acceptance on the active, unexpired proposal. Partial acceptance does not change the schedule; before unanimous tutor + active-student acceptance applies the proposed 90-minute time, the server serializes the booking/tutor decision and rechecks tutor overlap plus series-session ownership/state/sibling overlap. A stale, expired, or newly conflicting target is rejected without changing the schedule. Successful acceptance restores the booking state that was active before the proposal. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
 
 ### `booking.getRescheduleAvailability`
 
@@ -624,7 +624,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Protected; required tutor or active student voter
 - **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Rejects the active proposal, preserves the original schedule, and restores the booking state that was active before the proposal. Offline booking-level proposals also restore the confirmed room assignment to the original window; a conflict or missing assignment falls back to `awaiting_admin_room_approval`.
+- **Description:** Rejects the active, unexpired proposal under the same booking-level decision lock, preserves the original schedule, and restores the booking state that was active before the proposal. Expired/stale decisions are rejected and left for the expiry worker. Offline booking-level proposals also restore the confirmed room assignment to the original window; a conflict or missing assignment falls back to `awaiting_admin_room_approval`.
 
 ### `booking.proposeReschedule`
 
@@ -784,6 +784,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `tutorActions.markParticipantNoShow`
 
 - **RPC path:** `/rpc/tutorActions/markParticipantNoShow`
+- **Session ownership invariant:** For a series booking, `sessionId` must be a child of the supplied `bookingId`; a session from another series is rejected before any wallet deduction or attendance mutation.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, participantUserId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ bookingId, participantUserId, sessionId, forfeitedMarks }`

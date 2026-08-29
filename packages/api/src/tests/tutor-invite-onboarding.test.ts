@@ -178,11 +178,20 @@ describe("Tutor Invite & Onboarding", () => {
         displayName: "Prof Awesome",
         shortBio: "Passionate math educator",
         credentialsSummary: "PhD Mathematics, 10 years teaching",
+        achievements: "National mathematics medalist",
+        experiences: "Ten years teaching mathematics",
+        sourcePhotoUrl: "https://example.com/tutor-source.jpg",
         expertise: ["Mathematics", "Physics"],
         subjectIds: ["40000000-0000-4000-8000-000000000001"],
         modality: "online",
         prices: { "1": 50, "2": 40, "3": 32, "4": 28, "5": 25, "6": 22 },
         availabilitySummary: "Weekdays 3-6 PM",
+        bankName: "BCA",
+        bankAccountNumber: "1234567890",
+        bankAccountHolderName: "Prof Awesome",
+        bankAccountOpeningCity: "Jakarta",
+        bankAccountOwnership: "self",
+        bankTransferDisclaimerAccepted: true,
       });
 
       expect(updated.displayName).toBe("Prof Awesome");
@@ -205,7 +214,7 @@ describe("Tutor Invite & Onboarding", () => {
       await expectRejects(
         tutorClient.tutor.updateMyProfile({
           version,
-          proofUrls: ["not-a-url"],
+          achievementProofUrls: ["not-a-url"],
         }),
       );
     });
