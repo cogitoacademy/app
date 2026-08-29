@@ -34,6 +34,7 @@ import {
 } from "@cogito-app/api/lib/request-id";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { healthCheck, healthStatus } from "@cogito-app/api/lib/db-health";
+import { parseSignupBody } from "./signup-body";
 
 const redis = getRedisClient();
 
@@ -97,6 +98,7 @@ const contentRateLimit = rateLimit({
 });
 
 const MAX_BODY_BYTES = 1024 * 1024;
+
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
 function logRpcError(error: unknown) {
@@ -284,9 +286,10 @@ export function createServer() {
             // server owns the body here — better-auth 1.6.11 has no built-in
             // complexity options or effective global-hook short-circuit).
             if (request.url.endsWith("/api/auth/sign-up/email")) {
-              const parsed = JSON.parse(body || "{}") as {
-                password?: string;
-              };
+              const parsed = parseSignupBody(body);
+              if (!parsed) {
+                return status(400, { message: "Invalid JSON request body" });
+              }
               const policyError = assertPasswordPolicy(parsed.password ?? "");
               if (policyError) {
                 return status(400, { message: policyError });

@@ -52,7 +52,7 @@ Coolify checks from causing a false `Connection refused` status.
 
 Open `/login` in a clean browser and sign in as a student, tutor, and admin. The email button may show progress while the auth request and fresh session read complete; it must then go directly to `/dashboard`, `/onboarding`, or `/admin-tutors` without an intermediate `/login` navigation. Verify a wrong password returns the form with an error and the button is usable again. For a return link such as `/login?redirect=/bookings`, verify it lands on the validated target after the same handoff.
 
-Also verify the client validation feedback: blur an empty or malformed email, a short password, and (on sign-up) a short name or password missing uppercase/lowercase/digit requirements. Each invalid field should show its own Selia inline error and danger outline; submitting incomplete data should reveal the field errors and must not call `/api/auth`. Correcting the values should clear the errors and re-enable the normal auth request.
+Also verify the client validation feedback: blur an empty or malformed email, a short password, and (on sign-up) a short name or password missing uppercase/lowercase/digit requirements. Each invalid field should show its own Selia inline error and danger outline; submitting incomplete data should reveal the field errors and must not call `/api/auth`. Correcting the values should clear the errors and re-enable the normal auth request. An API-level malformed JSON request to `/api/auth/sign-up/email` must return 400, never 500.
 
 ### Dashboard smoke check
 
@@ -273,7 +273,7 @@ bun run db:migrate       # Apply pending migrations
 bun run db:generate      # Generate new migration from schema changes
 ```
 
-Migration `0038_room_booking_overlap_guard.sql` enables PostgreSQL `btree_gist` and adds `room_booking_confirmed_no_overlap`. Before applying it to an existing environment, query for overlapping `confirmed` room assignments and resolve any duplicates; PostgreSQL will refuse the constraint if conflicting historical rows exist. The range is half-open (`[start,end)`), so back-to-back room sessions are valid. The migration requires a database role allowed to install the trusted `btree_gist` extension (or an operator must pre-install it).
+Migration `0038_room_booking_overlap_guard.sql` enables PostgreSQL `btree_gist` and adds `room_booking_confirmed_no_overlap`. Before applying it to an existing environment, query for overlapping `confirmed` room assignments and resolve any duplicates; PostgreSQL will refuse the constraint if conflicting historical rows exist. The range is half-open (`[start,end)`), and the API conflict queries use the same strict boundaries, so back-to-back room sessions are valid. The migration requires a database role allowed to install the trusted `btree_gist` extension (or an operator must pre-install it).
 
 Contact sharing uses migration `0030_bouncy_madrox.sql`, which adds
 `student_profile.allow_contact_requests` and the `contact_request` table. Apply
