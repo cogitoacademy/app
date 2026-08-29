@@ -570,7 +570,7 @@ chat directory.
 **Business Rules:**
 
 - Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min) + IP allowlist (honors `TRUST_PROXY`)
-- Webhook idempotency is atomic — `IdempotencyStore.claim` keyed on the verified payload event id, released on processing failure (#46)
+- Webhook idempotency is atomic — `IdempotencyStore.claim` keys lifecycle events by provider + verified payment/event id (or provider reference fallback) + normalized status. This prevents a PENDING event from suppressing a later PAID event for the same Xendit payment while still deduplicating provider retries of the same state; transient processing failures release the claim (#46)
 - Circuit breaker prevents cascading failures to the provider
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
 - Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback)
