@@ -43,7 +43,9 @@ type TutorDocument = {
 };
 
 function safeAssetName(tutor: TutorDocument, url: string) {
-  const sourceName = tutor.profilePicture?.asset?.originalFilename || basename(new URL(url).pathname);
+  const sourceName =
+    tutor.profilePicture?.asset?.originalFilename ||
+    basename(new URL(url).pathname);
   const cleaned = sourceName.replace(/[^a-zA-Z0-9._-]/g, "_");
   return `${tutor._id}-${cleaned || "profile-image"}`;
 }
@@ -71,7 +73,9 @@ async function main() {
       : undefined,
   });
   if (!response.ok) {
-    throw new Error(`Sanity query failed (${response.status}): ${await response.text()}`);
+    throw new Error(
+      `Sanity query failed (${response.status}): ${await response.text()}`,
+    );
   }
 
   const payload = (await response.json()) as { result?: TutorDocument[] };
@@ -82,17 +86,26 @@ async function main() {
   );
 
   const assets = [];
-  const issues: Array<{ tutorId: string; tutorName?: string; issue: string }> = [];
+  const issues: Array<{ tutorId: string; tutorName?: string; issue: string }> =
+    [];
   for (const tutor of tutors) {
     const imageUrl = tutor.profilePicture?.asset?.url;
     if (!imageUrl) {
-      issues.push({ tutorId: tutor._id, tutorName: tutor.name, issue: "missing_profile_image" });
+      issues.push({
+        tutorId: tutor._id,
+        tutorName: tutor.name,
+        issue: "missing_profile_image",
+      });
       continue;
     }
 
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
-      issues.push({ tutorId: tutor._id, tutorName: tutor.name, issue: `image_download_${imageResponse.status}` });
+      issues.push({
+        tutorId: tutor._id,
+        tutorName: tutor.name,
+        issue: `image_download_${imageResponse.status}`,
+      });
       continue;
     }
     const bytes = new Uint8Array(await imageResponse.arrayBuffer());
@@ -115,10 +128,20 @@ async function main() {
     normalizedNames.set(key, ids);
     if (!tutor.name) issues.push({ tutorId: tutor._id, issue: "missing_name" });
     if (!tutor.affiliation?.some((item) => item._key === "id" && item.value)) {
-      issues.push({ tutorId: tutor._id, tutorName: tutor.name, issue: "missing_id_affiliation" });
+      issues.push({
+        tutorId: tutor._id,
+        tutorName: tutor.name,
+        issue: "missing_id_affiliation",
+      });
     }
-    if ((tutor.competitionFields?.length ?? 0) !== (tutor.categories?.length ?? 0)) {
-      issues.push({ tutorId: tutor._id, tutorName: tutor.name, issue: "unresolved_category_reference" });
+    if (
+      (tutor.competitionFields?.length ?? 0) !== (tutor.categories?.length ?? 0)
+    ) {
+      issues.push({
+        tutorId: tutor._id,
+        tutorName: tutor.name,
+        issue: "unresolved_category_reference",
+      });
     }
   }
 
@@ -139,7 +162,10 @@ async function main() {
     duplicates,
     issues,
   };
-  await writeFile(join(reportsDir, "inventory.json"), `${JSON.stringify(report, null, 2)}\n`);
+  await writeFile(
+    join(reportsDir, "inventory.json"),
+    `${JSON.stringify(report, null, 2)}\n`,
+  );
   console.log(JSON.stringify(report.counts));
 }
 

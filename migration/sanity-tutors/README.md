@@ -29,4 +29,3 @@ Tutor accounts in Cogito Digital. An admin sends an invitation to the tutor's
 verified email. Claiming that invitation links the account to the existing
 profile; it must not create a duplicate profile. Digital publication remains a
 separate admin-controlled step after onboarding and booking setup are complete.
-

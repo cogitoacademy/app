@@ -2,9 +2,9 @@
 
 ## Document control
 
-| Version | Date       | Status               | Summary                                                                                                      |
-| ------- | ---------- | -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 1.1.0   | 2026-08-29 | Implemented          | Booking topic selection and immutable category/subcategory snapshot drive standardized Calendar/Meet metadata |
+| Version | Date       | Status                | Summary                                                                                                                                                               |
+| ------- | ---------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.1.0   | 2026-08-29 | Implemented           | Booking topic selection and immutable category/subcategory snapshot drive standardized Calendar/Meet metadata                                                         |
 | 1.0.1   | 2026-08-28 | Implemented follow-up | Session Notes replaces the booking-form Learning goal label; free-text notes may include reference links, while the existing API/storage field remains `learningGoal` |
 
 ## Scheduling invariants
