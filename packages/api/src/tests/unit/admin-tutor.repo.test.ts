@@ -278,9 +278,11 @@ describe("AdminTutorRepo", () => {
 
       expect(result).toEqual(updated);
       expect(update).toHaveBeenCalledTimes(1);
-      expect(set).toHaveBeenCalledWith(expect.objectContaining({
-        onboardingStatus: "published",
-      }));
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onboardingStatus: "published",
+        }),
+      );
     });
   });
 
